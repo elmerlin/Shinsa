@@ -11,14 +11,6 @@ struct UpscoreCardView: View {
         _pumpCount = State(initialValue: item.pumpCount ?? 0)
     }
 
-    private var upgrades: [(String, String, Int, Int?, Int?)] {
-        guard let json = item.upscoresJson,
-              let data = json.data(using: .utf8),
-              let entries = try? JSONDecoder().decode([UpscoreEntry].self, from: data)
-        else { return [] }
-        return entries.map { ($0.songTitle ?? "Unknown", $0.mode ?? "Single", $0.level ?? 0, $0.oldScore, $0.newScore) }
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             // Header
@@ -35,7 +27,7 @@ struct UpscoreCardView: View {
                         Text(item.username ?? "Unknown")
                             .font(.system(size: 14, weight: .bold))
                             .foregroundColor(.white)
-                        Text("improved \(upgrades.count) score\(upgrades.count != 1 ? "s" : "")")
+                        Text("improved a score!")
                             .font(.system(size: 12))
                             .foregroundColor(DojoTheme.textMuted)
                     }
@@ -48,39 +40,39 @@ struct UpscoreCardView: View {
                 Spacer()
             }
 
-            // Score upgrades
-            ForEach(Array(upgrades.enumerated()), id: \.offset) { _, entry in
-                HStack {
-                    Text("\(entry.1 == "Single" ? "S" : "D")\(entry.2)")
+            // Score upgrade
+            HStack {
+                if let mode = item.mode, let level = item.level {
+                    Text("\(mode == "Single" ? "S" : "D")\(level)")
                         .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(entry.1 == "Single" ? .red : .green)
+                        .foregroundColor(mode == "Single" ? .red : .green)
                         .frame(width: 30)
+                }
 
-                    Text(entry.0)
-                        .font(.system(size: 12))
-                        .foregroundColor(.white)
-                        .lineLimit(1)
+                Text(item.songTitle ?? "Unknown")
+                    .font(.system(size: 12))
+                    .foregroundColor(.white)
+                    .lineLimit(1)
 
-                    Spacer()
+                Spacer()
 
-                    if let old = entry.3, let new = entry.4 {
-                        HStack(spacing: 4) {
-                            Text(old.formattedScore)
-                                .font(.system(size: 11))
-                                .foregroundColor(DojoTheme.textMuted)
-                            Image(systemName: "arrow.right")
-                                .font(.system(size: 8))
-                                .foregroundColor(DojoTheme.piuGreen)
-                            Text(new.formattedScore)
-                                .font(.system(size: 11, weight: .bold))
-                                .foregroundColor(DojoTheme.piuGreen)
-                        }
+                if let old = item.previousScore, let new = item.newScore {
+                    HStack(spacing: 4) {
+                        Text(old.formattedScore)
+                            .font(.system(size: 11))
+                            .foregroundColor(DojoTheme.textMuted)
+                        Image(systemName: "arrow.right")
+                            .font(.system(size: 8))
+                            .foregroundColor(DojoTheme.piuGreen)
+                        Text(new.formattedScore)
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(DojoTheme.piuGreen)
                     }
                 }
-                .padding(6)
-                .background(DojoTheme.piuDark)
-                .cornerRadius(4)
             }
+            .padding(6)
+            .background(DojoTheme.piuDark)
+            .cornerRadius(4)
 
             // Footer
             HStack(spacing: 16) {

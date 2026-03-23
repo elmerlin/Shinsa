@@ -1,66 +1,81 @@
 import Foundation
 
-struct FeedItem: Codable, Identifiable {
-    var id: String { "\(type)_\(itemId)" }
-
-    let type: String // "post", "upscore", "clear"
-    let itemId: Int
-
-    // Common fields
-    var userId: String?
+struct FeedUser: Codable {
+    var id: String?
     var username: String?
     var avatar: String?
-    var nationality: String?
-    var pumpCount: Int?
-    var commentCount: Int?
-    var userPumped: BoolOrInt?
-    var createdAt: String?
-
-    // Post fields
-    var content: String?
-    var images: String?
-    var youtubeUrl: String?
-    var commentsDisabled: Int?
-    var updatedAt: String?
-
-    // Upscore fields
-    var upscoresJson: String?
-
-    // New clear fields
-    var songTitle: String?
-    var mode: String?
-    var level: Int?
-    var score: Int?
-    var grade: String?
-    var plate: String?
-    var backgroundUrl: String?
-
-    var isPumped: Bool { userPumped?.boolValue ?? false }
+    var countryCode: String?
 
     enum CodingKeys: String, CodingKey {
-        case type, content, images, username, avatar, nationality, mode, level, score, grade, plate
-        case itemId = "id"
-        case userId = "user_id"
-        case pumpCount = "pump_count"
-        case commentCount = "comment_count"
-        case userPumped = "user_pumped"
-        case createdAt = "created_at"
-        case youtubeUrl = "youtube_url"
-        case commentsDisabled = "comments_disabled"
-        case updatedAt = "updated_at"
-        case upscoresJson = "upscores_json"
-        case songTitle = "song_title"
-        case backgroundUrl = "background_url"
+        case id, username, avatar
+        case countryCode = "country_code"
     }
 }
 
-struct FeedResponse: Codable {
-    var items: [FeedItem]?
-    var page: Int?
-    var hasMore: Bool?
+struct FeedItem: Codable, Identifiable {
+    var id: String { "\(entryType)_\(itemId)" }
+
+    let entryType: String // "post", "upscore", "new_clear"
+    var user: FeedUser?
+
+    // Computed convenience accessors for views
+    var userId: String? { user?.id }
+    var username: String? { user?.username }
+    var avatar: String? { user?.avatar }
+    var nationality: String? { user?.countryCode }
+
+    // Common fields
+    var pumpCount: Int?
+    var commentCount: Int?
+    var pumped: BoolOrInt?
+    var createdAt: String?
+
+    // Type-specific IDs
+    var upscoreId: Int?
+    var clearId: Int?
+    var postId: Int?
+
+    var itemId: Int {
+        upscoreId ?? clearId ?? postId ?? 0
+    }
+
+    // Post fields
+    var content: String?
+    var images: [String]?
+    var youtubeUrl: String?
+
+    // Upscore fields
+    var songTitle: String?
+    var mode: String?
+    var level: Int?
+    var previousScore: Int?
+    var newScore: Int?
+    var previousGrade: String?
+    var newGrade: String?
+    var pumbilityGain: Double?
+
+    // New clear fields
+    var score: Int?
+    var grade: String?
+    var plate: String?
+
+    var isPumped: Bool { pumped?.boolValue ?? false }
 
     enum CodingKeys: String, CodingKey {
-        case items, page
-        case hasMore = "has_more"
+        case entryType = "entry_type"
+        case user, content, images, mode, level, score, grade, plate, pumped
+        case pumpCount = "pump_count"
+        case commentCount = "comment_count"
+        case createdAt = "created_at"
+        case youtubeUrl = "youtube_url"
+        case songTitle = "song_title"
+        case upscoreId = "upscore_id"
+        case clearId = "clear_id"
+        case postId = "post_id"
+        case previousScore = "previous_score"
+        case newScore = "new_score"
+        case previousGrade = "previous_grade"
+        case newGrade = "new_grade"
+        case pumbilityGain = "pumbility_gain"
     }
 }

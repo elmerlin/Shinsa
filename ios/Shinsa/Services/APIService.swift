@@ -195,6 +195,7 @@ class APIService {
     func searchUsers(_ q: String) async throws -> [User] { try await request("/auth/search?q=\(q.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? q)") }
     func getUserProfile(_ id: String) async throws -> User { try await request("/auth/user/\(id)") }
     func getUserStats(_ id: String) async throws -> UserStats { try await request("/auth/user/\(id)/stats") }
+    func getUserAchievements(_ id: String) async throws -> [AchievementBadge] { try await request("/auth/user/\(id)/achievements") }
     func getInvitations() async throws -> [Invitation] { try await request("/auth/invitations") }
     func respondInvitation(_ id: String, status: String) async throws -> GenericResponse { try await request("/auth/invitations/\(id)", method: "PUT", body: ["status": status]) }
     func sendInvitation(_ data: [String: AnyCodable]) async throws -> GenericResponse { try await request("/auth/invite", method: "POST", body: data) }
@@ -234,6 +235,7 @@ class APIService {
         return try await request(path)
     }
     func getPiugameRecentlyPlayed(_ userId: String) async throws -> [RecentlyPlayed] { try await request("/piugame/recently-played/\(userId)") }
+    func getPiugameRecentlyPlayed(_ userId: String, year: Int) async throws -> [RecentlyPlayed] { try await request("/piugame/recently-played/\(userId)?year=\(year)") }
     func getPiugameSyncStatus(_ userId: String) async throws -> PiugameSyncStatus { try await request("/piugame/sync-status/\(userId)") }
     func getSyncProgress() async throws -> SyncProgressResponse { try await request("/piugame/sync/progress") }
 
@@ -304,8 +306,186 @@ class APIService {
     func getNewClear(_ id: Int) async throws -> NewClear { try await request("/social/clears/\(id)") }
 
     // MARK: - Social: Feed
-    func getFeed(page: Int = 1) async throws -> FeedResponse { try await request("/social/feed?page=\(page)") }
+    func getFeed(page: Int = 1) async throws -> [FeedItem] { try await request("/social/feed?page=\(page)") }
     func getRecentActivity() async throws -> [RecentActivity] { try await request("/social/recent-activity") }
+
+    // MARK: - Phases
+    func getPhases(_ tournamentId: String) async throws -> [Phase] { try await request("/phases/tournament/\(tournamentId)") }
+    func getPhase(_ id: String) async throws -> Phase { try await request("/phases/\(id)") }
+    func createPhase(_ data: CreatePhaseRequest) async throws -> Phase { try await request("/phases", method: "POST", body: data) }
+    func updatePhase(_ id: String, _ data: [String: AnyCodable]) async throws -> Phase { try await request("/phases/\(id)", method: "PUT", body: data) }
+    func deletePhase(_ id: String) async throws { try await requestVoid("/phases/\(id)", method: "DELETE") }
+    func activatePhase(_ id: String) async throws -> Phase { try await request("/phases/\(id)/activate", method: "POST") }
+    func completePhase(_ id: String) async throws -> Phase { try await request("/phases/\(id)/complete", method: "POST") }
+    func generatePhaseMatches(_ phaseId: String) async throws -> [Match] { try await request("/matches/phase/\(phaseId)/generate", method: "POST") }
+
+    // MARK: - Communities
+    func getCommunities() async throws -> [Community] { try await request("/communities") }
+    func getFeaturedCommunities() async throws -> [Community] { try await request("/communities/featured") }
+    func getCommunityByName(_ name: String) async throws -> Community { try await request("/communities/name/\(name.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? name)") }
+    func createCommunity(_ data: [String: AnyCodable]) async throws -> Community { try await request("/communities", method: "POST", body: data) }
+    func updateCommunity(_ id: String, _ data: [String: AnyCodable]) async throws -> Community { try await request("/communities/\(id)", method: "PUT", body: data) }
+    func deleteCommunity(_ id: String) async throws { try await requestVoid("/communities/\(id)", method: "DELETE") }
+    func joinCommunity(_ id: String) async throws -> GenericResponse { try await request("/communities/\(id)/join", method: "POST") }
+    func leaveCommunity(_ id: String) async throws -> GenericResponse { try await request("/communities/\(id)/leave", method: "DELETE") }
+    func getCommunityMembers(_ id: String) async throws -> [CommunityMember] { try await request("/communities/\(id)/members") }
+    func getCommunityPosts(_ id: String) async throws -> [CommunityPost] { try await request("/communities/\(id)/posts") }
+    func createCommunityPost(_ communityId: String, content: String) async throws -> CommunityPost { try await request("/communities/\(communityId)/posts", method: "POST", body: ["content": content]) }
+    func deleteCommunityPost(_ communityId: String, postId: Int) async throws { try await requestVoid("/communities/\(communityId)/posts/\(postId)", method: "DELETE") }
+    func pumpCommunityPost(_ communityId: String, postId: Int) async throws -> PumpResponse { try await request("/communities/\(communityId)/posts/\(postId)/pump", method: "POST") }
+    func getCommunityPostComments(_ communityId: String, postId: Int) async throws -> [Comment] { try await request("/communities/\(communityId)/posts/\(postId)/comments") }
+    func addCommunityPostComment(_ communityId: String, postId: Int, content: String) async throws -> Comment { try await request("/communities/\(communityId)/posts/\(postId)/comments", method: "POST", body: ["content": content]) }
+
+    // MARK: - Messages & Conversations
+    func getHighlights() async throws -> [UserHighlight] { try await request("/messages/highlights") }
+    func getUserStories(_ userId: String) async throws -> [Story] { try await request("/messages/highlights/\(userId)/story") }
+    func viewStory(_ userId: String, storyId: String) async throws -> GenericResponse { try await request("/messages/highlights/\(userId)/story/\(storyId)/view", method: "POST") }
+    func pumpStory(_ userId: String, storyId: String) async throws -> GenericResponse { try await request("/messages/highlights/\(userId)/story/\(storyId)/pump", method: "POST") }
+    func getConversations() async throws -> [Conversation] {
+        let response: ConversationsResponse = try await request("/messages/conversations")
+        return response.conversations ?? []
+    }
+    func getConversation(_ id: String) async throws -> Conversation { try await request("/messages/conversations/\(id)") }
+    func getMessages(_ conversationId: String) async throws -> [DirectMessage] {
+        let response: ConversationDetailResponse = try await request("/messages/conversations/\(conversationId)?limit=50")
+        return response.messages ?? []
+    }
+    func sendMessage(_ conversationId: String, content: String) async throws -> DirectMessage { try await request("/messages/conversations/\(conversationId)/messages", method: "POST", body: ["content": content]) }
+    func deleteMessage(_ conversationId: String, messageId: String) async throws { try await requestVoid("/messages/conversations/\(conversationId)/messages/\(messageId)", method: "DELETE") }
+    func markConversationRead(_ conversationId: String) async throws -> GenericResponse { try await request("/messages/conversations/\(conversationId)/read", method: "POST") }
+    func updateConversationTheme(_ conversationId: String, theme: String) async throws -> GenericResponse { try await request("/messages/conversations/\(conversationId)/theme", method: "PUT", body: ["theme": theme]) }
+    func startDirectConversation(_ userId: String) async throws -> Conversation { try await request("/messages/direct/\(userId)", method: "POST") }
+    func createSquad(_ data: SquadCreateRequest) async throws -> Conversation { try await request("/messages/squads", method: "POST", body: data) }
+
+    // MARK: - Live Sessions
+    func getLiveSessions() async throws -> [LiveSession] { try await request("/live/sessions") }
+    func getMyActiveSession() async throws -> LiveSession? { try await request("/live/sessions/mine/active") }
+    func createLiveSession(_ data: [String: AnyCodable]) async throws -> LiveSession { try await request("/live/sessions", method: "POST", body: data) }
+    func getLiveSession(_ id: String) async throws -> LiveSession { try await request("/live/sessions/\(id)") }
+    func updateLiveSession(_ id: String, _ data: [String: AnyCodable]) async throws -> LiveSession { try await request("/live/sessions/\(id)", method: "PATCH", body: data) }
+    func addCohost(_ sessionId: String, userId: String) async throws -> GenericResponse { try await request("/live/sessions/\(sessionId)/cohosts", method: "POST", body: ["user_id": userId]) }
+    func removeCohost(_ sessionId: String, userId: String) async throws { try await requestVoid("/live/sessions/\(sessionId)/cohosts/\(userId)", method: "DELETE") }
+    func endLiveSession(_ id: String) async throws -> GenericResponse { try await request("/live/sessions/\(id)/end", method: "POST") }
+    func getLiveMessages(_ sessionId: String) async throws -> [LiveMessage] { try await request("/live/sessions/\(sessionId)/messages") }
+    func sendLiveMessage(_ sessionId: String, content: String) async throws -> LiveMessage { try await request("/live/sessions/\(sessionId)/messages", method: "POST", body: ["content": content]) }
+    func createLiveRequest(_ sessionId: String, data: [String: AnyCodable]) async throws -> LiveRequest { try await request("/live/sessions/\(sessionId)/requests", method: "POST", body: data) }
+    func voteLiveRequest(_ sessionId: String, requestId: String, vote: Int) async throws -> GenericResponse { try await request("/live/sessions/\(sessionId)/votes", method: "POST", body: ["request_id": AnyCodable(requestId), "vote": AnyCodable(vote)]) }
+    func getLiveProfile(_ userId: String) async throws -> [String: AnyCodable] { try await request("/live/profile/\(userId)") }
+    func getHopLeaderboard() async throws -> [HopLeaderboardEntry] { try await request("/live/hop/leaderboard") }
+    func getHopAttempts() async throws -> [HopLeaderboardEntry] { try await request("/live/hop/attempts") }
+
+    // MARK: - Duels (offline)
+    func getDuels() async throws -> [Duel] { try await request("/duels") }
+    func getDuel(_ id: String) async throws -> Duel { try await request("/duels/\(id)") }
+    func createDuel(_ data: [String: AnyCodable]) async throws -> Duel { try await request("/duels", method: "POST", body: data) }
+    func duelDraw(_ id: String, level: Int, drawMode: String? = nil) async throws -> [String: AnyCodable] {
+        var body: [String: AnyCodable] = ["level": AnyCodable(level)]
+        if let dm = drawMode { body["draw_mode"] = AnyCodable(dm) }
+        return try await request("/duels/\(id)/draw", method: "POST", body: body)
+    }
+    func duelScore(_ id: String, songEntryId: String, p1Score: Int, p2Score: Int) async throws -> GenericResponse { try await request("/duels/\(id)/score", method: "POST", body: ["song_entry_id": AnyCodable(songEntryId), "player1_score": AnyCodable(p1Score), "player2_score": AnyCodable(p2Score)]) }
+    func deleteDuelSong(_ id: String, songEntryId: String) async throws { try await requestVoid("/duels/\(id)/song/\(songEntryId)", method: "DELETE") }
+    func endDuel(_ id: String) async throws -> GenericResponse { try await request("/duels/\(id)/end", method: "POST") }
+    func deleteDuel(_ id: String) async throws { try await requestVoid("/duels/\(id)", method: "DELETE") }
+
+    // MARK: - Online Duel Additions
+    func getOnlineDuelHistory(_ userId: String) async throws -> [OnlineDuel] { try await request("/online-duels/user/\(userId)/history") }
+    func predictOnlineDuel(_ id: String, prediction: String) async throws -> GenericResponse { try await request("/online-duels/\(id)/predict", method: "POST", body: ["prediction": prediction]) }
+    func getOnlineDuelPredictions(_ id: String) async throws -> [String: AnyCodable] { try await request("/online-duels/\(id)/predictions") }
+
+    // MARK: - Songs (Extended)
+    func getSongLibrary() async throws -> SongLibraryResponse { try await request("/songs/library") }
+    func getChartDetail(_ chartId: Int) async throws -> ChartDetailResponse { try await request("/songs/chart/\(chartId)") }
+    func getSkillsMeta() async throws -> [ChartSkill] { try await request("/songs/skills/meta") }
+    func getSkillCharts(_ skillSlug: String) async throws -> [ChartDetail] { try await request("/songs/skill/\(skillSlug)") }
+    func updateChartSkills(_ chartId: Int, skills: [String]) async throws -> GenericResponse { try await request("/songs/chart/\(chartId)/skills", method: "PUT", body: ["skills": AnyCodable(skills)]) }
+    func getSongAnalytics(_ userId: String) async throws -> SongAnalytics { try await request("/songs/analytics/user/\(userId)") }
+    func getTiers(mode: String? = nil, level: Int? = nil) async throws -> TiersResponse {
+        var params: [String] = ["tier_list_type=Pass"]
+        if let m = mode { params.append("mode=\(m)") }
+        if let l = level { params.append("level=\(l)") }
+        let qs = params.joined(separator: "&")
+        return try await request("/songs/tiers?\(qs)")
+    }
+    func getTiersMeta() async throws -> TiersMetaResponse { try await request("/songs/tiers/meta?tier_list_type=Pass") }
+    func getSongLists() async throws -> [SongList] { try await request("/songs/lists") }
+    func createSongList(name: String, description: String?) async throws -> SongList {
+        var body: [String: AnyCodable] = ["name": AnyCodable(name)]
+        if let d = description { body["description"] = AnyCodable(d) }
+        return try await request("/songs/lists", method: "POST", body: body)
+    }
+    func updateSongList(_ listId: String, name: String?, description: String?) async throws -> SongList {
+        var body: [String: AnyCodable] = [:]
+        if let n = name { body["name"] = AnyCodable(n) }
+        if let d = description { body["description"] = AnyCodable(d) }
+        return try await request("/songs/lists/\(listId)", method: "PUT", body: body)
+    }
+    func deleteSongList(_ listId: String) async throws { try await requestVoid("/songs/lists/\(listId)", method: "DELETE") }
+    func addToSongList(_ listId: String, chartId: Int) async throws -> GenericResponse { try await request("/songs/lists/\(listId)/items", method: "POST", body: ["chart_id": chartId]) }
+    func removeFromSongList(_ listId: String, itemId: String) async throws { try await requestVoid("/songs/lists/\(listId)/items/\(itemId)", method: "DELETE") }
+
+    // MARK: - Checkins
+    func getVenues() async throws -> [Venue] { try await request("/checkins/venues") }
+    func getVenue(_ slug: String) async throws -> Venue { try await request("/checkins/venue/\(slug)") }
+    func checkin(venueId: String, lat: Double, lng: Double) async throws -> GenericResponse { try await request("/checkins/checkin", method: "POST", body: ["venue_id": AnyCodable(venueId), "location_lat": AnyCodable(lat), "location_lng": AnyCodable(lng)]) }
+    func checkout() async throws -> GenericResponse { try await request("/checkins/checkout", method: "POST") }
+    func getCheckinStatus() async throws -> CheckinStatus { try await request("/checkins/my-status") }
+    func getActiveCheckins(_ venueSlug: String) async throws -> [String: AnyCodable] { try await request("/checkins/active/\(venueSlug)") }
+    func getCheckinHistory() async throws -> [CheckinHistory] { try await request("/checkins/history") }
+    func updatePlayingStatus(_ status: String) async throws -> GenericResponse { try await request("/checkins/playing-status", method: "PUT", body: ["status": status]) }
+
+    // MARK: - Venue Access
+    func getVenueAccessConfig() async throws -> [String: AnyCodable] { try await request("/venue-access/config") }
+    func getVenuePlans(_ venueSlug: String) async throws -> [VenuePlan] { try await request("/venue-access/plans/\(venueSlug)") }
+    func getMyVenueAccess(_ venueSlug: String) async throws -> VenueAccessStatus { try await request("/venue-access/my-access/\(venueSlug)") }
+    func getMyMembership(_ venueSlug: String) async throws -> VenueMembership { try await request("/venue-access/my-membership/\(venueSlug)") }
+    func purchaseDayPass(venueSlug: String, date: String) async throws -> [String: AnyCodable] { try await request("/venue-access/purchase/day-pass", method: "POST", body: ["venue_slug": AnyCodable(venueSlug), "date": AnyCodable(date)]) }
+    func purchaseSubscription(venueSlug: String, planId: String, cadenceKey: String) async throws -> [String: AnyCodable] { try await request("/venue-access/purchase/subscription", method: "POST", body: ["venue_slug": AnyCodable(venueSlug), "plan_id": AnyCodable(planId), "cadence_key": AnyCodable(cadenceKey)]) }
+    func cancelSubscription(_ subscriptionId: String) async throws -> GenericResponse { try await request("/venue-access/cancel-subscription", method: "POST", body: ["subscription_id": subscriptionId]) }
+    func getMyPayments() async throws -> [[String: AnyCodable]] { try await request("/venue-access/my-payments") }
+
+    // MARK: - World Max
+    func getWorldMaxMeta() async throws -> WorldMaxMeta { try await request("/world-max/meta") }
+    func getWorldMaxMachines() async throws -> [WorldMaxMachine] { try await request("/world-max/machines") }
+    func getWorldMaxMachine(_ id: String) async throws -> WorldMaxMachine { try await request("/world-max/machines/\(id)") }
+    func createWorldMaxMachine(_ data: [String: AnyCodable]) async throws -> WorldMaxMachine { try await request("/world-max/machines", method: "POST", body: data) }
+    func updateWorldMaxMachine(_ id: String, _ data: [String: AnyCodable]) async throws -> WorldMaxMachine { try await request("/world-max/machines/\(id)", method: "PUT", body: data) }
+    func searchWorldMaxMachines(_ q: String) async throws -> [WorldMaxMachine] { try await request("/world-max/search?q=\(q.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? q)") }
+
+    // MARK: - Changelog
+    func getChangelog() async throws -> [ChangelogEntry] { try await request("/changelog") }
+    func createChangelogEntry(_ data: [String: AnyCodable]) async throws -> ChangelogEntry { try await request("/changelog", method: "POST", body: data) }
+    func updateChangelogEntry(_ id: String, _ data: [String: AnyCodable]) async throws -> ChangelogEntry { try await request("/changelog/\(id)", method: "PUT", body: data) }
+    func deleteChangelogEntry(_ id: String) async throws { try await requestVoid("/changelog/\(id)", method: "DELETE") }
+
+    // MARK: - Chatbot
+    func sendChatbotMessage(_ message: String) async throws -> [String: AnyCodable] { try await request("/chatbot/message", method: "POST", body: ["message": message], timeout: 30) }
+
+    // MARK: - Shoes
+    func getShoeTopStats(limit: Int = 24) async throws -> [Shoe] { try await request("/piugame/shoes/stats/top?limit=\(limit)") }
+    func getUserShoes(_ userId: String) async throws -> [Shoe] { try await request("/piugame/shoes/\(userId)") }
+
+    // MARK: - Auth Admin
+    func getAdminFeatures() async throws -> [[String: AnyCodable]] { try await request("/auth/admin/features") }
+    func getFeatureUsers(_ featureKey: String) async throws -> [User] { try await request("/auth/admin/features/\(featureKey)/users") }
+    func addFeatureUser(_ featureKey: String, userId: String) async throws -> GenericResponse { try await request("/auth/admin/features/\(featureKey)/users", method: "POST", body: ["user_id": userId]) }
+    func removeFeatureUser(_ featureKey: String, userId: String) async throws { try await requestVoid("/auth/admin/features/\(featureKey)/users/\(userId)", method: "DELETE") }
+    func getAdminGroups() async throws -> [[String: AnyCodable]] { try await request("/auth/admin/groups") }
+    func createAdminGroup(_ data: [String: AnyCodable]) async throws -> [String: AnyCodable] { try await request("/auth/admin/groups", method: "POST", body: data) }
+    func getUserByUsername(_ username: String) async throws -> User { try await request("/auth/user/username/\(username.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? username)") }
+    func getUserActivity(_ userId: String) async throws -> [RecentActivity] { try await request("/auth/user/\(userId)/activity") }
+
+    // MARK: - QR Login
+    func createQRLoginChallenge() async throws -> [String: AnyCodable] { try await request("/auth/qr-login/challenges", method: "POST") }
+    func getQRLoginChallenge(_ id: String) async throws -> [String: AnyCodable] { try await request("/auth/qr-login/challenges/\(id)") }
+    func approveQRLogin(_ id: String) async throws -> GenericResponse { try await request("/auth/qr-login/challenges/\(id)/approve", method: "POST") }
+    func pollQRLogin(_ id: String) async throws -> [String: AnyCodable] { try await request("/auth/qr-login/challenges/\(id)/poll") }
+
+    // MARK: - Leaderboards
+    func getPumbilityLeaderboard(metric: String = "overall") async throws -> PumbilityLeaderboardResponse { try await request("/piugame/leaderboards/pumbility?metric=\(metric)") }
+
+    // MARK: - Head to Head
+    func getHeadToHead(userId1: String, userId2: String) async throws -> [[String: AnyCodable]] { try await request("/songs/analytics/head-to-head?user1=\(userId1)&user2=\(userId2)") }
 }
 
 // MARK: - Helper Types

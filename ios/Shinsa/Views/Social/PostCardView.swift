@@ -48,11 +48,8 @@ struct PostCardView: View {
             }
 
             // Images
-            if let imagesStr = item.images, !imagesStr.isEmpty {
-                let urls = parseImageUrls(imagesStr)
-                if !urls.isEmpty {
-                    ImageGridView(urls: urls)
-                }
+            if let urls = item.images, !urls.isEmpty {
+                ImageGridView(urls: urls)
             }
 
             // YouTube
@@ -102,10 +99,4 @@ struct PostCardView: View {
         } catch {}
     }
 
-    private func parseImageUrls(_ str: String) -> [String] {
-        guard let data = str.data(using: .utf8),
-              let urls = try? JSONDecoder().decode([String].self, from: data)
-        else { return [] }
-        return urls
-    }
 }

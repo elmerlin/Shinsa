@@ -22,12 +22,12 @@ struct FeedView: View {
                 ScrollView {
                     LazyVStack(spacing: 12) {
                         ForEach(vm.items) { item in
-                            switch item.type {
+                            switch item.entryType {
                             case "post":
                                 PostCardView(item: item)
                             case "upscore":
                                 UpscoreCardView(item: item)
-                            case "clear":
+                            case "new_clear":
                                 NewClearCardView(item: item)
                             default:
                                 EmptyView()

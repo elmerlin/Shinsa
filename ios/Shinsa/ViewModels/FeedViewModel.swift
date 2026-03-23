@@ -12,8 +12,8 @@ class FeedViewModel: ObservableObject {
         isLoading = true
         do {
             let response = try await APIService.shared.getFeed(page: 1)
-            items = response.items ?? []
-            hasMore = response.hasMore ?? false
+            items = response
+            hasMore = !response.isEmpty
         } catch {
             items = []
         }
@@ -26,8 +26,8 @@ class FeedViewModel: ObservableObject {
         page += 1
         do {
             let response = try await APIService.shared.getFeed(page: page)
-            items.append(contentsOf: response.items ?? [])
-            hasMore = response.hasMore ?? false
+            items.append(contentsOf: response)
+            hasMore = !response.isEmpty
         } catch {}
         isLoading = false
     }
