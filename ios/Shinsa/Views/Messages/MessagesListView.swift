@@ -83,19 +83,46 @@ struct MessagesListView: View {
     private func conversationRow(_ conversation: Conversation) -> some View {
         HStack(spacing: 12) {
             // Avatar
-            AvatarView(
-                conversation.partnerAvatar,
-                name: conversation.partnerUsername ?? "Chat",
-                size: 44
-            )
+            if conversation.isSquad {
+                ZStack {
+                    Circle()
+                        .fill(DojoTheme.piuAccent.opacity(0.2))
+                        .frame(width: 44, height: 44)
+                    Image(systemName: "person.3.fill")
+                        .font(.system(size: 16))
+                        .foregroundColor(DojoTheme.piuAccent)
+                }
+            } else {
+                AvatarView(
+                    conversation.partnerAvatar,
+                    name: conversation.partnerUsername ?? "Chat",
+                    size: 44
+                )
+            }
 
             // Info
             VStack(alignment: .leading, spacing: 3) {
-                HStack {
-                    Text(conversation.partnerUsername ?? "Conversation")
+                HStack(spacing: 6) {
+                    if conversation.isPinned == true {
+                        Image(systemName: "pin.fill")
+                            .font(.system(size: 9))
+                            .foregroundColor(DojoTheme.piuGold)
+                    }
+
+                    Text(conversation.displayName)
                         .font(.system(size: 14, weight: .bold))
                         .foregroundColor(.white)
                         .lineLimit(1)
+
+                    if conversation.isSquad {
+                        Text("Squad")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(DojoTheme.piuAccent)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(DojoTheme.piuAccent.opacity(0.15))
+                            .cornerRadius(4)
+                    }
 
                     Spacer()
 

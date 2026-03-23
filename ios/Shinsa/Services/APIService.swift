@@ -409,6 +409,7 @@ class APIService {
     func deleteMessage(_ conversationId: String, messageId: String) async throws { try await requestVoid("/messages/conversations/\(conversationId)/messages/\(messageId)", method: "DELETE") }
     func markConversationRead(_ conversationId: String) async throws -> GenericResponse { try await request("/messages/conversations/\(conversationId)/read", method: "POST") }
     func updateConversationTheme(_ conversationId: String, theme: String) async throws -> GenericResponse { try await request("/messages/conversations/\(conversationId)/theme", method: "PUT", body: ["theme": theme]) }
+    func pinConversation(_ conversationId: String, pin: Bool) async throws -> GenericResponse { try await request("/messages/conversations/\(conversationId)/pin", method: "PUT", body: ["pinned": AnyCodable(pin)]) }
     func startDirectConversation(_ userId: String) async throws -> Conversation { try await request("/messages/direct/\(userId)", method: "POST") }
     func createSquad(_ data: SquadCreateRequest) async throws -> Conversation { try await request("/messages/squads", method: "POST", body: data) }
 

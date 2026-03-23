@@ -41,38 +41,70 @@ struct NewClearCardView: View {
             }
 
             // Song info
-            HStack(spacing: 12) {
-                // Level badge
+            HStack(spacing: 10) {
+                // Jacket placeholder
+                ZStack {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(
+                            LinearGradient(
+                                colors: item.mode == "Single"
+                                    ? [Color(hex: "#ff3366").opacity(0.3), Color(hex: "#ff6699").opacity(0.15)]
+                                    : [Color(hex: "#33ff66").opacity(0.3), Color(hex: "#66ff99").opacity(0.15)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                    if let mode = item.mode {
+                        Text(mode == "Single" ? "S" : "D")
+                            .font(.system(size: 16, weight: .black))
+                            .foregroundColor(mode == "Single" ? DojoTheme.piuAccent.opacity(0.6) : DojoTheme.piuGreen.opacity(0.6))
+                    }
+                }
+                .frame(width: 56, height: 32)
+
+                // Mode badge
                 if let mode = item.mode, let level = item.level {
                     Text("\(mode == "Single" ? "S" : "D")\(level)")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(mode == "Single" ? .red : .green)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(Color.black.opacity(0.3))
-                        .cornerRadius(6)
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(
+                            LinearGradient(
+                                colors: mode == "Single"
+                                    ? [Color(hex: "#ff3366"), Color(hex: "#ff6699")]
+                                    : [Color(hex: "#33ff66"), Color(hex: "#22cc55")],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .cornerRadius(4)
                 }
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 3) {
                     Text(item.songTitle ?? "Unknown Song")
                         .font(.system(size: 14, weight: .bold))
                         .foregroundColor(.white)
+                        .lineLimit(1)
 
                     HStack(spacing: 8) {
                         if let score = item.score {
                             Text(score.formattedScore)
                                 .font(.system(size: 12, weight: .bold))
-                                .foregroundColor(DojoTheme.piuGold)
-                        }
-                        if let grade = item.grade {
-                            Text(grade)
-                                .font(.system(size: 11))
-                                .foregroundColor(DojoTheme.piuSilver)
+                                .foregroundColor(DojoTheme.gradeColor(for: score))
+
+                            Text(DojoTheme.gradeLabel(for: score))
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundColor(DojoTheme.gradeColor(for: score))
                         }
                         if let plate = item.plate {
                             Text(plate)
-                                .font(.system(size: 11))
+                                .font(.system(size: 10, weight: .medium))
                                 .foregroundColor(DojoTheme.piuGold)
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 1)
+                                .background(DojoTheme.piuGold.opacity(0.1))
+                                .cornerRadius(3)
                         }
                     }
                 }
@@ -89,13 +121,19 @@ struct NewClearCardView: View {
                     await togglePump()
                 }
 
-                HStack(spacing: 4) {
-                    Image(systemName: "bubble.left")
-                        .font(.system(size: 12))
-                    Text("\(item.commentCount ?? 0)")
-                        .font(.system(size: 12))
+                NavigationLink {
+                    CommentsView(itemType: "clear", itemId: item.itemId)
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "bubble.left")
+                            .font(.system(size: 12))
+                        Text("\(item.commentCount ?? 0)")
+                            .font(.system(size: 12, weight: .bold))
+                    }
+                    .foregroundColor(DojoTheme.textMuted)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
                 }
-                .foregroundColor(DojoTheme.textMuted)
 
                 Spacer()
             }

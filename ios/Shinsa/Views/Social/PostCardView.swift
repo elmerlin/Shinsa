@@ -68,19 +68,25 @@ struct PostCardView: View {
                 }
             }
 
-            // Footer: Pump + Comments
+            // Footer: Pump + Comments + Share
             HStack(spacing: 16) {
                 PumpButtonView(pumped: $pumped, count: $pumpCount) {
                     await togglePump()
                 }
 
-                HStack(spacing: 4) {
-                    Image(systemName: "bubble.left")
-                        .font(.system(size: 12))
-                    Text("\(item.commentCount ?? 0)")
-                        .font(.system(size: 12))
+                NavigationLink {
+                    CommentsView(itemType: "post", itemId: item.itemId)
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "bubble.left")
+                            .font(.system(size: 12))
+                        Text("\(item.commentCount ?? 0)")
+                            .font(.system(size: 12, weight: .bold))
+                    }
+                    .foregroundColor(DojoTheme.textMuted)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
                 }
-                .foregroundColor(DojoTheme.textMuted)
 
                 Spacer()
             }

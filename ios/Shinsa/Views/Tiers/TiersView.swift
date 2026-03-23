@@ -7,6 +7,16 @@ struct TiersView: View {
     @State private var selectedLevel: Int? = nil
     @State private var isLoading = true
 
+    // Settings
+    @State private var displayMode: String = "grade" // "grade" or "score"
+    @State private var overlaySize: Double = 65
+    @State private var jacketOpacity: Double = 90
+    @State private var showUnplayed: Bool = true
+    @State private var showEmpty: Bool = false
+    @State private var hideCoOp: Bool = true
+    @State private var songsPerRow: Int = 4
+    @State private var showSettings = false
+
     private let modeOrder = ["Single", "Double", "CoOp"]
 
     private let tierLabels: [String: String] = [
@@ -58,13 +68,27 @@ struct TiersView: View {
                     ProgressView().tint(DojoTheme.piuAccent)
                     Spacer()
                 } else if let response = tiersResponse, let tiers = response.tiers, !tiers.isEmpty {
-                    ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 12) {
-                            ForEach(tiers) { group in
-                                tierGroupView(group)
-                            }
+                    let filteredTiers = filterTiers(tiers)
+                    if filteredTiers.isEmpty {
+                        Spacer()
+                        VStack(spacing: 8) {
+                            Image(systemName: "chart.bar")
+                                .font(.system(size: 32))
+                                .foregroundColor(DojoTheme.textMuted.opacity(0.5))
+                            Text("No tier data for this selection")
+                                .font(.system(size: 14))
+                                .foregroundColor(DojoTheme.textMuted)
                         }
-                        .padding()
+                        Spacer()
+                    } else {
+                        ScrollView {
+                            LazyVStack(alignment: .leading, spacing: 12) {
+                                ForEach(filteredTiers) { group in
+                                    tierGroupView(group)
+                                }
+                            }
+                            .padding()
+                        }
                     }
                 } else {
                     Spacer()
@@ -82,7 +106,122 @@ struct TiersView: View {
         }
         .navigationTitle("Tier List")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button { showSettings = true } label: {
+                    Image(systemName: "gearshape").foregroundColor(DojoTheme.textMuted)
+                }
+            }
+        }
+        .sheet(isPresented: $showSettings) { settingsSheet }
         .task { await loadMeta() }
+    }
+
+    // MARK: - Settings Sheet
+
+    private var settingsSheet: some View {
+        NavigationStack {
+            ZStack {
+                DojoTheme.piuBg.ignoresSafeArea()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        // Display Mode
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("OVERLAY DISPLAY").font(.system(size: 11, weight: .bold)).foregroundColor(DojoTheme.textMuted)
+                            HStack(spacing: 8) {
+                                ForEach(["grade", "score"], id: \.self) { mode in
+                                    Button(mode.capitalized) {
+                                        displayMode = mode
+                                    }
+                                    .font(.system(size: 13, weight: .bold))
+                                    .foregroundColor(displayMode == mode ? .white : DojoTheme.textMuted)
+                                    .padding(.horizontal, 16).padding(.vertical, 8)
+                                    .background(displayMode == mode ? DojoTheme.piuAccent : DojoTheme.piuDark)
+                                    .cornerRadius(8)
+                                }
+                            }
+                        }
+
+                        // Overlay Size slider
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("OVERLAY SIZE: \(Int(overlaySize))%").font(.system(size: 11, weight: .bold)).foregroundColor(DojoTheme.textMuted)
+                            Slider(value: $overlaySize, in: 20...100, step: 5)
+                                .tint(DojoTheme.piuAccent)
+                        }
+
+                        // Jacket Opacity slider
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("JACKET OPACITY: \(Int(jacketOpacity))%").font(.system(size: 11, weight: .bold)).foregroundColor(DojoTheme.textMuted)
+                            Slider(value: $jacketOpacity, in: 10...100, step: 5)
+                                .tint(DojoTheme.piuAccent)
+                        }
+
+                        // Toggles
+                        Toggle("Show unplayed charts", isOn: $showUnplayed)
+                            .tint(DojoTheme.piuAccent).foregroundColor(.white)
+                        Toggle("Show empty tiers", isOn: $showEmpty)
+                            .tint(DojoTheme.piuAccent).foregroundColor(.white)
+                        Toggle("Hide Co-Op", isOn: $hideCoOp)
+                            .tint(DojoTheme.piuAccent).foregroundColor(.white)
+
+                        // Songs per row
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("SONGS PER ROW").font(.system(size: 11, weight: .bold)).foregroundColor(DojoTheme.textMuted)
+                            HStack(spacing: 8) {
+                                ForEach([4, 5, 6, 7], id: \.self) { n in
+                                    Button("\(n)") {
+                                        songsPerRow = n
+                                    }
+                                    .font(.system(size: 13, weight: .bold))
+                                    .foregroundColor(songsPerRow == n ? .white : DojoTheme.textMuted)
+                                    .frame(width: 40, height: 36)
+                                    .background(songsPerRow == n ? DojoTheme.piuAccent : DojoTheme.piuDark)
+                                    .cornerRadius(8)
+                                }
+                            }
+                        }
+                    }
+                    .padding(20)
+                }
+            }
+            .navigationTitle("Tier Settings")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { showSettings = false }
+                        .foregroundColor(DojoTheme.piuAccent)
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+
+    // MARK: - Filtering
+
+    private func filterTiers(_ tiers: [TierGroup]) -> [TierGroup] {
+        var result: [TierGroup] = []
+        for group in tiers {
+            var charts = group.charts ?? []
+
+            // Filter unplayed
+            if !showUnplayed {
+                charts = charts.filter { ($0.bestScore ?? 0) > 0 }
+            }
+
+            // Filter co-op
+            if hideCoOp {
+                charts = charts.filter { $0.mode?.lowercased() != "coop" && $0.mode?.lowercased() != "co-op" }
+            }
+
+            if charts.isEmpty && !showEmpty {
+                continue
+            }
+
+            var filtered = group
+            filtered.charts = charts
+            result.append(filtered)
+        }
+        return result
     }
 
     // MARK: - Level Navigation Header (compact arrows)
@@ -183,12 +322,13 @@ struct TiersView: View {
 
     private func tierGroupView(_ group: TierGroup) -> some View {
         let sortedCharts = (group.charts ?? []).sorted { a, b in
-            // Passed first, then by score DESC
             let aPass = a.isPass ?? false
             let bPass = b.isPass ?? false
             if aPass != bPass { return aPass && !bPass }
             return (a.bestScore ?? 0) > (b.bestScore ?? 0)
         }
+
+        let columns = Array(repeating: GridItem(.flexible(), spacing: 6), count: songsPerRow)
 
         return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
@@ -214,11 +354,6 @@ struct TiersView: View {
             }
 
             if !sortedCharts.isEmpty {
-                // Responsive grid: 4 on iPhone, 5 on iPad
-                let columns = UIDevice.current.userInterfaceIdiom == .pad
-                    ? Array(repeating: GridItem(.flexible(), spacing: 6), count: 5)
-                    : Array(repeating: GridItem(.flexible(), spacing: 6), count: 4)
-
                 LazyVGrid(columns: columns, spacing: 6) {
                     ForEach(sortedCharts) { chart in
                         NavigationLink(value: "song-chart/\(chart.id)") {
@@ -237,70 +372,75 @@ struct TiersView: View {
         )
     }
 
-    // MARK: - Tier Jacket with Grade Overlay
+    // MARK: - Tier Jacket with Grade Overlay (centered)
 
     private func tierJacketView(_ chart: TierChart) -> some View {
-        ZStack(alignment: .bottomTrailing) {
+        let cellSize = (UIScreen.main.bounds.width - 32 - CGFloat(songsPerRow - 1) * 6 - 24) / CGFloat(songsPerRow)
+        let fontSize = min(cellSize * (overlaySize / 100) * 0.35, 22)
+
+        return ZStack {
+            // Jacket image with opacity
             if let url = chart.jacketUrl, !url.isEmpty, let imgURL = fullURL(url) {
                 AsyncImage(url: imgURL) { phase in
                     switch phase {
                     case .success(let image):
-                        image.resizable().aspectRatio(contentMode: .fill)
-                            .frame(minWidth: 0, maxWidth: .infinity)
-                            .aspectRatio(1, contentMode: .fill)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                        image.resizable().scaledToFill()
+                            .opacity(jacketOpacity / 100)
                     default:
-                        jacketPlaceholder
+                        Rectangle().fill(DojoTheme.piuDark)
                     }
                 }
+                .frame(width: cellSize, height: cellSize * 0.56)
+                .clipped()
             } else {
-                jacketPlaceholder
+                Rectangle().fill(DojoTheme.piuDark)
+                    .frame(width: cellSize, height: cellSize * 0.56)
+                Image(systemName: "music.note")
+                    .font(.system(size: 14))
+                    .foregroundColor(DojoTheme.textMuted)
             }
 
-            // Grade overlay if user has a score
-            if let grade = chart.bestGrade, !grade.isEmpty {
-                Text(grade)
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 2)
-                    .background(gradeOverlayColor(grade).opacity(0.85))
-                    .cornerRadius(4)
-                    .padding(3)
+            // Grade/Score overlay centered
+            if let score = chart.bestScore, score > 0 {
+                if displayMode == "score" {
+                    Text(formatScore(score))
+                        .font(.system(size: max(fontSize * 0.65, 8), weight: .black))
+                        .foregroundColor(.white)
+                        .shadow(color: .black, radius: 4, x: 0, y: 1)
+                        .shadow(color: .black.opacity(0.8), radius: 2, x: 0, y: 0)
+                } else {
+                    Text(DojoTheme.gradeLabel(for: score))
+                        .font(.system(size: fontSize, weight: .black))
+                        .foregroundColor(DojoTheme.gradeColor(for: score))
+                        .shadow(color: .black, radius: 4, x: 0, y: 1)
+                        .shadow(color: .black.opacity(0.8), radius: 2, x: 0, y: 0)
+                }
             }
 
             // Pass indicator
             if chart.isPass == true {
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 12))
+                    .font(.system(size: 10))
                     .foregroundColor(DojoTheme.piuGreen)
-                    .padding(3)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .padding(2)
             }
         }
-        .aspectRatio(1, contentMode: .fit)
+        .frame(width: cellSize, height: cellSize * 0.56)
+        .cornerRadius(6)
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(chart.isPass == true ? DojoTheme.piuBorder : Color.red.opacity(0.3), lineWidth: 1)
+        )
     }
 
-    private func gradeOverlayColor(_ grade: String) -> Color {
-        switch grade {
-        case "SSS+", "SSS": return Color(hex: "#0ea5e9")
-        case "SS+", "SS": return Color(hex: "#ca8a04")
-        case "S+", "S": return Color(hex: "#d97706")
-        case "AAA+", "AAA": return Color(hex: "#6b7280")
-        case "AA+", "AA": return Color(hex: "#92400e")
-        default: return DojoTheme.piuBorder
+    private func formatScore(_ score: Int) -> String {
+        let s = String(format: "%06d", score)
+        if s.count >= 6 {
+            let idx = s.index(s.startIndex, offsetBy: s.count - 3)
+            return s[s.startIndex..<idx] + "," + s[idx...]
         }
-    }
-
-    private var jacketPlaceholder: some View {
-        ZStack {
-            LinearGradient(colors: [DojoTheme.piuAccent.opacity(0.2), DojoTheme.piuDark], startPoint: .topLeading, endPoint: .bottomTrailing)
-            Image(systemName: "music.note")
-                .font(.system(size: 14))
-                .foregroundColor(DojoTheme.textMuted)
-        }
-        .aspectRatio(1, contentMode: .fit)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        return "\(score)"
     }
 
     private func fullURL(_ path: String) -> URL? {

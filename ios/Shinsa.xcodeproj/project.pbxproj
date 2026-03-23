@@ -29,6 +29,7 @@
 		BC14253E84D09BA4D21C8139 /* HapticService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8795A1798C6F688596C6F39 /* HapticService.swift */; };
 		1C6116089DEA22C34955DBDD /* NotificationPoller.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AC0F80F0A0FEA1E46BF2C05 /* NotificationPoller.swift */; };
 		A37055E640B1AAFD096BCE30 /* DojoTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0ECD499CE307187720463D9F /* DojoTheme.swift */; };
+		CHAT7HEME0001000100010001 /* ChatTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = CHAT7HEME0002000200020002 /* ChatTheme.swift */; };
 		CE16E41CAD08D928AD7D775C /* CountryData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F0D702A7D4165C729C3C31C /* CountryData.swift */; };
 		BA90D08F81F2700C082A88C3 /* Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0F00FA78E97CF080D8E7CE7 /* Extensions.swift */; };
 		C42C5F395B4338CF821077A9 /* KeychainHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = E45CD5E237962459B87BBCA1 /* KeychainHelper.swift */; };
@@ -154,6 +155,7 @@
 		F8795A1798C6F688596C6F39 /* HapticService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HapticService.swift"; sourceTree = "<group>"; };
 		8AC0F80F0A0FEA1E46BF2C05 /* NotificationPoller.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NotificationPoller.swift"; sourceTree = "<group>"; };
 		0ECD499CE307187720463D9F /* DojoTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DojoTheme.swift"; sourceTree = "<group>"; };
+		CHAT7HEME0002000200020002 /* ChatTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ChatTheme.swift"; sourceTree = "<group>"; };
 		8F0D702A7D4165C729C3C31C /* CountryData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CountryData.swift"; sourceTree = "<group>"; };
 		A0F00FA78E97CF080D8E7CE7 /* Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Extensions.swift"; sourceTree = "<group>"; };
 		E45CD5E237962459B87BBCA1 /* KeychainHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "KeychainHelper.swift"; sourceTree = "<group>"; };
@@ -360,6 +362,7 @@
 			isa = PBXGroup;
 			children = (
 				0ECD499CE307187720463D9F /* DojoTheme.swift */,
+				CHAT7HEME0002000200020002 /* ChatTheme.swift */,
 			);
 			path = Theme;
 			sourceTree = "<group>";
@@ -777,6 +780,7 @@
 				BC14253E84D09BA4D21C8139 /* HapticService.swift in Sources */,
 				1C6116089DEA22C34955DBDD /* NotificationPoller.swift in Sources */,
 				A37055E640B1AAFD096BCE30 /* DojoTheme.swift in Sources */,
+				CHAT7HEME0001000100010001 /* ChatTheme.swift in Sources */,
 				CE16E41CAD08D928AD7D775C /* CountryData.swift in Sources */,
 				BA90D08F81F2700C082A88C3 /* Extensions.swift in Sources */,
 				C42C5F395B4338CF821077A9 /* KeychainHelper.swift in Sources */,

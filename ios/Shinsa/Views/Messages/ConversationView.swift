@@ -7,6 +7,20 @@ struct ConversationView: View {
 
     @State private var messageText = ""
     @State private var scrollProxy: ScrollViewProxy?
+    @State private var showOptions = false
+    @State private var currentThemeKey: String
+    @State private var isPinned: Bool
+
+    init(conversation: Conversation, messagesVM: MessagesViewModel) {
+        self.conversation = conversation
+        self.messagesVM = messagesVM
+        _currentThemeKey = State(initialValue: conversation.theme ?? "default")
+        _isPinned = State(initialValue: conversation.isPinned ?? false)
+    }
+
+    private var theme: ChatTheme {
+        ChatTheme.get(currentThemeKey)
+    }
 
     var body: some View {
         ZStack {
@@ -92,6 +106,15 @@ struct ConversationView: View {
         }
         .navigationTitle(conversationTitle)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button { showOptions = true } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .foregroundColor(DojoTheme.textMuted)
+                }
+            }
+        }
+        .sheet(isPresented: $showOptions) { optionsSheet }
         .task {
             await messagesVM.loadMessages(conversationId: conversation.id)
             messagesVM.startPolling(conversationId: conversation.id)
@@ -104,7 +127,142 @@ struct ConversationView: View {
     // MARK: - Title
 
     private var conversationTitle: String {
-        conversation.partnerUsername ?? "Chat"
+        conversation.displayName
+    }
+
+    // MARK: - Options Sheet
+
+    private var optionsSheet: some View {
+        NavigationStack {
+            ZStack {
+                DojoTheme.piuBg.ignoresSafeArea()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        // Profile link (direct chats only)
+                        if !conversation.isSquad, let _ = conversation.partner?.id {
+                            NavigationLink {
+                                // Navigate to profile
+                                Text("Profile") // Placeholder - uses existing navigation
+                            } label: {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "person.circle")
+                                        .font(.system(size: 20))
+                                        .foregroundColor(DojoTheme.piuBlue)
+                                    Text("Visit Profile")
+                                        .font(.system(size: 14, weight: .medium))
+                                        .foregroundColor(.white)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(DojoTheme.textMuted)
+                                }
+                                .padding(14)
+                                .background(DojoTheme.piuCard)
+                                .cornerRadius(10)
+                            }
+                        }
+
+                        // Pin/Unpin
+                        Button {
+                            Task {
+                                let newPin = !isPinned
+                                _ = try? await APIService.shared.pinConversation(conversation.id, pin: newPin)
+                                isPinned = newPin
+                            }
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: isPinned ? "pin.slash.fill" : "pin.fill")
+                                    .font(.system(size: 20))
+                                    .foregroundColor(DojoTheme.piuGold)
+                                Text(isPinned ? "Unpin Conversation" : "Pin Conversation")
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundColor(.white)
+                                Spacer()
+                            }
+                            .padding(14)
+                            .background(DojoTheme.piuCard)
+                            .cornerRadius(10)
+                        }
+
+                        // Theme picker
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("CHAT THEME")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundColor(DojoTheme.textMuted)
+
+                            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
+                                ForEach(ChatTheme.orderedKeys, id: \.self) { key in
+                                    let t = ChatTheme.themes[key]!
+                                    Button {
+                                        currentThemeKey = key
+                                        Task {
+                                            _ = try? await APIService.shared.updateConversationTheme(conversation.id, theme: key)
+                                        }
+                                    } label: {
+                                        VStack(spacing: 6) {
+                                            ZStack {
+                                                RoundedRectangle(cornerRadius: 8)
+                                                    .fill(t.headerBg)
+                                                    .frame(height: 36)
+                                                HStack(spacing: 4) {
+                                                    Circle().fill(t.ownBubble)
+                                                        .frame(width: 12, height: 12)
+                                                        .overlay(Circle().stroke(t.ownBubbleBorder, lineWidth: 1))
+                                                    Circle().fill(t.otherBubble)
+                                                        .frame(width: 12, height: 12)
+                                                        .overlay(Circle().stroke(t.otherBubbleBorder, lineWidth: 1))
+                                                }
+                                            }
+                                            Text(t.name)
+                                                .font(.system(size: 11, weight: .medium))
+                                                .foregroundColor(currentThemeKey == key ? .white : DojoTheme.textMuted)
+                                        }
+                                        .padding(8)
+                                        .background(currentThemeKey == key ? DojoTheme.piuAccent.opacity(0.2) : DojoTheme.piuCard)
+                                        .cornerRadius(10)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 10)
+                                                .stroke(currentThemeKey == key ? DojoTheme.piuAccent : DojoTheme.piuBorder, lineWidth: currentThemeKey == key ? 2 : 1)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // Search messages placeholder
+                        Button {
+                            // Future: implement search
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "magnifyingglass")
+                                    .font(.system(size: 20))
+                                    .foregroundColor(DojoTheme.textMuted)
+                                Text("Search Messages")
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundColor(.white)
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(DojoTheme.textMuted)
+                            }
+                            .padding(14)
+                            .background(DojoTheme.piuCard)
+                            .cornerRadius(10)
+                        }
+                    }
+                    .padding(20)
+                }
+            }
+            .navigationTitle("Options")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { showOptions = false }
+                        .foregroundColor(DojoTheme.piuAccent)
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
     }
 
     // MARK: - Message Bubble
@@ -112,6 +270,10 @@ struct ConversationView: View {
     @ViewBuilder
     private func messageBubble(_ msg: DirectMessage) -> some View {
         let isMe = msg.isOwn ?? (msg.senderId == auth.userId)
+        let bubbleBg = isMe ? theme.ownBubble : theme.otherBubble
+        let bubbleBorder = isMe ? theme.ownBubbleBorder : theme.otherBubbleBorder
+        let textColor: Color = theme.isLight && !isMe ? .black : .white
+
         HStack(alignment: .top, spacing: 0) {
             if isMe { Spacer(minLength: 48) }
 
@@ -129,10 +291,14 @@ struct ConversationView: View {
 
                 Text(msg.content ?? "")
                     .font(.system(size: 13))
-                    .foregroundColor(.white)
+                    .foregroundColor(textColor)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
-                    .background(isMe ? DojoTheme.piuAccent.opacity(0.3) : DojoTheme.piuCard)
+                    .background(bubbleBg)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(bubbleBorder, lineWidth: 1)
+                    )
                     .cornerRadius(16)
 
                 if let ts = msg.createdAt {

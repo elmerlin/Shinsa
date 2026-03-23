@@ -21,18 +21,32 @@ struct Conversation: Codable, Identifiable {
     var lastMessageAt: String?
     var unreadCount: Int?
     var isPinned: Bool?
+    var title: String?
+    var memberCount: Int?
+    var theme: String?
 
     // Convenience for views
     var partnerUsername: String? { partner?.username }
     var partnerAvatar: String? { partner?.avatar }
     var lastMessagePreview: String? { lastMessage?.preview }
 
+    /// Display name: squad title or partner username
+    var displayName: String {
+        if kind == "squad" {
+            return title ?? "Squad"
+        }
+        return partner?.username ?? "Chat"
+    }
+
+    var isSquad: Bool { kind == "squad" }
+
     enum CodingKeys: String, CodingKey {
-        case id, kind, partner
+        case id, kind, partner, title, theme
         case lastMessage = "last_message"
         case lastMessageAt = "last_message_at"
         case unreadCount = "unread_count"
         case isPinned = "is_pinned"
+        case memberCount = "member_count"
     }
 }
 

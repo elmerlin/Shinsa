@@ -68,6 +68,42 @@ enum DojoTheme {
         return LinearGradient(colors: [pair.0, pair.1], startPoint: .topLeading, endPoint: .bottomTrailing)
     }
 
+    // MARK: - Grade Colors
+    static func gradeColor(for score: Int) -> Color {
+        if score >= 995000 { return Color(hex: "#7dd3fc") } // SSS+ sky-300
+        if score >= 990000 { return Color(hex: "#38bdf8") } // SSS sky-400
+        if score >= 985000 { return Color(hex: "#ffd700") } // SS+ gold
+        if score >= 980000 { return Color(hex: "#facc15") } // SS yellow-400
+        if score >= 975000 { return Color(hex: "#f59e0b") } // S+ amber-400
+        if score >= 970000 { return Color(hex: "#d97706") } // S amber-500
+        if score >= 960000 { return Color(hex: "#c0c0c0") } // AAA+ silver
+        if score >= 950000 { return Color(hex: "#d1d5db") } // AAA gray-300
+        if score >= 925000 { return Color(hex: "#cd7f32") } // AA+ bronze
+        if score >= 900000 { return Color(hex: "#cd7f32") } // AA bronze
+        if score >= 825000 { return Color(hex: "#b45309") } // A+ amber-700
+        if score >= 750000 { return Color(hex: "#b45309") } // A amber-700
+        return Color(hex: "#6b7280") // B/C/D/F gray
+    }
+
+    static func gradeLabel(for score: Int) -> String {
+        if score >= 995000 { return "SSS+" }
+        if score >= 990000 { return "SSS" }
+        if score >= 985000 { return "SS+" }
+        if score >= 980000 { return "SS" }
+        if score >= 975000 { return "S+" }
+        if score >= 970000 { return "S" }
+        if score >= 960000 { return "AAA+" }
+        if score >= 950000 { return "AAA" }
+        if score >= 925000 { return "AA+" }
+        if score >= 900000 { return "AA" }
+        if score >= 825000 { return "A+" }
+        if score >= 750000 { return "A" }
+        if score >= 650000 { return "B" }
+        if score >= 550000 { return "C" }
+        if score >= 450000 { return "D" }
+        return "F"
+    }
+
     // MARK: - Medal
     static func medalEmoji(for rank: Int) -> String {
         switch rank {
