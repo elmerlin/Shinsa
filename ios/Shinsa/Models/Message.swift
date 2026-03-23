@@ -137,16 +137,29 @@ struct SquadDetail: Codable {
 }
 
 struct SquadMember: Codable, Identifiable {
-    var id: String { userId ?? UUID().uuidString }
+    var id: String { userId ?? user?.id ?? UUID().uuidString }
     var userId: String?
+    var role: String?
+    var user: SquadMemberUser?
+
+    // Convenience accessors
+    var username: String? { user?.username }
+    var avatar: String? { user?.avatar }
+
+    enum CodingKeys: String, CodingKey {
+        case role, user
+        case userId = "user_id"
+    }
+}
+
+struct SquadMemberUser: Codable {
+    var id: String?
     var username: String?
     var avatar: String?
-    var role: String?
     var playingStatus: String?
 
     enum CodingKeys: String, CodingKey {
-        case username, avatar, role
-        case userId = "user_id"
+        case id, username, avatar
         case playingStatus = "playing_status"
     }
 }
