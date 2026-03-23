@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { getTournaments, getDuels, getNotices, deleteTournament, searchTournaments, deleteDuel, getOnlineDuels, deleteOnlineDuel, getRecentActivity, getFeaturedCommunities, getLiveSessions, joinCommunity, getDailyHighlights, getJacketMap } from '../utils/api';
+import { getTournaments, getDuels, getNotices, deleteTournament, searchTournaments, deleteDuel, getOnlineDuels, deleteOnlineDuel, getRecentActivity, getFeaturedCommunities, getLiveSessions, joinCommunity, getDailyHighlights, getJacketMap, getChartKeyMap } from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag } from '../components/PlayerRegistration';
@@ -62,6 +62,7 @@ export default function Dashboard() {
   const [showArchived, setShowArchived] = useState(false);
   const [dailyHighlights, setDailyHighlights] = useState(null);
   const [jacketLookup, setJacketLookup] = useState({});
+  const [chartKeyMap, setChartKeyMap] = useState({});
 
   const matchesSearch = (value, q) => String(value || '').toLowerCase().includes(q);
   const duelMatchesSearch = (duel, q) => (
@@ -81,6 +82,7 @@ export default function Dashboard() {
     getRecentActivity().then(setRecentActivity).catch(() => {});
     getDailyHighlights().then(setDailyHighlights).catch(() => {});
     getJacketMap().then(setJacketLookup).catch(() => {});
+    getChartKeyMap().then(setChartKeyMap).catch(() => {});
     getFeaturedCommunities()
       .then((rows) => setFeaturedCommunities((rows || []).map((community) => ({
         ...community,
@@ -467,7 +469,7 @@ export default function Dashboard() {
       )}
 
       {dailyHighlights && searchResults === null && (
-        <DailyHighlights data={dailyHighlights} jacketLookup={jacketLookup} />
+        <DailyHighlights data={dailyHighlights} jacketLookup={jacketLookup} chartKeyMap={chartKeyMap} />
       )}
 
       {/* Communities Section */}

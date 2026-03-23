@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
 import { parseGrade } from '../utils/grades';
 import { getAvatarUrl } from './AvatarPicker';
 import { resolveChartJacketUrl } from './PiuChartJacket';
 import YouTubeReplayModal from './YouTubeReplayModal';
+import ScoreSnapshotModal from './ScoreSnapshotModal';
 import { getCountryFlag } from './PlayerRegistration';
+import { buildScoreSnapshotLinkShare } from '../utils/directMessageShares';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -41,7 +42,6 @@ function getGradeColor(grade, score = 0) {
   return getRank(score).color;
 }
 
-// Consistent with PiuChartJacket badge tones
 function getLevelBadgeTone(mode) {
   if (String(mode || '').trim() === 'Single')
     return 'border-rose-200/45 bg-gradient-to-br from-[#ff7a7a] via-[#d93d62] to-[#7a1730] shadow-[0_2px_8px_rgba(217,61,98,0.3)]';
@@ -58,6 +58,13 @@ function getModeShort(mode) {
 
 function fmt(value) {
   return (parseInt(value, 10) || 0).toLocaleString();
+}
+
+function buildChartLink(item, chartKeyMap) {
+  const norm = (item.song_title || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const exactKey = `${norm}|${item.mode}|${item.level}`;
+  const chartId = chartKeyMap?.[exactKey] || chartKeyMap?.[norm];
+  return chartId ? `/songs/chart/${chartId}` : `/songs?q=${encodeURIComponent(item.song_title || '')}`;
 }
 
 const RANK_STYLES = [
@@ -116,8 +123,8 @@ function PlayerRow({ avatarUrl, username, nationality }) {
       {avatarUrl ? (
         <img src={avatarUrl} alt="" className="h-[18px] w-[18px] shrink-0 rounded-full border border-white/25 object-cover shadow-sm" />
       ) : null}
-      <span className="min-w-0 truncate text-[10px] font-display font-bold text-white/95 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
-        {nationality ? <>{getCountryFlag(nationality, 'h-[10px] inline-block')} </> : null}{username}
+      <span className="min-w-0 truncate text-[11px] font-display font-bold text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">
+        {nationality ? <>{getCountryFlag(nationality, 'h-[11px] inline-block')} </> : null}{username}
       </span>
     </div>
   );
@@ -207,8 +214,8 @@ function ReplayCard({ play, rank, jacketLookup, onReplayClick, visible }) {
   return (
     <button
       type="button"
-      onClick={() => onReplayClick(play.replay_embed_url, `${play.song_title} — ${play.username}`)}
-      className={`group relative flex-shrink-0 snap-start ${CARD_W} ${CARD_H} overflow-hidden rounded-lg border border-piu-border/50 transition-all duration-400 ease-out hover:border-sky-400/35 hover:shadow-[0_4px_16px_rgba(56,189,248,0.1)] ${visible ? 'translate-y-0 opacity-100' : 'translate-y-3 opacity-0'}`}
+      onClick={() => onReplayClick(play.replay_embed_url, play.song_title)}
+      className={`group relative flex-shrink-0 snap-start ${CARD_W} ${CARD_H} overflow-hidden rounded-lg border border-piu-border/50 text-left transition-all duration-400 ease-out hover:border-sky-400/35 hover:shadow-[0_4px_16px_rgba(56,189,248,0.1)] ${visible ? 'translate-y-0 opacity-100' : 'translate-y-3 opacity-0'}`}
     >
       <RankBadge rank={rank} />
       <LevelBadge mode={play.mode} level={play.level} />
@@ -218,18 +225,18 @@ function ReplayCard({ play, rank, jacketLookup, onReplayClick, visible }) {
       ) : (
         <div className="absolute inset-0 bg-gradient-to-br from-[#152238] via-[#0f1a2d] to-[#090d18]" />
       )}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-black/10" />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-black/15" />
 
       <PlayOverlay />
 
       <div className="relative z-10 flex h-full flex-col justify-end p-2">
         <PlayerRow avatarUrl={avatarUrl} username={play.username} nationality={play.nationality} />
-        <p className="mt-0.5 font-display text-[10px] font-black leading-tight text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] line-clamp-1">
+        <p className="mt-0.5 font-display text-[11px] font-black leading-tight text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] line-clamp-1">
           {play.song_title}
         </p>
         <div className="mt-1 flex items-baseline justify-between">
-          <span className="font-display text-[13px] font-black text-white leading-none drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">{fmt(score)}</span>
-          <span className={`font-display text-[11px] font-black leading-none drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)] ${getGradeColor(gradeDisplay, score)} ${grade.isBroken ? 'grade-broken' : ''}`} data-grade={gradeDisplay}>{gradeDisplay}</span>
+          <span className="font-display text-sm font-black text-white leading-none drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">{fmt(score)}</span>
+          <span className={`font-display text-xs font-black leading-none drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)] ${getGradeColor(gradeDisplay, score)} ${grade.isBroken ? 'grade-broken' : ''}`} data-grade={gradeDisplay}>{gradeDisplay}</span>
         </div>
       </div>
 
@@ -244,7 +251,7 @@ function ReplayCard({ play, rank, jacketLookup, onReplayClick, visible }) {
 
 // ── Upscore card ────────────────────────────────────────────────────────────
 
-function UpscoreCard({ item, rank, jacketLookup, visible }) {
+function UpscoreCard({ item, rank, jacketLookup, chartKeyMap, visible, onScoreClick }) {
   const jacket = resolveChartJacketUrl({ title: item.song_title, mode: item.mode, level: item.level, jacketLookup, backgroundUrl: item.background_url });
   const newScore = parseInt(item.new_score ?? item.score, 10) || 0;
   const oldScore = parseInt(item.old_score, 10) || 0;
@@ -253,11 +260,26 @@ function UpscoreCard({ item, rank, jacketLookup, visible }) {
   const grade = parseGrade(item.new_grade || item.grade, rankInfo.label);
   const gradeDisplay = grade.display || rankInfo.label;
   const avatarUrl = item.avatar ? getAvatarUrl(item.avatar) : '';
+  const chartLink = buildChartLink(item, chartKeyMap);
 
   return (
-    <Link
-      to={`/upscore/${item.upscore_id}`}
-      className={`group relative flex-shrink-0 snap-start ${CARD_W} ${CARD_H} overflow-hidden rounded-lg border border-piu-border/50 transition-all duration-400 ease-out hover:border-piu-green/35 hover:shadow-[0_4px_16px_rgba(51,255,102,0.08)] ${visible ? 'translate-y-0 opacity-100' : 'translate-y-3 opacity-0'}`}
+    <button
+      type="button"
+      onClick={() => onScoreClick({
+        ...item,
+        _jacketUrl: jacket,
+        _chartLink: chartLink,
+        _dmLinkShare: buildScoreSnapshotLinkShare({
+          kind: 'upscore',
+          sourceId: item.upscore_id,
+          username: item.username,
+          avatar: avatarUrl,
+          score: item,
+          path: `/upscore/${item.upscore_id}`,
+          chartPath: chartLink,
+        }),
+      })}
+      className={`group relative flex-shrink-0 snap-start ${CARD_W} ${CARD_H} overflow-hidden rounded-lg border border-piu-border/50 text-left transition-all duration-400 ease-out hover:border-piu-green/35 hover:shadow-[0_4px_16px_rgba(51,255,102,0.08)] ${visible ? 'translate-y-0 opacity-100' : 'translate-y-3 opacity-0'}`}
     >
       <RankBadge rank={rank} />
       <LevelBadge mode={item.mode} level={item.level} />
@@ -267,42 +289,57 @@ function UpscoreCard({ item, rank, jacketLookup, visible }) {
       ) : (
         <div className="absolute inset-0 bg-gradient-to-br from-[#0d1f12] via-[#0a1a0e] to-[#060d08]" />
       )}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-black/10" />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-black/15" />
 
       <div className="relative z-10 flex h-full flex-col justify-end p-2">
         <PlayerRow avatarUrl={avatarUrl} username={item.username} nationality={item.nationality} />
-        <p className="mt-0.5 font-display text-[10px] font-black leading-tight text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] line-clamp-1">
+        <p className="mt-0.5 font-display text-[11px] font-black leading-tight text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] line-clamp-1">
           {item.song_title}
         </p>
         <div className="mt-1 flex items-baseline justify-between">
-          <span className="font-display text-[13px] font-black text-white leading-none drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">{fmt(newScore)}</span>
-          <span className={`font-display text-[11px] font-black leading-none drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)] ${getGradeColor(gradeDisplay, newScore)} ${grade.isBroken ? 'grade-broken' : ''}`} data-grade={gradeDisplay}>{gradeDisplay}</span>
+          <span className="font-display text-sm font-black text-white leading-none drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">{fmt(newScore)}</span>
+          <span className={`font-display text-xs font-black leading-none drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)] ${getGradeColor(gradeDisplay, newScore)} ${grade.isBroken ? 'grade-broken' : ''}`} data-grade={gradeDisplay}>{gradeDisplay}</span>
         </div>
         <div className="mt-px flex items-center justify-between">
-          <span className="text-[8px] text-gray-300/80 drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]">{fmt(oldScore)}</span>
-          <span className={`font-mono text-[9px] font-bold drop-shadow-[0_1px_1px_rgba(0,0,0,0.6)] ${delta > 0 ? 'text-piu-green' : delta < 0 ? 'text-rose-300' : 'text-gray-400'}`}>
+          <span className="text-[9px] text-gray-200/80 drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]">{fmt(oldScore)}</span>
+          <span className={`font-mono text-[10px] font-bold drop-shadow-[0_1px_1px_rgba(0,0,0,0.6)] ${delta > 0 ? 'text-piu-green' : delta < 0 ? 'text-rose-300' : 'text-gray-400'}`}>
             {delta > 0 ? '+' : ''}{delta.toLocaleString()}
           </span>
         </div>
       </div>
-    </Link>
+    </button>
   );
 }
 
 // ── Clear card ──────────────────────────────────────────────────────────────
 
-function ClearCard({ item, rank, jacketLookup, visible }) {
+function ClearCard({ item, rank, jacketLookup, chartKeyMap, visible, onScoreClick }) {
   const jacket = resolveChartJacketUrl({ title: item.song_title, mode: item.mode, level: item.level, jacketLookup, backgroundUrl: item.background_url });
   const score = parseInt(item.score, 10) || 0;
   const rankInfo = getRank(score);
   const grade = parseGrade(item.grade, rankInfo.label);
   const gradeDisplay = grade.display || rankInfo.label;
   const avatarUrl = item.avatar ? getAvatarUrl(item.avatar) : '';
+  const chartLink = buildChartLink(item, chartKeyMap);
 
   return (
-    <Link
-      to={`/clear/${item.clear_id}`}
-      className={`group relative flex-shrink-0 snap-start ${CARD_W} ${CARD_H} overflow-hidden rounded-lg border border-piu-border/50 transition-all duration-400 ease-out hover:border-sky-400/35 hover:shadow-[0_4px_16px_rgba(56,189,248,0.08)] ${visible ? 'translate-y-0 opacity-100' : 'translate-y-3 opacity-0'}`}
+    <button
+      type="button"
+      onClick={() => onScoreClick({
+        ...item,
+        _jacketUrl: jacket,
+        _chartLink: chartLink,
+        _dmLinkShare: buildScoreSnapshotLinkShare({
+          kind: 'clear',
+          sourceId: item.clear_id,
+          username: item.username,
+          avatar: avatarUrl,
+          score: item,
+          path: `/clear/${item.clear_id}`,
+          chartPath: chartLink,
+        }),
+      })}
+      className={`group relative flex-shrink-0 snap-start ${CARD_W} ${CARD_H} overflow-hidden rounded-lg border border-piu-border/50 text-left transition-all duration-400 ease-out hover:border-sky-400/35 hover:shadow-[0_4px_16px_rgba(56,189,248,0.08)] ${visible ? 'translate-y-0 opacity-100' : 'translate-y-3 opacity-0'}`}
     >
       <RankBadge rank={rank} />
       <LevelBadge mode={item.mode} level={item.level} />
@@ -312,26 +349,27 @@ function ClearCard({ item, rank, jacketLookup, visible }) {
       ) : (
         <div className="absolute inset-0 bg-gradient-to-br from-[#0d1525] via-[#0a1020] to-[#06090f]" />
       )}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-black/10" />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-black/15" />
 
       <div className="relative z-10 flex h-full flex-col justify-end p-2">
         <PlayerRow avatarUrl={avatarUrl} username={item.username} nationality={item.nationality} />
-        <p className="mt-0.5 font-display text-[10px] font-black leading-tight text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] line-clamp-1">
+        <p className="mt-0.5 font-display text-[11px] font-black leading-tight text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] line-clamp-1">
           {item.song_title}
         </p>
         <div className="mt-1 flex items-baseline justify-between">
-          <span className="font-display text-[13px] font-black text-white leading-none drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">{fmt(score)}</span>
-          <span className={`font-display text-[11px] font-black leading-none drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)] ${getGradeColor(gradeDisplay, score)} ${grade.isBroken ? 'grade-broken' : ''}`} data-grade={gradeDisplay}>{gradeDisplay}</span>
+          <span className="font-display text-sm font-black text-white leading-none drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">{fmt(score)}</span>
+          <span className={`font-display text-xs font-black leading-none drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)] ${getGradeColor(gradeDisplay, score)} ${grade.isBroken ? 'grade-broken' : ''}`} data-grade={gradeDisplay}>{gradeDisplay}</span>
         </div>
       </div>
-    </Link>
+    </button>
   );
 }
 
 // ── Main component ──────────────────────────────────────────────────────────
 
-export default function DailyHighlights({ data, jacketLookup = {} }) {
+export default function DailyHighlights({ data, jacketLookup = {}, chartKeyMap = {} }) {
   const [replayModal, setReplayModal] = useState(null);
+  const [selectedScore, setSelectedScore] = useState(null);
 
   const topReplays = data?.topReplays || [];
   const topUpscores = data?.topUpscores || [];
@@ -356,7 +394,7 @@ export default function DailyHighlights({ data, jacketLookup = {} }) {
 
       {hasReplays && (
         <div ref={replayAnim.ref} className="mb-3">
-          <SectionLabel icon="🎬" title="Top Plays" accent="from-red-500/30" />
+          <SectionLabel icon="🎬" title="Top Replays" accent="from-red-500/30" />
           <ScrollRail>
             {topReplays.map((play, i) => (
               <ReplayCard key={play.id || i} play={play} rank={i + 1} jacketLookup={jacketLookup} onReplayClick={(url, title) => setReplayModal({ url, title })} visible={replayAnim.visible.includes(i)} />
@@ -370,7 +408,7 @@ export default function DailyHighlights({ data, jacketLookup = {} }) {
           <SectionLabel icon="📈" title="Best Upscores" accent="from-piu-green/30" />
           <ScrollRail>
             {topUpscores.map((item, i) => (
-              <UpscoreCard key={`${item.upscore_id}-${i}`} item={item} rank={i + 1} jacketLookup={jacketLookup} visible={upscoreAnim.visible.includes(i)} />
+              <UpscoreCard key={`${item.upscore_id}-${i}`} item={item} rank={i + 1} jacketLookup={jacketLookup} chartKeyMap={chartKeyMap} visible={upscoreAnim.visible.includes(i)} onScoreClick={setSelectedScore} />
             ))}
           </ScrollRail>
         </div>
@@ -381,7 +419,7 @@ export default function DailyHighlights({ data, jacketLookup = {} }) {
           <SectionLabel icon="🎯" title="Best New Clears" accent="from-sky-400/30" />
           <ScrollRail>
             {topClears.map((item, i) => (
-              <ClearCard key={`${item.clear_id}-${i}`} item={item} rank={i + 1} jacketLookup={jacketLookup} visible={clearAnim.visible.includes(i)} />
+              <ClearCard key={`${item.clear_id}-${i}`} item={item} rank={i + 1} jacketLookup={jacketLookup} chartKeyMap={chartKeyMap} visible={clearAnim.visible.includes(i)} onScoreClick={setSelectedScore} />
             ))}
           </ScrollRail>
         </div>
@@ -389,6 +427,17 @@ export default function DailyHighlights({ data, jacketLookup = {} }) {
 
       {replayModal && (
         <YouTubeReplayModal url={replayModal.url} title={replayModal.title} onClose={() => setReplayModal(null)} />
+      )}
+
+      {selectedScore && (
+        <ScoreSnapshotModal
+          score={selectedScore}
+          jacketUrl={selectedScore._jacketUrl || ''}
+          chartLink={selectedScore._chartLink || ''}
+          directMessageLinkShare={selectedScore._dmLinkShare || null}
+          modalLabel="Score details"
+          onClose={() => setSelectedScore(null)}
+        />
       )}
     </div>
   );
