@@ -413,10 +413,6 @@ export default function Dashboard() {
         </div>
       )}
 
-      {dailyHighlights && searchResults === null && (
-        <DailyHighlights data={dailyHighlights} jacketLookup={jacketLookup} />
-      )}
-
       {user && liveSessions.length > 0 && searchResults === null && (
         <div className="mb-8">
           <div className="mb-3 flex items-center justify-between gap-3">
@@ -468,6 +464,10 @@ export default function Dashboard() {
             })}
           </div>
         </div>
+      )}
+
+      {dailyHighlights && searchResults === null && (
+        <DailyHighlights data={dailyHighlights} jacketLookup={jacketLookup} />
       )}
 
       {/* Communities Section */}
