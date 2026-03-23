@@ -501,6 +501,7 @@ export function SingleUpscorePage() {
   const upscoreLinkShare = buildUpscoreLinkShare({
     upscoreId: item.id,
     username: item.username,
+    avatar: item.avatar ? getAvatarUrl(item.avatar) : '',
     upscores,
   });
   const upscoreChallengeOptions = buildUpscoreChallengeOptions({
@@ -718,6 +719,7 @@ export function SingleClearPage() {
   const clearLinkShare = buildClearLinkShare({
     clearId: item.id,
     username: item.username,
+    avatar: item.avatar ? getAvatarUrl(item.avatar) : '',
     clears,
   });
   const clearChallengeOptions = buildClearChallengeOptions({

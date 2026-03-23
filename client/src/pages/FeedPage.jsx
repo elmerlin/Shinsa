@@ -457,6 +457,7 @@ function UpscoreCard({ item, jacketLookup, chartKeyMap, onScoreClick, onReplayCl
   const upscoreLinkShare = buildUpscoreLinkShare({
     upscoreId: item.id,
     username: item.username,
+    avatar: item.avatar ? getAvatarUrl(item.avatar) : '',
     upscores,
   });
   const upscoreChallengeOptions = buildUpscoreChallengeOptions({
@@ -872,6 +873,7 @@ function NewClearCard({ item, jacketLookup, chartKeyMap, onScoreClick, onReplayC
   const clearLinkShare = buildClearLinkShare({
     clearId: item.id,
     username: item.username,
+    avatar: item.avatar ? getAvatarUrl(item.avatar) : '',
     clears,
   });
   const clearChallengeOptions = buildClearChallengeOptions({

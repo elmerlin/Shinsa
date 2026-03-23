@@ -1644,13 +1644,15 @@ function MessageLinkCard({
           const rebuilt = buildClearLinkShare({
             clearId: resourceId,
             username: clearItem?.username || linkShare.playerName || '',
+            avatar: clearItem?.avatar ? getAvatarUrl(clearItem.avatar) : '',
             clears: getClearItems(clearItem),
           });
-          if (!active || !rebuilt?.previewItems?.length) return;
+          const hasRichData = rebuilt?.previewItems?.length > 0 || hasScoreSnapshotLinkShare(rebuilt);
+          if (!active || !hasRichData) return;
           setHydratedLinkShare({
             ...rebuilt,
             ...linkShare,
-            previewItems: enrichPreviewItemsWithJackets(rebuilt.previewItems, lookup),
+            previewItems: rebuilt.previewItems ? enrichPreviewItemsWithJackets(rebuilt.previewItems, lookup) : undefined,
             totalItemCount: rebuilt.totalItemCount,
             extraItemCount: rebuilt.extraItemCount,
             title: rebuilt.title || linkShare.title,
@@ -1669,9 +1671,11 @@ function MessageLinkCard({
         const rebuilt = buildUpscoreLinkShare({
           upscoreId: resourceId,
           username: upscoreItem?.username || linkShare.playerName || '',
+          avatar: upscoreItem?.avatar ? getAvatarUrl(upscoreItem.avatar) : '',
           upscores: parseUpscoreItems(upscoreItem),
         });
-        if (!active || !rebuilt?.previewItems?.length) return;
+        const hasRichUpscoreData = rebuilt?.previewItems?.length > 0 || hasScoreSnapshotLinkShare(rebuilt);
+        if (!active || !hasRichUpscoreData) return;
         setHydratedLinkShare({
           ...rebuilt,
           ...linkShare,

@@ -280,6 +280,8 @@ export function buildLiveSessionLinkShare({
 export function buildUpscoreLinkShare({
   upscoreId,
   username,
+  avatar = '',
+  skillTitle = '',
   upscores,
 }) {
   const id = String(upscoreId || '').trim();
@@ -303,10 +305,13 @@ export function buildUpscoreLinkShare({
 
   if (rows.length === 1) {
     const [entry] = rows;
-    const gainLabel = formatDelta((Number(entry?.new_score) || 0) - (Number(entry?.old_score) || 0));
-    const oldScore = formatScore(entry?.old_score);
-    const newScore = formatScore(entry?.new_score);
-    const scoreLabel = oldScore && newScore ? `${oldScore} -> ${newScore}` : newScore || oldScore;
+    const newScoreNum = Number(entry?.new_score) || 0;
+    const oldScoreNum = Number(entry?.old_score) || 0;
+    const delta = newScoreNum > 0 && oldScoreNum > 0 ? newScoreNum - oldScoreNum : 0;
+    const gainLabel = formatDelta(delta);
+    const oldScoreLabel = formatScore(entry?.old_score);
+    const newScoreLabel = formatScore(entry?.new_score);
+    const scoreLabel = oldScoreLabel && newScoreLabel ? `${oldScoreLabel} -> ${newScoreLabel}` : newScoreLabel || oldScoreLabel;
 
     return {
       kind: 'upscore',
@@ -321,7 +326,25 @@ export function buildUpscoreLinkShare({
       songTitle: String(entry?.song_title || ''),
       mode: String(entry?.mode || ''),
       level: Number(entry?.level) || 0,
-      targetScore: Number(entry?.new_score) || 0,
+      targetScore: newScoreNum,
+      score: newScoreNum,
+      oldScore: oldScoreNum,
+      grade: compactText(entry?.new_grade || entry?.grade, 20),
+      oldGrade: compactText(entry?.old_grade, 20),
+      scoreDelta: delta,
+      jacketUrl: String(entry?.background_url || entry?._jacketUrl || '').trim(),
+      perfect: Number(entry?.perfect) || 0,
+      great: Number(entry?.great) || 0,
+      good: Number(entry?.good) || 0,
+      bad: Number(entry?.bad) || 0,
+      miss: Number(entry?.miss) || 0,
+      plate: String(entry?.plate || '').trim(),
+      overTop100Rank: Number(entry?.over_top100_rank) || 0,
+      isStageBreak: !!entry?.is_stage_break,
+      playerName: authorName,
+      playerAvatar: String(avatar || '').trim(),
+      playerSkillTitle: String(skillTitle || '').trim(),
+      playedAt: String(entry?.date_played || '').trim(),
     };
   }
 
@@ -440,6 +463,8 @@ export function buildScoreSnapshotLinkShare({
 export function buildClearLinkShare({
   clearId,
   username,
+  avatar = '',
+  skillTitle = '',
   clears,
 }) {
   const id = String(clearId || '').trim();
@@ -464,6 +489,7 @@ export function buildClearLinkShare({
   const allTitleUnlocks = rows.every((entry) => String(entry?.entry_type || '').trim().toLowerCase() === 'title_unlock');
   if (rows.length === 1) {
     const [entry] = rows;
+    const scoreNum = Number(entry?.score) || 0;
     return {
       kind: 'clear',
       path: `/clear/${id}`,
@@ -477,7 +503,22 @@ export function buildClearLinkShare({
       songTitle: String(entry?.song_title || ''),
       mode: String(entry?.mode || ''),
       level: Number(entry?.level) || 0,
-      targetScore: Number(entry?.score) || 0,
+      targetScore: scoreNum,
+      score: scoreNum,
+      grade: compactText(entry?.grade, 20),
+      jacketUrl: String(entry?.background_url || entry?._jacketUrl || '').trim(),
+      perfect: Number(entry?.perfect) || 0,
+      great: Number(entry?.great) || 0,
+      good: Number(entry?.good) || 0,
+      bad: Number(entry?.bad) || 0,
+      miss: Number(entry?.miss) || 0,
+      plate: String(entry?.plate || '').trim(),
+      overTop100Rank: Number(entry?.over_top100_rank) || 0,
+      isStageBreak: !!entry?.is_stage_break,
+      playerName: authorName,
+      playerAvatar: String(avatar || '').trim(),
+      playerSkillTitle: String(skillTitle || '').trim(),
+      playedAt: String(entry?.date_played || '').trim(),
     };
   }
 
