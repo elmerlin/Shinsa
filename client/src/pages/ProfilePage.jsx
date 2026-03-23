@@ -2583,8 +2583,8 @@ export default function ProfilePage() {
             </div>
             <div className="flex items-center gap-1.5 sm:gap-2 mt-0.5 flex-wrap">
               {displaySkillTitle && (
-                <span className={`badge border ${getSkillColor(displaySkillTitle)}`}>
-                  {displaySkillTitle}
+                <span className={`badge border whitespace-nowrap ${getSkillColor(displaySkillTitle)}`}>
+                  {displaySkillTitle.replace(/\bIntermediate\b/i, 'Int.').replace(/\bBeginner\b/i, 'Beg.')}
                 </span>
               )}
               {age !== null && (
