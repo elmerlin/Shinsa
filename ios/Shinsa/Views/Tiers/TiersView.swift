@@ -15,6 +15,7 @@ struct TiersView: View {
     @State private var showEmpty: Bool = false
     @State private var hideCoOp: Bool = true
     @State private var songsPerRow: Int = 4
+    @AppStorage("tiers_default_level") private var defaultLevel: Int = 0
     @State private var showSettings = false
 
     private let modeOrder = ["Single", "Double", "CoOp"]
@@ -163,6 +164,31 @@ struct TiersView: View {
                             .tint(DojoTheme.piuAccent).foregroundColor(.white)
                         Toggle("Hide Co-Op", isOn: $hideCoOp)
                             .tint(DojoTheme.piuAccent).foregroundColor(.white)
+
+                        // Default Level
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("DEFAULT LEVEL").font(.system(size: 11, weight: .bold)).foregroundColor(DojoTheme.textMuted)
+                            Text("Level shown when opening Tiers")
+                                .font(.system(size: 11))
+                                .foregroundColor(DojoTheme.textMuted.opacity(0.6))
+
+                            let maxLevel = selectedMode == "Single" ? 26 : 28
+                            let levels = Array(1...maxLevel)
+                            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7), spacing: 4) {
+                                ForEach(levels, id: \.self) { level in
+                                    Button("\(level)") {
+                                        defaultLevel = level
+                                        selectedLevel = level
+                                    }
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundColor(defaultLevel == level ? .white : DojoTheme.textMuted)
+                                    .frame(height: 32)
+                                    .frame(maxWidth: .infinity)
+                                    .background(defaultLevel == level ? DojoTheme.piuAccent : DojoTheme.piuDark)
+                                    .cornerRadius(6)
+                                }
+                            }
+                        }
 
                         // Songs per row
                         VStack(alignment: .leading, spacing: 6) {
@@ -460,7 +486,12 @@ struct TiersView: View {
         let modes = modeOrder.filter { levelsByMode[$0] != nil && !(levelsByMode[$0]?.isEmpty ?? true) }
         if let first = modes.first {
             selectedMode = first
-            selectedLevel = levelsByMode[first]?.first?.level
+            // Apply default level if set, otherwise use first available
+            if defaultLevel > 0, let levels = levelsByMode[first], levels.contains(where: { $0.level == defaultLevel }) {
+                selectedLevel = defaultLevel
+            } else {
+                selectedLevel = levelsByMode[first]?.first?.level
+            }
         }
         await loadTiers()
     }
