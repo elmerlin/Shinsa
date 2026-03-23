@@ -395,8 +395,11 @@ class APIService {
     func addCommunityPostComment(_ communityId: String, postId: Int, content: String) async throws -> Comment { try await request("/communities/\(communityId)/posts/\(postId)/comments", method: "POST", body: ["content": content]) }
 
     // MARK: - Messages & Conversations
-    func getHighlights() async throws -> [UserHighlight] { try await request("/messages/highlights") }
-    func getUserStories(_ userId: String) async throws -> [Story] { try await request("/messages/highlights/\(userId)/story") }
+    func getHighlights() async throws -> [UserHighlight] {
+        let response: HighlightsResponse = try await request("/messages/highlights")
+        return response.highlights ?? []
+    }
+    func getUserStories(_ userId: String) async throws -> UserStoryResponse { try await request("/messages/highlights/\(userId)/story") }
     func viewStory(_ userId: String, storyId: String) async throws -> GenericResponse { try await request("/messages/highlights/\(userId)/story/\(storyId)/view", method: "POST") }
     func pumpStory(_ userId: String, storyId: String) async throws -> GenericResponse { try await request("/messages/highlights/\(userId)/story/\(storyId)/pump", method: "POST") }
     func getConversations() async throws -> [Conversation] {
@@ -415,6 +418,7 @@ class APIService {
     func pinConversation(_ conversationId: String, pin: Bool) async throws -> GenericResponse { try await request("/messages/conversations/\(conversationId)/pin", method: "PUT", body: ["pinned": AnyCodable(pin)]) }
     func startDirectConversation(_ userId: String) async throws -> Conversation { try await request("/messages/direct/\(userId)", method: "POST") }
     func createSquad(_ data: SquadCreateRequest) async throws -> Conversation { try await request("/messages/squads", method: "POST", body: data) }
+    func getSquadInfo(_ conversationId: String) async throws -> SquadInfo { try await request("/messages/conversations/\(conversationId)/squad") }
 
     // MARK: - Live Sessions
     func getLiveSessions() async throws -> [LiveSession] { try await request("/live/sessions") }

@@ -40,6 +40,11 @@ struct MessagesListView: View {
                 }
             } else {
                 ScrollView {
+                    if !vm.highlights.isEmpty {
+                        HighlightsStripView(highlights: vm.highlights)
+                            .padding(.vertical, 8)
+                    }
+
                     LazyVStack(spacing: 0) {
                         ForEach(vm.conversations) { conversation in
                             NavigationLink {
@@ -84,13 +89,17 @@ struct MessagesListView: View {
         HStack(spacing: 12) {
             // Avatar
             if conversation.isSquad {
-                ZStack {
-                    Circle()
-                        .fill(DojoTheme.piuAccent.opacity(0.2))
-                        .frame(width: 44, height: 44)
-                    Image(systemName: "person.3.fill")
-                        .font(.system(size: 16))
-                        .foregroundColor(DojoTheme.piuAccent)
+                if let avatarPath = conversation.avatar, !avatarPath.isEmpty {
+                    AvatarView(avatarPath, name: conversation.displayName, size: 44)
+                } else {
+                    ZStack {
+                        Circle()
+                            .fill(DojoTheme.piuAccent.opacity(0.2))
+                            .frame(width: 44, height: 44)
+                        Text(String(conversation.displayName.prefix(2)).uppercased())
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundColor(DojoTheme.piuAccent)
+                    }
                 }
             } else {
                 AvatarView(
