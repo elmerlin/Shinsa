@@ -2404,7 +2404,9 @@ function NowPlayingPanel({ play, requestInfo, live, onOpen, compact = false, sho
 
       {play ? (
         <div className={`${compact ? 'mt-2 flex flex-1 flex-col' : 'mt-4 flex flex-col'}`}>
-          <p className={`truncate font-display font-black text-white ${compact ? 'text-base leading-tight' : 'text-lg'}`}>{play.song_title}</p>
+          {compact ? null : (
+            <p className="truncate font-display font-black text-white text-lg">{play.song_title}</p>
+          )}
           {showPerformer && play?.username ? (
             <UserIdentity
               avatar={play.avatar}
@@ -2412,7 +2414,7 @@ function NowPlayingPanel({ play, requestInfo, live, onOpen, compact = false, sho
               skillTitle={play.skill_title}
               isHost={play.participant_role === 'owner'}
               participantRole={play.participant_role}
-              className="mt-2"
+              className={compact ? 'mt-1' : 'mt-2'}
               compact={compact}
             />
           ) : null}
@@ -2461,11 +2463,6 @@ function NowPlayingPanel({ play, requestInfo, live, onOpen, compact = false, sho
                 {play.over_top100_rank > 0 ? (
                   <span className="rounded-md border border-yellow-400/30 bg-yellow-500/10 px-2.5 py-0.5 text-[10px] font-display font-semibold text-yellow-200">
                     OVER Top 100 #{play.over_top100_rank}
-                  </span>
-                ) : null}
-                {play.session_result_type ? (
-                  <span className="rounded-md border border-piu-border/60 bg-piu-dark/60 px-2.5 py-0.5 text-[10px] text-gray-300 capitalize">
-                    {play.session_result_type}
                   </span>
                 ) : null}
               </div>
@@ -5069,25 +5066,29 @@ export default function LivePage() {
                 isCompactSongCardLayout ? 'p-2.5' : 'p-3'
               }`}
             >
-              <div className={`flex items-start ${isCompactSongCardLayout ? 'gap-2.5' : 'gap-3'}`}>
-                <PiuChartJacket
-                  title={play.song_title}
-                  mode={play.mode}
-                  level={play.level}
-                  jacketUrl={play.background_url}
-                  size={isCompactSongCardLayout ? 'sm' : 'md'}
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="flex min-w-0 items-start gap-1.5">
-                    <p className={`${isCompactSongCardLayout ? 'text-[10px]' : 'text-[11px]'} min-w-0 flex-1 truncate font-display font-bold leading-tight text-white`}>{play.song_title}</p>
-                    {showCohostMarker ? (
-                      <CohostPlayMarker
-                        avatar={play.avatar}
-                        username={play.username}
-                        compact={isCompactSongCardLayout}
-                        className="mt-0.5"
-                      />
-                    ) : null}
+              {isCompactSongCardLayout ? (
+                /* ── Compact mobile layout ── */
+                <div>
+                  <div className="flex items-start gap-2.5">
+                    <PiuChartJacket
+                      title={play.song_title}
+                      mode={play.mode}
+                      level={play.level}
+                      jacketUrl={play.background_url}
+                      size="sm"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] min-w-0 truncate font-display font-bold leading-tight text-white">{play.song_title}</p>
+                      <div className="mt-1 flex items-baseline gap-2">
+                        <p
+                          className={`text-base font-display font-black leading-none ${getGradeColor(displayGrade, displayScore)} ${parsedGrade.isBroken ? 'grade-broken' : ''}`}
+                          data-grade={displayGrade}
+                        >
+                          {displayGrade}
+                        </p>
+                        <p className="text-[10px] font-display font-bold text-cyan-300">{formatNumber(play.score)}</p>
+                      </div>
+                    </div>
                   </div>
                   {showPerformerLabels && play?.username ? (
                     <UserIdentity
@@ -5096,51 +5097,111 @@ export default function LivePage() {
                       skillTitle={play.skill_title}
                       isHost={play.participant_role === 'owner'}
                       participantRole={play.participant_role}
-                      className="mt-1.5"
-                      compact={isCompactSongCardLayout}
-                      hideAvatar={showCohostMarker}
+                      className="mt-2"
+                      compact
                     />
                   ) : null}
-                  <div className={`${isCompactSongCardLayout ? 'mt-2' : 'mt-3'}`}>
-                    <div className={`flex items-baseline ${isCompactSongCardLayout ? 'gap-2' : 'gap-2.5'}`}>
-                      <p
-                        className={`${isCompactSongCardLayout ? 'text-base' : 'text-lg'} font-display font-black leading-none ${getGradeColor(displayGrade, displayScore)} ${parsedGrade.isBroken ? 'grade-broken' : ''}`}
-                        data-grade={displayGrade}
-                      >
-                        {displayGrade}
-                      </p>
-                      <p className={`${isCompactSongCardLayout ? 'text-[10px]' : 'text-[11px]'} font-display font-bold text-cyan-300`}>{formatNumber(play.score)}</p>
-                    </div>
-                  </div>
-                  <div className={`flex flex-wrap ${isCompactSongCardLayout ? 'mt-1.5 gap-1' : 'mt-2 gap-1.5'}`}>
+                  <div className="flex flex-wrap mt-1.5 gap-1">
                     {isHopSession && play?.hop_status_label ? (
-                      <span className={`rounded-md border border-yellow-400/25 bg-yellow-500/10 font-display font-semibold text-yellow-100 ${isCompactSongCardLayout ? 'px-1.5 py-0.5 text-[9px]' : 'px-2 py-0.5 text-[10px]'}`}>
+                      <span className="rounded-md border border-yellow-400/25 bg-yellow-500/10 font-display font-semibold text-yellow-100 px-1.5 py-0.5 text-[9px]">
                         {play.hop_status_label}
                       </span>
                     ) : null}
                     {isHopSession && play?.hop_rating_points_earned > 0 ? (
-                      <span className={`rounded-md border border-emerald-400/25 bg-emerald-500/10 font-display font-semibold text-emerald-200 ${isCompactSongCardLayout ? 'px-1.5 py-0.5 text-[9px]' : 'px-2 py-0.5 text-[10px]'}`}>
+                      <span className="rounded-md border border-emerald-400/25 bg-emerald-500/10 font-display font-semibold text-emerald-200 px-1.5 py-0.5 text-[9px]">
                         +{play.hop_rating_points_earned} HoP
                       </span>
                     ) : null}
                     {play.pumbility_gain > 0 ? (
-                      <span className={`rounded-md border border-emerald-400/25 bg-emerald-500/10 font-display font-semibold text-emerald-200 ${isCompactSongCardLayout ? 'px-1.5 py-0.5 text-[9px]' : 'px-2 py-0.5 text-[10px]'}`}>
+                      <span className="rounded-md border border-emerald-400/25 bg-emerald-500/10 font-display font-semibold text-emerald-200 px-1.5 py-0.5 text-[9px]">
                         +{play.pumbility_gain} p
                       </span>
                     ) : null}
                     {play.over_top100_rank > 0 ? (
-                      <span className={`rounded-md border border-yellow-400/25 bg-yellow-500/10 font-display font-semibold text-yellow-200 ${isCompactSongCardLayout ? 'px-1.5 py-0.5 text-[9px]' : 'px-2 py-0.5 text-[10px]'}`}>
+                      <span className="rounded-md border border-yellow-400/25 bg-yellow-500/10 font-display font-semibold text-yellow-200 px-1.5 py-0.5 text-[9px]">
                         Top 100 #{play.over_top100_rank}
                       </span>
                     ) : null}
                     {requestInfo ? (
-                      <span className={`rounded-md font-display font-semibold ${isCompactSongCardLayout ? 'px-1.5 py-0.5 text-[9px]' : 'px-2 py-0.5 text-[10px]'} ${getRequestStatusMeta(requestStatus).pill}`}>
+                      <span className={`rounded-md font-display font-semibold px-1.5 py-0.5 text-[9px] ${getRequestStatusMeta(requestStatus).pill}`}>
                         {formatRequestStateLabel(requestInfo)}
                       </span>
                     ) : null}
                   </div>
                 </div>
-              </div>
+              ) : (
+                /* ── Desktop layout (unchanged) ── */
+                <div className="flex items-start gap-3">
+                  <PiuChartJacket
+                    title={play.song_title}
+                    mode={play.mode}
+                    level={play.level}
+                    jacketUrl={play.background_url}
+                    size="md"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex min-w-0 items-start gap-1.5">
+                      <p className="text-[11px] min-w-0 flex-1 truncate font-display font-bold leading-tight text-white">{play.song_title}</p>
+                      {showCohostMarker ? (
+                        <CohostPlayMarker
+                          avatar={play.avatar}
+                          username={play.username}
+                          className="mt-0.5"
+                        />
+                      ) : null}
+                    </div>
+                    {showPerformerLabels && play?.username ? (
+                      <UserIdentity
+                        avatar={play.avatar}
+                        username={play.username}
+                        skillTitle={play.skill_title}
+                        isHost={play.participant_role === 'owner'}
+                        participantRole={play.participant_role}
+                        className="mt-1.5"
+                        hideAvatar={showCohostMarker}
+                      />
+                    ) : null}
+                    <div className="mt-3">
+                      <div className="flex items-baseline gap-2.5">
+                        <p
+                          className={`text-lg font-display font-black leading-none ${getGradeColor(displayGrade, displayScore)} ${parsedGrade.isBroken ? 'grade-broken' : ''}`}
+                          data-grade={displayGrade}
+                        >
+                          {displayGrade}
+                        </p>
+                        <p className="text-[11px] font-display font-bold text-cyan-300">{formatNumber(play.score)}</p>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap mt-2 gap-1.5">
+                      {isHopSession && play?.hop_status_label ? (
+                        <span className="rounded-md border border-yellow-400/25 bg-yellow-500/10 font-display font-semibold text-yellow-100 px-2 py-0.5 text-[10px]">
+                          {play.hop_status_label}
+                        </span>
+                      ) : null}
+                      {isHopSession && play?.hop_rating_points_earned > 0 ? (
+                        <span className="rounded-md border border-emerald-400/25 bg-emerald-500/10 font-display font-semibold text-emerald-200 px-2 py-0.5 text-[10px]">
+                          +{play.hop_rating_points_earned} HoP
+                        </span>
+                      ) : null}
+                      {play.pumbility_gain > 0 ? (
+                        <span className="rounded-md border border-emerald-400/25 bg-emerald-500/10 font-display font-semibold text-emerald-200 px-2 py-0.5 text-[10px]">
+                          +{play.pumbility_gain} p
+                        </span>
+                      ) : null}
+                      {play.over_top100_rank > 0 ? (
+                        <span className="rounded-md border border-yellow-400/25 bg-yellow-500/10 font-display font-semibold text-yellow-200 px-2 py-0.5 text-[10px]">
+                          Top 100 #{play.over_top100_rank}
+                        </span>
+                      ) : null}
+                      {requestInfo ? (
+                        <span className={`rounded-md font-display font-semibold px-2 py-0.5 text-[10px] ${getRequestStatusMeta(requestStatus).pill}`}>
+                          {formatRequestStateLabel(requestInfo)}
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              )}
             </button>
           );
         })}
