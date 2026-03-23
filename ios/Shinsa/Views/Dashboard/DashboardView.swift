@@ -10,10 +10,7 @@ struct DashboardView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    // Header
-                    headerSection
-
-                    // Quick Action Buttons (2x2 grid)
+                    // Quick Action Buttons (4-column row)
                     quickActionsGrid
 
                     // Search
@@ -47,92 +44,89 @@ struct DashboardView: View {
             .refreshable { await vm.load() }
         }
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                HStack(spacing: 0) {
+                    Text("PUMP")
+                        .font(.system(size: 18, weight: .black))
+                        .foregroundColor(DojoTheme.piuGold)
+                    Text(" SHINSA")
+                        .font(.system(size: 18, weight: .black))
+                        .foregroundColor(.white)
+                }
+            }
+        }
         .task { await vm.load() }
         .sheet(item: $vm.selectedNotice) { notice in
             NoticeDetailSheet(notice: notice)
         }
     }
 
-    // MARK: - Header
-
-    private var headerSection: some View {
-        HStack(spacing: 0) {
-            Text("PUMP")
-                .font(.system(size: 36, weight: .black))
-                .foregroundColor(DojoTheme.piuGold)
-            Text(" SHINSA")
-                .font(.system(size: 36, weight: .black))
-                .foregroundColor(.white)
-        }
-    }
+    // MARK: - Header (moved to toolbar)
 
     // MARK: - Quick Actions Grid
 
     private var quickActionsGrid: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 10) {
-                NavigationLink {
-                    LiveDirectoryView()
-                } label: {
-                    quickActionButton(
-                        icon: "video.fill",
-                        title: "Live",
-                        gradientColors: [Color(hex: "#06b6d4"), Color(hex: "#3b82f6")]
-                    )
-                }
-
-                NavigationLink {
-                    SongsView()
-                } label: {
-                    quickActionButton(
-                        icon: "music.note",
-                        title: "Songs",
-                        gradientColors: [Color(hex: "#10b981"), Color(hex: "#14b8a6")]
-                    )
-                }
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
+            NavigationLink {
+                LiveDirectoryView()
+            } label: {
+                quickActionButton(
+                    icon: "video.fill",
+                    title: "Live",
+                    gradientColors: [Color(hex: "#06b6d4"), Color(hex: "#3b82f6")]
+                )
             }
 
-            HStack(spacing: 10) {
-                NavigationLink {
-                    ListsView()
-                } label: {
-                    quickActionButton(
-                        icon: "checkmark.circle.fill",
-                        title: "Lists",
-                        gradientColors: [Color(hex: "#8b5cf6"), Color(hex: "#a855f7")]
-                    )
-                }
+            NavigationLink {
+                SongsView()
+            } label: {
+                quickActionButton(
+                    icon: "music.note",
+                    title: "Songs",
+                    gradientColors: [Color(hex: "#10b981"), Color(hex: "#14b8a6")]
+                )
+            }
 
-                NavigationLink {
-                    HeadToHeadView()
-                } label: {
-                    quickActionButton(
-                        icon: "person.2.fill",
-                        title: "Rival",
-                        gradientColors: [Color(hex: "#f59e0b"), Color(hex: "#f97316")]
-                    )
-                }
+            NavigationLink {
+                ListsView()
+            } label: {
+                quickActionButton(
+                    icon: "checkmark.circle.fill",
+                    title: "Lists",
+                    gradientColors: [Color(hex: "#8b5cf6"), Color(hex: "#a855f7")]
+                )
+            }
+
+            NavigationLink {
+                HeadToHeadView()
+            } label: {
+                quickActionButton(
+                    icon: "person.2.fill",
+                    title: "Rival",
+                    gradientColors: [Color(hex: "#f59e0b"), Color(hex: "#f97316")]
+                )
             }
         }
     }
 
     private func quickActionButton(icon: String, title: String, gradientColors: [Color]) -> some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 6) {
             Image(systemName: icon)
-                .font(.system(size: 24, weight: .semibold))
+                .font(.system(size: 20, weight: .semibold))
                 .foregroundColor(.white)
 
             Text(title)
-                .font(.system(size: 14, weight: .bold))
+                .font(.system(size: 11, weight: .bold))
                 .foregroundColor(.white)
         }
         .frame(maxWidth: .infinity)
-        .frame(height: 90)
+        .frame(height: 72)
         .background(
             LinearGradient(colors: gradientColors, startPoint: .topLeading, endPoint: .bottomTrailing)
         )
-        .cornerRadius(14)
-        .shadow(color: gradientColors[0].opacity(0.3), radius: 8, y: 4)
+        .cornerRadius(12)
+        .shadow(color: gradientColors[0].opacity(0.3), radius: 6, y: 3)
     }
 
     // MARK: - Search

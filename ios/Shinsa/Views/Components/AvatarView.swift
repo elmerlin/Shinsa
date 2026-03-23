@@ -11,8 +11,21 @@ struct AvatarView: View {
         self.size = size
     }
 
+    /// Check if the URL is a base64 data URI and decode it
+    private var base64Image: UIImage? {
+        guard let url, url.hasPrefix("data:image/") else { return nil }
+        // SVG data URIs can't be decoded to UIImage
+        if url.hasPrefix("data:image/svg") { return nil }
+        guard let range = url.range(of: ";base64,") else { return nil }
+        let base64 = String(url[range.upperBound...])
+        guard let data = Data(base64Encoded: base64, options: .ignoreUnknownCharacters) else { return nil }
+        return UIImage(data: data)
+    }
+
     private var fullURL: URL? {
         guard let url, !url.isEmpty else { return nil }
+        // Skip data URIs - handled by base64Image
+        if url.hasPrefix("data:") { return nil }
         if url.hasPrefix("http") { return URL(string: url) }
         let base = APIService.shared.baseURL
         let path = url.hasPrefix("/") ? url : "/\(url)"
@@ -28,7 +41,13 @@ struct AvatarView: View {
     }
 
     var body: some View {
-        if let fullURL {
+        if let uiImage = base64Image {
+            Image(uiImage: uiImage)
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .frame(width: size, height: size)
+                .clipShape(RoundedRectangle(cornerRadius: size * 0.2))
+        } else if let fullURL {
             AsyncImage(url: fullURL) { phase in
                 switch phase {
                 case .success(let image):

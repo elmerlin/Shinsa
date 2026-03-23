@@ -329,6 +329,8 @@ struct SongAnalytics: Codable {
     var gradeDistribution: [String: Int]?
     var levelDistribution: [String: Int]?
     var recentScores: [AnalyticsScore]?
+    var pumbility: Int?
+    var singlesPumbility: Int?
 
     enum CodingKeys: String, CodingKey {
         case totalPlays = "total_plays"
@@ -336,6 +338,8 @@ struct SongAnalytics: Codable {
         case gradeDistribution = "grade_distribution"
         case levelDistribution = "level_distribution"
         case recentScores = "recent_scores"
+        case pumbility
+        case singlesPumbility = "singles_pumbility"
     }
 }
 

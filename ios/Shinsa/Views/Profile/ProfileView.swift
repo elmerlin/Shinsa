@@ -1,4 +1,28 @@
 import SwiftUI
+import WebKit
+
+private struct SVGImageView: UIViewRepresentable {
+    let svgData: String
+
+    func makeUIView(context: Context) -> WKWebView {
+        let webView = WKWebView()
+        webView.isOpaque = false
+        webView.backgroundColor = .clear
+        webView.scrollView.isScrollEnabled = false
+        webView.isUserInteractionEnabled = false
+        return webView
+    }
+
+    func updateUIView(_ webView: WKWebView, context: Context) {
+        let html = """
+        <html><head><meta name="viewport" content="width=device-width,initial-scale=1">
+        <style>body{margin:0;background:transparent;display:flex;align-items:center;justify-content:center;height:100vh}
+        img{max-width:100%;max-height:100%;object-fit:contain}</style></head>
+        <body><img src="\(svgData)"></body></html>
+        """
+        webView.loadHTMLString(html, baseURL: nil)
+    }
+}
 
 private struct AchievementSeriesID: Identifiable {
     let id: String
@@ -21,6 +45,7 @@ struct ProfileView: View {
     @State private var heatmapYear: Int = Calendar.current.component(.year, from: Date())
     @State private var selectedAchievementSeries: String?
     @State private var isSyncingPlays = false
+    @State private var showSinglesPumbility = false
 
     private var tabs: [(String, String, String)] {
         var t: [(String, String, String)] = [
@@ -144,13 +169,17 @@ struct ProfileView: View {
 
                 // RIGHT COLUMN: PIU stats card + badges
                 VStack(spacing: 6) {
-                    // Pumbility box
+                    // Pumbility box (tap to toggle singles)
                     if let pumbility = user.pumbility, pumbility > 0 {
+                        let singlesPumb = vm.songAnalytics?.singlesPumbility
+                        let displayValue = showSinglesPumbility ? (singlesPumb ?? pumbility) : pumbility
+                        let displayLabel = showSinglesPumbility ? "S. PUMBILITY" : "PUMBILITY"
+
                         VStack(spacing: 2) {
-                            Text("PUMBILITY")
+                            Text(displayLabel)
                                 .font(.system(size: 8, weight: .bold))
                                 .foregroundColor(DojoTheme.piuGold)
-                            Text("\(pumbility)")
+                            Text("\(displayValue)")
                                 .font(.system(size: 18, weight: .black))
                                 .foregroundColor(.white)
                         }
@@ -164,6 +193,11 @@ struct ProfileView: View {
                                         .stroke(DojoTheme.piuGold.opacity(0.3), lineWidth: 1)
                                 )
                         )
+                        .onTapGesture {
+                            withAnimation(.easeInOut(duration: 0.15)) {
+                                showSinglesPumbility.toggle()
+                            }
+                        }
                     }
 
                     // Best Clears
@@ -315,7 +349,9 @@ struct ProfileView: View {
 
     private func badgeCircle(url: String?, name: String?, size: CGFloat, borderColor: Color) -> some View {
         Group {
-            if let uiImage = decodeBase64Image(url) {
+            if let urlStr = url, urlStr.hasPrefix("data:image/svg") {
+                SVGImageView(svgData: urlStr)
+            } else if let uiImage = decodeBase64Image(url) {
                 Image(uiImage: uiImage)
                     .resizable()
                     .scaledToFill()
@@ -1214,7 +1250,9 @@ struct ProfileView: View {
 
     private func achievementBadgeImage(_ badge: AchievementBadge, size: CGFloat) -> some View {
         Group {
-            if let uiImage = decodeBase64Image(badge.image) {
+            if let img = badge.image, img.hasPrefix("data:image/svg") {
+                SVGImageView(svgData: img)
+            } else if let uiImage = decodeBase64Image(badge.image) {
                 Image(uiImage: uiImage)
                     .resizable()
                     .scaledToFit()

@@ -15,6 +15,7 @@ class ProfileViewModel: ObservableObject {
     @Published var posts: [Post] = []
     @Published var heatmapData: [String: HeatmapDay] = [:]
     @Published var piuStatus: PiuSyncStatus?
+    @Published var songAnalytics: SongAnalytics?
     @Published var postsPage = 1
     @Published var hasMorePosts = true
     @Published var isLoadingPosts = false
@@ -37,6 +38,7 @@ class ProfileViewModel: ObservableObject {
         followStatus = try? await f
         socialCounts = try? await c
         piuStatus = try? await APIService.shared.getPiuSyncStatus(userId)
+        songAnalytics = try? await APIService.shared.getSongAnalytics(userId)
 
         // Load achievements from user profile
         if let badges = user?.achievementBadges {

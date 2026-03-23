@@ -5,6 +5,8 @@ struct ContentView: View {
     @EnvironmentObject var notificationPoller: NotificationPoller
     @State private var selectedTab = 0
     @State private var isDrawerOpen = false
+    @State private var isSearching = false
+    @State private var searchText = ""
 
     var body: some View {
         Group {
@@ -110,6 +112,42 @@ struct ContentView: View {
                         .tag(4)
                     }
                     .tint(DojoTheme.piuAccent)
+                    .safeAreaInset(edge: .top) {
+                        if isSearching {
+                            HStack(spacing: 8) {
+                                Image(systemName: "magnifyingglass")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(DojoTheme.textMuted)
+
+                                TextField("Search players, songs, tournaments...", text: $searchText)
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.white)
+                                    .autocorrectionDisabled()
+                                    .textInputAutocapitalization(.never)
+
+                                if !searchText.isEmpty {
+                                    Button {
+                                        searchText = ""
+                                    } label: {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .font(.system(size: 14))
+                                            .foregroundColor(DojoTheme.textMuted)
+                                    }
+                                }
+                            }
+                            .padding(10)
+                            .background(DojoTheme.piuCard)
+                            .cornerRadius(10)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(DojoTheme.piuBorder, lineWidth: 1)
+                            )
+                            .padding(.horizontal, 16)
+                            .padding(.bottom, 4)
+                            .background(DojoTheme.piuBg)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                        }
+                    }
 
                     // Side drawer overlay
                     SideDrawerView(isOpen: $isDrawerOpen)
@@ -126,6 +164,17 @@ struct ContentView: View {
 
     @ViewBuilder
     private var toolbarButtons: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                isSearching.toggle()
+                if !isSearching { searchText = "" }
+            }
+        } label: {
+            Image(systemName: isSearching ? "xmark" : "magnifyingglass")
+                .font(.system(size: 15))
+                .foregroundColor(.white)
+        }
+
         NavigationLink {
             MessagesListView()
         } label: {
