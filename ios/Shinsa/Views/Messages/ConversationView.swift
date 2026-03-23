@@ -177,33 +177,30 @@ struct ConversationView: View {
             ? [("person.3", "Members"), ("paintbrush", "Theme"), ("clock", "Activity")]
             : [("person.circle", "Profile"), ("paintbrush", "Theme"), ("magnifyingglass", "Search")]
 
-        return ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 0) {
-                ForEach(Array(tabs.enumerated()), id: \.offset) { index, tab in
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.2)) { selectedOptionsTab = index }
-                    } label: {
-                        VStack(spacing: 6) {
-                            Image(systemName: tab.0)
-                                .font(.system(size: 16))
-                            Text(tab.1)
-                                .font(.system(size: 11, weight: .medium))
-                        }
-                        .foregroundColor(selectedOptionsTab == index ? DojoTheme.piuAccent : DojoTheme.textMuted)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .background(selectedOptionsTab == index ? DojoTheme.piuAccent.opacity(0.1) : .clear)
-                        .overlay(alignment: .bottom) {
-                            if selectedOptionsTab == index {
-                                Rectangle()
-                                    .fill(DojoTheme.piuAccent)
-                                    .frame(height: 2)
-                            }
+        return HStack(spacing: 0) {
+            ForEach(Array(tabs.enumerated()), id: \.offset) { index, tab in
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) { selectedOptionsTab = index }
+                } label: {
+                    VStack(spacing: 6) {
+                        Image(systemName: tab.0)
+                            .font(.system(size: 18))
+                        Text(tab.1)
+                            .font(.system(size: 12, weight: .bold))
+                    }
+                    .foregroundColor(selectedOptionsTab == index ? DojoTheme.piuAccent : DojoTheme.textMuted)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(selectedOptionsTab == index ? DojoTheme.piuAccent.opacity(0.08) : .clear)
+                    .overlay(alignment: .bottom) {
+                        if selectedOptionsTab == index {
+                            Rectangle()
+                                .fill(DojoTheme.piuAccent)
+                                .frame(height: 2)
                         }
                     }
                 }
             }
-            .frame(maxWidth: .infinity)
         }
         .background(DojoTheme.piuCard)
     }
@@ -288,16 +285,98 @@ struct ConversationView: View {
     }
 
     private var activityTab: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "clock.arrow.circlepath")
-                .font(.system(size: 32))
-                .foregroundColor(DojoTheme.textMuted.opacity(0.5))
-            Text("Activity coming soon")
-                .font(.system(size: 13))
-                .foregroundColor(DojoTheme.textMuted)
+        let urls = extractURLsFromMessages()
+        let videoURLs = urls.filter { $0.contains("youtube.com") || $0.contains("youtu.be") }
+        let linkURLs = urls.filter { !$0.contains("youtube.com") && !$0.contains("youtu.be") }
+
+        return VStack(alignment: .leading, spacing: 16) {
+            // Videos
+            VStack(alignment: .leading, spacing: 8) {
+                Text("VIDEOS")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(DojoTheme.textMuted)
+
+                if videoURLs.isEmpty {
+                    Text("No videos shared yet")
+                        .font(.system(size: 12))
+                        .foregroundColor(DojoTheme.textMuted.opacity(0.6))
+                        .padding(.vertical, 8)
+                } else {
+                    ForEach(videoURLs, id: \.self) { url in
+                        Link(destination: URL(string: url)!) {
+                            HStack(spacing: 10) {
+                                Image(systemName: "play.rectangle.fill")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.red)
+                                Text(url)
+                                    .font(.system(size: 12))
+                                    .foregroundColor(DojoTheme.piuBlue)
+                                    .lineLimit(1)
+                                Spacer()
+                            }
+                            .padding(10)
+                            .background(DojoTheme.piuDark)
+                            .cornerRadius(8)
+                        }
+                    }
+                }
+            }
+
+            // Links
+            VStack(alignment: .leading, spacing: 8) {
+                Text("SHARED LINKS")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(DojoTheme.textMuted)
+
+                if linkURLs.isEmpty {
+                    Text("No links shared yet")
+                        .font(.system(size: 12))
+                        .foregroundColor(DojoTheme.textMuted.opacity(0.6))
+                        .padding(.vertical, 8)
+                } else {
+                    ForEach(linkURLs.prefix(20), id: \.self) { url in
+                        Link(destination: URL(string: url)!) {
+                            HStack(spacing: 10) {
+                                Image(systemName: "link")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(DojoTheme.piuBlue)
+                                Text(url)
+                                    .font(.system(size: 12))
+                                    .foregroundColor(DojoTheme.piuBlue)
+                                    .lineLimit(1)
+                                Spacer()
+                            }
+                            .padding(10)
+                            .background(DojoTheme.piuDark)
+                            .cornerRadius(8)
+                        }
+                    }
+                }
+            }
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 40)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+
+    private func extractURLsFromMessages() -> [String] {
+        let urlRegex = try? NSRegularExpression(pattern: "https?://[^\\s<>()]+", options: [])
+        var urls: [String] = []
+        var seen = Set<String>()
+        for msg in messagesVM.messages {
+            guard let content = msg.content else { continue }
+            let range = NSRange(content.startIndex..., in: content)
+            let matches = urlRegex?.matches(in: content, range: range) ?? []
+            for match in matches {
+                if let r = Range(match.range, in: content) {
+                    let url = String(content[r])
+                    if !seen.contains(url) {
+                        seen.insert(url)
+                        urls.append(url)
+                    }
+                }
+            }
+        }
+        return urls
     }
 
     // MARK: - Direct Chat Options
@@ -438,8 +517,10 @@ struct ConversationView: View {
         isLoadingSquad = true
         do {
             let info = try await APIService.shared.getSquadInfo(conversation.id)
-            squadMembers = info.squad?.members ?? []
+            // API returns members at top level, not nested under squad
+            squadMembers = info.members ?? info.squad?.members ?? []
         } catch {
+            print("[Squad] Failed to load members: \(error)")
             squadMembers = []
         }
         isLoadingSquad = false

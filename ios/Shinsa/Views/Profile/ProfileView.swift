@@ -1,6 +1,37 @@
 import SwiftUI
 import WebKit
 
+// MARK: - Badge Image Cache (renders SVG/webp badges from local bundle)
+
+private final class BadgeImageCache {
+    static let shared = BadgeImageCache()
+    private var cache: [String: UIImage] = [:]
+
+    /// Try to load a badge from the local bundle by series_key + threshold
+    func localBadgeImage(seriesKey: String?, threshold: Int?) -> UIImage? {
+        guard let key = seriesKey, let thresh = threshold else { return nil }
+        let cacheKey = "\(key)_\(thresh)"
+        if let cached = cache[cacheKey] { return cached }
+
+        // Try webp first, then look for svg rendered to UIImage
+        if let url = Bundle.main.url(forResource: cacheKey, withExtension: "webp", subdirectory: "badges"),
+           let data = try? Data(contentsOf: url),
+           let img = UIImage(data: data) {
+            cache[cacheKey] = img
+            return img
+        }
+        // SVG: load raw data and try to create UIImage (iOS 13+ can handle some SVGs)
+        if let url = Bundle.main.url(forResource: cacheKey, withExtension: "svg", subdirectory: "badges"),
+           let data = try? Data(contentsOf: url),
+           let img = UIImage(data: data) {
+            cache[cacheKey] = img
+            return img
+        }
+        return nil
+    }
+}
+
+// Fallback SVG renderer using WKWebView for SVGs that UIImage can't handle
 private struct SVGImageView: UIViewRepresentable {
     let svgData: String
 
@@ -1250,13 +1281,24 @@ struct ProfileView: View {
 
     private func achievementBadgeImage(_ badge: AchievementBadge, size: CGFloat) -> some View {
         Group {
-            if let img = badge.image, img.hasPrefix("data:image/svg") {
-                SVGImageView(svgData: img)
-            } else if let uiImage = decodeBase64Image(badge.image) {
+            // 1. Try local bundle first (instant, no WKWebView)
+            if let localImg = BadgeImageCache.shared.localBadgeImage(seriesKey: badge.seriesKey, threshold: badge.threshold) {
+                Image(uiImage: localImg)
+                    .resizable()
+                    .scaledToFit()
+            }
+            // 2. Try base64 webp/png from API response
+            else if let uiImage = decodeBase64Image(badge.image) {
                 Image(uiImage: uiImage)
                     .resizable()
                     .scaledToFit()
-            } else if let urlStr = badge.image, let url = URL(string: urlStr), urlStr.hasPrefix("http") {
+            }
+            // 3. Fallback to WKWebView for SVG data URIs
+            else if let img = badge.image, img.hasPrefix("data:image/svg") {
+                SVGImageView(svgData: img)
+            }
+            // 4. Remote URL
+            else if let urlStr = badge.image, let url = URL(string: urlStr), urlStr.hasPrefix("http") {
                 AsyncImage(url: url) { phase in
                     switch phase {
                     case .success(let img):
@@ -1265,7 +1307,9 @@ struct ProfileView: View {
                         badgePlaceholder(badge.name, size: size)
                     }
                 }
-            } else {
+            }
+            // 5. Placeholder
+            else {
                 badgePlaceholder(badge.name, size: size)
             }
         }

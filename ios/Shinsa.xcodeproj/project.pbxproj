@@ -135,6 +135,7 @@
 		B04C2869769817D6359AFB75 /* WorldMaxView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88CF2D058C10AD9C777E950D /* WorldMaxView.swift */; };
 		SC0RE5NAP0001000100010001 /* ScoreSnapshotSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = SC0RE5NAP0002000200020002 /* ScoreSnapshotSheet.swift */; };
 		7655BCE94F6045868DD1B106 /* jackets in Resources */ = {isa = PBXBuildFile; fileRef = E48101928121430D91D1B27F /* jackets */; };
+		BADGE00000000000000000002 /* badges in Resources */ = {isa = PBXBuildFile; fileRef = BADGE00000000000000000001 /* badges */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -267,6 +268,7 @@
 		88CF2D058C10AD9C777E950D /* WorldMaxView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WorldMaxView.swift"; sourceTree = "<group>"; };
 		SC0RE5NAP0002000200020002 /* ScoreSnapshotSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ScoreSnapshotSheet.swift"; sourceTree = "<group>"; };
 		E48101928121430D91D1B27F /* jackets */ = {isa = PBXFileReference; lastKnownFileType = folder; name = jackets; path = "Shinsa/Resources/jackets"; sourceTree = "<group>"; };
+		BADGE00000000000000000001 /* badges */ = {isa = PBXFileReference; lastKnownFileType = folder; name = badges; path = "Shinsa/Resources/badges"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */

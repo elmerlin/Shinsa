@@ -1,0 +1,169 @@
+
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300" role="img" aria-label="100 SSS mastery badge">
+      <defs>
+        <radialGradient id="sss-bg-sss-100" cx="50%" cy="30%" r="74%">
+          <stop offset="0%" stop-color="#103b5c" />
+          <stop offset="54%" stop-color="#0b2742" />
+          <stop offset="100%" stop-color="#050b16" />
+        </radialGradient>
+        <linearGradient id="sss-ring-sss-100" x1="12%" y1="10%" x2="88%" y2="92%">
+          <stop offset="0%" stop-color="#67e8f9" />
+          <stop offset="45%" stop-color="#7dd3fc" />
+          <stop offset="100%" stop-color="#d8f3ff" />
+        </linearGradient>
+        <linearGradient id="sss-plate-sss-100" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="#0f3b57" />
+          <stop offset="100%" stop-color="#081d2d" />
+        </linearGradient>
+        <filter id="sss-shadow-sss-100" x="-40%" y="-40%" width="180%" height="180%">
+          <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#0ea5e9" flood-opacity="0.34" />
+        </filter>
+        <filter id="sss-glow-sss-100" x="-60%" y="-60%" width="220%" height="220%">
+          <feDropShadow dx="0" dy="0" stdDeviation="8" flood-color="#7dd3fc" flood-opacity="0.65" />
+        </filter>
+      </defs>
+
+      <rect width="300" height="300" rx="52" fill="#020611" />
+      <rect x="12" y="12" width="276" height="276" rx="46" fill="url(#sss-bg-sss-100)" stroke="url(#sss-ring-sss-100)" stroke-width="2.5" />
+      <circle cx="150" cy="150" r="118" fill="rgba(7,20,34,0.92)" stroke="url(#sss-ring-sss-100)" stroke-width="15" filter="url(#sss-shadow-sss-100)" />
+      <circle cx="150" cy="150" r="96" fill="#07101d" stroke="rgba(125,211,252,0.42)" stroke-width="2" />
+      <circle cx="150" cy="150" r="96" fill="rgba(125,211,252,0.204)" opacity="0.36" />
+      <g>
+      <polygon
+        points="150.00,34.00 158.00,62.00 142.00,62.00"
+        fill="#d8f3ff"
+        opacity="0.34"
+      />
+    
+      <polygon
+        points="226.37,73.63 223.54,84.95 215.05,76.46"
+        fill="#67e8f9"
+        opacity="0.41"
+      />
+    
+      <polygon
+        points="258.00,150.00 238.00,158.00 238.00,142.00"
+        fill="#67e8f9"
+        opacity="0.48"
+      />
+    
+      <polygon
+        points="232.02,232.02 215.05,223.54 223.54,215.05"
+        fill="#d8f3ff"
+        opacity="0.55"
+      />
+    
+      <polygon
+        points="150.00,258.00 142.00,238.00 158.00,238.00"
+        fill="#67e8f9"
+        opacity="0.34"
+      />
+    
+      <polygon
+        points="73.63,226.37 76.46,215.05 84.95,223.54"
+        fill="#67e8f9"
+        opacity="0.41"
+      />
+    
+      <polygon
+        points="34.00,150.00 62.00,142.00 62.00,158.00"
+        fill="#d8f3ff"
+        opacity="0.48"
+      />
+    
+      <polygon
+        points="73.63,73.63 84.95,76.46 76.46,84.95"
+        fill="#67e8f9"
+        opacity="0.55"
+      />
+    </g>
+      <g>
+      <polygon
+        points="171.62,66.97 173.29,70.91 177.22,72.57 173.29,74.23 171.62,78.17 169.96,74.23 166.02,72.57 169.96,70.91"
+        fill="#d8f3ff"
+        opacity="0.70"
+      />
+    
+      <polygon
+        points="230.82,74.24 233.02,79.44 238.22,81.64 233.02,83.84 230.82,89.04 228.63,83.84 223.42,81.64 228.63,79.44"
+        fill="#d8f3ff"
+        opacity="0.78"
+      />
+    
+      <polygon
+        points="254.00,92.40 255.66,96.34 259.60,98.00 255.66,99.66 254.00,103.60 252.34,99.66 248.40,98.00 252.34,96.34"
+        fill="#d8f3ff"
+        opacity="0.86"
+      />
+    
+      <polygon
+        points="230.82,106.96 233.02,112.16 238.22,114.36 233.02,116.56 230.82,121.76 228.63,116.56 223.42,114.36 228.63,112.16"
+        fill="#d8f3ff"
+        opacity="0.70"
+      />
+    
+      <polygon
+        points="171.62,117.83 173.29,121.77 177.22,123.43 173.29,125.09 171.62,129.03 169.96,125.09 166.02,123.43 169.96,121.77"
+        fill="#d8f3ff"
+        opacity="0.78"
+      />
+    </g>
+      <polygon
+        points="150,58 227,102 227,190 150,234 73,190 73,102"
+        fill="rgba(14,165,233,0.08)"
+        stroke="rgba(125,211,252,0.32)"
+        stroke-width="2"
+      />
+      <path d="M94 126 H206" stroke="rgba(125,211,252,0.18)" stroke-width="2" stroke-linecap="round" />
+      <path d="M96 206 H204" stroke="rgba(125,211,252,0.22)" stroke-width="2" stroke-linecap="round" />
+      <g text-anchor="middle">
+        <text
+          x="150"
+          y="70"
+          fill="#d8f3ff"
+          font-family="Arial, Helvetica, sans-serif"
+          font-size="17"
+          font-weight="700"
+          letter-spacing="5"
+        >PERFECT</text>
+        <text
+          x="150"
+          y="130"
+          fill="#7dd3fc"
+          font-family="Arial Black, Arial, Helvetica, sans-serif"
+          font-size="58"
+          font-weight="900"
+          letter-spacing="4"
+          filter="url(#sss-glow-sss-100)"
+        >SSS</text>
+        <text
+          x="150"
+          y="192"
+          fill="#eff8ff"
+          font-family="Arial Black, Arial, Helvetica, sans-serif"
+          font-size="72"
+          font-weight="900"
+          letter-spacing="2"
+        >100</text>
+        <text
+          x="150"
+          y="220"
+          fill="#a5f3fc"
+          font-family="Arial, Helvetica, sans-serif"
+          font-size="18"
+          font-weight="700"
+          letter-spacing="4"
+        >CHARTS</text>
+        <rect x="77" y="238" width="146" height="24" rx="12" fill="url(#sss-plate-sss-100)" opacity="0.96" />
+        <text
+          x="150"
+          y="255"
+          fill="#e0f2fe"
+          font-family="Arial, Helvetica, sans-serif"
+          font-size="14"
+          font-weight="700"
+          letter-spacing="2"
+        >PRISM</text>
+      </g>
+    </svg>
+  

@@ -107,6 +107,26 @@ struct SquadCreateRequest: Encodable {
 
 struct SquadInfo: Codable {
     var squad: SquadDetail?
+    var conversation: Conversation?
+    var members: [SquadMember]?
+    var viewerMembership: SquadViewerMembership?
+
+    enum CodingKeys: String, CodingKey {
+        case squad, conversation, members
+        case viewerMembership = "viewer_membership"
+    }
+}
+
+struct SquadViewerMembership: Codable {
+    var role: String?
+    var notificationsEnabled: Bool?
+    var notifyMentions: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case role
+        case notificationsEnabled = "notifications_enabled"
+        case notifyMentions = "notify_mentions"
+    }
 }
 
 struct SquadDetail: Codable {
