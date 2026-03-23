@@ -2136,7 +2136,14 @@ router.get('/daily-highlights', (req, res) => {
 
   const db = getDb();
 
-  // --- Top 5 replay plays today (highest score) ---
+  // --- Top 5 replay plays today (highest rating = level * score) ---
+  // Use played_at_utc >= date('now') for accurate "today" filter,
+  // with date_played >= date('now') as fallback for rows missing played_at_utc.
+  const todayFilter = `(
+    (rp.played_at_utc IS NOT NULL AND rp.played_at_utc != '' AND rp.played_at_utc >= date('now'))
+    OR rp.date_played >= date('now')
+  )`;
+
   // Source 1: plays with replay_embed_url set directly on user_recently_played
   const directReplays = db.prepare(`
     SELECT rp.id, rp.user_id, rp.song_title, rp.mode, rp.level, rp.score, rp.grade, rp.plate,
@@ -2147,12 +2154,12 @@ router.get('/daily-highlights', (req, res) => {
     FROM user_recently_played rp
     JOIN users u ON rp.user_id = u.id
     WHERE rp.replay_embed_url IS NOT NULL AND rp.replay_embed_url != ''
-      AND rp.date_played >= date('now', '-1 day')
-    ORDER BY rp.score DESC
+      AND ${todayFilter}
+    ORDER BY (CAST(rp.level AS INTEGER) * CAST(rp.score AS INTEGER)) DESC
     LIMIT 20
   `).all();
 
-  // Source 2: today's plays that match a chart with a session_youtube_url link
+  // Source 2: today's plays matched via songs → chart youtube links
   const chartLinkedReplays = db.prepare(`
     SELECT rp.id, rp.user_id, rp.song_title, rp.mode, rp.level, rp.score, rp.grade, rp.plate,
            rp.perfect, rp.great, rp.good, rp.bad, rp.miss, rp.max_combo,
@@ -2166,12 +2173,12 @@ router.get('/daily-highlights', (req, res) => {
     JOIN user_chart_youtube_links yt ON yt.user_id = rp.user_id AND yt.chart_id = s.id
     WHERE yt.session_youtube_url IS NOT NULL AND yt.session_youtube_url != ''
       AND (rp.replay_embed_url IS NULL OR rp.replay_embed_url = '')
-      AND rp.date_played >= date('now', '-1 day')
-    ORDER BY rp.score DESC
+      AND ${todayFilter}
+    ORDER BY (CAST(rp.level AS INTEGER) * CAST(rp.score AS INTEGER)) DESC
     LIMIT 20
   `).all();
 
-  // Merge both sources, de-dupe by rp.id, sort by score
+  // Merge both sources, de-dupe by rp.id, sort by rating (level × score)
   const replayIdSet = new Set(directReplays.map((r) => r.id));
   const mergedReplays = [...directReplays];
   for (const r of chartLinkedReplays) {
@@ -2180,7 +2187,7 @@ router.get('/daily-highlights', (req, res) => {
       mergedReplays.push(r);
     }
   }
-  mergedReplays.sort((a, b) => toInt(b.score) - toInt(a.score));
+  mergedReplays.sort((a, b) => (toInt(b.level) * toInt(b.score)) - (toInt(a.level) * toInt(a.score)));
 
   const topReplays = pickTopNDiverse(mergedReplays, 5, (r) => r.user_id).map((r) => ({
     ...r,
@@ -2193,7 +2200,7 @@ router.get('/daily-highlights', (req, res) => {
            us.created_at, u.username, u.avatar, u.nationality
     FROM user_upscores us
     JOIN users u ON us.user_id = u.id
-    WHERE us.created_at >= datetime('now', '-1 day')
+    WHERE us.created_at >= date('now')
     ORDER BY us.created_at DESC
     LIMIT 50
   `).all();
@@ -2226,7 +2233,7 @@ router.get('/daily-highlights', (req, res) => {
            nc.created_at, u.username, u.avatar, u.nationality
     FROM user_new_clears nc
     JOIN users u ON nc.user_id = u.id
-    WHERE nc.created_at >= datetime('now', '-1 day')
+    WHERE nc.created_at >= date('now')
     ORDER BY nc.created_at DESC
     LIMIT 50
   `).all();
