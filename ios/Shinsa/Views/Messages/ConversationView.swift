@@ -27,7 +27,7 @@ struct ConversationView: View {
 
     var body: some View {
         ZStack {
-            DojoTheme.piuBg.ignoresSafeArea()
+            theme.background.ignoresSafeArea()
 
             VStack(spacing: 0) {
                 // Messages
@@ -452,7 +452,15 @@ struct ConversationView: View {
         let isMe = msg.isOwn ?? (msg.senderId == auth.userId)
         let bubbleBg = isMe ? theme.ownBubble : theme.otherBubble
         let bubbleBorder = isMe ? theme.ownBubbleBorder : theme.otherBubbleBorder
-        let textColor: Color = theme.isLight && !isMe ? .black : .white
+        let textColor: Color = {
+            if isMe && (currentThemeKey == "skype" || currentThemeKey == "line") {
+                return .white
+            }
+            return theme.isLight ? .black : theme.textColor
+        }()
+        let msgFont: Font = theme.useMonospace
+            ? .system(size: 13, weight: .regular, design: .monospaced)
+            : .system(size: 13)
 
         HStack(alignment: .top, spacing: 0) {
             if isMe { Spacer(minLength: 48) }
@@ -470,7 +478,7 @@ struct ConversationView: View {
                 }
 
                 Text(msg.content ?? "")
-                    .font(.system(size: 13))
+                    .font(msgFont)
                     .foregroundColor(textColor)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)

@@ -212,34 +212,34 @@ struct ScoreSnapshotSheet: View {
             ("BAD", bad ?? 0, Color(hex: "#f0abfc")),
             ("MISS", miss ?? 0, Color(hex: "#fca5a5")),
         ]
-        let total = items.reduce(0) { $0 + $1.1 }
 
-        return VStack(spacing: 6) {
+        return HStack(spacing: 0) {
             ForEach(items, id: \.0) { label, count, color in
-                HStack(spacing: 8) {
+                VStack(spacing: 6) {
                     Text(label)
-                        .font(.system(size: 10, weight: .bold))
+                        .font(.system(size: 9, weight: .heavy))
                         .foregroundColor(color)
-                        .frame(width: 55, alignment: .leading)
-
-                    GeometryReader { geo in
-                        let fraction = total > 0 ? CGFloat(count) / CGFloat(total) : 0
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(color.opacity(0.7))
-                            .frame(width: max(geo.size.width * fraction, 2), height: 14)
-                    }
-                    .frame(height: 14)
-
-                    Text("\(count)")
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    Text(formatJudgmentCount(count))
+                        .font(.system(size: 16, weight: .bold, design: .monospaced))
                         .foregroundColor(.white)
-                        .frame(width: 40, alignment: .trailing)
                 }
+                .frame(maxWidth: .infinity)
             }
         }
-        .padding(12)
-        .background(DojoTheme.piuCard)
-        .cornerRadius(8)
+        .padding(.vertical, 14)
+        .padding(.horizontal, 8)
+        .background(Color.black.opacity(0.48))
+        .cornerRadius(10)
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+        )
+    }
+
+    private func formatJudgmentCount(_ count: Int) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        return formatter.string(from: NSNumber(value: count)) ?? "\(count)"
     }
 
     private func formatScore(_ score: Int) -> String {

@@ -20,6 +20,7 @@ struct ProfileView: View {
     @State private var selectedHeatmapDay: HeatmapDay?
     @State private var heatmapYear: Int = Calendar.current.component(.year, from: Date())
     @State private var selectedAchievementSeries: String?
+    @State private var isSyncingPlays = false
 
     private var tabs: [(String, String, String)] {
         var t: [(String, String, String)] = [
@@ -597,6 +598,28 @@ struct ProfileView: View {
                             .font(.system(size: 10, weight: .bold))
                             .foregroundColor(heatmapYear < Calendar.current.component(.year, from: Date()) ? DojoTheme.textMuted : DojoTheme.textMuted.opacity(0.3))
                     }
+                }
+
+                if isOwnProfile {
+                    Button {
+                        Task {
+                            isSyncingPlays = true
+                            _ = try? await APIService.shared.syncRecentlyPlayed()
+                            await vm.loadRecentPlays(year: heatmapYear)
+                            isSyncingPlays = false
+                        }
+                    } label: {
+                        if isSyncingPlays {
+                            ProgressView()
+                                .tint(DojoTheme.piuGreen)
+                                .scaleEffect(0.7)
+                        } else {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundColor(DojoTheme.textMuted)
+                        }
+                    }
+                    .disabled(isSyncingPlays)
                 }
             }
 

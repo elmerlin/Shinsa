@@ -37,6 +37,12 @@ class ProfileViewModel: ObservableObject {
         followStatus = try? await f
         socialCounts = try? await c
         piuStatus = try? await APIService.shared.getPiuSyncStatus(userId)
+
+        // Load achievements from user profile
+        if let badges = user?.achievementBadges {
+            achievements = badges
+        }
+
         isLoading = false
     }
 
@@ -73,10 +79,9 @@ class ProfileViewModel: ObservableObject {
     }
 
     func loadAchievements() async {
-        do {
-            achievements = try await APIService.shared.getUserAchievements(userId)
-        } catch {
-            // Silently fail
+        // Badges come from user profile response, not a separate endpoint
+        if let badges = user?.achievementBadges {
+            achievements = badges
         }
     }
 
