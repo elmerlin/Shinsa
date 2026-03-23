@@ -5,6 +5,8 @@ struct NewClearCardView: View {
     @State private var pumped: Bool
     @State private var pumpCount: Int
     @State private var showAll = false
+    @State private var showComments = false
+    @State private var selectedClear: FeedItem.ClearItem?
 
     init(item: FeedItem) {
         self.item = item
@@ -89,8 +91,10 @@ struct NewClearCardView: View {
                     await togglePump()
                 }
 
-                NavigationLink {
-                    CommentsView(itemType: "clear", itemId: item.itemId)
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showComments.toggle()
+                    }
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "bubble.left")
@@ -98,17 +102,37 @@ struct NewClearCardView: View {
                         Text("\(item.commentCount ?? 0)")
                             .font(.system(size: 12, weight: .bold))
                     }
-                    .foregroundColor(DojoTheme.textMuted)
+                    .foregroundColor(showComments ? DojoTheme.piuAccent : DojoTheme.textMuted)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                 }
 
                 Spacer()
             }
+
+            // Inline comments
+            if showComments {
+                CommentsView(itemType: "clear", itemId: item.itemId)
+                    .frame(maxHeight: 300)
+                    .clipped()
+            }
         }
         .padding(14)
         .background(DojoTheme.piuCard)
         .cornerRadius(12)
+        .sheet(item: $selectedClear) { c in
+            ScoreSnapshotSheet(
+                songTitle: c.songTitle ?? "Unknown",
+                mode: c.mode ?? "S",
+                level: c.level ?? 0,
+                score: c.score ?? 0,
+                grade: DojoTheme.gradeLabel(for: c.score ?? 0),
+                plate: c.plate,
+                backgroundUrl: c.backgroundUrl,
+                replayEmbedUrl: c.replayEmbedUrl,
+                username: item.username
+            )
+        }
     }
 
     // MARK: - Clear Row
@@ -140,7 +164,16 @@ struct NewClearCardView: View {
 
             Spacer()
 
-            // Score + Grade + Plate
+            // Replay badge
+            if let replayUrl = c.replayEmbedUrl, !replayUrl.isEmpty, let url = URL(string: replayUrl) {
+                Link(destination: url) {
+                    Image(systemName: "play.circle.fill")
+                        .font(.system(size: 14))
+                        .foregroundColor(.red)
+                }
+            }
+
+            // Score + Grade + Plate (tappable)
             VStack(alignment: .trailing, spacing: 2) {
                 if let score = c.score, score > 0 {
                     Text(DojoTheme.gradeLabel(for: score))
@@ -162,6 +195,8 @@ struct NewClearCardView: View {
                         .cornerRadius(3)
                 }
             }
+            .contentShape(Rectangle())
+            .onTapGesture { selectedClear = c }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)

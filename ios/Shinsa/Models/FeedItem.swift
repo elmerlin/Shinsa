@@ -53,7 +53,8 @@ struct FeedItem: Codable, Identifiable {
         return (try? JSONDecoder().decode([String].self, from: data)) ?? []
     }
 
-    struct UpscoreItem: Codable {
+    struct UpscoreItem: Codable, Identifiable {
+        var id: String { "\(songTitle ?? "")_\(mode ?? "")_\(level ?? 0)_\(newScore ?? 0)" }
         var songTitle: String?
         var mode: String?
         var level: Int?
@@ -65,6 +66,8 @@ struct FeedItem: Codable, Identifiable {
         var pumbilityGain: FlexDouble?
         var singlesPumbilityGain: FlexDouble?
         var overTop100Rank: Int?
+        var replayEmbedUrl: String?
+        var replayVideoId: String?
         enum CodingKeys: String, CodingKey {
             case mode, level
             case songTitle = "song_title"
@@ -76,10 +79,13 @@ struct FeedItem: Codable, Identifiable {
             case pumbilityGain = "pumbility_gain"
             case singlesPumbilityGain = "singles_pumbility_gain"
             case overTop100Rank = "over_top100_rank"
+            case replayEmbedUrl = "replay_embed_url"
+            case replayVideoId = "replay_video_id"
         }
     }
 
-    struct ClearItem: Codable {
+    struct ClearItem: Codable, Identifiable {
+        var id: String { "\(songTitle ?? "")_\(mode ?? "")_\(level ?? 0)_\(score ?? 0)" }
         var entryType: String?
         var songTitle: String?
         var mode: String?
@@ -90,6 +96,8 @@ struct FeedItem: Codable, Identifiable {
         var backgroundUrl: String?
         var pumbilityGain: FlexDouble?
         var titleName: String?
+        var replayEmbedUrl: String?
+        var replayVideoId: String?
         enum CodingKeys: String, CodingKey {
             case mode, level, score, grade, plate
             case entryType = "entry_type"
@@ -97,6 +105,8 @@ struct FeedItem: Codable, Identifiable {
             case backgroundUrl = "background_url"
             case pumbilityGain = "pumbility_gain"
             case titleName = "title_name"
+            case replayEmbedUrl = "replay_embed_url"
+            case replayVideoId = "replay_video_id"
         }
     }
 

@@ -368,7 +368,7 @@ struct PIUGameSyncView: View {
         successMessage = nil
         do {
             let data = try await APIService.shared.syncPumbility()
-            if let val = data.pumbility {
+            if let val = data.pumbilityValue {
                 syncStatus?.pumbilityValue = val
             }
             successMessage = "Pumbility synced"

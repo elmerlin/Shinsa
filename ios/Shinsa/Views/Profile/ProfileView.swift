@@ -165,6 +165,44 @@ struct ProfileView: View {
                         )
                     }
 
+                    // Best Clears
+                    if let status = vm.piuStatus,
+                       let hs = status.highestSingle, hs > 0,
+                       let hd = status.highestDouble, hd > 0 {
+                        VStack(spacing: 2) {
+                            Text("BEST CLEARS")
+                                .font(.system(size: 8, weight: .bold))
+                                .foregroundColor(DojoTheme.textMuted)
+                            HStack(spacing: 2) {
+                                Text("S")
+                                    .font(.system(size: 11, weight: .black))
+                                    .foregroundColor(DojoTheme.piuAccent)
+                                Text("\(hs)")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundColor(.white)
+                                Text("/")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(DojoTheme.textMuted)
+                                Text("D")
+                                    .font(.system(size: 11, weight: .black))
+                                    .foregroundColor(DojoTheme.piuGreen)
+                                Text("\(hd)")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundColor(.white)
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 4)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(DojoTheme.piuDark)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .stroke(DojoTheme.piuBorder, lineWidth: 1)
+                                )
+                        )
+                    }
+
                     // Achievement + Group badges
                     let groupBadges = user.groupBadges ?? []
                     let achievementBadges = highestPerSeries

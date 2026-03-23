@@ -4,6 +4,7 @@ struct PostCardView: View {
     let item: FeedItem
     @State private var pumped: Bool
     @State private var pumpCount: Int
+    @State private var showComments = false
 
     init(item: FeedItem) {
         self.item = item
@@ -74,8 +75,10 @@ struct PostCardView: View {
                     await togglePump()
                 }
 
-                NavigationLink {
-                    CommentsView(itemType: "post", itemId: item.itemId)
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showComments.toggle()
+                    }
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "bubble.left")
@@ -83,12 +86,19 @@ struct PostCardView: View {
                         Text("\(item.commentCount ?? 0)")
                             .font(.system(size: 12, weight: .bold))
                     }
-                    .foregroundColor(DojoTheme.textMuted)
+                    .foregroundColor(showComments ? DojoTheme.piuAccent : DojoTheme.textMuted)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                 }
 
                 Spacer()
+            }
+
+            // Inline comments
+            if showComments {
+                CommentsView(itemType: "post", itemId: item.itemId)
+                    .frame(maxHeight: 300)
+                    .clipped()
             }
         }
         .padding(14)

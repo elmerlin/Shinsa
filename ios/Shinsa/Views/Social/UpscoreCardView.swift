@@ -5,6 +5,8 @@ struct UpscoreCardView: View {
     @State private var pumped: Bool
     @State private var pumpCount: Int
     @State private var showAll = false
+    @State private var showComments = false
+    @State private var selectedScore: FeedItem.UpscoreItem?
 
     init(item: FeedItem) {
         self.item = item
@@ -90,8 +92,10 @@ struct UpscoreCardView: View {
                     await togglePump()
                 }
 
-                NavigationLink {
-                    CommentsView(itemType: "upscore", itemId: item.itemId)
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showComments.toggle()
+                    }
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "bubble.left")
@@ -99,17 +103,36 @@ struct UpscoreCardView: View {
                         Text("\(item.commentCount ?? 0)")
                             .font(.system(size: 12, weight: .bold))
                     }
-                    .foregroundColor(DojoTheme.textMuted)
+                    .foregroundColor(showComments ? DojoTheme.piuAccent : DojoTheme.textMuted)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                 }
 
                 Spacer()
             }
+
+            // Inline comments
+            if showComments {
+                CommentsView(itemType: "upscore", itemId: item.itemId)
+                    .frame(maxHeight: 300)
+                    .clipped()
+            }
         }
         .padding(14)
         .background(DojoTheme.piuCard)
         .cornerRadius(12)
+        .sheet(item: $selectedScore) { u in
+            ScoreSnapshotSheet(
+                songTitle: u.songTitle ?? "Unknown",
+                mode: u.mode ?? "S",
+                level: u.level ?? 0,
+                score: u.newScore ?? 0,
+                grade: DojoTheme.gradeLabel(for: u.newScore ?? 0),
+                backgroundUrl: u.backgroundUrl,
+                replayEmbedUrl: u.replayEmbedUrl,
+                username: item.username
+            )
+        }
     }
 
     // MARK: - Upscore Row (from upscores_json)
@@ -151,7 +174,16 @@ struct UpscoreCardView: View {
 
             Spacer()
 
-            // Scores with grades
+            // Replay badge
+            if let replayUrl = u.replayEmbedUrl, !replayUrl.isEmpty, let url = URL(string: replayUrl) {
+                Link(destination: url) {
+                    Image(systemName: "play.circle.fill")
+                        .font(.system(size: 14))
+                        .foregroundColor(.red)
+                }
+            }
+
+            // Scores with grades (tappable)
             if let old = u.oldScore, let new = u.newScore {
                 VStack(alignment: .trailing, spacing: 2) {
                     // Score line
@@ -165,7 +197,7 @@ struct UpscoreCardView: View {
                                 .foregroundColor(DojoTheme.textMuted)
                         }
 
-                        Text("→")
+                        Text("\u{2192}")
                             .font(.system(size: 8))
                             .foregroundColor(DojoTheme.textMuted)
 
@@ -187,6 +219,8 @@ struct UpscoreCardView: View {
                             .foregroundColor(DojoTheme.piuGreen)
                     }
                 }
+                .contentShape(Rectangle())
+                .onTapGesture { selectedScore = u }
             }
         }
         .padding(.horizontal, 10)
@@ -213,7 +247,7 @@ struct UpscoreCardView: View {
                     Text(formatScore(old))
                         .font(.system(size: 10, design: .monospaced))
                         .foregroundColor(DojoTheme.textMuted)
-                    Text("→")
+                    Text("\u{2192}")
                         .font(.system(size: 8))
                         .foregroundColor(DojoTheme.textMuted)
                     Text(formatScore(new))

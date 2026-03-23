@@ -133,6 +133,7 @@
 		03446E9871FE692DE9F32DEC /* WorldMax.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3133259257158639A9CE82A5 /* WorldMax.swift */; };
 		87A472B68A1366A8601E6EA2 /* WorldMaxMachineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D98BD5FD335E1B2417615D7 /* WorldMaxMachineView.swift */; };
 		B04C2869769817D6359AFB75 /* WorldMaxView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88CF2D058C10AD9C777E950D /* WorldMaxView.swift */; };
+		SC0RE5NAP0001000100010001 /* ScoreSnapshotSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = SC0RE5NAP0002000200020002 /* ScoreSnapshotSheet.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -263,6 +264,7 @@
 		3133259257158639A9CE82A5 /* WorldMax.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WorldMax.swift"; sourceTree = "<group>"; };
 		9D98BD5FD335E1B2417615D7 /* WorldMaxMachineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WorldMaxMachineView.swift"; sourceTree = "<group>"; };
 		88CF2D058C10AD9C777E950D /* WorldMaxView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WorldMaxView.swift"; sourceTree = "<group>"; };
+		SC0RE5NAP0002000200020002 /* ScoreSnapshotSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ScoreSnapshotSheet.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -538,6 +540,7 @@
 				E30A16161616161616161616 /* PostComposerView.swift */,
 				E30A1E1E1E1E1E1E1E1E1E1E /* NotificationsView.swift */,
 				F40A0A0A0A0A0A0A0A0A0A0A /* CommentsView.swift */,
+				SC0RE5NAP0002000200020002 /* ScoreSnapshotSheet.swift */,
 				F40A0C0C0C0C0C0C0C0C0C0C /* ImageLightboxView.swift */,
 			);
 			path = Social;
@@ -832,6 +835,7 @@
 				F40A05050505050505050505 /* OnlineDuelRoomView.swift in Sources */,
 				F40A07070707070707070707 /* DuelChatView.swift in Sources */,
 				F40A09090909090909090909 /* CommentsView.swift in Sources */,
+				SC0RE5NAP0001000100010001 /* ScoreSnapshotSheet.swift in Sources */,
 				F40A0B0B0B0B0B0B0B0B0B0B /* ImageLightboxView.swift in Sources */,
 				F40A0D0D0D0D0D0D0D0D0D0D /* UserSearchView.swift in Sources */,
 				F40A0F0F0F0F0F0F0F0F0F0F /* TextFormatter.swift in Sources */,

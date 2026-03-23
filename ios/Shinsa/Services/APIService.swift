@@ -278,6 +278,7 @@ class APIService {
     }
     func getPiugameSyncStatus(_ userId: String) async throws -> PiugameSyncStatus { try await request("/piugame/sync-status/\(userId)") }
     func getSyncProgress() async throws -> SyncProgressResponse { try await request("/piugame/sync/progress") }
+    func getPiuSyncStatus(_ userId: String) async throws -> PiuSyncStatus { try await request("/piugame/sync-status/\(userId)") }
 
     // MARK: - Notifications
     func getNotifications() async throws -> NotificationsResponse { try await request("/auth/notifications") }

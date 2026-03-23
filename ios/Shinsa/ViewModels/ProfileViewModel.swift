@@ -14,6 +14,7 @@ class ProfileViewModel: ObservableObject {
     @Published var achievements: [AchievementBadge] = []
     @Published var posts: [Post] = []
     @Published var heatmapData: [String: HeatmapDay] = [:]
+    @Published var piuStatus: PiuSyncStatus?
     @Published var postsPage = 1
     @Published var hasMorePosts = true
     @Published var isLoadingPosts = false
@@ -35,6 +36,7 @@ class ProfileViewModel: ObservableObject {
         stats = try? await s
         followStatus = try? await f
         socialCounts = try? await c
+        piuStatus = try? await APIService.shared.getPiuSyncStatus(userId)
         isLoading = false
     }
 

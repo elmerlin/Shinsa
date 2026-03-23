@@ -11,9 +11,10 @@ struct PumbilityScore: Codable, Identifiable {
     var backgroundUrl: String?
     var datePlayed: String?
     var rankOrder: Int?
+    var rating: Int?
 
     enum CodingKeys: String, CodingKey {
-        case id, mode, level, score, grade
+        case id, mode, level, score, grade, rating
         case userId = "user_id"
         case songTitle = "song_title"
         case backgroundUrl = "background_url"
@@ -107,8 +108,57 @@ struct PiugameSyncStatus: Codable {
 }
 
 struct PumbilityData: Codable {
-    var pumbility: Int?
+    var pumbilityValue: Int?
+    var officialPumbility: Int?
     var scores: [PumbilityScore]?
+    var averageRating: Double?
+    var equivalentLevel: Int?
+    var equivalentGrade: String?
+    var minEntryRating: Int?
+    var minEntryDetails: MinEntryDetails?
+    var ranking: Int?
+    var scoreCount: Int?
+
+    struct MinEntryDetails: Codable {
+        var rating: Int?
+        var songTitle: String?
+        var mode: String?
+        var level: Int?
+        var score: Int?
+        var grade: String?
+        enum CodingKeys: String, CodingKey {
+            case rating, mode, level, score, grade
+            case songTitle = "song_title"
+        }
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case scores, ranking
+        case pumbilityValue = "pumbility_value"
+        case officialPumbility = "official_pumbility"
+        case averageRating = "average_rating"
+        case equivalentLevel = "equivalent_level"
+        case equivalentGrade = "equivalent_grade"
+        case minEntryRating = "min_entry_rating"
+        case minEntryDetails = "min_entry_details"
+        case scoreCount = "score_count"
+    }
+}
+
+struct PiuSyncStatus: Codable {
+    var linked: Bool?
+    var highestSingle: Int?
+    var highestDouble: Int?
+    var pumbilityValue: Int?
+    var bestScoresImported: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case linked
+        case highestSingle = "highest_single"
+        case highestDouble = "highest_double"
+        case pumbilityValue = "pumbility_value"
+        case bestScoresImported = "best_scores_imported"
+    }
 }
 
 struct SyncProgressResponse: Codable {
