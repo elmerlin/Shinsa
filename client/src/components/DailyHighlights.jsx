@@ -95,7 +95,7 @@ function RankBadge({ rank }) {
   const style = RANK_BADGE_STYLES[rank - 1] || RANK_BADGE_STYLES[4];
   return (
     <span
-      className={`absolute -top-1.5 -left-1.5 z-20 flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br font-display text-[11px] font-black leading-none ${style}`}
+      className={`absolute -top-1 -left-1 z-20 flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br font-display text-[9px] font-black leading-none ${style}`}
     >
       {rank}
     </span>
@@ -106,9 +106,9 @@ function RankBadge({ rank }) {
 
 function SectionHeader({ icon, title, accent }) {
   return (
-    <div className="mb-3 flex items-center gap-2.5">
-      <span className="text-lg">{icon}</span>
-      <h3 className="font-display text-sm font-black tracking-[0.12em] uppercase text-white/90">
+    <div className="mb-2 flex items-center gap-2">
+      <span className="text-sm">{icon}</span>
+      <h3 className="font-display text-[11px] font-black tracking-[0.12em] uppercase text-white/90">
         {title}
       </h3>
       <div className={`ml-1 h-px flex-1 bg-gradient-to-r ${accent} to-transparent`} />
@@ -121,8 +121,8 @@ function SectionHeader({ icon, title, accent }) {
 function PlayOverlay() {
   return (
     <div className="absolute inset-0 z-10 flex items-center justify-center opacity-0 transition-opacity duration-300 group-hover:opacity-100">
-      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-600/90 shadow-[0_0_24px_rgba(255,0,0,0.4)] backdrop-blur-sm">
-        <svg className="ml-0.5 h-5 w-5 text-white" viewBox="0 0 24 24" fill="currentColor">
+      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-red-600/90 shadow-[0_0_18px_rgba(255,0,0,0.4)] backdrop-blur-sm">
+        <svg className="ml-0.5 h-4 w-4 text-white" viewBox="0 0 24 24" fill="currentColor">
           <path d="M8 5v14l11-7z" />
         </svg>
       </div>
@@ -150,8 +150,7 @@ function ReplayCard({ play, rank, jacketLookup, onReplayClick, visible }) {
     <button
       type="button"
       onClick={() => onReplayClick(play.replay_embed_url, `${play.song_title} — ${play.username}`)}
-      className={`group relative flex-shrink-0 w-[280px] sm:w-[320px] overflow-hidden rounded-2xl border border-piu-border/60 transition-all duration-500 ease-out hover:border-sky-400/40 hover:shadow-[0_8px_32px_rgba(56,189,248,0.15)] ${visible ? 'translate-y-0 opacity-100' : 'translate-y-6 opacity-0'}`}
-      style={{ transitionDelay: visible ? '0ms' : '0ms' }}
+      className={`group relative flex-shrink-0 w-[200px] sm:w-[220px] overflow-hidden rounded-xl border border-piu-border/60 transition-all duration-500 ease-out hover:border-sky-400/40 hover:shadow-[0_6px_24px_rgba(56,189,248,0.12)] ${visible ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'}`}
     >
       <RankBadge rank={rank} />
 
@@ -162,32 +161,31 @@ function ReplayCard({ play, rank, jacketLookup, onReplayClick, visible }) {
         <div className="absolute inset-0 bg-gradient-to-br from-[#152238] via-[#0f1a2d] to-[#090d18]" />
       )}
       <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-black/20" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(120,220,255,0.1),transparent_50%)]" />
 
       <PlayOverlay />
 
       {/* Content */}
-      <div className="relative z-10 flex h-[160px] flex-col justify-end p-3.5">
-        <p className="font-display text-sm font-black leading-tight text-white line-clamp-1">
+      <div className="relative z-10 flex h-[110px] flex-col justify-end p-2.5">
+        <p className="font-display text-[11px] font-black leading-tight text-white line-clamp-1">
           {play.song_title}
         </p>
-        <div className="mt-1.5 flex items-center gap-2">
+        <div className="mt-1 flex items-center gap-1.5">
           {avatarUrl ? (
-            <img src={avatarUrl} alt="" className="h-5 w-5 rounded-full border border-white/20 object-cover" />
+            <img src={avatarUrl} alt="" className="h-4 w-4 rounded-full border border-white/20 object-cover" />
           ) : null}
-          <span className="text-[11px] text-gray-300 font-display font-bold">
+          <span className="text-[9px] text-gray-300 font-display font-bold truncate">
             {play.nationality ? `${getCountryFlag(play.nationality)} ` : ''}{play.username}
           </span>
         </div>
-        <div className="mt-2 flex items-end justify-between gap-2">
-          <div className="flex items-baseline gap-2">
-            <span className="font-display text-2xl font-black text-white leading-none">{fmt(score)}</span>
-            <span className={`font-display text-lg font-black leading-none ${getGradeColor(gradeDisplay, score)} ${grade.isBroken ? 'grade-broken' : ''}`} data-grade={gradeDisplay}>
+        <div className="mt-1.5 flex items-end justify-between gap-1">
+          <div className="flex items-baseline gap-1.5">
+            <span className="font-display text-base font-black text-white leading-none">{fmt(score)}</span>
+            <span className={`font-display text-sm font-black leading-none ${getGradeColor(gradeDisplay, score)} ${grade.isBroken ? 'grade-broken' : ''}`} data-grade={gradeDisplay}>
               {gradeDisplay}
             </span>
           </div>
           {play.level > 0 && (
-            <span className={`inline-flex h-7 min-w-[32px] items-center justify-center rounded-full border px-1.5 font-display text-xs font-black ${getModeBadgeClasses(play.mode)}`}>
+            <span className={`inline-flex h-5.5 min-w-[24px] items-center justify-center rounded-full border px-1 font-display text-[10px] font-black ${getModeBadgeClasses(play.mode)}`}>
               {play.level}
             </span>
           )}
@@ -195,8 +193,8 @@ function ReplayCard({ play, rank, jacketLookup, onReplayClick, visible }) {
       </div>
 
       {/* Replay badge */}
-      <div className="absolute top-2.5 right-2.5 z-10 flex items-center gap-1 rounded-full bg-red-600/80 px-2 py-0.5 text-[9px] font-display font-bold text-white shadow-lg backdrop-blur-sm">
-        <svg className="h-3 w-3" viewBox="0 0 24 24" fill="currentColor">
+      <div className="absolute top-1.5 right-1.5 z-10 flex items-center gap-0.5 rounded-full bg-red-600/80 px-1.5 py-0.5 text-[8px] font-display font-bold text-white shadow-lg backdrop-blur-sm">
+        <svg className="h-2.5 w-2.5" viewBox="0 0 24 24" fill="currentColor">
           <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.546 12 3.546 12 3.546s-7.505 0-9.377.504A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.504 9.376.504 9.376.504s7.505 0 9.377-.504a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
         </svg>
         Replay
@@ -248,7 +246,7 @@ function UpscoreCard({ item, rank, jacketLookup, visible }) {
   return (
     <Link
       to={`/upscore/${item.upscore_id}`}
-      className={`group relative flex-shrink-0 w-[200px] overflow-hidden rounded-2xl border border-piu-border/50 transition-all duration-500 ease-out hover:border-piu-green/40 hover:shadow-[0_6px_28px_rgba(51,255,102,0.12)] ${rank === 1 ? 'ring-1 ring-piu-gold/20' : ''} ${visible ? 'translate-y-0 opacity-100' : 'translate-y-6 opacity-0'}`}
+      className={`group relative flex-shrink-0 w-[150px] overflow-hidden rounded-xl border border-piu-border/50 transition-all duration-500 ease-out hover:border-piu-green/40 hover:shadow-[0_4px_20px_rgba(51,255,102,0.1)] ${rank === 1 ? 'ring-1 ring-piu-gold/20' : ''} ${visible ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'}`}
     >
       <RankBadge rank={rank} />
 
@@ -257,46 +255,46 @@ function UpscoreCard({ item, rank, jacketLookup, visible }) {
       ) : (
         <div className="absolute inset-0 bg-gradient-to-br from-[#0d1f12] via-[#0a1a0e] to-[#060d08]" />
       )}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/92 via-black/60 to-black/30" />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/92 via-black/60 to-black/25" />
 
-      <div className="relative z-10 flex h-[190px] flex-col justify-end p-3">
+      <div className="relative z-10 flex h-[132px] flex-col justify-end p-2">
         {/* Player row */}
-        <div className="flex items-center gap-1.5 mb-1.5">
+        <div className="flex items-center gap-1 mb-1">
           {avatarUrl ? (
-            <img src={avatarUrl} alt="" className="h-5 w-5 rounded-full border border-white/15 object-cover" />
+            <img src={avatarUrl} alt="" className="h-4 w-4 rounded-full border border-white/15 object-cover" />
           ) : null}
-          <span className="text-[10px] text-gray-300 font-display font-bold truncate">
+          <span className="text-[9px] text-gray-300 font-display font-bold truncate">
             {item.nationality ? `${getCountryFlag(item.nationality)} ` : ''}{item.username}
           </span>
         </div>
 
         {/* Song title */}
-        <p className="font-display text-xs font-black leading-tight text-white line-clamp-2 mb-2">
+        <p className="font-display text-[10px] font-black leading-tight text-white line-clamp-1 mb-1.5">
           {item.song_title}
         </p>
 
         {/* Score + grade */}
         <div className="flex items-baseline justify-between gap-1">
-          <span className="font-display text-xl font-black text-white leading-none">{fmt(newScore)}</span>
-          <span className={`font-display text-base font-black leading-none ${getGradeColor(gradeDisplay, newScore)} ${grade.isBroken ? 'grade-broken' : ''}`} data-grade={gradeDisplay}>
+          <span className="font-display text-sm font-black text-white leading-none">{fmt(newScore)}</span>
+          <span className={`font-display text-xs font-black leading-none ${getGradeColor(gradeDisplay, newScore)} ${grade.isBroken ? 'grade-broken' : ''}`} data-grade={gradeDisplay}>
             {gradeDisplay}
           </span>
         </div>
 
         {/* Delta row */}
-        <div className="mt-1 flex items-center justify-between">
-          <span className="text-[10px] text-gray-400">
+        <div className="mt-0.5 flex items-center justify-between">
+          <span className="text-[8px] text-gray-400">
             {fmt(oldScore)} {oldGrade.display}
           </span>
-          <span className={`font-mono text-xs font-bold ${delta > 0 ? 'text-piu-green' : delta < 0 ? 'text-rose-300' : 'text-gray-400'}`}>
+          <span className={`font-mono text-[10px] font-bold ${delta > 0 ? 'text-piu-green' : delta < 0 ? 'text-rose-300' : 'text-gray-400'}`}>
             {delta > 0 ? '+' : ''}{delta.toLocaleString()}
           </span>
         </div>
 
         {/* Level badge */}
         {item.level > 0 && (
-          <div className="absolute top-2.5 right-2.5">
-            <span className={`inline-flex h-7 min-w-[30px] items-center justify-center rounded-full border px-1.5 font-display text-xs font-black ${getModeBadgeClasses(item.mode)}`}>
+          <div className="absolute top-1.5 right-1.5">
+            <span className={`inline-flex h-5.5 min-w-[24px] items-center justify-center rounded-full border px-1 font-display text-[10px] font-black ${getModeBadgeClasses(item.mode)}`}>
               {item.level}
             </span>
           </div>
@@ -325,7 +323,7 @@ function ClearCard({ item, rank, jacketLookup, visible }) {
   return (
     <Link
       to={`/clear/${item.clear_id}`}
-      className={`group relative flex-shrink-0 w-[200px] overflow-hidden rounded-2xl border border-piu-border/50 transition-all duration-500 ease-out hover:border-sky-400/40 hover:shadow-[0_6px_28px_rgba(56,189,248,0.12)] ${rank === 1 ? 'ring-1 ring-piu-gold/20' : ''} ${visible ? 'translate-y-0 opacity-100' : 'translate-y-6 opacity-0'}`}
+      className={`group relative flex-shrink-0 w-[150px] overflow-hidden rounded-xl border border-piu-border/50 transition-all duration-500 ease-out hover:border-sky-400/40 hover:shadow-[0_4px_20px_rgba(56,189,248,0.1)] ${rank === 1 ? 'ring-1 ring-piu-gold/20' : ''} ${visible ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'}`}
     >
       <RankBadge rank={rank} />
 
@@ -334,43 +332,43 @@ function ClearCard({ item, rank, jacketLookup, visible }) {
       ) : (
         <div className="absolute inset-0 bg-gradient-to-br from-[#0d1525] via-[#0a1020] to-[#06090f]" />
       )}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/92 via-black/60 to-black/30" />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/92 via-black/60 to-black/25" />
 
-      <div className="relative z-10 flex h-[190px] flex-col justify-end p-3">
+      <div className="relative z-10 flex h-[132px] flex-col justify-end p-2">
         {/* Player row */}
-        <div className="flex items-center gap-1.5 mb-1.5">
+        <div className="flex items-center gap-1 mb-1">
           {avatarUrl ? (
-            <img src={avatarUrl} alt="" className="h-5 w-5 rounded-full border border-white/15 object-cover" />
+            <img src={avatarUrl} alt="" className="h-4 w-4 rounded-full border border-white/15 object-cover" />
           ) : null}
-          <span className="text-[10px] text-gray-300 font-display font-bold truncate">
+          <span className="text-[9px] text-gray-300 font-display font-bold truncate">
             {item.nationality ? `${getCountryFlag(item.nationality)} ` : ''}{item.username}
           </span>
         </div>
 
         {/* Song title */}
-        <p className="font-display text-xs font-black leading-tight text-white line-clamp-2 mb-2">
+        <p className="font-display text-[10px] font-black leading-tight text-white line-clamp-1 mb-1.5">
           {item.song_title}
         </p>
 
         {/* Score + grade */}
         <div className="flex items-baseline justify-between gap-1">
-          <span className="font-display text-xl font-black text-white leading-none">{fmt(score)}</span>
-          <span className={`font-display text-base font-black leading-none ${getGradeColor(gradeDisplay, score)} ${grade.isBroken ? 'grade-broken' : ''}`} data-grade={gradeDisplay}>
+          <span className="font-display text-sm font-black text-white leading-none">{fmt(score)}</span>
+          <span className={`font-display text-xs font-black leading-none ${getGradeColor(gradeDisplay, score)} ${grade.isBroken ? 'grade-broken' : ''}`} data-grade={gradeDisplay}>
             {gradeDisplay}
           </span>
         </div>
 
         {/* Plate */}
         {item.plate && (
-          <p className="mt-0.5 text-[9px] font-display font-bold tracking-[0.1em] text-emerald-300/80">
+          <p className="mt-0.5 text-[8px] font-display font-bold tracking-[0.1em] text-emerald-300/80">
             {item.plate}
           </p>
         )}
 
         {/* Level badge */}
         {item.level > 0 && (
-          <div className="absolute top-2.5 right-2.5">
-            <span className={`inline-flex h-7 min-w-[30px] items-center justify-center rounded-full border px-1.5 font-display text-xs font-black ${getModeBadgeClasses(item.mode)}`}>
+          <div className="absolute top-1.5 right-1.5">
+            <span className={`inline-flex h-5.5 min-w-[24px] items-center justify-center rounded-full border px-1 font-display text-[10px] font-black ${getModeBadgeClasses(item.mode)}`}>
               {item.level}
             </span>
           </div>
@@ -410,7 +408,7 @@ function ScrollRail({ children, className = '' }) {
   const scroll = (dir) => {
     const el = scrollRef.current;
     if (!el) return;
-    el.scrollBy({ left: dir * 260, behavior: 'smooth' });
+    el.scrollBy({ left: dir * 180, behavior: 'smooth' });
   };
 
   return (
@@ -419,7 +417,7 @@ function ScrollRail({ children, className = '' }) {
       <ScrollArrow direction="right" onClick={() => scroll(1)} visible={canRight} />
       <div
         ref={scrollRef}
-        className="flex gap-3 overflow-x-auto scroll-smooth snap-x snap-mandatory pb-2 scrollbar-none"
+        className="flex gap-2.5 overflow-x-auto scroll-smooth snap-x snap-mandatory pb-1.5 scrollbar-none"
         style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
       >
         {children}
@@ -448,10 +446,10 @@ export default function DailyHighlights({ data, jacketLookup = {} }) {
   if (!hasReplays && !hasUpscores && !hasClears) return null;
 
   return (
-    <div className="mb-8">
+    <div className="mb-6">
       {/* Section title */}
-      <div className="mb-4 flex items-center gap-3">
-        <h2 className="font-display text-lg font-bold tracking-wider text-piu-accent">
+      <div className="mb-3 flex items-center gap-3">
+        <h2 className="font-display text-sm font-bold tracking-wider text-piu-accent">
           TODAY&apos;S HIGHLIGHTS
         </h2>
         <div className="h-px flex-1 bg-gradient-to-r from-piu-accent/40 to-transparent" />
@@ -459,7 +457,7 @@ export default function DailyHighlights({ data, jacketLookup = {} }) {
 
       {/* Top Replay Plays carousel */}
       {hasReplays && (
-        <div ref={replayAnim.ref} className="mb-5">
+        <div ref={replayAnim.ref} className="mb-3.5">
           <SectionHeader
             icon="🎬"
             title="Top Plays"
@@ -482,7 +480,7 @@ export default function DailyHighlights({ data, jacketLookup = {} }) {
 
       {/* Best Upscores */}
       {hasUpscores && (
-        <div ref={upscoreAnim.ref} className="mb-5">
+        <div ref={upscoreAnim.ref} className="mb-3.5">
           <SectionHeader
             icon="📈"
             title="Best Upscores"
