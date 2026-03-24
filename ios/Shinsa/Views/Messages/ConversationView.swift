@@ -562,7 +562,7 @@ struct ConversationView: View {
                 // Rich content based on message type
                 if msg.messageType == "link_share", let ls = msg.linkShare {
                     linkShareCard(ls)
-                        .frame(maxWidth: 280)
+                        .frame(maxWidth: 320)
                 } else if msg.messageType == "challenge_card", let cc = msg.challengeCard {
                     challengeCardView(cc)
                         .frame(maxWidth: 280)
@@ -607,151 +607,209 @@ struct ConversationView: View {
             title: ls.songTitle, mode: ls.mode, level: ls.level,
             backgroundUrl: ls.backgroundUrl ?? ls.jacketUrl
         )
+        let isDouble: Bool = {
+            guard let m = ls.mode else { return false }
+            return m.lowercased().hasPrefix("d") || m.lowercased() == "double"
+        }()
 
         return VStack(alignment: .leading, spacing: 0) {
-            // Badge
-            Text(linkShareBadgeLabel(kind))
-                .font(.system(size: 8, weight: .bold))
-                .foregroundColor(.cyan.opacity(0.8))
-                .textCase(.uppercase)
-                .tracking(1)
-                .padding(.horizontal, 10)
-                .padding(.top, 8)
-                .padding(.bottom, 4)
-
             if hasScore, let songTitle = ls.songTitle {
-                // Score snapshot card
-                ZStack(alignment: .bottom) {
-                    // Jacket background
-                    if let url = jacketURL {
-                        AsyncImage(url: url) { phase in
-                            if case .success(let img) = phase {
-                                img.resizable().scaledToFill()
-                            } else {
-                                Rectangle().fill(LinearGradient(colors: [Color(hex: "#152238"), Color(hex: "#090d18")], startPoint: .topLeading, endPoint: .bottomTrailing))
+                // Score snapshot card with jacket background
+                ZStack(alignment: .topTrailing) {
+                    // Full jacket background
+                    ZStack {
+                        if let url = jacketURL {
+                            AsyncImage(url: url) { phase in
+                                if case .success(let img) = phase {
+                                    img.resizable().scaledToFill()
+                                } else {
+                                    Rectangle().fill(LinearGradient(colors: [Color(hex: "#152238"), Color(hex: "#090d18")], startPoint: .topLeading, endPoint: .bottomTrailing))
+                                }
                             }
+                        } else {
+                            Rectangle().fill(LinearGradient(colors: [Color(hex: "#152238"), Color(hex: "#090d18")], startPoint: .topLeading, endPoint: .bottomTrailing))
                         }
-                    } else {
-                        Rectangle().fill(LinearGradient(colors: [Color(hex: "#152238"), Color(hex: "#090d18")], startPoint: .topLeading, endPoint: .bottomTrailing))
+
+                        // Dark gradient overlay from top to bottom
+                        LinearGradient(colors: [.black.opacity(0.3), .black.opacity(0.6), .black.opacity(0.92)], startPoint: .top, endPoint: .bottom)
                     }
 
-                    // Dark gradient
-                    LinearGradient(colors: [.black.opacity(0.15), .black.opacity(0.85)], startPoint: .top, endPoint: .bottom)
-
-                    // Content
-                    VStack(alignment: .leading, spacing: 4) {
-                        // Player
-                        if let player = ls.playerName, !player.isEmpty {
-                            Text(player)
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundColor(.white.opacity(0.7))
-                        }
-
-                        Text(songTitle)
-                            .font(.system(size: 12, weight: .black))
+                    // Level badge top right
+                    if let level = ls.level, level > 0 {
+                        Text("\(level)")
+                            .font(.system(size: 11, weight: .black))
                             .foregroundColor(.white)
-                            .lineLimit(2)
-
-                        // Mode badge
-                        if let mode = ls.mode, let level = ls.level, level > 0 {
-                            let isDouble = mode.lowercased().hasPrefix("d") || mode.lowercased() == "double"
-                            Text("\(isDouble ? "D" : "S")\(level)")
-                                .font(.system(size: 9, weight: .black))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 5)
-                                .padding(.vertical, 2)
-                                .background(
+                            .frame(width: 28, height: 28)
+                            .background(
+                                Circle().fill(
                                     LinearGradient(
                                         colors: isDouble
                                             ? [Color(hex: "#4cf4aa"), Color(hex: "#0b5d48")]
                                             : [Color(hex: "#ff7a7a"), Color(hex: "#7a1730")],
-                                        startPoint: .leading, endPoint: .trailing
+                                        startPoint: .topLeading, endPoint: .bottomTrailing
                                     )
                                 )
-                                .cornerRadius(4)
+                            )
+                            .padding(10)
+                    }
+
+                    // Content overlaid
+                    VStack(alignment: .leading, spacing: 6) {
+                        Spacer()
+
+                        // Song title
+                        Text(songTitle)
+                            .font(.system(size: 16, weight: .black))
+                            .foregroundColor(.white)
+                            .lineLimit(2)
+
+                        // Player + date
+                        HStack(spacing: 6) {
+                            if let avatar = ls.playerAvatar, !avatar.isEmpty {
+                                AvatarView(avatar, name: ls.playerName ?? "?", size: 22)
+                            }
+                            if let player = ls.playerName, !player.isEmpty {
+                                Text(player)
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundColor(.white.opacity(0.8))
+                            }
+                            if let _ = ls.mode, let level = ls.level, level > 0 {
+                                Text("\(isDouble ? "D" : "S")\(level)")
+                                    .font(.system(size: 9, weight: .black))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 2)
+                                    .background(
+                                        LinearGradient(
+                                            colors: isDouble
+                                                ? [Color(hex: "#4cf4aa"), Color(hex: "#0b5d48")]
+                                                : [Color(hex: "#ff7a7a"), Color(hex: "#7a1730")],
+                                            startPoint: .leading, endPoint: .trailing
+                                        )
+                                    )
+                                    .cornerRadius(4)
+                            }
                         }
 
+                        // Score (large left) + Grade (large right)
                         HStack(alignment: .bottom, spacing: 6) {
                             Text(score > 0 ? score.formattedScore : "")
-                                .font(.system(size: 20, weight: .black))
+                                .font(.system(size: 28, weight: .black, design: .monospaced))
                                 .foregroundColor(.white)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
 
                             Spacer()
 
                             Text(gradeLabel)
-                                .font(.system(size: 18, weight: .black))
+                                .font(.system(size: 24, weight: .black))
                                 .foregroundColor(gradeColor)
-                        }
-
-                        // Judgments
-                        if hasJudgments(ls) {
-                            HStack(spacing: 0) {
-                                judgmentLabel("P", ls.perfect ?? 0, Color(hex: "#7dd3fc"))
-                                judgmentLabel("GR", ls.great ?? 0, Color(hex: "#6ee7b7"))
-                                judgmentLabel("GO", ls.good ?? 0, Color(hex: "#fde68a"))
-                                judgmentLabel("B", ls.bad ?? 0, Color(hex: "#f0abfc"))
-                                judgmentLabel("M", ls.miss ?? 0, Color(hex: "#fca5a5"))
-                            }
-                            .padding(6)
-                            .background(Color.black.opacity(0.5))
-                            .cornerRadius(8)
+                                .lineLimit(1)
                         }
 
                         // Old score for upscores
                         if kind == "upscore", let oldScore = ls.oldScore, oldScore > 0, let newScore = ls.score, newScore > oldScore {
-                            HStack(spacing: 4) {
-                                Text("Prev \(oldScore.formattedScore)")
-                                    .font(.system(size: 9))
+                            HStack(spacing: 6) {
+                                let oldGrade = ls.oldGrade ?? DojoTheme.gradeLabel(for: oldScore)
+                                Text("Prev \(oldScore.formattedScore) \(oldGrade)")
+                                    .font(.system(size: 10))
                                     .foregroundColor(.white.opacity(0.5))
                                 Text("+\((newScore - oldScore).formattedScore)")
-                                    .font(.system(size: 9, weight: .bold))
+                                    .font(.system(size: 10, weight: .bold))
                                     .foregroundColor(DojoTheme.piuGreen)
                             }
                         }
+
+                        // Judgments breakdown
+                        if hasJudgments(ls) {
+                            HStack(spacing: 0) {
+                                judgmentColumn("PERFECT", ls.perfect ?? 0, Color(hex: "#7dd3fc"))
+                                judgmentColumn("GREAT", ls.great ?? 0, Color(hex: "#6ee7b7"))
+                                judgmentColumn("GOOD", ls.good ?? 0, Color(hex: "#fde68a"))
+                                judgmentColumn("BAD", ls.bad ?? 0, Color(hex: "#f0abfc"))
+                                judgmentColumn("MISS", ls.miss ?? 0, Color(hex: "#fca5a5"))
+                            }
+                            .padding(.vertical, 6)
+                            .padding(.horizontal, 6)
+                            .background(Color.black.opacity(0.4))
+                            .cornerRadius(8)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                            )
+                        }
                     }
-                    .padding(10)
+                    .padding(12)
                 }
-                .frame(height: 180)
+                .frame(minHeight: 220)
                 .clipped()
+                .cornerRadius(12)
+
+                // "Open upscore/clear" button below the card
+                let buttonLabel = kind == "upscore" ? "Open upscore" : kind == "clear" ? "Open clear" : "Open score"
+                Text(buttonLabel)
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(DojoTheme.piuAccent)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(DojoTheme.piuAccent.opacity(0.4), lineWidth: 1)
+                    )
+                    .cornerRadius(8)
+                    .padding(.top, 4)
             } else {
                 // Generic link share (post, live_session, etc)
-                VStack(alignment: .leading, spacing: 4) {
-                    if let title = ls.title, !title.isEmpty {
-                        Text(title)
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(.white)
-                            .lineLimit(2)
+                VStack(alignment: .leading, spacing: 0) {
+                    // Badge
+                    Text(linkShareBadgeLabel(kind))
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundColor(.cyan.opacity(0.8))
+                        .textCase(.uppercase)
+                        .tracking(1)
+                        .padding(.horizontal, 10)
+                        .padding(.top, 8)
+                        .padding(.bottom, 4)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        if let title = ls.title, !title.isEmpty {
+                            Text(title)
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(.white)
+                                .lineLimit(2)
+                        }
+                        if let subtitle = ls.subtitle, !subtitle.isEmpty {
+                            Text(subtitle)
+                                .font(.system(size: 11))
+                                .foregroundColor(DojoTheme.textMuted)
+                                .lineLimit(2)
+                        }
                     }
-                    if let subtitle = ls.subtitle, !subtitle.isEmpty {
-                        Text(subtitle)
-                            .font(.system(size: 11))
-                            .foregroundColor(DojoTheme.textMuted)
-                            .lineLimit(2)
-                    }
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, 8)
                 }
-                .padding(.horizontal, 10)
-                .padding(.bottom, 8)
+                .background(DojoTheme.piuDark)
+                .cornerRadius(12)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(DojoTheme.piuBorder, lineWidth: 1)
+                )
             }
         }
-        .background(DojoTheme.piuDark)
-        .cornerRadius(12)
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(DojoTheme.piuBorder, lineWidth: 1)
-        )
     }
 
     private func hasJudgments(_ ls: MessageLinkShare) -> Bool {
         (ls.perfect ?? 0) + (ls.great ?? 0) + (ls.good ?? 0) + (ls.bad ?? 0) + (ls.miss ?? 0) > 0
     }
 
-    private func judgmentLabel(_ label: String, _ value: Int, _ color: Color) -> some View {
-        VStack(spacing: 1) {
+    private func judgmentColumn(_ label: String, _ value: Int, _ color: Color) -> some View {
+        VStack(spacing: 2) {
             Text(label)
                 .font(.system(size: 7, weight: .bold))
                 .foregroundColor(color)
+                .lineLimit(1)
             Text("\(value)")
-                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
                 .foregroundColor(.white)
         }
         .frame(maxWidth: .infinity)
