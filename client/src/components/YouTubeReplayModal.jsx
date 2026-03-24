@@ -6,7 +6,7 @@ export default function YouTubeReplayModal({ url, title = 'Replay clip', onClose
   if (!embedSrc) return null;
 
   return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/80 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4" onClick={onClose}>
       <div
         className="w-full max-w-3xl overflow-hidden rounded-2xl border border-piu-border bg-[#07111f] shadow-2xl"
         onClick={(event) => event.stopPropagation()}
