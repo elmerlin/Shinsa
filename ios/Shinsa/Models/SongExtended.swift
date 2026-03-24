@@ -324,22 +324,121 @@ struct PumbilityLeaderboardResponse: Codable {
 }
 
 struct SongAnalytics: Codable {
+    var pumbility: Int?
+    var singlesPumbility: Int?
+    var totals: AnalyticsTotals?
+    var levels: AnalyticsLevels?
+    var competitiveLevels: CompetitiveLevels?
+    var pumbilityBreakdown: PumbilityBreakdown?
+
+    // Legacy fields kept for OptimiseView compatibility (API no longer returns these)
     var totalPlays: Int?
     var uniqueCharts: Int?
     var gradeDistribution: [String: Int]?
     var levelDistribution: [String: Int]?
     var recentScores: [AnalyticsScore]?
-    var pumbility: Int?
-    var singlesPumbility: Int?
 
     enum CodingKeys: String, CodingKey {
+        case pumbility, totals, levels
+        case singlesPumbility = "singles_pumbility"
+        case competitiveLevels = "competitive_levels"
+        case pumbilityBreakdown = "pumbility_breakdown"
         case totalPlays = "total_plays"
         case uniqueCharts = "unique_charts"
         case gradeDistribution = "grade_distribution"
         case levelDistribution = "level_distribution"
         case recentScores = "recent_scores"
-        case pumbility
-        case singlesPumbility = "singles_pumbility"
+    }
+}
+
+struct AnalyticsTotals: Codable {
+    var single: ModeTotals?
+    var double: ModeTotals?
+    var both: ModeTotals?
+}
+
+struct ModeTotals: Codable {
+    var totalCharts: Int?
+    var clearedCharts: Int?
+    var clearPercentage: Double?
+    enum CodingKeys: String, CodingKey {
+        case totalCharts = "total_charts"
+        case clearedCharts = "cleared_charts"
+        case clearPercentage = "clear_percentage"
+    }
+}
+
+struct AnalyticsLevels: Codable {
+    var single: [LevelEntry]?
+    var double: [LevelEntry]?
+    var both: [LevelEntry]?
+}
+
+struct LevelEntry: Codable, Identifiable {
+    var id: Int { level ?? 0 }
+    var level: Int?
+    var totalCharts: Int?
+    var clearedCharts: Int?
+    var clearPercentage: Double?
+    var averageScore: Int?
+    var averageGrade: String?
+    var ratingTotal: Double?
+    enum CodingKeys: String, CodingKey {
+        case level
+        case totalCharts = "total_charts"
+        case clearedCharts = "cleared_charts"
+        case clearPercentage = "clear_percentage"
+        case averageScore = "average_score"
+        case averageGrade = "average_grade"
+        case ratingTotal = "rating_total"
+    }
+}
+
+struct CompetitiveLevels: Codable {
+    var single: CompetitiveLevel?
+    var double: CompetitiveLevel?
+}
+
+struct CompetitiveLevel: Codable {
+    var level: Int?
+    var averageGrade: String?
+    var averageScore: Int?
+    var clearPercentage: Double?
+    enum CodingKeys: String, CodingKey {
+        case level
+        case averageGrade = "average_grade"
+        case averageScore = "average_score"
+        case clearPercentage = "clear_percentage"
+    }
+}
+
+struct PumbilityBreakdown: Codable {
+    var overallTop50: [PumbilityEntry]?
+    var singlesTop50: [PumbilityEntry]?
+    var doublesTop50: [PumbilityEntry]?
+    enum CodingKeys: String, CodingKey {
+        case overallTop50 = "overall_top50"
+        case singlesTop50 = "singles_top50"
+        case doublesTop50 = "doubles_top50"
+    }
+}
+
+struct PumbilityEntry: Codable, Identifiable {
+    var id: String { "\(chartId ?? 0)_\(title ?? "")" }
+    var chartId: Int?
+    var title: String?
+    var mode: String?
+    var level: Int?
+    var score: Int?
+    var grade: String?
+    var rating: Double?
+    var datePlayed: String?
+    var jacketUrl: String?
+    enum CodingKeys: String, CodingKey {
+        case title, mode, level, score, grade, rating
+        case chartId = "chart_id"
+        case datePlayed = "date_played"
+        case jacketUrl = "jacket_url"
     }
 }
 

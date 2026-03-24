@@ -78,6 +78,7 @@ struct ProfileView: View {
     @State private var selectedPlay: RecentlyPlayed?
     @State private var isSyncingPlays = false
     @State private var showSinglesPumbility = false
+    @State private var showAllDayPlays = false
 
     private var tabs: [(String, String, String)] {
         var t: [(String, String, String)] = [
@@ -818,9 +819,12 @@ struct ProfileView: View {
             )
             .onTapGesture {
                 if let data = dayData {
-                    selectedHeatmapDay = selectedHeatmapDay?.key == key ? nil : data
+                    let newDay = selectedHeatmapDay?.key == key ? nil : data
+                    selectedHeatmapDay = newDay
+                    showAllDayPlays = false
                 } else {
                     selectedHeatmapDay = nil
+                    showAllDayPlays = false
                 }
             }
     }
@@ -842,6 +846,8 @@ struct ProfileView: View {
             guard let datePlayed = play.effectiveDate else { return false }
             return normalizeDateKey(datePlayed) == day.key
         }
+        let visiblePlays = showAllDayPlays ? playsForDay : Array(playsForDay.prefix(5))
+        let hiddenCount = playsForDay.count - 5
 
         return VStack(alignment: .leading, spacing: 8) {
             HStack {
@@ -854,7 +860,7 @@ struct ProfileView: View {
                     .foregroundColor(DojoTheme.textMuted)
             }
 
-            ForEach(Array(playsForDay.enumerated()), id: \.offset) { _, play in
+            ForEach(Array(visiblePlays.enumerated()), id: \.offset) { _, play in
                 let jacketURL = JacketService.shared.resolveJacketURL(title: play.songTitle, mode: play.mode, level: play.level, backgroundUrl: play.backgroundUrl)
                 let score = play.score ?? 0
                 let isBreak = score <= 0
@@ -932,6 +938,25 @@ struct ProfileView: View {
                 }
                 .buttonStyle(.plain)
             }
+
+            // Show more button
+            if !showAllDayPlays && hiddenCount > 0 {
+                Button {
+                    showAllDayPlays = true
+                } label: {
+                    Text("Show \(hiddenCount) more")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(DojoTheme.piuBlue)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background(DojoTheme.piuBlue.opacity(0.1))
+                        .cornerRadius(8)
+                }
+                .buttonStyle(.plain)
+            }
+
+            // Daily Level Grade Chart
+            dailyLevelGradeChart(playsForDay)
         }
         .padding(12)
         .background(DojoTheme.piuBg)
@@ -958,6 +983,127 @@ struct ProfileView: View {
                 replayEmbedUrl: play.replayEmbedUrl,
                 username: vm.user?.username
             )
+        }
+    }
+
+    // MARK: - Daily Level Grade Chart
+
+    private func gradeFromScore(_ score: Int) -> String {
+        if score >= 995000 { return "SSS+" }
+        if score >= 990000 { return "SSS" }
+        if score >= 985000 { return "SS+" }
+        if score >= 980000 { return "SS" }
+        if score >= 975000 { return "S+" }
+        if score >= 970000 { return "S" }
+        if score >= 960000 { return "AAA+" }
+        if score >= 950000 { return "AAA" }
+        if score >= 925000 { return "AA+" }
+        if score >= 900000 { return "AA" }
+        if score >= 825000 { return "A+" }
+        if score >= 750000 { return "A" }
+        if score >= 650000 { return "B" }
+        if score >= 550000 { return "C" }
+        if score >= 450000 { return "D" }
+        return "F"
+    }
+
+    private func dailyLevelGradeChart(_ plays: [RecentlyPlayed]) -> some View {
+        let gradeBarColors: [(key: String, color: Color)] = [
+            ("SSS+", Color(hex: "#7dd3fc")), ("SSS", Color(hex: "#38bdf8")),
+            ("SS+", Color(hex: "#fde047")), ("SS", Color(hex: "#facc15")),
+            ("S+", Color(hex: "#f59e0b")), ("S", Color(hex: "#d97706")),
+            ("AAA+", Color(hex: "#cbd5e1")), ("AAA", Color(hex: "#94a3b8")),
+            ("AA+", Color(hex: "#a78bfa")), ("AA", Color(hex: "#8b5cf6")),
+            ("A+", Color(hex: "#34d399")), ("A", Color(hex: "#10b981")),
+            ("B", Color(hex: "#9ca3af")),
+        ]
+        let gradeColorMap = Dictionary(uniqueKeysWithValues: gradeBarColors.map { ($0.key, $0.color) })
+
+        // Group by level
+        var levelData: [Int: (grades: [String: Int], breaks: Int)] = [:]
+        for play in plays {
+            guard let level = play.level else { continue }
+            let score = play.score ?? 0
+            if score <= 0 {
+                levelData[level, default: (grades: [:], breaks: 0)].breaks += 1
+            } else {
+                let grade = gradeFromScore(score)
+                levelData[level, default: (grades: [:], breaks: 0)].grades[grade, default: 0] += 1
+            }
+        }
+
+        let sortedLevels = levelData.keys.sorted()
+        let maxCount = sortedLevels.map { level in
+            let data = levelData[level]!
+            return data.grades.values.reduce(0, +) + data.breaks
+        }.max() ?? 1
+
+        return VStack(alignment: .leading, spacing: 6) {
+            if !sortedLevels.isEmpty {
+                Text("GRADE DISTRIBUTION BY LEVEL")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(DojoTheme.piuAccent)
+                    .padding(.top, 4)
+
+                ForEach(sortedLevels, id: \.self) { level in
+                    let data = levelData[level]!
+                    let totalGrades = data.grades.values.reduce(0, +)
+                    let totalCount = totalGrades + data.breaks
+
+                    HStack(spacing: 6) {
+                        Text("Lv.\(level)")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(width: 36, alignment: .leading)
+
+                        GeometryReader { geo in
+                            let barWidth = geo.size.width
+                            let gradeWidth = barWidth * CGFloat(totalGrades) / CGFloat(max(maxCount, 1))
+                            let breakWidth = barWidth * CGFloat(data.breaks) / CGFloat(max(maxCount, 1))
+
+                            HStack(spacing: 0) {
+                                // Grade segments (positive direction)
+                                HStack(spacing: 0) {
+                                    ForEach(gradeBarColors, id: \.key) { item in
+                                        let count = data.grades[item.key] ?? 0
+                                        if count > 0 {
+                                            let segWidth = gradeWidth * CGFloat(count) / CGFloat(max(totalGrades, 1))
+                                            Rectangle()
+                                                .fill(item.color)
+                                                .frame(width: max(segWidth, 2))
+                                        }
+                                    }
+                                    // Include C, D, F as gray
+                                    let otherCount = (data.grades["C"] ?? 0) + (data.grades["D"] ?? 0) + (data.grades["F"] ?? 0)
+                                    if otherCount > 0 {
+                                        let segWidth = gradeWidth * CGFloat(otherCount) / CGFloat(max(totalGrades, 1))
+                                        Rectangle()
+                                            .fill(Color(hex: "#6b7280"))
+                                            .frame(width: max(segWidth, 2))
+                                    }
+                                }
+                                .frame(height: 14)
+                                .cornerRadius(3)
+
+                                // Break segments (red, opposite direction marker)
+                                if data.breaks > 0 {
+                                    Spacer().frame(width: 2)
+                                    Rectangle()
+                                        .fill(Color(hex: "#f87171"))
+                                        .frame(width: max(breakWidth, 2), height: 14)
+                                        .cornerRadius(3)
+                                }
+                            }
+                        }
+                        .frame(height: 14)
+
+                        Text("\(totalCount)")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(DojoTheme.textMuted)
+                            .frame(width: 22, alignment: .trailing)
+                    }
+                }
+            }
         }
     }
 
