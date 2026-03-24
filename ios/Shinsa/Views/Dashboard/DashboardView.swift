@@ -467,14 +467,18 @@ struct DashboardView: View {
             ZStack {
                 // Jacket background fills entire card
                 if let url = jacketURL {
-                    AsyncImage(url: url) { phase in
-                        switch phase {
-                        case .success(let img):
-                            img.resizable().scaledToFill()
-                        default:
-                            Rectangle().fill(
-                                LinearGradient(colors: [Color(hex: "#152238"), Color(hex: "#090d18")], startPoint: .topLeading, endPoint: .bottomTrailing)
-                            )
+                    GeometryReader { geo in
+                        AsyncImage(url: url) { phase in
+                            switch phase {
+                            case .success(let img):
+                                img.resizable().scaledToFill()
+                                    .frame(width: geo.size.width, height: geo.size.height)
+                                    .clipped()
+                            default:
+                                Rectangle().fill(
+                                    LinearGradient(colors: [Color(hex: "#152238"), Color(hex: "#090d18")], startPoint: .topLeading, endPoint: .bottomTrailing)
+                                )
+                            }
                         }
                     }
                 } else {
@@ -484,7 +488,7 @@ struct DashboardView: View {
                 }
 
                 // Dark gradient overlay
-                LinearGradient(colors: [.black.opacity(0.25), .black.opacity(0.55), .black.opacity(0.92)], startPoint: .top, endPoint: .bottom)
+                LinearGradient(colors: [.black.opacity(0.2), .black.opacity(0.5), .black.opacity(0.95)], startPoint: .top, endPoint: .bottom)
 
                 // Content overlay
                 VStack(spacing: 0) {
@@ -597,8 +601,9 @@ struct DashboardView: View {
                 }
             }
             .frame(width: 170, height: 120)
-            .cornerRadius(10)
             .clipped()
+            .contentShape(Rectangle())
+            .cornerRadius(10)
         }
         .buttonStyle(.plain)
     }
