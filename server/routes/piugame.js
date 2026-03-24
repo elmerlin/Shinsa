@@ -2576,6 +2576,22 @@ function buildTitleUnlockClearRows(unlockedTitles) {
 function insertTitleUnlockActivityPost(db, userId, unlockedTitles) {
   const payload = buildTitleUnlockClearRows(unlockedTitles);
   if (payload.length === 0) return null;
+
+  // Guard against duplicate title posts from concurrent sync paths
+  // (best-scores sync and recently-played sync can both detect the same titles)
+  const recentTitlePost = db.prepare(`
+    SELECT id, clears_json FROM user_new_clears
+    WHERE user_id = ? AND created_at >= datetime('now', '-5 minutes')
+    ORDER BY created_at DESC LIMIT 5
+  `).all(userId);
+  const titleNames = new Set(payload.map((r) => r.title_name));
+  for (const post of recentTitlePost) {
+    const items = safeParseJsonArray(post.clears_json);
+    if (items.length > 0 && items.every((i) => i.entry_type === 'title_unlock') && items.some((i) => titleNames.has(i.title_name))) {
+      return post.id; // Already posted — return existing ID
+    }
+  }
+
   return insertGroupedNewClearPost(db, userId, payload);
 }
 
