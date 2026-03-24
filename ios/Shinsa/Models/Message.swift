@@ -251,24 +251,54 @@ struct Story: Codable, Identifiable {
 }
 
 struct HighlightsResponse: Codable {
-    var highlights: [UserHighlight]?
+    var me: HighlightCircle?
+    var circles: [HighlightCircle]?
 }
 
-struct UserHighlight: Codable, Identifiable {
-    var id: String { userId ?? UUID().uuidString }
-    var userId: String?
-    var username: String?
-    var avatar: String?
-    var hasUnviewed: Bool?
+struct HighlightCircle: Codable, Identifiable {
+    var id: String { user?.id ?? UUID().uuidString }
+    var user: HighlightUser?
+    var note: HighlightNote?
+    var hasStory: Bool?
     var storyCount: Int?
+    var isSelf: Bool?
+    var lastActivityAt: String?
+
+    // Convenience
+    var userId: String? { user?.id }
+    var username: String? { user?.username }
+    var avatar: String? { user?.avatar }
+    var hasUnviewed: Bool { hasStory ?? false }
 
     enum CodingKeys: String, CodingKey {
-        case username, avatar
-        case userId = "user_id"
-        case hasUnviewed = "has_unviewed"
+        case user, note
+        case hasStory = "has_story"
         case storyCount = "story_count"
+        case isSelf = "is_self"
+        case lastActivityAt = "last_activity_at"
     }
 }
+
+struct HighlightUser: Codable {
+    var id: String?
+    var username: String?
+    var avatar: String?
+}
+
+struct HighlightNote: Codable {
+    var text: String?
+    var createdAt: String?
+    var updatedAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case text
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+    }
+}
+
+// Legacy alias
+typealias UserHighlight = HighlightCircle
 
 struct UserStoryResponse: Codable {
     var stories: [StoryItem]?

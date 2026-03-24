@@ -397,9 +397,9 @@ class APIService {
     func addCommunityPostComment(_ communityId: String, postId: Int, content: String) async throws -> Comment { try await request("/communities/\(communityId)/posts/\(postId)/comments", method: "POST", body: ["content": content]) }
 
     // MARK: - Messages & Conversations
-    func getHighlights() async throws -> [UserHighlight] {
+    func getHighlights() async throws -> [HighlightCircle] {
         let response: HighlightsResponse = try await request("/messages/highlights")
-        return response.highlights ?? []
+        return response.circles ?? []
     }
     func getUserStories(_ userId: String) async throws -> UserStoryResponse { try await request("/messages/highlights/\(userId)/story") }
     func viewStory(_ userId: String, storyId: String) async throws -> GenericResponse { try await request("/messages/highlights/\(userId)/story/\(storyId)/view", method: "POST") }
