@@ -2356,6 +2356,199 @@ function registerSharePreviewRoutes(app, { clientBuildDir }) {
     res.set('Content-Type', 'text/html');
     return res.send(html);
   });
+
+  // ───────────────────────────────────────────────────
+  // Live Session rich preview (WhatsApp / iMessage / etc.)
+  // ───────────────────────────────────────────────────
+
+  app.get('/og/live/:id.jpg', async (req, res) => {
+    const sessionId = String(req.params.id || '').replace(/\.jpg$/i, '');
+    if (!sessionId) return res.status(400).send('Invalid session id');
+
+    const db = getDb();
+    const session = db.prepare(`
+      SELECT ls.id, ls.title, ls.status, ls.session_type, ls.stream_url,
+             ls.youtube_video_id, ls.youtube_broadcast_id, ls.youtube_stream_title,
+             ls.viewer_peak, ls.created_at, ls.started_at, ls.ended_at, ls.updated_at,
+             u.id AS user_id, u.username, u.avatar, u.avatar_v
+      FROM live_sessions ls
+      JOIN users u ON ls.host_user_id = u.id
+      WHERE ls.id = ? AND ls.deleted_at IS NULL
+    `).get(sessionId);
+    if (!session) return res.status(404).send('Not found');
+
+    const versionRaw = String(session.updated_at || session.created_at || '');
+    const version = versionRaw.replace(/[^A-Za-z0-9_.-]/g, '_');
+    const etag = `W/"live-og-${sessionId}-${version}"`;
+    if (req.headers['if-none-match'] === etag) return res.status(304).end();
+
+    try {
+      const origin = getRequestOrigin(req);
+      const brandAssets = await buildBrandAssets({
+        clientBuildDir,
+        origin,
+        username: session.username,
+        avatar: session.avatar,
+        userId: session.user_id,
+        avatarVersion: session.avatar_v,
+      });
+
+      // Try to load YouTube thumbnail as background
+      let ytThumbnailBuffer = null;
+      const ytVideoId = session.youtube_video_id || session.youtube_broadcast_id;
+      if (ytVideoId) {
+        const thumbUrl = `https://img.youtube.com/vi/${ytVideoId}/maxresdefault.jpg`;
+        try {
+          ytThumbnailBuffer = await loadImageBuffer({ clientBuildDir, origin, source: thumbUrl });
+          if (ytThumbnailBuffer?.length) {
+            ytThumbnailBuffer = await sharp(ytThumbnailBuffer)
+              .resize(1200, 630, { fit: 'cover' })
+              .jpeg({ quality: 80 })
+              .toBuffer();
+          }
+        } catch { ytThumbnailBuffer = null; }
+      }
+
+      const isLive = session.status === 'live';
+      const isHop = session.session_type === 'hop';
+      const sessionTitle = session.title || session.youtube_stream_title || `${session.username}'s ${isHop ? 'Hour of Power' : 'Live Session'}`;
+      const statusLabel = isLive ? '● LIVE NOW' : 'Session Ended';
+      const statusColor = isLive ? '#ef4444' : '#94a3b8';
+      const accentFrom = isLive ? '#ef4444' : '#3b82f6';
+      const accentTo = isHop ? '#f59e0b' : '#ec4899';
+      const hostLabel = brandAssets?.usernameLabel || `@${session.username}`;
+      const viewerText = session.viewer_peak ? `Peak: ${session.viewer_peak} viewers` : '';
+
+      const { lines: titleLines } = wrapTextByChars(sessionTitle, 30, 2);
+      const titleSize = titleLines.length > 1 ? 56 : 68;
+      const titleStartY = ytThumbnailBuffer ? 340 : 240;
+
+      const width = 1200;
+      const height = 630;
+
+      const overlaySvg = `
+      <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#07111c"/>
+            <stop offset="100%" stop-color="#0d1528"/>
+          </linearGradient>
+          <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="${escapeXml(accentFrom)}"/>
+            <stop offset="100%" stop-color="${escapeXml(accentTo)}"/>
+          </linearGradient>
+          ${ytThumbnailBuffer ? `
+          <linearGradient id="dim" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="rgba(7,17,28,0.15)"/>
+            <stop offset="45%" stop-color="rgba(7,17,28,0.55)"/>
+            <stop offset="100%" stop-color="rgba(7,17,28,0.96)"/>
+          </linearGradient>` : ''}
+        </defs>
+        ${ytThumbnailBuffer ? `<rect x="0" y="0" width="${width}" height="${height}" fill="url(#dim)" />` : `<rect x="0" y="0" width="${width}" height="${height}" fill="url(#bg)" />`}
+
+        <!-- Status badge -->
+        <rect x="64" y="24" width="${statusLabel.length * 14 + 36}" height="40" rx="20" fill="${isLive ? 'rgba(239,68,68,0.25)' : 'rgba(100,116,139,0.25)'}" stroke="${isLive ? 'rgba(239,68,68,0.5)' : 'rgba(100,116,139,0.3)'}" stroke-width="1.5"/>
+        <text x="84" y="51" fill="${escapeXml(statusColor)}" font-size="20" font-weight="800" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(statusLabel)}</text>
+
+        <!-- Accent bar -->
+        <rect x="64" y="${titleStartY - 30}" width="8" height="80" rx="4" fill="url(#accent)" />
+
+        <!-- Title -->
+        ${titleLines.map((line, idx) => {
+          const y = titleStartY + idx * Math.round(titleSize * 1.15);
+          return `<text x="88" y="${y}" fill="white" font-size="${titleSize}" font-weight="800" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(line)}</text>`;
+        }).join('\n')}
+
+        <!-- Host label -->
+        <text x="${width - 148}" y="52" fill="rgba(255,255,255,0.76)" font-size="22" text-anchor="end" font-weight="700" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(hostLabel)}</text>
+
+        <!-- Viewer count / subtitle -->
+        ${viewerText ? `<text x="88" y="${titleStartY + titleLines.length * Math.round(titleSize * 1.15) + 24}" fill="rgba(255,255,255,0.6)" font-size="24" font-weight="600" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(viewerText)}</text>` : ''}
+
+        <!-- PUMP SHINSA branding bottom -->
+        <text x="64" y="${height - 30}" fill="rgba(255,255,255,0.28)" font-size="16" font-weight="700" letter-spacing="0.12em" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">PUMP SHINSA</text>
+      </svg>`;
+
+      const composites = [
+        { input: Buffer.from(overlaySvg) },
+        ...buildBrandComposites({ width, brandAssets }),
+      ];
+
+      let baseImage;
+      if (ytThumbnailBuffer) {
+        // Use YouTube thumbnail as background
+        baseImage = sharp(ytThumbnailBuffer).resize(width, height, { fit: 'cover' });
+      } else {
+        baseImage = sharp({
+          create: { width, height, channels: 4, background: { r: 9, g: 15, b: 31, alpha: 1 } },
+        });
+      }
+
+      const jpeg = await baseImage
+        .composite(composites)
+        .jpeg({ quality: 88, mozjpeg: true })
+        .toBuffer();
+
+      res.set('Content-Type', 'image/jpeg');
+      res.set('Cache-Control', 'public, max-age=300');
+      res.set('ETag', etag);
+      return res.send(jpeg);
+    } catch (err) {
+      console.error('Share preview: live session og render failed:', err.message);
+      return res.status(500).send('Error');
+    }
+  });
+
+  app.get('/live/:id', (req, res, next) => {
+    const sessionId = String(req.params.id || '');
+    if (!sessionId) return next();
+
+    const indexHtml = getIndexHtml();
+    if (!indexHtml) return next();
+
+    const db = getDb();
+    const session = db.prepare(`
+      SELECT ls.id, ls.title, ls.status, ls.session_type, ls.stream_url,
+             ls.youtube_video_id, ls.youtube_broadcast_id, ls.youtube_stream_title,
+             ls.viewer_peak, ls.created_at, ls.started_at, ls.ended_at, ls.updated_at,
+             u.id AS user_id, u.username, u.avatar, u.avatar_v
+      FROM live_sessions ls
+      JOIN users u ON ls.host_user_id = u.id
+      WHERE ls.id = ? AND ls.deleted_at IS NULL
+    `).get(sessionId);
+
+    if (!session) {
+      res.set('Content-Type', 'text/html');
+      return res.send(indexHtml);
+    }
+
+    const origin = getRequestOrigin(req);
+    const isLive = session.status === 'live';
+    const isHop = session.session_type === 'hop';
+    const sessionTitle = session.title || session.youtube_stream_title || `${session.username}'s ${isHop ? 'Hour of Power' : 'Live Session'}`;
+    const statusText = isLive ? '🔴 LIVE NOW' : 'Session ended';
+    const description = `${statusText} — ${sessionTitle} hosted by @${session.username}${session.viewer_peak ? ` • Peak: ${session.viewer_peak} viewers` : ''} — Pump Shinsa`;
+
+    const url = `${origin}/live/${sessionId}`;
+    const version = String(session.updated_at || session.created_at || '');
+    const image = buildPreviewImageUrl(origin, `/og/live/${sessionId}.jpg`, version);
+
+    const html = injectSocialMeta(indexHtml, {
+      type: isLive ? 'video.other' : 'article',
+      siteName: 'Pump Shinsa',
+      title: `${isLive ? '🔴 ' : ''}${sessionTitle} — @${session.username}`,
+      description,
+      url,
+      image,
+      imageType: 'image/jpeg',
+      imageWidth: 1200,
+      imageHeight: 630,
+      imageAlt: `${session.username}'s live session on Pump Shinsa`,
+      twitterCard: 'summary_large_image',
+    });
+    res.set('Content-Type', 'text/html');
+    return res.send(html);
+  });
 }
 
 module.exports = { registerSharePreviewRoutes };
