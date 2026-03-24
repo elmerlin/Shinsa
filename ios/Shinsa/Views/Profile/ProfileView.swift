@@ -82,6 +82,13 @@ struct ProfileView: View {
     @State private var showFollowersList = false  // "followers" or "following"
     @State private var followerListMode: String = "followers"
 
+    /// Most recent day with play data, for auto-selecting on load
+    private var latestHeatmapDay: HeatmapDay? {
+        vm.heatmapData.values
+            .filter { $0.plays > 0 }
+            .max(by: { $0.key < $1.key })
+    }
+
     private var tabs: [(String, String, String)] {
         var t: [(String, String, String)] = [
             ("overview", "Overview", "chart.xyaxis.line"),
@@ -577,8 +584,8 @@ struct ProfileView: View {
             // Activity Heatmap
             activityHeatmap
 
-            // Selected day plays
-            if let day = selectedHeatmapDay {
+            // Selected day plays (auto-select latest day if none selected)
+            if let day = selectedHeatmapDay ?? latestHeatmapDay {
                 selectedDayPlays(day)
             }
 
@@ -1084,12 +1091,13 @@ struct ProfileView: View {
             ("B", Color(hex: "#9ca3af")),
         ]
 
-        // Group by level - fold C/D/F into B
+        // Group by level - fold C/D/F into B; stage break = score 0
         var levelData: [Int: [String: Int]] = [:]
         for play in plays {
-            guard let level = play.level else { continue }
+            guard let level = play.level, level > 0 else { continue }
             let score = play.score ?? 0
-            if score <= 0 {
+            let isBreak = score <= 0 || (play.grade?.lowercased() == "f" && score < 450000)
+            if isBreak {
                 levelData[level, default: [:]]["stage_break", default: 0] += 1
             } else {
                 var grade = gradeFromScore(score)
@@ -1109,6 +1117,8 @@ struct ProfileView: View {
             levelData[level]?["stage_break"] ?? 0
         }.max() ?? 0
         let maxMag = max(maxPositive, maxNegative, 1)
+        let positiveHeight: CGFloat = 120
+        let negativeHeight: CGFloat = maxNegative > 0 ? 30 : 0
 
         return AnyView(VStack(alignment: .leading, spacing: 6) {
             Text("GRADE COUNT BY LEVEL")
@@ -1116,31 +1126,33 @@ struct ProfileView: View {
                 .foregroundColor(DojoTheme.textMuted)
                 .padding(.top, 4)
 
-            Text("Stage Break below zero")
-                .font(.system(size: 8))
-                .foregroundColor(DojoTheme.textMuted.opacity(0.5))
+            if maxNegative > 0 {
+                Text("Stage Break below zero")
+                    .font(.system(size: 8))
+                    .foregroundColor(DojoTheme.textMuted.opacity(0.5))
+            }
 
-            // Vertical stacked bar chart
-            ScrollView(.horizontal, showsIndicators: false) {
+            // Full-width stacked bar chart using GeometryReader
+            GeometryReader { geo in
+                let barWidth = max((geo.size.width - CGFloat(sortedLevels.count - 1) * 2) / CGFloat(sortedLevels.count), 8)
+
                 HStack(alignment: .bottom, spacing: 2) {
                     ForEach(sortedLevels, id: \.self) { level in
                         let data = levelData[level]!
-                        let positiveTotal = gradeBarColors.reduce(0) { $0 + (data[$1.key] ?? 0) }
                         let breakCount = data["stage_break"] ?? 0
-                        let barHeight: CGFloat = 120
 
                         VStack(spacing: 0) {
                             // Positive bars (grades stacked bottom-up)
                             ZStack(alignment: .bottom) {
                                 Rectangle().fill(Color.clear)
-                                    .frame(height: barHeight)
+                                    .frame(height: positiveHeight)
 
                                 VStack(spacing: 0) {
                                     Spacer()
                                     ForEach(gradeBarColors.reversed(), id: \.key) { item in
                                         let count = data[item.key] ?? 0
                                         if count > 0 {
-                                            let h = barHeight * CGFloat(count) / CGFloat(maxMag)
+                                            let h = positiveHeight * CGFloat(count) / CGFloat(maxMag)
                                             Rectangle()
                                                 .fill(item.color)
                                                 .frame(height: max(h, 1))
@@ -1148,21 +1160,28 @@ struct ProfileView: View {
                                     }
                                 }
                             }
-                            .frame(height: barHeight)
+                            .frame(height: positiveHeight)
 
                             // Zero line
                             Rectangle()
                                 .fill(DojoTheme.piuBorder.opacity(0.5))
                                 .frame(height: 1)
 
-                            // Negative bars (stage breaks)
-                            if breakCount > 0 {
-                                let bh = CGFloat(30) * CGFloat(breakCount) / CGFloat(max(maxNegative, 1))
-                                Rectangle()
-                                    .fill(Color(hex: "#dc2626"))
-                                    .frame(height: max(bh, 2))
-                            } else {
-                                Rectangle().fill(Color.clear).frame(height: 2)
+                            // Negative bars (stage breaks go below axis)
+                            if negativeHeight > 0 {
+                                if breakCount > 0 {
+                                    let bh = negativeHeight * CGFloat(breakCount) / CGFloat(max(maxNegative, 1))
+                                    VStack(spacing: 0) {
+                                        Rectangle()
+                                            .fill(Color(hex: "#dc2626"))
+                                            .frame(height: max(bh, 2))
+                                        Spacer()
+                                    }
+                                    .frame(height: negativeHeight)
+                                } else {
+                                    Rectangle().fill(Color.clear)
+                                        .frame(height: negativeHeight)
+                                }
                             }
 
                             // Level label
@@ -1171,14 +1190,14 @@ struct ProfileView: View {
                                 .foregroundColor(DojoTheme.textMuted)
                                 .padding(.top, 2)
                         }
-                        .frame(width: max(CGFloat(240) / CGFloat(sortedLevels.count), 18))
+                        .frame(width: barWidth)
                     }
                 }
             }
-            .frame(height: 170)
+            .frame(height: positiveHeight + negativeHeight + 20)
 
             // Legend
-            let legendItems = gradeBarColors + [("Stage Break", Color(hex: "#dc2626"))]
+            let legendItems = gradeBarColors + (maxNegative > 0 ? [("Stage Break", Color(hex: "#dc2626"))] : [])
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 2), count: 7), spacing: 2) {
                 ForEach(legendItems, id: \.key) { item in
                     HStack(spacing: 2) {
