@@ -49,22 +49,11 @@ struct DashboardView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
-                HStack(spacing: 4) {
-                    if let logoImage = UIImage(named: "pump-shinsa-logo") ?? UIImage(contentsOfFile: Bundle.main.path(forResource: "pump-shinsa-logo", ofType: "png") ?? "") {
-                        Image(uiImage: logoImage)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 28, height: 28)
-                            .cornerRadius(6)
-                    }
-                    Text("PUMP")
-                        .font(.system(size: 13, weight: .black))
-                        .foregroundColor(DojoTheme.piuGold)
-                    Text("SHINSA")
-                        .font(.system(size: 13, weight: .black))
-                        .foregroundColor(.white)
-                }
-                .fixedSize()
+                Image("ShinsaLogo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 32, height: 32)
+                    .cornerRadius(6)
             }
         }
         .task { await vm.load() }
@@ -464,7 +453,7 @@ struct DashboardView: View {
         return Button {
             selectedHighlight = item
         } label: {
-            ZStack(alignment: .topLeading) {
+            ZStack {
                 // Jacket background
                 if let url = jacketURL {
                     AsyncImage(url: url) { phase in
@@ -484,121 +473,99 @@ struct DashboardView: View {
                 }
 
                 // Dark gradient overlay
-                LinearGradient(colors: [.black.opacity(0.15), .black.opacity(0.5), .black.opacity(0.9)], startPoint: .top, endPoint: .bottom)
+                LinearGradient(colors: [.black.opacity(0.1), .black.opacity(0.35), .black.opacity(0.85)], startPoint: .top, endPoint: .bottom)
 
-                // Rank badge
-                Text("\(rank)")
-                    .font(.system(size: 9, weight: .black))
-                    .foregroundColor(rank <= 3 ? .black : .white)
-                    .frame(width: 18, height: 18)
-                    .background(
-                        Circle().fill(LinearGradient(colors: rankColors, startPoint: .topLeading, endPoint: .bottomTrailing))
-                    )
-                    .padding(4)
+                // Content overlay
+                VStack(spacing: 0) {
+                    // Top row: rank badge + mode badge
+                    HStack {
+                        Text("\(rank)")
+                            .font(.system(size: 9, weight: .black))
+                            .foregroundColor(rank <= 3 ? .black : .white)
+                            .frame(width: 18, height: 18)
+                            .background(
+                                Circle().fill(LinearGradient(colors: rankColors, startPoint: .topLeading, endPoint: .bottomTrailing))
+                            )
 
-                // Mode badge top-right
-                if let mode = item.mode, let level = item.level {
-                    let isDouble = mode.lowercased().hasPrefix("d") || mode.lowercased() == "double"
-                    let prefix = isDouble ? "D" : "S"
-                    let badgeColors: [Color] = isDouble
-                        ? [Color(hex: "#4cf4aa"), Color(hex: "#0b5d48")]
-                        : [Color(hex: "#ff7a7a"), Color(hex: "#7a1730")]
+                        Spacer()
 
-                    Text("\(prefix)\(level)")
-                        .font(.system(size: 8, weight: .black))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 3)
-                        .padding(.vertical, 1)
-                        .background(LinearGradient(colors: badgeColors, startPoint: .topLeading, endPoint: .bottomTrailing))
-                        .cornerRadius(4)
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                        .padding(.trailing, 4)
-                        .padding(.top, 4)
-                }
-
-                // Replay pill (for replays)
-                if isReplay {
-                    HStack(spacing: 2) {
-                        Image(systemName: "play.fill")
-                            .font(.system(size: 6))
-                        Text("Replay")
-                            .font(.system(size: 7, weight: .bold))
+                        if isReplay {
+                            HStack(spacing: 2) {
+                                Image(systemName: "play.fill")
+                                    .font(.system(size: 6))
+                                Text("Replay")
+                                    .font(.system(size: 7, weight: .bold))
+                            }
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(Color.red.opacity(0.85))
+                            .cornerRadius(8)
+                        }
                     }
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 2)
-                    .background(Color.red.opacity(0.85))
-                    .cornerRadius(8)
-                    .padding(.top, 24)
-                    .padding(.trailing, 4)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-                }
+                    .padding(5)
 
-                // Bottom content
-                VStack(alignment: .leading, spacing: 2) {
                     Spacer()
 
-                    // Player
-                    HStack(spacing: 3) {
-                        if let avatar = item.avatar, !avatar.isEmpty {
-                            AvatarView(avatar, name: item.username ?? "?", size: 14)
+                    // Bottom content
+                    VStack(alignment: .leading, spacing: 2) {
+                        // Player
+                        HStack(spacing: 3) {
+                            if let nat = item.nationality, !nat.isEmpty {
+                                Text(CountryData.flag(for: nat))
+                                    .font(.system(size: 8))
+                            }
+                            Text(item.username ?? "")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundColor(.white)
+                                .lineLimit(1)
+                                .shadow(color: .black, radius: 2)
                         }
-                        if let nat = item.nationality, !nat.isEmpty {
-                            Text(CountryData.flag(for: nat))
-                                .font(.system(size: 8))
-                        }
-                        Text(item.username ?? "")
-                            .font(.system(size: 9, weight: .bold))
+
+                        // Song title
+                        Text(item.songTitle ?? "Unknown")
+                            .font(.system(size: 10, weight: .black))
                             .foregroundColor(.white)
                             .lineLimit(1)
-                            .shadow(radius: 2)
-                    }
+                            .shadow(color: .black, radius: 2)
 
-                    // Song title
-                    Text(item.songTitle ?? "Unknown")
-                        .font(.system(size: 10, weight: .black))
-                        .foregroundColor(.white)
-                        .lineLimit(1)
-                        .shadow(radius: 2)
-
-                    // Score + Grade
-                    HStack {
-                        Text(displayScore > 0 ? displayScore.formattedScore : "")
-                            .font(.system(size: 12, weight: .black))
-                            .foregroundColor(.white)
-                            .shadow(radius: 2)
-                        Spacer()
-                        Text(gradeLabel)
-                            .font(.system(size: 11, weight: .black))
-                            .foregroundColor(gradeColor)
-                            .shadow(radius: 2)
-                    }
-
-                    // Delta for upscores
-                    if let old = item.oldScore, let new = item.newScore, new > old {
-                        HStack {
-                            Text(old.formattedScore)
-                                .font(.system(size: 8, design: .monospaced))
-                                .foregroundColor(.white.opacity(0.6))
+                        // Score + Grade
+                        HStack(spacing: 4) {
+                            Text(displayScore > 0 ? displayScore.formattedScore : "")
+                                .font(.system(size: 12, weight: .black))
+                                .foregroundColor(.white)
+                                .shadow(color: .black, radius: 2)
                             Spacer()
-                            Text("+\((new - old).formattedScore)")
-                                .font(.system(size: 9, weight: .bold, design: .monospaced))
-                                .foregroundColor(DojoTheme.piuGreen)
+                            Text(gradeLabel)
+                                .font(.system(size: 11, weight: .black))
+                                .foregroundColor(gradeColor)
+                                .shadow(color: .black, radius: 2)
+                        }
+
+                        // Delta for upscores
+                        if let old = item.oldScore, let new = item.newScore, new > old {
+                            HStack(spacing: 4) {
+                                Text(old.formattedScore)
+                                    .font(.system(size: 8, design: .monospaced))
+                                    .foregroundColor(.white.opacity(0.6))
+                                Spacer()
+                                Text("+\((new - old).formattedScore)")
+                                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                    .foregroundColor(DojoTheme.piuGreen)
+                            }
                         }
                     }
+                    .padding(.horizontal, 6)
+                    .padding(.bottom, 6)
                 }
-                .padding(6)
             }
-            .frame(width: 140, height: 105)
-            .cornerRadius(10)
+            .frame(width: 200, height: 140)
+            .cornerRadius(12)
             .clipped()
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(DojoTheme.piuBorder.opacity(0.5), lineWidth: 1)
-            )
         }
         .buttonStyle(.plain)
     }
+
 }
 
 // MARK: - Notice Detail Sheet
