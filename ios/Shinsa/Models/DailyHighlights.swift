@@ -33,9 +33,14 @@ struct HighlightItem: Codable, Identifiable {
     var nationality: String?
     var replayEmbedUrl: String?
     var replayVideoId: String?
+    var perfect: Int?
+    var great: Int?
+    var good: Int?
+    var bad: Int?
+    var miss: Int?
 
     enum CodingKeys: String, CodingKey {
-        case mode, level, score, grade, plate, username, avatar, nationality
+        case mode, level, score, grade, plate, username, avatar, nationality, perfect, great, good, bad, miss
         case upscoreId = "upscore_id"
         case clearId = "clear_id"
         case playId = "id"

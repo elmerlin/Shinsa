@@ -68,6 +68,11 @@ struct DashboardView: View {
                 score: item.newScore ?? item.score ?? 0,
                 grade: DojoTheme.gradeLabel(for: item.newScore ?? item.score ?? 0),
                 backgroundUrl: item.backgroundUrl,
+                perfect: item.perfect,
+                great: item.great,
+                good: item.good,
+                bad: item.bad,
+                miss: item.miss,
                 replayEmbedUrl: item.replayEmbedUrl,
                 username: item.username
             )
