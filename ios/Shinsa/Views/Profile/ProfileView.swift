@@ -1083,94 +1083,116 @@ struct ProfileView: View {
             ("A+", Color(hex: "#34d399")), ("A", Color(hex: "#10b981")),
             ("B", Color(hex: "#9ca3af")),
         ]
-        let gradeColorMap = Dictionary(uniqueKeysWithValues: gradeBarColors.map { ($0.key, $0.color) })
 
-        // Group by level
-        var levelData: [Int: (grades: [String: Int], breaks: Int)] = [:]
+        // Group by level - fold C/D/F into B
+        var levelData: [Int: [String: Int]] = [:]
         for play in plays {
             guard let level = play.level else { continue }
             let score = play.score ?? 0
             if score <= 0 {
-                levelData[level, default: (grades: [:], breaks: 0)].breaks += 1
+                levelData[level, default: [:]]["stage_break", default: 0] += 1
             } else {
-                let grade = gradeFromScore(score)
-                levelData[level, default: (grades: [:], breaks: 0)].grades[grade, default: 0] += 1
+                var grade = gradeFromScore(score)
+                if grade == "C" || grade == "D" || grade == "F" { grade = "B" }
+                levelData[level, default: [:]][grade, default: 0] += 1
             }
         }
 
         let sortedLevels = levelData.keys.sorted()
-        let maxCount = sortedLevels.map { level in
+        if sortedLevels.isEmpty { return AnyView(EmptyView()) }
+
+        let maxPositive = sortedLevels.map { level in
             let data = levelData[level]!
-            return data.grades.values.reduce(0, +) + data.breaks
+            return gradeBarColors.reduce(0) { $0 + (data[$1.key] ?? 0) }
         }.max() ?? 1
+        let maxNegative = sortedLevels.map { level in
+            levelData[level]?["stage_break"] ?? 0
+        }.max() ?? 0
+        let maxMag = max(maxPositive, maxNegative, 1)
 
-        return VStack(alignment: .leading, spacing: 6) {
-            if !sortedLevels.isEmpty {
-                Text("GRADE DISTRIBUTION BY LEVEL")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(DojoTheme.piuAccent)
-                    .padding(.top, 4)
+        return AnyView(VStack(alignment: .leading, spacing: 6) {
+            Text("GRADE COUNT BY LEVEL")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundColor(DojoTheme.textMuted)
+                .padding(.top, 4)
 
-                ForEach(sortedLevels, id: \.self) { level in
-                    let data = levelData[level]!
-                    let totalGrades = data.grades.values.reduce(0, +)
-                    let totalCount = totalGrades + data.breaks
+            Text("Stage Break below zero")
+                .font(.system(size: 8))
+                .foregroundColor(DojoTheme.textMuted.opacity(0.5))
 
-                    HStack(spacing: 6) {
-                        Text("Lv.\(level)")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(.white)
-                            .frame(width: 36, alignment: .leading)
+            // Vertical stacked bar chart
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .bottom, spacing: 2) {
+                    ForEach(sortedLevels, id: \.self) { level in
+                        let data = levelData[level]!
+                        let positiveTotal = gradeBarColors.reduce(0) { $0 + (data[$1.key] ?? 0) }
+                        let breakCount = data["stage_break"] ?? 0
+                        let barHeight: CGFloat = 120
 
-                        GeometryReader { geo in
-                            let barWidth = geo.size.width
-                            let gradeWidth = barWidth * CGFloat(totalGrades) / CGFloat(max(maxCount, 1))
-                            let breakWidth = barWidth * CGFloat(data.breaks) / CGFloat(max(maxCount, 1))
+                        VStack(spacing: 0) {
+                            // Positive bars (grades stacked bottom-up)
+                            ZStack(alignment: .bottom) {
+                                Rectangle().fill(Color.clear)
+                                    .frame(height: barHeight)
 
-                            HStack(spacing: 0) {
-                                // Grade segments (positive direction)
-                                HStack(spacing: 0) {
-                                    ForEach(gradeBarColors, id: \.key) { item in
-                                        let count = data.grades[item.key] ?? 0
+                                VStack(spacing: 0) {
+                                    Spacer()
+                                    ForEach(gradeBarColors.reversed(), id: \.key) { item in
+                                        let count = data[item.key] ?? 0
                                         if count > 0 {
-                                            let segWidth = gradeWidth * CGFloat(count) / CGFloat(max(totalGrades, 1))
+                                            let h = barHeight * CGFloat(count) / CGFloat(maxMag)
                                             Rectangle()
                                                 .fill(item.color)
-                                                .frame(width: max(segWidth, 2))
+                                                .frame(height: max(h, 1))
                                         }
                                     }
-                                    // Include C, D, F as gray
-                                    let otherCount = (data.grades["C"] ?? 0) + (data.grades["D"] ?? 0) + (data.grades["F"] ?? 0)
-                                    if otherCount > 0 {
-                                        let segWidth = gradeWidth * CGFloat(otherCount) / CGFloat(max(totalGrades, 1))
-                                        Rectangle()
-                                            .fill(Color(hex: "#6b7280"))
-                                            .frame(width: max(segWidth, 2))
-                                    }
-                                }
-                                .frame(height: 14)
-                                .cornerRadius(3)
-
-                                // Break segments (red, opposite direction marker)
-                                if data.breaks > 0 {
-                                    Spacer().frame(width: 2)
-                                    Rectangle()
-                                        .fill(Color(hex: "#f87171"))
-                                        .frame(width: max(breakWidth, 2), height: 14)
-                                        .cornerRadius(3)
                                 }
                             }
-                        }
-                        .frame(height: 14)
+                            .frame(height: barHeight)
 
-                        Text("\(totalCount)")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundColor(DojoTheme.textMuted)
-                            .frame(width: 22, alignment: .trailing)
+                            // Zero line
+                            Rectangle()
+                                .fill(DojoTheme.piuBorder.opacity(0.5))
+                                .frame(height: 1)
+
+                            // Negative bars (stage breaks)
+                            if breakCount > 0 {
+                                let bh = CGFloat(30) * CGFloat(breakCount) / CGFloat(max(maxNegative, 1))
+                                Rectangle()
+                                    .fill(Color(hex: "#dc2626"))
+                                    .frame(height: max(bh, 2))
+                            } else {
+                                Rectangle().fill(Color.clear).frame(height: 2)
+                            }
+
+                            // Level label
+                            Text("\(level)")
+                                .font(.system(size: 7, weight: .bold))
+                                .foregroundColor(DojoTheme.textMuted)
+                                .padding(.top, 2)
+                        }
+                        .frame(width: max(CGFloat(240) / CGFloat(sortedLevels.count), 18))
                     }
                 }
             }
-        }
+            .frame(height: 170)
+
+            // Legend
+            let legendItems = gradeBarColors + [("Stage Break", Color(hex: "#dc2626"))]
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 2), count: 7), spacing: 2) {
+                ForEach(legendItems, id: \.key) { item in
+                    HStack(spacing: 2) {
+                        RoundedRectangle(cornerRadius: 1)
+                            .fill(item.color)
+                            .frame(width: 7, height: 7)
+                        Text(item.key)
+                            .font(.system(size: 7))
+                            .foregroundColor(DojoTheme.textMuted)
+                            .lineLimit(1)
+                    }
+                }
+            }
+        })
     }
 
     // MARK: - Posts Tab
