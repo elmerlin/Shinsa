@@ -38,6 +38,8 @@
 		B6A97011E7E60D4D802792FB /* RegisterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F3A5826A5475B89DC122D89 /* RegisterView.swift */; };
 		2AB0D403EC61C232C338F5A4 /* CountryPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF204BA56091D62DCF38A098 /* CountryPickerView.swift */; };
 		D10A01010101010101010101 /* RecentActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = D10A02020202020202020202 /* RecentActivity.swift */; };
+		A1B2C3D4E5F60718293A4B5C /* ProfileLive.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5D /* ProfileLive.swift */; };
+		A1B2C3D4E5F60718293A4B5E /* ActivityItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5F /* ActivityItem.swift */; };
 		DA1175010101010101010101 /* DailyHighlights.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA1175020202020202020202 /* DailyHighlights.swift */; };
 		D10A03030303030303030303 /* DashboardViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D10A04040404040404040404 /* DashboardViewModel.swift */; };
 		D10A05050505050505050505 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D10A06060606060606060606 /* DashboardView.swift */; };
@@ -174,6 +176,8 @@
 		A078825699717CEBF005B23B /* Shinsa.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Shinsa.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		9040730A5F62BEB6AD6A55DD /* Charts.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Charts.framework; path = System/Library/Frameworks/Charts.framework; sourceTree = SDKROOT; };
 		D10A02020202020202020202 /* RecentActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "RecentActivity.swift"; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B5D /* ProfileLive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ProfileLive.swift"; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B5F /* ActivityItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ActivityItem.swift"; sourceTree = "<group>"; };
 		DA1175020202020202020202 /* DailyHighlights.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DailyHighlights.swift"; sourceTree = "<group>"; };
 		D10A04040404040404040404 /* DashboardViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DashboardViewModel.swift"; sourceTree = "<group>"; };
 		D10A06060606060606060606 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DashboardView.swift"; sourceTree = "<group>"; };
@@ -349,6 +353,8 @@
 				04B354C8164243030C7B6541 /* Player.swift */,
 				148D02ACF49F375FB80DB135 /* Post.swift */,
 				D10A02020202020202020202 /* RecentActivity.swift */,
+				A1B2C3D4E5F60718293A4B5D /* ProfileLive.swift */,
+				A1B2C3D4E5F60718293A4B5F /* ActivityItem.swift */,
 				DA1175020202020202020202 /* DailyHighlights.swift */,
 				E7C37EFAC03EC7BB44875EEB /* Shoe.swift */,
 				3DB419E2298EBE886D2693C0 /* Song.swift */,
@@ -809,6 +815,8 @@
 				B6A97011E7E60D4D802792FB /* RegisterView.swift in Sources */,
 				2AB0D403EC61C232C338F5A4 /* CountryPickerView.swift in Sources */,
 				D10A01010101010101010101 /* RecentActivity.swift in Sources */,
+				A1B2C3D4E5F60718293A4B5C /* ProfileLive.swift in Sources */,
+				A1B2C3D4E5F60718293A4B5E /* ActivityItem.swift in Sources */,
 				DA1175010101010101010101 /* DailyHighlights.swift in Sources */,
 				D10A03030303030303030303 /* DashboardViewModel.swift in Sources */,
 				D10A05050505050505050505 /* DashboardView.swift in Sources */,

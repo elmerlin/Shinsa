@@ -439,6 +439,16 @@ class APIService {
     func getHopLeaderboard() async throws -> [HopLeaderboardEntry] { try await request("/live/hop/leaderboard") }
     func getHopAttempts() async throws -> [HopLeaderboardEntry] { try await request("/live/hop/attempts") }
 
+    // MARK: - Profile Live Sessions
+    func getProfileLiveSessions(_ userId: String) async throws -> ProfileLiveResponse { try await request("/live/profile/\(userId)") }
+
+    // MARK: - User Activity
+    func getUserActivity(_ userId: String) async throws -> [ActivityItem] { try await request("/auth/user/\(userId)/activity") }
+
+    // MARK: - Shoes
+    func getProfileShoes(_ userId: String) async throws -> ShoeCabinet { try await request("/piugame/shoes/\(userId)") }
+    func wearShoe(_ shoeId: String) async throws -> GenericResponse { try await request("/piugame/shoes/\(shoeId)/wear", method: "POST") }
+
     // MARK: - Duels (offline)
     func getDuels() async throws -> [Duel] { try await request("/duels") }
     func getDuel(_ id: String) async throws -> Duel { try await request("/duels/\(id)") }

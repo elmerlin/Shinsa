@@ -21,6 +21,10 @@ class ProfileViewModel: ObservableObject {
     @Published var isLoadingPosts = false
     @Published var followers: [User] = []
     @Published var following: [User] = []
+    @Published var profileLive: ProfileLiveResponse?
+    @Published var activityItems: [ActivityItem] = []
+    @Published var shoeCabinet: ShoeCabinet?
+    @Published var shoeLoading = false
 
     let userId: String
 
@@ -153,6 +157,25 @@ class ProfileViewModel: ObservableObject {
             result[key] = HeatmapDay(key: key, plays: val.plays, singlesAvgLevel: singlesAvg, doublesAvgLevel: doublesAvg, doubleRatio: doubleRatio)
         }
         heatmapData = result
+    }
+
+    func loadProfileLive() async {
+        profileLive = try? await APIService.shared.getProfileLiveSessions(userId)
+    }
+
+    func loadActivity() async {
+        activityItems = (try? await APIService.shared.getUserActivity(userId)) ?? []
+    }
+
+    func loadShoes() async {
+        shoeLoading = true
+        shoeCabinet = try? await APIService.shared.getProfileShoes(userId)
+        shoeLoading = false
+    }
+
+    func wearShoe(_ shoeId: String) async {
+        _ = try? await APIService.shared.wearShoe(shoeId)
+        await loadShoes()
     }
 
     func loadFollowers() async {

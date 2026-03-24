@@ -81,6 +81,7 @@ struct ProfileView: View {
     @State private var showAllDayPlays = false
     @State private var showFollowersList = false  // "followers" or "following"
     @State private var followerListMode: String = "followers"
+    @State private var activitySubTab = "all"
 
     /// Most recent day with play data, for auto-selecting on load
     private var latestHeatmapDay: HeatmapDay? {
@@ -95,9 +96,14 @@ struct ProfileView: View {
             ("posts", "Posts", "square.and.pencil"),
         ]
         if vm.user?.pumbility != nil && (vm.user?.pumbility ?? 0) > 0 {
-            t.append(("piu", "PIU Data", "gamecontroller"))
+            t.insert(("piu", "PIU Data", "gamecontroller"), at: 2)
         }
-        t.append(("stats", "Stats", "trophy"))
+        t.append(contentsOf: [
+            ("live", "Live", "video.fill"),
+            ("shoes", "Shoes", "figure.walk"),
+            ("competitions", "Competitions", "trophy"),
+            ("activity", "Activity", "clock.arrow.circlepath"),
+        ])
         return t
     }
 
@@ -532,6 +538,15 @@ struct ProfileView: View {
                         if id == "posts" && vm.posts.isEmpty {
                             Task { await vm.loadPosts(reset: true) }
                         }
+                        if id == "live" && vm.profileLive == nil {
+                            Task { await vm.loadProfileLive() }
+                        }
+                        if id == "shoes" && vm.shoeCabinet == nil {
+                            Task { await vm.loadShoes() }
+                        }
+                        if id == "activity" && vm.activityItems.isEmpty {
+                            Task { await vm.loadActivity() }
+                        }
                     } label: {
                         VStack(spacing: 6) {
                             HStack(spacing: 4) {
@@ -570,8 +585,14 @@ struct ProfileView: View {
             followingTab
         case "piu":
             piuDataTab(user)
-        case "stats":
+        case "competitions":
             statsTab
+        case "live":
+            liveTab
+        case "shoes":
+            shoesTab
+        case "activity":
+            activityTab
         default:
             EmptyView()
         }
@@ -1825,5 +1846,418 @@ struct ProfileView: View {
         }
 
         return labels
+    }
+
+    // MARK: - Live Tab
+
+    private var liveTab: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            if let active = vm.profileLive?.activeSession {
+                // Active session card
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 6) {
+                        Circle().fill(.green).frame(width: 8, height: 8)
+                        Text("LIVE NOW")
+                            .font(.system(size: 11, weight: .black))
+                            .foregroundColor(.green)
+                            .tracking(1)
+                    }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(active.session?.title ?? "Live Session")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundColor(.white)
+
+                        if let url = active.session?.liveUrl, !url.isEmpty,
+                           let dest = URL(string: url) {
+                            Link("Open Shinsa Live", destination: dest)
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(DojoTheme.piuBlue)
+                        }
+                    }
+                }
+                .padding(14)
+                .background(DojoTheme.piuCard)
+                .cornerRadius(12)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.green.opacity(0.3), lineWidth: 1)
+                )
+            }
+
+            // Past sessions
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("PAST SESSIONS")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(DojoTheme.textMuted)
+                    Spacer()
+                    Text("\(vm.profileLive?.endedSessions?.count ?? 0)")
+                        .font(.system(size: 11))
+                        .foregroundColor(DojoTheme.textMuted)
+                }
+
+                let ended = vm.profileLive?.endedSessions ?? []
+                if ended.isEmpty {
+                    Text("No ended Shinsa Live sessions yet.")
+                        .font(.system(size: 13))
+                        .foregroundColor(DojoTheme.textMuted)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 20)
+                } else {
+                    ForEach(ended) { item in
+                        endedSessionCard(item)
+                    }
+                }
+            }
+        }
+        .padding(16)
+        .task { await vm.loadProfileLive() }
+    }
+
+    private func endedSessionCard(_ item: ProfileLiveItem) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(item.session?.title ?? "Session")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+                Spacer()
+                if let ended = item.session?.endedAt {
+                    Text(ended.timeAgo)
+                        .font(.system(size: 10))
+                        .foregroundColor(DojoTheme.textMuted)
+                }
+            }
+
+            HStack(spacing: 12) {
+                if let plays = item.playCount {
+                    liveStatPill("\(plays)", "plays")
+                }
+                if let msgs = item.messageCount {
+                    liveStatPill("\(msgs)", "messages")
+                }
+                if let summary = item.summary {
+                    if let duration = summary.durationMinutes, duration > 0 {
+                        liveStatPill("\(duration)m", "duration")
+                    }
+                    if let highest = summary.highestLevel, highest > 0 {
+                        liveStatPill("Lv.\(highest)", "highest")
+                    }
+                }
+            }
+        }
+        .padding(12)
+        .background(DojoTheme.piuCard)
+        .cornerRadius(10)
+    }
+
+    private func liveStatPill(_ value: String, _ label: String) -> some View {
+        VStack(spacing: 1) {
+            Text(value)
+                .font(.system(size: 12, weight: .bold))
+                .foregroundColor(.white)
+            Text(label)
+                .font(.system(size: 8))
+                .foregroundColor(DojoTheme.textMuted)
+        }
+    }
+
+    // MARK: - Shoes Tab
+
+    private var shoesTab: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // Stats row
+            if let cabinet = vm.shoeCabinet {
+                HStack(spacing: 8) {
+                    shoeStatBox("Lifetime Steps", "\((cabinet.lifetimeSteps ?? 0).formatted())")
+                    shoeStatBox("Lifetime Songs", "\((cabinet.lifetimeSongs ?? 0).formatted())")
+                    shoeStatBox("No. of Shoes", "\(cabinet.shoes?.count ?? 0)")
+                }
+            }
+
+            let shoes = vm.shoeCabinet?.shoes ?? []
+            let active = shoes.filter { $0.retiredAt == nil }
+            let retired = shoes.filter { $0.retiredAt != nil }
+
+            if vm.shoeLoading && shoes.isEmpty {
+                ProgressView().tint(DojoTheme.piuAccent)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 30)
+            } else if shoes.isEmpty {
+                Text(isOwnProfile ? "No shoes in your cabinet yet" : "No shoes added yet")
+                    .font(.system(size: 13))
+                    .foregroundColor(DojoTheme.textMuted)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 30)
+            } else {
+                ForEach(active) { shoe in
+                    shoeCard(shoe)
+                }
+
+                if !retired.isEmpty {
+                    Text("RETIRED SHOES")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(DojoTheme.textMuted)
+                        .padding(.top, 4)
+
+                    ForEach(retired) { shoe in
+                        shoeCard(shoe)
+                    }
+                }
+            }
+        }
+        .padding(16)
+        .task { await vm.loadShoes() }
+    }
+
+    private func shoeStatBox(_ label: String, _ value: String) -> some View {
+        VStack(spacing: 3) {
+            Text(label)
+                .font(.system(size: 8, weight: .bold))
+                .foregroundColor(DojoTheme.textMuted)
+                .textCase(.uppercase)
+            Text(value)
+                .font(.system(size: 14, weight: .bold))
+                .foregroundColor(DojoTheme.piuAccent)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+        .background(DojoTheme.piuDark)
+        .cornerRadius(8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(DojoTheme.piuBorder.opacity(0.4), lineWidth: 1)
+        )
+    }
+
+    private func shoeCard(_ shoe: Shoe) -> some View {
+        let label = [shoe.make, shoe.model].compactMap { $0 }.joined(separator: " ").trimmingCharacters(in: .whitespaces)
+        let isCurrent = shoe.isCurrent ?? false
+
+        return HStack(alignment: .top, spacing: 10) {
+            // Shoe image
+            if let imgData = shoe.imageData, !imgData.isEmpty,
+               let data = Data(base64Encoded: imgData.replacingOccurrences(of: "data:image/png;base64,", with: "").replacingOccurrences(of: "data:image/jpeg;base64,", with: "")),
+               let uiImage = UIImage(data: data) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 90, height: 52)
+                    .cornerRadius(8)
+                    .background(DojoTheme.piuDark)
+            } else {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(DojoTheme.piuDark)
+                    .frame(width: 90, height: 52)
+                    .overlay(
+                        Text("No Photo")
+                            .font(.system(size: 9))
+                            .foregroundColor(DojoTheme.textMuted)
+                    )
+            }
+
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text(label.isEmpty ? "Unnamed Shoe" : label)
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+
+                    if isCurrent {
+                        Text("Current")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundColor(Color(hex: "#6ee7b7"))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color(hex: "#6ee7b7").opacity(0.15))
+                            .cornerRadius(10)
+                    }
+                }
+
+                if let colorway = shoe.colorway, !colorway.isEmpty {
+                    Text(colorway)
+                        .font(.system(size: 10))
+                        .foregroundColor(DojoTheme.textMuted)
+                }
+
+                Text("\(shoe.songsLogged ?? 0) songs | \(shoe.stepsLogged ?? 0) steps")
+                    .font(.system(size: 10))
+                    .foregroundColor(DojoTheme.textMuted)
+            }
+
+            Spacer()
+
+            if isOwnProfile && !isCurrent && shoe.retiredAt == nil {
+                Button {
+                    Task { await vm.wearShoe(shoe.id) }
+                } label: {
+                    Text("Wear")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(DojoTheme.piuDark)
+                        .cornerRadius(6)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(DojoTheme.piuBorder, lineWidth: 1)
+                        )
+                }
+            }
+        }
+        .padding(10)
+        .background(isCurrent ? Color(hex: "#10b981").opacity(0.08) : DojoTheme.piuCard)
+        .cornerRadius(10)
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(isCurrent ? Color(hex: "#6ee7b7").opacity(0.4) : DojoTheme.piuBorder, lineWidth: 1)
+        )
+    }
+
+    // MARK: - Activity Tab
+
+    private var activityTab: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Sub-tab filters
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(["all", "posts", "comments", "scores", "competitions"], id: \.self) { key in
+                        Button {
+                            activitySubTab = key
+                        } label: {
+                            Text(key.capitalized)
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundColor(activitySubTab == key ? .white : DojoTheme.textMuted)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(activitySubTab == key ? DojoTheme.piuAccent : DojoTheme.piuCard)
+                                .cornerRadius(8)
+                        }
+                    }
+                }
+            }
+
+            let filtered = filteredActivityItems
+
+            if filtered.isEmpty {
+                Text("No activity yet")
+                    .font(.system(size: 13))
+                    .foregroundColor(DojoTheme.textMuted)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 30)
+            } else {
+                ForEach(filtered) { item in
+                    activityRow(item)
+                }
+            }
+        }
+        .padding(16)
+        .task { await vm.loadActivity() }
+    }
+
+    private var filteredActivityItems: [ActivityItem] {
+        if activitySubTab == "all" { return vm.activityItems }
+        return vm.activityItems.filter { $0.category == activitySubTab }
+    }
+
+    private func activityRow(_ item: ActivityItem) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            // Icon
+            activityIcon(item)
+                .frame(width: 32, height: 32)
+                .cornerRadius(8)
+
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(alignment: .top) {
+                    Text(item.message ?? "Activity")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(Color(hex: "#e5e7eb"))
+                        .lineLimit(2)
+
+                    Spacer()
+
+                    if let created = item.createdAt {
+                        Text(created.timeAgo)
+                            .font(.system(size: 9))
+                            .foregroundColor(DojoTheme.textMuted)
+                    }
+                }
+
+                if let detail = item.detail, !detail.isEmpty {
+                    Text(detail)
+                        .font(.system(size: 11))
+                        .foregroundColor(DojoTheme.textMuted)
+                        .lineLimit(2)
+                }
+
+                // Category badge
+                Text(activityCategoryLabel(item.category))
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundColor(DojoTheme.textMuted)
+                    .textCase(.uppercase)
+                    .tracking(0.5)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(DojoTheme.piuDark)
+                    .cornerRadius(4)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4)
+                            .stroke(DojoTheme.piuBorder.opacity(0.5), lineWidth: 0.5)
+                    )
+                    .padding(.top, 2)
+            }
+        }
+        .padding(10)
+        .background(DojoTheme.piuCard)
+        .cornerRadius(10)
+    }
+
+    private func activityIcon(_ item: ActivityItem) -> some View {
+        let type = item.type ?? ""
+        let icon: String
+        let bg: Color
+        let fg: Color
+
+        if type == "post_created" {
+            icon = "square.and.pencil"; bg = Color(hex: "#0ea5e9").opacity(0.1); fg = Color(hex: "#7dd3fc")
+        } else if type.contains("comment") || type.contains("reply") {
+            icon = "bubble.left.fill"; bg = Color(hex: "#8b5cf6").opacity(0.1); fg = Color(hex: "#c4b5fd")
+        } else if type == "upscore" {
+            icon = "chart.line.uptrend.xyaxis"; bg = Color(hex: "#f59e0b").opacity(0.1); fg = Color(hex: "#fcd34d")
+        } else if type == "new_clear" {
+            icon = "star.fill"; bg = Color(hex: "#10b981").opacity(0.1); fg = Color(hex: "#6ee7b7")
+        } else if type.contains("tournament") {
+            icon = "trophy.fill"; bg = Color(hex: "#ec4899").opacity(0.1); fg = Color(hex: "#f9a8d4")
+        } else if type.contains("duel") {
+            icon = "figure.fencing"; bg = Color(hex: "#f97316").opacity(0.1); fg = Color(hex: "#fdba74")
+        } else if type.contains("community") {
+            icon = "person.3.fill"; bg = Color(hex: "#06b6d4").opacity(0.1); fg = Color(hex: "#67e8f9")
+        } else {
+            icon = "clock.arrow.circlepath"; bg = DojoTheme.piuDark; fg = DojoTheme.textMuted
+        }
+
+        return ZStack {
+            RoundedRectangle(cornerRadius: 8)
+                .fill(bg)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(fg.opacity(0.3), lineWidth: 1)
+                )
+            Image(systemName: icon)
+                .font(.system(size: 12))
+                .foregroundColor(fg)
+        }
+    }
+
+    private func activityCategoryLabel(_ category: String?) -> String {
+        switch category {
+        case "posts": return "Post"
+        case "comments": return "Comment"
+        case "scores": return "Score"
+        case "competitions": return "Competition"
+        case "community": return "Community"
+        default: return "Activity"
+        }
     }
 }
