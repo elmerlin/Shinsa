@@ -116,8 +116,18 @@ class ProfileViewModel: ObservableObject {
 
         for play in plays {
             guard let datePlayed = play.effectiveDate else { continue }
-            // Extract just the date portion (YYYY-MM-DD)
-            let dateKey = String(datePlayed.prefix(10))
+            // Extract just the date portion (YYYY-MM-DD), normalizing dots/slashes to dashes
+            let rawKey = String(datePlayed.prefix(10))
+                .replacingOccurrences(of: ".", with: "-")
+                .replacingOccurrences(of: "/", with: "-")
+            // Pad single-digit month/day (e.g. "2026-3-5" → "2026-03-05")
+            let parts = rawKey.split(separator: "-")
+            let dateKey: String
+            if parts.count == 3, let y = parts.first, y.count == 4 {
+                dateKey = "\(y)-\(parts[1].count == 1 ? "0" : "")\(parts[1])-\(parts[2].count == 1 ? "0" : "")\(parts[2])"
+            } else {
+                dateKey = rawKey
+            }
             guard dateKey.count == 10 else { continue }
 
             var entry = map[dateKey] ?? (plays: 0, singlesLevels: [], doublesLevels: [])

@@ -75,6 +75,7 @@ struct ProfileView: View {
     @State private var selectedHeatmapDay: HeatmapDay?
     @State private var heatmapYear: Int = Calendar.current.component(.year, from: Date())
     @State private var selectedAchievementSeries: String?
+    @State private var selectedPlay: RecentlyPlayed?
     @State private var isSyncingPlays = false
     @State private var showSinglesPumbility = false
 
@@ -120,7 +121,7 @@ struct ProfileView: View {
         .task {
             await JacketService.shared.loadIfNeeded()
             await vm.load()
-            await vm.loadRecentPlays()
+            await vm.loadRecentPlays(year: heatmapYear)
             await vm.loadAchievements()
         }
     }
@@ -826,10 +827,20 @@ struct ProfileView: View {
 
     // MARK: - Selected Day Plays
 
+    /// Normalize a date string to YYYY-MM-DD for comparison
+    private func normalizeDateKey(_ raw: String) -> String {
+        let normalized = raw.prefix(10)
+            .replacingOccurrences(of: ".", with: "-")
+            .replacingOccurrences(of: "/", with: "-")
+        let parts = normalized.split(separator: "-")
+        guard parts.count == 3, let y = parts.first, y.count == 4 else { return String(normalized) }
+        return "\(y)-\(parts[1].count == 1 ? "0" : "")\(parts[1])-\(parts[2].count == 1 ? "0" : "")\(parts[2])"
+    }
+
     private func selectedDayPlays(_ day: HeatmapDay) -> some View {
         let playsForDay = vm.recentPlays.filter { play in
-            guard let datePlayed = play.datePlayed else { return false }
-            return datePlayed.hasPrefix(day.key)
+            guard let datePlayed = play.effectiveDate else { return false }
+            return normalizeDateKey(datePlayed) == day.key
         }
 
         return VStack(alignment: .leading, spacing: 8) {
@@ -844,47 +855,82 @@ struct ProfileView: View {
             }
 
             ForEach(Array(playsForDay.enumerated()), id: \.offset) { _, play in
-                HStack(spacing: 10) {
-                    // Jacket image
-                    if let bgUrl = play.backgroundUrl, let url = URL(string: bgUrl) {
-                        AsyncImage(url: url) { phase in
-                            switch phase {
-                            case .success(let img):
-                                img.resizable().scaledToFill()
-                            default:
+                let jacketURL = JacketService.shared.resolveJacketURL(title: play.songTitle, mode: play.mode, level: play.level, backgroundUrl: play.backgroundUrl)
+                let score = play.score ?? 0
+                let isBreak = score <= 0
+
+                Button {
+                    selectedPlay = play
+                } label: {
+                    HStack(spacing: 10) {
+                        // Jacket
+                        ZStack(alignment: .bottomTrailing) {
+                            if let url = jacketURL {
+                                AsyncImage(url: url) { phase in
+                                    switch phase {
+                                    case .success(let img):
+                                        img.resizable().scaledToFill()
+                                    default:
+                                        RoundedRectangle(cornerRadius: 4).fill(DojoTheme.piuBorder)
+                                    }
+                                }
+                            } else {
                                 RoundedRectangle(cornerRadius: 4).fill(DojoTheme.piuBorder)
                             }
+
+                            // Mode badge
+                            if let mode = play.mode, let level = play.level {
+                                let isDouble = mode.lowercased().hasPrefix("d") || mode.lowercased() == "double"
+                                Text("\(isDouble ? "D" : "S")\(level)")
+                                    .font(.system(size: 7, weight: .black))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 2)
+                                    .padding(.vertical, 1)
+                                    .background(isDouble ? Color(hex: "#16b77f") : Color(hex: "#d93d62"))
+                                    .cornerRadius(2)
+                                    .padding(1)
+                            }
                         }
-                        .frame(width: 36, height: 36)
-                        .cornerRadius(4)
-                    }
+                        .frame(width: 38, height: 38)
+                        .cornerRadius(6)
+                        .clipped()
 
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(play.songTitle ?? "Unknown")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(.white)
-                            .lineLimit(1)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(play.songTitle ?? "Unknown")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(.white)
+                                .lineLimit(1)
 
-                        HStack(spacing: 6) {
-                            modeBadge(play.mode ?? "S", level: play.level ?? 0)
+                            if let dp = play.datePlayed, dp.count > 10 {
+                                Text(String(dp.dropFirst(11).prefix(5)))
+                                    .font(.system(size: 10))
+                                    .foregroundColor(DojoTheme.textMuted)
+                            }
+                        }
 
-                            if let grade = play.grade {
-                                Text(grade)
+                        Spacer()
+
+                        // Score + Grade
+                        if isBreak {
+                            Text("STAGE BREAK")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(Color(hex: "#f87171"))
+                        } else {
+                            VStack(alignment: .trailing, spacing: 1) {
+                                Text(DojoTheme.gradeLabel(for: score))
                                     .font(.system(size: 10, weight: .bold))
-                                    .foregroundColor(gradeColor(grade))
+                                    .foregroundColor(DojoTheme.gradeColor(for: score))
+                                Text(score.formattedScore)
+                                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                    .foregroundColor(.white)
                             }
                         }
                     }
-
-                    Spacer()
-
-                    Text("\(play.score ?? 0)")
-                        .font(.system(size: 12, weight: .bold, design: .monospaced))
-                        .foregroundColor(DojoTheme.textSecondary)
+                    .padding(8)
+                    .background(DojoTheme.piuCard)
+                    .cornerRadius(8)
                 }
-                .padding(8)
-                .background(DojoTheme.piuCard)
-                .cornerRadius(8)
+                .buttonStyle(.plain)
             }
         }
         .padding(12)
@@ -894,6 +940,25 @@ struct ProfileView: View {
             RoundedRectangle(cornerRadius: 12)
                 .stroke(DojoTheme.piuBorder, lineWidth: 1)
         )
+        .sheet(item: $selectedPlay) { play in
+            ScoreSnapshotSheet(
+                songTitle: play.songTitle ?? "Unknown",
+                mode: play.mode ?? "S",
+                level: play.level ?? 0,
+                score: play.score ?? 0,
+                grade: DojoTheme.gradeLabel(for: play.score ?? 0),
+                plate: play.plate,
+                backgroundUrl: play.backgroundUrl,
+                perfect: play.perfect,
+                great: play.great,
+                good: play.good,
+                bad: play.bad,
+                miss: play.miss,
+                datePlayed: play.datePlayed,
+                replayEmbedUrl: play.replayEmbedUrl,
+                username: vm.user?.username
+            )
+        }
     }
 
     // MARK: - Posts Tab

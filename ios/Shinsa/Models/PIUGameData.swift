@@ -63,6 +63,8 @@ struct RecentlyPlayed: Codable, Identifiable {
     var maxCombo: Int?
     var kcal: Double?
     var plate: String?
+    var replayEmbedUrl: String?
+    var replayVideoId: String?
 
     /// Best available date string for this play
     var effectiveDate: String? {
@@ -79,6 +81,8 @@ struct RecentlyPlayed: Codable, Identifiable {
         case datePlayed = "date_played"
         case playedAtUtc = "played_at_utc"
         case maxCombo = "max_combo"
+        case replayEmbedUrl = "replay_embed_url"
+        case replayVideoId = "replay_video_id"
     }
 }
 
