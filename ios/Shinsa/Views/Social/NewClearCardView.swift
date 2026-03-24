@@ -7,6 +7,7 @@ struct NewClearCardView: View {
     @State private var showAll = false
     @State private var showComments = false
     @State private var selectedClear: FeedItem.ClearItem?
+    @State private var showSendPicker = false
 
     init(item: FeedItem) {
         self.item = item
@@ -107,20 +108,8 @@ struct NewClearCardView: View {
                     .padding(.vertical, 4)
                 }
 
-                Button {
-                    // TODO: Open user picker to send as DM
-                } label: {
+                Button { showSendPicker = true } label: {
                     Image(systemName: "paperplane")
-                        .font(.system(size: 12))
-                        .foregroundColor(DojoTheme.textMuted)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                }
-
-                Button {
-                    // TODO: Add to story
-                } label: {
-                    Image(systemName: "plus.circle")
                         .font(.system(size: 12))
                         .foregroundColor(DojoTheme.textMuted)
                         .padding(.horizontal, 8)
@@ -159,6 +148,31 @@ struct NewClearCardView: View {
                 username: item.username
             )
         }
+        .sheet(isPresented: $showSendPicker) {
+            UserPickerSheet(
+                title: "Send clear",
+                onSelectUser: { partner in sendClearTo(partnerId: partner.id) },
+                onSelectConversation: { convo in sendClearToConvo(convo.id) },
+                onDismiss: { showSendPicker = false }
+            )
+        }
+    }
+
+    private func sendClearTo(partnerId: String?) {
+        Task {
+            guard let pid = partnerId else { return }
+            let ls = buildClearLinkShare()
+            let convo = try? await APIService.shared.startDirectConversation(pid)
+            if let cid = convo?.id { _ = try? await APIService.shared.sendLinkShareMessage(cid, linkShare: ls) }
+        }
+    }
+
+    private func sendClearToConvo(_ convoId: String) {
+        Task { _ = try? await APIService.shared.sendLinkShareMessage(convoId, linkShare: buildClearLinkShare()) }
+    }
+
+    private func buildClearLinkShare() -> [String: AnyCodable] {
+        ["kind": AnyCodable("clear"), "title": AnyCodable("\(item.username ?? "Player")'s clear"), "songTitle": AnyCodable(item.songTitle ?? ""), "mode": AnyCodable(item.mode ?? ""), "level": AnyCodable(item.level ?? 0), "score": AnyCodable(item.score ?? 0)]
     }
 
     // MARK: - Clear Row

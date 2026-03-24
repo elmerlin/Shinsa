@@ -7,6 +7,7 @@ struct UpscoreCardView: View {
     @State private var showAll = false
     @State private var showComments = false
     @State private var selectedScore: FeedItem.UpscoreItem?
+    @State private var showSendPicker = false
 
     init(item: FeedItem) {
         self.item = item
@@ -108,20 +109,8 @@ struct UpscoreCardView: View {
                     .padding(.vertical, 4)
                 }
 
-                Button {
-                    // TODO: Open user picker to send as DM
-                } label: {
+                Button { showSendPicker = true } label: {
                     Image(systemName: "paperplane")
-                        .font(.system(size: 12))
-                        .foregroundColor(DojoTheme.textMuted)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                }
-
-                Button {
-                    // TODO: Add to story
-                } label: {
-                    Image(systemName: "plus.circle")
                         .font(.system(size: 12))
                         .foregroundColor(DojoTheme.textMuted)
                         .padding(.horizontal, 8)
@@ -157,6 +146,43 @@ struct UpscoreCardView: View {
                 datePlayed: u.datePlayed,
                 replayEmbedUrl: u.replayEmbedUrl,
                 username: item.username
+            )
+        }
+        .sheet(isPresented: $showSendPicker) {
+            UserPickerSheet(
+                title: "Send upscore",
+                onSelectUser: { partner in
+                    Task {
+                        let linkShare: [String: AnyCodable] = [
+                            "kind": AnyCodable("upscore"),
+                            "title": AnyCodable("\(item.username ?? "Player")'s upscore"),
+                            "songTitle": AnyCodable(item.songTitle ?? ""),
+                            "mode": AnyCodable(item.mode ?? ""),
+                            "level": AnyCodable(item.level ?? 0),
+                            "score": AnyCodable(item.newScore ?? 0),
+                        ]
+                        if let userId = partner.id {
+                            let convo = try? await APIService.shared.startDirectConversation(userId)
+                            if let cid = convo?.id {
+                                _ = try? await APIService.shared.sendLinkShareMessage(cid, linkShare: linkShare)
+                            }
+                        }
+                    }
+                },
+                onSelectConversation: { convo in
+                    Task {
+                        let linkShare: [String: AnyCodable] = [
+                            "kind": AnyCodable("upscore"),
+                            "title": AnyCodable("\(item.username ?? "Player")'s upscore"),
+                            "songTitle": AnyCodable(item.songTitle ?? ""),
+                            "mode": AnyCodable(item.mode ?? ""),
+                            "level": AnyCodable(item.level ?? 0),
+                            "score": AnyCodable(item.newScore ?? 0),
+                        ]
+                        _ = try? await APIService.shared.sendLinkShareMessage(convo.id, linkShare: linkShare)
+                    }
+                },
+                onDismiss: { showSendPicker = false }
             )
         }
     }

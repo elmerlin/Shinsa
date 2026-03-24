@@ -107,13 +107,6 @@ struct TiersView: View {
         }
         .navigationTitle("Tier List")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button { showSettings = true } label: {
-                    Image(systemName: "gearshape").foregroundColor(DojoTheme.textMuted)
-                }
-            }
-        }
         .sheet(isPresented: $showSettings) { settingsSheet }
         .task { await loadMeta() }
     }
@@ -320,6 +313,14 @@ struct TiersView: View {
                     .frame(width: 44, height: 44)
             }
             .disabled(!canNavigateLevel(1))
+
+            // Settings cog
+            Button { showSettings = true } label: {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 15))
+                    .foregroundColor(DojoTheme.textMuted)
+                    .frame(width: 36, height: 36)
+            }
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)

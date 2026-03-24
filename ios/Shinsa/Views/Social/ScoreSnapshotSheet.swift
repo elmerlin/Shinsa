@@ -199,27 +199,32 @@ struct ScoreSnapshotSheet: View {
         let gradeColor = DojoTheme.gradeColor(for: score)
 
         return ZStack(alignment: .topTrailing) {
-            // Jacket background
-            ZStack {
-                if let url = jacketURL {
-                    AsyncImage(url: url) { phase in
-                        switch phase {
-                        case .success(let img):
-                            img.resizable().scaledToFill()
-                        default:
-                            Rectangle().fill(
-                                LinearGradient(colors: [Color(hex: "#152238"), Color(hex: "#090d18")], startPoint: .topLeading, endPoint: .bottomTrailing)
-                            )
+            // Jacket background - use GeometryReader to fill without overflow
+            GeometryReader { geo in
+                ZStack {
+                    if let url = jacketURL {
+                        AsyncImage(url: url) { phase in
+                            switch phase {
+                            case .success(let img):
+                                img.resizable()
+                                    .scaledToFill()
+                                    .frame(width: geo.size.width, height: geo.size.height)
+                                    .clipped()
+                            default:
+                                Rectangle().fill(
+                                    LinearGradient(colors: [Color(hex: "#152238"), Color(hex: "#090d18")], startPoint: .topLeading, endPoint: .bottomTrailing)
+                                )
+                            }
                         }
+                    } else {
+                        Rectangle().fill(
+                            LinearGradient(colors: [Color(hex: "#152238"), Color(hex: "#090d18")], startPoint: .topLeading, endPoint: .bottomTrailing)
+                        )
                     }
-                } else {
-                    Rectangle().fill(
-                        LinearGradient(colors: [Color(hex: "#152238"), Color(hex: "#090d18")], startPoint: .topLeading, endPoint: .bottomTrailing)
-                    )
-                }
 
-                // Dark gradient overlay
-                LinearGradient(colors: [.black.opacity(0.2), .black.opacity(0.55), .black.opacity(0.9)], startPoint: .top, endPoint: .bottom)
+                    // Dark gradient overlay
+                    LinearGradient(colors: [.black.opacity(0.2), .black.opacity(0.55), .black.opacity(0.9)], startPoint: .top, endPoint: .bottom)
+                }
             }
 
             // Level badge top right
@@ -304,7 +309,7 @@ struct ScoreSnapshotSheet: View {
             }
             .padding(14)
         }
-        .frame(minHeight: 260)
+        .frame(minHeight: 280)
         .cornerRadius(12)
         .clipped()
     }

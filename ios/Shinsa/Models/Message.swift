@@ -125,18 +125,74 @@ struct MessageLinkShare: Codable {
     var miss: Int?
     var replayEmbedUrl: String?
     var previewImage: String?
+    var scoreDelta: Int?
+    var playedAt: String?
 
+    // Web app sends camelCase, API stores snake_case — accept both
     enum CodingKeys: String, CodingKey {
         case kind, title, subtitle, path, mode, level, score, grade, plate, perfect, great, good, bad, miss
-        case songTitle = "song_title"
-        case oldScore = "old_score"
-        case oldGrade = "old_grade"
-        case playerName = "player_name"
-        case playerAvatar = "player_avatar"
-        case jacketUrl = "jacket_url"
-        case backgroundUrl = "background_url"
-        case replayEmbedUrl = "replay_embed_url"
-        case previewImage = "preview_image"
+        case songTitle, oldScore, oldGrade, playerName, playerAvatar, jacketUrl, backgroundUrl, replayEmbedUrl, previewImage, scoreDelta, playedAt
+        // snake_case alternatives
+        case song_title, old_score, old_grade, player_name, player_avatar, jacket_url, background_url, replay_embed_url, preview_image, score_delta, played_at
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        kind = try c.decodeIfPresent(String.self, forKey: .kind)
+        title = try c.decodeIfPresent(String.self, forKey: .title)
+        subtitle = try c.decodeIfPresent(String.self, forKey: .subtitle)
+        path = try c.decodeIfPresent(String.self, forKey: .path)
+        mode = try c.decodeIfPresent(String.self, forKey: .mode)
+        level = try c.decodeIfPresent(Int.self, forKey: .level)
+        score = try c.decodeIfPresent(Int.self, forKey: .score)
+        grade = try c.decodeIfPresent(String.self, forKey: .grade)
+        plate = try c.decodeIfPresent(String.self, forKey: .plate)
+        perfect = try c.decodeIfPresent(Int.self, forKey: .perfect)
+        great = try c.decodeIfPresent(Int.self, forKey: .great)
+        good = try c.decodeIfPresent(Int.self, forKey: .good)
+        bad = try c.decodeIfPresent(Int.self, forKey: .bad)
+        miss = try c.decodeIfPresent(Int.self, forKey: .miss)
+        // Try camelCase first, fall back to snake_case
+        songTitle = try c.decodeIfPresent(String.self, forKey: .songTitle) ?? c.decodeIfPresent(String.self, forKey: .song_title)
+        oldScore = try c.decodeIfPresent(Int.self, forKey: .oldScore) ?? c.decodeIfPresent(Int.self, forKey: .old_score)
+        oldGrade = try c.decodeIfPresent(String.self, forKey: .oldGrade) ?? c.decodeIfPresent(String.self, forKey: .old_grade)
+        playerName = try c.decodeIfPresent(String.self, forKey: .playerName) ?? c.decodeIfPresent(String.self, forKey: .player_name)
+        playerAvatar = try c.decodeIfPresent(String.self, forKey: .playerAvatar) ?? c.decodeIfPresent(String.self, forKey: .player_avatar)
+        jacketUrl = try c.decodeIfPresent(String.self, forKey: .jacketUrl) ?? c.decodeIfPresent(String.self, forKey: .jacket_url)
+        backgroundUrl = try c.decodeIfPresent(String.self, forKey: .backgroundUrl) ?? c.decodeIfPresent(String.self, forKey: .background_url)
+        replayEmbedUrl = try c.decodeIfPresent(String.self, forKey: .replayEmbedUrl) ?? c.decodeIfPresent(String.self, forKey: .replay_embed_url)
+        previewImage = try c.decodeIfPresent(String.self, forKey: .previewImage) ?? c.decodeIfPresent(String.self, forKey: .preview_image)
+        scoreDelta = try c.decodeIfPresent(Int.self, forKey: .scoreDelta) ?? c.decodeIfPresent(Int.self, forKey: .score_delta)
+        playedAt = try c.decodeIfPresent(String.self, forKey: .playedAt) ?? c.decodeIfPresent(String.self, forKey: .played_at)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encodeIfPresent(kind, forKey: .kind)
+        try c.encodeIfPresent(title, forKey: .title)
+        try c.encodeIfPresent(subtitle, forKey: .subtitle)
+        try c.encodeIfPresent(path, forKey: .path)
+        try c.encodeIfPresent(songTitle, forKey: .songTitle)
+        try c.encodeIfPresent(mode, forKey: .mode)
+        try c.encodeIfPresent(level, forKey: .level)
+        try c.encodeIfPresent(score, forKey: .score)
+        try c.encodeIfPresent(grade, forKey: .grade)
+        try c.encodeIfPresent(plate, forKey: .plate)
+        try c.encodeIfPresent(oldScore, forKey: .oldScore)
+        try c.encodeIfPresent(oldGrade, forKey: .oldGrade)
+        try c.encodeIfPresent(playerName, forKey: .playerName)
+        try c.encodeIfPresent(playerAvatar, forKey: .playerAvatar)
+        try c.encodeIfPresent(jacketUrl, forKey: .jacketUrl)
+        try c.encodeIfPresent(backgroundUrl, forKey: .backgroundUrl)
+        try c.encodeIfPresent(perfect, forKey: .perfect)
+        try c.encodeIfPresent(great, forKey: .great)
+        try c.encodeIfPresent(good, forKey: .good)
+        try c.encodeIfPresent(bad, forKey: .bad)
+        try c.encodeIfPresent(miss, forKey: .miss)
+        try c.encodeIfPresent(replayEmbedUrl, forKey: .replayEmbedUrl)
+        try c.encodeIfPresent(previewImage, forKey: .previewImage)
+        try c.encodeIfPresent(scoreDelta, forKey: .scoreDelta)
+        try c.encodeIfPresent(playedAt, forKey: .playedAt)
     }
 }
 

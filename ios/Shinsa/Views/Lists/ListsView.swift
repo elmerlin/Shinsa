@@ -223,7 +223,7 @@ struct ListDetailView: View {
                     ForEach(items) { item in
                         HStack(spacing: 10) {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(item.title ?? "Unknown")
+                                Text(item.displayTitle)
                                     .font(.system(size: 13, weight: .medium))
                                     .foregroundColor(.white)
                                     .lineLimit(1)

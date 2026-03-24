@@ -4,9 +4,14 @@ struct ContentView: View {
     @EnvironmentObject var auth: AuthManager
     @EnvironmentObject var notificationPoller: NotificationPoller
     @State private var selectedTab = 0
+    @State private var previousTab = 0
     @State private var isDrawerOpen = false
     @State private var isSearching = false
     @State private var searchText = ""
+    @State private var homePath = NavigationPath()
+    @State private var feedPath = NavigationPath()
+    @State private var tiersPath = NavigationPath()
+    @State private var profilePath = NavigationPath()
 
     var body: some View {
         Group {
@@ -29,7 +34,7 @@ struct ContentView: View {
             } else if auth.isLoggedIn {
                 ZStack {
                     TabView(selection: $selectedTab) {
-                        NavigationStack {
+                        NavigationStack(path: $homePath) {
                             DashboardView()
                                 .navigationDestination(for: String.self) { route in
                                     routeDestination(route)
@@ -46,7 +51,7 @@ struct ContentView: View {
                         }
                         .tag(0)
 
-                        NavigationStack {
+                        NavigationStack(path: $feedPath) {
                             FeedView()
                                 .navigationDestination(for: String.self) { route in
                                     routeDestination(route)
@@ -77,7 +82,7 @@ struct ContentView: View {
                         }
                         .tag(2)
 
-                        NavigationStack {
+                        NavigationStack(path: $tiersPath) {
                             TiersView()
                                 .navigationDestination(for: String.self) { route in
                                     routeDestination(route)
@@ -94,7 +99,7 @@ struct ContentView: View {
                         }
                         .tag(3)
 
-                        NavigationStack {
+                        NavigationStack(path: $profilePath) {
                             ProfileView(userId: auth.userId)
                                 .navigationDestination(for: String.self) { route in
                                     routeDestination(route)
@@ -112,6 +117,19 @@ struct ContentView: View {
                         .tag(4)
                     }
                     .tint(DojoTheme.piuAccent)
+                    .onChange(of: selectedTab) { newTab in
+                        // Pop to root when re-selecting the same tab
+                        if newTab == previousTab {
+                            switch newTab {
+                            case 0: homePath = NavigationPath()
+                            case 1: feedPath = NavigationPath()
+                            case 3: tiersPath = NavigationPath()
+                            case 4: profilePath = NavigationPath()
+                            default: break
+                            }
+                        }
+                        previousTab = newTab
+                    }
                     .overlay(alignment: .top) {
                         if isSearching {
                             VStack(spacing: 0) {

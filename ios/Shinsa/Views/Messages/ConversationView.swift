@@ -570,19 +570,41 @@ struct ConversationView: View {
                     stompBubble()
                 } else if msg.messageType == "nudge" {
                     nudgeBubble()
+                } else if let content = msg.content, StickerService.isStickerOnly(content) {
+                    // Sticker-only message: render as large sticker image
+                    let tokens = StickerService.extractTokens(content)
+                    VStack(spacing: 4) {
+                        ForEach(tokens, id: \.self) { token in
+                            if let url = StickerService.stickerURL(for: token) {
+                                AsyncImage(url: url) { phase in
+                                    if case .success(let img) = phase {
+                                        img.resizable().scaledToFit()
+                                    } else {
+                                        Text(token).font(.system(size: 13)).foregroundColor(DojoTheme.textMuted)
+                                    }
+                                }
+                                .frame(width: 120, height: 120)
+                            }
+                        }
+                    }
                 } else {
-                    // Regular text message
-                    Text(msg.content ?? "")
-                        .font(msgFont)
-                        .foregroundColor(textColor)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(bubbleBg)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 16)
-                                .stroke(bubbleBorder, lineWidth: 1)
-                        )
-                        .cornerRadius(16)
+                    // Regular text message (with inline sticker support)
+                    let content = msg.content ?? ""
+                    if StickerService.containsStickers(content) {
+                        stickerTextBubble(content, font: msgFont, textColor: textColor, bg: bubbleBg, border: bubbleBorder)
+                    } else {
+                        Text(content)
+                            .font(msgFont)
+                            .foregroundColor(textColor)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(bubbleBg)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(bubbleBorder, lineWidth: 1)
+                            )
+                            .cornerRadius(16)
+                    }
                 }
 
                 if let ts = msg.createdAt {
@@ -617,21 +639,25 @@ struct ConversationView: View {
                 // Score snapshot card with jacket background
                 ZStack(alignment: .topTrailing) {
                     // Full jacket background
-                    ZStack {
-                        if let url = jacketURL {
-                            AsyncImage(url: url) { phase in
-                                if case .success(let img) = phase {
-                                    img.resizable().scaledToFill()
-                                } else {
-                                    Rectangle().fill(LinearGradient(colors: [Color(hex: "#152238"), Color(hex: "#090d18")], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    GeometryReader { geo in
+                        ZStack {
+                            if let url = jacketURL {
+                                AsyncImage(url: url) { phase in
+                                    if case .success(let img) = phase {
+                                        img.resizable().scaledToFill()
+                                            .frame(width: geo.size.width, height: geo.size.height)
+                                            .clipped()
+                                    } else {
+                                        Rectangle().fill(LinearGradient(colors: [Color(hex: "#152238"), Color(hex: "#090d18")], startPoint: .topLeading, endPoint: .bottomTrailing))
+                                    }
                                 }
+                            } else {
+                                Rectangle().fill(LinearGradient(colors: [Color(hex: "#152238"), Color(hex: "#090d18")], startPoint: .topLeading, endPoint: .bottomTrailing))
                             }
-                        } else {
-                            Rectangle().fill(LinearGradient(colors: [Color(hex: "#152238"), Color(hex: "#090d18")], startPoint: .topLeading, endPoint: .bottomTrailing))
-                        }
 
-                        // Dark gradient overlay from top to bottom
-                        LinearGradient(colors: [.black.opacity(0.3), .black.opacity(0.6), .black.opacity(0.92)], startPoint: .top, endPoint: .bottom)
+                            // Dark gradient overlay from top to bottom
+                            LinearGradient(colors: [.black.opacity(0.3), .black.opacity(0.6), .black.opacity(0.92)], startPoint: .top, endPoint: .bottom)
+                        }
                     }
 
                     // Level badge top right
@@ -672,6 +698,11 @@ struct ConversationView: View {
                                 Text(player)
                                     .font(.system(size: 11, weight: .bold))
                                     .foregroundColor(.white.opacity(0.8))
+                            }
+                            if let playedAt = ls.playedAt, !playedAt.isEmpty {
+                                Text(playedAt)
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.white.opacity(0.5))
                             }
                             if let _ = ls.mode, let level = ls.level, level > 0 {
                                 Text("\(isDouble ? "D" : "S")\(level)")
@@ -873,6 +904,33 @@ struct ConversationView: View {
             RoundedRectangle(cornerRadius: 12)
                 .stroke((isAccepted ? DojoTheme.piuGreen : isExpired ? Color.red : DojoTheme.piuGold).opacity(0.3), lineWidth: 1)
         )
+    }
+
+    // MARK: - Sticker Text Bubble (mixed text + stickers)
+    @ViewBuilder
+    private func stickerTextBubble(_ content: String, font: Font, textColor: Color, bg: Color, border: Color) -> some View {
+        let parts = StickerService.splitContent(content)
+        HStack(spacing: 2) {
+            ForEach(Array(parts.enumerated()), id: \.offset) { _, part in
+                if part.hasPrefix(":") && part.hasSuffix(":"), let url = StickerService.stickerURL(for: part) {
+                    AsyncImage(url: url) { phase in
+                        if case .success(let img) = phase {
+                            img.resizable().scaledToFit()
+                        } else {
+                            Text(part).font(.system(size: 13)).foregroundColor(DojoTheme.textMuted)
+                        }
+                    }
+                    .frame(width: 28, height: 28)
+                } else {
+                    Text(part).font(font).foregroundColor(textColor)
+                }
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(bg)
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(border, lineWidth: 1))
+        .cornerRadius(16)
     }
 
     // MARK: - Stomp & Nudge

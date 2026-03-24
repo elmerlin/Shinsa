@@ -5,6 +5,7 @@ struct PostCardView: View {
     @State private var pumped: Bool
     @State private var pumpCount: Int
     @State private var showComments = false
+    @State private var showSendPicker = false
 
     init(item: FeedItem) {
         self.item = item
@@ -91,20 +92,8 @@ struct PostCardView: View {
                     .padding(.vertical, 4)
                 }
 
-                Button {
-                    // TODO: Open user picker to send as DM
-                } label: {
+                Button { showSendPicker = true } label: {
                     Image(systemName: "paperplane")
-                        .font(.system(size: 12))
-                        .foregroundColor(DojoTheme.textMuted)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                }
-
-                Button {
-                    // TODO: Add to story
-                } label: {
-                    Image(systemName: "plus.circle")
                         .font(.system(size: 12))
                         .foregroundColor(DojoTheme.textMuted)
                         .padding(.horizontal, 8)
@@ -124,6 +113,26 @@ struct PostCardView: View {
         .padding(14)
         .background(DojoTheme.piuCard)
         .cornerRadius(12)
+        .sheet(isPresented: $showSendPicker) {
+            UserPickerSheet(
+                title: "Send post",
+                onSelectUser: { partner in
+                    Task {
+                        guard let pid = partner.id else { return }
+                        let ls: [String: AnyCodable] = ["kind": AnyCodable("post"), "title": AnyCodable("\(item.username ?? "Player")'s post"), "subtitle": AnyCodable(String((item.content ?? "").prefix(100)))]
+                        let convo = try? await APIService.shared.startDirectConversation(pid)
+                        if let cid = convo?.id { _ = try? await APIService.shared.sendLinkShareMessage(cid, linkShare: ls) }
+                    }
+                },
+                onSelectConversation: { convo in
+                    Task {
+                        let ls: [String: AnyCodable] = ["kind": AnyCodable("post"), "title": AnyCodable("\(item.username ?? "Player")'s post"), "subtitle": AnyCodable(String((item.content ?? "").prefix(100)))]
+                        _ = try? await APIService.shared.sendLinkShareMessage(convo.id, linkShare: ls)
+                    }
+                },
+                onDismiss: { showSendPicker = false }
+            )
+        }
     }
 
     private func togglePump() async {

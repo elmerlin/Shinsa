@@ -193,13 +193,19 @@ struct ChartFriendRecord: Codable, Identifiable {
 }
 
 struct ChartFriendUser: Codable, Identifiable {
-    var id: String { "\(userId ?? 0)" }
+    // API sends `id` (int), not `user_id`; and `avatar`, not `avatar_url`
+    var id: String { "\(rawId ?? userId ?? 0)" }
+    var rawId: Int?
     var userId: Int?
     var username: String?
+    var avatar: String?
     var avatarUrl: String?
 
+    var resolvedAvatar: String? { avatar ?? avatarUrl }
+
     enum CodingKeys: String, CodingKey {
-        case username
+        case username, avatar
+        case rawId = "id"
         case userId = "user_id"
         case avatarUrl = "avatar_url"
     }
@@ -207,8 +213,9 @@ struct ChartFriendUser: Codable, Identifiable {
 
 // MARK: - Song Lists
 
-struct SongList: Codable, Identifiable {
-    let id: String
+struct SongList: Decodable, Identifiable {
+    var id: String { "\(rawId)" }
+    var rawId: FlexId
     var name: String?
     var description: String?
     var itemCount: Int?
@@ -216,24 +223,71 @@ struct SongList: Codable, Identifiable {
     var createdAt: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, name, description, items
-        case itemCount = "item_count"
-        case createdAt = "created_at"
+        case name, description, items, itemCount, createdAt
+        case rawId = "id"
+        // snake_case alternatives
+        case item_count, created_at
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        rawId = try c.decode(FlexId.self, forKey: .rawId)
+        name = try c.decodeIfPresent(String.self, forKey: .name)
+        description = try c.decodeIfPresent(String.self, forKey: .description)
+        items = try c.decodeIfPresent([SongListItem].self, forKey: .items)
+        itemCount = try c.decodeIfPresent(Int.self, forKey: .itemCount) ?? c.decodeIfPresent(Int.self, forKey: .item_count)
+        createdAt = try c.decodeIfPresent(String.self, forKey: .createdAt) ?? c.decodeIfPresent(String.self, forKey: .created_at)
     }
 }
 
-struct SongListItem: Codable, Identifiable {
-    let id: String
+/// Flexible ID that decodes from either String or Int
+struct FlexId: Codable, Hashable, CustomStringConvertible {
+    let stringValue: String
+    var description: String { stringValue }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.singleValueContainer()
+        if let s = try? c.decode(String.self) { stringValue = s }
+        else if let i = try? c.decode(Int.self) { stringValue = "\(i)" }
+        else { stringValue = "0" }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.singleValueContainer()
+        try c.encode(stringValue)
+    }
+}
+
+struct SongListItem: Decodable, Identifiable {
+    var id: String { "\(rawId)" }
+    var rawId: FlexId
     var chartId: Int?
+    var songTitle: String?
     var title: String?
     var mode: String?
     var level: Int?
     var jacketUrl: String?
+    var artist: String?
+
+    var displayTitle: String { songTitle ?? title ?? "Unknown" }
 
     enum CodingKeys: String, CodingKey {
-        case id, title, mode, level
-        case chartId = "chart_id"
-        case jacketUrl = "jacket_url"
+        case mode, level, songTitle, title, chartId, jacketUrl, artist
+        case rawId = "id"
+        // snake_case alternatives
+        case song_title, chart_id, jacket_url
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        rawId = try c.decode(FlexId.self, forKey: .rawId)
+        mode = try c.decodeIfPresent(String.self, forKey: .mode)
+        level = try c.decodeIfPresent(Int.self, forKey: .level)
+        artist = try c.decodeIfPresent(String.self, forKey: .artist)
+        songTitle = try c.decodeIfPresent(String.self, forKey: .songTitle) ?? c.decodeIfPresent(String.self, forKey: .song_title)
+        title = try c.decodeIfPresent(String.self, forKey: .title)
+        chartId = try c.decodeIfPresent(Int.self, forKey: .chartId) ?? c.decodeIfPresent(Int.self, forKey: .chart_id)
+        jacketUrl = try c.decodeIfPresent(String.self, forKey: .jacketUrl) ?? c.decodeIfPresent(String.self, forKey: .jacket_url)
     }
 }
 

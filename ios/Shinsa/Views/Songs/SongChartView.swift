@@ -4,6 +4,7 @@ struct SongChartView: View {
     let chartId: Int
     @State private var response: ChartDetailResponse?
     @State private var isLoading = true
+    @State private var showJudgments = false
 
     var body: some View {
         ZStack {
@@ -21,7 +22,6 @@ struct SongChartView: View {
 
                         if let best = response.userSummary?.best {
                             personalBestSection(best)
-                            judgmentSection(best)
                         }
 
                         if let progression = response.progression, !progression.isEmpty {
@@ -233,58 +233,22 @@ struct SongChartView: View {
                         .foregroundColor(DojoTheme.textSecondary)
                 }
             }
-        }
-        .padding(16)
-        .background(DojoTheme.piuCard)
-        .cornerRadius(12)
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(DojoTheme.piuBorder, lineWidth: 1)
-        )
-    }
 
-    // MARK: - Judgment Breakdown
-
-    private func judgmentSection(_ best: ChartBestScore) -> some View {
-        let judgments: [(String, Int?, Color)] = [
-            ("PERFECT", best.perfect, Color(hex: "#38bdf8")),
-            ("GREAT", best.great, Color(hex: "#4ade80")),
-            ("GOOD", best.good, Color(hex: "#facc15")),
-            ("BAD", best.bad, Color(hex: "#fb923c")),
-            ("MISS", best.miss, Color(hex: "#f87171")),
-        ]
-
-        let total = judgments.compactMap(\.1).reduce(0, +)
-
-        return VStack(alignment: .leading, spacing: 12) {
-            sectionHeader("JUDGMENT BREAKDOWN", icon: "chart.bar.fill", color: DojoTheme.piuBlue)
-
-            ForEach(judgments, id: \.0) { label, count, color in
-                if let count {
-                    HStack(spacing: 10) {
-                        Text(label)
+            // View Judgments button
+            if (best.perfect ?? 0) + (best.great ?? 0) + (best.good ?? 0) + (best.bad ?? 0) + (best.miss ?? 0) > 0 {
+                Button { showJudgments = true } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "chart.bar.fill")
+                            .font(.system(size: 11))
+                        Text("View Judgments")
                             .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(color)
-                            .frame(width: 70, alignment: .leading)
-
-                        GeometryReader { geo in
-                            let pct = total > 0 ? CGFloat(count) / CGFloat(total) : 0
-                            ZStack(alignment: .leading) {
-                                RoundedRectangle(cornerRadius: 4)
-                                    .fill(DojoTheme.piuBorder.opacity(0.3))
-                                    .frame(height: 8)
-                                RoundedRectangle(cornerRadius: 4)
-                                    .fill(color)
-                                    .frame(width: geo.size.width * pct, height: 8)
-                            }
-                        }
-                        .frame(height: 8)
-
-                        Text("\(count)")
-                            .font(.system(size: 12, weight: .bold, design: .monospaced))
-                            .foregroundColor(.white)
-                            .frame(width: 50, alignment: .trailing)
                     }
+                    .foregroundColor(DojoTheme.piuBlue)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .background(DojoTheme.piuBlue.opacity(0.1))
+                    .cornerRadius(8)
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(DojoTheme.piuBlue.opacity(0.3), lineWidth: 1))
                 }
             }
         }
@@ -295,6 +259,76 @@ struct SongChartView: View {
             RoundedRectangle(cornerRadius: 12)
                 .stroke(DojoTheme.piuBorder, lineWidth: 1)
         )
+        .sheet(isPresented: $showJudgments) {
+            judgmentSheet(best)
+        }
+    }
+
+    // MARK: - Judgment Breakdown (Modal)
+
+    private func judgmentSheet(_ best: ChartBestScore) -> some View {
+        let judgments: [(String, Int?, Color)] = [
+            ("PERFECT", best.perfect, Color(hex: "#38bdf8")),
+            ("GREAT", best.great, Color(hex: "#4ade80")),
+            ("GOOD", best.good, Color(hex: "#facc15")),
+            ("BAD", best.bad, Color(hex: "#fb923c")),
+            ("MISS", best.miss, Color(hex: "#f87171")),
+        ]
+
+        let total = judgments.compactMap(\.1).reduce(0, +)
+
+        return NavigationStack {
+            ZStack {
+                DojoTheme.piuBg.ignoresSafeArea()
+                VStack(alignment: .leading, spacing: 16) {
+                    ForEach(judgments, id: \.0) { label, count, color in
+                        if let count {
+                            HStack(spacing: 10) {
+                                Text(label)
+                                    .font(.system(size: 13, weight: .bold))
+                                    .foregroundColor(color)
+                                    .frame(width: 75, alignment: .leading)
+
+                                GeometryReader { geo in
+                                    let pct = total > 0 ? CGFloat(count) / CGFloat(total) : 0
+                                    ZStack(alignment: .leading) {
+                                        RoundedRectangle(cornerRadius: 4)
+                                            .fill(DojoTheme.piuBorder.opacity(0.3))
+                                            .frame(height: 10)
+                                        RoundedRectangle(cornerRadius: 4)
+                                            .fill(color)
+                                            .frame(width: geo.size.width * pct, height: 10)
+                                    }
+                                }
+                                .frame(height: 10)
+
+                                Text("\(count)")
+                                    .font(.system(size: 13, weight: .bold, design: .monospaced))
+                                    .foregroundColor(.white)
+                                    .frame(width: 55, alignment: .trailing)
+                            }
+                        }
+                    }
+
+                    Divider().background(DojoTheme.piuBorder)
+
+                    HStack {
+                        Text("Total Notes")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundColor(DojoTheme.textMuted)
+                        Spacer()
+                        Text("\(total)")
+                            .font(.system(size: 13, weight: .bold, design: .monospaced))
+                            .foregroundColor(.white)
+                    }
+                }
+                .padding(20)
+            }
+            .navigationTitle("Judgment Breakdown")
+            .navigationBarTitleDisplayMode(.inline)
+            .presentationDetents([.medium])
+            .presentationDragIndicator(.visible)
+        }
     }
 
     // MARK: - Score Progression
@@ -408,20 +442,8 @@ struct SongChartView: View {
             ForEach(friends) { record in
                 HStack(spacing: 12) {
                     // Avatar
-                    if let avatarUrl = record.user?.avatarUrl, !avatarUrl.isEmpty, let url = fullURL(avatarUrl) {
-                        AsyncImage(url: url) { phase in
-                            switch phase {
-                            case .success(let img):
-                                img.resizable().aspectRatio(contentMode: .fill)
-                                    .frame(width: 32, height: 32)
-                                    .clipShape(Circle())
-                            default:
-                                avatarPlaceholder(record.user?.username ?? "?")
-                            }
-                        }
-                    } else {
-                        avatarPlaceholder(record.user?.username ?? "?")
-                    }
+                    AvatarView(record.user?.resolvedAvatar, name: record.user?.username ?? "?", size: 32)
+                        .clipShape(Circle())
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(record.user?.username ?? "Unknown")
