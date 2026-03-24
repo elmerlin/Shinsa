@@ -108,6 +108,26 @@ struct UpscoreCardView: View {
                     .padding(.vertical, 4)
                 }
 
+                Button {
+                    // TODO: Open user picker to send as DM
+                } label: {
+                    Image(systemName: "paperplane")
+                        .font(.system(size: 12))
+                        .foregroundColor(DojoTheme.textMuted)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                }
+
+                Button {
+                    // TODO: Add to story
+                } label: {
+                    Image(systemName: "plus.circle")
+                        .font(.system(size: 12))
+                        .foregroundColor(DojoTheme.textMuted)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                }
+
                 Spacer()
             }
 

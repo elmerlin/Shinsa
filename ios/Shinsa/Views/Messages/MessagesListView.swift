@@ -41,8 +41,11 @@ struct MessagesListView: View {
             } else {
                 ScrollView {
                     if !vm.highlights.isEmpty {
-                        HighlightsStripView(highlights: vm.highlights)
-                            .padding(.vertical, 8)
+                        HighlightsStripView(
+                            highlights: vm.highlights,
+                            currentUserId: auth.userId
+                        )
+                        .padding(.vertical, 8)
                     }
 
                     LazyVStack(spacing: 0) {

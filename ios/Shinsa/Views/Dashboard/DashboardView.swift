@@ -473,7 +473,7 @@ struct DashboardView: View {
                 }
 
                 // Dark gradient overlay - stronger to ensure text readability
-                LinearGradient(colors: [.clear, .black.opacity(0.4), .black.opacity(0.92)], startPoint: .top, endPoint: .bottom)
+                LinearGradient(colors: [.clear, .black.opacity(0.5), .black.opacity(0.95)], startPoint: .top, endPoint: .bottom)
 
                 // Content overlay
                 VStack(spacing: 0) {
@@ -507,7 +507,7 @@ struct DashboardView: View {
 
                     Spacer()
 
-                    // Bottom content - use GeometryReader-free approach with proper padding
+                    // Bottom content - vertically stacked to avoid width conflicts
                     VStack(alignment: .leading, spacing: 2) {
                         // Player
                         HStack(spacing: 3) {
@@ -521,6 +521,7 @@ struct DashboardView: View {
                                 .lineLimit(1)
                                 .truncationMode(.tail)
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
 
                         // Song title
                         Text(item.songTitle ?? "Unknown")
@@ -528,37 +529,39 @@ struct DashboardView: View {
                             .foregroundColor(.white)
                             .lineLimit(1)
                             .truncationMode(.tail)
+                            .frame(maxWidth: .infinity, alignment: .leading)
 
-                        // Score + Grade
-                        HStack {
-                            Text(displayScore > 0 ? displayScore.formattedScore : "")
-                                .font(.system(size: 11, weight: .black, design: .monospaced))
-                                .foregroundColor(.white)
-                                .lineLimit(1)
-                                .truncationMode(.tail)
-                            Spacer()
-                            Text(gradeLabel)
-                                .font(.system(size: 11, weight: .black))
-                                .foregroundColor(gradeColor)
-                                .lineLimit(1)
-                                .truncationMode(.tail)
-                        }
+                        // Grade
+                        Text(gradeLabel)
+                            .font(.system(size: 11, weight: .black))
+                            .foregroundColor(gradeColor)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+
+                        // Score
+                        Text(displayScore > 0 ? displayScore.formattedScore : "")
+                            .font(.system(size: 11, weight: .black, design: .monospaced))
+                            .foregroundColor(.white)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .frame(maxWidth: .infinity, alignment: .leading)
 
                         // Delta for upscores
                         if let old = item.oldScore, let new = item.newScore, new > old {
-                            HStack {
+                            HStack(spacing: 4) {
                                 Text(old.formattedScore)
                                     .font(.system(size: 7, design: .monospaced))
                                     .foregroundColor(.white.opacity(0.6))
                                     .lineLimit(1)
                                     .truncationMode(.tail)
-                                Spacer()
                                 Text("+\((new - old).formattedScore)")
                                     .font(.system(size: 8, weight: .bold, design: .monospaced))
                                     .foregroundColor(DojoTheme.piuGreen)
                                     .lineLimit(1)
                                     .truncationMode(.tail)
                             }
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         }
                     }
                     .padding(.horizontal, 8)
