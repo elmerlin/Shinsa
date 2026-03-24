@@ -366,6 +366,17 @@ struct UpscoreCardView: View {
         .frame(width: 50, height: 28)
         .cornerRadius(6)
         .clipped()
+        .overlay(
+            NavigationLink(value: chartRoute(songTitle: songTitle, mode: mode, level: level)) {
+                Color.clear
+            }
+            .opacity(0)
+        )
+    }
+
+    private func chartRoute(songTitle: String?, mode: String?, level: Int?) -> String {
+        guard let t = songTitle, let m = mode, let l = level else { return "" }
+        return "song-chart-lookup/\(t)|\(m)|\(l)"
     }
 
     private func jacketFallback(songTitle: String?, mode: String?) -> some View {

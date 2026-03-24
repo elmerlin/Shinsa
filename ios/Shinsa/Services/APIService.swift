@@ -490,6 +490,19 @@ class APIService {
     // MARK: - Songs (Extended)
     func getSongLibrary() async throws -> SongLibraryResponse { try await request("/songs/library") }
     func getChartDetail(_ chartId: Int) async throws -> ChartDetailResponse { try await request("/songs/chart/\(chartId)") }
+    func resolveChartId(title: String, mode: String, level: Int) async throws -> Int? {
+        let lib: SongLibraryResponse = try await request("/songs/library")
+        for song in lib.songs ?? [] {
+            if song.title?.lowercased() == title.lowercased() {
+                for chart in song.charts ?? [] {
+                    if chart.mode?.lowercased() == mode.lowercased() && chart.level == level {
+                        return chart.chartId
+                    }
+                }
+            }
+        }
+        return nil
+    }
     func getSkillsMeta() async throws -> [ChartSkill] { try await request("/songs/skills/meta") }
     func getSkillCharts(_ skillSlug: String) async throws -> [ChartDetail] { try await request("/songs/skill/\(skillSlug)") }
     func updateChartSkills(_ chartId: Int, skills: [String]) async throws -> GenericResponse { try await request("/songs/chart/\(chartId)/skills", method: "PUT", body: ["skills": AnyCodable(skills)]) }

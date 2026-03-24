@@ -265,6 +265,13 @@ struct ContentView: View {
             ProfileView(userId: param)
         case "song-chart":
             SongChartView(chartId: Int(param) ?? 0)
+        case "song-chart-lookup":
+            // param format: "songTitle|mode|level"
+            let lookupParts = param.components(separatedBy: "|")
+            let title = lookupParts.count > 0 ? lookupParts[0] : ""
+            let mode = lookupParts.count > 1 ? lookupParts[1] : "S"
+            let level = lookupParts.count > 2 ? Int(lookupParts[2]) ?? 0 : 0
+            SongChartView(songTitle: title, mode: mode, level: level)
         case "skill-charts":
             SkillChartsView(skillSlug: param)
         case "live-session":

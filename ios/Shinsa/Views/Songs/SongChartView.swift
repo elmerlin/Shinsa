@@ -1,10 +1,29 @@
 import SwiftUI
 
 struct SongChartView: View {
-    let chartId: Int
+    let chartId: Int?
+    let songTitle: String?
+    let mode: String?
+    let level: Int?
+
+    @State private var resolvedChartId: Int?
     @State private var response: ChartDetailResponse?
     @State private var isLoading = true
     @State private var showJudgments = false
+
+    init(chartId: Int) {
+        self.chartId = chartId
+        self.songTitle = nil
+        self.mode = nil
+        self.level = nil
+    }
+
+    init(songTitle: String, mode: String, level: Int) {
+        self.chartId = nil
+        self.songTitle = songTitle
+        self.mode = mode
+        self.level = level
+    }
 
     var body: some View {
         ZStack {
@@ -571,7 +590,15 @@ struct SongChartView: View {
 
     private func loadChart() async {
         isLoading = true
-        response = try? await APIService.shared.getChartDetail(chartId)
+        if let cid = chartId {
+            resolvedChartId = cid
+            response = try? await APIService.shared.getChartDetail(cid)
+        } else if let title = songTitle, let m = mode, let l = level {
+            if let cid = try? await APIService.shared.resolveChartId(title: title, mode: m, level: l) {
+                resolvedChartId = cid
+                response = try? await APIService.shared.getChartDetail(cid)
+            }
+        }
         isLoading = false
     }
 }
