@@ -80,24 +80,35 @@ struct MessagesListView: View {
                 }
             }
         }
-        .sheet(isPresented: $showNewMessage) {
-            NavigationStack {
-                NewMessageView(vm: vm) { conversation in
+        .sheet(isPresented: Binding(
+            get: {
+                showNewMessage || showNoteComposer
+            },
+            set: { newValue in
+                if !newValue {
                     showNewMessage = false
+                    showNoteComposer = false
+                }
+            }
+        )) {
+            if showNoteComposer {
+                let selfNote = vm.highlights.first(where: { $0.isSelf == true })?.note
+                NoteComposerView(
+                    existingNote: selfNote,
+                    onDismiss: {
+                        showNoteComposer = false
+                        Task { await vm.loadConversations() }
+                    }
+                )
+            } else {
+                NavigationStack {
+                    NewMessageView(vm: vm) { conversation in
+                        showNewMessage = false
+                    }
                 }
             }
         }
         .task { await vm.loadConversations() }
-        .sheet(isPresented: $showNoteComposer) {
-            let selfNote = vm.highlights.first(where: { $0.isSelf == true })?.note
-            NoteComposerView(
-                existingNote: selfNote,
-                onDismiss: {
-                    showNoteComposer = false
-                    Task { await vm.loadConversations() }
-                }
-            )
-        }
         .fullScreenCover(isPresented: $showStoryComposer) {
             StoryComposerView(onDismiss: {
                 showStoryComposer = false
