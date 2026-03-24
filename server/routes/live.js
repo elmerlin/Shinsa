@@ -2032,17 +2032,15 @@ async function backfillLiveSessionReplayData(db, liveSessionId) {
     };
   }
 
-  const video = await getYoutubeVideoById(db, session.host_user_id, videoId, {
-    enforceChannelOwnership: false,
-  });
-  if (!video) {
-    return {
-      session_id: String(liveSessionId),
-      skipped: true,
-      reason: 'video_not_found',
-    };
+  let video = null;
+  try {
+    video = await getYoutubeVideoById(db, session.host_user_id, videoId, {
+      enforceChannelOwnership: false,
+    });
+  } catch {
+    // YouTube OAuth may be expired; fall back to session timestamps
   }
-  if (!isReplayEligibleYoutubeVideo(video)) {
+  if (video && !isReplayEligibleYoutubeVideo(video)) {
     return {
       session_id: String(liveSessionId),
       skipped: true,
