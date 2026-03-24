@@ -41,12 +41,20 @@ struct PostCardView: View {
                 Spacer()
             }
 
-            // Content
+            // Content (parse live session markers)
             if let content = item.content, !content.isEmpty {
-                Text(content)
-                    .font(.system(size: 14))
-                    .foregroundColor(.white.opacity(0.9))
-                    .lineSpacing(3)
+                let parsed = LiveSessionMarker.split(content)
+
+                if let summary = parsed.summary {
+                    LiveSessionCardView(summary: summary, username: item.username)
+                }
+
+                if !parsed.text.isEmpty {
+                    Text(parsed.text)
+                        .font(.system(size: 14))
+                        .foregroundColor(.white.opacity(0.9))
+                        .lineSpacing(3)
+                }
             }
 
             // Images

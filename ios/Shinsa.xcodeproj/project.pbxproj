@@ -145,6 +145,7 @@
 		STCKRS000001000100010001 /* StickerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = STCKRS000002000200020002 /* StickerService.swift */; };
 		USRPKR000001000100010001 /* UserPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = USRPKR000002000200020002 /* UserPickerView.swift */; };
 		FDTLDV000001000100010001 /* FeedItemDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDTLDV000002000200020002 /* FeedItemDetailView.swift */; };
+		LVSCRD000001000100010001 /* LiveSessionCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = LVSCRD000002000200020002 /* LiveSessionCardView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -287,6 +288,7 @@
 		STCKRS000002000200020002 /* StickerService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StickerService.swift"; sourceTree = "<group>"; };
 		USRPKR000002000200020002 /* UserPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UserPickerView.swift"; sourceTree = "<group>"; };
 		FDTLDV000002000200020002 /* FeedItemDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FeedItemDetailView.swift"; sourceTree = "<group>"; };
+		LVSCRD000002000200020002 /* LiveSessionCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LiveSessionCardView.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -573,6 +575,7 @@
 				NOTEC0MP0002000200020002 /* NoteComposerView.swift */,
 				ST0RYC0MP0002000200020002 /* StoryComposerView.swift */,
 				FDTLDV000002000200020002 /* FeedItemDetailView.swift */,
+				LVSCRD000002000200020002 /* LiveSessionCardView.swift */,
 			);
 			path = Social;
 			sourceTree = "<group>";
@@ -936,6 +939,7 @@
 				STCKRS000001000100010001 /* StickerService.swift in Sources */,
 				USRPKR000001000100010001 /* UserPickerView.swift in Sources */,
 				FDTLDV000001000100010001 /* FeedItemDetailView.swift in Sources */,
+				LVSCRD000001000100010001 /* LiveSessionCardView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
