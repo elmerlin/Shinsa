@@ -175,7 +175,7 @@ struct ScoreSnapshotSheet: View {
         .fullScreenCover(isPresented: $showShareToStory) {
             StoryComposerView(
                 prefilledSnapshot: StorySnapshot(
-                    songTitle: songTitle, mode: mode, level: level, score: score, grade: grade, plate: plate
+                    songTitle: songTitle, mode: mode, level: level, score: score, grade: grade, plate: plate, jacketUrl: backgroundUrl
                 ),
                 onDismiss: { showShareToStory = false }
             )

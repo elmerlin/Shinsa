@@ -201,38 +201,81 @@ struct StoryComposerView: View {
     // MARK: - Score Preview
 
     private var scorePreview: some View {
-        ZStack {
-            LinearGradient(colors: [Color(hex: "#0f172a"), Color(hex: "#1e293b")], startPoint: .topLeading, endPoint: .bottomTrailing)
+        let jacketURL: URL? = {
+            guard let snap = prefilledSnapshot else { return nil }
+            return JacketService.shared.resolveJacketURL(
+                title: snap.songTitle, mode: snap.mode, level: snap.level,
+                backgroundUrl: snap.jacketUrl
+            )
+        }()
 
-            if let snap = prefilledSnapshot {
-                VStack(spacing: 12) {
-                    Text(snap.songTitle ?? "")
-                        .font(.system(size: 18, weight: .black))
-                        .foregroundColor(.white)
-
-                    HStack(spacing: 8) {
-                        Text("\(snap.mode == "Single" ? "S" : "D")\(snap.level ?? 0)")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundColor(snap.mode == "Single" ? .red : .green)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(Color.black.opacity(0.3))
-                            .cornerRadius(6)
+        return GeometryReader { geo in
+            ZStack {
+                // Jacket background
+                if let url = jacketURL {
+                    AsyncImage(url: url) { phase in
+                        if case .success(let img) = phase {
+                            img.resizable().scaledToFill()
+                                .frame(width: geo.size.width, height: geo.size.height)
+                                .clipped()
+                        } else {
+                            Rectangle().fill(
+                                LinearGradient(colors: [Color(hex: "#0f172a"), Color(hex: "#1e293b")], startPoint: .topLeading, endPoint: .bottomTrailing)
+                            )
+                        }
                     }
-
-                    Text((snap.score ?? 0).formattedScore)
-                        .font(.system(size: 48, weight: .black))
-                        .foregroundColor(.white)
-
-                    if let grade = snap.grade {
-                        Text(grade)
-                            .font(.system(size: 24, weight: .bold))
-                            .foregroundColor(gradeColor(grade))
-                    }
+                } else {
+                    Rectangle().fill(
+                        LinearGradient(colors: [Color(hex: "#0f172a"), Color(hex: "#1e293b")], startPoint: .topLeading, endPoint: .bottomTrailing)
+                    )
                 }
-                .padding(20)
+
+                // Dark overlay
+                LinearGradient(colors: [.black.opacity(0.25), .black.opacity(0.6), .black.opacity(0.9)], startPoint: .top, endPoint: .bottom)
+
+                if let snap = prefilledSnapshot {
+                    VStack(spacing: 10) {
+                        Spacer()
+
+                        Text(snap.songTitle ?? "")
+                            .font(.system(size: 20, weight: .black))
+                            .foregroundColor(.white)
+                            .multilineTextAlignment(.center)
+
+                        let isDouble = (snap.mode ?? "").lowercased().hasPrefix("d")
+                        let prefix = isDouble ? "D" : "S"
+                        Text("\(prefix)\(snap.level ?? 0)")
+                            .font(.system(size: 12, weight: .black))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(
+                                LinearGradient(
+                                    colors: isDouble
+                                        ? [Color(hex: "#4cf4aa"), Color(hex: "#0b5d48")]
+                                        : [Color(hex: "#ff7a7a"), Color(hex: "#7a1730")],
+                                    startPoint: .topLeading, endPoint: .bottomTrailing
+                                )
+                            )
+                            .cornerRadius(4)
+
+                        Text((snap.score ?? 0).formattedScore)
+                            .font(.system(size: 44, weight: .black, design: .monospaced))
+                            .foregroundColor(.white)
+
+                        if let grade = snap.grade {
+                            Text(grade)
+                                .font(.system(size: 26, weight: .black))
+                                .foregroundColor(gradeColor(grade))
+                        }
+
+                        Spacer().frame(height: 16)
+                    }
+                    .padding(20)
+                }
             }
         }
+        .frame(height: 380)
     }
 
     // MARK: - Post
