@@ -10,6 +10,7 @@ class DashboardViewModel: ObservableObject {
     @Published var searchQuery = ""
     @Published var isSearching = false
     @Published var selectedNotice: Notice? = nil
+    @Published var dailyHighlights: DailyHighlightsData?
     @Published var isLoading = false
 
     private var searchTask: Task<Void, Never>?
@@ -29,6 +30,7 @@ class DashboardViewModel: ObservableObject {
         onlineDuels = (try? await o) ?? []
         notices = (try? await n) ?? []
         recentActivity = (try? await a) ?? []
+        dailyHighlights = try? await APIService.shared.getDailyHighlights()
         isLoading = false
     }
 

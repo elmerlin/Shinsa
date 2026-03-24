@@ -367,6 +367,7 @@ class APIService {
         return items
     }
     func getRecentActivity() async throws -> [RecentActivity] { try await request("/social/recent-activity") }
+    func getDailyHighlights() async throws -> DailyHighlightsData { try await request("/social/daily-highlights") }
 
     // MARK: - Phases
     func getPhases(_ tournamentId: String) async throws -> [Phase] { try await request("/phases/tournament/\(tournamentId)") }
