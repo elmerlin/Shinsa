@@ -172,20 +172,44 @@ struct TiersView: View {
                                 .font(.system(size: 11))
                                 .foregroundColor(DojoTheme.textMuted.opacity(0.6))
 
-                            let maxLevel = selectedMode == "Single" ? 26 : 28
-                            let levels = Array(1...maxLevel)
-                            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7), spacing: 4) {
-                                ForEach(levels, id: \.self) { level in
-                                    Button("\(level)") {
-                                        defaultLevel = level
-                                        selectedLevel = level
+                            HStack(spacing: 16) {
+                                Button {
+                                    if defaultLevel > 1 { defaultLevel -= 1 }
+                                } label: {
+                                    Image(systemName: "chevron.left")
+                                        .font(.system(size: 14, weight: .bold))
+                                        .foregroundColor(defaultLevel > 1 ? .white : DojoTheme.textMuted.opacity(0.3))
+                                        .frame(width: 36, height: 36)
+                                        .background(DojoTheme.piuDark)
+                                        .cornerRadius(8)
+                                }
+                                .disabled(defaultLevel <= 1)
+
+                                Text(defaultLevel > 0 ? "\(defaultLevel)" : "None")
+                                    .font(.system(size: 20, weight: .black))
+                                    .foregroundColor(defaultLevel > 0 ? DojoTheme.piuAccent : DojoTheme.textMuted)
+                                    .frame(width: 50)
+
+                                Button {
+                                    let maxLevel = selectedMode == "Single" ? 26 : 28
+                                    if defaultLevel < maxLevel { defaultLevel += 1 }
+                                } label: {
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 14, weight: .bold))
+                                        .foregroundColor(.white)
+                                        .frame(width: 36, height: 36)
+                                        .background(DojoTheme.piuDark)
+                                        .cornerRadius(8)
+                                }
+
+                                Spacer()
+
+                                if defaultLevel > 0 {
+                                    Button("Clear") {
+                                        defaultLevel = 0
                                     }
                                     .font(.system(size: 12, weight: .bold))
-                                    .foregroundColor(defaultLevel == level ? .white : DojoTheme.textMuted)
-                                    .frame(height: 32)
-                                    .frame(maxWidth: .infinity)
-                                    .background(defaultLevel == level ? DojoTheme.piuAccent : DojoTheme.piuDark)
-                                    .cornerRadius(6)
+                                    .foregroundColor(DojoTheme.textMuted)
                                 }
                             }
                         }
@@ -334,13 +358,20 @@ struct TiersView: View {
     private func cycleMode() {
         let modes = availableModes
         guard !modes.isEmpty else { return }
+        let currentLevel = selectedLevel
         if let idx = modes.firstIndex(of: selectedMode) {
             let nextIdx = (idx + 1) % modes.count
             selectedMode = modes[nextIdx]
         } else {
             selectedMode = modes[0]
         }
-        selectedLevel = availableLevels.first?.level
+        // Keep the same level number when switching modes (e.g. S18 → D18)
+        if let lvl = currentLevel, availableLevels.contains(where: { $0.level == lvl }) {
+            selectedLevel = lvl
+        } else {
+            // Fall back to closest available level
+            selectedLevel = availableLevels.first?.level
+        }
         Task { await loadTiers() }
     }
 
