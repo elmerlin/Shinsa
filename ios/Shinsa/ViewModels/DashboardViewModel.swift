@@ -21,6 +21,7 @@ class DashboardViewModel: ObservableObject {
 
     func load() async {
         isLoading = true
+        await JacketService.shared.loadIfNeeded()
         async let t = APIService.shared.getTournaments()
         async let o = APIService.shared.getOnlineDuels()
         async let n = APIService.shared.getNotices()
