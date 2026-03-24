@@ -472,8 +472,8 @@ struct DashboardView: View {
                     )
                 }
 
-                // Dark gradient overlay
-                LinearGradient(colors: [.black.opacity(0.1), .black.opacity(0.35), .black.opacity(0.85)], startPoint: .top, endPoint: .bottom)
+                // Dark gradient overlay - stronger to ensure text readability
+                LinearGradient(colors: [.black.opacity(0.15), .black.opacity(0.5), .black.opacity(0.9)], startPoint: .top, endPoint: .bottom)
 
                 // Content overlay
                 VStack(spacing: 0) {
@@ -503,59 +503,56 @@ struct DashboardView: View {
                             .cornerRadius(6)
                         }
                     }
-                    .padding(4)
+                    .padding(6)
 
                     Spacer()
 
-                    // Bottom content
-                    VStack(alignment: .leading, spacing: 1) {
+                    // Bottom content - use GeometryReader-free approach with proper padding
+                    VStack(alignment: .leading, spacing: 2) {
                         // Player
-                        HStack(spacing: 2) {
+                        HStack(spacing: 3) {
                             if let nat = item.nationality, !nat.isEmpty {
                                 Text(CountryData.flag(for: nat))
-                                    .font(.system(size: 7))
+                                    .font(.system(size: 8))
                             }
                             Text(item.username ?? "")
-                                .font(.system(size: 8, weight: .bold))
+                                .font(.system(size: 9, weight: .bold))
                                 .foregroundColor(.white)
                                 .lineLimit(1)
                         }
-                        .shadow(color: .black.opacity(0.8), radius: 3, x: 0, y: 1)
 
                         // Song title
                         Text(item.songTitle ?? "Unknown")
-                            .font(.system(size: 9, weight: .black))
+                            .font(.system(size: 10, weight: .black))
                             .foregroundColor(.white)
                             .lineLimit(1)
-                            .shadow(color: .black.opacity(0.8), radius: 3, x: 0, y: 1)
 
                         // Score + Grade
-                        HStack(spacing: 2) {
+                        HStack {
                             Text(displayScore > 0 ? displayScore.formattedScore : "")
-                                .font(.system(size: 10, weight: .black))
+                                .font(.system(size: 11, weight: .black, design: .monospaced))
                                 .foregroundColor(.white)
                             Spacer()
                             Text(gradeLabel)
-                                .font(.system(size: 10, weight: .black))
+                                .font(.system(size: 11, weight: .black))
                                 .foregroundColor(gradeColor)
                         }
-                        .shadow(color: .black.opacity(0.8), radius: 3, x: 0, y: 1)
 
                         // Delta for upscores
                         if let old = item.oldScore, let new = item.newScore, new > old {
-                            HStack(spacing: 2) {
+                            HStack {
                                 Text(old.formattedScore)
                                     .font(.system(size: 7, design: .monospaced))
                                     .foregroundColor(.white.opacity(0.6))
                                 Spacer()
                                 Text("+\((new - old).formattedScore)")
-                                    .font(.system(size: 7, weight: .bold, design: .monospaced))
+                                    .font(.system(size: 8, weight: .bold, design: .monospaced))
                                     .foregroundColor(DojoTheme.piuGreen)
                             }
                         }
                     }
-                    .padding(.horizontal, 5)
-                    .padding(.bottom, 5)
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, 6)
                 }
             }
             .frame(width: 150, height: 110)
