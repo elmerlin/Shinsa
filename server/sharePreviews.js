@@ -2373,7 +2373,7 @@ function registerSharePreviewRoutes(app, { clientBuildDir }) {
              u.id AS user_id, u.username, u.avatar, u.avatar_v
       FROM live_sessions ls
       JOIN users u ON ls.host_user_id = u.id
-      WHERE ls.id = ? AND ls.deleted_at IS NULL
+      WHERE ls.id = ? AND (ls.deleted_at IS NULL OR ls.deleted_at = '')
     `).get(sessionId);
     if (!session) return res.status(404).send('Not found');
 
@@ -2514,7 +2514,7 @@ function registerSharePreviewRoutes(app, { clientBuildDir }) {
              u.id AS user_id, u.username, u.avatar, u.avatar_v
       FROM live_sessions ls
       JOIN users u ON ls.host_user_id = u.id
-      WHERE ls.id = ? AND ls.deleted_at IS NULL
+      WHERE ls.id = ? AND (ls.deleted_at IS NULL OR ls.deleted_at = '')
     `).get(sessionId);
 
     if (!session) {
