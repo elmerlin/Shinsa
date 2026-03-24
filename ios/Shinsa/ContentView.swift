@@ -242,7 +242,9 @@ struct ContentView: View {
 
     @ViewBuilder
     private func routeDestination(_ route: String) -> some View {
-        let parts = route.split(separator: "/", maxSplits: 1).map(String.init)
+        // Strip leading slash from web app paths like "/upscore/123"
+        let cleaned = route.hasPrefix("/") ? String(route.dropFirst()) : route
+        let parts = cleaned.split(separator: "/", maxSplits: 1).map(String.init)
         let prefix = parts.first ?? ""
         let param = parts.count > 1 ? parts[1] : ""
 
@@ -261,17 +263,25 @@ struct ContentView: View {
             } else {
                 OnlineDuelRoomView(duelId: param)
             }
+        case "duel":
+            MatchDetailView(matchId: param)
         case "profile":
             ProfileView(userId: param)
         case "song-chart":
             SongChartView(chartId: Int(param) ?? 0)
         case "song-chart-lookup":
-            // param format: "songTitle|mode|level"
             let lookupParts = param.components(separatedBy: "|")
             let title = lookupParts.count > 0 ? lookupParts[0] : ""
             let mode = lookupParts.count > 1 ? lookupParts[1] : "S"
             let level = lookupParts.count > 2 ? Int(lookupParts[2]) ?? 0 : 0
             SongChartView(songTitle: title, mode: mode, level: level)
+        case "upscore":
+            // Web path: /upscore/123 — show on feed (upscore detail not implemented, show profile)
+            FeedItemDetailView(type: "upscore", itemId: param)
+        case "clear":
+            FeedItemDetailView(type: "clear", itemId: param)
+        case "post":
+            FeedItemDetailView(type: "post", itemId: param)
         case "skill-charts":
             SkillChartsView(skillSlug: param)
         case "live-session":
