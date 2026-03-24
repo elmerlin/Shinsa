@@ -92,17 +92,9 @@ struct MessagesListView: View {
             let selfNote = vm.highlights.first(where: { $0.isSelf == true })?.note
             NoteComposerView(
                 existingNote: selfNote,
-                onSave: { content in
-                    Task {
-                        _ = try? await APIService.shared.createNote(content: content)
-                        await vm.loadConversations()
-                    }
-                },
-                onClear: {
-                    Task {
-                        _ = try? await APIService.shared.clearNote()
-                        await vm.loadConversations()
-                    }
+                onDismiss: {
+                    showNoteComposer = false
+                    Task { await vm.loadConversations() }
                 }
             )
         }

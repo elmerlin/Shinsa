@@ -2,12 +2,11 @@ import SwiftUI
 
 struct NoteComposerView: View {
     let existingNote: HighlightNote?
-    let onSave: (String) -> Void
-    let onClear: () -> Void
+    let onDismiss: () -> Void
 
-    @Environment(\.dismiss) var dismiss
     @State private var draft = ""
     @State private var isSaving = false
+    @State private var errorMessage: String?
     private let maxLength = 120
 
     var body: some View {
@@ -65,10 +64,20 @@ struct NoteComposerView: View {
                     Spacer()
 
                     // Action buttons
+                    if let err = errorMessage {
+                        Text(err)
+                            .font(.system(size: 12))
+                            .foregroundColor(.red)
+                    }
+
                     HStack {
                         Button {
-                            onClear()
-                            dismiss()
+                            Task {
+                                isSaving = true
+                                _ = try? await APIService.shared.clearNote()
+                                isSaving = false
+                                onDismiss()
+                            }
                         } label: {
                             Text("Clear note")
                                 .font(.system(size: 14, weight: .bold))
@@ -81,13 +90,23 @@ struct NoteComposerView: View {
                                         .overlay(Capsule().stroke(Color.white.opacity(0.1), lineWidth: 1))
                                 )
                         }
+                        .disabled(isSaving)
 
                         Spacer()
 
                         Button {
-                            isSaving = true
-                            onSave(draft.trimmingCharacters(in: .whitespacesAndNewlines))
-                            dismiss()
+                            Task {
+                                isSaving = true
+                                errorMessage = nil
+                                let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+                                do {
+                                    _ = try await APIService.shared.createNote(content: text)
+                                    onDismiss()
+                                } catch {
+                                    errorMessage = error.localizedDescription
+                                }
+                                isSaving = false
+                            }
                         } label: {
                             Text(isSaving ? "Saving..." : "Save note")
                                 .font(.system(size: 14, weight: .black))
@@ -105,7 +124,7 @@ struct NoteComposerView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button { dismiss() } label: {
+                    Button { onDismiss() } label: {
                         Text("Close")
                             .font(.system(size: 14))
                             .foregroundColor(.gray)
