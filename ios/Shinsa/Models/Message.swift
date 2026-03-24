@@ -313,24 +313,63 @@ struct StoryUser: Codable {
 
 struct StoryItem: Codable, Identifiable {
     let id: String
-    var storyType: String?
+    var type: String?  // "score_snapshot", "score_roundup", "text", "image", "post", "link"
     var snapshot: StorySnapshot?
     var text: String?
+    var title: String?
+    var subtitle: String?
+    var caption: String?
     var backgroundGradient: String?
     var createdAt: String?
+    var expiresAt: String?
     var viewCount: Int?
     var pumpCount: Int?
     var isPumped: Bool?
     var link: StoryLink?
+    var source: StorySource?
+    var scores: [StoryScoreEntry]?
+    var totalCount: Int?
+    var entryKind: String?
+    var mediaUrl: String?
+    var user: StoryUser?
+
+    // Convenience
+    var storyType: String? { type }
 
     enum CodingKeys: String, CodingKey {
-        case id, snapshot, text, link
-        case storyType = "story_type"
+        case id, type, snapshot, text, title, subtitle, caption, link, source, scores, user
         case backgroundGradient = "background_gradient"
         case createdAt = "created_at"
+        case expiresAt = "expires_at"
         case viewCount = "view_count"
         case pumpCount = "pump_count"
         case isPumped = "is_pumped"
+        case totalCount = "total_count"
+        case entryKind = "entry_kind"
+        case mediaUrl = "media_url"
+    }
+}
+
+struct StorySource: Codable {
+    var kind: String?  // "upscore", "clear", "post"
+    var id: String?
+}
+
+struct StoryScoreEntry: Codable {
+    var songTitle: String?
+    var mode: String?
+    var level: Int?
+    var score: Int?
+    var grade: String?
+    var plate: String?
+    var jacketUrl: String?
+    var backgroundUrl: String?
+
+    enum CodingKeys: String, CodingKey {
+        case mode, level, score, grade, plate
+        case songTitle = "song_title"
+        case jacketUrl = "jacket_url"
+        case backgroundUrl = "background_url"
     }
 }
 

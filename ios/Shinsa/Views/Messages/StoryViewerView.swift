@@ -147,14 +147,118 @@ struct StoryViewerView: View {
 
     @ViewBuilder
     private func storyContent(_ story: StoryItem) -> some View {
-        if story.storyType == "score_snapshot", let snap = story.snapshot {
+        let sType = story.type ?? story.storyType ?? ""
+        if sType == "score_snapshot", let snap = story.snapshot {
             scoreSnapshotView(snap)
-        } else if let text = story.text {
-            textStoryView(text, gradient: story.backgroundGradient)
+        } else if sType == "score_roundup", let scores = story.scores, !scores.isEmpty {
+            scoreRoundupView(story, scores: scores)
+        } else if sType == "text" || sType == "post" {
+            textStoryView(story.text ?? story.caption ?? story.title ?? "", gradient: story.backgroundGradient)
+        } else if sType == "image", let mediaUrl = story.mediaUrl, !mediaUrl.isEmpty {
+            imageStoryView(mediaUrl)
+        } else if let title = story.title, !title.isEmpty {
+            // Fallback: show title + subtitle
+            VStack(spacing: 8) {
+                Text(title)
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(.white)
+                    .multilineTextAlignment(.center)
+                if let subtitle = story.subtitle, !subtitle.isEmpty {
+                    Text(subtitle)
+                        .font(.system(size: 14))
+                        .foregroundColor(.white.opacity(0.7))
+                        .multilineTextAlignment(.center)
+                }
+            }
+            .padding(20)
+        } else if let caption = story.caption, !caption.isEmpty {
+            textStoryView(caption, gradient: story.backgroundGradient)
         } else {
             Text("Story")
-                .foregroundColor(.white)
+                .foregroundColor(.white.opacity(0.5))
         }
+    }
+
+    private func scoreRoundupView(_ story: StoryItem, scores: [StoryScoreEntry]) -> some View {
+        VStack(spacing: 12) {
+            Text(story.title ?? "\(scores.count) scores")
+                .font(.system(size: 18, weight: .black))
+                .foregroundColor(.white)
+
+            if let subtitle = story.subtitle, !subtitle.isEmpty {
+                Text(subtitle)
+                    .font(.system(size: 13))
+                    .foregroundColor(.white.opacity(0.7))
+            }
+
+            ForEach(Array(scores.prefix(3).enumerated()), id: \.offset) { _, entry in
+                HStack(spacing: 10) {
+                    // Jacket
+                    let jacketURL = JacketService.shared.resolveJacketURL(title: entry.songTitle, mode: entry.mode, level: entry.level, backgroundUrl: entry.backgroundUrl ?? entry.jacketUrl)
+                    if let url = jacketURL {
+                        AsyncImage(url: url) { phase in
+                            if case .success(let img) = phase {
+                                img.resizable().scaledToFill()
+                            } else {
+                                RoundedRectangle(cornerRadius: 6).fill(DojoTheme.piuCard)
+                            }
+                        }
+                        .frame(width: 44, height: 26)
+                        .cornerRadius(6)
+                        .clipped()
+                    }
+
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(entry.songTitle ?? "Unknown")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(.white)
+                            .lineLimit(1)
+
+                        if let mode = entry.mode, let level = entry.level {
+                            let isDouble = mode.lowercased().hasPrefix("d")
+                            Text("\(isDouble ? "D" : "S")\(level)")
+                                .font(.system(size: 9, weight: .black))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 1)
+                                .background(isDouble ? Color(hex: "#0b5d48") : Color(hex: "#7a1730"))
+                                .cornerRadius(3)
+                        }
+                    }
+
+                    Spacer()
+
+                    if let score = entry.score, score > 0 {
+                        VStack(alignment: .trailing, spacing: 1) {
+                            Text(DojoTheme.gradeLabel(for: score))
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundColor(DojoTheme.gradeColor(for: score))
+                            Text(score.formattedScore)
+                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                .foregroundColor(.white)
+                        }
+                    }
+                }
+                .padding(8)
+                .background(Color.white.opacity(0.08))
+                .cornerRadius(8)
+            }
+        }
+        .padding(.horizontal, 20)
+    }
+
+    private func imageStoryView(_ urlString: String) -> some View {
+        AsyncImage(url: imageURL(urlString)) { phase in
+            switch phase {
+            case .success(let img):
+                img.resizable().scaledToFit()
+                    .frame(maxWidth: .infinity)
+                    .cornerRadius(12)
+            default:
+                ProgressView().tint(.white)
+            }
+        }
+        .padding(.horizontal, 20)
     }
 
     private func scoreSnapshotView(_ snap: StorySnapshot) -> some View {
