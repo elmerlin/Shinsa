@@ -83,6 +83,8 @@ struct DirectMessage: Codable, Identifiable {
     var messageType: String?
     var content: String?
     var createdAt: String?
+    var linkShare: MessageLinkShare?
+    var challengeCard: MessageChallengeCard?
 
     // Convenience accessors for views
     var senderId: String? { sender?.id }
@@ -94,6 +96,67 @@ struct DirectMessage: Codable, Identifiable {
         case isOwn = "is_own"
         case messageType = "message_type"
         case createdAt = "created_at"
+        case linkShare = "link_share"
+        case challengeCard = "challenge_card"
+    }
+}
+
+struct MessageLinkShare: Codable {
+    var kind: String?  // "upscore", "clear", "score_snapshot", "chart_compare", "post", "live_session", "story"
+    var title: String?
+    var subtitle: String?
+    var path: String?
+    var songTitle: String?
+    var mode: String?
+    var level: Int?
+    var score: Int?
+    var grade: String?
+    var plate: String?
+    var oldScore: Int?
+    var oldGrade: String?
+    var playerName: String?
+    var playerAvatar: String?
+    var jacketUrl: String?
+    var backgroundUrl: String?
+    var perfect: Int?
+    var great: Int?
+    var good: Int?
+    var bad: Int?
+    var miss: Int?
+    var replayEmbedUrl: String?
+    var previewImage: String?
+
+    enum CodingKeys: String, CodingKey {
+        case kind, title, subtitle, path, mode, level, score, grade, plate, perfect, great, good, bad, miss
+        case songTitle = "song_title"
+        case oldScore = "old_score"
+        case oldGrade = "old_grade"
+        case playerName = "player_name"
+        case playerAvatar = "player_avatar"
+        case jacketUrl = "jacket_url"
+        case backgroundUrl = "background_url"
+        case replayEmbedUrl = "replay_embed_url"
+        case previewImage = "preview_image"
+    }
+}
+
+struct MessageChallengeCard: Codable {
+    var kind: String?  // "beat_score", "clear_chart"
+    var targetLabel: String?
+    var subtitle: String?
+    var statusKind: String?
+    var statusLabel: String?
+    var songTitle: String?
+    var mode: String?
+    var level: Int?
+    var score: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case kind, subtitle, mode, level, score
+        case targetLabel = "target_label"
+        case statusKind = "status_kind"
+        case statusLabel = "status_label"
+        case songTitle = "song_title"
     }
 }
 

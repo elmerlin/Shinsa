@@ -119,6 +119,7 @@ struct ConversationView: View {
         }
         .sheet(isPresented: $showOptions) { optionsSheet }
         .task {
+            await JacketService.shared.loadIfNeeded()
             await messagesVM.loadMessages(conversationId: conversation.id)
             messagesVM.startPolling(conversationId: conversation.id)
         }
@@ -558,17 +559,31 @@ struct ConversationView: View {
                         .foregroundColor(DojoTheme.piuBlue)
                 }
 
-                Text(msg.content ?? "")
-                    .font(msgFont)
-                    .foregroundColor(textColor)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(bubbleBg)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(bubbleBorder, lineWidth: 1)
-                    )
-                    .cornerRadius(16)
+                // Rich content based on message type
+                if msg.messageType == "link_share", let ls = msg.linkShare {
+                    linkShareCard(ls)
+                        .frame(maxWidth: 280)
+                } else if msg.messageType == "challenge_card", let cc = msg.challengeCard {
+                    challengeCardView(cc)
+                        .frame(maxWidth: 280)
+                } else if msg.messageType == "stomp" {
+                    stompBubble()
+                } else if msg.messageType == "nudge" {
+                    nudgeBubble()
+                } else {
+                    // Regular text message
+                    Text(msg.content ?? "")
+                        .font(msgFont)
+                        .foregroundColor(textColor)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(bubbleBg)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(bubbleBorder, lineWidth: 1)
+                        )
+                        .cornerRadius(16)
+                }
 
                 if let ts = msg.createdAt {
                     Text(formatTimestamp(ts))
@@ -579,6 +594,266 @@ struct ConversationView: View {
 
             if !isMe { Spacer(minLength: 48) }
         }
+    }
+
+    // MARK: - Link Share Card
+    private func linkShareCard(_ ls: MessageLinkShare) -> some View {
+        let kind = ls.kind ?? ""
+        let hasScore = ["upscore", "clear", "score_snapshot"].contains(kind)
+        let score = ls.score ?? ls.oldScore ?? 0
+        let gradeLabel = ls.grade ?? DojoTheme.gradeLabel(for: score)
+        let gradeColor = DojoTheme.gradeColor(for: score)
+        let jacketURL = JacketService.shared.resolveJacketURL(
+            title: ls.songTitle, mode: ls.mode, level: ls.level,
+            backgroundUrl: ls.backgroundUrl ?? ls.jacketUrl
+        )
+
+        return VStack(alignment: .leading, spacing: 0) {
+            // Badge
+            Text(linkShareBadgeLabel(kind))
+                .font(.system(size: 8, weight: .bold))
+                .foregroundColor(.cyan.opacity(0.8))
+                .textCase(.uppercase)
+                .tracking(1)
+                .padding(.horizontal, 10)
+                .padding(.top, 8)
+                .padding(.bottom, 4)
+
+            if hasScore, let songTitle = ls.songTitle {
+                // Score snapshot card
+                ZStack(alignment: .bottom) {
+                    // Jacket background
+                    if let url = jacketURL {
+                        AsyncImage(url: url) { phase in
+                            if case .success(let img) = phase {
+                                img.resizable().scaledToFill()
+                            } else {
+                                Rectangle().fill(LinearGradient(colors: [Color(hex: "#152238"), Color(hex: "#090d18")], startPoint: .topLeading, endPoint: .bottomTrailing))
+                            }
+                        }
+                    } else {
+                        Rectangle().fill(LinearGradient(colors: [Color(hex: "#152238"), Color(hex: "#090d18")], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    }
+
+                    // Dark gradient
+                    LinearGradient(colors: [.black.opacity(0.15), .black.opacity(0.85)], startPoint: .top, endPoint: .bottom)
+
+                    // Content
+                    VStack(alignment: .leading, spacing: 4) {
+                        // Player
+                        if let player = ls.playerName, !player.isEmpty {
+                            Text(player)
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundColor(.white.opacity(0.7))
+                        }
+
+                        Text(songTitle)
+                            .font(.system(size: 12, weight: .black))
+                            .foregroundColor(.white)
+                            .lineLimit(2)
+
+                        // Mode badge
+                        if let mode = ls.mode, let level = ls.level, level > 0 {
+                            let isDouble = mode.lowercased().hasPrefix("d") || mode.lowercased() == "double"
+                            Text("\(isDouble ? "D" : "S")\(level)")
+                                .font(.system(size: 9, weight: .black))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 2)
+                                .background(
+                                    LinearGradient(
+                                        colors: isDouble
+                                            ? [Color(hex: "#4cf4aa"), Color(hex: "#0b5d48")]
+                                            : [Color(hex: "#ff7a7a"), Color(hex: "#7a1730")],
+                                        startPoint: .leading, endPoint: .trailing
+                                    )
+                                )
+                                .cornerRadius(4)
+                        }
+
+                        HStack(alignment: .bottom, spacing: 6) {
+                            Text(score > 0 ? score.formattedScore : "")
+                                .font(.system(size: 20, weight: .black))
+                                .foregroundColor(.white)
+
+                            Spacer()
+
+                            Text(gradeLabel)
+                                .font(.system(size: 18, weight: .black))
+                                .foregroundColor(gradeColor)
+                        }
+
+                        // Judgments
+                        if hasJudgments(ls) {
+                            HStack(spacing: 0) {
+                                judgmentLabel("P", ls.perfect ?? 0, Color(hex: "#7dd3fc"))
+                                judgmentLabel("GR", ls.great ?? 0, Color(hex: "#6ee7b7"))
+                                judgmentLabel("GO", ls.good ?? 0, Color(hex: "#fde68a"))
+                                judgmentLabel("B", ls.bad ?? 0, Color(hex: "#f0abfc"))
+                                judgmentLabel("M", ls.miss ?? 0, Color(hex: "#fca5a5"))
+                            }
+                            .padding(6)
+                            .background(Color.black.opacity(0.5))
+                            .cornerRadius(8)
+                        }
+
+                        // Old score for upscores
+                        if kind == "upscore", let oldScore = ls.oldScore, oldScore > 0, let newScore = ls.score, newScore > oldScore {
+                            HStack(spacing: 4) {
+                                Text("Prev \(oldScore.formattedScore)")
+                                    .font(.system(size: 9))
+                                    .foregroundColor(.white.opacity(0.5))
+                                Text("+\((newScore - oldScore).formattedScore)")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundColor(DojoTheme.piuGreen)
+                            }
+                        }
+                    }
+                    .padding(10)
+                }
+                .frame(height: 180)
+                .clipped()
+            } else {
+                // Generic link share (post, live_session, etc)
+                VStack(alignment: .leading, spacing: 4) {
+                    if let title = ls.title, !title.isEmpty {
+                        Text(title)
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(.white)
+                            .lineLimit(2)
+                    }
+                    if let subtitle = ls.subtitle, !subtitle.isEmpty {
+                        Text(subtitle)
+                            .font(.system(size: 11))
+                            .foregroundColor(DojoTheme.textMuted)
+                            .lineLimit(2)
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.bottom, 8)
+            }
+        }
+        .background(DojoTheme.piuDark)
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(DojoTheme.piuBorder, lineWidth: 1)
+        )
+    }
+
+    private func hasJudgments(_ ls: MessageLinkShare) -> Bool {
+        (ls.perfect ?? 0) + (ls.great ?? 0) + (ls.good ?? 0) + (ls.bad ?? 0) + (ls.miss ?? 0) > 0
+    }
+
+    private func judgmentLabel(_ label: String, _ value: Int, _ color: Color) -> some View {
+        VStack(spacing: 1) {
+            Text(label)
+                .font(.system(size: 7, weight: .bold))
+                .foregroundColor(color)
+            Text("\(value)")
+                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .foregroundColor(.white)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func linkShareBadgeLabel(_ kind: String) -> String {
+        switch kind {
+        case "upscore": return "Upscore"
+        case "clear": return "Clear"
+        case "score_snapshot": return "Score"
+        case "chart_compare": return "Compare"
+        case "post": return "Post"
+        case "live_session": return "Live Session"
+        case "story": return "Story"
+        default: return "Shared"
+        }
+    }
+
+    // MARK: - Challenge Card
+    private func challengeCardView(_ cc: MessageChallengeCard) -> some View {
+        let kind = cc.kind ?? ""
+        let isAccepted = cc.statusKind == "accepted"
+        let isExpired = cc.statusKind == "expired"
+
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 4) {
+                Image(systemName: kind == "beat_score" ? "trophy.fill" : "star.fill")
+                    .font(.system(size: 10))
+                    .foregroundColor(isAccepted ? DojoTheme.piuGreen : isExpired ? DojoTheme.textMuted : DojoTheme.piuGold)
+                Text(kind == "beat_score" ? "Score Challenge" : "Clear Challenge")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(isAccepted ? DojoTheme.piuGreen : isExpired ? DojoTheme.textMuted : DojoTheme.piuGold)
+            }
+
+            if let target = cc.targetLabel, !target.isEmpty {
+                Text(target)
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(.white)
+            }
+
+            if let subtitle = cc.subtitle, !subtitle.isEmpty {
+                Text(subtitle)
+                    .font(.system(size: 11))
+                    .foregroundColor(DojoTheme.textMuted)
+            }
+
+            if let status = cc.statusLabel, !status.isEmpty {
+                Text(status)
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(isAccepted ? DojoTheme.piuGreen : isExpired ? .red : DojoTheme.piuGold)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background((isAccepted ? DojoTheme.piuGreen : isExpired ? Color.red : DojoTheme.piuGold).opacity(0.12))
+                    .cornerRadius(6)
+            }
+        }
+        .padding(12)
+        .background(DojoTheme.piuDark)
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke((isAccepted ? DojoTheme.piuGreen : isExpired ? Color.red : DojoTheme.piuGold).opacity(0.3), lineWidth: 1)
+        )
+    }
+
+    // MARK: - Stomp & Nudge
+    private func stompBubble() -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: "figure.dance")
+                .font(.system(size: 14))
+                .foregroundColor(DojoTheme.piuGold)
+            Text("STOMP!")
+                .font(.system(size: 12, weight: .black))
+                .foregroundColor(DojoTheme.piuGold)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(DojoTheme.piuGold.opacity(0.1))
+        .cornerRadius(16)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(DojoTheme.piuGold.opacity(0.3), lineWidth: 1)
+        )
+    }
+
+    private func nudgeBubble() -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: "hand.point.right.fill")
+                .font(.system(size: 14))
+                .foregroundColor(DojoTheme.piuAccent)
+            Text("Nudge!")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundColor(DojoTheme.piuAccent)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(DojoTheme.piuAccent.opacity(0.1))
+        .cornerRadius(16)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(DojoTheme.piuAccent.opacity(0.3), lineWidth: 1)
+        )
     }
 
     // MARK: - Helpers

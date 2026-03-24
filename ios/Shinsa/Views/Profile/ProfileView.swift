@@ -1081,7 +1081,7 @@ struct ProfileView: View {
     }
 
     private func dailyLevelGradeChart(_ plays: [RecentlyPlayed]) -> some View {
-        let gradeBarColors: [(key: String, color: Color)] = [
+        let gradeOrder: [(key: String, color: Color)] = [
             ("SSS+", Color(hex: "#7dd3fc")), ("SSS", Color(hex: "#38bdf8")),
             ("SS+", Color(hex: "#fde047")), ("SS", Color(hex: "#facc15")),
             ("S+", Color(hex: "#f59e0b")), ("S", Color(hex: "#d97706")),
@@ -1096,7 +1096,7 @@ struct ProfileView: View {
         for play in plays {
             guard let level = play.level, level > 0 else { continue }
             let score = play.score ?? 0
-            let isBreak = score <= 0 || (play.grade?.lowercased() == "f" && score < 450000)
+            let isBreak = score <= 0
             if isBreak {
                 levelData[level, default: [:]]["stage_break", default: 0] += 1
             } else {
@@ -1109,16 +1109,19 @@ struct ProfileView: View {
         let sortedLevels = levelData.keys.sorted()
         if sortedLevels.isEmpty { return AnyView(EmptyView()) }
 
+        // Compute max positive stack height and max negative (stage break) count
         let maxPositive = sortedLevels.map { level in
             let data = levelData[level]!
-            return gradeBarColors.reduce(0) { $0 + (data[$1.key] ?? 0) }
+            return gradeOrder.reduce(0) { $0 + (data[$1.key] ?? 0) }
         }.max() ?? 1
         let maxNegative = sortedLevels.map { level in
             levelData[level]?["stage_break"] ?? 0
         }.max() ?? 0
-        let maxMag = max(maxPositive, maxNegative, 1)
+
         let positiveHeight: CGFloat = 120
-        let negativeHeight: CGFloat = maxNegative > 0 ? 30 : 0
+        let negativeHeight: CGFloat = maxNegative > 0 ? 40 : 0
+        let labelHeight: CGFloat = 16
+        let totalHeight = positiveHeight + 1 + negativeHeight + labelHeight
 
         return AnyView(VStack(alignment: .leading, spacing: 6) {
             Text("GRADE COUNT BY LEVEL")
@@ -1126,78 +1129,77 @@ struct ProfileView: View {
                 .foregroundColor(DojoTheme.textMuted)
                 .padding(.top, 4)
 
-            if maxNegative > 0 {
-                Text("Stage Break below zero")
-                    .font(.system(size: 8))
-                    .foregroundColor(DojoTheme.textMuted.opacity(0.5))
-            }
-
-            // Full-width stacked bar chart using GeometryReader
+            // Full-width stacked bar chart
             GeometryReader { geo in
-                let barWidth = max((geo.size.width - CGFloat(sortedLevels.count - 1) * 2) / CGFloat(sortedLevels.count), 8)
+                let levelCount = CGFloat(sortedLevels.count)
+                let spacing: CGFloat = 2
+                let totalSpacing = spacing * max(levelCount - 1, 0)
+                let barWidth = max((geo.size.width - totalSpacing) / levelCount, 6)
+                let zeroY = positiveHeight // y-coordinate of the zero line
 
-                HStack(alignment: .bottom, spacing: 2) {
-                    ForEach(sortedLevels, id: \.self) { level in
+                ZStack(alignment: .topLeading) {
+                    // Zero line across full width
+                    Rectangle()
+                        .fill(DojoTheme.piuBorder.opacity(0.6))
+                        .frame(width: geo.size.width, height: 1)
+                        .offset(y: zeroY)
+
+                    // Bars
+                    ForEach(Array(sortedLevels.enumerated()), id: \.element) { index, level in
                         let data = levelData[level]!
+                        let xOffset = CGFloat(index) * (barWidth + spacing)
                         let breakCount = data["stage_break"] ?? 0
 
-                        VStack(spacing: 0) {
-                            // Positive bars (grades stacked bottom-up)
-                            ZStack(alignment: .bottom) {
-                                Rectangle().fill(Color.clear)
-                                    .frame(height: positiveHeight)
+                        // Positive stacked grades (drawn from zero line upward)
+                        let positiveTotal = gradeOrder.reduce(0) { $0 + (data[$1.key] ?? 0) }
+                        let posStackHeight = maxPositive > 0
+                            ? positiveHeight * CGFloat(positiveTotal) / CGFloat(maxPositive)
+                            : 0
 
-                                VStack(spacing: 0) {
-                                    Spacer()
-                                    ForEach(gradeBarColors.reversed(), id: \.key) { item in
-                                        let count = data[item.key] ?? 0
-                                        if count > 0 {
-                                            let h = positiveHeight * CGFloat(count) / CGFloat(maxMag)
-                                            Rectangle()
-                                                .fill(item.color)
-                                                .frame(height: max(h, 1))
-                                        }
-                                    }
-                                }
-                            }
-                            .frame(height: positiveHeight)
-
-                            // Zero line
-                            Rectangle()
-                                .fill(DojoTheme.piuBorder.opacity(0.5))
-                                .frame(height: 1)
-
-                            // Negative bars (stage breaks go below axis)
-                            if negativeHeight > 0 {
-                                if breakCount > 0 {
-                                    let bh = negativeHeight * CGFloat(breakCount) / CGFloat(max(maxNegative, 1))
-                                    VStack(spacing: 0) {
-                                        Rectangle()
-                                            .fill(Color(hex: "#dc2626"))
-                                            .frame(height: max(bh, 2))
-                                        Spacer()
-                                    }
-                                    .frame(height: negativeHeight)
-                                } else {
-                                    Rectangle().fill(Color.clear)
-                                        .frame(height: negativeHeight)
-                                }
-                            }
-
-                            // Level label
-                            Text("\(level)")
-                                .font(.system(size: 7, weight: .bold))
-                                .foregroundColor(DojoTheme.textMuted)
-                                .padding(.top, 2)
+                        // Build stacked segments from bottom (lowest grade) to top (highest grade)
+                        // gradeOrder is highest-first, so reverse for bottom-up stacking
+                        let segments: [(color: Color, height: CGFloat)] = gradeOrder.reversed().compactMap { item in
+                            let count = data[item.key] ?? 0
+                            guard count > 0 else { return nil }
+                            let h = maxPositive > 0
+                                ? positiveHeight * CGFloat(count) / CGFloat(maxPositive)
+                                : 0
+                            return (item.color, max(h, 1))
                         }
-                        .frame(width: barWidth)
+
+                        // Positive stack
+                        VStack(spacing: 0) {
+                            ForEach(Array(segments.enumerated()), id: \.offset) { _, seg in
+                                Rectangle()
+                                    .fill(seg.color)
+                                    .frame(width: barWidth, height: seg.height)
+                            }
+                        }
+                        .frame(width: barWidth, height: posStackHeight, alignment: .bottom)
+                        .offset(x: xOffset, y: zeroY - posStackHeight)
+
+                        // Negative bar (stage breaks below zero)
+                        if breakCount > 0 && maxNegative > 0 {
+                            let bh = negativeHeight * CGFloat(breakCount) / CGFloat(maxNegative)
+                            Rectangle()
+                                .fill(Color(hex: "#dc2626"))
+                                .frame(width: barWidth, height: max(bh, 2))
+                                .offset(x: xOffset, y: zeroY + 1)
+                        }
+
+                        // Level label below bars
+                        Text("Lv.\(level)")
+                            .font(.system(size: 7, weight: .bold))
+                            .foregroundColor(DojoTheme.textMuted)
+                            .frame(width: barWidth)
+                            .offset(x: xOffset, y: zeroY + 1 + negativeHeight + 2)
                     }
                 }
             }
-            .frame(height: positiveHeight + negativeHeight + 20)
+            .frame(height: totalHeight)
 
             // Legend
-            let legendItems = gradeBarColors + (maxNegative > 0 ? [("Stage Break", Color(hex: "#dc2626"))] : [])
+            let legendItems = gradeOrder + (maxNegative > 0 ? [("Stage Break", Color(hex: "#dc2626"))] : [])
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 2), count: 7), spacing: 2) {
                 ForEach(legendItems, id: \.key) { item in
                     HStack(spacing: 2) {

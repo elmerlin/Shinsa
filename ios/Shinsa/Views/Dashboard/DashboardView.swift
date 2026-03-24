@@ -473,7 +473,7 @@ struct DashboardView: View {
                 }
 
                 // Dark gradient overlay - stronger to ensure text readability
-                LinearGradient(colors: [.black.opacity(0.15), .black.opacity(0.5), .black.opacity(0.9)], startPoint: .top, endPoint: .bottom)
+                LinearGradient(colors: [.clear, .black.opacity(0.4), .black.opacity(0.92)], startPoint: .top, endPoint: .bottom)
 
                 // Content overlay
                 VStack(spacing: 0) {
@@ -519,6 +519,7 @@ struct DashboardView: View {
                                 .font(.system(size: 9, weight: .bold))
                                 .foregroundColor(.white)
                                 .lineLimit(1)
+                                .truncationMode(.tail)
                         }
 
                         // Song title
@@ -526,16 +527,21 @@ struct DashboardView: View {
                             .font(.system(size: 10, weight: .black))
                             .foregroundColor(.white)
                             .lineLimit(1)
+                            .truncationMode(.tail)
 
                         // Score + Grade
                         HStack {
                             Text(displayScore > 0 ? displayScore.formattedScore : "")
                                 .font(.system(size: 11, weight: .black, design: .monospaced))
                                 .foregroundColor(.white)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
                             Spacer()
                             Text(gradeLabel)
                                 .font(.system(size: 11, weight: .black))
                                 .foregroundColor(gradeColor)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
                         }
 
                         // Delta for upscores
@@ -544,10 +550,14 @@ struct DashboardView: View {
                                 Text(old.formattedScore)
                                     .font(.system(size: 7, design: .monospaced))
                                     .foregroundColor(.white.opacity(0.6))
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
                                 Spacer()
                                 Text("+\((new - old).formattedScore)")
                                     .font(.system(size: 8, weight: .bold, design: .monospaced))
                                     .foregroundColor(DojoTheme.piuGreen)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
                             }
                         }
                     }
