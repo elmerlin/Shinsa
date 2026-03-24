@@ -19,6 +19,8 @@ class ProfileViewModel: ObservableObject {
     @Published var postsPage = 1
     @Published var hasMorePosts = true
     @Published var isLoadingPosts = false
+    @Published var followers: [User] = []
+    @Published var following: [User] = []
 
     let userId: String
 
@@ -151,5 +153,17 @@ class ProfileViewModel: ObservableObject {
             result[key] = HeatmapDay(key: key, plays: val.plays, singlesAvgLevel: singlesAvg, doublesAvgLevel: doublesAvg, doubleRatio: doubleRatio)
         }
         heatmapData = result
+    }
+
+    func loadFollowers() async {
+        isLoading = true
+        followers = (try? await APIService.shared.getFollowers(userId)) ?? []
+        isLoading = false
+    }
+
+    func loadFollowing() async {
+        isLoading = true
+        following = (try? await APIService.shared.getFollowing(userId)) ?? []
+        isLoading = false
     }
 }

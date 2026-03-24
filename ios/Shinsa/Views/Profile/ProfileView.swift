@@ -79,13 +79,13 @@ struct ProfileView: View {
     @State private var isSyncingPlays = false
     @State private var showSinglesPumbility = false
     @State private var showAllDayPlays = false
+    @State private var showFollowersList = false  // "followers" or "following"
+    @State private var followerListMode: String = "followers"
 
     private var tabs: [(String, String, String)] {
         var t: [(String, String, String)] = [
             ("overview", "Overview", "chart.xyaxis.line"),
             ("posts", "Posts", "square.and.pencil"),
-            ("followers", "Followers", "person.2"),
-            ("following", "Following", "person.badge.plus"),
         ]
         if vm.user?.pumbility != nil && (vm.user?.pumbility ?? 0) > 0 {
             t.append(("piu", "PIU Data", "gamecontroller"))
@@ -415,18 +415,84 @@ struct ProfileView: View {
 
     private func statsBar(_ user: User) -> some View {
         HStack(spacing: 0) {
-            statItem("\(vm.socialCounts?.followersCount ?? 0)", "Followers")
+            Button {
+                followerListMode = "followers"
+                showFollowersList = true
+                Task { await vm.loadFollowers() }
+            } label: {
+                statItem("\(vm.socialCounts?.followersCount ?? 0)", "Followers")
+            }
+            statDivider
+            Button {
+                followerListMode = "following"
+                showFollowersList = true
+                Task { await vm.loadFollowing() }
+            } label: {
+                statItem("\(vm.socialCounts?.followingCount ?? 0)", "Following")
+            }
             statDivider
             statItem("\(vm.socialCounts?.postsCount ?? 0)", "Posts")
             statDivider
             statItem("\(vm.socialCounts?.pumpsReceived ?? 0)", "Pumps")
             statDivider
-            statItem("\((vm.stats?.tournaments?.count ?? 0) + (vm.stats?.duels?.count ?? 0))", "Competitions")
+            statItem("\((vm.stats?.tournaments?.count ?? 0) + (vm.stats?.duels?.count ?? 0))", "Comp")
         }
         .padding(.vertical, 10)
         .background(DojoTheme.piuCard)
         .overlay(alignment: .top) {
             Rectangle().fill(DojoTheme.piuBorder).frame(height: 1)
+        }
+        .sheet(isPresented: $showFollowersList) {
+            followerListSheet
+        }
+    }
+
+    private var followerListSheet: some View {
+        NavigationStack {
+            ZStack {
+                DojoTheme.piuBg.ignoresSafeArea()
+                let list = followerListMode == "followers" ? vm.followers : vm.following
+                if list.isEmpty && vm.isLoading {
+                    ProgressView().tint(DojoTheme.piuAccent)
+                } else if list.isEmpty {
+                    Text("No \(followerListMode) yet")
+                        .foregroundColor(DojoTheme.textMuted)
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: 0) {
+                            ForEach(list) { user in
+                                NavigationLink(value: "profile/\(user.id)") {
+                                    HStack(spacing: 12) {
+                                        AvatarView(user.avatar, name: user.username ?? "?", size: 40)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(user.username ?? "Unknown")
+                                                .font(.system(size: 14, weight: .bold))
+                                                .foregroundColor(.white)
+                                            if let skill = user.skillTitle, !skill.isEmpty {
+                                                Text(skill)
+                                                    .font(.system(size: 11))
+                                                    .foregroundColor(DojoTheme.textMuted)
+                                            }
+                                        }
+                                        Spacer()
+                                    }
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 10)
+                                }
+                                Divider().background(DojoTheme.piuBorder.opacity(0.3))
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle(followerListMode == "followers" ? "Followers" : "Following")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { showFollowersList = false }
+                        .foregroundColor(DojoTheme.piuAccent)
+                }
+            }
         }
     }
 
