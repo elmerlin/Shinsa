@@ -135,8 +135,40 @@ struct ScoreSnapshotSheet: View {
             }
         }
         .sheet(isPresented: $showSendToDM) {
-            SendToDMView(
-                songTitle: songTitle, mode: mode, level: level, score: score, grade: grade,
+            UserPickerSheet(
+                title: "Send Score",
+                onSelectUser: { partner in
+                    Task {
+                        guard let uid = partner.id else { return }
+                        let convo = try? await APIService.shared.startDirectConversation(uid)
+                        if let convoId = convo?.id {
+                            let ls: [String: AnyCodable] = [
+                                "kind": AnyCodable("score_snapshot"),
+                                "songTitle": AnyCodable(songTitle),
+                                "mode": AnyCodable(mode),
+                                "level": AnyCodable(level),
+                                "score": AnyCodable(score),
+                                "grade": AnyCodable(grade),
+                                "title": AnyCodable("\(songTitle) - \(mode) \(level)"),
+                            ]
+                            _ = try? await APIService.shared.sendLinkShareMessage(convoId, linkShare: ls)
+                        }
+                    }
+                },
+                onSelectConversation: { convo in
+                    Task {
+                        let ls: [String: AnyCodable] = [
+                            "kind": AnyCodable("score_snapshot"),
+                            "songTitle": AnyCodable(songTitle),
+                            "mode": AnyCodable(mode),
+                            "level": AnyCodable(level),
+                            "score": AnyCodable(score),
+                            "grade": AnyCodable(grade),
+                            "title": AnyCodable("\(songTitle) - \(mode) \(level)"),
+                        ]
+                        _ = try? await APIService.shared.sendLinkShareMessage(convo.id, linkShare: ls)
+                    }
+                },
                 onDismiss: { showSendToDM = false }
             )
         }
