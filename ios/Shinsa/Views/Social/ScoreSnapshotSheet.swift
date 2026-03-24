@@ -60,6 +60,8 @@ struct ScoreSnapshotSheet: View {
 
     @Environment(\.dismiss) var dismiss
     @State private var showReplay = false
+    @State private var showSendToDM = false
+    @State private var showShareToStory = false
 
     private var isDouble: Bool {
         mode.lowercased().hasPrefix("d") || mode.lowercased() == "double"
@@ -124,13 +126,27 @@ struct ScoreSnapshotSheet: View {
                 }
             }
         }
-        .presentationDetents([.medium, .large])
+        .presentationDetents([.large])
         .presentationDragIndicator(.visible)
         .fullScreenCover(isPresented: $showReplay) {
             if let url = replayWatchURL {
                 SafariView(url: url)
                     .ignoresSafeArea()
             }
+        }
+        .sheet(isPresented: $showSendToDM) {
+            SendToDMView(
+                songTitle: songTitle, mode: mode, level: level, score: score, grade: grade,
+                onDismiss: { showSendToDM = false }
+            )
+        }
+        .fullScreenCover(isPresented: $showShareToStory) {
+            StoryComposerView(
+                prefilledSnapshot: StorySnapshot(
+                    songTitle: songTitle, mode: mode, level: level, score: score, grade: grade, plate: plate
+                ),
+                onDismiss: { showShareToStory = false }
+            )
         }
     }
 
@@ -148,7 +164,7 @@ struct ScoreSnapshotSheet: View {
             // Action buttons
             HStack(spacing: 16) {
                 Button {
-                    // Send to DM action
+                    showShareToStory = true
                 } label: {
                     Image(systemName: "diamond")
                         .font(.system(size: 16))
@@ -156,7 +172,7 @@ struct ScoreSnapshotSheet: View {
                 }
 
                 Button {
-                    // Add to Story action
+                    showSendToDM = true
                 } label: {
                     Image(systemName: "checkmark.circle")
                         .font(.system(size: 16))

@@ -139,6 +139,9 @@
 		SC0RE5NAP0001000100010001 /* ScoreSnapshotSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = SC0RE5NAP0002000200020002 /* ScoreSnapshotSheet.swift */; };
 		7655BCE94F6045868DD1B106 /* jackets in Resources */ = {isa = PBXBuildFile; fileRef = E48101928121430D91D1B27F /* jackets */; };
 		BADGE00000000000000000002 /* badges in Resources */ = {isa = PBXBuildFile; fileRef = BADGE00000000000000000001 /* badges */; };
+		NOTEC0MP0001000100010001 /* NoteComposerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NOTEC0MP0002000200020002 /* NoteComposerView.swift */; };
+		ST0RYC0MP0001000100010001 /* StoryComposerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ST0RYC0MP0002000200020002 /* StoryComposerView.swift */; };
+		SENDDM000001000100010001 /* SendToDMButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = SENDDM000002000200020002 /* SendToDMButton.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -275,6 +278,9 @@
 		SC0RE5NAP0002000200020002 /* ScoreSnapshotSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ScoreSnapshotSheet.swift"; sourceTree = "<group>"; };
 		E48101928121430D91D1B27F /* jackets */ = {isa = PBXFileReference; lastKnownFileType = folder; name = jackets; path = "Shinsa/Resources/jackets"; sourceTree = "<group>"; };
 		BADGE00000000000000000001 /* badges */ = {isa = PBXFileReference; lastKnownFileType = folder; name = badges; path = "Shinsa/Resources/badges"; sourceTree = "<group>"; };
+		NOTEC0MP0002000200020002 /* NoteComposerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NoteComposerView.swift"; sourceTree = "<group>"; };
+		ST0RYC0MP0002000200020002 /* StoryComposerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StoryComposerView.swift"; sourceTree = "<group>"; };
+		SENDDM000002000200020002 /* SendToDMButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SendToDMButton.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -472,6 +478,7 @@
 				E30A12121212121212121212 /* PumpButtonView.swift */,
 				D10A0E0E0E0E0E0E0E0E0E0E /* StatusBadgeView.swift */,
 				F40A0E0E0E0E0E0E0E0E0E0E /* UserSearchView.swift */,
+				SENDDM000002000200020002 /* SendToDMButton.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -555,6 +562,8 @@
 				F40A0A0A0A0A0A0A0A0A0A0A /* CommentsView.swift */,
 				SC0RE5NAP0002000200020002 /* ScoreSnapshotSheet.swift */,
 				F40A0C0C0C0C0C0C0C0C0C0C /* ImageLightboxView.swift */,
+				NOTEC0MP0002000200020002 /* NoteComposerView.swift */,
+				ST0RYC0MP0002000200020002 /* StoryComposerView.swift */,
 			);
 			path = Social;
 			sourceTree = "<group>";
@@ -912,6 +921,9 @@
 				03446E9871FE692DE9F32DEC /* WorldMax.swift in Sources */,
 				87A472B68A1366A8601E6EA2 /* WorldMaxMachineView.swift in Sources */,
 				B04C2869769817D6359AFB75 /* WorldMaxView.swift in Sources */,
+				NOTEC0MP0001000100010001 /* NoteComposerView.swift in Sources */,
+				ST0RYC0MP0001000100010001 /* StoryComposerView.swift in Sources */,
+				SENDDM000001000100010001 /* SendToDMButton.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

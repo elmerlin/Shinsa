@@ -5,6 +5,8 @@ struct MessagesListView: View {
     @EnvironmentObject var auth: AuthManager
 
     @State private var showNewMessage = false
+    @State private var showNoteComposer = false
+    @State private var showStoryComposer = false
 
     var body: some View {
         ZStack {
@@ -43,7 +45,9 @@ struct MessagesListView: View {
                     if !vm.highlights.isEmpty {
                         HighlightsStripView(
                             highlights: vm.highlights,
-                            currentUserId: auth.userId
+                            currentUserId: auth.userId,
+                            onTapAddStory: { showStoryComposer = true },
+                            onTapShareNote: { showNoteComposer = true }
                         )
                         .padding(.vertical, 8)
                     }
@@ -84,6 +88,30 @@ struct MessagesListView: View {
             }
         }
         .task { await vm.loadConversations() }
+        .sheet(isPresented: $showNoteComposer) {
+            let selfNote = vm.highlights.first(where: { $0.isSelf == true })?.note
+            NoteComposerView(
+                existingNote: selfNote,
+                onSave: { content in
+                    Task {
+                        _ = try? await APIService.shared.createNote(content: content)
+                        await vm.loadConversations()
+                    }
+                },
+                onClear: {
+                    Task {
+                        _ = try? await APIService.shared.clearNote()
+                        await vm.loadConversations()
+                    }
+                }
+            )
+        }
+        .fullScreenCover(isPresented: $showStoryComposer) {
+            StoryComposerView(onDismiss: {
+                showStoryComposer = false
+                Task { await vm.loadConversations() }
+            })
+        }
     }
 
     // MARK: - Conversation Row

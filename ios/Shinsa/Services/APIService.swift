@@ -404,6 +404,25 @@ class APIService {
     func getUserStories(_ userId: String) async throws -> UserStoryResponse { try await request("/messages/highlights/\(userId)/story") }
     func viewStory(_ userId: String, storyId: String) async throws -> GenericResponse { try await request("/messages/highlights/\(userId)/story/\(storyId)/view", method: "POST") }
     func pumpStory(_ userId: String, storyId: String) async throws -> GenericResponse { try await request("/messages/highlights/\(userId)/story/\(storyId)/pump", method: "POST") }
+
+    // MARK: - Notes
+    func createNote(content: String) async throws -> GenericResponse { try await request("/messages/highlights/note", method: "POST", body: ["content": content]) }
+    func clearNote() async throws -> GenericResponse { try await request("/messages/highlights/note", method: "DELETE") }
+
+    // MARK: - Story Creation
+    func createStoryText(caption: String) async throws -> GenericResponse { try await request("/messages/highlights/story", method: "POST", body: ["story_type": "link", "caption": caption]) }
+    func createStorySnapshot(caption: String, snapshotJson: String) async throws -> GenericResponse {
+        let body: [String: AnyCodable] = ["story_type": AnyCodable("score_snapshot"), "caption": AnyCodable(caption), "snapshot_json": AnyCodable(snapshotJson)]
+        return try await request("/messages/highlights/story", method: "POST", body: body)
+    }
+
+    // MARK: - Stomp & Nudge
+    func sendStomp(_ conversationId: String) async throws -> GenericResponse { try await request("/messages/conversations/\(conversationId)/stomp", method: "POST", body: [String: String]()) }
+    func sendNudge(_ conversationId: String) async throws -> GenericResponse { try await request("/messages/conversations/\(conversationId)/nudge", method: "POST", body: [String: String]()) }
+
+    // MARK: - Send link_share message
+    func sendLinkShareMessage(_ conversationId: String, linkShare: [String: AnyCodable]) async throws -> DirectMessage { try await request("/messages/conversations/\(conversationId)/messages", method: "POST", body: ["content": AnyCodable(""), "link_share": AnyCodable(linkShare)]) }
+
     func getConversations() async throws -> [Conversation] {
         let response: ConversationsResponse = try await request("/messages/conversations")
         return response.conversations ?? []
