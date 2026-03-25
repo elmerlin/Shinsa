@@ -526,6 +526,30 @@ function HelpButton({ onClick, label = 'Explain this metric' }) {
   );
 }
 
+function getProjectionTone(mode) {
+  if (mode === 'single') {
+    return {
+      accent: '#22C55E',
+      badgeClass: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200',
+      subtleClass: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-100',
+    };
+  }
+
+  if (mode === 'double') {
+    return {
+      accent: '#A855F7',
+      badgeClass: 'border-violet-500/30 bg-violet-500/10 text-violet-200',
+      subtleClass: 'border-violet-500/20 bg-violet-500/10 text-violet-100',
+    };
+  }
+
+  return {
+    accent: '#ff3366',
+    badgeClass: 'border-piu-accent/30 bg-piu-accent/10 text-pink-200',
+    subtleClass: 'border-piu-accent/20 bg-piu-accent/10 text-pink-100',
+  };
+}
+
 function ConfidencePill({ confidence = 'Low' }) {
   const toneMap = {
     High: 'bg-emerald-400/15 text-emerald-300 border-emerald-400/30',
@@ -557,40 +581,51 @@ function LikelyPassCeilingCard({ passCeiling, mode, onExplain }) {
   const feeder = passCeiling.feeder_levels?.[0] || null;
   const modeLabel = mode === 'single' ? 'Singles' : 'Doubles';
   const nearPassCount = target.strong_near_pass_count || target.near_pass_count || 0;
+  const tone = getProjectionTone(mode);
 
   return (
-    <div className="card overflow-hidden relative">
-      <div className="absolute inset-0 bg-gradient-to-br from-sky-500/10 via-piu-accent/10 to-emerald-500/10" />
-      <div className="relative px-5 py-5">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-[10px] uppercase tracking-wider text-gray-500 font-display mb-2">
+    <div className="card overflow-hidden border-piu-border/60 bg-piu-card/95">
+      <div className="px-5 py-5">
+        <div className="flex items-start justify-between gap-3 border-b border-piu-border/35 pb-4">
+          <div className="min-w-0">
+            <p className="text-[10px] uppercase tracking-[0.24em] text-gray-500 font-display">
               Likely {modeLabel} Pass Ceiling
             </p>
-            <div className="flex items-end gap-2">
-              <span className="text-5xl sm:text-6xl font-display font-bold text-transparent bg-clip-text bg-gradient-to-r from-sky-300 via-piu-accent to-emerald-300">
-                <AnimatedNumber value={passCeiling.level} duration={1200} />
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-display font-bold uppercase tracking-wide ${tone.badgeClass}`}>
+                Supported now
               </span>
-              <span className="pb-2 text-sm font-display font-bold text-sky-200">Lv.</span>
+              <span className="text-[11px] text-gray-500">
+                Recent clears and near-passes support this push.
+              </span>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <ConfidencePill confidence={passCeiling.confidence} />
             <HelpButton onClick={onExplain} label="Explain likely pass ceiling" />
           </div>
         </div>
 
-        <p className="mt-2 text-xs text-gray-400">
-          Highest level the model thinks you have a real shot at passing right now.
+        <div className="mt-4 flex items-end gap-3">
+          <span className="text-5xl sm:text-6xl font-display font-bold tracking-tight text-white">
+            <AnimatedNumber value={passCeiling.level} duration={1200} />
+          </span>
+          <span className={`mb-2 rounded-md border px-2 py-0.5 text-xs font-display font-bold uppercase tracking-wide ${tone.badgeClass}`}>
+            Lv.
+          </span>
+        </div>
+
+        <p className="mt-3 max-w-[32ch] text-sm leading-relaxed text-gray-400">
+          Highest level with enough recent evidence to call a real pass chance right now.
         </p>
 
         <div className="mt-4 grid grid-cols-3 gap-2">
-          <MiniMetric label={`Lv.${passCeiling.level} clears`} value={target.clear_count || 0} accent="#7dd3fc" />
+          <MiniMetric label={`Lv.${passCeiling.level} clears`} value={target.clear_count || 0} accent={tone.accent} />
           <MiniMetric label="Near-passes" value={nearPassCount} accent="#f9a8d4" />
           <MiniMetric label={feeder ? `Lv.${feeder.level} clears` : 'Feeder clears'} value={feeder?.clear_count || 0} accent="#86efac" />
         </div>
 
-        <div className="mt-3 flex flex-wrap items-center gap-2">
+        <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-piu-border/30 pt-3">
           {passCeiling.predicted_grade && <GradePill grade={passCeiling.predicted_grade} />}
           {target.best_clear_score > 0 && (
             <span className="text-[11px] text-gray-400">
@@ -605,7 +640,7 @@ function LikelyPassCeilingCard({ passCeiling, mode, onExplain }) {
         </div>
 
         {passCeiling.reasons?.length > 0 && (
-          <div className="mt-3 space-y-1">
+          <div className="mt-3 space-y-1 border-l border-piu-border/40 pl-3">
             {passCeiling.reasons.slice(0, 3).map((reason) => (
               <p key={reason} className="text-[11px] text-gray-500">
                 {reason}
@@ -1270,21 +1305,46 @@ function GradePredictionTable({ predictions, comfortableLevel }) {
 
 function ComfortableLevelDisplay({ level, mode, className = '' }) {
   if (level == null) return null;
+  const modeLabel = mode === 'single' ? 'Singles' : 'Doubles';
+  const tone = getProjectionTone(mode);
   return (
-    <div className={`card overflow-hidden relative ${className}`}>
-      <div className="absolute inset-0 bg-gradient-to-br from-piu-accent/5 to-purple-600/5" />
-      <div className="relative px-5 py-5 text-center">
-        <p className="text-[10px] uppercase tracking-wider text-gray-500 font-display mb-2">
-          Comfortable {mode === 'single' ? 'Singles' : 'Doubles'} Level
-        </p>
-        <div className="inline-flex items-baseline gap-1">
-          <span className="text-5xl sm:text-6xl font-display font-bold text-transparent bg-clip-text bg-gradient-to-r from-piu-accent to-purple-400">
-            <AnimatedNumber value={level} duration={1200} />
+    <div className={`card overflow-hidden border-piu-border/60 bg-piu-card/95 ${className}`}>
+      <div className="px-5 py-5">
+        <div className="flex items-start justify-between gap-3 border-b border-piu-border/35 pb-4">
+          <div className="min-w-0">
+            <p className="text-[10px] uppercase tracking-[0.24em] text-gray-500 font-display">
+              Comfortable {modeLabel} Level
+            </p>
+            <p className="mt-2 max-w-[30ch] text-xs leading-relaxed text-gray-400">
+              Your repeatable level based on clears you can sustain at AA or better.
+            </p>
+          </div>
+          <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-display font-bold uppercase tracking-wide ${tone.badgeClass}`}>
+            Stable baseline
           </span>
         </div>
-        <p className="text-xs text-gray-500 mt-2">
+
+        <div className="mt-4 flex items-end gap-3">
+          <span className="text-5xl sm:text-6xl font-display font-bold tracking-tight text-white">
+            <AnimatedNumber value={level} duration={1200} />
+          </span>
+          <span className={`mb-2 rounded-md border px-2 py-0.5 text-xs font-display font-bold uppercase tracking-wide ${tone.badgeClass}`}>
+            Lv.
+          </span>
+        </div>
+
+        <p className="mt-3 max-w-[32ch] text-sm leading-relaxed text-gray-400">
           The level you can consistently clear with an AA grade or higher
         </p>
+
+        <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-piu-border/30 pt-3">
+          <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-display font-bold uppercase tracking-wide ${tone.subtleClass}`}>
+            AA+ or better
+          </span>
+          <span className="inline-flex rounded-full border border-piu-border/45 bg-piu-dark/55 px-2 py-0.5 text-[10px] font-display font-bold uppercase tracking-wide text-gray-300">
+            Built for consistency
+          </span>
+        </div>
       </div>
     </div>
   );
