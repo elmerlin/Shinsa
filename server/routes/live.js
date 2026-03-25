@@ -5355,10 +5355,15 @@ router.post('/sessions/:id/end', requireAuth, async (req, res) => {
       try {
         const replayVideoId = getLiveSessionYoutubeVideoId(session);
         if (replayVideoId) {
-          const replayVideo = await getYoutubeVideoById(db, req.user.id, replayVideoId, {
-            enforceChannelOwnership: false,
-          });
-          if (replayVideo && isReplayEligibleYoutubeVideo(replayVideo)) {
+          let replayVideo = null;
+          try {
+            replayVideo = await getYoutubeVideoById(db, req.user.id, replayVideoId, {
+              enforceChannelOwnership: false,
+            });
+          } catch {
+            // YouTube OAuth may be expired; fall back to session timestamps
+          }
+          if (!replayVideo || isReplayEligibleYoutubeVideo(replayVideo)) {
             const replayPlays = getSessionPlaysWithDurations(db, session.id);
             if (replayPlays.length > 0) {
               replayLookup = buildSessionReplayLookup(session, replayPlays, replayVideo, replayVideoId);
