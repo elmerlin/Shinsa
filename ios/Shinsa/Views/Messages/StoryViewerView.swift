@@ -172,7 +172,14 @@ struct StoryViewerView: View {
             }
             .padding(20)
         } else if let caption = story.caption, !caption.isEmpty {
-            textStoryView(caption, gradient: story.backgroundGradient)
+            // Check if caption contains a live session marker
+            let parsed = LiveSessionMarker.split(caption)
+            if let summary = parsed.summary {
+                LiveSessionCardView(summary: summary, username: storyUser?.username ?? highlight.username)
+                    .padding(.horizontal, 16)
+            } else {
+                textStoryView(caption, gradient: story.backgroundGradient)
+            }
         } else {
             Text("Story")
                 .foregroundColor(.white.opacity(0.5))
@@ -262,110 +269,164 @@ struct StoryViewerView: View {
     }
 
     private func scoreSnapshotView(_ snap: StorySnapshot) -> some View {
-        VStack(spacing: 16) {
-            // Jacket image
-            if let jacketUrl = snap.jacketUrl {
-                AsyncImage(url: imageURL(jacketUrl)) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(width: 180, height: 180)
-                            .cornerRadius(12)
-                    default:
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(DojoTheme.piuCard)
-                            .frame(width: 180, height: 180)
-                    }
-                }
-            }
+        let score = snap.score ?? 0
+        let gradeLabel = snap.grade ?? DojoTheme.gradeLabel(for: score)
+        let gradeColor = DojoTheme.gradeColor(for: score)
+        let isDouble = (snap.mode ?? "").lowercased().hasPrefix("d")
+        let jacketURL = JacketService.shared.resolveJacketURL(
+            title: snap.songTitle, mode: snap.mode, level: snap.level,
+            backgroundUrl: snap.jacketUrl
+        )
 
-            // Song title
-            if let title = snap.songTitle {
-                Text(title)
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(.white)
-                    .multilineTextAlignment(.center)
-            }
-
-            // Mode & Level badge
-            if let mode = snap.mode, let level = snap.level {
-                Text("\(mode.uppercased()) \(level)")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 6)
-                    .background(
-                        LinearGradient(
-                            colors: [DojoTheme.piuAccent, Color(hex: "ff6699")],
-                            startPoint: .leading,
-                            endPoint: .trailing
+        return GeometryReader { geo in
+            ZStack(alignment: .topTrailing) {
+                // Jacket background (local via JacketService)
+                ZStack {
+                    if let url = jacketURL {
+                        AsyncImage(url: url) { phase in
+                            if case .success(let img) = phase {
+                                img.resizable().scaledToFill()
+                                    .frame(width: geo.size.width, height: geo.size.height)
+                                    .clipped()
+                            } else {
+                                Rectangle().fill(
+                                    LinearGradient(colors: [Color(hex: "#152238"), Color(hex: "#090d18")], startPoint: .topLeading, endPoint: .bottomTrailing)
+                                )
+                            }
+                        }
+                    } else {
+                        Rectangle().fill(
+                            LinearGradient(colors: [Color(hex: "#152238"), Color(hex: "#090d18")], startPoint: .topLeading, endPoint: .bottomTrailing)
                         )
-                    )
-                    .cornerRadius(16)
-            }
-
-            // Grade and Score
-            HStack(spacing: 24) {
-                if let grade = snap.grade {
-                    VStack(spacing: 4) {
-                        Text(grade)
-                            .font(.system(size: 28, weight: .black))
-                            .foregroundColor(DojoTheme.piuGold)
-                        Text("Grade")
-                            .font(.system(size: 10))
-                            .foregroundColor(.white.opacity(0.6))
                     }
+                    // Dark gradient overlay
+                    LinearGradient(colors: [.black.opacity(0.2), .black.opacity(0.55), .black.opacity(0.9)], startPoint: .top, endPoint: .bottom)
                 }
 
-                if let score = snap.score {
-                    VStack(spacing: 4) {
-                        Text("\(score)")
-                            .font(.system(size: 28, weight: .black))
+                // Level badge top right
+                if let level = snap.level {
+                    Text("\(level)")
+                        .font(.system(size: 13, weight: .black))
+                        .foregroundColor(.white)
+                        .frame(width: 32, height: 32)
+                        .background(
+                            Circle().fill(
+                                LinearGradient(
+                                    colors: isDouble
+                                        ? [Color(hex: "#4cf4aa"), Color(hex: "#0b5d48")]
+                                        : [Color(hex: "#ff7a7a"), Color(hex: "#7a1730")],
+                                    startPoint: .topLeading, endPoint: .bottomTrailing
+                                )
+                            )
+                        )
+                        .padding(12)
+                }
+
+                // Content overlay
+                VStack(alignment: .leading, spacing: 6) {
+                    Spacer()
+
+                    if let title = snap.songTitle {
+                        Text(title)
+                            .font(.system(size: 20, weight: .black))
                             .foregroundColor(.white)
-                        Text("Score")
-                            .font(.system(size: 10))
-                            .foregroundColor(.white.opacity(0.6))
+                            .lineLimit(2)
                     }
-                }
 
-                if let plate = snap.plate {
-                    VStack(spacing: 4) {
+                    // Username + mode badge
+                    HStack(spacing: 8) {
+                        if let user = storyUser?.username ?? highlight.username {
+                            Text(user)
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(.white.opacity(0.8))
+                        }
+
+                        if let mode = snap.mode, let level = snap.level {
+                            let prefix = isDouble ? "D" : "S"
+                            Text("\(prefix)\(level)")
+                                .font(.system(size: 10, weight: .black))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(
+                                    LinearGradient(
+                                        colors: isDouble
+                                            ? [Color(hex: "#4cf4aa"), Color(hex: "#0b5d48")]
+                                            : [Color(hex: "#ff7a7a"), Color(hex: "#7a1730")],
+                                        startPoint: .topLeading, endPoint: .bottomTrailing
+                                    )
+                                )
+                                .cornerRadius(4)
+                        }
+                    }
+
+                    // Score + Grade
+                    HStack(alignment: .bottom, spacing: 8) {
+                        Text(score.formattedScore)
+                            .font(.system(size: 36, weight: .black, design: .monospaced))
+                            .foregroundColor(.white)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+
+                        Spacer()
+
+                        Text(gradeLabel)
+                            .font(.system(size: 30, weight: .black))
+                            .foregroundColor(gradeColor)
+                    }
+
+                    if let plate = snap.plate, !plate.isEmpty {
                         Text(plate)
-                            .font(.system(size: 28, weight: .black))
-                            .foregroundColor(DojoTheme.piuGreen)
-                        Text("Plate")
-                            .font(.system(size: 10))
-                            .foregroundColor(.white.opacity(0.6))
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(DojoTheme.piuGold)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(DojoTheme.piuGold.opacity(0.1))
+                            .cornerRadius(4)
+                            .overlay(RoundedRectangle(cornerRadius: 4).stroke(DojoTheme.piuGold.opacity(0.3), lineWidth: 1))
                     }
                 }
+                .padding(16)
             }
         }
-        .padding(24)
+        .frame(height: 340)
+        .cornerRadius(16)
+        .clipped()
+        .padding(.horizontal, 16)
     }
 
     private func textStoryView(_ text: String, gradient: String?) -> some View {
-        VStack {
-            Text(text)
-                .font(.system(size: 22, weight: .bold))
-                .foregroundColor(.white)
-                .multilineTextAlignment(.center)
-                .padding(32)
-        }
-        .frame(maxWidth: .infinity)
-        .frame(height: 300)
-        .background(
-            RoundedRectangle(cornerRadius: 20)
-                .fill(
-                    LinearGradient(
-                        colors: parseGradient(gradient),
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
+        let parsed = LiveSessionMarker.split(text)
+
+        return VStack(spacing: 12) {
+            if let summary = parsed.summary {
+                LiveSessionCardView(summary: summary, username: storyUser?.username ?? highlight.username)
+                    .padding(.horizontal, 16)
+            }
+
+            if !parsed.text.isEmpty {
+                VStack {
+                    Text(parsed.text)
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundColor(.white)
+                        .multilineTextAlignment(.center)
+                        .padding(32)
+                }
+                .frame(maxWidth: .infinity)
+                .frame(minHeight: parsed.summary != nil ? 0 : 300)
+                .background(
+                    RoundedRectangle(cornerRadius: 20)
+                        .fill(
+                            LinearGradient(
+                                colors: parseGradient(gradient),
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
                 )
-        )
-        .padding(.horizontal, 24)
+                .padding(.horizontal, 24)
+            }
+        }
     }
 
     // MARK: - Bottom Bar
