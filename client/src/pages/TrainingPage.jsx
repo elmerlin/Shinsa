@@ -659,6 +659,17 @@ function MiniMetric({ label, value, accent = '#e5e7eb', onClick }) {
   );
 }
 
+function getGradeColor(grade) {
+  const g = String(grade || '').replace('+', '_p').toUpperCase();
+  if (g.includes('SSS')) return 'text-sky-300';
+  if (g.includes('SS')) return 'text-piu-gold';
+  if (g.includes('S')) return 'text-amber-400';
+  if (g.includes('AAA')) return 'text-piu-silver';
+  if (g.includes('AA')) return 'text-piu-bronze';
+  if (g.includes('A')) return 'text-amber-700';
+  return 'text-gray-500';
+}
+
 function EvidenceSongListModal({ open, onClose, title, songs }) {
   if (!open || !songs?.length) return null;
   return (
@@ -683,9 +694,14 @@ function EvidenceSongListModal({ open, onClose, title, songs }) {
               <div className="min-w-0 flex-1">
                 <p className="text-sm text-gray-200 font-display font-bold truncate">{song.song_title || 'Unknown'}</p>
                 <p className="text-[11px] text-gray-500">
-                  {song.score?.toLocaleString()}{song.grade ? ` · ${song.grade}` : ''}
+                  {song.score?.toLocaleString()}
                 </p>
               </div>
+              {song.grade && (
+                <span className={`shrink-0 text-sm font-display font-black ${getGradeColor(song.grade)}`}>
+                  {song.grade}
+                </span>
+              )}
             </div>
           ))}
         </div>
