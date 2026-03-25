@@ -22,6 +22,7 @@ const { getUserTitleProgress, updateUserSkillTitleFromBestScores, LEVEL_BASE_POI
 const { checkSssAchievements, checkStreakAchievements } = require('../lib/achievements');
 const { normalizePiugamePlayedAtUtc } = require('../lib/piugameDate');
 const {
+  calculatePlayLoad,
   computeAllProfiles,
   computePopulationStats,
   computePopulationPercentile,
@@ -4475,10 +4476,10 @@ router.get('/training-population/:userId', (req, res) => {
   // Build per-user scatter data for the population chart (avatar + metrics)
   const userAvatars = {};
   const avatarRows = db.prepare(`
-    SELECT id, username, avatar_url FROM users
+    SELECT id, username, avatar FROM users
   `).all();
   for (const row of avatarRows) {
-    userAvatars[row.id] = { username: row.username, avatar_url: row.avatar_url || '' };
+    userAvatars[row.id] = { username: row.username, avatar_url: row.avatar || '' };
   }
 
   function buildScatterData(allPlays, mode) {
@@ -4487,12 +4488,10 @@ router.get('/training-population/:userId', (req, res) => {
       const m = String(play.mode || '').trim();
       if (m !== mode) continue;
       const score = parseInt(play.score, 10) || 0;
-      const { normalizeGrade, gradeFromScore } = require('../lib/titleProgress');
       const grade = normalizeGrade(play.grade) || (score > 0 ? gradeFromScore(score) : '') || 'F';
       if (grade === 'F' || score <= 0) continue;
 
       const level = parseInt(play.level, 10) || 0;
-      const { calculatePlayLoad } = require('../lib/trainingLoad');
       const load = calculatePlayLoad(level, play.grade, play.score);
 
       const entry = userStats.get(play.user_id) || { totalLoad: 0, clearCount: 0, levelCounts: {} };
@@ -4502,14 +4501,12 @@ router.get('/training-population/:userId', (req, res) => {
       userStats.set(play.user_id, entry);
     }
 
+    const { EXTENDED_BASE_POINTS } = require('../lib/trainingLoad');
+    const sortedLevels = Object.keys(EXTENDED_BASE_POINTS).map(Number).sort((a, b) => a - b);
     const points = [];
     for (const [uid, stats] of userStats.entries()) {
       if (stats.clearCount < 10) continue;
       const avgLoad = Math.round(stats.totalLoad / stats.clearCount);
-      // Compute comfort level (highest level with 50%+ clear rate in the population context is hard,
-      // so use the simpler avgLoad lookup approach matching LEVEL_BASE_POINTS)
-      const { EXTENDED_BASE_POINTS } = require('../lib/trainingLoad');
-      const sortedLevels = Object.keys(EXTENDED_BASE_POINTS).map(Number).sort((a, b) => a - b);
       let comfortLevel = 1;
       for (const l of sortedLevels) {
         if (EXTENDED_BASE_POINTS[l] <= avgLoad) comfortLevel = l;
