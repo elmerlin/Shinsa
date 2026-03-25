@@ -447,6 +447,7 @@ class APIService {
     func getMyActiveSession() async throws -> LiveSession? { try await request("/live/sessions/mine/active") }
     func createLiveSession(_ data: [String: AnyCodable]) async throws -> LiveSession { try await request("/live/sessions", method: "POST", body: data) }
     func getLiveSession(_ id: String) async throws -> LiveSession { try await request("/live/sessions/\(id)") }
+    func getLiveSessionSnapshot(_ id: String) async throws -> LiveSessionSnapshot { try await request("/live/sessions/\(id)") }
     func updateLiveSession(_ id: String, _ data: [String: AnyCodable]) async throws -> LiveSession { try await request("/live/sessions/\(id)", method: "PATCH", body: data) }
     func addCohost(_ sessionId: String, userId: String) async throws -> GenericResponse { try await request("/live/sessions/\(sessionId)/cohosts", method: "POST", body: ["user_id": userId]) }
     func removeCohost(_ sessionId: String, userId: String) async throws { try await requestVoid("/live/sessions/\(sessionId)/cohosts/\(userId)", method: "DELETE") }
@@ -455,6 +456,12 @@ class APIService {
     func sendLiveMessage(_ sessionId: String, content: String) async throws -> LiveMessage { try await request("/live/sessions/\(sessionId)/messages", method: "POST", body: ["content": content]) }
     func createLiveRequest(_ sessionId: String, data: [String: AnyCodable]) async throws -> LiveRequest { try await request("/live/sessions/\(sessionId)/requests", method: "POST", body: data) }
     func voteLiveRequest(_ sessionId: String, requestId: String, vote: Int) async throws -> GenericResponse { try await request("/live/sessions/\(sessionId)/votes", method: "POST", body: ["request_id": AnyCodable(requestId), "vote": AnyCodable(vote)]) }
+    func updateRequestStatus(_ sessionId: String, requestId: String, status: String) async throws -> GenericResponse { try await request("/live/sessions/\(sessionId)/requests/\(requestId)/status", method: "POST", body: ["status": status]) }
+    func createLiveVote(_ sessionId: String, modeFilter: String, minLevel: Int, maxLevel: Int) async throws -> GenericResponse { try await request("/live/sessions/\(sessionId)/votes", method: "POST", body: ["mode_filter": AnyCodable(modeFilter), "min_level": AnyCodable(minLevel), "max_level": AnyCodable(maxLevel)]) }
+    func castLiveVote(_ voteId: String, optionId: String) async throws -> GenericResponse { try await request("/live/votes/\(voteId)/cast", method: "POST", body: ["option_id": optionId]) }
+    func sendLivePresence(_ sessionId: String) async throws -> GenericResponse { try await request("/live/sessions/\(sessionId)/presence", method: "POST", body: [String: String]()) }
+    func pumpLiveMessage(_ sessionId: String, messageId: String) async throws -> GenericResponse { try await request("/live/sessions/\(sessionId)/messages/\(messageId)/pump", method: "POST", body: [String: String]()) }
+    func deleteLiveMessage(_ sessionId: String, messageId: String) async throws -> GenericResponse { try await request("/live/sessions/\(sessionId)/messages/\(messageId)/delete", method: "POST", body: [String: String]()) }
     func getLiveProfile(_ userId: String) async throws -> [String: AnyCodable] { try await request("/live/profile/\(userId)") }
     func getHopLeaderboard() async throws -> [HopLeaderboardEntry] { try await request("/live/hop/leaderboard") }
     func getHopAttempts() async throws -> [HopLeaderboardEntry] { try await request("/live/hop/attempts") }

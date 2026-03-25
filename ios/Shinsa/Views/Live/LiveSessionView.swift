@@ -7,10 +7,26 @@ struct LiveSessionView: View {
 
     @State private var showEndConfirm = false
     @State private var showAddCohost = false
-    @State private var cohostQuery = ""
+    @State private var showParticipants = false
+    @State private var showCreateVote = false
+    @State private var showYouTube = true
 
     private var isHost: Bool {
-        vm.session?.hostId == auth.currentUser?.id
+        vm.session?.isHost == true || vm.session?.hostId == auth.currentUser?.id
+    }
+
+    private var youtubeVideoId: String? {
+        if let vid = vm.session?.youtubeVideoId, !vid.isEmpty { return vid }
+        guard let url = vm.session?.streamUrl, !url.isEmpty else { return nil }
+        return extractYouTubeVideoId(url)
+    }
+
+    private var availableTabs: [LiveTab] {
+        var tabs: [LiveTab] = [.chat, .requests, .plays]
+        if vm.session?.isActive == false && vm.summary != nil {
+            tabs.append(.recap)
+        }
+        return tabs
     }
 
     var body: some View {
@@ -18,40 +34,43 @@ struct LiveSessionView: View {
             DojoTheme.piuBg.ignoresSafeArea()
 
             if vm.isLoading && vm.session == nil {
-                ProgressView()
-                    .tint(DojoTheme.piuAccent)
+                ProgressView().tint(DojoTheme.piuAccent)
             } else if let session = vm.session {
                 VStack(spacing: 0) {
                     // Session header
                     sessionHeader(session)
 
-                    // Chat messages
-                    ScrollViewReader { proxy in
-                        ScrollView {
-                            LazyVStack(alignment: .leading, spacing: 6) {
-                                ForEach(vm.messages) { msg in
-                                    messageRow(msg)
-                                        .id(msg.id)
-                                }
-                            }
-                            .padding(.horizontal)
-                            .padding(.vertical, 8)
-                        }
-                        .onChange(of: vm.messages.count) { _ in
-                            if let last = vm.messages.last {
-                                withAnimation {
-                                    proxy.scrollTo(last.id, anchor: .bottom)
-                                }
-                            }
-                        }
+                    // YouTube embed (collapsible)
+                    if let videoId = youtubeVideoId, showYouTube {
+                        YouTubeEmbedView(videoId: videoId)
+                            .frame(height: 200)
+                            .transition(.opacity)
                     }
 
-                    // Emote row
-                    emoteRow
+                    // Vote panel (pinned above tabs when active)
+                    if let vote = vm.activeVote {
+                        LiveVotePanel(vote: vote, sessionId: sessionId, vm: vm, isHost: isHost)
+                    }
 
-                    // Message input
-                    if session.isActive {
-                        messageInput
+                    // Tab bar
+                    tabBar
+
+                    // Tab content
+                    switch vm.selectedTab {
+                    case .chat:
+                        LiveChatTab(sessionId: sessionId, vm: vm, isHost: isHost)
+                    case .requests:
+                        LiveRequestsTab(sessionId: sessionId, vm: vm, isHost: isHost)
+                    case .plays:
+                        LivePlaysTab(vm: vm)
+                    case .recap:
+                        if let summary = vm.summary {
+                            LiveRecapTab(summary: summary, session: vm.session)
+                        } else {
+                            Text("No recap available")
+                                .foregroundColor(DojoTheme.textMuted)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        }
                     }
 
                     // Host controls
@@ -71,6 +90,19 @@ struct LiveSessionView: View {
         }
         .navigationTitle(vm.session?.title ?? "Live Session")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                if youtubeVideoId != nil {
+                    Button {
+                        withAnimation { showYouTube.toggle() }
+                    } label: {
+                        Image(systemName: showYouTube ? "rectangle.slash" : "play.rectangle")
+                            .font(.system(size: 14))
+                            .foregroundColor(DojoTheme.textMuted)
+                    }
+                }
+            }
+        }
         .task {
             await vm.loadSession(sessionId)
             vm.startPolling(sessionId)
@@ -86,19 +118,29 @@ struct LiveSessionView: View {
         } message: {
             Text("Are you sure you want to end this live session?")
         }
+        .sheet(isPresented: $showParticipants) {
+            if let session = vm.session {
+                LiveParticipantsSheet(session: session, onDismiss: { showParticipants = false })
+            }
+        }
+        .sheet(isPresented: $showCreateVote) {
+            CreateVoteSheet(sessionId: sessionId, vm: vm, onDismiss: { showCreateVote = false })
+        }
     }
 
     // MARK: - Session Header
 
     private func sessionHeader(_ session: LiveSession) -> some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 6) {
             HStack(spacing: 12) {
                 AvatarView(session.hostAvatar, name: session.hostUsername ?? "Host", size: 36)
+                    .clipShape(Circle())
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(session.title ?? "Live Session")
                         .font(.system(size: 15, weight: .bold))
                         .foregroundColor(.white)
+                        .lineLimit(1)
                     Text("Hosted by \(session.hostUsername ?? "Unknown")")
                         .font(.system(size: 11))
                         .foregroundColor(DojoTheme.textSecondary)
@@ -106,13 +148,16 @@ struct LiveSessionView: View {
 
                 Spacer()
 
-                HStack(spacing: 4) {
-                    Image(systemName: "eye.fill")
-                        .font(.system(size: 11))
-                    Text("\(session.viewerCount ?? 0)")
-                        .font(.system(size: 12, weight: .bold))
+                // Viewer count (tappable for participant list)
+                Button { showParticipants = true } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "eye.fill")
+                            .font(.system(size: 11))
+                        Text("\(session.viewerCount ?? 0)")
+                            .font(.system(size: 12, weight: .bold))
+                    }
+                    .foregroundColor(DojoTheme.textMuted)
                 }
-                .foregroundColor(DojoTheme.textMuted)
 
                 if session.isActive {
                     Text("LIVE")
@@ -122,10 +167,18 @@ struct LiveSessionView: View {
                         .padding(.vertical, 3)
                         .background(Color.red)
                         .cornerRadius(4)
+                } else {
+                    Text("ENDED")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.white.opacity(0.6))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(DojoTheme.piuCard)
+                        .cornerRadius(4)
                 }
             }
 
-            // Cohosts
+            // Co-hosts
             if let cohosts = session.cohosts, !cohosts.isEmpty {
                 HStack(spacing: 4) {
                     Text("Co-hosts:")
@@ -133,165 +186,141 @@ struct LiveSessionView: View {
                         .foregroundColor(DojoTheme.textMuted)
 
                     ForEach(cohosts) { cohost in
-                        HStack(spacing: 4) {
-                            AvatarView(cohost.avatar, name: cohost.username ?? "?", size: 18)
+                        HStack(spacing: 3) {
+                            AvatarView(cohost.avatar, name: cohost.username ?? "?", size: 16)
+                                .clipShape(Circle())
                             Text(cohost.username ?? "?")
                                 .font(.system(size: 10))
                                 .foregroundColor(DojoTheme.textSecondary)
-
-                            if isHost {
-                                Button {
-                                    Task { await vm.removeCohost(sessionId, userId: cohost.userId ?? "") }
-                                } label: {
-                                    Image(systemName: "xmark")
-                                        .font(.system(size: 8))
-                                        .foregroundColor(DojoTheme.textMuted)
-                                }
-                            }
                         }
-                        .padding(.horizontal, 6)
+                        .padding(.horizontal, 5)
                         .padding(.vertical, 2)
                         .background(DojoTheme.piuDark)
                         .cornerRadius(4)
                     }
                 }
             }
-        }
-        .padding(12)
-        .background(DojoTheme.piuCard)
-        .overlay(
-            Rectangle()
-                .frame(height: 1)
-                .foregroundColor(DojoTheme.piuBorder),
-            alignment: .bottom
-        )
-    }
 
-    // MARK: - Message Row
-
-    private func messageRow(_ msg: LiveMessage) -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            if msg.type == "system" {
-                Text(msg.content ?? "")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(DojoTheme.piuGold)
-                    .italic()
-                    .frame(maxWidth: .infinity, alignment: .center)
-            } else if msg.type == "emote" {
-                HStack(spacing: 4) {
-                    Text(msg.username ?? "")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundColor(DojoTheme.piuAccent)
-                    Text(msg.content ?? "")
-                        .font(.system(size: 16))
-                }
-            } else {
-                AvatarView(msg.avatar, name: msg.username ?? "?", size: 24)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(msg.username ?? "Unknown")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundColor(DojoTheme.piuAccent)
-                    Text(msg.content ?? "")
-                        .font(.system(size: 13))
-                        .foregroundColor(.white)
-                }
-            }
-        }
-        .padding(.vertical, 2)
-    }
-
-    // MARK: - Emote Row
-
-    private var emoteRow: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
-                ForEach(["fire", "heart.fill", "hand.thumbsup.fill", "star.fill", "bolt.fill"], id: \.self) { icon in
-                    Button {
-                        Task {
-                            let content = icon == "fire" ? "!fire" : icon == "heart.fill" ? "!heart" : icon == "hand.thumbsup.fill" ? "!thumbsup" : icon == "star.fill" ? "!star" : "!bolt"
-                            vm.messageText = content
-                            await vm.sendMessage(sessionId)
-                        }
-                    } label: {
-                        Image(systemName: icon)
-                            .font(.system(size: 18))
-                            .foregroundColor(DojoTheme.piuGold)
+            // Last play ticker
+            if let lastPlay = vm.lastPlay, session.isActive {
+                HStack(spacing: 6) {
+                    Image(systemName: "music.note")
+                        .font(.system(size: 10))
+                        .foregroundColor(Color(hex: "#6ee7b7"))
+                    Text("Now playing: \(lastPlay.songTitle ?? "")")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(Color(hex: "#6ee7b7"))
+                        .lineLimit(1)
+                    if let score = lastPlay.score, score > 0 {
+                        Text(DojoTheme.gradeLabel(for: score))
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(DojoTheme.gradeColor(for: score))
                     }
                 }
+                .padding(.vertical, 4)
+                .padding(.horizontal, 8)
+                .background(Color(hex: "#059669").opacity(0.1))
+                .cornerRadius(6)
             }
-            .padding(.horizontal)
-            .padding(.vertical, 8)
         }
-        .background(DojoTheme.piuCard.opacity(0.5))
+        .padding(10)
+        .background(DojoTheme.piuCard)
+        .overlay(Rectangle().frame(height: 1).foregroundColor(DojoTheme.piuBorder), alignment: .bottom)
     }
 
-    // MARK: - Message Input
+    // MARK: - Tab Bar
 
-    private var messageInput: some View {
-        HStack(spacing: 8) {
-            TextField("Send a message...", text: $vm.messageText)
-                .font(.system(size: 14))
-                .foregroundColor(.white)
-                .padding(10)
-                .background(DojoTheme.piuCard)
-                .cornerRadius(8)
+    private var tabBar: some View {
+        HStack(spacing: 0) {
+            ForEach(availableTabs, id: \.self) { tab in
+                Button {
+                    withAnimation(.easeInOut(duration: 0.15)) { vm.selectedTab = tab }
+                } label: {
+                    VStack(spacing: 4) {
+                        HStack(spacing: 4) {
+                            Text(tab.rawValue)
+                                .font(.system(size: 12, weight: .bold))
 
-            Button {
-                Task { await vm.sendMessage(sessionId) }
-            } label: {
-                Image(systemName: "paperplane.fill")
-                    .font(.system(size: 16))
-                    .foregroundColor(.white)
-                    .frame(width: 40, height: 40)
-                    .background(DojoTheme.piuAccent)
-                    .cornerRadius(8)
+                            // Badge counts
+                            if tab == .requests {
+                                let openCount = vm.requests.filter { $0.effectiveStatus == "open" || $0.effectiveStatus == "queued" }.count
+                                if openCount > 0 {
+                                    Text("\(openCount)")
+                                        .font(.system(size: 9, weight: .bold))
+                                        .foregroundColor(.white)
+                                        .frame(minWidth: 16, minHeight: 16)
+                                        .background(Circle().fill(DojoTheme.piuAccent))
+                                }
+                            } else if tab == .plays && !vm.plays.isEmpty {
+                                Text("\(vm.plays.count)")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .frame(minWidth: 16, minHeight: 16)
+                                    .background(Circle().fill(Color.cyan.opacity(0.6)))
+                            }
+                        }
+                        .foregroundColor(vm.selectedTab == tab ? .white : DojoTheme.textMuted)
+
+                        Rectangle()
+                            .fill(vm.selectedTab == tab ? DojoTheme.piuAccent : Color.clear)
+                            .frame(height: 2)
+                    }
+                }
+                .frame(maxWidth: .infinity)
             }
-            .disabled(vm.messageText.trimmingCharacters(in: .whitespaces).isEmpty)
         }
-        .padding(.horizontal)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 8)
+        .padding(.top, 6)
         .background(DojoTheme.piuDark)
     }
 
     // MARK: - Host Controls
 
     private var hostControls: some View {
-        HStack(spacing: 10) {
-            Button {
-                showAddCohost = true
-            } label: {
+        HStack(spacing: 8) {
+            Button { showAddCohost = true } label: {
                 HStack(spacing: 4) {
                     Image(systemName: "person.badge.plus")
                     Text("Co-host")
                 }
-                .font(.system(size: 12, weight: .bold))
+                .font(.system(size: 11, weight: .bold))
                 .foregroundColor(.white)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
                 .background(DojoTheme.piuBlue)
-                .cornerRadius(8)
+                .cornerRadius(6)
+            }
+
+            Button { showCreateVote = true } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "chart.bar")
+                    Text("Vote")
+                }
+                .font(.system(size: 11, weight: .bold))
+                .foregroundColor(.white)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color(hex: "#d946ef"))
+                .cornerRadius(6)
             }
 
             Spacer()
 
-            Button {
-                showEndConfirm = true
-            } label: {
+            Button { showEndConfirm = true } label: {
                 HStack(spacing: 4) {
                     Image(systemName: "stop.fill")
-                    Text("End Session")
+                    Text("End")
                 }
-                .font(.system(size: 12, weight: .bold))
+                .font(.system(size: 11, weight: .bold))
                 .foregroundColor(.white)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
                 .background(Color.red.opacity(0.8))
-                .cornerRadius(8)
+                .cornerRadius(6)
             }
         }
-        .padding(.horizontal)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
         .background(DojoTheme.piuDark)
     }
 }

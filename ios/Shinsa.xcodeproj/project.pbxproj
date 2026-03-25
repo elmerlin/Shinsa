@@ -147,6 +147,14 @@
 		FDTLDV000001000100010001 /* FeedItemDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDTLDV000002000200020002 /* FeedItemDetailView.swift */; };
 		LVSCRD000001000100010001 /* LiveSessionCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = LVSCRD000002000200020002 /* LiveSessionCardView.swift */; };
 		STKTXT000001000100010001 /* StickerTextView.swift in Sources */ = {isa = PBXBuildFile; fileRef = STKTXT000002000200020002 /* StickerTextView.swift */; };
+		YTEMBV000001000100010001 /* YouTubeEmbedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = YTEMBV000002000200020002 /* YouTubeEmbedView.swift */; };
+		LVCHAT000001000100010001 /* LiveChatTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = LVCHAT000002000200020002 /* LiveChatTab.swift */; };
+		LVREQS000001000100010001 /* LiveRequestsTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = LVREQS000002000200020002 /* LiveRequestsTab.swift */; };
+		LVRQSB000001000100010001 /* LiveRequestSubmitSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = LVRQSB000002000200020002 /* LiveRequestSubmitSheet.swift */; };
+		LVPLYS000001000100010001 /* LivePlaysTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = LVPLYS000002000200020002 /* LivePlaysTab.swift */; };
+		LVVOTE000001000100010001 /* LiveVotePanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = LVVOTE000002000200020002 /* LiveVotePanel.swift */; };
+		LVRCAP000001000100010001 /* LiveRecapTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = LVRCAP000002000200020002 /* LiveRecapTab.swift */; };
+		LVPRTS000001000100010001 /* LiveParticipantsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = LVPRTS000002000200020002 /* LiveParticipantsSheet.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -291,6 +299,14 @@
 		FDTLDV000002000200020002 /* FeedItemDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FeedItemDetailView.swift"; sourceTree = "<group>"; };
 		LVSCRD000002000200020002 /* LiveSessionCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LiveSessionCardView.swift"; sourceTree = "<group>"; };
 		STKTXT000002000200020002 /* StickerTextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StickerTextView.swift"; sourceTree = "<group>"; };
+		YTEMBV000002000200020002 /* YouTubeEmbedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "YouTubeEmbedView.swift"; sourceTree = "<group>"; };
+		LVCHAT000002000200020002 /* LiveChatTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LiveChatTab.swift"; sourceTree = "<group>"; };
+		LVREQS000002000200020002 /* LiveRequestsTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LiveRequestsTab.swift"; sourceTree = "<group>"; };
+		LVRQSB000002000200020002 /* LiveRequestSubmitSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LiveRequestSubmitSheet.swift"; sourceTree = "<group>"; };
+		LVPLYS000002000200020002 /* LivePlaysTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LivePlaysTab.swift"; sourceTree = "<group>"; };
+		LVVOTE000002000200020002 /* LiveVotePanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LiveVotePanel.swift"; sourceTree = "<group>"; };
+		LVRCAP000002000200020002 /* LiveRecapTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LiveRecapTab.swift"; sourceTree = "<group>"; };
+		LVPRTS000002000200020002 /* LiveParticipantsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LiveParticipantsSheet.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -672,6 +688,14 @@
 			children = (
 				4FB99DC7470A4257D41D8537 /* LiveDirectoryView.swift */,
 				DA7BA48ED10D93DD6DBD8C7A /* LiveSessionView.swift */,
+				YTEMBV000002000200020002 /* YouTubeEmbedView.swift */,
+				LVCHAT000002000200020002 /* LiveChatTab.swift */,
+				LVREQS000002000200020002 /* LiveRequestsTab.swift */,
+				LVRQSB000002000200020002 /* LiveRequestSubmitSheet.swift */,
+				LVPLYS000002000200020002 /* LivePlaysTab.swift */,
+				LVVOTE000002000200020002 /* LiveVotePanel.swift */,
+				LVRCAP000002000200020002 /* LiveRecapTab.swift */,
+				LVPRTS000002000200020002 /* LiveParticipantsSheet.swift */,
 			);
 			path = Live;
 			sourceTree = "<group>";
@@ -944,6 +968,14 @@
 				FDTLDV000001000100010001 /* FeedItemDetailView.swift in Sources */,
 				LVSCRD000001000100010001 /* LiveSessionCardView.swift in Sources */,
 				STKTXT000001000100010001 /* StickerTextView.swift in Sources */,
+				YTEMBV000001000100010001 /* YouTubeEmbedView.swift in Sources */,
+				LVCHAT000001000100010001 /* LiveChatTab.swift in Sources */,
+				LVREQS000001000100010001 /* LiveRequestsTab.swift in Sources */,
+				LVRQSB000001000100010001 /* LiveRequestSubmitSheet.swift in Sources */,
+				LVPLYS000001000100010001 /* LivePlaysTab.swift in Sources */,
+				LVVOTE000001000100010001 /* LiveVotePanel.swift in Sources */,
+				LVRCAP000001000100010001 /* LiveRecapTab.swift in Sources */,
+				LVPRTS000001000100010001 /* LiveParticipantsSheet.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
