@@ -134,10 +134,12 @@ function aggregateDailyLoadsByMode(plays, ianaTimezone) {
     if (!loadDate) continue;
     const load = calculatePlayLoad(play.level, play.grade, play.score);
     const mode = String(play.mode || '').trim();
+    const grade = normalizeGrade(play.grade) || (parseInt(play.score, 10) > 0 ? gradeFromScore(parseInt(play.score, 10)) : '') || 'F';
+    const cleared = grade !== 'F';
 
-    overall.push({ date: loadDate, load, mode });
-    if (mode === 'Single') single.push({ date: loadDate, load });
-    else if (mode === 'Double') double.push({ date: loadDate, load });
+    overall.push({ date: loadDate, load, mode, cleared });
+    if (mode === 'Single') single.push({ date: loadDate, load, cleared });
+    else if (mode === 'Double') double.push({ date: loadDate, load, cleared });
   }
 
   return {
@@ -150,9 +152,10 @@ function aggregateDailyLoadsByMode(plays, ianaTimezone) {
 function sumByDate(entries) {
   const dayMap = new Map();
   for (const e of entries) {
-    const existing = dayMap.get(e.date) || { date: e.date, load: 0, playCount: 0 };
+    const existing = dayMap.get(e.date) || { date: e.date, load: 0, playCount: 0, clearCount: 0 };
     existing.load += e.load;
     existing.playCount += 1;
+    if (e.cleared) existing.clearCount += 1;
     dayMap.set(e.date, existing);
   }
   return Array.from(dayMap.values()).sort((a, b) => a.date.localeCompare(b.date));
@@ -173,6 +176,7 @@ function computeEWMA(dailyLoads, startDate, endDate) {
   let baseSkill = 0;
   let currentForm = 0;
   let chronicPlayCount = 0;
+  let chronicClearCount = 0;
   const history = [];
   const playDates = new Set();
   let current = startDate;
@@ -181,10 +185,12 @@ function computeEWMA(dailyLoads, startDate, endDate) {
     const day = loadMap.get(current);
     const dailyLoad = day ? day.load : 0;
     const dailyPlayCount = day ? day.playCount : 0;
+    const dailyClearCount = day ? (day.clearCount || 0) : 0;
 
     baseSkill = baseSkill * (1 - ALPHA_CHRONIC) + dailyLoad * ALPHA_CHRONIC;
     currentForm = currentForm * (1 - ALPHA_ACUTE) + dailyLoad * ALPHA_ACUTE;
     chronicPlayCount = chronicPlayCount * (1 - ALPHA_CHRONIC) + dailyPlayCount * ALPHA_CHRONIC;
+    chronicClearCount = chronicClearCount * (1 - ALPHA_CHRONIC) + dailyClearCount * ALPHA_CHRONIC;
 
     if (dailyPlayCount > 0) playDates.add(current);
 
@@ -202,6 +208,7 @@ function computeEWMA(dailyLoads, startDate, endDate) {
     baseSkill: round2(baseSkill),
     currentForm: round2(currentForm),
     chronicPlayCount: round2(chronicPlayCount),
+    chronicClearCount: round2(chronicClearCount),
     playDays: playDates.size,
     history,
   };
@@ -230,8 +237,8 @@ function getTrainingStatus(baseSkill, currentForm, playDays) {
   return { label: 'Idle', color: '#6B7280', ratio: 0 };
 }
 
-function predictComfortableLevel(baseSkill, chronicPlayCount) {
-  const avgPlayLoad = baseSkill / Math.max(chronicPlayCount, 0.5);
+function predictComfortableLevel(baseSkill, chronicClearCount) {
+  const avgPlayLoad = baseSkill / Math.max(chronicClearCount, 0.5);
   let comfortableLevel = 1;
   for (const level of SORTED_LEVELS) {
     if (EXTENDED_BASE_POINTS[level] <= avgPlayLoad) {
@@ -247,7 +254,7 @@ function predictGradeAtLevel(targetLevel, recentPlays, ianaTimezone, comfortable
   const nearbyPlays = [];
   for (const play of recentPlays) {
     const playLevel = parseInt(play.level, 10) || 0;
-    if (Math.abs(playLevel - targetLevel) > 1) continue;
+    if (Math.abs(playLevel - targetLevel) > 3) continue;
     const utc = resolvePlayUtc(play);
     if (!utc) continue;
     const playDate = new Date(utc);
@@ -257,7 +264,10 @@ function predictGradeAtLevel(targetLevel, recentPlays, ianaTimezone, comfortable
     const score = parseInt(play.score, 10) || 0;
     if (score <= 0) continue;
 
-    const weight = Math.pow(ALPHA_ACUTE, daysAgo / 7);
+    const levelDist = Math.abs(playLevel - targetLevel);
+    const timeWeight = Math.pow(ALPHA_ACUTE, daysAgo / 7);
+    const distWeight = 1 / (1 + levelDist); // ±0: 1.0, ±1: 0.5, ±2: 0.33, ±3: 0.25
+    const weight = timeWeight * distWeight;
     const levelAdjust = (playLevel - targetLevel) * 50000;
     const adjustedScore = Math.max(0, Math.min(1000000, score + levelAdjust));
     nearbyPlays.push({ adjustedScore, weight });
@@ -302,9 +312,9 @@ function computeModeProfile(dailyLoads, startDate, endDate, recentPlays, ianaTim
   };
 
   if (includePredictions && !profile.calibrating && ewma.playDays > 0) {
-    const comfortableLevel = predictComfortableLevel(ewma.baseSkill, ewma.chronicPlayCount);
+    const comfortableLevel = predictComfortableLevel(ewma.baseSkill, ewma.chronicClearCount);
     profile.comfortable_level = comfortableLevel;
-    profile.avg_play_load = round2(ewma.baseSkill / Math.max(ewma.chronicPlayCount, 0.5));
+    profile.avg_play_load = round2(ewma.baseSkill / Math.max(ewma.chronicClearCount, 0.5));
 
     // Grade predictions for levels around comfortable level
     const predictions = {};
