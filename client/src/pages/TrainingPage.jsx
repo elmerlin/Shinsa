@@ -1518,19 +1518,18 @@ function PopulationPercentileCard({ percentile, mode, avgPlayLoad, onExplain }) 
   const tone = getProjectionTone(mode);
   const topPct = Math.max(1, Math.round(100 - percentile.percentile));
   return (
-    <div className="card overflow-hidden border-piu-border/60 bg-piu-card/95">
-      <div className="px-3 py-3">
-        <div className="flex items-center justify-between">
-          <p className="text-[9px] uppercase tracking-[0.2em] text-gray-500 font-display">Percentile</p>
-          <HelpButton onClick={onExplain} label="Explain population percentile" />
-        </div>
-        <p className="mt-1 text-2xl font-display font-bold text-white leading-none">Top {topPct}%</p>
-        <p className="mt-1 text-[10px] text-gray-500">{percentile.total_users} players</p>
-        <div className="mt-1.5 h-1 rounded-full bg-piu-dark/80 overflow-hidden">
-          <div className="h-full rounded-full" style={{ width: `${Math.min(100, percentile.percentile)}%`, background: `linear-gradient(90deg, ${tone.accent}60, ${tone.accent})` }} />
+    <button onClick={onExplain} className="card overflow-hidden border-piu-border/60 bg-piu-card/95 text-left w-full">
+      <div className="px-2.5 py-2">
+        <p className="text-[8px] uppercase tracking-[0.18em] text-gray-500 font-display">Percentile</p>
+        <p className="mt-0.5 text-lg font-display font-bold text-white leading-none">Top {topPct}%</p>
+        <div className="mt-1 flex items-center gap-1.5">
+          <div className="flex-1 h-1 rounded-full bg-piu-dark/80 overflow-hidden">
+            <div className="h-full rounded-full" style={{ width: `${Math.min(100, percentile.percentile)}%`, background: `linear-gradient(90deg, ${tone.accent}60, ${tone.accent})` }} />
+          </div>
+          <span className="text-[9px] text-gray-600 shrink-0">{percentile.total_users}p</span>
         </div>
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -1540,25 +1539,18 @@ function MilestoneTargetCard({ milestone, mode, onExplain }) {
   const modePrefix = mode === 'single' ? 'S' : 'D';
   const progress = milestone.already_met ? 100 : Math.min(99, Math.round((milestone.current_avg_load / milestone.target_avg_load) * 100));
   return (
-    <div className="card overflow-hidden border-piu-border/60 bg-piu-card/95">
-      <div className="px-3 py-3">
-        <div className="flex items-center justify-between">
-          <p className="text-[9px] uppercase tracking-[0.2em] text-gray-500 font-display">Milestone</p>
-          <HelpButton onClick={onExplain} label="Explain milestone target" />
+    <button onClick={onExplain} className="card overflow-hidden border-piu-border/60 bg-piu-card/95 text-left w-full">
+      <div className="px-2.5 py-2">
+        <p className="text-[8px] uppercase tracking-[0.18em] text-gray-500 font-display">Next Target</p>
+        <div className="mt-0.5 flex items-baseline gap-1">
+          <span className="text-lg font-display font-bold text-white leading-none">{modePrefix}{milestone.target_level}</span>
+          {!milestone.already_met && <span className="text-[9px] text-gray-600">+{Math.round(milestone.gap_percent)}%</span>}
         </div>
-        <p className="mt-1 text-2xl font-display font-bold text-white leading-none">{modePrefix}{milestone.target_level}</p>
-        {milestone.already_met ? (
-          <p className="mt-1 text-[10px] text-emerald-400 font-display font-bold">Met!</p>
-        ) : (
-          <p className="mt-1 text-[10px] text-gray-500">
-            {formatNumber(milestone.target_avg_load)} load <span className="text-gray-600">(+{Math.round(milestone.gap_percent)}%)</span>
-          </p>
-        )}
-        <div className="mt-1.5 h-1 rounded-full bg-piu-dark/80 overflow-hidden">
+        <div className="mt-1 h-1 rounded-full bg-piu-dark/80 overflow-hidden">
           <div className="h-full rounded-full" style={{ width: `${progress}%`, background: milestone.already_met ? '#22C55E' : `linear-gradient(90deg, ${tone.accent}60, ${tone.accent})` }} />
         </div>
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -1567,19 +1559,16 @@ function CeilingPredictionCard({ ceiling, mode, onExplain }) {
   const tone = getProjectionTone(mode);
   const modePrefix = mode === 'single' ? 'S' : 'D';
   return (
-    <div className="card overflow-hidden border-piu-border/60 bg-piu-card/95">
-      <div className="px-3 py-3">
-        <div className="flex items-center justify-between">
-          <p className="text-[9px] uppercase tracking-[0.2em] text-gray-500 font-display">Ceiling</p>
-          <HelpButton onClick={onExplain} label="Explain ceiling prediction" />
+    <button onClick={onExplain} className="card overflow-hidden border-piu-border/60 bg-piu-card/95 text-left w-full">
+      <div className="px-2.5 py-2">
+        <p className="text-[8px] uppercase tracking-[0.18em] text-gray-500 font-display">Ceiling</p>
+        <div className="mt-0.5 flex items-baseline gap-1">
+          <span className="text-lg font-display font-bold text-white leading-none">{modePrefix}{ceiling.ceiling_level}</span>
+          <span className={`rounded border px-1 text-[7px] font-display font-bold uppercase ${tone.badgeClass}`}>Peak</span>
         </div>
-        <div className="mt-1 flex items-end gap-1.5">
-          <span className="text-2xl font-display font-bold text-white leading-none">{modePrefix}{ceiling.ceiling_level}</span>
-          <span className={`mb-px rounded border px-1 py-px text-[8px] font-display font-bold uppercase ${tone.badgeClass}`}>Peak</span>
-        </div>
-        <p className="mt-1 text-[10px] text-gray-500">{modePrefix}{ceiling.comfortable_level} + {ceiling.delta}</p>
+        <p className="mt-0.5 text-[9px] text-gray-600">{modePrefix}{ceiling.comfortable_level} + {ceiling.delta}</p>
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -1744,7 +1733,7 @@ function PopulationScatterChart({ scatter, mode, onExplain }) {
             return (
               <div key={`x-${load}`} className="absolute top-0 bottom-0" style={{ left: `${left}%` }}>
                 <div className="border-l border-piu-border/15 h-full" />
-                <span className="absolute bottom-0 -translate-x-1/2 text-[9px] font-display text-gray-600 pb-0.5">
+                <span className="absolute bottom-0 -translate-x-1/2 text-[8px] font-display text-gray-600 pb-1">
                   {load >= 1000 ? `${(load / 1000).toFixed(1)}k` : load}
                 </span>
               </div>
@@ -1795,9 +1784,9 @@ function PopulationScatterChart({ scatter, mode, onExplain }) {
                       </div>
                     )}
                   </div>
-                  {/* Tooltip on tap/hover */}
+                  {/* Tooltip on tap/hover — flip below when near top edge */}
                   {(isActive || undefined) && (
-                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 z-40 pointer-events-none">
+                    <div className={`absolute left-1/2 -translate-x-1/2 z-40 pointer-events-none ${comfortY < 25 ? 'top-full mt-1' : 'bottom-full mb-1'}`}>
                       <div className="bg-piu-card border border-piu-border/60 rounded-lg px-2 py-1 shadow-xl whitespace-nowrap">
                         <p className="text-[10px] font-display font-bold text-white">{point.username}</p>
                         <p className="text-[9px] text-gray-400">
@@ -1811,8 +1800,7 @@ function PopulationScatterChart({ scatter, mode, onExplain }) {
             );
           })}
         </div>
-        {/* Axis labels outside the zoomable area */}
-        <span className="absolute bottom-1 left-1/2 -translate-x-1/2 text-[8px] text-gray-600 font-display pointer-events-none">Avg Load / Clear</span>
+        {/* Axis label — only y-axis since x-axis ticks are self-explanatory */}
         <span className="absolute left-1 top-1/2 -translate-y-1/2 -rotate-90 text-[8px] text-gray-600 font-display whitespace-nowrap pointer-events-none">Comfort Level</span>
       </div>
     </div>
