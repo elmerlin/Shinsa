@@ -36,6 +36,7 @@ import SongsPage from './pages/SongsPage';
 import ShoesPage from './pages/ShoesPage';
 import SongChartPage from './pages/SongChartPage';
 import HeadToHeadPage from './pages/HeadToHeadPage';
+import TrainingPage from './pages/TrainingPage';
 import ListsPage from './pages/ListsPage';
 import TiersPage from './pages/TiersPage';
 import SkillsPage from './pages/SkillsPage';
@@ -574,6 +575,16 @@ function UserMenu() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 6h18M3 12h14M3 18h10" />
             </svg>
             {t('app.nav.tiers')}
+          </Link>
+          <Link
+            to="/training"
+            onClick={closeMenu}
+            className={menuLinkClass}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+            </svg>
+            Training
           </Link>
           <Link
             to="/head-to-head"
@@ -1380,8 +1391,8 @@ export default function App() {
                 {t('app.nav.dojo_admin')}
               </Link>
             )}
-            <Link to="/head-to-head" className="hidden sm:inline text-sm text-gray-400 hover:text-white transition-colors font-display">
-              {t('app.nav.rivals')}
+            <Link to="/training" className="hidden sm:inline text-sm text-gray-400 hover:text-white transition-colors font-display">
+              Training
             </Link>
             <Link to="/communities" className="hidden sm:inline text-sm text-gray-400 hover:text-white transition-colors font-display">
               {t('app.nav.communities')}
@@ -1448,6 +1459,7 @@ export default function App() {
           <Route path="/skill" element={<SkillsPage />} />
           <Route path="/skill/:skillSlug" element={<SkillChartsPage />} />
           <Route path="/tiers" element={<TiersPage />} />
+          <Route path="/training" element={<TrainingPage />} />
           <Route path="/head-to-head" element={<HeadToHeadPage />} />
           <Route path="/fun" element={<FunPage />} />
           <Route path="/motion" element={<Navigate to="/fun?tab=motion" replace />} />

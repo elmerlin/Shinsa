@@ -441,6 +441,7 @@ export const getPiugameRecentlyPlayed = (userId, options = {}) => {
   return request(`/piugame/recently-played/${userId}${query ? `?${query}` : ''}`);
 };
 export const getPiugameTitles = (userId) => request(`/piugame/titles/${userId}`);
+export const getPiugameTrainingLoad = (userId) => request(`/piugame/training-load/${userId}`);
 export const getPiugameSyncStatus = (userId) => request(`/piugame/sync-status/${userId}`);
 export const getPumbilityRecommendations = (userId, options = {}) => {
   const qs = new URLSearchParams();
