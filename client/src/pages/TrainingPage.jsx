@@ -28,9 +28,315 @@ const ZONE_CONFIG = {
   Calibrating: { gradient: ['#A855F7', '#7C3AED'], pulse: true, icon: '📡', desc: 'Gathering data. Play a few more sessions to calibrate your profile.' },
 };
 
+const TRAINING_ZONE_DETAILS = [
+  {
+    status: 'Overclocked',
+    range: '150%+',
+    meaning: 'Your recent week is far above your long-term baseline.',
+    playerPattern: 'Usually means you are playing a lot more, pushing harder levels, or stacking long sessions with strong clears.',
+    achievementPattern: 'Great for short-term peaks, but it can be hard to sustain and may come with fatigue.',
+  },
+  {
+    status: 'In The Zone',
+    range: '100% to 149%',
+    meaning: 'Your recent week is matching or outperforming your baseline.',
+    playerPattern: 'Usually means you are clearing solid volume at your normal hard levels, or mixing consistency with some pushes.',
+    achievementPattern: 'This is the healthiest zone for building form and keeping progress moving.',
+  },
+  {
+    status: 'Cruising',
+    range: '80% to 99%',
+    meaning: 'Your recent week is a bit lighter than baseline, but still close enough to maintain.',
+    playerPattern: 'Usually means you are still playing regularly and getting clears, but not quite matching the load or difficulty of your better weeks.',
+    achievementPattern: 'You are more likely maintaining current skill than actively pushing your ceiling.',
+  },
+  {
+    status: 'Warming Up',
+    range: '50% to 79%',
+    meaning: 'Your recent week is clearly below baseline.',
+    playerPattern: 'Usually means shorter sessions, fewer active days, easier clears, or a comeback after time off.',
+    achievementPattern: 'Good for rebuilding rhythm, but usually not enough yet to hold top form.',
+  },
+  {
+    status: 'Cooling Down',
+    range: '1% to 49%',
+    meaning: 'Your recent week is much lighter than baseline.',
+    playerPattern: 'Usually means very little recent play, very easy sessions, or scattered activity with not many strong clears.',
+    achievementPattern: 'Your sharpness may slip here unless you start rebuilding recent load.',
+  },
+  {
+    status: 'Calibrating',
+    range: '1 to 6 play days',
+    meaning: 'The system does not trust the ratio yet because there is not enough recent history.',
+    playerPattern: 'Usually means you just started syncing, changed mode, or do not have enough separate days logged yet.',
+    achievementPattern: 'Keep playing on more days and the profile will settle into a real zone.',
+  },
+  {
+    status: 'Idle',
+    range: 'No recent data',
+    meaning: 'There is not enough current activity to classify your training state.',
+    playerPattern: 'Usually means no recent synced play or a fully decayed training profile.',
+    achievementPattern: 'Once you start logging sessions again, the system will begin rebuilding your profile.',
+  },
+];
+
 function formatDate(dateStr) {
   const d = new Date(dateStr + 'T12:00:00');
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function formatNumber(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return '--';
+  return Math.round(numeric).toLocaleString();
+}
+
+function formatDetailedNumber(value, decimals = 2) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return '--';
+  return numeric.toLocaleString(undefined, {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+}
+
+function formatSignedNumber(value, decimals = 0) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return '--';
+  const rounded = Number(numeric.toFixed(decimals));
+  const prefix = rounded > 0 ? '+' : rounded < 0 ? '-' : '';
+  return `${prefix}${Math.abs(rounded).toLocaleString(undefined, {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  })}`;
+}
+
+function getModeEwmaSeries(data, mode) {
+  if (!Array.isArray(data?.ewma_history)) return [];
+  return data.ewma_history.map((entry) => {
+    const point = entry?.[mode] || {};
+    return {
+      date: entry.date,
+      baseSkill: Number(point.base_skill) || 0,
+      currentForm: Number(point.current_form) || 0,
+      chronicClearCount: Number(point.chronic_clear_count) || 0,
+    };
+  });
+}
+
+function getModeDailySeries(data, mode) {
+  if (!Array.isArray(data?.daily_load_history)) return [];
+  return data.daily_load_history.map((entry) => ({
+    date: entry.date,
+    load: Number(entry?.[mode]) || 0,
+  }));
+}
+
+function getTrendSnapshot(values, lookback = 7) {
+  if (!values.length) {
+    return { current: null, previous: null, delta: null };
+  }
+  const current = values[values.length - 1];
+  const previous = values[Math.max(0, values.length - lookback - 1)];
+  return {
+    current,
+    previous,
+    delta: current - previous,
+  };
+}
+
+function getTrendTone(delta, stableThreshold = 1) {
+  if (!Number.isFinite(delta)) {
+    return { label: 'Not enough trend data yet', color: '#94A3B8' };
+  }
+  if (Math.abs(delta) <= stableThreshold) {
+    return { label: 'Holding steady', color: '#94A3B8' };
+  }
+  return delta > 0
+    ? { label: 'Trending up', color: '#22C55E' }
+    : { label: 'Trending down', color: '#EF4444' };
+}
+
+function countActiveDays(entries, windowSize, offset = 0) {
+  const end = Math.max(0, entries.length - offset);
+  const start = Math.max(0, end - windowSize);
+  return entries.slice(start, end).filter((entry) => entry.load > 0).length;
+}
+
+function sumLoad(entries, windowSize, offset = 0) {
+  const end = Math.max(0, entries.length - offset);
+  const start = Math.max(0, end - windowSize);
+  return entries.slice(start, end).reduce((sum, entry) => sum + entry.load, 0);
+}
+
+function buildMetricExplainer(metricKey, profile, data, mode) {
+  if (!profile) return null;
+
+  const modeLabel = MODE_LABELS[mode] || 'Overall';
+  const ewmaSeries = getModeEwmaSeries(data, mode);
+  const dailySeries = getModeDailySeries(data, mode);
+  const baseTrend = getTrendSnapshot(ewmaSeries.map((point) => point.baseSkill));
+  const formTrend = getTrendSnapshot(ewmaSeries.map((point) => point.currentForm));
+  const ratioTrend = getTrendSnapshot(
+    ewmaSeries
+      .map((point) => (point.baseSkill > 0.01 ? (point.currentForm / point.baseSkill) * 100 : null))
+      .filter((value) => value != null)
+  );
+  const avgLoadTrend = getTrendSnapshot(
+    ewmaSeries.map((point) => point.baseSkill / Math.max(point.chronicClearCount, 0.5))
+  );
+  const recentActive14 = countActiveDays(dailySeries, 14);
+  const previousActive14 = countActiveDays(dailySeries, 14, 14);
+  const recentActive7 = countActiveDays(dailySeries, 7);
+  const recentLoad7 = sumLoad(dailySeries, 7);
+  const previousLoad7 = sumLoad(dailySeries, 7, 7);
+  const pluralDays = (count) => `${count} active day${count === 1 ? '' : 's'}`;
+
+  switch (metricKey) {
+    case 'base_skill': {
+      const tone = getTrendTone(baseTrend.delta, 20);
+      return {
+        title: 'Base Skill',
+        subtitle: `Your ${modeLabel.toLowerCase()} long-term training baseline.`,
+        color: '#22C55E',
+        value: formatNumber(profile.base_skill),
+        summary: 'This moves slowly and rewards sustained work over multiple weeks.',
+        trendLabel: tone.label,
+        trendColor: tone.color,
+        metrics: [
+          { label: 'Current', value: formatNumber(profile.base_skill), accent: '#22C55E' },
+          { label: '7d Change', value: formatSignedNumber(baseTrend.delta, 0), accent: tone.color },
+          { label: 'Last 7d Load', value: formatNumber(recentLoad7), accent: '#ff3366' },
+          { label: 'Last 14d', value: pluralDays(recentActive14), accent: '#4488ff' },
+        ],
+        calculation: 'Every local day gets a total training load from the songs you played, weighted by level and result. Base Skill is a 28-day EWMA of those daily totals, so consistent weeks matter more than one huge session.',
+        trend: `${tone.label}. You are ${formatSignedNumber(baseTrend.delta, 0)} points versus 7 days ago. In the last 7 days you logged ${formatNumber(recentLoad7)} total load, compared with ${formatNumber(previousLoad7)} in the 7 days before that.`,
+        improve: 'To push Base Skill back up, play and clear more songs across more days, and keep the clears at meaningful levels for 2 to 4 weeks. Higher sustained levels and better grades raise it faster than one-off spikes.',
+        note: 'If Base Skill is falling, it usually means your recent weeks are lighter than your longer-term baseline.',
+      };
+    }
+    case 'current_form': {
+      const tone = getTrendTone(formTrend.delta, 20);
+      const formVsBase = profile.base_skill > 0
+        ? (profile.current_form / profile.base_skill) * 100
+        : null;
+      const formGap = profile.current_form - profile.base_skill;
+      return {
+        title: 'Current Form',
+        subtitle: `Your ${modeLabel.toLowerCase()} recent sharpness and momentum.`,
+        color: '#ff3366',
+        value: formatNumber(profile.current_form),
+        summary: formVsBase != null
+          ? `Right now you are at ${formatDetailedNumber(formVsBase, 0)}% of your Base Skill.`
+          : 'This tracks how hard your recent week has been.',
+        trendLabel: tone.label,
+        trendColor: tone.color,
+        metrics: [
+          { label: 'Current', value: formatNumber(profile.current_form), accent: '#ff3366' },
+          { label: '7d Change', value: formatSignedNumber(formTrend.delta, 0), accent: tone.color },
+          { label: 'Vs Base', value: formVsBase != null ? `${formatDetailedNumber(formVsBase, 0)}%` : '--', accent: '#22C55E' },
+          { label: 'Gap To Base', value: formatSignedNumber(formGap, 0), accent: formGap >= 0 ? '#22C55E' : '#F59E0B' },
+        ],
+        calculation: 'Current Form uses the same daily load input as Base Skill, but smooths it over 7 days instead of 28. That makes it respond much faster to what you have done this week.',
+        trend: `${tone.label}. Current Form is ${formatSignedNumber(formTrend.delta, 0)} versus 7 days ago and ${formGap >= 0 ? 'above' : 'below'} Base Skill by ${formatNumber(Math.abs(formGap))}.`,
+        improve: formGap < 0
+          ? 'To bring it back up, stack a few strong sessions this week. Recent sessions matter a lot here, so harder clears and more volume over the next several days will move it faster than older play.'
+          : 'You are already running at or above baseline. To hold it there, keep the recent sessions coming, but watch fatigue if you stay elevated for too long.',
+        note: 'This is the quickest metric to react when you go on a hot streak or take a few days off.',
+      };
+    }
+    case 'play_days': {
+      const dayDelta = recentActive14 - previousActive14;
+      const tone = getTrendTone(dayDelta, 0);
+      return {
+        title: 'Play Days',
+        subtitle: `How often you have shown up for ${modeLabel.toLowerCase()} play.`,
+        color: '#4488ff',
+        value: formatNumber(profile.play_days),
+        summary: 'This rewards consistency across days, not marathoning everything into one session.',
+        trendLabel: tone.label,
+        trendColor: tone.color,
+        metrics: [
+          { label: 'Total 56d', value: formatNumber(profile.play_days), accent: '#4488ff' },
+          { label: 'Last 14d', value: recentActive14, accent: '#7dd3fc' },
+          { label: 'Prev 14d', value: previousActive14, accent: '#94A3B8' },
+          { label: 'Last 7d', value: recentActive7, accent: '#22C55E' },
+        ],
+        calculation: 'Play Days is the number of distinct local calendar days with at least one logged play in the last 56 days. Twenty songs on one day still count as one play day.',
+        trend: `${tone.label}. You had ${recentActive14} active day${recentActive14 === 1 ? '' : 's'} in the last 14 days versus ${previousActive14} in the 14 days before that.`,
+        improve: 'To raise this, spread your sessions across more separate days. Even a shorter session counts, so regular cadence works better than saving everything for one long day.',
+        note: 'If this number slips, calibration and other training metrics also become slower to trust.',
+      };
+    }
+    case 'training_ratio': {
+      const tone = getTrendTone(ratioTrend.delta, 2);
+      const ratio = profile.training_ratio;
+      let improve = 'Keep the recent week strong enough to stay near or above your long-term baseline.';
+      if (ratio == null) {
+        improve = 'Play on at least 7 separate days to calibrate the ratio. Once calibrated, stronger recent sessions will lift it quickly.';
+      } else if (ratio < 80) {
+        improve = 'To move this back up, you need a stronger recent week than the one you just had. More recent sessions, higher levels, and better clears will lift Current Form relative to Base Skill.';
+      } else if (ratio < 100) {
+        improve = 'A couple of strong recent sessions should pull this back toward baseline. Focus on quality clears this week.';
+      } else if (ratio >= 150) {
+        improve = 'This is already very high. You can push it further, but recovery and consistency are probably more useful than chasing a higher ratio here.';
+      }
+      return {
+        title: 'Training Ratio',
+        subtitle: 'How your recent week compares with your longer baseline.',
+        color: profile.training_color || '#ff3366',
+        value: ratio != null ? formatDetailedNumber(ratio, 0) : '--',
+        unit: '%',
+        summary: ratio != null
+          ? `${profile.training_status} means your recent load is ${ratio >= 100 ? 'matching or beating' : 'below'} baseline.`
+          : 'This stays hidden until your profile has enough play days to calibrate.',
+        trendLabel: tone.label,
+        trendColor: tone.color,
+        metrics: [
+          { label: 'Ratio', value: ratio != null ? `${formatDetailedNumber(ratio, 0)}%` : '--', accent: profile.training_color || '#ff3366' },
+          { label: 'Status', value: profile.training_status || '--', accent: profile.training_color || '#ff3366' },
+          { label: '7d Change', value: ratio != null ? `${formatSignedNumber(ratioTrend.delta, 0)} pts` : '--', accent: tone.color },
+          { label: 'Formula', value: `${formatNumber(profile.current_form)} / ${formatNumber(profile.base_skill)}`, accent: '#e5e7eb' },
+        ],
+        calculation: 'Training Ratio is Current Form divided by Base Skill, multiplied by 100. Around 100% means your recent week matches your baseline. Above that means you are running hot; below that means your recent week has been lighter.',
+        trend: ratio != null
+          ? `${tone.label}. You are at ${formatDetailedNumber(ratio, 0)}%, which is ${formatSignedNumber(ratioTrend.delta, 0)} percentage points versus 7 days ago.`
+          : 'Still calibrating. Once you have enough play days, this will show how your recent week compares with your longer baseline.',
+        improve,
+        note: 'This metric is great for spotting whether you are building, maintaining, or cooling off.',
+      };
+    }
+    case 'avg_play_load': {
+      const tone = getTrendTone(avgLoadTrend.delta, 15);
+      const smoothedClears = Number(profile.chronic_clear_count) || 0;
+      return {
+        title: 'Avg Load / Clear',
+        subtitle: `The average difficulty weight of the clears supporting your ${modeLabel.toLowerCase()} profile.`,
+        color: '#A855F7',
+        value: formatNumber(profile.avg_play_load),
+        summary: 'This is a conservative difficulty baseline, not a pass guarantee.',
+        trendLabel: tone.label,
+        trendColor: tone.color,
+        metrics: [
+          { label: 'Current', value: formatNumber(profile.avg_play_load), accent: '#A855F7' },
+          { label: '7d Change', value: formatSignedNumber(avgLoadTrend.delta, 0), accent: tone.color },
+          { label: 'Smoothed Clears', value: formatDetailedNumber(smoothedClears, 2), accent: '#7dd3fc' },
+          { label: 'Comfortable Lv.', value: profile.comfortable_level != null ? `Lv.${profile.comfortable_level}` : '--', accent: '#f9a8d4' },
+        ],
+        calculation: `Avg Load / Clear is Base Skill divided by smoothed clear count. With your current numbers that is ${formatDetailedNumber(profile.base_skill, 2)} / ${formatDetailedNumber(smoothedClears, 2)} = ${formatDetailedNumber(profile.avg_play_load, 2)}.`,
+        trend: `${tone.label}. This metric is ${formatSignedNumber(avgLoadTrend.delta, 0)} versus 7 days ago. Stronger clears and better grades push it up, while lots of easier clears can pull it down.`,
+        improve: 'To move this up, clear harder songs or improve your grades on the songs you are already clearing. A big pile of easy clears can grow the clear count faster than the load, which usually drags this number down.',
+        note: 'We use this as one input for comfortable level and pass-ceiling logic, but it is not enough on its own.',
+      };
+    }
+    default:
+      return null;
+  }
+}
+
+function getTrainingStatusDetail(status) {
+  return TRAINING_ZONE_DETAILS.find((zone) => zone.status === status)
+    || TRAINING_ZONE_DETAILS.find((zone) => zone.status === 'Idle');
 }
 
 function AnimatedNumber({ value, duration = 800 }) {
@@ -69,7 +375,7 @@ function PulsingDot({ color, active }) {
   );
 }
 
-function ZoneBadge({ status, color, ratio }) {
+function ZoneBadge({ status, color, ratio, onExplainRatio, onExplainStatus }) {
   const zone = ZONE_CONFIG[status] || ZONE_CONFIG.Idle;
   return (
     <div className="relative overflow-hidden rounded-2xl border border-piu-border/60">
@@ -93,16 +399,46 @@ function ZoneBadge({ status, color, ratio }) {
           <div className="flex items-center gap-2.5">
             <span className="text-2xl">{zone.icon}</span>
             <div>
-              <h3
-                className="font-display font-bold text-xl sm:text-2xl tracking-wide"
-                style={{ color: zone.gradient[0] }}
-              >
-                {status}
-              </h3>
+              {onExplainStatus ? (
+                <button
+                  type="button"
+                  onClick={onExplainStatus}
+                  className="rounded px-1 -mx-1 transition-colors hover:text-white focus:outline-none focus:ring-2 focus:ring-piu-accent/50"
+                  aria-label={`Explain training status ${status}`}
+                >
+                  <span
+                    className="font-display font-bold text-xl sm:text-2xl tracking-wide text-left"
+                    style={{ color: zone.gradient[0] }}
+                  >
+                    {status}
+                  </span>
+                </button>
+              ) : (
+                <h3
+                  className="font-display font-bold text-xl sm:text-2xl tracking-wide"
+                  style={{ color: zone.gradient[0] }}
+                >
+                  {status}
+                </h3>
+              )}
               {ratio != null && (
-                <p className="text-xs text-gray-400 font-display">
-                  Training Ratio: <span className="text-gray-200 font-bold">{ratio}%</span>
-                </p>
+                <div className="text-xs text-gray-400 font-display">
+                  Training Ratio:{' '}
+                  {onExplainRatio ? (
+                    <button
+                      type="button"
+                      onClick={onExplainRatio}
+                      className="font-bold text-gray-200 rounded px-1 transition-colors hover:text-white focus:outline-none focus:ring-2 focus:ring-piu-accent/50"
+                    >
+                      {ratio}%
+                    </button>
+                  ) : (
+                    <span className="text-gray-200 font-bold">{ratio}%</span>
+                  )}
+                </div>
+              )}
+              {onExplainStatus && (
+                <p className="text-[10px] text-gray-600 font-display mt-0.5">Click status to compare zones</p>
               )}
             </div>
           </div>
@@ -114,17 +450,39 @@ function ZoneBadge({ status, color, ratio }) {
   );
 }
 
-function StatCard({ label, value, unit, color, delay = 0 }) {
+function StatCard({ label, value, unit, color, delay = 0, onExplain }) {
+  const valueNode = (
+    <>
+      <AnimatedNumber value={value} />
+      {unit && <span className="text-sm text-gray-500 ml-1">{unit}</span>}
+    </>
+  );
+
   return (
     <div
       className="card py-3 px-4 text-center animate-slide-up"
       style={{ animationDelay: `${delay}ms` }}
     >
       <p className="text-[10px] uppercase tracking-wider text-gray-500 font-display mb-1">{label}</p>
-      <p className="text-xl sm:text-2xl font-display font-bold" style={{ color: color || '#e5e7eb' }}>
-        <AnimatedNumber value={value} />
-        {unit && <span className="text-sm text-gray-500 ml-1">{unit}</span>}
-      </p>
+      {onExplain ? (
+        <button
+          type="button"
+          onClick={onExplain}
+          className="mx-auto inline-flex items-end rounded-lg px-2 py-1 transition-transform hover:scale-[1.02] focus:outline-none focus:ring-2 focus:ring-piu-accent/50"
+          aria-label={`Explain ${label}`}
+        >
+          <span className="text-xl sm:text-2xl font-display font-bold" style={{ color: color || '#e5e7eb' }}>
+            {valueNode}
+          </span>
+        </button>
+      ) : (
+        <p className="text-xl sm:text-2xl font-display font-bold" style={{ color: color || '#e5e7eb' }}>
+          {valueNode}
+        </p>
+      )}
+      {onExplain && (
+        <p className="text-[10px] text-gray-600 mt-1">Click value to explain</p>
+      )}
     </div>
   );
 }
@@ -152,6 +510,500 @@ function GradePill({ grade }) {
     <span className={`inline-flex px-2 py-0.5 rounded-md border text-xs font-display font-bold ${colorMap[grade] || 'bg-gray-500/10 text-gray-400 border-gray-500/20'}`}>
       {grade}
     </span>
+  );
+}
+
+function HelpButton({ onClick, label = 'Explain this metric' }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-piu-border/50 bg-piu-dark/70 text-[10px] font-display font-bold text-gray-300 transition-colors hover:text-white hover:border-piu-accent/50"
+    >
+      ?
+    </button>
+  );
+}
+
+function ConfidencePill({ confidence = 'Low' }) {
+  const toneMap = {
+    High: 'bg-emerald-400/15 text-emerald-300 border-emerald-400/30',
+    Medium: 'bg-amber-400/15 text-amber-300 border-amber-400/30',
+    Low: 'bg-slate-400/15 text-slate-300 border-slate-400/30',
+  };
+  return (
+    <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-display font-bold uppercase tracking-wide ${toneMap[confidence] || toneMap.Low}`}>
+      {confidence}
+    </span>
+  );
+}
+
+function MiniMetric({ label, value, accent = '#e5e7eb' }) {
+  return (
+    <div className="rounded-lg border border-piu-border/35 bg-piu-dark/40 px-3 py-2 text-center">
+      <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">{label}</p>
+      <p className="mt-1 text-sm font-display font-bold" style={{ color: accent }}>
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function LikelyPassCeilingCard({ passCeiling, mode, onExplain }) {
+  if (!passCeiling?.level) return null;
+
+  const target = passCeiling.target || {};
+  const feeder = passCeiling.feeder_levels?.[0] || null;
+  const modeLabel = mode === 'single' ? 'Singles' : 'Doubles';
+  const nearPassCount = target.strong_near_pass_count || target.near_pass_count || 0;
+
+  return (
+    <div className="card overflow-hidden relative">
+      <div className="absolute inset-0 bg-gradient-to-br from-sky-500/10 via-piu-accent/10 to-emerald-500/10" />
+      <div className="relative px-5 py-5">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-gray-500 font-display mb-2">
+              Likely {modeLabel} Pass Ceiling
+            </p>
+            <div className="flex items-end gap-2">
+              <span className="text-5xl sm:text-6xl font-display font-bold text-transparent bg-clip-text bg-gradient-to-r from-sky-300 via-piu-accent to-emerald-300">
+                <AnimatedNumber value={passCeiling.level} duration={1200} />
+              </span>
+              <span className="pb-2 text-sm font-display font-bold text-sky-200">Lv.</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <ConfidencePill confidence={passCeiling.confidence} />
+            <HelpButton onClick={onExplain} label="Explain likely pass ceiling" />
+          </div>
+        </div>
+
+        <p className="mt-2 text-xs text-gray-400">
+          Highest level the model thinks you have a real shot at passing right now.
+        </p>
+
+        <div className="mt-4 grid grid-cols-3 gap-2">
+          <MiniMetric label={`Lv.${passCeiling.level} clears`} value={target.clear_count || 0} accent="#7dd3fc" />
+          <MiniMetric label="Near-passes" value={nearPassCount} accent="#f9a8d4" />
+          <MiniMetric label={feeder ? `Lv.${feeder.level} clears` : 'Feeder clears'} value={feeder?.clear_count || 0} accent="#86efac" />
+        </div>
+
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {passCeiling.predicted_grade && <GradePill grade={passCeiling.predicted_grade} />}
+          {target.best_clear_score > 0 && (
+            <span className="text-[11px] text-gray-400">
+              Best clear: <span className="font-mono text-gray-200">{formatNumber(target.best_clear_score)}</span>
+            </span>
+          )}
+          {target.best_near_pass_score > 0 && (
+            <span className="text-[11px] text-gray-400">
+              Best near-pass: <span className="font-mono text-gray-200">{formatNumber(target.best_near_pass_score)}</span>
+            </span>
+          )}
+        </div>
+
+        {passCeiling.reasons?.length > 0 && (
+          <div className="mt-3 space-y-1">
+            {passCeiling.reasons.slice(0, 3).map((reason) => (
+              <p key={reason} className="text-[11px] text-gray-500">
+                {reason}
+              </p>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ExplainerBlock({ title, body }) {
+  return (
+    <div className="rounded-xl border border-piu-border/45 bg-piu-dark/45 p-3">
+      <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">{title}</p>
+      <p className="mt-1 text-sm leading-relaxed text-gray-300">{body}</p>
+    </div>
+  );
+}
+
+function PassCeilingHelpModal({ open, onClose, mode, profile }) {
+  if (!open) return null;
+
+  const passCeiling = profile?.likely_pass || null;
+  const feeder = passCeiling?.feeder_levels?.[0] || null;
+  const feederTwo = passCeiling?.feeder_levels?.[1] || null;
+  const modeLabel = mode === 'single' ? 'Singles' : 'Doubles';
+
+  return (
+    <div
+      className="fixed inset-0 z-[90] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-3xl max-h-[85vh] overflow-y-auto rounded-2xl border border-piu-border bg-[#0b1220] shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="px-4 py-3 border-b border-piu-border/60 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">Training Explainer</p>
+            <h3 className="text-sm sm:text-base font-display font-bold text-piu-accent break-words">
+              Likely {modeLabel} Pass Ceiling
+            </h3>
+            <p className="mt-1 text-[11px] text-gray-500">
+              A “good chance right now” estimate, not a guaranteed pass and not your all-time peak.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-xs text-gray-400 hover:text-white transition-colors shrink-0"
+          >
+            Close
+          </button>
+        </div>
+
+        <div className="px-4 py-4 space-y-4">
+          {passCeiling && (
+            <div className="rounded-2xl border border-piu-border/45 bg-gradient-to-br from-sky-500/10 via-piu-dark/30 to-emerald-500/10 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Current estimate</p>
+                  <div className="mt-1 flex items-end gap-2">
+                    <span className="text-4xl font-display font-bold text-white">Lv.{passCeiling.level}</span>
+                    <ConfidencePill confidence={passCeiling.confidence} />
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {passCeiling.predicted_grade && <GradePill grade={passCeiling.predicted_grade} />}
+                  <span className="rounded-full border border-piu-border/45 px-2 py-0.5 text-[10px] font-display font-bold uppercase tracking-wide text-gray-300">
+                    Comfortable Lv.{profile?.comfortable_level ?? '--'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <ExplainerBlock
+              title="Base Skill"
+              body="A 28-day smoothed daily load baseline. Higher means you have been sustaining more total work over time."
+            />
+            <ExplainerBlock
+              title="Current Form"
+              body="A 7-day smoothed daily load. We compare it against base skill to see whether you are hot, neutral, or cooling off."
+            />
+            <ExplainerBlock
+              title="Avg Load / Clear"
+              body="Your smoothed training load divided by smoothed clears. We use it as a conservative difficulty baseline, not as a pass guarantee."
+            />
+            <ExplainerBlock
+              title="Exact-Level Evidence"
+              body="Recent clears at the target level matter most. High-score stage breaks around 900k+ also count as near-passes for ceiling logic."
+            />
+            <ExplainerBlock
+              title="Feeder Levels"
+              body="Clear volume one and two levels below the target helps support moving up. Strong sessions at level minus one matter too."
+            />
+            <ExplainerBlock
+              title="Final Decision"
+              body="We choose the highest level with enough recent evidence to call it a likely pass, then lower confidence if your form is running cold."
+            />
+          </div>
+
+          {passCeiling && (
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <MiniMetric label="Base Skill" value={formatNumber(profile?.base_skill)} accent="#22C55E" />
+                <MiniMetric label="Current Form" value={formatNumber(profile?.current_form)} accent="#ff3366" />
+                <MiniMetric label="Avg Load/Clear" value={formatNumber(profile?.avg_play_load)} accent="#A855F7" />
+                <MiniMetric label="Form Ratio" value={`${formatNumber(passCeiling.form_ratio)}%`} accent="#7dd3fc" />
+              </div>
+
+              <div className="rounded-xl border border-piu-border/45 bg-piu-dark/45 p-4 space-y-3">
+                <div>
+                  <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Target Level Evidence</p>
+                  <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <MiniMetric label={`Lv.${passCeiling.level} attempts`} value={passCeiling.target?.attempt_count || 0} accent="#e5e7eb" />
+                    <MiniMetric label="Clears" value={passCeiling.target?.clear_count || 0} accent="#7dd3fc" />
+                    <MiniMetric label="Near-passes" value={(passCeiling.target?.strong_near_pass_count || passCeiling.target?.near_pass_count || 0)} accent="#f9a8d4" />
+                    <MiniMetric label="Peak day clears" value={passCeiling.target?.clear_day_peak || 0} accent="#86efac" />
+                  </div>
+                </div>
+
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="rounded-lg border border-piu-border/35 bg-piu-card/30 p-3">
+                    <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Target bests</p>
+                    <p className="mt-1 text-sm text-gray-300">
+                      Best clear: <span className="font-mono text-white">{formatNumber(passCeiling.target?.best_clear_score)}</span>
+                    </p>
+                    <p className="text-sm text-gray-300">
+                      Best near-pass: <span className="font-mono text-white">{formatNumber(passCeiling.target?.best_near_pass_score)}</span>
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-piu-border/35 bg-piu-card/30 p-3">
+                    <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Feeder support</p>
+                    <p className="mt-1 text-sm text-gray-300">
+                      {feeder ? `Lv.${feeder.level}: ${feeder.clear_count} clears, peak day ${feeder.clear_day_peak}` : 'Lv.-1: --'}
+                    </p>
+                    <p className="text-sm text-gray-300">
+                      {feederTwo ? `Lv.${feederTwo.level}: ${feederTwo.clear_count} clears` : 'Lv.-2: --'}
+                    </p>
+                    <p className="text-sm text-gray-300">
+                      Load-supported pass level: <span className="font-display font-bold text-white">Lv.{passCeiling.load_supported_pass_level ?? '--'}</span>
+                    </p>
+                  </div>
+                </div>
+
+                {passCeiling.reasons?.length > 0 && (
+                  <div className="rounded-lg border border-piu-border/35 bg-piu-card/30 p-3">
+                    <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Why this level</p>
+                    <div className="mt-2 space-y-1">
+                      {passCeiling.reasons.map((reason) => (
+                        <p key={reason} className="text-sm text-gray-300">{reason}</p>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
+          <div className="rounded-xl border border-piu-border/45 bg-piu-dark/35 p-3">
+            <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Important note</p>
+            <p className="mt-1 text-sm text-gray-300 leading-relaxed">
+              Grade predictions ignore failed runs, but likely pass ceiling does use strong positive-score stage breaks as “near-pass” evidence.
+              That lets us recognize when someone is close to a new pass even before the first clean clear lands.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MetricHelpModal({ metricKey, onClose, profile, data, mode }) {
+  const content = buildMetricExplainer(metricKey, profile, data, mode);
+  if (!content) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-[90] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-2xl border border-piu-border bg-[#0b1220] shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="px-4 py-3 border-b border-piu-border/60 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">Metric Explainer</p>
+            <h3 className="text-sm sm:text-base font-display font-bold break-words" style={{ color: content.color }}>
+              {content.title}
+            </h3>
+            <p className="mt-1 text-[11px] text-gray-500">
+              {content.subtitle}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-xs text-gray-400 hover:text-white transition-colors shrink-0"
+          >
+            Close
+          </button>
+        </div>
+
+        <div className="px-4 py-4 space-y-4">
+          <div className="rounded-2xl border border-piu-border/45 bg-gradient-to-br from-piu-accent/10 via-piu-dark/35 to-transparent p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Current value</p>
+                <div className="mt-1 flex items-end gap-2">
+                  <span className="text-4xl font-display font-bold text-white">
+                    {content.value}
+                  </span>
+                  {content.unit && (
+                    <span className="pb-1 text-sm font-display font-bold text-gray-400">{content.unit}</span>
+                  )}
+                </div>
+              </div>
+              <span
+                className="inline-flex rounded-full border px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-wide"
+                style={{ color: content.trendColor, borderColor: `${content.trendColor}55`, backgroundColor: `${content.trendColor}12` }}
+              >
+                {content.trendLabel}
+              </span>
+            </div>
+            <p className="mt-3 text-sm text-gray-300 leading-relaxed">
+              {content.summary}
+            </p>
+          </div>
+
+          {content.metrics?.length > 0 && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {content.metrics.map((metric) => (
+                <MiniMetric
+                  key={metric.label}
+                  label={metric.label}
+                  value={metric.value}
+                  accent={metric.accent}
+                />
+              ))}
+            </div>
+          )}
+
+          <div className="grid gap-3">
+            <ExplainerBlock title="How It Is Calculated" body={content.calculation} />
+            <ExplainerBlock title="Your Trend" body={content.trend} />
+            <ExplainerBlock title="How To Move It" body={content.improve} />
+          </div>
+
+          {content.note && (
+            <div className="rounded-xl border border-piu-border/45 bg-piu-dark/35 p-3">
+              <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">What To Keep In Mind</p>
+              <p className="mt-1 text-sm text-gray-300 leading-relaxed">{content.note}</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TrainingStatusHelpModal({ open, onClose, profile, mode }) {
+  if (!open || !profile) return null;
+
+  const activeStatus = profile.training_status || 'Idle';
+  const activeZone = ZONE_CONFIG[activeStatus] || ZONE_CONFIG.Idle;
+  const activeDetail = getTrainingStatusDetail(activeStatus);
+  const modeLabel = MODE_LABELS[mode] || 'Overall';
+  const ratio = profile.training_ratio;
+  const formVsBase = profile.base_skill > 0
+    ? (profile.current_form / profile.base_skill) * 100
+    : null;
+
+  const currentSummary = ratio != null
+    ? `Your recent ${modeLabel.toLowerCase()} load is running at ${formatDetailedNumber(ratio, 0)}% of your baseline. That comes from Current Form ${formatNumber(profile.current_form)} compared with Base Skill ${formatNumber(profile.base_skill)}.`
+    : activeStatus === 'Calibrating'
+      ? `You have ${profile.play_days} play day${profile.play_days === 1 ? '' : 's'} so far in this profile. The system waits for at least 7 play days before it trusts the training ratio.`
+      : 'There is not enough current activity in this profile to compare recent load against long-term baseline yet.';
+
+  return (
+    <div
+      className="fixed inset-0 z-[90] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-3xl max-h-[85vh] overflow-y-auto rounded-2xl border border-piu-border bg-[#0b1220] shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="px-4 py-3 border-b border-piu-border/60 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">Training Status</p>
+            <h3 className="text-sm sm:text-base font-display font-bold break-words" style={{ color: activeZone.gradient[0] }}>
+              {activeStatus}
+            </h3>
+            <p className="mt-1 text-[11px] text-gray-500">
+              Clicking the status shows what each zone means and how your recent play fits into it.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-xs text-gray-400 hover:text-white transition-colors shrink-0"
+          >
+            Close
+          </button>
+        </div>
+
+        <div className="px-4 py-4 space-y-4">
+          <div className="rounded-2xl border border-piu-border/45 p-4" style={{ background: `linear-gradient(135deg, ${activeZone.gradient[0]}18, ${activeZone.gradient[1]}10)` }}>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <span className="text-3xl">{activeZone.icon}</span>
+                <div>
+                  <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Current zone</p>
+                  <div className="mt-1 flex items-center gap-2">
+                    <span className="text-2xl font-display font-bold text-white">{activeStatus}</span>
+                    <span
+                      className="inline-flex rounded-full border px-2 py-0.5 text-[10px] font-display font-bold uppercase tracking-wide"
+                      style={{ color: activeZone.gradient[0], borderColor: `${activeZone.gradient[0]}55`, backgroundColor: `${activeZone.gradient[0]}12` }}
+                    >
+                      {activeDetail.range}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <MiniMetric label="Base Skill" value={formatNumber(profile.base_skill)} accent="#22C55E" />
+                <MiniMetric label="Current Form" value={formatNumber(profile.current_form)} accent="#ff3366" />
+                <MiniMetric label="Training Ratio" value={ratio != null ? `${formatDetailedNumber(ratio, 0)}%` : '--'} accent={profile.training_color || activeZone.gradient[0]} />
+                <MiniMetric label="Play Days" value={profile.play_days} accent="#4488ff" />
+              </div>
+            </div>
+            <p className="mt-3 text-sm text-gray-300 leading-relaxed">{currentSummary}</p>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <ExplainerBlock
+              title="What This Means"
+              body={`${activeDetail.meaning} ${activeDetail.playerPattern}`}
+            />
+            <ExplainerBlock
+              title="What You Are Likely Achieving"
+              body={activeDetail.achievementPattern}
+            />
+            <ExplainerBlock
+              title="How The System Decides"
+              body={ratio != null
+                ? `This status comes from Current Form divided by Base Skill. Your profile is currently at ${formatDetailedNumber(formVsBase, 0)}%, which places you in ${activeStatus}.`
+                : activeStatus === 'Calibrating'
+                  ? 'This profile has activity, but fewer than 7 play days, so the system waits before assigning a fully trusted ratio zone.'
+                  : 'Without recent synced activity or baseline data, the system cannot place you in an active training zone yet.'}
+            />
+            <ExplainerBlock
+              title="How To Move Up"
+              body={activeStatus === 'Overclocked'
+                ? 'You are already above baseline. The real goal here is to hold quality without burning out.'
+                : 'To climb into a stronger zone, increase recent load relative to your baseline: play on more days this week, clear more songs, or raise the level and grade quality of those clears.'}
+            />
+          </div>
+
+          <div className="rounded-xl border border-piu-border/45 bg-piu-dark/35 p-4">
+            <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">All Training Zones</p>
+            <div className="mt-3 space-y-3">
+              {TRAINING_ZONE_DETAILS.map((detail) => {
+                const zone = ZONE_CONFIG[detail.status] || ZONE_CONFIG.Idle;
+                const active = detail.status === activeStatus;
+                return (
+                  <div
+                    key={detail.status}
+                    className={`rounded-xl border p-3 transition-colors ${active ? 'border-white/20 bg-white/5' : 'border-piu-border/35 bg-piu-dark/35'}`}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xl">{zone.icon}</span>
+                        <span className="font-display font-bold" style={{ color: zone.gradient[0] }}>{detail.status}</span>
+                        {active && (
+                          <span className="rounded-full border border-piu-accent/30 bg-piu-accent/10 px-2 py-0.5 text-[10px] font-display font-bold uppercase tracking-wide text-piu-accent">
+                            Current
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[10px] font-display uppercase tracking-wide text-gray-400">{detail.range}</span>
+                    </div>
+                    <p className="mt-2 text-sm text-gray-300">{detail.meaning}</p>
+                    <p className="mt-1 text-sm text-gray-400">{detail.playerPattern}</p>
+                    <p className="mt-1 text-sm text-gray-500">{detail.achievementPattern}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -416,10 +1268,10 @@ function GradePredictionTable({ predictions, comfortableLevel }) {
   );
 }
 
-function ComfortableLevelDisplay({ level, mode }) {
+function ComfortableLevelDisplay({ level, mode, className = '' }) {
   if (level == null) return null;
   return (
-    <div className="card overflow-hidden relative">
+    <div className={`card overflow-hidden relative ${className}`}>
       <div className="absolute inset-0 bg-gradient-to-br from-piu-accent/5 to-purple-600/5" />
       <div className="relative px-5 py-5 text-center">
         <p className="text-[10px] uppercase tracking-wider text-gray-500 font-display mb-2">
@@ -486,6 +1338,9 @@ export default function TrainingPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [mode, setMode] = useState('overall');
+  const [showPassCeilingHelp, setShowPassCeilingHelp] = useState(false);
+  const [showStatusHelp, setShowStatusHelp] = useState(false);
+  const [activeMetricHelp, setActiveMetricHelp] = useState('');
 
   useEffect(() => {
     if (!user?.id) return;
@@ -519,6 +1374,14 @@ export default function TrainingPage() {
   const profile = data?.[mode] || null;
   const modeColor = mode === 'single' ? '#22C55E' : mode === 'double' ? '#A855F7' : '#ff3366';
   const showPredictions = mode !== 'overall' && profile && !profile.calibrating;
+  const statCards = profile ? [
+    { key: 'base_skill', label: 'Base Skill', value: Math.round(profile.base_skill), color: '#22C55E', delay: 0 },
+    { key: 'current_form', label: 'Current Form', value: Math.round(profile.current_form), color: '#ff3366', delay: 50 },
+    { key: 'play_days', label: 'Play Days', value: profile.play_days, color: '#4488ff', delay: 100 },
+    profile.avg_play_load != null
+      ? { key: 'avg_play_load', label: 'Avg Load/Clear', value: Math.round(profile.avg_play_load), color: '#A855F7', delay: 150 }
+      : { key: 'training_ratio', label: 'Training Ratio', value: profile.training_ratio || 0, unit: '%', color: profile.training_color, delay: 150 },
+  ] : [];
 
   return (
     <div className="max-w-5xl mx-auto px-3 sm:px-4 py-6 space-y-4">
@@ -566,27 +1429,38 @@ export default function TrainingPage() {
               status={profile.training_status}
               color={profile.training_color}
               ratio={profile.training_ratio}
+              onExplainStatus={() => setShowStatusHelp(true)}
+              onExplainRatio={profile.training_ratio != null ? () => setActiveMetricHelp('training_ratio') : null}
             />
           )}
 
           {/* Key Stats */}
           {profile && (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <StatCard label="Base Skill" value={Math.round(profile.base_skill)} color="#22C55E" delay={0} />
-              <StatCard label="Current Form" value={Math.round(profile.current_form)} color="#ff3366" delay={50} />
-              <StatCard label="Play Days" value={profile.play_days} color="#4488ff" delay={100} />
-              {profile.avg_play_load != null && (
-                <StatCard label="Avg Play Load" value={Math.round(profile.avg_play_load)} color="#A855F7" delay={150} />
-              )}
-              {profile.avg_play_load == null && (
-                <StatCard label="Training Ratio" value={profile.training_ratio || 0} unit="%" color={profile.training_color} delay={150} />
-              )}
+              {statCards.map((card) => (
+                <StatCard
+                  key={card.key}
+                  label={card.label}
+                  value={card.value}
+                  unit={card.unit}
+                  color={card.color}
+                  delay={card.delay}
+                  onExplain={() => setActiveMetricHelp(card.key)}
+                />
+              ))}
             </div>
           )}
 
-          {/* Comfortable Level */}
+          {/* Level Projections */}
           {showPredictions && profile.comfortable_level != null && (
-            <ComfortableLevelDisplay level={profile.comfortable_level} mode={mode} />
+            <div className={`grid gap-3 ${profile.likely_pass?.level ? 'md:grid-cols-2' : ''}`}>
+              <ComfortableLevelDisplay level={profile.comfortable_level} mode={mode} />
+              <LikelyPassCeilingCard
+                passCeiling={profile.likely_pass}
+                mode={mode}
+                onExplain={() => setShowPassCeilingHelp(true)}
+              />
+            </div>
           )}
 
           {/* EWMA Chart */}
@@ -606,6 +1480,26 @@ export default function TrainingPage() {
               comfortableLevel={profile.comfortable_level}
             />
           )}
+
+          <PassCeilingHelpModal
+            open={showPassCeilingHelp}
+            onClose={() => setShowPassCeilingHelp(false)}
+            mode={mode}
+            profile={profile}
+          />
+          <TrainingStatusHelpModal
+            open={showStatusHelp}
+            onClose={() => setShowStatusHelp(false)}
+            mode={mode}
+            profile={profile}
+          />
+          <MetricHelpModal
+            metricKey={activeMetricHelp}
+            onClose={() => setActiveMetricHelp('')}
+            mode={mode}
+            profile={profile}
+            data={data}
+          />
         </>
       )}
     </div>
