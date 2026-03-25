@@ -209,10 +209,10 @@ function buildMetricExplainer(metricKey, profile, data, mode) {
           { label: 'Last 7d Load', value: formatNumber(recentLoad7), accent: '#ff3366' },
           { label: 'Last 14d', value: pluralDays(recentActive14), accent: '#4488ff' },
         ],
-        calculation: 'Every local day gets a total training load from the songs you played, weighted by level and result. Base Skill is a 28-day EWMA of those daily totals, so consistent weeks matter more than one huge session.',
+        calculation: 'In plain English: every song adds some training-load points. Harder levels and better results add more, while failed songs still add a little. We total those points for each day, then Base Skill smooths the last 28 days with an EWMA, which is just a rolling average that gives more weight to recent days.',
         trend: `${tone.label}. You are ${formatSignedNumber(baseTrend.delta, 0)} points versus 7 days ago. In the last 7 days you logged ${formatNumber(recentLoad7)} total load, compared with ${formatNumber(previousLoad7)} in the 7 days before that.`,
         improve: 'To push Base Skill back up, play and clear more songs across more days, and keep the clears at meaningful levels for 2 to 4 weeks. Higher sustained levels and better grades raise it faster than one-off spikes.',
-        note: 'If Base Skill is falling, it usually means your recent weeks are lighter than your longer-term baseline.',
+        note: 'If Base Skill is falling, it usually means your recent weeks are lighter than your longer-term baseline. Because it is smoothed, one big day will not instantly spike it.',
       };
     }
     case 'current_form': {
@@ -237,12 +237,12 @@ function buildMetricExplainer(metricKey, profile, data, mode) {
           { label: 'Vs Base', value: formVsBase != null ? `${formatDetailedNumber(formVsBase, 0)}%` : '--', accent: '#22C55E' },
           { label: 'Gap To Base', value: formatSignedNumber(formGap, 0), accent: formGap >= 0 ? '#22C55E' : '#F59E0B' },
         ],
-        calculation: 'Current Form uses the same daily load input as Base Skill, but smooths it over 7 days instead of 28. That makes it respond much faster to what you have done this week.',
+        calculation: 'Current Form uses the same daily training-load points as Base Skill, but only smooths about the last 7 days. It still uses an EWMA, so recent sessions count more, but it reacts much faster to what you did this week.',
         trend: `${tone.label}. Current Form is ${formatSignedNumber(formTrend.delta, 0)} versus 7 days ago and ${formGap >= 0 ? 'above' : 'below'} Base Skill by ${formatNumber(Math.abs(formGap))}.`,
         improve: formGap < 0
           ? 'To bring it back up, stack a few strong sessions this week. Recent sessions matter a lot here, so harder clears and more volume over the next several days will move it faster than older play.'
           : 'You are already running at or above baseline. To hold it there, keep the recent sessions coming, but watch fatigue if you stay elevated for too long.',
-        note: 'This is the quickest metric to react when you go on a hot streak or take a few days off.',
+        note: 'This is the quickest metric to react when you go on a hot streak or take a few days off, because the smoothing window is much shorter than Base Skill.',
       };
     }
     case 'play_days': {
@@ -463,7 +463,7 @@ function StatCard({ label, value, unit, color, delay = 0, onExplain }) {
       className="card py-3 px-4 text-center animate-slide-up"
       style={{ animationDelay: `${delay}ms` }}
     >
-      <p className="text-[10px] uppercase tracking-wider text-gray-500 font-display mb-1">{label}</p>
+      <p className="text-[9px] sm:text-[10px] uppercase tracking-wide text-gray-500 font-display mb-1 whitespace-nowrap">{label}</p>
       {onExplain ? (
         <button
           type="button"
@@ -483,6 +483,88 @@ function StatCard({ label, value, unit, color, delay = 0, onExplain }) {
       {onExplain && (
         <p className="text-[10px] text-gray-600 mt-1">Click value to explain</p>
       )}
+    </div>
+  );
+}
+
+function TrainingBasicsModal({ open, onClose, profile, mode }) {
+  if (!open) return null;
+
+  const modeLabel = MODE_LABELS[mode] || 'Overall';
+
+  return (
+    <div
+      className="fixed inset-0 z-[90] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-3xl max-h-[85vh] overflow-y-auto rounded-2xl border border-piu-border bg-[#0b1220] shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="px-4 py-3 border-b border-piu-border/60 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[10px] text-gray-500 font-display uppercase tracking-wide">Training Basics</p>
+            <h3 className="text-sm sm:text-base font-display font-bold text-piu-accent break-words">
+              How {modeLabel} Training Load Works
+            </h3>
+            <p className="mt-1 text-[11px] text-gray-500">
+              A plain-English guide to load, smoothing, Base Skill, and Current Form.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-xs text-gray-400 hover:text-white transition-colors shrink-0"
+          >
+            Close
+          </button>
+        </div>
+
+        <div className="px-4 py-4 space-y-4">
+          <div className="rounded-2xl border border-piu-border/45 bg-piu-card/60 p-4">
+            <div className="flex flex-wrap gap-3">
+              <MiniMetric label="Base Skill" value={formatNumber(profile?.base_skill)} accent="#22C55E" />
+              <MiniMetric label="Current Form" value={formatNumber(profile?.current_form)} accent="#ff3366" />
+              <MiniMetric label="Play Days" value={profile?.play_days ?? '--'} accent="#4488ff" />
+              <MiniMetric label="Avg Load/Clear" value={profile?.avg_play_load != null ? formatNumber(profile.avg_play_load) : '--'} accent="#A855F7" />
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <ExplainerBlock
+              title="1. Every Song Adds Load"
+              body="Think of training load as workout points. Every song you play adds some. Harder charts add more. Better results add more. Failed songs still add a little because they still count as effort."
+            />
+            <ExplainerBlock
+              title="2. Your Day Total"
+              body="All of the songs from one day get added together into one daily load number. So a long session with lots of clears will build a much bigger day than one or two songs."
+            />
+            <ExplainerBlock
+              title="3. What EWMA Means"
+              body="EWMA stands for Exponentially Weighted Moving Average. In normal terms, it is a smoothed rolling average where recent days count more than older days. It stops one huge session from instantly redefining your profile."
+            />
+            <ExplainerBlock
+              title="4. Base Skill"
+              body="Base Skill is the slower 28-day smoothed version of your daily load. It shows the level of work you have been sustaining over a few weeks, not just what happened yesterday."
+            />
+            <ExplainerBlock
+              title="5. Current Form"
+              body="Current Form is the faster 7-day smoothed version of your daily load. It reacts much quicker, so it tells you whether your recent week is sharper, flatter, or stronger than normal."
+            />
+            <ExplainerBlock
+              title="6. Why The Lines Look Smooth"
+              body="The bars show raw daily load. The Base Skill and Current Form lines are smoothed versions of those bars. That is why the lines change gradually even if one day spikes hard."
+            />
+          </div>
+
+          <div className="rounded-xl border border-piu-border/45 bg-piu-dark/35 p-3">
+            <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Simple Example</p>
+            <p className="mt-1 text-sm text-gray-300 leading-relaxed">
+              If you play lots of easier songs, you still gain some load. If you start clearing harder songs with better grades, your daily load rises faster. Keep doing that across multiple days and Base Skill climbs. Do it mainly this week and Current Form climbs first.
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1042,7 +1124,7 @@ function TrainingStatusHelpModal({ open, onClose, profile, mode }) {
   );
 }
 
-function EWMAChart({ data, mode }) {
+function EWMAChart({ data, mode, onExplain }) {
   const chartData = useMemo(() => {
     if (!data?.length) return [];
     // Show last 28 days
@@ -1068,17 +1150,20 @@ function EWMAChart({ data, mode }) {
       <div className="px-4 pt-4 pb-2 flex items-center justify-between">
         <div>
           <h3 className="font-display font-bold text-sm text-gray-200">Fitness Trend</h3>
-          <p className="text-[10px] text-gray-500 mt-0.5">28-day EWMA — Base Skill vs Current Form</p>
+          <p className="text-[10px] text-gray-500 mt-0.5">EWMA = smoothed rolling average, with recent days counting more</p>
         </div>
-        <div className="flex items-center gap-4 text-[10px]">
-          <span className="flex items-center gap-1.5">
-            <span className="w-3 h-0.5 rounded-full bg-emerald-400 inline-block" />
-            <span className="text-gray-500">Base Skill</span>
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-3 h-0.5 rounded-full bg-piu-accent inline-block" />
-            <span className="text-gray-500">Current Form</span>
-          </span>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-4 text-[10px]">
+            <span className="flex items-center gap-1.5">
+              <span className="w-3 h-0.5 rounded-full bg-emerald-400 inline-block" />
+              <span className="text-gray-500 whitespace-nowrap">Base Skill</span>
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-3 h-0.5 rounded-full bg-piu-accent inline-block" />
+              <span className="text-gray-500 whitespace-nowrap">Current Form</span>
+            </span>
+          </div>
+          {onExplain && <HelpButton onClick={onExplain} label="Explain training load and EWMA" />}
         </div>
       </div>
       <div className="px-1 pb-3" style={{ height: 220 }}>
@@ -1177,7 +1262,7 @@ function EWMAChart({ data, mode }) {
   );
 }
 
-function DailyLoadChart({ data, mode }) {
+function DailyLoadChart({ data, mode, onExplain }) {
   const chartData = useMemo(() => {
     if (!data?.length) return [];
     const recent = data.slice(-28);
@@ -1194,9 +1279,12 @@ function DailyLoadChart({ data, mode }) {
 
   return (
     <div className="card overflow-hidden">
-      <div className="px-4 pt-4 pb-2">
-        <h3 className="font-display font-bold text-sm text-gray-200">Daily Load</h3>
-        <p className="text-[10px] text-gray-500 mt-0.5">Play load per day — higher bars mean harder sessions</p>
+      <div className="px-4 pt-4 pb-2 flex items-start justify-between gap-3">
+        <div>
+          <h3 className="font-display font-bold text-sm text-gray-200">Daily Load</h3>
+          <p className="text-[10px] text-gray-500 mt-0.5">Each bar is that day&apos;s total load from all songs you played</p>
+        </div>
+        {onExplain && <HelpButton onClick={onExplain} label="Explain how daily training load is accumulated" />}
       </div>
       <div className="px-1 pb-3" style={{ height: 180 }}>
         <ResponsiveContainer width="100%" height="100%">
@@ -1398,6 +1486,7 @@ export default function TrainingPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [mode, setMode] = useState('overall');
+  const [showTrainingBasicsHelp, setShowTrainingBasicsHelp] = useState(false);
   const [showPassCeilingHelp, setShowPassCeilingHelp] = useState(false);
   const [showStatusHelp, setShowStatusHelp] = useState(false);
   const [activeMetricHelp, setActiveMetricHelp] = useState('');
@@ -1449,7 +1538,16 @@ export default function TrainingPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-wide">Training</h1>
-          <p className="text-xs text-gray-500 mt-0.5">Tracked Training Load</p>
+          <div className="mt-0.5 flex items-center gap-2">
+            <p className="text-xs text-gray-500">Tracked Training Load</p>
+            <button
+              type="button"
+              onClick={() => setShowTrainingBasicsHelp(true)}
+              className="text-[10px] font-display font-bold uppercase tracking-wide text-piu-accent hover:text-pink-200 transition-colors"
+            >
+              How It Works
+            </button>
+          </div>
         </div>
         {data && (
           <div className="flex gap-1 bg-piu-card/50 rounded-xl p-1 border border-piu-border/30">
@@ -1525,12 +1623,20 @@ export default function TrainingPage() {
 
           {/* EWMA Chart */}
           {data.ewma_history?.length > 0 && (
-            <EWMAChart data={data.ewma_history} mode={mode} />
+            <EWMAChart
+              data={data.ewma_history}
+              mode={mode}
+              onExplain={() => setShowTrainingBasicsHelp(true)}
+            />
           )}
 
           {/* Daily Load Chart */}
           {data.daily_load_history?.length > 0 && (
-            <DailyLoadChart data={data.daily_load_history} mode={mode} />
+            <DailyLoadChart
+              data={data.daily_load_history}
+              mode={mode}
+              onExplain={() => setShowTrainingBasicsHelp(true)}
+            />
           )}
 
           {/* Grade Predictions */}
@@ -1544,6 +1650,12 @@ export default function TrainingPage() {
           <PassCeilingHelpModal
             open={showPassCeilingHelp}
             onClose={() => setShowPassCeilingHelp(false)}
+            mode={mode}
+            profile={profile}
+          />
+          <TrainingBasicsModal
+            open={showTrainingBasicsHelp}
+            onClose={() => setShowTrainingBasicsHelp(false)}
             mode={mode}
             profile={profile}
           />
