@@ -17,12 +17,12 @@ struct HighlightsStripView: View {
         VStack(alignment: .leading, spacing: 0) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 14) {
-                    // Own story circle (always first)
-                    let selfHighlight = highlights.first(where: { $0.userId == currentUserId })
+                    // Own story circle (always first, use isSelf flag)
+                    let selfHighlight = highlights.first(where: { $0.isSelf == true }) ?? highlights.first(where: { $0.userId == currentUserId })
                     ownStoryCircle(selfHighlight)
 
                     // Other user circles
-                    ForEach(highlights.filter { $0.userId != currentUserId }) { h in
+                    ForEach(highlights.filter { $0.isSelf != true && $0.userId != currentUserId }) { h in
                         otherStoryCircle(h)
                     }
                 }
