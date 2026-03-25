@@ -1516,31 +1516,18 @@ function ComfortableLevelDisplay({ level, mode, className = '' }) {
 function PopulationPercentileCard({ percentile, mode, avgPlayLoad, onExplain }) {
   if (!percentile) return null;
   const tone = getProjectionTone(mode);
-  const modeLabel = mode === 'single' ? 'Singles' : 'Doubles';
   const topPct = Math.max(1, Math.round(100 - percentile.percentile));
   return (
     <div className="card overflow-hidden border-piu-border/60 bg-piu-card/95">
-      <div className="px-4 py-3.5">
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-[10px] uppercase tracking-[0.24em] text-gray-500 font-display">Percentile</p>
+      <div className="px-3 py-3">
+        <div className="flex items-center justify-between">
+          <p className="text-[9px] uppercase tracking-[0.2em] text-gray-500 font-display">Percentile</p>
           <HelpButton onClick={onExplain} label="Explain population percentile" />
         </div>
-        <div className="mt-2 flex items-end gap-2">
-          <span className="text-3xl font-display font-bold tracking-tight text-white leading-none">
-            Top {topPct}%
-          </span>
-        </div>
-        <p className="mt-1.5 text-[11px] text-gray-400">
-          of {percentile.total_users} tracked {modeLabel.toLowerCase()} players
-        </p>
-        <div className="mt-2 h-1.5 rounded-full bg-piu-dark/80 overflow-hidden">
-          <div
-            className="h-full rounded-full transition-all duration-1000"
-            style={{
-              width: `${Math.min(100, percentile.percentile)}%`,
-              background: `linear-gradient(90deg, ${tone.accent}60, ${tone.accent})`,
-            }}
-          />
+        <p className="mt-1 text-2xl font-display font-bold text-white leading-none">Top {topPct}%</p>
+        <p className="mt-1 text-[10px] text-gray-500">{percentile.total_users} players</p>
+        <div className="mt-1.5 h-1 rounded-full bg-piu-dark/80 overflow-hidden">
+          <div className="h-full rounded-full" style={{ width: `${Math.min(100, percentile.percentile)}%`, background: `linear-gradient(90deg, ${tone.accent}60, ${tone.accent})` }} />
         </div>
       </div>
     </div>
@@ -1554,35 +1541,21 @@ function MilestoneTargetCard({ milestone, mode, onExplain }) {
   const progress = milestone.already_met ? 100 : Math.min(99, Math.round((milestone.current_avg_load / milestone.target_avg_load) * 100));
   return (
     <div className="card overflow-hidden border-piu-border/60 bg-piu-card/95">
-      <div className="px-4 py-3.5">
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-[10px] uppercase tracking-[0.24em] text-gray-500 font-display">Next Milestone</p>
+      <div className="px-3 py-3">
+        <div className="flex items-center justify-between">
+          <p className="text-[9px] uppercase tracking-[0.2em] text-gray-500 font-display">Milestone</p>
           <HelpButton onClick={onExplain} label="Explain milestone target" />
         </div>
-        <div className="mt-2 flex items-end gap-2">
-          <span className="text-3xl font-display font-bold tracking-tight text-white leading-none">
-            {modePrefix}{milestone.target_level}
-          </span>
-          <span className="text-[11px] text-gray-500 mb-0.5">comfort</span>
-        </div>
+        <p className="mt-1 text-2xl font-display font-bold text-white leading-none">{modePrefix}{milestone.target_level}</p>
         {milestone.already_met ? (
-          <p className="mt-1.5 text-[11px] text-emerald-400 font-display font-bold">Threshold already met!</p>
+          <p className="mt-1 text-[10px] text-emerald-400 font-display font-bold">Met!</p>
         ) : (
-          <p className="mt-1.5 text-[11px] text-gray-400">
-            Need <span className="text-gray-200 font-mono">{formatNumber(milestone.target_avg_load)}</span> avg load/clear
-            <span className="text-gray-500"> (+{Math.round(milestone.gap_percent)}%)</span>
+          <p className="mt-1 text-[10px] text-gray-500">
+            {formatNumber(milestone.target_avg_load)} load <span className="text-gray-600">(+{Math.round(milestone.gap_percent)}%)</span>
           </p>
         )}
-        <div className="mt-2 h-1.5 rounded-full bg-piu-dark/80 overflow-hidden">
-          <div
-            className="h-full rounded-full transition-all duration-1000"
-            style={{
-              width: `${progress}%`,
-              background: milestone.already_met
-                ? 'linear-gradient(90deg, #22C55E60, #22C55E)'
-                : `linear-gradient(90deg, ${tone.accent}60, ${tone.accent})`,
-            }}
-          />
+        <div className="mt-1.5 h-1 rounded-full bg-piu-dark/80 overflow-hidden">
+          <div className="h-full rounded-full" style={{ width: `${progress}%`, background: milestone.already_met ? '#22C55E' : `linear-gradient(90deg, ${tone.accent}60, ${tone.accent})` }} />
         </div>
       </div>
     </div>
@@ -1595,182 +1568,252 @@ function CeilingPredictionCard({ ceiling, mode, onExplain }) {
   const modePrefix = mode === 'single' ? 'S' : 'D';
   return (
     <div className="card overflow-hidden border-piu-border/60 bg-piu-card/95">
-      <div className="px-4 py-3.5">
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-[10px] uppercase tracking-[0.24em] text-gray-500 font-display">Predicted Ceiling</p>
+      <div className="px-3 py-3">
+        <div className="flex items-center justify-between">
+          <p className="text-[9px] uppercase tracking-[0.2em] text-gray-500 font-display">Ceiling</p>
           <HelpButton onClick={onExplain} label="Explain ceiling prediction" />
         </div>
-        <div className="mt-2 flex items-end gap-2">
-          <span className="text-3xl font-display font-bold tracking-tight text-white leading-none">
-            {modePrefix}{ceiling.ceiling_level}
-          </span>
-          <span className={`mb-0.5 rounded-md border px-1.5 py-px text-[10px] font-display font-bold uppercase tracking-wide ${tone.badgeClass}`}>
-            Peak
-          </span>
+        <div className="mt-1 flex items-end gap-1.5">
+          <span className="text-2xl font-display font-bold text-white leading-none">{modePrefix}{ceiling.ceiling_level}</span>
+          <span className={`mb-px rounded border px-1 py-px text-[8px] font-display font-bold uppercase ${tone.badgeClass}`}>Peak</span>
         </div>
-        <p className="mt-1.5 text-[11px] text-gray-400">
-          Comfort {modePrefix}{ceiling.comfortable_level} + {ceiling.delta} levels
-        </p>
+        <p className="mt-1 text-[10px] text-gray-500">{modePrefix}{ceiling.comfortable_level} + {ceiling.delta}</p>
       </div>
     </div>
   );
 }
 
-function PopulationScatterChart({ scatter, mode, currentUsername }) {
+function PopulationScatterChart({ scatter, mode, onExplain }) {
+  const containerRef = useRef(null);
+  const [scale, setScale] = useState(1);
+  const [translate, setTranslate] = useState({ x: 0, y: 0 });
+  const [activePoint, setActivePoint] = useState(null);
+  const gestureRef = useRef({ initialDistance: 0, initialScale: 1, isPinching: false, lastTouch: null, panStart: null });
+
   if (!scatter?.length || scatter.length < 3) return null;
   const modePrefix = mode === 'single' ? 'S' : 'D';
   const tone = getProjectionTone(mode);
 
-  // Chart dimensions
-  const width = 100; // percentage-based positioning
-  const minLoad = Math.min(...scatter.map((p) => p.avg_load_per_clear));
-  const maxLoad = Math.max(...scatter.map((p) => p.avg_load_per_clear));
-  const minLevel = Math.min(...scatter.map((p) => p.comfortable_level));
-  const maxLevel = Math.max(...scatter.map((p) => p.comfortable_level));
-  const loadRange = Math.max(maxLoad - minLoad, 100);
-  const levelRange = Math.max(maxLevel - minLevel, 2);
-  const pad = 0.1; // 10% padding
+  // Compute data ranges with padding
+  const allLoads = scatter.map((p) => p.avg_load_per_clear);
+  const allLevels = scatter.flatMap((p) => [p.comfortable_level, p.ceiling_level]);
+  const dataMinLoad = Math.min(...allLoads);
+  const dataMaxLoad = Math.max(...allLoads);
+  const dataMinLevel = Math.min(...allLevels);
+  const dataMaxLevel = Math.max(...allLevels);
+  const loadPad = Math.max(50, (dataMaxLoad - dataMinLoad) * 0.12);
+  const levelPad = 1;
+  const minLoad = dataMinLoad - loadPad;
+  const maxLoad = dataMaxLoad + loadPad;
+  const minLevel = dataMinLevel - levelPad;
+  const maxLevel = dataMaxLevel + levelPad;
+  const loadRange = maxLoad - minLoad;
+  const levelRange = maxLevel - minLevel;
 
-  function xPos(load) {
-    return (pad + (1 - 2 * pad) * (load - minLoad) / loadRange) * 100;
+  function xPct(load) { return ((load - minLoad) / loadRange) * 100; }
+  function yPct(level) { return (1 - (level - minLevel) / levelRange) * 100; }
+
+  // Axis tick helpers
+  function niceStep(range, targetTicks) {
+    const rough = range / targetTicks;
+    const mag = Math.pow(10, Math.floor(Math.log10(rough)));
+    const residual = rough / mag;
+    return (residual <= 1.5 ? 1 : residual <= 3 ? 2 : residual <= 7 ? 5 : 10) * mag;
   }
-  function yPos(level) {
-    return (1 - pad - (1 - 2 * pad) * (level - minLevel) / levelRange) * 100;
+  const xStep = niceStep(loadRange, 5);
+  const xTickStart = Math.ceil(minLoad / xStep) * xStep;
+  const xTicks = [];
+  for (let v = xTickStart; v <= maxLoad; v += xStep) xTicks.push(Math.round(v));
+  const yTicks = [];
+  for (let v = Math.ceil(minLevel); v <= Math.floor(maxLevel); v++) yTicks.push(v);
+
+  // Regression line
+  const n = scatter.length;
+  const sumX = scatter.reduce((s, p) => s + p.avg_load_per_clear, 0);
+  const sumY = scatter.reduce((s, p) => s + p.comfortable_level, 0);
+  const sumXY = scatter.reduce((s, p) => s + p.avg_load_per_clear * p.comfortable_level, 0);
+  const sumX2 = scatter.reduce((s, p) => s + p.avg_load_per_clear * p.avg_load_per_clear, 0);
+  const denom = n * sumX2 - sumX * sumX;
+  const slope = denom !== 0 ? (n * sumXY - sumX * sumY) / denom : 0;
+  const intercept = (sumY - slope * sumX) / n;
+  // R² for display
+  const meanY = sumY / n;
+  const ssTot = scatter.reduce((s, p) => s + (p.comfortable_level - meanY) ** 2, 0);
+  const ssRes = scatter.reduce((s, p) => s + (p.comfortable_level - (slope * p.avg_load_per_clear + intercept)) ** 2, 0);
+  const r2 = ssTot > 0 ? (1 - ssRes / ssTot) : 0;
+
+  // Pinch-to-zoom gesture handlers
+  function getDistance(t1, t2) {
+    return Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
   }
+
+  function handleTouchStart(e) {
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      gestureRef.current.initialDistance = getDistance(e.touches[0], e.touches[1]);
+      gestureRef.current.initialScale = scale;
+      gestureRef.current.isPinching = true;
+    } else if (e.touches.length === 1 && scale > 1) {
+      gestureRef.current.panStart = { x: e.touches[0].clientX - translate.x, y: e.touches[0].clientY - translate.y };
+    }
+  }
+
+  function handleTouchMove(e) {
+    if (gestureRef.current.isPinching && e.touches.length === 2) {
+      e.preventDefault();
+      const dist = getDistance(e.touches[0], e.touches[1]);
+      const newScale = Math.max(1, Math.min(4, gestureRef.current.initialScale * (dist / gestureRef.current.initialDistance)));
+      setScale(newScale);
+    } else if (gestureRef.current.panStart && e.touches.length === 1 && scale > 1) {
+      const newX = e.touches[0].clientX - gestureRef.current.panStart.x;
+      const newY = e.touches[0].clientY - gestureRef.current.panStart.y;
+      setTranslate({ x: newX, y: newY });
+    }
+  }
+
+  function handleTouchEnd(e) {
+    if (e.touches.length < 2) {
+      gestureRef.current.isPinching = false;
+    }
+    if (e.touches.length === 0) {
+      gestureRef.current.panStart = null;
+    }
+  }
+
+  function handleWheel(e) {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? 0.9 : 1.1;
+    setScale((s) => Math.max(1, Math.min(4, s * delta)));
+  }
+
+  function resetZoom() {
+    setScale(1);
+    setTranslate({ x: 0, y: 0 });
+  }
+
+  const chartAreaStyle = {
+    transform: `scale(${scale}) translate(${translate.x / scale}px, ${translate.y / scale}px)`,
+    transformOrigin: 'center center',
+    touchAction: scale > 1 ? 'none' : 'pan-y',
+  };
 
   return (
     <div className="card overflow-hidden border-piu-border/60 bg-piu-card/95">
       <div className="px-4 pt-3 pb-1 flex items-center justify-between">
         <div>
           <h3 className="font-display font-bold text-sm text-gray-200">Player Landscape</h3>
-          <p className="text-[10px] text-gray-500 mt-0.5">Avg load/clear vs comfortable level</p>
+          <p className="text-[10px] text-gray-500 mt-0.5">
+            R² = {r2.toFixed(2)} correlation
+            {scale > 1 && <span className="text-gray-600"> · pinch or scroll to zoom</span>}
+          </p>
         </div>
-        <div className="flex items-center gap-3 text-[10px]">
-          <span className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: tone.accent }} />
-            <span className="text-gray-500">Comfort</span>
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" />
-            <span className="text-gray-500">Ceiling</span>
-          </span>
+        <div className="flex items-center gap-2">
+          {scale > 1 && (
+            <button onClick={resetZoom} className="text-[9px] font-display font-bold uppercase text-gray-500 hover:text-gray-300 transition-colors">Reset</button>
+          )}
+          {onExplain && <HelpButton onClick={onExplain} label="Explain player landscape" />}
         </div>
       </div>
-      <div className="px-4 pb-4">
-        <div className="relative w-full" style={{ paddingBottom: '55%' }}>
-          {/* Grid lines */}
-          <div className="absolute inset-0">
-            {[0.25, 0.5, 0.75].map((frac) => (
-              <div
-                key={`h-${frac}`}
-                className="absolute left-0 right-0 border-t border-piu-border/20"
-                style={{ top: `${frac * 100}%` }}
-              />
-            ))}
-            {[0.25, 0.5, 0.75].map((frac) => (
-              <div
-                key={`v-${frac}`}
-                className="absolute top-0 bottom-0 border-l border-piu-border/20"
-                style={{ left: `${frac * 100}%` }}
-              />
-            ))}
-          </div>
-
-          {/* Axis labels */}
-          <span className="absolute -bottom-4 left-1/2 -translate-x-1/2 text-[9px] text-gray-600 font-display">
-            Avg Load / Clear →
-          </span>
-          <span className="absolute -left-1 top-1/2 -translate-y-1/2 -rotate-90 text-[9px] text-gray-600 font-display whitespace-nowrap">
-            Level →
-          </span>
-
-          {/* Trend line (least squares) */}
-          {scatter.length >= 3 && (() => {
-            const n = scatter.length;
-            const sumX = scatter.reduce((s, p) => s + p.avg_load_per_clear, 0);
-            const sumY = scatter.reduce((s, p) => s + p.comfortable_level, 0);
-            const sumXY = scatter.reduce((s, p) => s + p.avg_load_per_clear * p.comfortable_level, 0);
-            const sumX2 = scatter.reduce((s, p) => s + p.avg_load_per_clear * p.avg_load_per_clear, 0);
-            const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
-            const intercept = (sumY - slope * sumX) / n;
-            const x1 = minLoad;
-            const x2 = maxLoad;
-            const y1 = slope * x1 + intercept;
-            const y2 = slope * x2 + intercept;
+      <div
+        ref={containerRef}
+        className="relative overflow-hidden mx-4 mb-4 rounded-lg border border-piu-border/20 bg-piu-dark/30"
+        style={{ paddingBottom: '60%' }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onWheel={handleWheel}
+      >
+        <div className="absolute inset-0" style={chartAreaStyle}>
+          {/* Y-axis ticks (levels) */}
+          {yTicks.map((level) => {
+            const top = yPct(level);
+            if (top < 2 || top > 98) return null;
             return (
-              <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-                <line
-                  x1={xPos(x1)} y1={yPos(y1)}
-                  x2={xPos(x2)} y2={yPos(y2)}
-                  stroke={tone.accent}
-                  strokeOpacity={0.25}
-                  strokeWidth={0.5}
-                  strokeDasharray="2 2"
-                />
-              </svg>
+              <div key={`y-${level}`} className="absolute left-0 right-0" style={{ top: `${top}%` }}>
+                <div className="border-t border-piu-border/15 w-full" />
+                <span className="absolute -left-0.5 -translate-y-1/2 text-[9px] font-display text-gray-600 pl-1.5">
+                  {modePrefix}{level}
+                </span>
+              </div>
             );
-          })()}
+          })}
+          {/* X-axis ticks (load values) */}
+          {xTicks.map((load) => {
+            const left = xPct(load);
+            if (left < 5 || left > 98) return null;
+            return (
+              <div key={`x-${load}`} className="absolute top-0 bottom-0" style={{ left: `${left}%` }}>
+                <div className="border-l border-piu-border/15 h-full" />
+                <span className="absolute bottom-0 -translate-x-1/2 text-[9px] font-display text-gray-600 pb-0.5">
+                  {load >= 1000 ? `${(load / 1000).toFixed(1)}k` : load}
+                </span>
+              </div>
+            );
+          })}
+
+          {/* Trend line */}
+          <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+            <line
+              x1={xPct(dataMinLoad)} y1={yPct(slope * dataMinLoad + intercept)}
+              x2={xPct(dataMaxLoad)} y2={yPct(slope * dataMaxLoad + intercept)}
+              stroke={tone.accent} strokeOpacity={0.35} strokeWidth={0.4} strokeDasharray="1.5 1.5"
+            />
+          </svg>
 
           {/* Data points */}
           {scatter.map((point) => {
             const isMe = point.is_current_user;
-            const x = xPos(point.avg_load_per_clear);
-            const y = yPos(point.comfortable_level);
+            const isActive = activePoint === point.username;
+            const x = xPct(point.avg_load_per_clear);
+            const comfortY = yPct(point.comfortable_level);
+            const ceilingY = yPct(point.ceiling_level);
             return (
-              <div
-                key={point.username}
-                className="absolute group"
-                style={{
-                  left: `${x}%`,
-                  top: `${y}%`,
-                  transform: 'translate(-50%, -50%)',
-                  zIndex: isMe ? 20 : 10,
-                }}
-              >
-                {/* Ceiling indicator line */}
+              <div key={point.username}>
+                {/* Ceiling whisker line */}
                 {point.ceiling_level > point.comfortable_level && (
-                  <div
-                    className="absolute left-1/2 -translate-x-1/2 border-l border-dashed border-amber-500/40"
-                    style={{
-                      top: '50%',
-                      height: `${Math.abs(yPos(point.ceiling_level) - yPos(point.comfortable_level))}%`,
-                      transform: `translate(-50%, -100%)`,
-                    }}
-                  />
+                  <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none">
+                    <line x1={x} y1={comfortY} x2={x} y2={ceilingY} stroke="#F59E0B" strokeOpacity={0.35} strokeWidth={0.3} strokeDasharray="0.8 0.8" />
+                    <circle cx={x} cy={ceilingY} r={0.6} fill="#F59E0B" fillOpacity={0.5} />
+                  </svg>
                 )}
-                {/* Avatar */}
-                <div className={`relative ${isMe ? 'ring-2 ring-offset-1 ring-offset-piu-card' : ''} rounded-full`}
-                  style={isMe ? { ringColor: tone.accent } : {}}
+                {/* Avatar dot */}
+                <div
+                  className="absolute"
+                  style={{ left: `${x}%`, top: `${comfortY}%`, transform: 'translate(-50%, -50%)', zIndex: isMe ? 30 : isActive ? 25 : 10 }}
+                  onClick={() => setActivePoint(isActive ? null : point.username)}
                 >
-                  {point.avatar_url ? (
-                    <img
-                      src={point.avatar_url}
-                      alt={point.username}
-                      className={`rounded-full object-cover border border-piu-border/40 ${isMe ? 'w-8 h-8' : 'w-6 h-6'}`}
-                    />
-                  ) : (
-                    <div className={`rounded-full border border-piu-border/40 flex items-center justify-center text-[8px] font-display font-bold text-gray-400 bg-piu-dark ${isMe ? 'w-8 h-8' : 'w-6 h-6'}`}>
-                      {point.username.charAt(0)}
+                  <div className={`rounded-full transition-transform duration-200 ${isMe ? 'ring-2 ring-offset-1 ring-offset-piu-dark' : ''} ${isActive ? 'scale-125' : ''}`}
+                    style={isMe ? { '--tw-ring-color': tone.accent } : {}}
+                  >
+                    {point.avatar_url ? (
+                      <img src={point.avatar_url} alt={point.username}
+                        className={`rounded-full object-cover border border-piu-border/40 ${isMe ? 'w-7 h-7' : 'w-5 h-5'}`}
+                      />
+                    ) : (
+                      <div className={`rounded-full border border-piu-border/40 flex items-center justify-center text-[7px] font-display font-bold text-gray-400 bg-piu-dark ${isMe ? 'w-7 h-7' : 'w-5 h-5'}`}>
+                        {point.username.charAt(0)}
+                      </div>
+                    )}
+                  </div>
+                  {/* Tooltip on tap/hover */}
+                  {(isActive || undefined) && (
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 z-40 pointer-events-none">
+                      <div className="bg-piu-card border border-piu-border/60 rounded-lg px-2 py-1 shadow-xl whitespace-nowrap">
+                        <p className="text-[10px] font-display font-bold text-white">{point.username}</p>
+                        <p className="text-[9px] text-gray-400">
+                          {formatNumber(point.avg_load_per_clear)} load · {modePrefix}{point.comfortable_level} → {modePrefix}{point.ceiling_level}
+                        </p>
+                      </div>
                     </div>
                   )}
-                </div>
-                {/* Tooltip */}
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block z-30">
-                  <div className="bg-piu-card border border-piu-border/60 rounded-lg px-2.5 py-1.5 shadow-xl whitespace-nowrap">
-                    <p className="text-[11px] font-display font-bold text-white">{point.username}</p>
-                    <p className="text-[10px] text-gray-400">
-                      Load/clear: <span className="text-gray-200">{formatNumber(point.avg_load_per_clear)}</span>
-                    </p>
-                    <p className="text-[10px] text-gray-400">
-                      Comfort: <span className="text-gray-200">{modePrefix}{point.comfortable_level}</span>
-                      {' · '}Ceiling: <span className="text-amber-400">{modePrefix}{point.ceiling_level}</span>
-                    </p>
-                  </div>
                 </div>
               </div>
             );
           })}
         </div>
+        {/* Axis labels outside the zoomable area */}
+        <span className="absolute bottom-1 left-1/2 -translate-x-1/2 text-[8px] text-gray-600 font-display pointer-events-none">Avg Load / Clear</span>
+        <span className="absolute left-1 top-1/2 -translate-y-1/2 -rotate-90 text-[8px] text-gray-600 font-display whitespace-nowrap pointer-events-none">Comfort Level</span>
       </div>
     </div>
   );
@@ -1907,6 +1950,49 @@ function CeilingPredictionHelpModal({ open, onClose, mode, ceiling }) {
   );
 }
 
+function PlayerLandscapeHelpModal({ open, onClose, mode }) {
+  if (!open) return null;
+  const modeLabel = mode === 'single' ? 'Singles' : 'Doubles';
+  const modePrefix = mode === 'single' ? 'S' : 'D';
+  return (
+    <div className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/75 backdrop-blur-sm" />
+      <div className="relative w-full sm:max-w-3xl max-h-[85vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl border border-piu-border/50 bg-piu-card shadow-2xl"
+        onClick={(e) => e.stopPropagation()}>
+        <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-piu-border/40 bg-piu-card px-5 py-4 rounded-t-2xl">
+          <div>
+            <h2 className="font-display font-bold text-lg text-white">Player Landscape</h2>
+            <p className="text-xs text-gray-400 mt-1">How all tracked {modeLabel.toLowerCase()} players compare</p>
+          </div>
+          <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors text-xl leading-none mt-1">✕</button>
+        </div>
+        <div className="px-5 py-5 space-y-4">
+          <ExplainerBlock
+            title="What This Chart Shows"
+            body={`Each avatar represents a tracked ${modeLabel.toLowerCase()} player. The horizontal position shows their average training load per clear — how much difficulty weight each clear contributes. The vertical position shows their comfortable level — the highest level they can consistently clear at AA or better. Your avatar has a highlighted ring.`}
+          />
+          <ExplainerBlock
+            title="The Regression Line"
+            body="The dashed trend line is a least-squares regression fit to all data points. It shows the overall relationship between avg load/clear and comfortable level. The R² value measures how tightly the data clusters around this line — closer to 1.00 means stronger correlation. In our data, R² is typically above 0.85, meaning avg load/clear is a very reliable predictor of comfortable level."
+          />
+          <ExplainerBlock
+            title="Ceiling Whiskers"
+            body="The small amber dots above each avatar show that player's ceiling — the highest level they've cleared. The dashed line connecting comfort to ceiling visualizes the gap. Across the population, this gap is remarkably consistent at roughly +2 levels, regardless of skill tier."
+          />
+          <ExplainerBlock
+            title="The Running Analogy"
+            body={`This chart is like plotting all runners in a club by their average training pace (x-axis) versus the marathon time they can sustain (y-axis). Faster training pace reliably predicts faster race times. Similarly, higher avg load/clear reliably predicts higher comfortable level in ${modeLabel.toLowerCase()}.`}
+          />
+          <ExplainerBlock
+            title="How To Move Right And Up"
+            body="To shift your position on this chart, you need to raise your avg load/clear over time. That means consistently clearing harder charts (pushing into your frontier levels) and scoring well on them. As your avg load/clear rises, your comfortable level follows the regression line upward."
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SyncWarning({ syncStale, lastSyncedAt }) {
   if (!syncStale) return null;
   const ago = lastSyncedAt
@@ -1963,6 +2049,7 @@ export default function TrainingPage() {
   const [showPercentileHelp, setShowPercentileHelp] = useState(false);
   const [showMilestoneHelp, setShowMilestoneHelp] = useState(false);
   const [showCeilingHelp, setShowCeilingHelp] = useState(false);
+  const [showLandscapeHelp, setShowLandscapeHelp] = useState(false);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -2151,7 +2238,7 @@ export default function TrainingPage() {
               <PopulationScatterChart
                 scatter={modePopData.scatter}
                 mode={mode}
-                currentUsername={user?.username}
+                onExplain={() => setShowLandscapeHelp(true)}
               />
             </div>
           )}
@@ -2210,6 +2297,11 @@ export default function TrainingPage() {
             onClose={() => setShowCeilingHelp(false)}
             mode={mode}
             ceiling={modePopData?.ceiling}
+          />
+          <PlayerLandscapeHelpModal
+            open={showLandscapeHelp}
+            onClose={() => setShowLandscapeHelp(false)}
+            mode={mode}
           />
         </>
       )}
