@@ -1428,9 +1428,6 @@ function ComfortableLevelDisplay({ level, mode, className = '' }) {
           <span className={`inline-flex rounded-full border px-2 py-px text-[9px] font-display font-bold uppercase tracking-wide ${tone.subtleClass}`}>
             AA+ or better
           </span>
-          <span className="inline-flex rounded-full border border-piu-border/45 bg-piu-dark/55 px-2 py-px text-[9px] font-display font-bold uppercase tracking-wide text-gray-400">
-            Consistent clears
-          </span>
         </div>
       </div>
     </div>
