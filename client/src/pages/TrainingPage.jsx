@@ -394,10 +394,10 @@ function ZoneBadge({ status, color, ratio, onExplainRatio, onExplainStatus }) {
           }}
         />
       )}
-      <div className="relative px-5 py-5 sm:px-6 sm:py-6">
-        <div className="flex items-center justify-between mb-3">
+      <div className="relative px-5 py-4 sm:px-6">
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <span className="text-2xl">{zone.icon}</span>
+            <span className="text-xl">{zone.icon}</span>
             <div>
               {onExplainStatus ? (
                 <button
@@ -407,7 +407,7 @@ function ZoneBadge({ status, color, ratio, onExplainRatio, onExplainStatus }) {
                   aria-label={`Explain training status ${status}`}
                 >
                   <span
-                    className="font-display font-bold text-xl sm:text-2xl tracking-wide text-left"
+                    className="font-display font-bold text-lg sm:text-xl tracking-wide text-left"
                     style={{ color: zone.gradient[0] }}
                   >
                     {status}
@@ -415,36 +415,35 @@ function ZoneBadge({ status, color, ratio, onExplainRatio, onExplainStatus }) {
                 </button>
               ) : (
                 <h3
-                  className="font-display font-bold text-xl sm:text-2xl tracking-wide"
+                  className="font-display font-bold text-lg sm:text-xl tracking-wide"
                   style={{ color: zone.gradient[0] }}
                 >
                   {status}
                 </h3>
               )}
-              {ratio != null && (
-                <div className="text-xs text-gray-400 font-display">
-                  Training Ratio:{' '}
-                  {onExplainRatio ? (
-                    <button
-                      type="button"
-                      onClick={onExplainRatio}
-                      className="font-bold text-gray-200 rounded px-1 transition-colors hover:text-white focus:outline-none focus:ring-2 focus:ring-piu-accent/50"
-                    >
-                      {ratio}%
-                    </button>
-                  ) : (
-                    <span className="text-gray-200 font-bold">{ratio}%</span>
-                  )}
-                </div>
-              )}
-              {onExplainStatus && (
-                <p className="text-[10px] text-gray-600 font-display mt-0.5">Click status to compare zones</p>
-              )}
+              <div className="flex items-center gap-2">
+                {ratio != null && (
+                  <span className="text-xs text-gray-400 font-display">
+                    Ratio:{' '}
+                    {onExplainRatio ? (
+                      <button
+                        type="button"
+                        onClick={onExplainRatio}
+                        className="font-bold text-gray-200 rounded px-0.5 transition-colors hover:text-white focus:outline-none focus:ring-2 focus:ring-piu-accent/50"
+                      >
+                        {ratio}%
+                      </button>
+                    ) : (
+                      <span className="text-gray-200 font-bold">{ratio}%</span>
+                    )}
+                  </span>
+                )}
+                <span className="text-[10px] text-gray-500">{zone.desc}</span>
+              </div>
             </div>
           </div>
           <PulsingDot color={zone.gradient[0]} active={zone.pulse} />
         </div>
-        <p className="text-sm text-gray-400 leading-relaxed">{zone.desc}</p>
       </div>
     </div>
   );
@@ -1148,7 +1147,6 @@ function EWMAChart({ data, mode, onExplain }) {
       <div className="px-4 pt-4 pb-2 flex items-center justify-between">
         <div>
           <h3 className="font-display font-bold text-sm text-gray-200">Fitness Trend</h3>
-          <p className="text-[10px] text-gray-500 mt-0.5">EWMA = smoothed rolling average, with recent days counting more</p>
         </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-4 text-[10px]">
@@ -1534,16 +1532,7 @@ export default function TrainingPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-wide">Training</h1>
-          <div className="mt-0.5 flex items-center gap-2">
-            <p className="text-xs text-gray-500">Tracked Training Load</p>
-            <button
-              type="button"
-              onClick={() => setShowTrainingBasicsHelp(true)}
-              className="text-[10px] font-display font-bold uppercase tracking-wide text-piu-accent hover:text-pink-200 transition-colors"
-            >
-              How It Works
-            </button>
-          </div>
+          <p className="mt-0.5 text-xs text-gray-500">Tracked Training Load</p>
         </div>
         {data && (
           <div className="flex gap-1 bg-piu-card/50 rounded-xl p-1 border border-piu-border/30">
@@ -1642,6 +1631,17 @@ export default function TrainingPage() {
               comfortableLevel={profile.comfortable_level}
             />
           )}
+
+          {/* How It Works footer */}
+          <div className="flex justify-center pt-2 pb-4">
+            <button
+              type="button"
+              onClick={() => setShowTrainingBasicsHelp(true)}
+              className="text-[11px] font-display font-bold uppercase tracking-wide text-gray-600 hover:text-gray-400 transition-colors"
+            >
+              How does training load work?
+            </button>
+          </div>
 
           <PassCeilingHelpModal
             open={showPassCeilingHelp}
