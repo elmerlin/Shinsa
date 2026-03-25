@@ -25,6 +25,13 @@ const ALPHA_ACUTE = 2 / (ACUTE_DAYS + 1);
 const LOOKBACK_DAYS = 56; // 2x chronic window for EWMA warmup
 const QUERY_BUFFER_DAYS = 60; // extra buffer for timezone/DST edge
 const MIN_PLAY_DAYS = 7;
+const PREDICTION_LOOKBACK_DAYS = 28;
+const MAX_PREDICTION_LEVEL_DISTANCE = 3;
+const LEVEL_SCORE_ADJUSTMENT = 50000;
+const MIN_EXACT_PREDICTION_PLAYS = 3;
+const STRONG_NEAR_PASS_SCORE = 900000;
+const SOFT_NEAR_PASS_SCORE = 825000;
+const LIKELY_PASS_MIN_SUPPORT = 5;
 const EPSILON = 0.01;
 const DEFAULT_ROLLOVER_HOUR = 4;
 
@@ -35,6 +42,7 @@ const TRAINING_ZONES = [
   { minRatio: 0.50, label: 'Warming Up', color: '#EAB308' },
   { minRatio: 0.01, label: 'Cooling Down', color: '#94A3B8' },
 ];
+const GRADE_ORDER = ['F', 'D', 'C', 'B', 'A', 'A+', 'AA', 'AA+', 'AAA', 'AAA+', 'S', 'S+', 'SS', 'SS+', 'SSS', 'SSS+'];
 
 function calculatePlayLoad(level, rawGrade, score) {
   const numericLevel = parseInt(level, 10) || 0;
@@ -54,6 +62,17 @@ function calculatePlayLoad(level, rawGrade, score) {
   const mult = GRADE_MULTIPLIER[grade];
   if (!mult) return Math.round(basePoints * 0.10);
   return Math.round(basePoints * mult);
+}
+
+function resolvePlayResult(play) {
+  const score = parseInt(play?.score, 10) || 0;
+  const grade = normalizeGrade(play?.grade) || (score > 0 ? gradeFromScore(score) : '') || 'F';
+  return {
+    score,
+    grade,
+    cleared: score > 0 && grade !== 'F',
+    positiveScoreFail: score > 0 && grade === 'F',
+  };
 }
 
 function toLocalDate(utcIso, ianaTimezone, rolloverHour) {
@@ -199,6 +218,7 @@ function computeEWMA(dailyLoads, startDate, endDate) {
       base_skill: round2(baseSkill),
       current_form: round2(currentForm),
       chronic_play_count: round2(chronicPlayCount),
+      chronic_clear_count: round2(chronicClearCount),
     });
 
     current = addDays(current, 1);
@@ -248,40 +268,348 @@ function predictComfortableLevel(baseSkill, chronicClearCount) {
   return comfortableLevel;
 }
 
+function createLevelEvidence(level) {
+  return {
+    level,
+    attempt_count: 0,
+    clear_count: 0,
+    clear_day_peak: 0,
+    near_pass_count: 0,
+    strong_near_pass_count: 0,
+    best_clear_score: 0,
+    best_clear_grade: '',
+    best_near_pass_score: 0,
+    best_positive_score: 0,
+    clear_days: new Map(),
+    clears: [],
+    near_passes: [],
+  };
+}
+
+function emptyLevelEvidence(level) {
+  return {
+    level,
+    attempt_count: 0,
+    clear_count: 0,
+    clear_day_peak: 0,
+    near_pass_count: 0,
+    strong_near_pass_count: 0,
+    best_clear_score: 0,
+    best_clear_grade: '',
+    best_near_pass_score: 0,
+    best_positive_score: 0,
+    clears: [],
+    near_passes: [],
+  };
+}
+
+function getLevelEvidence(levelMap, level) {
+  if (level <= 0) return emptyLevelEvidence(level);
+  return levelMap.get(level) || emptyLevelEvidence(level);
+}
+
+function buildRecentLevelEvidence(recentPlays, ianaTimezone) {
+  const now = new Date();
+  const levelMap = new Map();
+
+  for (const play of recentPlays) {
+    const playLevel = parseInt(play?.level, 10) || 0;
+    if (playLevel <= 0) continue;
+
+    const utc = resolvePlayUtc(play);
+    if (!utc) continue;
+    const playDate = new Date(utc);
+    const daysAgo = (now.getTime() - playDate.getTime()) / 86400000;
+    if (daysAgo > PREDICTION_LOOKBACK_DAYS || daysAgo < 0) continue;
+
+    const localDate = toLocalDate(utc, ianaTimezone) || utc.slice(0, 10);
+    const { score, grade, cleared, positiveScoreFail } = resolvePlayResult(play);
+    const entry = levelMap.get(playLevel) || createLevelEvidence(playLevel);
+
+    entry.attempt_count += 1;
+    entry.best_positive_score = Math.max(entry.best_positive_score, score);
+
+    const playDetail = {
+      song_title: play.song_title || '',
+      score,
+      grade,
+      background_url: play.background_url || '',
+    };
+
+    if (cleared) {
+      entry.clear_count += 1;
+      entry.best_clear_score = Math.max(entry.best_clear_score, score);
+      if (score >= entry.best_clear_score) {
+        entry.best_clear_grade = grade;
+      }
+      entry.clear_days.set(localDate, (entry.clear_days.get(localDate) || 0) + 1);
+      entry.clears.push(playDetail);
+    } else if (positiveScoreFail && score >= SOFT_NEAR_PASS_SCORE) {
+      entry.near_pass_count += 1;
+      entry.best_near_pass_score = Math.max(entry.best_near_pass_score, score);
+      if (score >= STRONG_NEAR_PASS_SCORE) {
+        entry.strong_near_pass_count += 1;
+      }
+      entry.near_passes.push(playDetail);
+    }
+
+    levelMap.set(playLevel, entry);
+  }
+
+  for (const [level, entry] of levelMap.entries()) {
+    let clearDayPeak = 0;
+    for (const count of entry.clear_days.values()) {
+      if (count > clearDayPeak) clearDayPeak = count;
+    }
+    levelMap.set(level, {
+      level: entry.level,
+      attempt_count: entry.attempt_count,
+      clear_count: entry.clear_count,
+      clear_day_peak: clearDayPeak,
+      near_pass_count: entry.near_pass_count,
+      strong_near_pass_count: entry.strong_near_pass_count,
+      best_clear_score: entry.best_clear_score,
+      best_clear_grade: entry.best_clear_grade,
+      best_near_pass_score: entry.best_near_pass_score,
+      best_positive_score: entry.best_positive_score,
+      clears: entry.clears.sort((a, b) => b.score - a.score).slice(0, 20),
+      near_passes: entry.near_passes.sort((a, b) => b.score - a.score).slice(0, 10),
+    });
+  }
+
+  return levelMap;
+}
+
+function gradeFromWeightedScores(entries, scoreKey) {
+  if (!entries.length) return null;
+
+  let weightedSum = 0;
+  let weightTotal = 0;
+  for (const entry of entries) {
+    weightedSum += entry[scoreKey] * entry.weight;
+    weightTotal += entry.weight;
+  }
+
+  if (weightTotal <= 0) return null;
+  return gradeFromScore(Math.round(weightedSum / weightTotal));
+}
+
+function gradeAtLeast(grade, minimum) {
+  const gradeIndex = GRADE_ORDER.indexOf(String(grade || '').trim());
+  const minimumIndex = GRADE_ORDER.indexOf(String(minimum || '').trim());
+  if (gradeIndex === -1 || minimumIndex === -1) return false;
+  return gradeIndex >= minimumIndex;
+}
+
+function predictLoadSupportedPassLevel(avgPlayLoad) {
+  if (avgPlayLoad == null) return null;
+  let level = 1;
+  for (const candidate of SORTED_LEVELS) {
+    const requiredLoad = (EXTENDED_BASE_POINTS[candidate] || 0) * (GRADE_MULTIPLIER['A+'] || 0.9);
+    if (requiredLoad <= avgPlayLoad) {
+      level = candidate;
+    }
+  }
+  return level;
+}
+
+function getLikelyPassConfidence(supportScore) {
+  if (supportScore >= 10) return 'High';
+  if (supportScore >= 7) return 'Medium';
+  return 'Low';
+}
+
+function scoreLikelyPassCandidate(targetLevel, levelEvidenceMap, context) {
+  const target = getLevelEvidence(levelEvidenceMap, targetLevel);
+  const previous = getLevelEvidence(levelEvidenceMap, targetLevel - 1);
+  const twoBelow = getLevelEvidence(levelEvidenceMap, targetLevel - 2);
+  const formRatio = context.baseSkill > EPSILON ? (context.currentForm / context.baseSkill) : null;
+  const loadSupportedPassLevel = predictLoadSupportedPassLevel(context.avgPlayLoad);
+  const predictedGrade = predictGradeAtLevel(
+    targetLevel,
+    context.recentPlays,
+    context.ianaTimezone,
+    context.comfortableLevel
+  );
+
+  const hasDirectEvidence = target.clear_count > 0
+    || target.strong_near_pass_count > 0
+    || target.near_pass_count >= 2;
+  const hasHotLadderBridge = targetLevel <= Math.min(28, (context.comfortableLevel || 1) + 1)
+    && previous.clear_count >= 5
+    && previous.clear_day_peak >= 2
+    && twoBelow.clear_count >= 3
+    && formRatio != null
+    && formRatio >= 1.0;
+
+  let supportScore = 0;
+  const reasons = [];
+
+  if (target.clear_count >= 5) {
+    supportScore += 6;
+    reasons.push(`${target.clear_count} recent clears at Lv.${targetLevel}`);
+  } else if (target.clear_count >= 3) {
+    supportScore += 5;
+    reasons.push(`${target.clear_count} recent clears at Lv.${targetLevel}`);
+  } else if (target.clear_count >= 1) {
+    supportScore += 3;
+    reasons.push(`${target.clear_count} recent clear${target.clear_count === 1 ? '' : 's'} at Lv.${targetLevel}`);
+  }
+
+  if (target.strong_near_pass_count >= 2) {
+    supportScore += 3;
+    reasons.push(`${target.strong_near_pass_count} high-score near-pass attempts at Lv.${targetLevel}`);
+  } else if (target.strong_near_pass_count === 1) {
+    supportScore += 2;
+    reasons.push(`1 high-score near-pass attempt at Lv.${targetLevel}`);
+  } else if (target.near_pass_count >= 2) {
+    supportScore += 1;
+    reasons.push(`${target.near_pass_count} positive-score near-pass attempts at Lv.${targetLevel}`);
+  }
+
+  if (previous.clear_count >= 10) {
+    supportScore += 3;
+    reasons.push(`${previous.clear_count} recent clears at Lv.${targetLevel - 1}`);
+  } else if (previous.clear_count >= 5) {
+    supportScore += 2;
+    reasons.push(`${previous.clear_count} recent clears at Lv.${targetLevel - 1}`);
+  } else if (previous.clear_count >= 3) {
+    supportScore += 1;
+    reasons.push(`${previous.clear_count} recent clears at Lv.${targetLevel - 1}`);
+  }
+
+  if (previous.clear_day_peak >= 3) {
+    supportScore += 1;
+    reasons.push(`Peak session of ${previous.clear_day_peak} clears at Lv.${targetLevel - 1}`);
+  }
+
+  if (twoBelow.clear_count >= 10) {
+    supportScore += 2;
+    reasons.push(`${twoBelow.clear_count} recent clears at Lv.${targetLevel - 2}`);
+  } else if (twoBelow.clear_count >= 5) {
+    supportScore += 1;
+    reasons.push(`${twoBelow.clear_count} recent clears at Lv.${targetLevel - 2}`);
+  }
+
+  if (formRatio != null) {
+    if (formRatio >= 1.15) {
+      supportScore += 2;
+      reasons.push(`Current form is ${round2(formRatio * 100)}% of base skill`);
+    } else if (formRatio >= 0.95) {
+      supportScore += 1;
+      reasons.push(`Current form is ${round2(formRatio * 100)}% of base skill`);
+    } else if (formRatio < 0.60) {
+      supportScore -= 2;
+      reasons.push(`Current form is down at ${round2(formRatio * 100)}% of base skill`);
+    } else if (formRatio < 0.80) {
+      supportScore -= 1;
+      reasons.push(`Current form is down at ${round2(formRatio * 100)}% of base skill`);
+    }
+  }
+
+  if (loadSupportedPassLevel != null && targetLevel <= loadSupportedPassLevel) {
+    supportScore += 1;
+    reasons.push(`Avg load per clear supports roughly Lv.${loadSupportedPassLevel} pass territory`);
+  }
+
+  if (predictedGrade && gradeAtLeast(predictedGrade, 'AA')) {
+    supportScore += 1;
+  }
+
+  return {
+    level: targetLevel,
+    eligible: hasDirectEvidence || hasHotLadderBridge,
+    support_score: supportScore,
+    confidence: getLikelyPassConfidence(supportScore),
+    predicted_grade: predictedGrade,
+    load_supported_pass_level: loadSupportedPassLevel,
+    form_ratio: formRatio != null ? round2(formRatio * 100) : null,
+    target,
+    feeder_levels: [previous, twoBelow],
+    reasons,
+  };
+}
+
+function predictLikelyPassLevel(baseSkill, currentForm, avgPlayLoad, comfortableLevel, recentPlays, ianaTimezone) {
+  if (comfortableLevel == null || avgPlayLoad == null || !Array.isArray(recentPlays) || recentPlays.length === 0) {
+    return null;
+  }
+
+  const levelEvidenceMap = buildRecentLevelEvidence(recentPlays, ianaTimezone);
+  let best = null;
+
+  for (const targetLevel of SORTED_LEVELS) {
+    const candidate = scoreLikelyPassCandidate(targetLevel, levelEvidenceMap, {
+      baseSkill,
+      currentForm,
+      avgPlayLoad,
+      comfortableLevel,
+      recentPlays,
+      ianaTimezone,
+    });
+
+    if (!candidate.eligible || candidate.support_score < LIKELY_PASS_MIN_SUPPORT) continue;
+
+    if (!best || candidate.level > best.level || (candidate.level === best.level && candidate.support_score > best.support_score)) {
+      best = candidate;
+    }
+  }
+
+  if (!best) return null;
+
+  return {
+    level: best.level,
+    confidence: best.confidence,
+    support_score: best.support_score,
+    predicted_grade: best.predicted_grade,
+    load_supported_pass_level: best.load_supported_pass_level,
+    form_ratio: best.form_ratio,
+    target: best.target,
+    feeder_levels: best.feeder_levels,
+    reasons: best.reasons.slice(0, 5),
+  };
+}
+
 function predictGradeAtLevel(targetLevel, recentPlays, ianaTimezone, comfortableLevel) {
   const now = new Date();
-
+  const exactLevelPlays = [];
   const nearbyPlays = [];
+
   for (const play of recentPlays) {
     const playLevel = parseInt(play.level, 10) || 0;
-    if (Math.abs(playLevel - targetLevel) > 3) continue;
+    const levelDist = Math.abs(playLevel - targetLevel);
+    if (levelDist > MAX_PREDICTION_LEVEL_DISTANCE) continue;
+
     const utc = resolvePlayUtc(play);
     if (!utc) continue;
     const playDate = new Date(utc);
     const daysAgo = (now.getTime() - playDate.getTime()) / (1000 * 60 * 60 * 24);
-    if (daysAgo > 28 || daysAgo < 0) continue;
+    if (daysAgo > PREDICTION_LOOKBACK_DAYS || daysAgo < 0) continue;
 
     const score = parseInt(play.score, 10) || 0;
-    if (score <= 0) continue;
+    const grade = normalizeGrade(play.grade) || (score > 0 ? gradeFromScore(score) : '') || 'F';
+    if (score <= 0 || grade === 'F') continue;
 
-    const levelDist = Math.abs(playLevel - targetLevel);
     const timeWeight = Math.pow(ALPHA_ACUTE, daysAgo / 7);
+    if (playLevel === targetLevel) {
+      exactLevelPlays.push({ score, weight: timeWeight });
+    }
+
     const distWeight = 1 / (1 + levelDist); // ±0: 1.0, ±1: 0.5, ±2: 0.33, ±3: 0.25
     const weight = timeWeight * distWeight;
-    const levelAdjust = (playLevel - targetLevel) * 50000;
+    const levelAdjust = (playLevel - targetLevel) * LEVEL_SCORE_ADJUSTMENT;
     const adjustedScore = Math.max(0, Math.min(1000000, score + levelAdjust));
     nearbyPlays.push({ adjustedScore, weight });
   }
 
-  if (nearbyPlays.length > 0) {
-    let weightedSum = 0;
-    let weightTotal = 0;
-    for (const p of nearbyPlays) {
-      weightedSum += p.adjustedScore * p.weight;
-      weightTotal += p.weight;
-    }
-    const avgScore = Math.round(weightedSum / weightTotal);
-    return gradeFromScore(avgScore);
+  if (exactLevelPlays.length >= MIN_EXACT_PREDICTION_PLAYS) {
+    const exactGrade = gradeFromWeightedScores(exactLevelPlays, 'score');
+    if (exactGrade) return exactGrade;
+  }
+
+  const nearbyGrade = gradeFromWeightedScores(nearbyPlays, 'adjustedScore');
+  if (nearbyGrade) {
+    return nearbyGrade;
   }
 
   // Fallback: extrapolate from comfortable level
@@ -308,6 +636,7 @@ function computeModeProfile(dailyLoads, startDate, endDate, recentPlays, ianaTim
     training_status: status.label,
     training_color: status.color,
     play_days: ewma.playDays,
+    chronic_clear_count: ewma.chronicClearCount,
     calibrating: ewma.playDays > 0 && ewma.playDays < MIN_PLAY_DAYS,
   };
 
@@ -315,6 +644,14 @@ function computeModeProfile(dailyLoads, startDate, endDate, recentPlays, ianaTim
     const comfortableLevel = predictComfortableLevel(ewma.baseSkill, ewma.chronicClearCount);
     profile.comfortable_level = comfortableLevel;
     profile.avg_play_load = round2(ewma.baseSkill / Math.max(ewma.chronicClearCount, 0.5));
+    profile.likely_pass = predictLikelyPassLevel(
+      ewma.baseSkill,
+      ewma.currentForm,
+      profile.avg_play_load,
+      comfortableLevel,
+      recentPlays,
+      ianaTimezone
+    );
 
     // Grade predictions for levels around comfortable level
     const predictions = {};
@@ -328,6 +665,7 @@ function computeModeProfile(dailyLoads, startDate, endDate, recentPlays, ianaTim
   } else if (includePredictions) {
     profile.comfortable_level = null;
     profile.avg_play_load = null;
+    profile.likely_pass = null;
     profile.grade_predictions = null;
   }
 
@@ -373,9 +711,21 @@ function computeAllProfiles(plays, ianaTimezone, lastSyncedAt) {
     const dh = doubleResult.ewmaHistory[i] || {};
     return {
       date: oh.date,
-      overall: { base_skill: oh.base_skill, current_form: oh.current_form },
-      single: { base_skill: sh.base_skill || 0, current_form: sh.current_form || 0 },
-      double: { base_skill: dh.base_skill || 0, current_form: dh.current_form || 0 },
+      overall: {
+        base_skill: oh.base_skill,
+        current_form: oh.current_form,
+        chronic_clear_count: oh.chronic_clear_count || 0,
+      },
+      single: {
+        base_skill: sh.base_skill || 0,
+        current_form: sh.current_form || 0,
+        chronic_clear_count: sh.chronic_clear_count || 0,
+      },
+      double: {
+        base_skill: dh.base_skill || 0,
+        current_form: dh.current_form || 0,
+        chronic_clear_count: dh.chronic_clear_count || 0,
+      },
     };
   });
 
@@ -399,18 +749,126 @@ function computeAllProfiles(plays, ianaTimezone, lastSyncedAt) {
   };
 }
 
+// --- Population-based statistical predictions ---
+
+const POPULATION_MIN_CLEARS = 10;
+
+function computePopulationPercentile(userAvgPlayLoad, allUsersAvgPlayLoads) {
+  if (userAvgPlayLoad == null || !allUsersAvgPlayLoads.length) return null;
+  const sorted = [...allUsersAvgPlayLoads].sort((a, b) => a - b);
+  const belowOrEqual = sorted.filter((v) => v <= userAvgPlayLoad).length;
+  const percentile = round2((belowOrEqual / sorted.length) * 100);
+  return {
+    percentile,
+    rank: belowOrEqual,
+    total_users: sorted.length,
+    distribution: buildDistributionBuckets(sorted),
+  };
+}
+
+function buildDistributionBuckets(sortedValues) {
+  // Build histogram buckets for the population chart
+  if (!sortedValues.length) return [];
+  const min = sortedValues[0];
+  const max = sortedValues[sortedValues.length - 1];
+  const range = max - min;
+  const bucketCount = Math.min(8, Math.max(3, sortedValues.length));
+  const bucketSize = Math.max(1, Math.ceil(range / bucketCount));
+  const buckets = [];
+  for (let i = 0; i < bucketCount; i++) {
+    const lo = min + i * bucketSize;
+    const hi = lo + bucketSize;
+    const count = sortedValues.filter((v) => v >= lo && (i === bucketCount - 1 ? v <= hi : v < hi)).length;
+    buckets.push({ lo: Math.round(lo), hi: Math.round(hi), count });
+  }
+  return buckets;
+}
+
+function computeMilestoneTarget(currentAvgPlayLoad, comfortableLevel) {
+  if (currentAvgPlayLoad == null || comfortableLevel == null) return null;
+  const nextLevel = comfortableLevel + 1;
+  if (nextLevel > 28) return null;
+  const targetAvgLoad = EXTENDED_BASE_POINTS[nextLevel];
+  if (!targetAvgLoad) return null;
+  const gap = targetAvgLoad - currentAvgPlayLoad;
+  return {
+    target_level: nextLevel,
+    target_avg_load: targetAvgLoad,
+    current_avg_load: round2(currentAvgPlayLoad),
+    gap_absolute: round2(Math.max(0, gap)),
+    gap_percent: round2(Math.max(0, (gap / Math.max(currentAvgPlayLoad, 1)) * 100)),
+    already_met: currentAvgPlayLoad >= targetAvgLoad,
+  };
+}
+
+function computeCeilingPrediction(comfortableLevel) {
+  if (comfortableLevel == null) return null;
+  const ceilingLevel = Math.min(28, comfortableLevel + 2);
+  return {
+    ceiling_level: ceilingLevel,
+    comfortable_level: comfortableLevel,
+    delta: ceilingLevel - comfortableLevel,
+  };
+}
+
+function computePopulationStats(allPlays, currentUserId) {
+  // Group plays by (user_id, mode), compute avg load/clear for each
+  const userModeStats = new Map(); // key: `${userId}|${mode}`
+
+  for (const play of allPlays) {
+    const score = parseInt(play.score, 10) || 0;
+    const grade = normalizeGrade(play.grade) || (score > 0 ? gradeFromScore(score) : '') || 'F';
+    if (grade === 'F' || score <= 0) continue;
+
+    const mode = String(play.mode || '').trim();
+    if (mode !== 'Single' && mode !== 'Double') continue;
+
+    const key = `${play.user_id}|${mode}`;
+    const entry = userModeStats.get(key) || { userId: play.user_id, mode, totalLoad: 0, clearCount: 0 };
+    entry.totalLoad += calculatePlayLoad(play.level, play.grade, play.score);
+    entry.clearCount += 1;
+    userModeStats.set(key, entry);
+  }
+
+  const singleLoads = [];
+  const doubleLoads = [];
+  let currentSingle = null;
+  let currentDouble = null;
+
+  for (const entry of userModeStats.values()) {
+    if (entry.clearCount < POPULATION_MIN_CLEARS) continue;
+    const avgLoad = round2(entry.totalLoad / entry.clearCount);
+
+    if (entry.mode === 'Single') {
+      singleLoads.push(avgLoad);
+      if (entry.userId === currentUserId) currentSingle = avgLoad;
+    } else {
+      doubleLoads.push(avgLoad);
+      if (entry.userId === currentUserId) currentDouble = avgLoad;
+    }
+  }
+
+  return { singleLoads, doubleLoads, currentSingle, currentDouble };
+}
+
 module.exports = {
   ALPHA_ACUTE,
   ALPHA_CHRONIC,
   EXTENDED_BASE_POINTS,
   LOOKBACK_DAYS,
   MIN_PLAY_DAYS,
+  POPULATION_MIN_CLEARS,
   QUERY_BUFFER_DAYS,
   calculatePlayLoad,
   computeAllProfiles,
+  computeCeilingPrediction,
   computeEWMA,
+  computeMilestoneTarget,
   computeModeProfile,
+  computePopulationPercentile,
+  computePopulationStats,
   getTrainingStatus,
+  predictLikelyPassLevel,
   predictComfortableLevel,
   predictGradeAtLevel,
   resolvePlayUtc,

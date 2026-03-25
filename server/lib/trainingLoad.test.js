@@ -10,6 +10,7 @@ const {
   computeEWMA,
   computeAllProfiles,
   getTrainingStatus,
+  predictLikelyPassLevel,
   predictComfortableLevel,
   predictGradeAtLevel,
   toLocalDate,
@@ -262,6 +263,112 @@ describe('predictComfortableLevel', () => {
   it('accounts for plays per day', () => {
     // baseSkill=3250, chronicPlayCount=5 => avgPlayLoad=650 => level 20
     assert.equal(predictComfortableLevel(3250, 5), 20);
+  });
+});
+
+// ─── predictGradeAtLevel ───────────────────────────────
+
+describe('predictGradeAtLevel', () => {
+  it('prefers exact-level recent clears when enough direct evidence exists', () => {
+    const now = Date.now();
+    const plays = [
+      {
+        level: 24, grade: 'S', score: 970000, mode: 'Double',
+        played_at_utc: new Date(now - 1 * 86400000).toISOString(), date_played: '',
+      },
+      {
+        level: 24, grade: 'S+', score: 976000, mode: 'Double',
+        played_at_utc: new Date(now - 2 * 86400000).toISOString(), date_played: '',
+      },
+      {
+        level: 24, grade: 'SS', score: 982000, mode: 'Double',
+        played_at_utc: new Date(now - 3 * 86400000).toISOString(), date_played: '',
+      },
+      {
+        level: 21, grade: 'AA', score: 905000, mode: 'Double',
+        played_at_utc: new Date(now - 1 * 86400000).toISOString(), date_played: '',
+      },
+      {
+        level: 22, grade: 'AA+', score: 930000, mode: 'Double',
+        played_at_utc: new Date(now - 2 * 86400000).toISOString(), date_played: '',
+      },
+      {
+        level: 25, grade: 'AA', score: 905000, mode: 'Double',
+        played_at_utc: new Date(now - 1 * 86400000).toISOString(), date_played: '',
+      },
+    ];
+
+    assert.equal(predictGradeAtLevel(24, plays, 'UTC', 23), 'S+');
+  });
+
+  it('ignores positive-score x_ failed grades when building prediction evidence', () => {
+    const now = Date.now();
+    const plays = [
+      {
+        level: 25, grade: 'x_aa_p', score: 934370, mode: 'Double',
+        played_at_utc: new Date(now - 1 * 86400000).toISOString(), date_played: '',
+      },
+      {
+        level: 24, grade: 'x_a', score: 799987, mode: 'Double',
+        played_at_utc: new Date(now - 2 * 86400000).toISOString(), date_played: '',
+      },
+      {
+        level: 23, grade: 'x_a_p', score: 886004, mode: 'Double',
+        played_at_utc: new Date(now - 3 * 86400000).toISOString(), date_played: '',
+      },
+    ];
+
+    // With no valid recent clears left, the prediction should fall back to comfortable-level extrapolation.
+    assert.equal(predictGradeAtLevel(24, plays, 'UTC', 23), 'A+');
+  });
+});
+
+// ─── predictLikelyPassLevel ────────────────────────────
+
+describe('predictLikelyPassLevel', () => {
+  function makePlay({ level, grade, score, daysAgo, mode = 'Double' }) {
+    return {
+      level,
+      grade,
+      score,
+      mode,
+      played_at_utc: new Date(Date.now() - daysAgo * 86400000).toISOString(),
+      date_played: '',
+    };
+  }
+
+  it('recognizes a likely new pass level when direct recent clears back it up', () => {
+    const plays = [
+      ...Array.from({ length: 5 }, (_, i) => makePlay({ level: 23, grade: 'SS', score: 982000 + i * 50, daysAgo: 10 + i })),
+      ...Array.from({ length: 8 }, (_, i) => makePlay({ level: 24, grade: 'S+', score: 976000 + i * 100, daysAgo: 6 + i })),
+      ...Array.from({ length: 4 }, (_, i) => makePlay({ level: 25, grade: 'AA+', score: 940000 + i * 1500, daysAgo: 1 + i })),
+    ];
+
+    const likelyPass = predictLikelyPassLevel(7983, 7855, 1128, 23, plays, 'UTC');
+    assert.equal(likelyPass.level, 25);
+    assert.equal(likelyPass.target.clear_count, 4);
+  });
+
+  it('does not overreach on load alone when there is no direct target-level evidence and form is cold', () => {
+    const plays = [
+      ...Array.from({ length: 15 }, (_, i) => makePlay({ level: 23, grade: 'AAA', score: 955000 + i * 120, daysAgo: 10 + i })),
+      ...Array.from({ length: 9 }, (_, i) => makePlay({ level: 24, grade: 'AA+', score: 940000 + i * 250, daysAgo: 1 + i })),
+    ];
+
+    const likelyPass = predictLikelyPassLevel(1477, 618, 1522, 26, plays, 'UTC');
+    assert.equal(likelyPass.level, 24);
+  });
+
+  it('treats strong positive-score stage breaks as near-pass evidence for the next level up', () => {
+    const plays = [
+      ...Array.from({ length: 7 }, (_, i) => makePlay({ level: 24, grade: 'S', score: 971000 + i * 300, daysAgo: 3 + i })),
+      makePlay({ level: 25, grade: 'x_aa_p', score: 934370, daysAgo: 1 }),
+      makePlay({ level: 25, grade: 'x_aa_p', score: 930950, daysAgo: 2 }),
+    ];
+
+    const likelyPass = predictLikelyPassLevel(7800, 8200, 1110, 23, plays, 'UTC');
+    assert.equal(likelyPass.level, 25);
+    assert.equal(likelyPass.target.strong_near_pass_count, 2);
   });
 });
 
