@@ -1284,7 +1284,7 @@ function DailyLoadChart({ data, mode, onExplain }) {
       </div>
       <div className="px-1 pb-3" style={{ height: 180 }}>
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={chartData} margin={{ top: 5, right: 16, left: 0, bottom: 0 }}>
+          <BarChart data={chartData} margin={{ top: 5, right: 50, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor="#ff3366" stopOpacity={0.9} />
@@ -1532,7 +1532,7 @@ export default function TrainingPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-wide">Training</h1>
-          <p className="mt-0.5 text-xs text-gray-500">Tracked Training Load</p>
+          <p className="mt-0.5 text-[10px] text-gray-500 whitespace-nowrap">Tracked Training Load</p>
         </div>
         {data && (
           <div className="flex gap-1 bg-piu-card/50 rounded-xl p-1 border border-piu-border/30">
