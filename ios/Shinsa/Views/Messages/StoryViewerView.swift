@@ -152,37 +152,32 @@ struct StoryViewerView: View {
             scoreSnapshotView(snap)
         } else if sType == "score_roundup", let scores = story.scores, !scores.isEmpty {
             scoreRoundupView(story, scores: scores)
-        } else if sType == "text" || sType == "post" {
+        } else if sType == "text" || sType == "post" || sType == "link" {
             textStoryView(story.text ?? story.caption ?? story.title ?? "", gradient: story.backgroundGradient)
         } else if sType == "image", let mediaUrl = story.mediaUrl, !mediaUrl.isEmpty {
             imageStoryView(mediaUrl)
-        } else if let title = story.title, !title.isEmpty {
-            // Fallback: show title + subtitle
-            VStack(spacing: 8) {
-                Text(title)
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(.white)
-                    .multilineTextAlignment(.center)
-                if let subtitle = story.subtitle, !subtitle.isEmpty {
-                    Text(subtitle)
-                        .font(.system(size: 14))
-                        .foregroundColor(.white.opacity(0.7))
-                        .multilineTextAlignment(.center)
-                }
-            }
-            .padding(20)
-        } else if let caption = story.caption, !caption.isEmpty {
-            // Check if caption contains a live session marker
-            let parsed = LiveSessionMarker.split(caption)
-            if let summary = parsed.summary {
-                LiveSessionCardView(summary: summary, username: storyUser?.username ?? highlight.username)
-                    .padding(.horizontal, 16)
-            } else {
-                textStoryView(caption, gradient: story.backgroundGradient)
-            }
         } else {
-            Text("Story")
-                .foregroundColor(.white.opacity(0.5))
+            // Fallback: check all text fields for live session markers
+            let rawContent = story.caption ?? story.text ?? story.title ?? ""
+            let parsed = LiveSessionMarker.split(rawContent)
+            if let summary = parsed.summary {
+                VStack(spacing: 12) {
+                    LiveSessionCardView(summary: summary, username: storyUser?.username ?? highlight.username)
+                        .padding(.horizontal, 16)
+                    if !parsed.text.isEmpty {
+                        Text(parsed.text)
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(.white)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 20)
+                    }
+                }
+            } else if !rawContent.isEmpty {
+                textStoryView(rawContent, gradient: story.backgroundGradient)
+            } else {
+                Text("Story")
+                    .foregroundColor(.white.opacity(0.5))
+            }
         }
     }
 

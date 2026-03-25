@@ -399,7 +399,17 @@ class APIService {
     // MARK: - Messages & Conversations
     func getHighlights() async throws -> [HighlightCircle] {
         let response: HighlightsResponse = try await request("/messages/highlights")
-        return response.circles ?? []
+        var result: [HighlightCircle] = []
+        // Include self (me) first — has note and isSelf=true
+        if var me = response.me {
+            me.isSelf = true
+            result.append(me)
+        }
+        // Then other circles (filter out duplicates of self)
+        let selfId = response.me?.userId
+        let others = (response.circles ?? []).filter { $0.userId != selfId }
+        result.append(contentsOf: others)
+        return result
     }
     func getUserStories(_ userId: String) async throws -> UserStoryResponse { try await request("/messages/highlights/\(userId)/story") }
     func viewStory(_ userId: String, storyId: String) async throws -> GenericResponse { try await request("/messages/highlights/\(userId)/story/\(storyId)/view", method: "POST") }
