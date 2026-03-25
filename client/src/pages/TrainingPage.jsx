@@ -667,18 +667,15 @@ function LikelyPassCeilingCard({ passCeiling, mode, onExplain }) {
 
   return (
     <div className="card overflow-hidden border-piu-border/60 bg-piu-card/95">
-      <div className="px-5 py-5">
-        <div className="flex items-start justify-between gap-3 border-b border-piu-border/35 pb-4">
+      <div className="px-5 py-4">
+        <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="text-[10px] uppercase tracking-[0.24em] text-gray-500 font-display">
               Likely {modeLabel} Pass Ceiling
             </p>
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-display font-bold uppercase tracking-wide ${tone.badgeClass}`}>
-                Supported now
-              </span>
-              <span className="text-[11px] text-gray-500">
-                Recent clears and near-passes support this push.
+            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+              <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-[10px] font-display font-bold uppercase tracking-wide whitespace-nowrap ${tone.badgeClass}`}>
+                Supported
               </span>
             </div>
           </div>
@@ -688,26 +685,27 @@ function LikelyPassCeilingCard({ passCeiling, mode, onExplain }) {
           </div>
         </div>
 
-        <div className="mt-4 flex items-end gap-3">
-          <span className="text-5xl sm:text-6xl font-display font-bold tracking-tight text-white">
-            <AnimatedNumber value={passCeiling.level} duration={1200} />
-          </span>
-          <span className={`mb-2 rounded-md border px-2 py-0.5 text-xs font-display font-bold uppercase tracking-wide ${tone.badgeClass}`}>
-            Lv.
-          </span>
+        <div className="mt-3 flex items-center gap-4 border-t border-piu-border/30 pt-3">
+          <div className="flex items-end gap-2 shrink-0">
+            <span className="text-4xl sm:text-5xl font-display font-bold tracking-tight text-white leading-none">
+              <AnimatedNumber value={passCeiling.level} duration={1200} />
+            </span>
+            <span className={`mb-0.5 rounded-md border px-1.5 py-px text-[10px] font-display font-bold uppercase tracking-wide ${tone.badgeClass}`}>
+              Lv.
+            </span>
+          </div>
+          <p className="text-sm leading-snug text-gray-400">
+            Enough recent evidence for a real pass chance right now.
+          </p>
         </div>
 
-        <p className="mt-3 max-w-[32ch] text-sm leading-relaxed text-gray-400">
-          Highest level with enough recent evidence to call a real pass chance right now.
-        </p>
-
-        <div className="mt-4 grid grid-cols-3 gap-2">
+        <div className="mt-3 grid grid-cols-3 gap-2">
           <MiniMetric label={`Lv.${passCeiling.level} clears`} value={target.clear_count || 0} accent={tone.accent} />
           <MiniMetric label="Near-passes" value={nearPassCount} accent="#f9a8d4" />
           <MiniMetric label={feeder ? `Lv.${feeder.level} clears` : 'Feeder clears'} value={feeder?.clear_count || 0} accent="#86efac" />
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-piu-border/30 pt-3">
+        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-piu-border/30 pt-3">
           {passCeiling.predicted_grade && <GradePill grade={passCeiling.predicted_grade} />}
           {target.best_clear_score > 0 && (
             <span className="text-[11px] text-gray-400">
@@ -722,7 +720,7 @@ function LikelyPassCeilingCard({ passCeiling, mode, onExplain }) {
         </div>
 
         {passCeiling.reasons?.length > 0 && (
-          <div className="mt-3 space-y-1 border-l border-piu-border/40 pl-3">
+          <div className="mt-2 space-y-0.5 border-l border-piu-border/40 pl-3">
             {passCeiling.reasons.slice(0, 3).map((reason) => (
               <p key={reason} className="text-[11px] text-gray-500">
                 {reason}
@@ -1397,40 +1395,41 @@ function ComfortableLevelDisplay({ level, mode, className = '' }) {
   const tone = getProjectionTone(mode);
   return (
     <div className={`card overflow-hidden border-piu-border/60 bg-piu-card/95 ${className}`}>
-      <div className="px-5 py-5">
-        <div className="flex items-start justify-between gap-3 border-b border-piu-border/35 pb-4">
+      <div className="px-5 py-4">
+        <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="text-[10px] uppercase tracking-[0.24em] text-gray-500 font-display">
               Comfortable {modeLabel} Level
             </p>
-            <p className="mt-2 max-w-[30ch] text-xs leading-relaxed text-gray-400">
-              Your repeatable level based on clears you can sustain at AA or better.
+            <p className="mt-1 text-xs leading-relaxed text-gray-400">
+              Repeatable clears at AA or better.
             </p>
           </div>
-          <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-display font-bold uppercase tracking-wide ${tone.badgeClass}`}>
-            Stable baseline
+          <span className={`shrink-0 inline-flex rounded-full border px-2.5 py-0.5 text-[10px] font-display font-bold uppercase tracking-wide whitespace-nowrap ${tone.badgeClass}`}>
+            Baseline
           </span>
         </div>
 
-        <div className="mt-4 flex items-end gap-3">
-          <span className="text-5xl sm:text-6xl font-display font-bold tracking-tight text-white">
-            <AnimatedNumber value={level} duration={1200} />
-          </span>
-          <span className={`mb-2 rounded-md border px-2 py-0.5 text-xs font-display font-bold uppercase tracking-wide ${tone.badgeClass}`}>
-            Lv.
-          </span>
+        <div className="mt-3 flex items-center gap-4 border-t border-piu-border/30 pt-3">
+          <div className="flex items-end gap-2">
+            <span className="text-4xl sm:text-5xl font-display font-bold tracking-tight text-white leading-none">
+              <AnimatedNumber value={level} duration={1200} />
+            </span>
+            <span className={`mb-0.5 rounded-md border px-1.5 py-px text-[10px] font-display font-bold uppercase tracking-wide ${tone.badgeClass}`}>
+              Lv.
+            </span>
+          </div>
+          <p className="text-sm leading-snug text-gray-400">
+            Consistently clear with an AA grade or higher
+          </p>
         </div>
 
-        <p className="mt-3 max-w-[32ch] text-sm leading-relaxed text-gray-400">
-          The level you can consistently clear with an AA grade or higher
-        </p>
-
-        <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-piu-border/30 pt-3">
-          <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-display font-bold uppercase tracking-wide ${tone.subtleClass}`}>
+        <div className="mt-3 flex flex-wrap items-center gap-1.5">
+          <span className={`inline-flex rounded-full border px-2 py-px text-[9px] font-display font-bold uppercase tracking-wide ${tone.subtleClass}`}>
             AA+ or better
           </span>
-          <span className="inline-flex rounded-full border border-piu-border/45 bg-piu-dark/55 px-2 py-0.5 text-[10px] font-display font-bold uppercase tracking-wide text-gray-300">
-            Built for consistency
+          <span className="inline-flex rounded-full border border-piu-border/45 bg-piu-dark/55 px-2 py-px text-[9px] font-display font-bold uppercase tracking-wide text-gray-400">
+            Consistent clears
           </span>
         </div>
       </div>
