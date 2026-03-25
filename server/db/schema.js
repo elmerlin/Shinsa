@@ -925,6 +925,7 @@ function initializeDb() {
       location_city TEXT DEFAULT '',
       location_lat REAL DEFAULT NULL,
       location_lng REAL DEFAULT NULL,
+      timezone TEXT DEFAULT '',
       created_at TEXT DEFAULT (datetime('now'))
     );
 
@@ -3037,6 +3038,7 @@ function initializeDb() {
     ['avatar_v', 'INT DEFAULT 0'],
     ['playing_status', "TEXT DEFAULT ''"],
     ['updated_at', "TEXT DEFAULT ''"],
+    ['timezone', "TEXT DEFAULT ''"],
   ];
   for (const [col, type] of userMigrations) {
     if (!userCols.includes(col)) {

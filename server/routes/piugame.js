@@ -21,6 +21,7 @@ const { notifyActivitySubscribers, buildProfilePath } = require('../lib/activity
 const { getUserTitleProgress, updateUserSkillTitleFromBestScores, LEVEL_BASE_POINTS, GRADE_MULTIPLIER, SCORE_TO_GRADE, calculateRatingPoints, gradeFromScore, normalizeGrade } = require('../lib/titleProgress');
 const { checkSssAchievements, checkStreakAchievements } = require('../lib/achievements');
 const { normalizePiugamePlayedAtUtc } = require('../lib/piugameDate');
+const { computeAllProfiles, QUERY_BUFFER_DAYS } = require('../lib/trainingLoad');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'shinsa-pump-dojo-secret-key';
 const ENCRYPTION_KEY = crypto.createHash('sha256').update(process.env.PIU_ENCRYPT_KEY || 'shinsa-piugame-credential-key').digest();
@@ -4393,6 +4394,35 @@ router.get('/titles/:userId', (req, res) => {
   const db = getDb();
   const progress = getUserTitleProgress(db, req.params.userId);
   res.json(progress);
+});
+
+// GET /api/piugame/training-load/:userId
+router.get('/training-load/:userId', (req, res) => {
+  const db = getDb();
+  const userId = req.params.userId;
+
+  const user = db.prepare('SELECT timezone FROM users WHERE id = ?').get(userId);
+  const ianaTimezone = (user && user.timezone) || '';
+
+  const plays = db.prepare(`
+    SELECT level, score, grade, mode, played_at_utc, date_played
+    FROM user_recently_played
+    WHERE user_id = ?
+      AND (
+        played_at_utc >= datetime('now', '-' || ? || ' days')
+        OR (played_at_utc IS NULL AND date_played != '' AND date_played >= date('now', '-' || ? || ' days'))
+        OR (played_at_utc = '' AND date_played != '' AND date_played >= date('now', '-' || ? || ' days'))
+      )
+    ORDER BY COALESCE(NULLIF(played_at_utc, ''), date_played) ASC, id ASC
+  `).all(userId, QUERY_BUFFER_DAYS, QUERY_BUFFER_DAYS, QUERY_BUFFER_DAYS);
+
+  const sync = db.prepare(
+    'SELECT last_recently_played_sync FROM user_piugame_sync WHERE user_id = ?'
+  ).get(userId);
+  const lastSyncedAt = (sync && sync.last_recently_played_sync) || null;
+
+  const result = computeAllProfiles(plays, ianaTimezone, lastSyncedAt);
+  res.json(result);
 });
 
 // GET /api/piugame/sync-status/:userId

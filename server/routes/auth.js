@@ -44,10 +44,17 @@ const AUTH_USER_SELECT = `
   SELECT id, username, is_admin, email, avatar, avatar_v, pumbility, skill_title, skill_level, gender, nationality,
          date_of_birth, show_age, age, height_cm, weight_kg, description,
          location_country, location_country_code, location_city, location_lat, location_lng,
-         playing_status, created_at
+         timezone, playing_status, created_at
   FROM users
   WHERE id = ?
 `;
+
+const VALID_TIMEZONES = new Set(Intl.supportedValuesOf('timeZone'));
+
+function validateTimezone(value) {
+  const tz = String(value || '').trim();
+  return VALID_TIMEZONES.has(tz) ? tz : '';
+}
 
 function textSnippet(text, max = 90) {
   const compact = String(text || '').replace(/\s+/g, ' ').trim();
@@ -468,6 +475,7 @@ router.post('/register', (req, res) => {
     gender, nationality, date_of_birth, show_age, description,
     age, height_cm, weight_kg,
     location_country, location_country_code, location_city, location_lat, location_lng,
+    timezone,
   } = req.body;
 
   if (!username || !password) {
@@ -498,21 +506,22 @@ router.post('/register', (req, res) => {
     INSERT INTO users (
       id, username, password_hash, email, avatar, pumbility, skill_title, skill_level,
       gender, nationality, date_of_birth, show_age, age, height_cm, weight_kg, description,
-      location_country, location_country_code, location_city, location_lat, location_lng
+      location_country, location_country_code, location_city, location_lat, location_lng, timezone
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(id, username.trim(), password_hash, email || '', avatar || '', pumbility || 0,
     skill_title || '', skill_level || 1, gender || '', nationality || '', date_of_birth || '',
     show_age ? 1 : 0, parsedAge.value, parsedHeightCm.value, parsedWeightKg.value, description || '',
     location_country || '', location_country_code || '', location_city || '',
     Number.isFinite(Number(location_lat)) ? Number(location_lat) : null,
-    Number.isFinite(Number(location_lng)) ? Number(location_lng) : null);
+    Number.isFinite(Number(location_lng)) ? Number(location_lng) : null,
+    validateTimezone(timezone));
 
   const user = db.prepare(`
     SELECT id, username, is_admin, email, avatar, avatar_v, pumbility, skill_title, skill_level, gender, nationality,
            date_of_birth, show_age, age, height_cm, weight_kg, description,
            location_country, location_country_code, location_city, location_lat, location_lng,
-           playing_status, created_at
+           timezone, playing_status, created_at
     FROM users WHERE id = ?
   `).get(id);
   const clientUser = toClientAuthUser(db, user, 96);
@@ -1921,6 +1930,7 @@ router.put('/me', requireAuth, (req, res) => {
     date_of_birth, show_age, description,
     age, height_cm, weight_kg,
     location_country, location_country_code, location_city, location_lat, location_lng,
+    timezone,
   } = req.body;
   const parsedAge = parseOptionalHealthNumber(age, { min: 1, max: 120, integer: true });
   const parsedHeightCm = parseOptionalHealthNumber(height_cm, { min: 50, max: 280 });
@@ -1949,6 +1959,7 @@ router.put('/me', requireAuth, (req, res) => {
       location_city = COALESCE(?, location_city),
       location_lat = COALESCE(?, location_lat),
       location_lng = COALESCE(?, location_lng),
+      timezone = COALESCE(?, timezone),
       updated_at = datetime('now')
     WHERE id = ?
   `).run(
@@ -1973,6 +1984,7 @@ router.put('/me', requireAuth, (req, res) => {
     location_city,
     Number.isFinite(Number(location_lat)) ? Number(location_lat) : null,
     Number.isFinite(Number(location_lng)) ? Number(location_lng) : null,
+    timezone !== undefined ? validateTimezone(timezone) : null,
     req.user.id
   );
 
@@ -1984,7 +1996,7 @@ router.put('/me', requireAuth, (req, res) => {
     SELECT id, username, is_admin, email, avatar, avatar_v, pumbility, skill_title, skill_level, gender, nationality,
            date_of_birth, show_age, age, height_cm, weight_kg, description,
            location_country, location_country_code, location_city, location_lat, location_lng,
-           created_at
+           timezone, created_at
     FROM users WHERE id = ?
   `).get(req.user.id);
   res.json(toClientAuthUser(db, user, 96));
