@@ -21,7 +21,14 @@ const { notifyActivitySubscribers, buildProfilePath } = require('../lib/activity
 const { getUserTitleProgress, updateUserSkillTitleFromBestScores, LEVEL_BASE_POINTS, GRADE_MULTIPLIER, SCORE_TO_GRADE, calculateRatingPoints, gradeFromScore, normalizeGrade } = require('../lib/titleProgress');
 const { checkSssAchievements, checkStreakAchievements } = require('../lib/achievements');
 const { normalizePiugamePlayedAtUtc } = require('../lib/piugameDate');
-const { computeAllProfiles, QUERY_BUFFER_DAYS } = require('../lib/trainingLoad');
+const {
+  computeAllProfiles,
+  computePopulationStats,
+  computePopulationPercentile,
+  computeMilestoneTarget,
+  computeCeilingPrediction,
+  QUERY_BUFFER_DAYS,
+} = require('../lib/trainingLoad');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'shinsa-pump-dojo-secret-key';
 const ENCRYPTION_KEY = crypto.createHash('sha256').update(process.env.PIU_ENCRYPT_KEY || 'shinsa-piugame-credential-key').digest();
@@ -4422,6 +4429,129 @@ router.get('/training-load/:userId', (req, res) => {
   const lastSyncedAt = (sync && sync.last_recently_played_sync) || null;
 
   const result = computeAllProfiles(plays, ianaTimezone, lastSyncedAt);
+  res.json(result);
+});
+
+// GET /api/piugame/training-population/:userId
+router.get('/training-population/:userId', (req, res) => {
+  const db = getDb();
+  const userId = req.params.userId;
+
+  // Get all users' recent plays for population comparison
+  const allPlays = db.prepare(`
+    SELECT user_id, level, score, grade, mode
+    FROM user_recently_played
+    WHERE score >= 0
+      AND (
+        played_at_utc >= datetime('now', '-' || ? || ' days')
+        OR (played_at_utc IS NULL AND date_played != '' AND date_played >= date('now', '-' || ? || ' days'))
+        OR (played_at_utc = '' AND date_played != '' AND date_played >= date('now', '-' || ? || ' days'))
+      )
+  `).all(QUERY_BUFFER_DAYS, QUERY_BUFFER_DAYS, QUERY_BUFFER_DAYS);
+
+  const popStats = computePopulationStats(allPlays, userId);
+
+  // Get the current user's profiles for milestone/ceiling predictions
+  const user = db.prepare('SELECT timezone FROM users WHERE id = ?').get(userId);
+  const ianaTimezone = (user && user.timezone) || '';
+  const userPlays = db.prepare(`
+    SELECT level, score, grade, mode, played_at_utc, date_played, song_title, background_url
+    FROM user_recently_played
+    WHERE user_id = ?
+      AND (
+        played_at_utc >= datetime('now', '-' || ? || ' days')
+        OR (played_at_utc IS NULL AND date_played != '' AND date_played >= date('now', '-' || ? || ' days'))
+        OR (played_at_utc = '' AND date_played != '' AND date_played >= date('now', '-' || ? || ' days'))
+      )
+    ORDER BY COALESCE(NULLIF(played_at_utc, ''), date_played) ASC, id ASC
+  `).all(userId, QUERY_BUFFER_DAYS, QUERY_BUFFER_DAYS, QUERY_BUFFER_DAYS);
+
+  const sync = db.prepare(
+    'SELECT last_recently_played_sync FROM user_piugame_sync WHERE user_id = ?'
+  ).get(userId);
+  const lastSyncedAt = (sync && sync.last_recently_played_sync) || null;
+  const profiles = computeAllProfiles(userPlays, ianaTimezone, lastSyncedAt);
+
+  // Build per-user scatter data for the population chart (avatar + metrics)
+  const userAvatars = {};
+  const avatarRows = db.prepare(`
+    SELECT id, username, avatar_url FROM users
+  `).all();
+  for (const row of avatarRows) {
+    userAvatars[row.id] = { username: row.username, avatar_url: row.avatar_url || '' };
+  }
+
+  function buildScatterData(allPlays, mode) {
+    const userStats = new Map();
+    for (const play of allPlays) {
+      const m = String(play.mode || '').trim();
+      if (m !== mode) continue;
+      const score = parseInt(play.score, 10) || 0;
+      const { normalizeGrade, gradeFromScore } = require('../lib/titleProgress');
+      const grade = normalizeGrade(play.grade) || (score > 0 ? gradeFromScore(score) : '') || 'F';
+      if (grade === 'F' || score <= 0) continue;
+
+      const level = parseInt(play.level, 10) || 0;
+      const { calculatePlayLoad } = require('../lib/trainingLoad');
+      const load = calculatePlayLoad(level, play.grade, play.score);
+
+      const entry = userStats.get(play.user_id) || { totalLoad: 0, clearCount: 0, levelCounts: {} };
+      entry.totalLoad += load;
+      entry.clearCount += 1;
+      entry.levelCounts[level] = (entry.levelCounts[level] || 0) + 1;
+      userStats.set(play.user_id, entry);
+    }
+
+    const points = [];
+    for (const [uid, stats] of userStats.entries()) {
+      if (stats.clearCount < 10) continue;
+      const avgLoad = Math.round(stats.totalLoad / stats.clearCount);
+      // Compute comfort level (highest level with 50%+ clear rate in the population context is hard,
+      // so use the simpler avgLoad lookup approach matching LEVEL_BASE_POINTS)
+      const { EXTENDED_BASE_POINTS } = require('../lib/trainingLoad');
+      const sortedLevels = Object.keys(EXTENDED_BASE_POINTS).map(Number).sort((a, b) => a - b);
+      let comfortLevel = 1;
+      for (const l of sortedLevels) {
+        if (EXTENDED_BASE_POINTS[l] <= avgLoad) comfortLevel = l;
+      }
+      const maxClearLevel = Math.max(...Object.keys(stats.levelCounts).map(Number));
+      const info = userAvatars[uid] || { username: '?', avatar_url: '' };
+      points.push({
+        username: info.username,
+        avatar_url: info.avatar_url,
+        avg_load_per_clear: avgLoad,
+        comfortable_level: comfortLevel,
+        ceiling_level: maxClearLevel,
+        is_current_user: uid === userId,
+      });
+    }
+    return points.sort((a, b) => a.avg_load_per_clear - b.avg_load_per_clear);
+  }
+
+  const result = {};
+
+  // Singles
+  const singleProfile = profiles.single;
+  if (singleProfile && singleProfile.avg_play_load != null && singleProfile.comfortable_level != null) {
+    result.single = {
+      percentile: computePopulationPercentile(popStats.currentSingle, popStats.singleLoads),
+      milestone: computeMilestoneTarget(singleProfile.avg_play_load, singleProfile.comfortable_level),
+      ceiling: computeCeilingPrediction(singleProfile.comfortable_level),
+      scatter: buildScatterData(allPlays, 'Single'),
+    };
+  }
+
+  // Doubles
+  const doubleProfile = profiles.double;
+  if (doubleProfile && doubleProfile.avg_play_load != null && doubleProfile.comfortable_level != null) {
+    result.double = {
+      percentile: computePopulationPercentile(popStats.currentDouble, popStats.doubleLoads),
+      milestone: computeMilestoneTarget(doubleProfile.avg_play_load, doubleProfile.comfortable_level),
+      ceiling: computeCeilingPrediction(doubleProfile.comfortable_level),
+      scatter: buildScatterData(allPlays, 'Double'),
+    };
+  }
+
   res.json(result);
 });
 

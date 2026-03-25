@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getPiugameTrainingLoad } from '../utils/api';
+import { getPiugameTrainingLoad, getPiugameTrainingPopulation } from '../utils/api';
 import {
   ResponsiveContainer,
   AreaChart,
@@ -1511,6 +1511,402 @@ function ComfortableLevelDisplay({ level, mode, className = '' }) {
   );
 }
 
+// --- Population Insights Components ---
+
+function PopulationPercentileCard({ percentile, mode, avgPlayLoad, onExplain }) {
+  if (!percentile) return null;
+  const tone = getProjectionTone(mode);
+  const modeLabel = mode === 'single' ? 'Singles' : 'Doubles';
+  const topPct = Math.max(1, Math.round(100 - percentile.percentile));
+  return (
+    <div className="card overflow-hidden border-piu-border/60 bg-piu-card/95">
+      <div className="px-4 py-3.5">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[10px] uppercase tracking-[0.24em] text-gray-500 font-display">Percentile</p>
+          <HelpButton onClick={onExplain} label="Explain population percentile" />
+        </div>
+        <div className="mt-2 flex items-end gap-2">
+          <span className="text-3xl font-display font-bold tracking-tight text-white leading-none">
+            Top {topPct}%
+          </span>
+        </div>
+        <p className="mt-1.5 text-[11px] text-gray-400">
+          of {percentile.total_users} tracked {modeLabel.toLowerCase()} players
+        </p>
+        <div className="mt-2 h-1.5 rounded-full bg-piu-dark/80 overflow-hidden">
+          <div
+            className="h-full rounded-full transition-all duration-1000"
+            style={{
+              width: `${Math.min(100, percentile.percentile)}%`,
+              background: `linear-gradient(90deg, ${tone.accent}60, ${tone.accent})`,
+            }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MilestoneTargetCard({ milestone, mode, onExplain }) {
+  if (!milestone) return null;
+  const tone = getProjectionTone(mode);
+  const modePrefix = mode === 'single' ? 'S' : 'D';
+  const progress = milestone.already_met ? 100 : Math.min(99, Math.round((milestone.current_avg_load / milestone.target_avg_load) * 100));
+  return (
+    <div className="card overflow-hidden border-piu-border/60 bg-piu-card/95">
+      <div className="px-4 py-3.5">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[10px] uppercase tracking-[0.24em] text-gray-500 font-display">Next Milestone</p>
+          <HelpButton onClick={onExplain} label="Explain milestone target" />
+        </div>
+        <div className="mt-2 flex items-end gap-2">
+          <span className="text-3xl font-display font-bold tracking-tight text-white leading-none">
+            {modePrefix}{milestone.target_level}
+          </span>
+          <span className="text-[11px] text-gray-500 mb-0.5">comfort</span>
+        </div>
+        {milestone.already_met ? (
+          <p className="mt-1.5 text-[11px] text-emerald-400 font-display font-bold">Threshold already met!</p>
+        ) : (
+          <p className="mt-1.5 text-[11px] text-gray-400">
+            Need <span className="text-gray-200 font-mono">{formatNumber(milestone.target_avg_load)}</span> avg load/clear
+            <span className="text-gray-500"> (+{Math.round(milestone.gap_percent)}%)</span>
+          </p>
+        )}
+        <div className="mt-2 h-1.5 rounded-full bg-piu-dark/80 overflow-hidden">
+          <div
+            className="h-full rounded-full transition-all duration-1000"
+            style={{
+              width: `${progress}%`,
+              background: milestone.already_met
+                ? 'linear-gradient(90deg, #22C55E60, #22C55E)'
+                : `linear-gradient(90deg, ${tone.accent}60, ${tone.accent})`,
+            }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CeilingPredictionCard({ ceiling, mode, onExplain }) {
+  if (!ceiling) return null;
+  const tone = getProjectionTone(mode);
+  const modePrefix = mode === 'single' ? 'S' : 'D';
+  return (
+    <div className="card overflow-hidden border-piu-border/60 bg-piu-card/95">
+      <div className="px-4 py-3.5">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[10px] uppercase tracking-[0.24em] text-gray-500 font-display">Predicted Ceiling</p>
+          <HelpButton onClick={onExplain} label="Explain ceiling prediction" />
+        </div>
+        <div className="mt-2 flex items-end gap-2">
+          <span className="text-3xl font-display font-bold tracking-tight text-white leading-none">
+            {modePrefix}{ceiling.ceiling_level}
+          </span>
+          <span className={`mb-0.5 rounded-md border px-1.5 py-px text-[10px] font-display font-bold uppercase tracking-wide ${tone.badgeClass}`}>
+            Peak
+          </span>
+        </div>
+        <p className="mt-1.5 text-[11px] text-gray-400">
+          Comfort {modePrefix}{ceiling.comfortable_level} + {ceiling.delta} levels
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function PopulationScatterChart({ scatter, mode, currentUsername }) {
+  if (!scatter?.length || scatter.length < 3) return null;
+  const modePrefix = mode === 'single' ? 'S' : 'D';
+  const tone = getProjectionTone(mode);
+
+  // Chart dimensions
+  const width = 100; // percentage-based positioning
+  const minLoad = Math.min(...scatter.map((p) => p.avg_load_per_clear));
+  const maxLoad = Math.max(...scatter.map((p) => p.avg_load_per_clear));
+  const minLevel = Math.min(...scatter.map((p) => p.comfortable_level));
+  const maxLevel = Math.max(...scatter.map((p) => p.comfortable_level));
+  const loadRange = Math.max(maxLoad - minLoad, 100);
+  const levelRange = Math.max(maxLevel - minLevel, 2);
+  const pad = 0.1; // 10% padding
+
+  function xPos(load) {
+    return (pad + (1 - 2 * pad) * (load - minLoad) / loadRange) * 100;
+  }
+  function yPos(level) {
+    return (1 - pad - (1 - 2 * pad) * (level - minLevel) / levelRange) * 100;
+  }
+
+  return (
+    <div className="card overflow-hidden border-piu-border/60 bg-piu-card/95">
+      <div className="px-4 pt-3 pb-1 flex items-center justify-between">
+        <div>
+          <h3 className="font-display font-bold text-sm text-gray-200">Player Landscape</h3>
+          <p className="text-[10px] text-gray-500 mt-0.5">Avg load/clear vs comfortable level</p>
+        </div>
+        <div className="flex items-center gap-3 text-[10px]">
+          <span className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: tone.accent }} />
+            <span className="text-gray-500">Comfort</span>
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" />
+            <span className="text-gray-500">Ceiling</span>
+          </span>
+        </div>
+      </div>
+      <div className="px-4 pb-4">
+        <div className="relative w-full" style={{ paddingBottom: '55%' }}>
+          {/* Grid lines */}
+          <div className="absolute inset-0">
+            {[0.25, 0.5, 0.75].map((frac) => (
+              <div
+                key={`h-${frac}`}
+                className="absolute left-0 right-0 border-t border-piu-border/20"
+                style={{ top: `${frac * 100}%` }}
+              />
+            ))}
+            {[0.25, 0.5, 0.75].map((frac) => (
+              <div
+                key={`v-${frac}`}
+                className="absolute top-0 bottom-0 border-l border-piu-border/20"
+                style={{ left: `${frac * 100}%` }}
+              />
+            ))}
+          </div>
+
+          {/* Axis labels */}
+          <span className="absolute -bottom-4 left-1/2 -translate-x-1/2 text-[9px] text-gray-600 font-display">
+            Avg Load / Clear →
+          </span>
+          <span className="absolute -left-1 top-1/2 -translate-y-1/2 -rotate-90 text-[9px] text-gray-600 font-display whitespace-nowrap">
+            Level →
+          </span>
+
+          {/* Trend line (least squares) */}
+          {scatter.length >= 3 && (() => {
+            const n = scatter.length;
+            const sumX = scatter.reduce((s, p) => s + p.avg_load_per_clear, 0);
+            const sumY = scatter.reduce((s, p) => s + p.comfortable_level, 0);
+            const sumXY = scatter.reduce((s, p) => s + p.avg_load_per_clear * p.comfortable_level, 0);
+            const sumX2 = scatter.reduce((s, p) => s + p.avg_load_per_clear * p.avg_load_per_clear, 0);
+            const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+            const intercept = (sumY - slope * sumX) / n;
+            const x1 = minLoad;
+            const x2 = maxLoad;
+            const y1 = slope * x1 + intercept;
+            const y2 = slope * x2 + intercept;
+            return (
+              <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+                <line
+                  x1={xPos(x1)} y1={yPos(y1)}
+                  x2={xPos(x2)} y2={yPos(y2)}
+                  stroke={tone.accent}
+                  strokeOpacity={0.25}
+                  strokeWidth={0.5}
+                  strokeDasharray="2 2"
+                />
+              </svg>
+            );
+          })()}
+
+          {/* Data points */}
+          {scatter.map((point) => {
+            const isMe = point.is_current_user;
+            const x = xPos(point.avg_load_per_clear);
+            const y = yPos(point.comfortable_level);
+            return (
+              <div
+                key={point.username}
+                className="absolute group"
+                style={{
+                  left: `${x}%`,
+                  top: `${y}%`,
+                  transform: 'translate(-50%, -50%)',
+                  zIndex: isMe ? 20 : 10,
+                }}
+              >
+                {/* Ceiling indicator line */}
+                {point.ceiling_level > point.comfortable_level && (
+                  <div
+                    className="absolute left-1/2 -translate-x-1/2 border-l border-dashed border-amber-500/40"
+                    style={{
+                      top: '50%',
+                      height: `${Math.abs(yPos(point.ceiling_level) - yPos(point.comfortable_level))}%`,
+                      transform: `translate(-50%, -100%)`,
+                    }}
+                  />
+                )}
+                {/* Avatar */}
+                <div className={`relative ${isMe ? 'ring-2 ring-offset-1 ring-offset-piu-card' : ''} rounded-full`}
+                  style={isMe ? { ringColor: tone.accent } : {}}
+                >
+                  {point.avatar_url ? (
+                    <img
+                      src={point.avatar_url}
+                      alt={point.username}
+                      className={`rounded-full object-cover border border-piu-border/40 ${isMe ? 'w-8 h-8' : 'w-6 h-6'}`}
+                    />
+                  ) : (
+                    <div className={`rounded-full border border-piu-border/40 flex items-center justify-center text-[8px] font-display font-bold text-gray-400 bg-piu-dark ${isMe ? 'w-8 h-8' : 'w-6 h-6'}`}>
+                      {point.username.charAt(0)}
+                    </div>
+                  )}
+                </div>
+                {/* Tooltip */}
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block z-30">
+                  <div className="bg-piu-card border border-piu-border/60 rounded-lg px-2.5 py-1.5 shadow-xl whitespace-nowrap">
+                    <p className="text-[11px] font-display font-bold text-white">{point.username}</p>
+                    <p className="text-[10px] text-gray-400">
+                      Load/clear: <span className="text-gray-200">{formatNumber(point.avg_load_per_clear)}</span>
+                    </p>
+                    <p className="text-[10px] text-gray-400">
+                      Comfort: <span className="text-gray-200">{modePrefix}{point.comfortable_level}</span>
+                      {' · '}Ceiling: <span className="text-amber-400">{modePrefix}{point.ceiling_level}</span>
+                    </p>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// --- Population Explainer Modals ---
+
+function PopulationPercentileHelpModal({ open, onClose, mode, profile, popData }) {
+  if (!open) return null;
+  const modeLabel = mode === 'single' ? 'Singles' : 'Doubles';
+  return (
+    <div className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/75 backdrop-blur-sm" />
+      <div className="relative w-full sm:max-w-3xl max-h-[85vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl border border-piu-border/50 bg-piu-card shadow-2xl"
+        onClick={(e) => e.stopPropagation()}>
+        <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-piu-border/40 bg-piu-card px-5 py-4 rounded-t-2xl">
+          <div>
+            <h2 className="font-display font-bold text-lg text-white">Population Percentile</h2>
+            <p className="text-xs text-gray-400 mt-1">Where you rank among all tracked {modeLabel.toLowerCase()} players</p>
+          </div>
+          <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors text-xl leading-none mt-1">✕</button>
+        </div>
+        <div className="px-5 py-5 space-y-4">
+          <ExplainerBlock
+            title="The Running Analogy"
+            body="Think of avg load/clear as your training pace. A runner who averages 4:30/km on their runs will beat one averaging 5:30/km in a race — regardless of how many total kilometers they run. Your avg load/clear captures the difficulty weight of each clear, not the quantity. It's your pace, not your mileage."
+          />
+          <ExplainerBlock
+            title="What We Measure"
+            body={`We compute the average training load per clear for every tracked player in ${modeLabel} mode who has at least 10 clears in the last 60 days. Each clear generates load points based on the level's base difficulty and the grade achieved. Higher levels and better grades generate more load per clear.`}
+          />
+          <ExplainerBlock
+            title="How Percentile Works"
+            body="If you're in the 85th percentile, your avg load/clear exceeds 85% of all tracked players. 'Top 15%' means only 15% of the community generates higher-quality clears than you on average. This normalizes for play frequency — a player who clears 200 easy songs and one who clears 20 hard songs are compared on difficulty weight, not volume."
+          />
+          <ExplainerBlock
+            title="Statistical Foundation"
+            body="This metric works because PIU's scoring system assigns exponentially higher base points to harder levels (Lv.20 = 650, Lv.22 = 880, Lv.24 = 1150). When you consistently clear harder charts, your average load per clear rises proportionally. The population ranking then places you against other players using the same scale."
+          />
+          <ExplainerBlock
+            title="Caveats"
+            body="The population is all Shinsa users who sync their plays — not all PIU players worldwide. Small populations can shift percentiles with each new user. As more players join and sync, the percentiles become more stable and meaningful."
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MilestoneTargetHelpModal({ open, onClose, mode, milestone }) {
+  if (!open) return null;
+  const modeLabel = mode === 'single' ? 'Singles' : 'Doubles';
+  const modePrefix = mode === 'single' ? 'S' : 'D';
+  return (
+    <div className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/75 backdrop-blur-sm" />
+      <div className="relative w-full sm:max-w-3xl max-h-[85vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl border border-piu-border/50 bg-piu-card shadow-2xl"
+        onClick={(e) => e.stopPropagation()}>
+        <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-piu-border/40 bg-piu-card px-5 py-4 rounded-t-2xl">
+          <div>
+            <h2 className="font-display font-bold text-lg text-white">Next Milestone Target</h2>
+            <p className="text-xs text-gray-400 mt-1">What your training numbers need to reach {modePrefix}{milestone?.target_level} comfort</p>
+          </div>
+          <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors text-xl leading-none mt-1">✕</button>
+        </div>
+        <div className="px-5 py-5 space-y-4">
+          <ExplainerBlock
+            title="The Running Analogy"
+            body={`If avg load/clear is your pace, then milestone targets are like saying "to run a sub-3:00 marathon, you need to sustain 4:15/km." Each PIU level has a known load threshold from the scoring system, just like each marathon time has a required pace.`}
+          />
+          <ExplainerBlock
+            title="Where Targets Come From"
+            body={`Each level has a base point value in the scoring system (e.g., ${modePrefix}22 = 880, ${modePrefix}23 = 1,010, ${modePrefix}24 = 1,150). When your avg load/clear reaches that value, it means your typical clear effort matches the difficulty weight of that level at AA grade — which is the threshold for "comfortable" play.`}
+          />
+          <ExplainerBlock
+            title="Why This Predicts Comfort Level"
+            body="Across all tracked players, the ratio of avg load/clear to LEVEL_BASE_POINTS at their comfortable level falls consistently between 0.93× and 1.20×. In other words, the lookup table predicts comfortable level within ±1 for every player in our dataset. The milestone target is simply the next level's base point value."
+          />
+          {milestone && !milestone.already_met && (
+            <ExplainerBlock
+              title="Your Current Gap"
+              body={`Your current avg load/clear is ${formatNumber(milestone.current_avg_load)}. To reach ${modePrefix}${milestone.target_level} comfort, you need ~${formatNumber(milestone.target_avg_load)} — a gap of ${formatNumber(milestone.gap_absolute)} points (+${Math.round(milestone.gap_percent)}%). This means sustaining higher-quality clears: either clearing harder charts, or achieving better grades on current charts.`}
+            />
+          )}
+          <ExplainerBlock
+            title="How To Close The Gap"
+            body="There are two ways to raise your avg load/clear: (1) Clear harder charts — each level up adds significantly more load per clear due to the exponential base point curve. (2) Score better — an S grade generates 1.20× the load of an AA grade on the same chart. Both contribute, but pushing level difficulty tends to have the bigger impact."
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CeilingPredictionHelpModal({ open, onClose, mode, ceiling }) {
+  if (!open) return null;
+  const modePrefix = mode === 'single' ? 'S' : 'D';
+  return (
+    <div className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/75 backdrop-blur-sm" />
+      <div className="relative w-full sm:max-w-3xl max-h-[85vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl border border-piu-border/50 bg-piu-card shadow-2xl"
+        onClick={(e) => e.stopPropagation()}>
+        <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-piu-border/40 bg-piu-card px-5 py-4 rounded-t-2xl">
+          <div>
+            <h2 className="font-display font-bold text-lg text-white">Predicted Ceiling</h2>
+            <p className="text-xs text-gray-400 mt-1">Your peak pass level based on population patterns</p>
+          </div>
+          <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors text-xl leading-none mt-1">✕</button>
+        </div>
+        <div className="px-5 py-5 space-y-4">
+          <ExplainerBlock
+            title="The Running Analogy"
+            body="Comfortable level is your sustainable race pace — what you can repeat day after day. Ceiling is your PR: the best you can do when everything clicks. Just as most runners' PRs tend to be a predictable margin above their training pace, we observe a remarkably consistent gap between comfort and ceiling across all tracked players."
+          />
+          <ExplainerBlock
+            title="The Observation"
+            body={`Across all tracked Shinsa players, we observe that players whose comfortable level is N tend to have their highest reliable passes at N+2. For example: a player comfortable at ${modePrefix}22 typically has ceiling passes at ${modePrefix}24. A player comfortable at ${modePrefix}20 peaks around ${modePrefix}22. This holds across the entire skill spectrum in our dataset.`}
+          />
+          <ExplainerBlock
+            title="Why +2 Levels?"
+            body="PIU's difficulty curve is exponential — each level adds roughly 10-15% more base difficulty. Two levels above comfort represents a zone where peak form, favorable chart selection, and strong execution can overcome the difficulty gap. At +3 levels, the gap becomes too large for consistent passes. The +2 rule emerges naturally from the scoring curve's shape."
+          />
+          <ExplainerBlock
+            title="How To Raise Your Ceiling"
+            body="Since ceiling tracks comfort + 2, the only way to raise it is to raise your comfortable level. That means sustaining higher avg load/clear over time — clearing harder charts consistently, not just spiking one lucky pass. As your comfort creeps up, your ceiling follows automatically."
+          />
+          <ExplainerBlock
+            title="Limitations"
+            body="This is a statistical prediction, not a guarantee. Individual chart difficulty varies widely within a level. A player might pass one specific Lv.25 but fail most others. The +2 rule describes the typical range where passes become possible, not where they're guaranteed."
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SyncWarning({ syncStale, lastSyncedAt }) {
   if (!syncStale) return null;
   const ago = lastSyncedAt
@@ -1563,6 +1959,10 @@ export default function TrainingPage() {
   const [showPassCeilingHelp, setShowPassCeilingHelp] = useState(false);
   const [showStatusHelp, setShowStatusHelp] = useState(false);
   const [activeMetricHelp, setActiveMetricHelp] = useState('');
+  const [popData, setPopData] = useState(null);
+  const [showPercentileHelp, setShowPercentileHelp] = useState(false);
+  const [showMilestoneHelp, setShowMilestoneHelp] = useState(false);
+  const [showCeilingHelp, setShowCeilingHelp] = useState(false);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -1582,6 +1982,18 @@ export default function TrainingPage() {
     return () => { cancelled = true; };
   }, [user?.id]);
 
+  // Load population stats after main data is available
+  useEffect(() => {
+    if (!user?.id || !data) return;
+    let cancelled = false;
+    getPiugameTrainingPopulation(user.id)
+      .then((result) => {
+        if (!cancelled) setPopData(result);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [user?.id, data]);
+
   if (!user) {
     return (
       <div className="max-w-xl mx-auto px-4 py-8">
@@ -1594,6 +2006,7 @@ export default function TrainingPage() {
   }
 
   const profile = data?.[mode] || null;
+  const modePopData = popData?.[mode] || null;
   const modeColor = mode === 'single' ? '#ff3366' : mode === 'double' ? '#22C55E' : '#A855F7';
   const showPredictions = mode !== 'overall' && profile && !profile.calibrating;
   const statCards = profile ? [
@@ -1711,6 +2124,38 @@ export default function TrainingPage() {
             />
           )}
 
+          {/* Population Insights */}
+          {showPredictions && modePopData && (
+            <div className="space-y-3">
+              <p className="text-[10px] uppercase tracking-[0.24em] text-gray-500 font-display">
+                Population Insights
+              </p>
+              <div className="grid gap-3 grid-cols-3">
+                <PopulationPercentileCard
+                  percentile={modePopData.percentile}
+                  mode={mode}
+                  avgPlayLoad={profile.avg_play_load}
+                  onExplain={() => setShowPercentileHelp(true)}
+                />
+                <MilestoneTargetCard
+                  milestone={modePopData.milestone}
+                  mode={mode}
+                  onExplain={() => setShowMilestoneHelp(true)}
+                />
+                <CeilingPredictionCard
+                  ceiling={modePopData.ceiling}
+                  mode={mode}
+                  onExplain={() => setShowCeilingHelp(true)}
+                />
+              </div>
+              <PopulationScatterChart
+                scatter={modePopData.scatter}
+                mode={mode}
+                currentUsername={user?.username}
+              />
+            </div>
+          )}
+
           {/* How It Works footer */}
           <div className="flex justify-center pt-2 pb-4">
             <button
@@ -1746,6 +2191,25 @@ export default function TrainingPage() {
             mode={mode}
             profile={profile}
             data={data}
+          />
+          <PopulationPercentileHelpModal
+            open={showPercentileHelp}
+            onClose={() => setShowPercentileHelp(false)}
+            mode={mode}
+            profile={profile}
+            popData={modePopData}
+          />
+          <MilestoneTargetHelpModal
+            open={showMilestoneHelp}
+            onClose={() => setShowMilestoneHelp(false)}
+            mode={mode}
+            milestone={modePopData?.milestone}
+          />
+          <CeilingPredictionHelpModal
+            open={showCeilingHelp}
+            onClose={() => setShowCeilingHelp(false)}
+            mode={mode}
+            ceiling={modePopData?.ceiling}
           />
         </>
       )}

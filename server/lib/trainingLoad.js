@@ -749,17 +749,124 @@ function computeAllProfiles(plays, ianaTimezone, lastSyncedAt) {
   };
 }
 
+// --- Population-based statistical predictions ---
+
+const POPULATION_MIN_CLEARS = 10;
+
+function computePopulationPercentile(userAvgPlayLoad, allUsersAvgPlayLoads) {
+  if (userAvgPlayLoad == null || !allUsersAvgPlayLoads.length) return null;
+  const sorted = [...allUsersAvgPlayLoads].sort((a, b) => a - b);
+  const belowOrEqual = sorted.filter((v) => v <= userAvgPlayLoad).length;
+  const percentile = round2((belowOrEqual / sorted.length) * 100);
+  return {
+    percentile,
+    rank: belowOrEqual,
+    total_users: sorted.length,
+    distribution: buildDistributionBuckets(sorted),
+  };
+}
+
+function buildDistributionBuckets(sortedValues) {
+  // Build histogram buckets for the population chart
+  if (!sortedValues.length) return [];
+  const min = sortedValues[0];
+  const max = sortedValues[sortedValues.length - 1];
+  const range = max - min;
+  const bucketCount = Math.min(8, Math.max(3, sortedValues.length));
+  const bucketSize = Math.max(1, Math.ceil(range / bucketCount));
+  const buckets = [];
+  for (let i = 0; i < bucketCount; i++) {
+    const lo = min + i * bucketSize;
+    const hi = lo + bucketSize;
+    const count = sortedValues.filter((v) => v >= lo && (i === bucketCount - 1 ? v <= hi : v < hi)).length;
+    buckets.push({ lo: Math.round(lo), hi: Math.round(hi), count });
+  }
+  return buckets;
+}
+
+function computeMilestoneTarget(currentAvgPlayLoad, comfortableLevel) {
+  if (currentAvgPlayLoad == null || comfortableLevel == null) return null;
+  const nextLevel = comfortableLevel + 1;
+  if (nextLevel > 28) return null;
+  const targetAvgLoad = EXTENDED_BASE_POINTS[nextLevel];
+  if (!targetAvgLoad) return null;
+  const gap = targetAvgLoad - currentAvgPlayLoad;
+  return {
+    target_level: nextLevel,
+    target_avg_load: targetAvgLoad,
+    current_avg_load: round2(currentAvgPlayLoad),
+    gap_absolute: round2(Math.max(0, gap)),
+    gap_percent: round2(Math.max(0, (gap / Math.max(currentAvgPlayLoad, 1)) * 100)),
+    already_met: currentAvgPlayLoad >= targetAvgLoad,
+  };
+}
+
+function computeCeilingPrediction(comfortableLevel) {
+  if (comfortableLevel == null) return null;
+  const ceilingLevel = Math.min(28, comfortableLevel + 2);
+  return {
+    ceiling_level: ceilingLevel,
+    comfortable_level: comfortableLevel,
+    delta: ceilingLevel - comfortableLevel,
+  };
+}
+
+function computePopulationStats(allPlays, currentUserId) {
+  // Group plays by (user_id, mode), compute avg load/clear for each
+  const userModeStats = new Map(); // key: `${userId}|${mode}`
+
+  for (const play of allPlays) {
+    const score = parseInt(play.score, 10) || 0;
+    const grade = normalizeGrade(play.grade) || (score > 0 ? gradeFromScore(score) : '') || 'F';
+    if (grade === 'F' || score <= 0) continue;
+
+    const mode = String(play.mode || '').trim();
+    if (mode !== 'Single' && mode !== 'Double') continue;
+
+    const key = `${play.user_id}|${mode}`;
+    const entry = userModeStats.get(key) || { userId: play.user_id, mode, totalLoad: 0, clearCount: 0 };
+    entry.totalLoad += calculatePlayLoad(play.level, play.grade, play.score);
+    entry.clearCount += 1;
+    userModeStats.set(key, entry);
+  }
+
+  const singleLoads = [];
+  const doubleLoads = [];
+  let currentSingle = null;
+  let currentDouble = null;
+
+  for (const entry of userModeStats.values()) {
+    if (entry.clearCount < POPULATION_MIN_CLEARS) continue;
+    const avgLoad = round2(entry.totalLoad / entry.clearCount);
+
+    if (entry.mode === 'Single') {
+      singleLoads.push(avgLoad);
+      if (entry.userId === currentUserId) currentSingle = avgLoad;
+    } else {
+      doubleLoads.push(avgLoad);
+      if (entry.userId === currentUserId) currentDouble = avgLoad;
+    }
+  }
+
+  return { singleLoads, doubleLoads, currentSingle, currentDouble };
+}
+
 module.exports = {
   ALPHA_ACUTE,
   ALPHA_CHRONIC,
   EXTENDED_BASE_POINTS,
   LOOKBACK_DAYS,
   MIN_PLAY_DAYS,
+  POPULATION_MIN_CLEARS,
   QUERY_BUFFER_DAYS,
   calculatePlayLoad,
   computeAllProfiles,
+  computeCeilingPrediction,
   computeEWMA,
+  computeMilestoneTarget,
   computeModeProfile,
+  computePopulationPercentile,
+  computePopulationStats,
   getTrainingStatus,
   predictLikelyPassLevel,
   predictComfortableLevel,
