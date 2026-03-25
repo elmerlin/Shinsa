@@ -342,12 +342,16 @@ struct HighlightUser: Codable {
 }
 
 struct HighlightNote: Codable {
-    var text: String?
+    var content: String?
+    var kind: String?
     var createdAt: String?
     var updatedAt: String?
 
+    /// Convenience: the API uses "content" but callers expect "text"
+    var text: String? { content }
+
     enum CodingKeys: String, CodingKey {
-        case text
+        case content, kind
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }

@@ -177,10 +177,13 @@ struct MessagesListView: View {
                 }
 
                 HStack {
-                    Text(conversation.lastMessagePreview ?? "No messages yet")
-                        .font(.system(size: 13))
-                        .foregroundColor(DojoTheme.textSecondary)
-                        .lineLimit(1)
+                    StickerTextView(
+                        text: conversation.lastMessagePreview ?? "No messages yet",
+                        font: .system(size: 13),
+                        color: DojoTheme.textSecondary,
+                        stickerSize: 18,
+                        lineLimit: 1
+                    )
 
                     Spacer()
 

@@ -146,6 +146,7 @@
 		USRPKR000001000100010001 /* UserPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = USRPKR000002000200020002 /* UserPickerView.swift */; };
 		FDTLDV000001000100010001 /* FeedItemDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDTLDV000002000200020002 /* FeedItemDetailView.swift */; };
 		LVSCRD000001000100010001 /* LiveSessionCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = LVSCRD000002000200020002 /* LiveSessionCardView.swift */; };
+		STKTXT000001000100010001 /* StickerTextView.swift in Sources */ = {isa = PBXBuildFile; fileRef = STKTXT000002000200020002 /* StickerTextView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -289,6 +290,7 @@
 		USRPKR000002000200020002 /* UserPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UserPickerView.swift"; sourceTree = "<group>"; };
 		FDTLDV000002000200020002 /* FeedItemDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FeedItemDetailView.swift"; sourceTree = "<group>"; };
 		LVSCRD000002000200020002 /* LiveSessionCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LiveSessionCardView.swift"; sourceTree = "<group>"; };
+		STKTXT000002000200020002 /* StickerTextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StickerTextView.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -489,6 +491,7 @@
 				F40A0E0E0E0E0E0E0E0E0E0E /* UserSearchView.swift */,
 				SENDDM000002000200020002 /* SendToDMButton.swift */,
 				USRPKR000002000200020002 /* UserPickerView.swift */,
+				STKTXT000002000200020002 /* StickerTextView.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -940,6 +943,7 @@
 				USRPKR000001000100010001 /* UserPickerView.swift in Sources */,
 				FDTLDV000001000100010001 /* FeedItemDetailView.swift in Sources */,
 				LVSCRD000001000100010001 /* LiveSessionCardView.swift in Sources */,
+				STKTXT000001000100010001 /* StickerTextView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
