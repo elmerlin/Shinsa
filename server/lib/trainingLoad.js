@@ -281,6 +281,8 @@ function createLevelEvidence(level) {
     best_near_pass_score: 0,
     best_positive_score: 0,
     clear_days: new Map(),
+    clears: [],
+    near_passes: [],
   };
 }
 
@@ -296,6 +298,8 @@ function emptyLevelEvidence(level) {
     best_clear_grade: '',
     best_near_pass_score: 0,
     best_positive_score: 0,
+    clears: [],
+    near_passes: [],
   };
 }
 
@@ -325,6 +329,13 @@ function buildRecentLevelEvidence(recentPlays, ianaTimezone) {
     entry.attempt_count += 1;
     entry.best_positive_score = Math.max(entry.best_positive_score, score);
 
+    const playDetail = {
+      song_title: play.song_title || '',
+      score,
+      grade,
+      background_url: play.background_url || '',
+    };
+
     if (cleared) {
       entry.clear_count += 1;
       entry.best_clear_score = Math.max(entry.best_clear_score, score);
@@ -332,12 +343,14 @@ function buildRecentLevelEvidence(recentPlays, ianaTimezone) {
         entry.best_clear_grade = grade;
       }
       entry.clear_days.set(localDate, (entry.clear_days.get(localDate) || 0) + 1);
+      entry.clears.push(playDetail);
     } else if (positiveScoreFail && score >= SOFT_NEAR_PASS_SCORE) {
       entry.near_pass_count += 1;
       entry.best_near_pass_score = Math.max(entry.best_near_pass_score, score);
       if (score >= STRONG_NEAR_PASS_SCORE) {
         entry.strong_near_pass_count += 1;
       }
+      entry.near_passes.push(playDetail);
     }
 
     levelMap.set(playLevel, entry);
@@ -359,6 +372,8 @@ function buildRecentLevelEvidence(recentPlays, ianaTimezone) {
       best_clear_grade: entry.best_clear_grade,
       best_near_pass_score: entry.best_near_pass_score,
       best_positive_score: entry.best_positive_score,
+      clears: entry.clears.sort((a, b) => b.score - a.score).slice(0, 20),
+      near_passes: entry.near_passes.sort((a, b) => b.score - a.score).slice(0, 10),
     });
   }
 

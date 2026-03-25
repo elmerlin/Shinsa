@@ -610,24 +610,24 @@ function HelpButton({ onClick, label = 'Explain this metric' }) {
 function getProjectionTone(mode) {
   if (mode === 'single') {
     return {
+      accent: '#ff3366',
+      badgeClass: 'border-piu-accent/30 bg-piu-accent/10 text-pink-200',
+      subtleClass: 'border-piu-accent/20 bg-piu-accent/10 text-pink-100',
+    };
+  }
+
+  if (mode === 'double') {
+    return {
       accent: '#22C55E',
       badgeClass: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200',
       subtleClass: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-100',
     };
   }
 
-  if (mode === 'double') {
-    return {
-      accent: '#A855F7',
-      badgeClass: 'border-violet-500/30 bg-violet-500/10 text-violet-200',
-      subtleClass: 'border-violet-500/20 bg-violet-500/10 text-violet-100',
-    };
-  }
-
   return {
-    accent: '#ff3366',
-    badgeClass: 'border-piu-accent/30 bg-piu-accent/10 text-pink-200',
-    subtleClass: 'border-piu-accent/20 bg-piu-accent/10 text-pink-100',
+    accent: '#A855F7',
+    badgeClass: 'border-violet-500/30 bg-violet-500/10 text-violet-200',
+    subtleClass: 'border-violet-500/20 bg-violet-500/10 text-violet-100',
   };
 }
 
@@ -644,18 +644,59 @@ function ConfidencePill({ confidence = 'Low' }) {
   );
 }
 
-function MiniMetric({ label, value, accent = '#e5e7eb' }) {
+function MiniMetric({ label, value, accent = '#e5e7eb', onClick }) {
+  const Wrapper = onClick ? 'button' : 'div';
   return (
-    <div className="rounded-lg border border-piu-border/35 bg-piu-dark/40 px-3 py-2 text-center">
+    <Wrapper
+      onClick={onClick}
+      className={`rounded-lg border border-piu-border/35 bg-piu-dark/40 px-3 py-2 text-center ${onClick ? 'cursor-pointer hover:border-piu-border/60 hover:bg-piu-dark/60 transition-colors' : ''}`}
+    >
       <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">{label}</p>
       <p className="mt-1 text-sm font-display font-bold" style={{ color: accent }}>
         {value}
       </p>
+    </Wrapper>
+  );
+}
+
+function EvidenceSongListModal({ open, onClose, title, songs }) {
+  if (!open || !songs?.length) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+      <div
+        className="relative w-full sm:max-w-md max-h-[70vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl border border-piu-border/60 bg-piu-card shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-piu-border/40 bg-piu-card px-4 py-3">
+          <h3 className="font-display font-bold text-sm text-gray-200">{title}</h3>
+          <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors text-lg leading-none">✕</button>
+        </div>
+        <div className="divide-y divide-piu-border/25">
+          {songs.map((song, i) => (
+            <div key={`${song.song_title}-${song.score}-${i}`} className="flex items-center gap-3 px-4 py-2.5">
+              {song.background_url ? (
+                <img src={song.background_url} alt="" className="w-10 h-10 rounded-lg object-cover shrink-0 border border-piu-border/30" />
+              ) : (
+                <div className="w-10 h-10 rounded-lg bg-piu-dark/60 border border-piu-border/30 shrink-0" />
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="text-sm text-gray-200 font-display font-bold truncate">{song.song_title || 'Unknown'}</p>
+                <p className="text-[11px] text-gray-500">
+                  {song.score?.toLocaleString()}{song.grade ? ` · ${song.grade}` : ''}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
 
 function LikelyPassCeilingCard({ passCeiling, mode, onExplain }) {
+  const [songList, setSongList] = useState(null);
+
   if (!passCeiling?.level) return null;
 
   const target = passCeiling.target || {};
@@ -699,9 +740,24 @@ function LikelyPassCeilingCard({ passCeiling, mode, onExplain }) {
         </div>
 
         <div className="mt-3 grid grid-cols-3 gap-2">
-          <MiniMetric label={`Lv.${passCeiling.level} clears`} value={target.clear_count || 0} accent={tone.accent} />
-          <MiniMetric label="Near-passes" value={nearPassCount} accent="#f9a8d4" />
-          <MiniMetric label={feeder ? `Lv.${feeder.level} clears` : 'Feeder clears'} value={feeder?.clear_count || 0} accent="#86efac" />
+          <MiniMetric
+            label={`Lv.${passCeiling.level} clears`}
+            value={target.clear_count || 0}
+            accent={tone.accent}
+            onClick={target.clears?.length ? () => setSongList({ title: `Lv.${passCeiling.level} Clears`, songs: target.clears }) : undefined}
+          />
+          <MiniMetric
+            label="Near-passes"
+            value={nearPassCount}
+            accent="#f9a8d4"
+            onClick={target.near_passes?.length ? () => setSongList({ title: `Lv.${passCeiling.level} Near-Passes`, songs: target.near_passes }) : undefined}
+          />
+          <MiniMetric
+            label={feeder ? `Lv.${feeder.level} clears` : 'Feeder clears'}
+            value={feeder?.clear_count || 0}
+            accent="#86efac"
+            onClick={feeder?.clears?.length ? () => setSongList({ title: `Lv.${feeder.level} Clears`, songs: feeder.clears }) : undefined}
+          />
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-piu-border/30 pt-3">
@@ -728,6 +784,13 @@ function LikelyPassCeilingCard({ passCeiling, mode, onExplain }) {
           </div>
         )}
       </div>
+
+      <EvidenceSongListModal
+        open={!!songList}
+        onClose={() => setSongList(null)}
+        title={songList?.title || ''}
+        songs={songList?.songs || []}
+      />
     </div>
   );
 }
@@ -1515,7 +1578,7 @@ export default function TrainingPage() {
   }
 
   const profile = data?.[mode] || null;
-  const modeColor = mode === 'single' ? '#22C55E' : mode === 'double' ? '#A855F7' : '#ff3366';
+  const modeColor = mode === 'single' ? '#ff3366' : mode === 'double' ? '#22C55E' : '#A855F7';
   const showPredictions = mode !== 'overall' && profile && !profile.calibrating;
   const statCards = profile ? [
     { key: 'base_skill', label: 'Base Skill', value: Math.round(profile.base_skill), color: '#22C55E', delay: 0 },

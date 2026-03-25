@@ -4405,7 +4405,7 @@ router.get('/training-load/:userId', (req, res) => {
   const ianaTimezone = (user && user.timezone) || '';
 
   const plays = db.prepare(`
-    SELECT level, score, grade, mode, played_at_utc, date_played
+    SELECT level, score, grade, mode, played_at_utc, date_played, song_title, background_url
     FROM user_recently_played
     WHERE user_id = ?
       AND (
