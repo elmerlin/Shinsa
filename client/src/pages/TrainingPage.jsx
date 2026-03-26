@@ -13,6 +13,9 @@ import {
   CartesianGrid,
   Tooltip,
   ReferenceLine,
+  ReferenceArea,
+  LineChart,
+  Line,
 } from 'recharts';
 
 const MODE_LABELS = { overall: 'Overall', single: 'Singles', double: 'Doubles' };
@@ -1337,6 +1340,136 @@ function EWMAChart({ data, mode, onExplain }) {
   );
 }
 
+const INTENSITY_ZONES = [
+  { min: 150, label: 'Overclocked', color: '#F97316', bg: '#F97316', desc: 'Recent training may be excessive' },
+  { min: 100, label: 'In The Zone', color: '#22C55E', bg: '#22C55E', desc: 'Productive training is building fitness' },
+  { min: 80, label: 'Cruising', color: '#3B82F6', bg: '#3B82F6', desc: 'Moderate load, maintaining Base Fitness' },
+  { min: 50, label: 'Warming Up', color: '#EAB308', bg: '#EAB308', desc: 'Increasing load is improving fitness' },
+  { min: 0, label: 'Cooling Down', color: '#94A3B8', bg: '#94A3B8', desc: 'Low recent load, Base Fitness declining' },
+];
+
+function getIntensityZone(ratio) {
+  if (ratio == null) return null;
+  for (const z of INTENSITY_ZONES) {
+    if (ratio >= z.min) return z;
+  }
+  return INTENSITY_ZONES[INTENSITY_ZONES.length - 1];
+}
+
+function IntensityTrendCard({ data, mode, profile }) {
+  const chartData = useMemo(() => {
+    if (!data?.length) return [];
+    const recent = data.slice(-28);
+    return recent.map((d) => {
+      const entry = d[mode] || {};
+      const base = entry.base_skill || 0;
+      const form = entry.current_form || 0;
+      const ratio = base > 0.01 ? Math.round((form / base) * 100) : null;
+      return { date: formatDate(d.date), ratio };
+    }).filter((d) => d.ratio != null);
+  }, [data, mode]);
+
+  if (!chartData.length || !profile) return null;
+
+  const currentRatio = profile.training_ratio;
+  const currentZone = getIntensityZone(currentRatio);
+  const maxRatio = Math.max(...chartData.map((d) => d.ratio), 160);
+  const yMax = Math.min(Math.ceil(maxRatio / 10) * 10 + 10, 250);
+
+  return (
+    <div className="card overflow-hidden">
+      <div className="px-4 pt-3 pb-1 flex items-center justify-between">
+        <div>
+          <h3 className="font-display font-bold text-sm text-gray-200">Intensity Trend</h3>
+          <p className="text-[10px] text-gray-500 mt-0.5">Training Ratio over last 28 days</p>
+        </div>
+        {currentRatio != null && currentZone && (
+          <div className="text-right">
+            <p className="text-lg font-display font-bold" style={{ color: currentZone.color }}>{currentRatio}%</p>
+            <p className="text-[10px] font-display font-bold" style={{ color: currentZone.color }}>{currentZone.label}</p>
+          </div>
+        )}
+      </div>
+
+      <div className="px-1 pb-1" style={{ height: 180 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={chartData} margin={{ top: 5, right: 16, left: 0, bottom: 0 }}>
+            <defs>
+              <linearGradient id="gradRatio" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={currentZone?.color || '#94A3B8'} stopOpacity={0.25} />
+                <stop offset="100%" stopColor={currentZone?.color || '#94A3B8'} stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            {/* Zone bands */}
+            <ReferenceArea y1={150} y2={yMax} fill="#F97316" fillOpacity={0.06} />
+            <ReferenceArea y1={100} y2={150} fill="#22C55E" fillOpacity={0.06} />
+            <ReferenceArea y1={80} y2={100} fill="#3B82F6" fillOpacity={0.06} />
+            <ReferenceArea y1={50} y2={80} fill="#EAB308" fillOpacity={0.06} />
+            <ReferenceArea y1={0} y2={50} fill="#94A3B8" fillOpacity={0.06} />
+            <CartesianGrid strokeDasharray="3 3" stroke="#1e1e3a" />
+            <XAxis
+              dataKey="date"
+              tick={{ fontSize: 10, fill: '#6B7280' }}
+              tickLine={false}
+              axisLine={{ stroke: '#2a2a4a' }}
+              interval="preserveStartEnd"
+            />
+            <YAxis
+              tick={{ fontSize: 10, fill: '#6B7280' }}
+              tickLine={false}
+              axisLine={false}
+              domain={[0, yMax]}
+              ticks={[0, 50, 80, 100, 150]}
+              width={35}
+            />
+            <Tooltip
+              contentStyle={{
+                background: '#141428',
+                border: '1px solid #2a2a4a',
+                borderRadius: 12,
+                fontSize: 12,
+                fontFamily: 'Rajdhani',
+              }}
+              labelStyle={{ color: '#9CA3AF', fontWeight: 700 }}
+              formatter={(value) => [`${value}%`, 'Ratio']}
+            />
+            <ReferenceLine y={100} stroke="#22C55E" strokeDasharray="4 4" strokeOpacity={0.4} />
+            <Area
+              type="monotone"
+              dataKey="ratio"
+              stroke={currentZone?.color || '#94A3B8'}
+              strokeWidth={2}
+              fill="url(#gradRatio)"
+              dot={false}
+              activeDot={{ r: 4, fill: currentZone?.color || '#94A3B8', stroke: '#0a0a1a', strokeWidth: 2 }}
+            />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* Zone legend */}
+      <div className="px-4 pb-3 space-y-1">
+        {INTENSITY_ZONES.map((z) => {
+          const isActive = currentZone?.label === z.label;
+          return (
+            <div key={z.label} className={`flex items-start gap-2 rounded-lg px-2 py-1.5 transition-colors ${isActive ? 'bg-white/[0.04]' : ''}`}>
+              <div className="w-1 h-full min-h-[24px] rounded-full shrink-0 mt-0.5" style={{ backgroundColor: z.color, opacity: isActive ? 1 : 0.35 }} />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className={`text-[11px] font-display font-bold ${isActive ? '' : 'opacity-50'}`} style={{ color: z.color }}>{z.label}</span>
+                  <span className="text-[10px] text-gray-600">{z.min === 0 ? '0–49%' : z.min === 50 ? '50–79%' : z.min === 80 ? '80–99%' : z.min === 100 ? '100–149%' : '≥150%'}</span>
+                  {isActive && <span className="text-[9px] font-display font-bold text-white bg-white/10 px-1.5 py-0.5 rounded-full">YOU</span>}
+                </div>
+                <p className={`text-[10px] ${isActive ? 'text-gray-400' : 'text-gray-600'}`}>{z.desc}</p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function DailyLoadChart({ data, mode, onExplain }) {
   const chartData = useMemo(() => {
     if (!data?.length) return [];
@@ -2179,6 +2312,15 @@ export default function TrainingPage() {
               data={data.ewma_history}
               mode={mode}
               onExplain={() => setShowTrainingBasicsHelp(true)}
+            />
+          )}
+
+          {/* Intensity Trend (Training Ratio) */}
+          {data.ewma_history?.length > 0 && profile && (
+            <IntensityTrendCard
+              data={data.ewma_history}
+              mode={mode}
+              profile={profile}
             />
           )}
 
