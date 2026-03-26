@@ -9,6 +9,8 @@ const {
   calculatePlayLoad,
   computeEWMA,
   computeAllProfiles,
+  computeModeProfile,
+  getReadinessStatus,
   getTrainingStatus,
   predictLikelyPassLevel,
   predictComfortableLevel,
@@ -451,5 +453,89 @@ describe('grade normalization in play load', () => {
   it('handles SSP alias for SS+', () => {
     // L20 with SS+ (1.38) => 650 * 1.38 = 897
     assert.equal(calculatePlayLoad(20, 'SSP', 985000), 897);
+  });
+});
+
+// ─── Readiness ────────────────────────────────────────
+
+describe('readiness', () => {
+  it('trusted profile has readiness ≈ 100 - training_ratio', () => {
+    // 10 days of constant 800 load → trusted profile
+    const dailyLoads = [];
+    for (let i = 0; i < 10; i++) {
+      dailyLoads.push({ date: `2026-03-${String(i + 1).padStart(2, '0')}`, load: 800, playCount: 4, clearCount: 3 });
+    }
+    const result = computeModeProfile(dailyLoads, '2026-03-01', '2026-03-10', [], 'UTC', false);
+    const { profile } = result;
+    assert.ok(profile.readiness != null, 'readiness should not be null for trusted profile');
+    assert.ok(profile.taper_distance != null, 'taper_distance should not be null');
+    // readiness ≈ 100 - training_ratio (within ±1 due to rounding)
+    const expected = Math.round(100 - profile.training_ratio);
+    assert.ok(Math.abs(profile.readiness - expected) <= 1,
+      `readiness ${profile.readiness} should be within ±1 of ${expected}`);
+  });
+
+  it('calibrating profile has readiness and taper_distance null', () => {
+    // Only 3 play days → calibrating
+    const dailyLoads = [
+      { date: '2026-03-01', load: 500, playCount: 3, clearCount: 2 },
+      { date: '2026-03-03', load: 600, playCount: 4, clearCount: 3 },
+      { date: '2026-03-05', load: 700, playCount: 5, clearCount: 4 },
+    ];
+    const result = computeModeProfile(dailyLoads, '2026-03-01', '2026-03-07', [], 'UTC', false);
+    const { profile } = result;
+    assert.equal(profile.calibrating, true);
+    assert.equal(profile.readiness, null);
+    assert.equal(profile.taper_distance, null);
+    assert.equal(profile.readiness_status, 'Calibrating');
+  });
+
+  it('ewma history readiness is null until 7th play day', () => {
+    const dailyLoads = [];
+    for (let i = 0; i < 10; i++) {
+      dailyLoads.push({ date: `2026-03-${String(i + 1).padStart(2, '0')}`, load: 500, playCount: 3, clearCount: 2 });
+    }
+    const result = computeEWMA(dailyLoads, '2026-03-01', '2026-03-10');
+    // First 6 entries should have readiness null (< 7 play days)
+    for (let i = 0; i < 6; i++) {
+      assert.equal(result.history[i].readiness, null,
+        `history[${i}] readiness should be null (only ${i + 1} play days)`);
+    }
+    // 7th entry onward should have numeric readiness
+    assert.ok(result.history[6].readiness != null,
+      'history[6] readiness should be numeric (7 play days)');
+  });
+
+  it('computeAllProfiles propagates readiness into ewma_history', () => {
+    // Build plays for 10 days so profile is trusted
+    const plays = [];
+    for (let i = 0; i < 10; i++) {
+      const date = `2026-03-${String(i + 1).padStart(2, '0')}`;
+      plays.push({
+        mode: 'Single',
+        level: 20,
+        grade: 'AA',
+        score: 900000,
+        date_played: date,
+        played_at_utc: `${date}T18:00:00Z`,
+      });
+    }
+    const result = computeAllProfiles(plays, 'UTC', null);
+    const lastEntry = result.ewma_history[result.ewma_history.length - 1];
+    // Single mode should have readiness in history
+    assert.ok(lastEntry.single.readiness != null,
+      'single readiness should be propagated into ewma_history');
+    // Overall should also have readiness
+    assert.ok(lastEntry.overall.readiness != null,
+      'overall readiness should be propagated into ewma_history');
+  });
+
+  it('getReadinessStatus returns correct zones', () => {
+    assert.equal(getReadinessStatus(35).label, 'Peaked');
+    assert.equal(getReadinessStatus(10).label, 'Fresh');
+    assert.equal(getReadinessStatus(0).label, 'Balanced');
+    assert.equal(getReadinessStatus(-20).label, 'Building');
+    assert.equal(getReadinessStatus(-60).label, 'Overtrained');
+    assert.equal(getReadinessStatus(null).label, null);
   });
 });

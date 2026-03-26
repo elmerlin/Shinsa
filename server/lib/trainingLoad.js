@@ -213,12 +213,14 @@ function computeEWMA(dailyLoads, startDate, endDate) {
 
     if (dailyPlayCount > 0) playDates.add(current);
 
+    const trusted = playDates.size >= MIN_PLAY_DAYS && baseSkill > EPSILON;
     history.push({
       date: current,
       base_skill: round2(baseSkill),
       current_form: round2(currentForm),
       chronic_play_count: round2(chronicPlayCount),
       chronic_clear_count: round2(chronicClearCount),
+      readiness: trusted ? Math.round((1 - currentForm / baseSkill) * 100) : null,
     });
 
     current = addDays(current, 1);
@@ -236,6 +238,22 @@ function computeEWMA(dailyLoads, startDate, endDate) {
 
 function round2(value) {
   return Math.round(Number(value || 0) * 100) / 100;
+}
+
+const READINESS_ZONES = [
+  { minReadiness: 30, label: 'Peaked', color: '#A855F7' },
+  { minReadiness: 5, label: 'Fresh', color: '#22C55E' },
+  { minReadiness: -15, label: 'Balanced', color: '#3B82F6' },
+  { minReadiness: -50, label: 'Building', color: '#F97316' },
+];
+const READINESS_OVERTRAINED = { label: 'Overtrained', color: '#EF4444' };
+
+function getReadinessStatus(readiness) {
+  if (readiness == null) return { label: null, color: null };
+  for (const zone of READINESS_ZONES) {
+    if (readiness >= zone.minReadiness) return { label: zone.label, color: zone.color };
+  }
+  return READINESS_OVERTRAINED;
 }
 
 function getTrainingStatus(baseSkill, currentForm, playDays) {
@@ -629,6 +647,15 @@ function computeModeProfile(dailyLoads, startDate, endDate, recentPlays, ianaTim
   const ewma = computeEWMA(dailyLoads, startDate, endDate);
   const status = getTrainingStatus(ewma.baseSkill, ewma.currentForm, ewma.playDays);
 
+  const calibrating = ewma.playDays > 0 && ewma.playDays < MIN_PLAY_DAYS;
+  const idle = status.label === 'Idle';
+  const trusted = !calibrating && !idle && ewma.baseSkill > EPSILON;
+  const readiness = trusted ? Math.round((1 - ewma.currentForm / ewma.baseSkill) * 100) : null;
+  const readinessInfo = trusted
+    ? getReadinessStatus(readiness)
+    : { label: idle ? 'Idle' : 'Calibrating', color: idle ? '#6B7280' : '#A855F7' };
+  const taperDistance = readiness != null ? Math.max(0, 5 - readiness) : null;
+
   const profile = {
     base_skill: ewma.baseSkill,
     current_form: ewma.currentForm,
@@ -637,7 +664,11 @@ function computeModeProfile(dailyLoads, startDate, endDate, recentPlays, ianaTim
     training_color: status.color,
     play_days: ewma.playDays,
     chronic_clear_count: ewma.chronicClearCount,
-    calibrating: ewma.playDays > 0 && ewma.playDays < MIN_PLAY_DAYS,
+    calibrating,
+    readiness,
+    readiness_status: readinessInfo.label,
+    readiness_color: readinessInfo.color,
+    taper_distance: taperDistance,
   };
 
   if (includePredictions && !profile.calibrating && ewma.playDays > 0) {
@@ -715,16 +746,19 @@ function computeAllProfiles(plays, ianaTimezone, lastSyncedAt) {
         base_skill: oh.base_skill,
         current_form: oh.current_form,
         chronic_clear_count: oh.chronic_clear_count || 0,
+        readiness: oh.readiness != null ? oh.readiness : null,
       },
       single: {
         base_skill: sh.base_skill || 0,
         current_form: sh.current_form || 0,
         chronic_clear_count: sh.chronic_clear_count || 0,
+        readiness: sh.readiness != null ? sh.readiness : null,
       },
       double: {
         base_skill: dh.base_skill || 0,
         current_form: dh.current_form || 0,
         chronic_clear_count: dh.chronic_clear_count || 0,
+        readiness: dh.readiness != null ? dh.readiness : null,
       },
     };
   });
@@ -867,6 +901,7 @@ module.exports = {
   computeModeProfile,
   computePopulationPercentile,
   computePopulationStats,
+  getReadinessStatus,
   getTrainingStatus,
   predictLikelyPassLevel,
   predictComfortableLevel,

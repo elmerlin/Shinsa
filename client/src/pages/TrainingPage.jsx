@@ -225,7 +225,7 @@ function buildMetricExplainer(metricKey, profile, data, mode) {
         : null;
       const formGap = profile.current_form - profile.base_skill;
       return {
-        title: 'Current Form',
+        title: 'Recent Load',
         subtitle: `Your ${modeLabel.toLowerCase()} recent sharpness and momentum.`,
         color: '#ff3366',
         value: formatNumber(profile.current_form),
@@ -240,8 +240,8 @@ function buildMetricExplainer(metricKey, profile, data, mode) {
           { label: 'Vs Base', value: formVsBase != null ? `${formatDetailedNumber(formVsBase, 0)}%` : '--', accent: '#22C55E' },
           { label: 'Gap To Base', value: formatSignedNumber(formGap, 0), accent: formGap >= 0 ? '#22C55E' : '#F59E0B' },
         ],
-        calculation: 'Current Form uses the same daily training-load points as Base Skill, but only smooths about the last 7 days. It still uses an EWMA, so recent sessions count more, but it reacts much faster to what you did this week.',
-        trend: `${tone.label}. Current Form is ${formatSignedNumber(formTrend.delta, 0)} versus 7 days ago and ${formGap >= 0 ? 'above' : 'below'} Base Skill by ${formatNumber(Math.abs(formGap))}.`,
+        calculation: 'Recent Load uses the same daily training-load points as Base Skill, but only smooths about the last 7 days. It still uses an EWMA, so recent sessions count more, but it reacts much faster to what you did this week.',
+        trend: `${tone.label}. Recent Load is ${formatSignedNumber(formTrend.delta, 0)} versus 7 days ago and ${formGap >= 0 ? 'above' : 'below'} Base Skill by ${formatNumber(Math.abs(formGap))}.`,
         improve: formGap < 0
           ? 'To bring it back up, stack a few strong sessions this week. Recent sessions matter a lot here, so harder clears and more volume over the next several days will move it faster than older play.'
           : 'You are already running at or above baseline. To hold it there, keep the recent sessions coming, but watch fatigue if you stay elevated for too long.',
@@ -278,7 +278,7 @@ function buildMetricExplainer(metricKey, profile, data, mode) {
       if (ratio == null) {
         improve = 'Play on at least 7 separate days to calibrate the ratio. Once calibrated, stronger recent sessions will lift it quickly.';
       } else if (ratio < 80) {
-        improve = 'To move this back up, you need a stronger recent week than the one you just had. More recent sessions, higher levels, and better clears will lift Current Form relative to Base Skill.';
+        improve = 'To move this back up, you need a stronger recent week than the one you just had. More recent sessions, higher levels, and better clears will lift Recent Load relative to Base Skill.';
       } else if (ratio < 100) {
         improve = 'A couple of strong recent sessions should pull this back toward baseline. Focus on quality clears this week.';
       } else if (ratio >= 150) {
@@ -301,7 +301,7 @@ function buildMetricExplainer(metricKey, profile, data, mode) {
           { label: '7d Change', value: ratio != null ? `${formatSignedNumber(ratioTrend.delta, 0)} pts` : '--', accent: tone.color },
           { label: 'Formula', value: `${formatNumber(profile.current_form)} / ${formatNumber(profile.base_skill)}`, accent: '#e5e7eb' },
         ],
-        calculation: 'Training Ratio is Current Form divided by Base Skill, multiplied by 100. Around 100% means your recent week matches your baseline. Above that means you are running hot; below that means your recent week has been lighter.',
+        calculation: 'Training Ratio is Recent Load divided by Base Skill, multiplied by 100. Around 100% means your recent week matches your baseline. Above that means you are running hot; below that means your recent week has been lighter.',
         trend: ratio != null
           ? `${tone.label}. You are at ${formatDetailedNumber(ratio, 0)}%, which is ${formatSignedNumber(ratioTrend.delta, 0)} percentage points versus 7 days ago.`
           : 'Still calibrating. Once you have enough play days, this will show how your recent week compares with your longer baseline.',
@@ -510,7 +510,7 @@ function TrainingBasicsModal({ open, onClose, profile, mode }) {
               How {modeLabel} Training Load Works
             </h3>
             <p className="mt-1 text-[11px] text-gray-500">
-              A plain-English guide to load, smoothing, Base Skill, and Current Form.
+              A plain-English guide to load, smoothing, Base Skill, and Recent Load.
             </p>
           </div>
           <button
@@ -526,7 +526,7 @@ function TrainingBasicsModal({ open, onClose, profile, mode }) {
           <div className="rounded-2xl border border-piu-border/45 bg-piu-card/60 p-4">
             <div className="flex flex-wrap gap-3">
               <MiniMetric label="Base Skill" value={formatNumber(profile?.base_skill)} accent="#22C55E" />
-              <MiniMetric label="Current Form" value={formatNumber(profile?.current_form)} accent="#ff3366" />
+              <MiniMetric label="Recent Load" value={formatNumber(profile?.current_form)} accent="#ff3366" />
               <MiniMetric label="Play Days" value={profile?.play_days ?? '--'} accent="#4488ff" />
               <MiniMetric label="Avg Load/Clear" value={profile?.avg_play_load != null ? formatNumber(profile.avg_play_load) : '--'} accent="#A855F7" />
             </div>
@@ -550,19 +550,19 @@ function TrainingBasicsModal({ open, onClose, profile, mode }) {
               body="Base Skill is the slower 28-day smoothed version of your daily load. It shows the level of work you have been sustaining over a few weeks, not just what happened yesterday."
             />
             <ExplainerBlock
-              title="5. Current Form"
-              body="Current Form is the faster 7-day smoothed version of your daily load. It reacts much quicker, so it tells you whether your recent week is sharper, flatter, or stronger than normal."
+              title="5. Recent Load"
+              body="Recent Load is the faster 7-day smoothed version of your daily load. It reacts much quicker, so it tells you whether your recent week is sharper, flatter, or stronger than normal."
             />
             <ExplainerBlock
               title="6. Why The Lines Look Smooth"
-              body="The bars show raw daily load. The Base Skill and Current Form lines are smoothed versions of those bars. That is why the lines change gradually even if one day spikes hard."
+              body="The bars show raw daily load. The Base Skill and Recent Load lines are smoothed versions of those bars. That is why the lines change gradually even if one day spikes hard."
             />
           </div>
 
           <div className="rounded-xl border border-piu-border/45 bg-piu-dark/35 p-3">
             <p className="text-[10px] font-display uppercase tracking-wide text-gray-500">Simple Example</p>
             <p className="mt-1 text-sm text-gray-300 leading-relaxed">
-              If you play lots of easier songs, you still gain some load. If you start clearing harder songs with better grades, your daily load rises faster. Keep doing that across multiple days and Base Skill climbs. Do it mainly this week and Current Form climbs first.
+              If you play lots of easier songs, you still gain some load. If you start clearing harder songs with better grades, your daily load rises faster. Keep doing that across multiple days and Base Skill climbs. Do it mainly this week and Recent Load climbs first.
             </p>
           </div>
         </div>
@@ -886,7 +886,7 @@ function PassCeilingHelpModal({ open, onClose, mode, profile }) {
               body="A 28-day smoothed daily load baseline. Higher means you have been sustaining more total work over time."
             />
             <ExplainerBlock
-              title="Current Form"
+              title="Recent Load"
               body="A 7-day smoothed daily load. We compare it against base skill to see whether you are hot, neutral, or cooling off."
             />
             <ExplainerBlock
@@ -911,7 +911,7 @@ function PassCeilingHelpModal({ open, onClose, mode, profile }) {
             <>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <MiniMetric label="Base Skill" value={formatNumber(profile?.base_skill)} accent="#22C55E" />
-                <MiniMetric label="Current Form" value={formatNumber(profile?.current_form)} accent="#ff3366" />
+                <MiniMetric label="Recent Load" value={formatNumber(profile?.current_form)} accent="#ff3366" />
                 <MiniMetric label="Avg Load/Clear" value={formatNumber(profile?.avg_play_load)} accent="#A855F7" />
                 <MiniMetric label="Form Ratio" value={`${formatNumber(passCeiling.form_ratio)}%`} accent="#7dd3fc" />
               </div>
@@ -1080,7 +1080,7 @@ function TrainingStatusHelpModal({ open, onClose, profile, mode }) {
     : null;
 
   const currentSummary = ratio != null
-    ? `Your recent ${modeLabel.toLowerCase()} load is running at ${formatDetailedNumber(ratio, 0)}% of your baseline. That comes from Current Form ${formatNumber(profile.current_form)} compared with Base Skill ${formatNumber(profile.base_skill)}.`
+    ? `Your recent ${modeLabel.toLowerCase()} load is running at ${formatDetailedNumber(ratio, 0)}% of your baseline. That comes from Recent Load ${formatNumber(profile.current_form)} compared with Base Skill ${formatNumber(profile.base_skill)}.`
     : activeStatus === 'Calibrating'
       ? `You have ${profile.play_days} play day${profile.play_days === 1 ? '' : 's'} so far in this profile. The system waits for at least 7 play days before it trusts the training ratio.`
       : 'There is not enough current activity in this profile to compare recent load against long-term baseline yet.';
@@ -1133,7 +1133,7 @@ function TrainingStatusHelpModal({ open, onClose, profile, mode }) {
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <MiniMetric label="Base Skill" value={formatNumber(profile.base_skill)} accent="#22C55E" />
-                <MiniMetric label="Current Form" value={formatNumber(profile.current_form)} accent="#ff3366" />
+                <MiniMetric label="Recent Load" value={formatNumber(profile.current_form)} accent="#ff3366" />
                 <MiniMetric label="Training Ratio" value={ratio != null ? `${formatDetailedNumber(ratio, 0)}%` : '--'} accent={profile.training_color || activeZone.gradient[0]} />
                 <MiniMetric label="Play Days" value={profile.play_days} accent="#4488ff" />
               </div>
@@ -1153,7 +1153,7 @@ function TrainingStatusHelpModal({ open, onClose, profile, mode }) {
             <ExplainerBlock
               title="How The System Decides"
               body={ratio != null
-                ? `This status comes from Current Form divided by Base Skill. Your profile is currently at ${formatDetailedNumber(formVsBase, 0)}%, which places you in ${activeStatus}.`
+                ? `This status comes from Recent Load divided by Base Skill. Your profile is currently at ${formatDetailedNumber(formVsBase, 0)}%, which places you in ${activeStatus}.`
                 : activeStatus === 'Calibrating'
                   ? 'This profile has activity, but fewer than 7 play days, so the system waits before assigning a fully trusted ratio zone.'
                   : 'Without recent synced activity or baseline data, the system cannot place you in an active training zone yet.'}
@@ -1238,7 +1238,7 @@ function EWMAChart({ data, mode, onExplain }) {
             </span>
             <span className="flex items-center gap-1.5">
               <span className="w-3 h-0.5 rounded-full bg-piu-accent inline-block" />
-              <span className="text-gray-500 whitespace-nowrap">Current Form</span>
+              <span className="text-gray-500 whitespace-nowrap">Recent Load</span>
             </span>
           </div>
           {onExplain && <HelpButton onClick={onExplain} label="Explain training load and EWMA" />}
@@ -1308,7 +1308,7 @@ function EWMAChart({ data, mode, onExplain }) {
               stroke="#ff3366"
               strokeWidth={2.5}
               fill="url(#gradForm)"
-              name="Current Form"
+              name="Recent Load"
               dot={false}
               activeDot={{ r: 4, fill: '#ff3366', stroke: '#0a0a1a', strokeWidth: 2 }}
               filter="url(#glow)"
@@ -1356,7 +1356,23 @@ function getIntensityZone(ratio) {
   return INTENSITY_ZONES[INTENSITY_ZONES.length - 1];
 }
 
-function IntensityTrendCard({ data, mode, profile }) {
+const READINESS_ZONES = [
+  { min: 30, label: 'Peaked', color: '#A855F7', desc: 'Maximum freshness — fitness will decay if held too long' },
+  { min: 5, label: 'Fresh', color: '#22C55E', desc: 'Competition-ready — fatigue has been shed' },
+  { min: -15, label: 'Balanced', color: '#3B82F6', desc: 'Transitional — moderate fatigue' },
+  { min: -50, label: 'Building', color: '#F97316', desc: 'Productive stress — fitness is being built' },
+  { min: -Infinity, label: 'Overtrained', color: '#EF4444', desc: 'Extreme fatigue — high burnout risk' },
+];
+
+function getReadinessZone(readiness) {
+  if (readiness == null) return null;
+  for (const z of READINESS_ZONES) {
+    if (readiness >= z.min) return z;
+  }
+  return READINESS_ZONES[READINESS_ZONES.length - 1];
+}
+
+function IntensityTrendCard({ data, mode, profile, onExplainReadiness }) {
   const chartData = useMemo(() => {
     if (!data?.length) return [];
     const recent = data.slice(-28);
@@ -1466,6 +1482,54 @@ function IntensityTrendCard({ data, mode, profile }) {
           );
         })}
       </div>
+
+      {/* Readiness section — only when trusted */}
+      {profile?.readiness != null && (() => {
+        const readiness = profile.readiness;
+        const zone = getReadinessZone(readiness);
+        const taperDist = profile.taper_distance ?? 0;
+        return (
+          <div className="mx-4 mb-3 mt-1 pt-3 border-t border-piu-border/20">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <div className="flex items-center gap-2">
+                <h4 className="text-[11px] font-display font-bold text-gray-300 uppercase tracking-wide">Competition Readiness</h4>
+                {onExplainReadiness && <HelpButton onClick={onExplainReadiness} label="Explain readiness" />}
+              </div>
+              {zone && (
+                <div className="flex items-center gap-2">
+                  <span className="text-lg font-display font-bold" style={{ color: zone.color }}>{readiness > 0 ? '+' : ''}{readiness}%</span>
+                  <span className="text-[10px] font-display font-bold px-2 py-0.5 rounded-full" style={{ color: zone.color, backgroundColor: zone.color + '18' }}>{zone.label}</span>
+                </div>
+              )}
+            </div>
+            {/* Readiness zone legend */}
+            <div className="space-y-0.5 mb-2">
+              {READINESS_ZONES.map((z) => {
+                const isActive = zone?.label === z.label;
+                return (
+                  <div key={z.label} className={`flex items-center gap-2 rounded px-1.5 py-1 transition-colors ${isActive ? 'bg-white/[0.04]' : ''}`}>
+                    <div className="w-1 h-4 rounded-full shrink-0" style={{ backgroundColor: z.color, opacity: isActive ? 1 : 0.3 }} />
+                    <span className={`text-[10px] font-display font-bold shrink-0 w-20 ${isActive ? '' : 'opacity-40'}`} style={{ color: z.color }}>{z.label}</span>
+                    <span className="text-[9px] text-gray-600 shrink-0 w-14">{z.min === -Infinity ? '≤ −50%' : z.min === -50 ? '−50–−15%' : z.min === -15 ? '−15–+5%' : z.min === 5 ? '+5–+30%' : '> +30%'}</span>
+                    <span className={`text-[9px] ${isActive ? 'text-gray-400' : 'text-gray-600'} truncate`}>{z.desc}</span>
+                    {isActive && <span className="text-[8px] font-display font-bold text-white bg-white/10 px-1.5 py-0.5 rounded-full shrink-0">YOU</span>}
+                  </div>
+                );
+              })}
+            </div>
+            {/* Taper distance insight */}
+            <div className="rounded-lg bg-piu-dark/40 px-2.5 py-2 text-[10px]">
+              {taperDist > 20 ? (
+                <p className="text-red-400">🔴 {taperDist}% of fatigue to shed before competition-ready. Several rest days needed.</p>
+              ) : taperDist > 0 ? (
+                <p className="text-amber-400">🟡 {taperDist}% of fatigue to shed. A couple of easy sessions would get you there.</p>
+              ) : (
+                <p className="text-emerald-400">✅ Competition-ready. You've crossed the freshness threshold.</p>
+              )}
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -2114,6 +2178,65 @@ function PlayerLandscapeHelpModal({ open, onClose, mode }) {
   );
 }
 
+function ReadinessHelpModal({ open, onClose }) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/75 backdrop-blur-sm" />
+      <div className="relative w-full sm:max-w-3xl max-h-[85vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl border border-piu-border/50 bg-piu-card shadow-2xl"
+        onClick={(e) => e.stopPropagation()}>
+        <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-piu-border/40 bg-piu-card px-5 py-4 rounded-t-2xl">
+          <div>
+            <h2 className="font-display font-bold text-lg text-white">Competition Readiness</h2>
+            <p className="text-xs text-gray-400 mt-1">How fresh you are for peak performance</p>
+          </div>
+          <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors text-xl leading-none mt-1">✕</button>
+        </div>
+        <div className="px-5 py-5 space-y-4">
+          <ExplainerBlock
+            title="What Readiness Measures"
+            body="Readiness measures how much fatigue you've shed relative to your fitness. When you train hard, Recent Load (short-term stress) rises faster than Base Skill (long-term fitness) — you're tired but getting stronger. When you ease off, fatigue drops quickly (halves in roughly 2.5 days) while fitness lingers much longer (halves in roughly 10 days). That gap opening up is freshness."
+          />
+          <ExplainerBlock
+            title="The Running Analogy"
+            body="Marathon runners taper 1–3 weeks before race day, cutting training volume by about 50%. They arrive on the start line rested but still fit. The same principle applies to PIU — if you have a tournament coming up, ease off the grind sessions a few days before so you're sharp rather than tired."
+          />
+          <ExplainerBlock
+            title="How It's Calculated"
+            body="Readiness = 100% − Training Ratio. When your Training Ratio is 120% (In The Zone), readiness is −20% (Building — you're accumulating productive stress). When ratio drops to 70% after a light week, readiness jumps to +30% (Fresh — fatigue has cleared while fitness remains)."
+          />
+          <ExplainerBlock
+            title="The Zones"
+            body=""
+          />
+          <div className="space-y-2 -mt-2">
+            {READINESS_ZONES.map((z) => (
+              <div key={z.label} className="flex items-start gap-2 px-1">
+                <div className="w-1.5 h-4 rounded-full shrink-0 mt-0.5" style={{ backgroundColor: z.color }} />
+                <div>
+                  <span className="text-xs font-display font-bold" style={{ color: z.color }}>{z.label}</span>
+                  <span className="text-[10px] text-gray-500 ml-1.5">
+                    {z.min === -Infinity ? '≤ −50%' : z.min === -50 ? '−50% to −15%' : z.min === -15 ? '−15% to +5%' : z.min === 5 ? '+5% to +30%' : '> +30%'}
+                  </span>
+                  <p className="text-[10px] text-gray-400 mt-0.5">{z.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+          <ExplainerBlock
+            title="Taper Distance"
+            body="The taper distance shows how many percentage points of fatigue you still need to shed to cross the competition-ready threshold (Fresh zone at +5%). When it reaches zero, you're competition-ready. To get there faster, reduce your session length and difficulty — play fewer songs, stick to comfortable levels, and skip the hardest pushes for a few days."
+          />
+          <ExplainerBlock
+            title="Important Caveat"
+            body="Readiness is derived from the same Training Ratio shown in the Intensity Trend chart — it's a different lens on the same signal, optimized for competition timing rather than training guidance. Don't hold peak freshness too long or fitness will start to erode."
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SyncWarning({ syncStale, lastSyncedAt }) {
   if (!syncStale) return null;
   const ago = lastSyncedAt
@@ -2171,6 +2294,7 @@ export default function TrainingPage() {
   const [showMilestoneHelp, setShowMilestoneHelp] = useState(false);
   const [showCeilingHelp, setShowCeilingHelp] = useState(false);
   const [showLandscapeHelp, setShowLandscapeHelp] = useState(false);
+  const [showReadinessHelp, setShowReadinessHelp] = useState(false);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -2219,7 +2343,7 @@ export default function TrainingPage() {
   const showPredictions = mode !== 'overall' && profile && !profile.calibrating;
   const statCards = profile ? [
     { key: 'base_skill', label: 'Base Skill', value: Math.round(profile.base_skill), color: '#22C55E', delay: 0 },
-    { key: 'current_form', label: 'Current Form', value: Math.round(profile.current_form), color: '#ff3366', delay: 50 },
+    { key: 'current_form', label: 'Recent Load', value: Math.round(profile.current_form), color: '#ff3366', delay: 50 },
     { key: 'play_days', label: 'Play Days', value: profile.play_days, color: '#4488ff', delay: 100 },
     profile.avg_play_load != null
       ? { key: 'avg_play_load', label: 'Avg Load/Clear', value: Math.round(profile.avg_play_load), color: '#A855F7', delay: 150 }
@@ -2321,6 +2445,7 @@ export default function TrainingPage() {
               data={data.ewma_history}
               mode={mode}
               profile={profile}
+              onExplainReadiness={() => setShowReadinessHelp(true)}
             />
           )}
 
@@ -2435,6 +2560,10 @@ export default function TrainingPage() {
           />
         </>
       )}
+      <ReadinessHelpModal
+        open={showReadinessHelp}
+        onClose={() => setShowReadinessHelp(false)}
+      />
     </div>
   );
 }
