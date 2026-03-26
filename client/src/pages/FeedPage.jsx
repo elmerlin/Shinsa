@@ -104,6 +104,7 @@ function getClearItems(item) {
       replay_video_id: item.replay_video_id || '',
       replay_start_seconds: parseInt(item.replay_start_seconds, 10) || 0,
       replay_end_seconds: parseInt(item.replay_end_seconds, 10) || 0,
+      machine_name: item.machine_name || '',
     }];
 
   try {
@@ -133,6 +134,7 @@ function getClearItems(item) {
       replay_video_id: c.replay_video_id || '',
       replay_start_seconds: parseInt(c.replay_start_seconds, 10) || 0,
       replay_end_seconds: parseInt(c.replay_end_seconds, 10) || 0,
+      machine_name: c.machine_name || '',
     }));
   } catch {
     return fallback;
