@@ -88,6 +88,7 @@ function sanitizeSummary(summary) {
       miss: toInt(src?.judgmentTotals?.miss),
     },
     perfectRate: toInt(src.perfectRate),
+    trainingLoad: toInt(src.trainingLoad),
     topSongsByScore: sanitizeSongRows(src.topSongsByScore),
     topSongsByRating: sanitizeSongRows(src.topSongsByRating),
   };

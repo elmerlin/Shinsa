@@ -92,6 +92,26 @@ export function gradeFromScore(score) {
   return 'F';
 }
 
+const EXTENDED_BASE_POINTS = {
+  1: 10, 2: 20, 3: 30, 4: 40, 5: 50, 6: 60, 7: 70, 8: 80, 9: 90,
+  ...LEVEL_BASE_RATING,
+};
+
+export function calculatePlayLoad(level, rawGrade, score) {
+  const numericLevel = parseInt(level, 10) || 0;
+  const numericScore = parseInt(score, 10) || 0;
+  const clampedLevel = Math.max(1, Math.min(28, numericLevel));
+  const basePoints = EXTENDED_BASE_POINTS[clampedLevel] || 10;
+  const grade = normalizeGrade(rawGrade) || (numericScore > 0 ? gradeFromScore(numericScore) : '') || 'F';
+  if (grade === 'F') {
+    if (numericScore > 0) return Math.round(basePoints * 0.20 * Math.max(0.1, Math.min(1.0, numericScore / 500000)));
+    return Math.round(basePoints * 0.10);
+  }
+  const mult = GRADE_MULTIPLIER[grade];
+  if (!mult) return Math.round(basePoints * 0.10);
+  return Math.round(basePoints * mult);
+}
+
 export function calculateClearRating(level, grade, score) {
   const numericScore = parseInt(score, 10) || 0;
   if (numericScore <= 0) return 0;
