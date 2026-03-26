@@ -468,7 +468,7 @@ describe('readiness', () => {
     const result = computeModeProfile(dailyLoads, '2026-03-01', '2026-03-10', [], 'UTC', false);
     const { profile } = result;
     assert.ok(profile.readiness != null, 'readiness should not be null for trusted profile');
-    assert.ok(profile.taper_distance != null, 'taper_distance should not be null');
+    assert.ok(profile.taper_days_rest != null, 'taper_days_rest should not be null');
     // readiness ≈ 100 - training_ratio (within ±1 due to rounding)
     const expected = Math.round(100 - profile.training_ratio);
     assert.ok(Math.abs(profile.readiness - expected) <= 1,
@@ -486,7 +486,8 @@ describe('readiness', () => {
     const { profile } = result;
     assert.equal(profile.calibrating, true);
     assert.equal(profile.readiness, null);
-    assert.equal(profile.taper_distance, null);
+    assert.equal(profile.taper_days_rest, null);
+    assert.equal(profile.taper_days_light, null);
     assert.equal(profile.readiness_status, 'Calibrating');
   });
 

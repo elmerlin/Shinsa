@@ -1487,7 +1487,9 @@ function IntensityTrendCard({ data, mode, profile, onExplainReadiness }) {
       {profile?.readiness != null && (() => {
         const readiness = profile.readiness;
         const zone = getReadinessZone(readiness);
-        const taperDist = profile.taper_distance ?? 0;
+        const restDays = profile.taper_days_rest;
+        const lightDays = profile.taper_days_light;
+        const isReady = restDays === 0;
         return (
           <div className="mx-4 mb-3 mt-1 pt-3 border-t border-piu-border/20">
             <div className="flex items-center justify-between gap-2 mb-2">
@@ -1517,14 +1519,27 @@ function IntensityTrendCard({ data, mode, profile, onExplainReadiness }) {
                 );
               })}
             </div>
-            {/* Taper distance insight */}
-            <div className="rounded-lg bg-piu-dark/40 px-2.5 py-2 text-[10px]">
-              {taperDist > 20 ? (
-                <p className="text-red-400">🔴 {taperDist}% of fatigue to shed before competition-ready. Several rest days needed.</p>
-              ) : taperDist > 0 ? (
-                <p className="text-amber-400">🟡 {taperDist}% of fatigue to shed. A couple of easy sessions would get you there.</p>
+            {/* Taper recommendation */}
+            <div className="rounded-lg bg-piu-dark/40 px-2.5 py-2 text-[10px] space-y-1.5">
+              {isReady ? (
+                <p className="text-emerald-400">✅ You're competition-ready. Fresh enough for peak performance.</p>
               ) : (
-                <p className="text-emerald-400">✅ Competition-ready. You've crossed the freshness threshold.</p>
+                <>
+                  <p className="text-gray-300 font-display font-bold text-[11px]">To reach peak readiness:</p>
+                  {restDays != null && (
+                    <p className="text-amber-300">
+                      🛏️ <strong>Full rest:</strong> {restDays} day{restDays !== 1 ? 's' : ''} off would get you there
+                    </p>
+                  )}
+                  {lightDays != null && lightDays !== restDays && (
+                    <p className="text-blue-300">
+                      🎯 <strong>Light sessions:</strong> {lightDays} day{lightDays !== 1 ? 's' : ''} at half your normal load
+                    </p>
+                  )}
+                  {restDays != null && restDays >= 21 && (
+                    <p className="text-gray-500">You're carrying a lot of fatigue. Even partial rest will help — any reduction in load moves the needle.</p>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -2224,8 +2239,8 @@ function ReadinessHelpModal({ open, onClose }) {
             ))}
           </div>
           <ExplainerBlock
-            title="Taper Distance"
-            body="The taper distance shows how many percentage points of fatigue you still need to shed to cross the competition-ready threshold (Fresh zone at +5%). When it reaches zero, you're competition-ready. To get there faster, reduce your session length and difficulty — play fewer songs, stick to comfortable levels, and skip the hardest pushes for a few days."
+            title="Taper Recommendations"
+            body="When you're not yet competition-ready, Shinsa simulates how your fitness and fatigue would evolve over the coming days. It shows two paths: full rest (zero load) and light training (half your recent average load). Both tell you how many days it would take to cross into the Fresh zone. Light training takes longer but preserves more fitness — it's usually the better choice unless you're very close to a tournament."
           />
           <ExplainerBlock
             title="Important Caveat"

@@ -654,7 +654,39 @@ function computeModeProfile(dailyLoads, startDate, endDate, recentPlays, ianaTim
   const readinessInfo = trusted
     ? getReadinessStatus(readiness)
     : { label: idle ? 'Idle' : 'Calibrating', color: idle ? '#6B7280' : '#A855F7' };
-  const taperDistance = readiness != null ? Math.max(0, 5 - readiness) : null;
+  // Simulate how many rest days until readiness >= FRESH_THRESHOLD (+5%)
+  // Also simulate "light training" days at 50% of recent avg daily load
+  const FRESH_THRESHOLD = 5; // readiness % to be competition-ready
+  const MAX_TAPER_SIMULATION = 21; // cap simulation at 3 weeks
+  let taperDaysRest = null;
+  let taperDaysLight = null;
+  if (trusted && readiness != null && readiness < FRESH_THRESHOLD) {
+    const avgDailyLoad = ewma.currentForm; // recent load ≈ smoothed daily average
+    // Simulate full rest (load = 0)
+    let simBase = ewma.baseSkill;
+    let simForm = ewma.currentForm;
+    for (let d = 1; d <= MAX_TAPER_SIMULATION; d++) {
+      simBase = simBase * (1 - ALPHA_CHRONIC);
+      simForm = simForm * (1 - ALPHA_ACUTE);
+      const simReadiness = simBase > EPSILON ? Math.round((1 - simForm / simBase) * 100) : 0;
+      if (simReadiness >= FRESH_THRESHOLD) { taperDaysRest = d; break; }
+    }
+    if (taperDaysRest === null) taperDaysRest = MAX_TAPER_SIMULATION; // capped
+    // Simulate light training (50% of current avg load)
+    const lightLoad = avgDailyLoad * 0.5;
+    simBase = ewma.baseSkill;
+    simForm = ewma.currentForm;
+    for (let d = 1; d <= MAX_TAPER_SIMULATION; d++) {
+      simBase = simBase * (1 - ALPHA_CHRONIC) + lightLoad * ALPHA_CHRONIC;
+      simForm = simForm * (1 - ALPHA_ACUTE) + lightLoad * ALPHA_ACUTE;
+      const simReadiness = simBase > EPSILON ? Math.round((1 - simForm / simBase) * 100) : 0;
+      if (simReadiness >= FRESH_THRESHOLD) { taperDaysLight = d; break; }
+    }
+    if (taperDaysLight === null) taperDaysLight = MAX_TAPER_SIMULATION;
+  } else if (trusted && readiness != null && readiness >= FRESH_THRESHOLD) {
+    taperDaysRest = 0;
+    taperDaysLight = 0;
+  }
 
   const profile = {
     base_skill: ewma.baseSkill,
@@ -668,7 +700,8 @@ function computeModeProfile(dailyLoads, startDate, endDate, recentPlays, ianaTim
     readiness,
     readiness_status: readinessInfo.label,
     readiness_color: readinessInfo.color,
-    taper_distance: taperDistance,
+    taper_days_rest: taperDaysRest,
+    taper_days_light: taperDaysLight,
   };
 
   if (includePredictions && !profile.calibrating && ewma.playDays > 0) {
