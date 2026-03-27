@@ -463,6 +463,10 @@ export const getGoalRecommendations = (options = {}) => {
   return request(`/songs/recommendations/goals${query ? `?${query}` : ''}`);
 };
 
+// Private chart feedback (passability rating + note)
+export const saveChartFeedback = (chartId, payload) =>
+  request(`/songs/chart/${chartId}/feedback`, { method: 'PUT', body: JSON.stringify(payload) });
+
 // YouTube Integration
 export const getYoutubeConnectionStatus = () => request('/youtube/status');
 export const startYoutubeConnection = (nextPath) => request('/youtube/connect/start', {

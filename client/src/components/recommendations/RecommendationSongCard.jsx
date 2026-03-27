@@ -12,6 +12,14 @@ const REASON_COLORS = {
   impact_ranked: 'bg-violet-500/20 text-violet-300 border-violet-500/40',
 };
 
+const PASSABILITY_LABEL_COLORS = {
+  1: 'text-emerald-400',
+  2: 'text-lime-400',
+  3: 'text-amber-400',
+  4: 'text-orange-400',
+  5: 'text-rose-400',
+};
+
 function formatScore(score) {
   if (!score && score !== 0) return null;
   const n = parseInt(score, 10) || 0;
@@ -67,10 +75,43 @@ function ScoreState({ rec, goal }) {
   );
 }
 
+function FeedbackIndicators({ rec }) {
+  const fb = rec.player_feedback;
+  const ph = rec.play_history;
+  const items = [];
+
+  if (fb?.passability_rating) {
+    const color = PASSABILITY_LABEL_COLORS[fb.passability_rating] || 'text-gray-400';
+    items.push(
+      <span key="read" className={`text-[9px] font-body ${color}`}>
+        Your read: {fb.passability_label}
+      </span>,
+    );
+  }
+  if (fb?.note) {
+    items.push(
+      <svg key="note" className="w-3 h-3 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+      </svg>,
+    );
+  }
+  if (ph?.logged_plays > 0) {
+    const txt = ph.logged_passes > 0
+      ? `${ph.logged_plays} logged plays, ${ph.logged_passes} passes`
+      : `${ph.logged_plays} logged plays`;
+    items.push(
+      <span key="plays" className="text-[9px] text-gray-600 font-body">{txt}</span>,
+    );
+  }
+
+  if (!items.length) return null;
+  return <div className="flex items-center gap-1.5 flex-wrap">{items}</div>;
+}
+
 // ---------------------------------------------------------------------------
 // Detail Modal — shown on card tap
 // ---------------------------------------------------------------------------
-function RecommendationDetailModal({ rec, goal, onClose }) {
+function RecommendationDetailModal({ rec, goal, onClose, onTrack }) {
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -85,6 +126,8 @@ function RecommendationDetailModal({ rec, goal, onClose }) {
   const reasonColors = REASON_COLORS[rec.reason_type] || REASON_COLORS.unpassed;
   const jacketSrc = rec.jacket_url || rec.background_url || '';
   const isSingle = String(rec.mode || '').toLowerCase().startsWith('s');
+  const fb = rec.player_feedback;
+  const ph = rec.play_history;
 
   return (
     <div
@@ -98,20 +141,13 @@ function RecommendationDetailModal({ rec, goal, onClose }) {
         {/* Jacket header */}
         <div className="relative aspect-video bg-piu-dark overflow-hidden">
           {jacketSrc ? (
-            <img
-              src={jacketSrc}
-              alt={rec.song_title}
-              className="w-full h-full object-cover"
-            />
+            <img src={jacketSrc} alt={rec.song_title} className="w-full h-full object-cover" />
           ) : (
             <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-piu-dark to-piu-bg">
-              <span className="text-4xl font-display font-black text-gray-700">
-                {(rec.song_title || '?')[0]}
-              </span>
+              <span className="text-4xl font-display font-black text-gray-700">{(rec.song_title || '?')[0]}</span>
             </div>
           )}
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
-          {/* Level badge */}
           <span className={`absolute top-2 left-2 inline-flex items-center justify-center rounded-md min-w-[32px] h-[22px] px-1.5 border text-white font-display font-black text-xs leading-none shadow-lg ${
             isSingle
               ? 'bg-gradient-to-b from-red-500 to-red-800 border-red-300/50'
@@ -119,7 +155,6 @@ function RecommendationDetailModal({ rec, goal, onClose }) {
           }`}>
             {isSingle ? 'S' : 'D'}{rec.level}
           </span>
-          {/* Close button */}
           <button
             onClick={onClose}
             className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/50 border border-white/10 flex items-center justify-center text-gray-300 hover:text-white transition-colors"
@@ -128,25 +163,19 @@ function RecommendationDetailModal({ rec, goal, onClose }) {
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
-          {/* Song info overlaid at bottom */}
           <div className="absolute bottom-0 left-0 right-0 px-4 pb-3">
             <p className="text-sm font-display font-bold text-white leading-tight">{rec.song_title}</p>
-            {rec.artist && (
-              <p className="text-xs text-gray-300 font-body mt-0.5">{rec.artist}</p>
-            )}
+            {rec.artist && <p className="text-xs text-gray-300 font-body mt-0.5">{rec.artist}</p>}
           </div>
         </div>
 
         {/* Body */}
         <div className="px-4 py-3 space-y-3">
-          {/* Reason + tier row */}
           <div className="flex items-center gap-2 flex-wrap">
             <span className={`inline-flex items-center px-2 py-1 rounded text-[10px] font-display font-bold border leading-none ${reasonColors}`}>
               {rec.reason_label}
             </span>
-            {rec.tier_name && rec.tier_name !== 'Unrated' && (
-              <TierChip tierName={rec.tier_name} />
-            )}
+            {rec.tier_name && rec.tier_name !== 'Unrated' && <TierChip tierName={rec.tier_name} />}
           </div>
 
           {/* Score details */}
@@ -156,9 +185,7 @@ function RecommendationDetailModal({ rec, goal, onClose }) {
                 {rec.current_score != null && (
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-gray-500 font-body">Current</span>
-                    <span className="text-gray-200 font-display font-bold">
-                      {rec.current_score?.toLocaleString()} {rec.current_grade || ''}
-                    </span>
+                    <span className="text-gray-200 font-display font-bold">{rec.current_score?.toLocaleString()} {rec.current_grade || ''}</span>
                   </div>
                 )}
                 {rec.next_grade && (
@@ -190,23 +217,43 @@ function RecommendationDetailModal({ rec, goal, onClose }) {
                 ) : rec.best_score ? (
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-gray-500 font-body">Best score</span>
-                    <span className="text-gray-200 font-display font-bold">
-                      {rec.best_score?.toLocaleString()} {rec.best_grade || ''}
-                    </span>
+                    <span className="text-gray-200 font-display font-bold">{rec.best_score?.toLocaleString()} {rec.best_grade || ''}</span>
                   </div>
                 ) : (
                   <div className="text-xs text-gray-500 font-body">No attempts yet</div>
                 )}
               </>
             )}
+
+            {/* Play history */}
+            {ph?.logged_plays > 0 && (
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-gray-500 font-body">Logged plays</span>
+                <span className="text-gray-300 font-display font-bold">{ph.logged_plays}</span>
+              </div>
+            )}
+            {ph?.logged_passes > 0 && (
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-gray-500 font-body">Logged passes</span>
+                <span className="text-emerald-400 font-display font-bold">{ph.logged_passes}</span>
+              </div>
+            )}
           </div>
+
+          {/* Your Read */}
+          {fb?.passability_rating && (
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-gray-500 font-body">Your read:</span>
+              <span className={`text-[10px] font-display font-bold ${PASSABILITY_LABEL_COLORS[fb.passability_rating] || 'text-gray-300'}`}>
+                {fb.passability_label}
+              </span>
+            </div>
+          )}
 
           {/* Reasoning */}
           {rec.reasoning && (
             <div className="rounded-lg bg-piu-dark/50 border border-piu-border/30 px-3 py-2">
-              <p className="text-[11px] text-gray-300 font-body leading-relaxed">
-                {rec.reasoning}
-              </p>
+              <p className="text-[11px] text-gray-300 font-body leading-relaxed">{rec.reasoning}</p>
             </div>
           )}
 
@@ -214,12 +261,21 @@ function RecommendationDetailModal({ rec, goal, onClose }) {
           {rec.skills?.length > 0 && (
             <div className="flex flex-wrap gap-1">
               {rec.skills.map((s) => (
-                <span key={s} className="text-[10px] text-gray-400 bg-piu-dark/70 border border-piu-border/30 rounded-md px-2 py-0.5 font-body">
-                  {s}
-                </span>
+                <span key={s} className="text-[10px] text-gray-400 bg-piu-dark/70 border border-piu-border/30 rounded-md px-2 py-0.5 font-body">{s}</span>
               ))}
             </div>
           )}
+
+          {/* Track This Chart button */}
+          <button
+            onClick={() => { onClose(); onTrack(rec); }}
+            className="w-full py-2.5 rounded-lg bg-gradient-to-r from-violet-500 to-purple-700 border border-violet-300/30 text-white font-display font-bold text-xs shadow-lg shadow-violet-900/30 hover:brightness-110 transition-all flex items-center justify-center gap-2"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+            </svg>
+            Track This Chart
+          </button>
         </div>
       </div>
     </div>
@@ -229,7 +285,7 @@ function RecommendationDetailModal({ rec, goal, onClose }) {
 // ---------------------------------------------------------------------------
 // Card (compact — tappable to open modal)
 // ---------------------------------------------------------------------------
-export default function RecommendationSongCard({ rec, goal, index, animKey }) {
+export default function RecommendationSongCard({ rec, goal, index, animKey, onTrack }) {
   const [showDetail, setShowDetail] = useState(false);
   const reasonColors = REASON_COLORS[rec.reason_type] || REASON_COLORS.unpassed;
   const jacketSrc = rec.jacket_url || rec.background_url || '';
@@ -252,9 +308,7 @@ export default function RecommendationSongCard({ rec, goal, index, animKey }) {
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-piu-dark to-piu-bg">
-              <span className="text-2xl font-display font-black text-gray-700">
-                {(rec.song_title || '?')[0]}
-              </span>
+              <span className="text-2xl font-display font-black text-gray-700">{(rec.song_title || '?')[0]}</span>
             </div>
           )}
           <LevelBadge mode={rec.mode} level={rec.level} />
@@ -262,6 +316,18 @@ export default function RecommendationSongCard({ rec, goal, index, animKey }) {
             <span className="absolute top-1.5 right-1.5 inline-flex items-center px-1 py-0.5 rounded text-[9px] font-display font-bold bg-black/60 text-piu-green border border-piu-green/30">
               +{rec.pumbility_gain}
             </span>
+          )}
+          {/* Track button on jacket */}
+          {onTrack && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onTrack(rec); }}
+              className="absolute bottom-1.5 right-1.5 w-7 h-7 rounded-full bg-black/60 border border-white/10 flex items-center justify-center text-gray-300 hover:text-violet-300 hover:border-violet-400/40 transition-colors"
+              title="Track"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+              </svg>
+            </button>
           )}
         </div>
 
@@ -285,6 +351,9 @@ export default function RecommendationSongCard({ rec, goal, index, animKey }) {
           <span className={`inline-flex items-center self-start px-1.5 py-0.5 rounded text-[9px] font-display font-bold border leading-none mt-0.5 ${reasonColors}`}>
             {rec.reason_label}
           </span>
+
+          {/* Saved-state indicators */}
+          <FeedbackIndicators rec={rec} />
         </div>
       </div>
 
@@ -293,6 +362,7 @@ export default function RecommendationSongCard({ rec, goal, index, animKey }) {
           rec={rec}
           goal={goal}
           onClose={() => setShowDetail(false)}
+          onTrack={onTrack}
         />
       )}
     </>

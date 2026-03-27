@@ -1725,6 +1725,20 @@ function initializeDb() {
     CREATE INDEX IF NOT EXISTS idx_user_lists_user ON user_lists(user_id);
     CREATE INDEX IF NOT EXISTS idx_user_list_items_list ON user_list_items(list_id);
 
+    CREATE TABLE IF NOT EXISTS user_chart_feedback (
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      chart_id INTEGER NOT NULL REFERENCES songs(id) ON DELETE CASCADE,
+      passability_rating INTEGER DEFAULT NULL,
+      note TEXT DEFAULT '',
+      note_updated_at TEXT DEFAULT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (user_id, chart_id),
+      CHECK (passability_rating IS NULL OR (passability_rating >= 1 AND passability_rating <= 5))
+    );
+    CREATE INDEX IF NOT EXISTS idx_user_chart_feedback_user_updated
+      ON user_chart_feedback(user_id, updated_at DESC);
+
     CREATE TABLE IF NOT EXISTS user_chart_youtube_links (
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       chart_id INTEGER NOT NULL,
