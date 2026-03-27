@@ -2393,6 +2393,16 @@ function insertGroupedNewClearPost(db, userId, clears, options = {}) {
     ? Math.max(0, parseInt(explicitSinglesGain, 10) || 0)
     : normalized.reduce((sum, row) => sum + (parseInt(row.singles_pumbility_gain, 10) || 0), 0);
 
+  const clearsJson = JSON.stringify(normalized);
+
+  // Deduplicate: skip if an identical clear post was created in the last 60 seconds
+  const recentDupe = db.prepare(`
+    SELECT id FROM user_new_clears
+    WHERE user_id = ? AND created_at >= datetime('now', '-60 seconds') AND clears_json = ?
+    LIMIT 1
+  `).get(userId, clearsJson);
+  if (recentDupe) return recentDupe.id;
+
   const result = db.prepare(`
     INSERT INTO user_new_clears (
       user_id, song_title, mode, level, score, grade, plate, background_url, clears_json, pumbility_gain, singles_pumbility_gain, created_at
@@ -2406,7 +2416,7 @@ function insertGroupedNewClearPost(db, userId, clears, options = {}) {
     first.grade,
     first.plate,
     first.background_url,
-    JSON.stringify(normalized),
+    clearsJson,
     postPumbilityGain,
     postSinglesPumbilityGain
   );
@@ -2777,11 +2787,20 @@ async function syncRecentlyPlayedForUser(user, options = {}) {
     }
 
     if (persistActivityPosts && upscoreRowsWithGains.length > 0) {
-      const upscoreInsert = db.prepare(`
-        INSERT INTO user_upscores (user_id, upscores_json, pumbility_gain, singles_pumbility_gain, created_at)
-        VALUES (?, ?, ?, ?, datetime('now'))
-      `).run(userId, JSON.stringify(upscoreRowsWithGains), pumbilityGains.upscore_gain, pumbilityGains.singles_upscore_gain);
-      upscorePostId = upscoreInsert.lastInsertRowid;
+      // Deduplicate: skip if an identical upscore post was created in the last 60 seconds
+      const upscoreJson = JSON.stringify(upscoreRowsWithGains);
+      const recentDupe = db.prepare(`
+        SELECT id FROM user_upscores
+        WHERE user_id = ? AND created_at >= datetime('now', '-60 seconds') AND upscores_json = ?
+        LIMIT 1
+      `).get(userId, upscoreJson);
+      if (!recentDupe) {
+        const upscoreInsert = db.prepare(`
+          INSERT INTO user_upscores (user_id, upscores_json, pumbility_gain, singles_pumbility_gain, created_at)
+          VALUES (?, ?, ?, ?, datetime('now'))
+        `).run(userId, upscoreJson, pumbilityGains.upscore_gain, pumbilityGains.singles_upscore_gain);
+        upscorePostId = upscoreInsert.lastInsertRowid;
+      }
     }
 
     if (persistActivityPosts) {
@@ -3138,11 +3157,19 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
         newClears = pumbilityGains.clears;
 
         if (upscores.length > 0) {
-          const upscoreInsert = db.prepare(`
-            INSERT INTO user_upscores (user_id, upscores_json, pumbility_gain, singles_pumbility_gain, created_at)
-            VALUES (?, ?, ?, ?, datetime('now'))
-          `).run(userId, JSON.stringify(upscores), pumbilityGains.upscore_gain, pumbilityGains.singles_upscore_gain);
-          upscorePostId = upscoreInsert.lastInsertRowid;
+          const upscoreJson = JSON.stringify(upscores);
+          const recentDupe = db.prepare(`
+            SELECT id FROM user_upscores
+            WHERE user_id = ? AND created_at >= datetime('now', '-60 seconds') AND upscores_json = ?
+            LIMIT 1
+          `).get(userId, upscoreJson);
+          if (!recentDupe) {
+            const upscoreInsert = db.prepare(`
+              INSERT INTO user_upscores (user_id, upscores_json, pumbility_gain, singles_pumbility_gain, created_at)
+              VALUES (?, ?, ?, ?, datetime('now'))
+            `).run(userId, upscoreJson, pumbilityGains.upscore_gain, pumbilityGains.singles_upscore_gain);
+            upscorePostId = upscoreInsert.lastInsertRowid;
+          }
         }
         newClearPostId = insertGroupedNewClearPost(db, userId, newClears, {
           pumbilityGain: pumbilityGains.clear_gain,
