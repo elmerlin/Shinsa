@@ -2314,6 +2314,17 @@ function writeDailyHighlightsCache(data) {
   dailyHighlightsCache = { data, expiresAt: Date.now() + DAILY_HIGHLIGHTS_TTL_MS };
 }
 
+function dedupeByUserChart(items) {
+  const seen = new Set();
+  return items.filter(item => {
+    const title = item.song_title || item.new_song_title || '';
+    const key = `${item.user_id}|${title}|${item.mode}|${item.level || item.new_level || 0}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 function pickTopNDiverse(items, n, getUserId) {
   if (items.length <= n) return items.slice(0, n);
   const uniqueUsers = new Set(items.map(getUserId));
@@ -2429,8 +2440,9 @@ router.get('/daily-highlights', (req, res) => {
       });
     }
   }
-  flatUpscores.sort((a, b) => (b.pumbility_gain || b.score_delta) - (a.pumbility_gain || a.score_delta));
-  let topUpscores = pickTopNDiverse(flatUpscores, 5, (u) => u.user_id);
+  const dedupedUpscores = dedupeByUserChart(flatUpscores);
+  dedupedUpscores.sort((a, b) => (b.pumbility_gain || b.score_delta) - (a.pumbility_gain || a.score_delta));
+  let topUpscores = pickTopNDiverse(dedupedUpscores, 5, (u) => u.user_id);
   let topUpscoresIsFallback = false;
 
   if (topUpscores.length === 0) {
@@ -2463,8 +2475,9 @@ router.get('/daily-highlights', (req, res) => {
         });
       }
     }
-    fallbackFlatUpscores.sort((a, b) => (b.pumbility_gain || b.score_delta) - (a.pumbility_gain || a.score_delta));
-    topUpscores = pickTopNDiverse(fallbackFlatUpscores, 5, (u) => u.user_id);
+    const dedupedFallbackUpscores = dedupeByUserChart(fallbackFlatUpscores);
+    dedupedFallbackUpscores.sort((a, b) => (b.pumbility_gain || b.score_delta) - (a.pumbility_gain || a.score_delta));
+    topUpscores = pickTopNDiverse(dedupedFallbackUpscores, 5, (u) => u.user_id);
     if (topUpscores.length > 0) topUpscoresIsFallback = true;
   }
 
@@ -2515,12 +2528,13 @@ router.get('/daily-highlights', (req, res) => {
       });
     }
   }
-  flatClears.sort((a, b) => {
+  const dedupedClears = dedupeByUserChart(flatClears);
+  dedupedClears.sort((a, b) => {
     const lvlDiff = toInt(b.level) - toInt(a.level);
     if (lvlDiff !== 0) return lvlDiff;
     return toInt(b.score) - toInt(a.score);
   });
-  let topClears = pickTopNDiverse(flatClears, 5, (c) => c.user_id);
+  let topClears = pickTopNDiverse(dedupedClears, 5, (c) => c.user_id);
   let topClearsIsFallback = false;
 
   if (topClears.length === 0) {
@@ -2571,12 +2585,13 @@ router.get('/daily-highlights', (req, res) => {
         });
       }
     }
-    fallbackFlatClears.sort((a, b) => {
+    const dedupedFallbackClears = dedupeByUserChart(fallbackFlatClears);
+    dedupedFallbackClears.sort((a, b) => {
       const lvlDiff = toInt(b.level) - toInt(a.level);
       if (lvlDiff !== 0) return lvlDiff;
       return toInt(b.score) - toInt(a.score);
     });
-    topClears = pickTopNDiverse(fallbackFlatClears, 5, (c) => c.user_id);
+    topClears = pickTopNDiverse(dedupedFallbackClears, 5, (c) => c.user_id);
     if (topClears.length > 0) topClearsIsFallback = true;
   }
 
