@@ -860,6 +860,12 @@ export const getNewClearComments = (clearId) => request(`/social/clears/${clearI
 export const addNewClearComment = (clearId, content, parentId) => request(`/social/clears/${clearId}/comments`, { method: 'POST', body: JSON.stringify({ content, parent_id: parentId || null }) });
 export const deleteNewClearComment = (id) => request(`/social/clears/comments/${id}`, { method: 'DELETE' });
 
+// Social — Play Interactions
+export const getPlay = (playId) => request(`/social/plays/${playId}`);
+export const getPlayComments = (playId) => request(`/social/plays/${playId}/comments`);
+export const addPlayComment = (playId, content, parentId) => request(`/social/plays/${playId}/comments`, { method: 'POST', body: JSON.stringify({ content, parent_id: parentId || null }) });
+export const deletePlayComment = (id) => request(`/social/plays/comments/${id}`, { method: 'DELETE' });
+
 // Social — Comment Pumps
 export const pumpComment = (type, commentId) => pumpRequestWithHaptic(`/social/comments/${type}/${commentId}/pump`, { method: 'POST' });
 

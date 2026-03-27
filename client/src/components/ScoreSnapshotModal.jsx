@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { createMessageStoryItem } from '../utils/api';
+import { createMessageStoryItem, getPlayComments, addPlayComment, deletePlayComment } from '../utils/api';
 import SendToDirectMessageButton from './SendToDirectMessageButton';
 import ScoreSnapshotCard from './ScoreSnapshotCard';
+import ItemCommentSection from './ItemCommentSection';
 import YouTubeReplayModal from './YouTubeReplayModal';
 import { buildReplayModalTitle } from '../utils/replayTitle';
 
@@ -174,8 +175,12 @@ export default function ScoreSnapshotModal({
   onClose,
   directMessageLinkShare = null,
   modalLabel = 'Run details',
+  playId,
+  focusCommentId,
 }) {
   const [storyComposerOpen, setStoryComposerOpen] = useState(false);
+  const [commentCount, setCommentCount] = useState(0);
+  const [commentSectionOpen, setCommentSectionOpen] = useState(!!focusCommentId);
   const [storyCaption, setStoryCaption] = useState('');
   const [storySubmitting, setStorySubmitting] = useState(false);
   const [storyError, setStoryError] = useState('');
@@ -299,7 +304,26 @@ export default function ScoreSnapshotModal({
             replayUrl={replayUrl}
             replayTitle={replayTitle}
             onOpenReplay={replayUrl ? () => setReplayOpen(true) : null}
+            commentCount={commentCount}
+            onCommentClick={() => setCommentSectionOpen(v => !v)}
           />
+          {playId && (
+            <div className="mt-2">
+              <ItemCommentSection
+                itemId={playId}
+                commentType="play"
+                getCommentsFn={getPlayComments}
+                addCommentFn={addPlayComment}
+                deleteCommentFn={deletePlayComment}
+                initialOpen={false}
+                externalOpen={commentSectionOpen}
+                onOpenChange={setCommentSectionOpen}
+                ownerId={score?.user_id || ''}
+                focusCommentId={focusCommentId}
+                onCountChange={setCommentCount}
+              />
+            </div>
+          )}
         </div>
       </div>
 

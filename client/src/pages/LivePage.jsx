@@ -1330,6 +1330,7 @@ function PlayDetailModal({ play, onClose }) {
       onClose={onClose}
       directMessageLinkShare={directMessageLinkShare}
       modalLabel="Live play"
+      playId={play.recently_played_id || play.id}
     />
   );
 }

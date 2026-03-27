@@ -1,14 +1,14 @@
 import React from 'react';
 import { buildYouTubeEmbedSrc } from '../utils/youtube';
 
-export default function YouTubeReplayModal({ url, title = 'Replay clip', onClose }) {
+export default function YouTubeReplayModal({ url, title = 'Replay clip', onClose, children }) {
   const embedSrc = buildYouTubeEmbedSrc(url, { autoplay: true });
   if (!embedSrc) return null;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4" onClick={onClose}>
       <div
-        className="w-full max-w-3xl overflow-hidden rounded-2xl border border-piu-border bg-[#07111f] shadow-2xl"
+        className={`w-full max-w-3xl overflow-hidden rounded-2xl border border-piu-border bg-[#07111f] shadow-2xl${children ? ' max-h-[85vh] overflow-y-auto' : ''}`}
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-piu-border/40 px-4 py-3">
@@ -31,6 +31,7 @@ export default function YouTubeReplayModal({ url, title = 'Replay clip', onClose
             frameBorder="0"
           />
         </div>
+        {children}
       </div>
     </div>
   );

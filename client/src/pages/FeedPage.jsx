@@ -106,6 +106,8 @@ function getClearItems(item) {
       replay_end_seconds: parseInt(item.replay_end_seconds, 10) || 0,
       machine_name: item.machine_name || '',
       played_at_utc: item.played_at_utc || '',
+      play_id: item.play_id || '',
+      user_id: item.user_id || '',
     }];
 
   try {
@@ -137,6 +139,8 @@ function getClearItems(item) {
       replay_end_seconds: parseInt(c.replay_end_seconds, 10) || 0,
       machine_name: c.machine_name || '',
       played_at_utc: c.played_at_utc || '',
+      play_id: c.play_id || item.play_id || '',
+      user_id: c.user_id || item.user_id || '',
     }));
   } catch {
     return fallback;
@@ -200,6 +204,7 @@ function ScoreDetailModal({ score, jacketUrl, chartLink, onClose }) {
       directMessageLinkShare={score?._dmLinkShare || null}
       modalLabel="Score details"
       onClose={onClose}
+      playId={score?.play_id}
     />
   );
 }
@@ -577,6 +582,7 @@ function UpscoreCard({ item, jacketLookup, chartKeyMap, onScoreClick, onReplayCl
                   onClick={() => onScoreClick && onScoreClick({
                     ...u,
                     username: item.username,
+                    user_id: u.user_id || item.user_id,
                     date_played: u.date_played || item.created_at,
                     _jacketUrl: jacketUrl,
                     _chartLink: chartLink,
@@ -1025,6 +1031,7 @@ function NewClearCard({ item, jacketLookup, chartKeyMap, onScoreClick, onReplayC
                   onClick={() => onScoreClick && onScoreClick({
                     ...clear,
                     username: item.username,
+                    user_id: clear.user_id || item.user_id,
                     date_played: clear.date_played || item.created_at,
                     _jacketUrl: jacketUrl,
                     _chartLink: chartLink,

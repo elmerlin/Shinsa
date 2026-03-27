@@ -2128,6 +2128,20 @@ function initializeDb() {
     CREATE INDEX IF NOT EXISTS idx_new_clears_created ON user_new_clears(created_at);
     CREATE INDEX IF NOT EXISTS idx_new_clear_pumps ON new_clear_pumps(clear_id);
     CREATE INDEX IF NOT EXISTS idx_new_clear_comments ON new_clear_comments(clear_id);
+
+    CREATE TABLE IF NOT EXISTS play_comments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      play_id INTEGER NOT NULL,
+      user_id TEXT NOT NULL,
+      parent_id INTEGER DEFAULT NULL,
+      content TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (play_id) REFERENCES user_recently_played(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (parent_id) REFERENCES play_comments(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_play_comments_play ON play_comments(play_id);
+    CREATE INDEX IF NOT EXISTS idx_play_comments_parent ON play_comments(parent_id);
   `);
 
   // Comment pumps table (pumps on any comment or reply)
