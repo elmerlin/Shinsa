@@ -46,6 +46,7 @@ import ChatPage from './pages/ChatPage';
 import MessagesPage from './pages/MessagesPage';
 import FunPage from './pages/FunPage';
 import OptimisePage from './pages/OptimisePage';
+import WhatToPlayPage from './pages/WhatToPlayPage';
 import ChangeLogPage from './pages/ChangeLogPage';
 import CheckinPage from './pages/CheckinPage';
 import MembershipPage from './pages/MembershipPage';
@@ -1457,6 +1458,7 @@ export default function App() {
           <Route path="/shoes" element={<ShoesPage />} />
           <Route path="/optimise" element={<OptimisePage />} />
           <Route path="/optimize" element={<OptimisePage />} />
+          <Route path="/what-to-play" element={<WhatToPlayPage />} />
           <Route path="/songs/chart/:chartId" element={<SongChartPage />} />
           <Route path="/skill" element={<SkillsPage />} />
           <Route path="/skill/:skillSlug" element={<SkillChartsPage />} />
