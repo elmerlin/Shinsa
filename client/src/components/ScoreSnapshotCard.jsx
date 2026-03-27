@@ -102,19 +102,16 @@ function formatDateLabel(value) {
     return raw.length >= 10 ? raw.slice(0, 10) : raw;
   }
 
-  // Always display in Europe/London timezone
-  const opts = { timeZone: 'Europe/London' };
+  // Display in the viewer's local timezone (browser default)
   const hasTime = /(?:T|\s)\d{2}:\d{2}/.test(raw);
   return hasTime
-    ? parsed.toLocaleString('en-GB', {
-      ...opts,
+    ? parsed.toLocaleString(undefined, {
       month: 'short',
       day: 'numeric',
       hour: 'numeric',
       minute: '2-digit',
     })
-    : parsed.toLocaleDateString('en-GB', {
-      ...opts,
+    : parsed.toLocaleDateString(undefined, {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
