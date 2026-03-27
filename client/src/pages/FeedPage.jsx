@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getFeed, getJacketMap, getChartKeyMap, pumpUpscore, getUpscoreComments, addUpscoreComment, deleteUpscoreComment, pumpNewClear, getNewClearComments, addNewClearComment, deleteNewClearComment, pumpComment, getUpscorePumpers, getNewClearPumpers } from '../utils/api';
+import { getFeed, getJacketMap, getChartKeyMap, pumpUpscore, getUpscoreComments, addUpscoreComment, deleteUpscoreComment, pumpNewClear, getNewClearComments, addNewClearComment, deleteNewClearComment, pumpComment, getUpscorePumpers, getNewClearPumpers, pumpWeeklyChallengePlay, getWeeklyChallengePlayComments, addWeeklyChallengePlayComment, deleteWeeklyChallengePlayComment, getWeeklyChallengePlayPumpers } from '../utils/api';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag } from '../components/PlayerRegistration';
 import PostCard, { ShareButton } from '../components/PostCard';
@@ -1098,74 +1098,309 @@ function NewClearCard({ item, jacketLookup, chartKeyMap, onScoreClick, onReplayC
   );
 }
 
-function WeeklyChallengePlayCard({ item, jacketLookup, chartKeyMap }) {
-  let plays;
-  try { plays = JSON.parse(item.plays_json || '[]'); } catch { plays = []; }
-  const weekKey = item.week_key || '';
-  const avatarUrl = item.avatar ? getAvatarUrl(item.avatar) : '';
+function WcPlayPumpButton({ playPostId, initialCount, initialPumped }) {
+  const { user } = useAuth();
+  const [pumped, setPumped] = useState(!!initialPumped);
+  const [count, setCount] = useState(initialCount || 0);
+  const [loading, setLoading] = useState(false);
+  const [animating, setAnimating] = useState(false);
+  const [showPumpers, setShowPumpers] = useState(false);
+
+  const toggle = async () => {
+    if (!user || loading) return;
+    setLoading(true);
+    try {
+      const res = await pumpWeeklyChallengePlay(playPostId);
+      setPumped(res.pumped);
+      setCount(res.pump_count);
+      if (res.pumped) {
+        setAnimating(true);
+        setTimeout(() => setAnimating(false), 600);
+      }
+    } catch {}
+    setLoading(false);
+  };
 
   return (
-    <div className="card mb-3">
-      <div className="flex items-center gap-3 mb-3">
-        {avatarUrl && (
-          <Link to={`/profile/${item.user_id}`}>
-            <img src={avatarUrl} alt="" className="w-10 h-10 rounded-full border-2 border-piu-border object-cover" />
-          </Link>
-        )}
-        <div className="flex-1 min-w-0">
-          <Link to={`/profile/${item.user_id}`} className="font-display font-bold text-white hover:text-piu-accent transition-colors">
-            {item.nationality ? <>{getCountryFlag(item.nationality, 'h-4 inline-block mr-1')} </> : null}
-            {item.username}
-          </Link>
-          <span className="text-gray-400 ml-1.5">played weekly challenges!</span>
+    <>
+      <button
+        onClick={toggle}
+        disabled={!user}
+        className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm font-display font-bold transition-all ${
+          pumped
+            ? 'text-piu-gold bg-piu-gold/10'
+            : 'text-gray-400 hover:text-piu-gold hover:bg-piu-gold/5'
+        } ${!user ? 'opacity-50 cursor-not-allowed' : ''}`}
+        title={user ? (pumped ? 'Un-pump' : 'Pump it up!') : 'Log in to pump'}
+      >
+        <img
+          src={pumped ? '/piu/stomp-yellow.svg' : '/piu/stomp-gray.svg'}
+          alt=""
+          className={`w-5 h-5 ${animating ? 'animate-bounce' : ''}`}
+        />
+      </button>
+      {count > 0 && (
+        <button
+          type="button"
+          onClick={() => setShowPumpers(true)}
+          className="px-2.5 py-1.5 rounded-lg text-sm font-display font-bold text-gray-300 hover:text-white hover:bg-piu-dark/50 transition-colors"
+          title="See who pumped"
+        >
+          {count}
+        </button>
+      )}
+      <PumpersModal
+        open={showPumpers}
+        onClose={() => setShowPumpers(false)}
+        title={`Pumped by (${count})`}
+        loadPumpers={() => getWeeklyChallengePlayPumpers(playPostId)}
+        reloadKey={count}
+      />
+    </>
+  );
+}
+
+function WcPlayCommentSection({ playPostId, commentCount: initialCount }) {
+  const { user } = useAuth();
+  const [open, setOpen] = useState(false);
+  const [comments, setComments] = useState([]);
+  const [newComment, setNewComment] = useState('');
+  const [replyTo, setReplyTo] = useState(null);
+  const [replyText, setReplyText] = useState('');
+  const [count, setCount] = useState(initialCount || 0);
+
+  const loadComments = async () => {
+    const data = await getWeeklyChallengePlayComments(playPostId);
+    setComments(data);
+  };
+
+  const toggleOpen = () => {
+    if (!open) loadComments();
+    setOpen(!open);
+  };
+
+  const submit = async () => {
+    if (!newComment.trim()) return;
+    const c = await addWeeklyChallengePlayComment(playPostId, newComment.trim());
+    setComments(prev => [...prev, c]);
+    setNewComment('');
+    setCount(prev => prev + 1);
+  };
+
+  const submitReply = async (parentId) => {
+    if (!replyText.trim()) return;
+    const c = await addWeeklyChallengePlayComment(playPostId, replyText.trim(), parentId);
+    setComments(prev => prev.map(cm =>
+      cm.id === parentId ? { ...cm, replies: [...(cm.replies || []), c] } : cm
+    ));
+    setReplyTo(null);
+    setReplyText('');
+    setCount(prev => prev + 1);
+  };
+
+  const handleDelete = async (id, parentId) => {
+    await deleteWeeklyChallengePlayComment(id);
+    if (parentId) {
+      setComments(prev => prev.map(cm =>
+        cm.id === parentId ? { ...cm, replies: (cm.replies || []).filter(r => r.id !== id) } : cm
+      ));
+    } else {
+      const removed = comments.find(c => c.id === id);
+      const removedCount = 1 + (removed?.replies?.length || 0);
+      setComments(prev => prev.filter(c => c.id !== id));
+      setCount(prev => Math.max(0, prev - removedCount));
+    }
+  };
+
+  const insertCommentSticker = (token) => {
+    setNewComment((prev) => appendStickerToken(prev, token));
+  };
+
+  const insertReplySticker = (token) => {
+    setReplyText((prev) => appendStickerToken(prev, token));
+  };
+
+  return (
+    <>
+      <ActionIconButton
+        onClick={toggleOpen}
+        title={open ? 'Hide comments' : 'Show comments'}
+        ariaLabel={open ? 'Hide comments' : 'Show comments'}
+        count={count}
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M7 10.5h10M7 14h6m8 4-3.8-1.3a9.2 9.2 0 0 1-3.2.55C7.925 17.25 4 14.22 4 10.5S7.925 3.75 12.75 3.75 21.5 6.78 21.5 10.5c0 1.75-.87 3.34-2.3 4.52L21 18Z" />
+        </svg>
+      </ActionIconButton>
+      {open && (
+        <div className="w-full order-last mt-2 border-l-2 border-piu-border/30 pl-3 space-y-2">
+          {comments.map(c => (
+            <div key={c.id}>
+              <div className="flex items-start gap-2">
+                <Link to={getProfilePath(c.user_id, c.username)}>
+                  {c.avatar ? (
+                    <img src={getAvatarUrl(c.avatar)} className="w-6 h-6 rounded-full object-cover" alt="" />
+                  ) : (
+                    <div className="w-6 h-6 rounded-full bg-piu-dark flex items-center justify-center text-[10px] font-bold">{(c.username || '?')[0]}</div>
+                  )}
+                </Link>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1">
+                    <Link to={getProfilePath(c.user_id, c.username)} className="text-[11px] font-display font-bold hover:text-piu-accent leading-none">{c.username}</Link>
+                    <span className="text-[9px] text-gray-600">{timeAgo(c.created_at)}</span>
+                  </div>
+                  <p className="text-[11px] text-gray-300 break-words">{renderFormattedText(c.content)}</p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    {user && <button onClick={() => { setReplyTo(c.id); setReplyText(''); }} className="text-[9px] text-gray-500 hover:text-piu-accent font-display">Reply</button>}
+                    {user && user.id === c.user_id && <button onClick={() => handleDelete(c.id)} className="text-[9px] text-gray-600 hover:text-red-400 font-display">Delete</button>}
+                  </div>
+                </div>
+              </div>
+              {replyTo === c.id && user && (
+                <div className="ml-8 mt-1 flex items-center gap-1">
+                  <DojoCatStickerPicker onSelect={insertReplySticker} />
+                  <input
+                    value={replyText}
+                    onChange={e => setReplyText(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && submitReply(c.id)}
+                    className="flex-1 bg-piu-dark/80 border border-piu-border/30 rounded px-2 py-1 text-[11px] text-white placeholder-gray-600"
+                    placeholder="Reply..."
+                  />
+                  <button onClick={() => submitReply(c.id)} className="text-[10px] font-display font-bold text-piu-accent hover:text-piu-accent/80 px-2">Send</button>
+                  <button onClick={() => setReplyTo(null)} className="text-[10px] text-gray-500 hover:text-gray-300">✕</button>
+                </div>
+              )}
+            </div>
+          ))}
+          {user && (
+            <div className="flex items-center gap-1 pt-1">
+              <DojoCatStickerPicker onSelect={insertCommentSticker} />
+              <input
+                value={newComment}
+                onChange={e => setNewComment(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && submit()}
+                className="flex-1 bg-piu-dark/80 border border-piu-border/30 rounded px-2 py-1 text-[11px] text-white placeholder-gray-600"
+                placeholder="Add a comment..."
+              />
+              <button onClick={submit} className="text-[10px] font-display font-bold text-piu-accent hover:text-piu-accent/80 px-2">Post</button>
+            </div>
+          )}
         </div>
-        <Link to={`/weekly-challenges?week=${weekKey}`} className="text-[9px] px-2 py-1 rounded bg-purple-500/15 text-purple-300 border border-purple-500/25 font-display font-bold hover:bg-purple-500/25 transition-colors shrink-0">
-          {weekKey}
+      )}
+    </>
+  );
+}
+
+function WeeklyChallengePlayCard({ item, jacketLookup, chartKeyMap }) {
+  const [showAll, setShowAll] = useState(false);
+  const plays = (() => {
+    try { return JSON.parse(item.plays_json || '[]'); } catch { return []; }
+  })();
+  const weekKey = item.week_key || '';
+  const flag = getCountryFlag(item.nationality);
+  const hasMore = plays.length > 5;
+  const visiblePlays = showAll ? plays : plays.slice(0, 5);
+
+  if (plays.length === 0) return null;
+
+  return (
+    <div className="card">
+      <div className="flex items-center gap-3 mb-3">
+        <Link to={getProfilePath(item.user_id, item.username)}>
+          {item.avatar ? (
+            <img src={getAvatarUrl(item.avatar)} alt="" className="w-9 h-9 rounded-full object-cover border border-piu-border" />
+          ) : (
+            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-sm">
+              {(item.username || '?')[0].toUpperCase()}
+            </div>
+          )}
         </Link>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5">
+            <Link to={getProfilePath(item.user_id, item.username)} className="font-display font-bold text-sm hover:text-piu-accent transition-colors">
+              {flag && <span className="mr-1">{flag}</span>}
+              {item.username}
+            </Link>
+            <span className="text-purple-300 font-display font-bold text-xs">weekly challenge!</span>
+            <Link to={`/weekly-challenges?week=${weekKey}`} className="text-[9px] px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-300 border border-purple-500/25 font-display font-bold hover:bg-purple-500/25 transition-colors">
+              {weekKey}
+            </Link>
+          </div>
+          <p className="text-[10px] text-gray-500">{timeAgo(item.created_at)}</p>
+        </div>
       </div>
 
       <div className="space-y-2">
-        {plays.slice(0, 5).map((play, i) => {
-          const isSingle = play.mode === 'Single';
-          const jacketUrl = resolveChartJacketUrl({ title: play.song_title, mode: play.mode, level: play.level, jacketLookup, backgroundUrl: play.background_url });
+        {visiblePlays.map((play, i) => {
+          const rank = getRank(play.score);
+          const grade = parseGrade(play.grade, rank.label);
+          const jacketUrl = resolveChartJacketUrl({
+            title: play.song_title,
+            mode: play.mode,
+            level: play.level,
+            jacketLookup,
+          });
+          const norm = (play.song_title || '').toLowerCase().replace(/\s+/g, ' ').trim();
+          const exactKey = `${norm}|${play.mode}|${play.level}`;
+          const chartId = chartKeyMap?.[exactKey] || chartKeyMap?.[norm];
+          const chartLink = chartId ? `/songs/chart/${chartId}` : `/songs?q=${encodeURIComponent(play.song_title || '')}`;
+
           return (
-            <div key={`${play.song_title}-${play.mode}-${play.level}-${i}`} className="flex items-center gap-3 py-1.5">
-              <div className="w-9 h-9 shrink-0 rounded overflow-hidden bg-piu-dark">
-                {jacketUrl ? <img src={jacketUrl} alt="" className="w-full h-full object-cover" /> : null}
-              </div>
+            <div key={i} className="flex items-center gap-3 py-1.5 border-b border-piu-border/20 last:border-0">
+              <Link to={chartLink} className="group shrink-0">
+                <PiuChartJacket
+                  title={play.song_title}
+                  mode={play.mode}
+                  level={play.level}
+                  jacketUrl={jacketUrl}
+                  size="md"
+                  imageClassName="group-hover:scale-[1.04]"
+                />
+              </Link>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-display font-bold truncate text-white">{play.song_title}</p>
-                <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-display font-bold ${isSingle ? 'bg-red-600/20 text-red-400' : 'bg-green-600/20 text-green-400'}`}>
-                    {isSingle ? 'S' : 'D'}{play.level}
-                  </span>
+                <p className="text-xs font-display font-bold truncate">{play.song_title}</p>
+                <div className="flex items-center gap-1 mt-0.5">
                   {play.weekly_challenge_rank && (
                     <Link to={`/weekly-challenges?week=${play.weekly_challenge_week_key || weekKey}`} className="text-[9px] px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-300 border border-purple-500/25 font-display font-black hover:bg-purple-500/25 transition-colors">
                       WC #{play.weekly_challenge_rank}
                     </Link>
                   )}
+                  {play.rating_points > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-300 font-display font-black">
+                      {play.rating_points} pts
+                    </span>
+                  )}
                 </div>
               </div>
               <div className="text-right shrink-0">
-                <span className={`font-display font-bold text-xs ${getGradeColor(play.grade, play.score)}`}>{play.grade || getRank(play.score).label}</span>
-                <p className="font-mono text-xs font-bold text-gray-300">{(parseInt(play.score, 10) || 0).toLocaleString()}</p>
+                <span
+                  className={`text-xs font-display font-bold ${getGradeColor(grade.display, play.score)} ${grade.isBroken ? 'grade-broken' : ''}`}
+                  data-grade={grade.display}
+                >
+                  {grade.display}
+                </span>
+                <p className="text-xs font-mono font-bold text-gray-300">{(parseInt(play.score, 10) || 0).toLocaleString()}</p>
               </div>
             </div>
           );
         })}
-        {plays.length > 5 && (
-          <p className="text-center text-gray-500 text-[10px] py-1">+{plays.length - 5} more</p>
-        )}
       </div>
+      {hasMore && (
+        <button
+          onClick={() => setShowAll(v => !v)}
+          className="mt-2 text-xs font-display font-bold text-piu-accent hover:text-piu-accent/80 transition-colors"
+        >
+          {showAll ? 'Show less' : `Show ${plays.length - 5} more`}
+        </button>
+      )}
 
-      <div className="flex items-center gap-4 mt-3 pt-2 border-t border-piu-border/30">
-        <span className="text-[10px] text-gray-500">{timeAgo(item.created_at)}</span>
-        <span className="text-[10px] text-gray-500">
-          {item.pump_count || 0} pump{item.pump_count !== 1 ? 's' : ''}
-        </span>
-        <span className="text-[10px] text-gray-500">
-          {item.comment_count || 0} comment{item.comment_count !== 1 ? 's' : ''}
-        </span>
+      {/* Actions: Pump + Comments + Share */}
+      <div className="border-t border-piu-border/20 pt-2 mt-1">
+        <div className="flex items-center gap-2 flex-wrap">
+          <WcPlayPumpButton playPostId={item.id} initialCount={item.pump_count || 0} initialPumped={item.user_pumped} />
+          <WcPlayCommentSection playPostId={item.id} commentCount={item.comment_count || 0} />
+          <ShareButton path={`/weekly-play/${item.id}`} />
+        </div>
       </div>
     </div>
   );
