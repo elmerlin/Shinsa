@@ -2578,7 +2578,7 @@ async function syncRecentlyPlayedForUser(user, options = {}) {
   let updatedCount = 0;
   const upscoresFromRecent = [];
   const newClearsFromRecent = [];
-  const wcOnlyPlays = []; // passing WC plays that aren't upscores or new clears
+  const wcAllPlays = []; // all passing plays — used for WC post (includes upscores & clears too)
   let upscorePostId = null;
   let newClearPostId = null;
   let titleUnlockPostId = null;
@@ -2732,24 +2732,24 @@ async function syncRecentlyPlayedForUser(user, options = {}) {
             touchedPlayDataLevels.add(String(level));
           }
           updatedCount += 1;
-        } else {
-          // Passing play but not an upscore or new clear — candidate for WC-only post
-          wcOnlyPlays.push({
-            song_title: songTitle,
-            mode,
-            level,
-            score,
-            grade: grade || '',
-            plate: plate || '',
-            background_url: backgroundUrl || '',
-            played_at_utc: playedAtUtc || datePlayed || '',
-            perfect,
-            great,
-            good,
-            bad,
-            miss,
-          });
         }
+
+        // ALL passing plays are candidates for WC post (upscores, clears, and non-improvements)
+        wcAllPlays.push({
+          song_title: songTitle,
+          mode,
+          level,
+          score,
+          grade: grade || '',
+          plate: plate || '',
+          background_url: backgroundUrl || '',
+          played_at_utc: playedAtUtc || datePlayed || '',
+          perfect,
+          great,
+          good,
+          bad,
+          miss,
+        });
       }
     }
 
@@ -2794,13 +2794,13 @@ async function syncRecentlyPlayedForUser(user, options = {}) {
   txn();
 
   // Create weekly challenge play posts for WC-only plays (not upscores/clears)
-  if (persistActivityPosts && wcOnlyPlays.length > 0) {
+  if (persistActivityPosts && wcAllPlays.length > 0) {
     try {
       ensureCurrentWeeklyChallengeWeek(db);
       // Annotate with WC data
-      annotateWeeklyChallengePlayRows(db, wcOnlyPlays, userId);
+      annotateWeeklyChallengePlayRows(db, wcAllPlays, userId);
       // Filter to only plays that matched a WC chart
-      const wcMatched = wcOnlyPlays.filter(p => p.weekly_challenge_week_key);
+      const wcMatched = wcAllPlays.filter(p => p.weekly_challenge_week_key);
       if (wcMatched.length > 0) {
         // Group by week
         const byWeek = {};
