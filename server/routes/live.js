@@ -209,6 +209,10 @@ function resolveKnownSongVariantTitle(rawTitle, songKey = '', flags = '') {
   if (isShortCut) {
     return `${title} - SHORT CUT -`;
   }
+  const isFullSong = normalizedFlags.includes('cut:4');
+  if (isFullSong && !/full\s*song/i.test(title)) {
+    return `${title} - FULL SONG -`;
+  }
   return title;
 }
 

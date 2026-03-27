@@ -21,9 +21,15 @@ function resolveKnownSongVariantTitle(rawTitle, songKey = '', flags = '') {
   const title = String(rawTitle || '').replace(/\s+/g, ' ').trim();
   if (!title) return '';
   const normalizedFlags = parseSongFlags(flags).map((flag) => flag.toLowerCase());
+
+  // Normalize existing suffixes in the title
   const shortCutSuffixPattern = /\s*-\s*SHORT CUT\s*-\s*$/i;
   if (shortCutSuffixPattern.test(title)) {
     return title.replace(shortCutSuffixPattern, ' - SHORT CUT -');
+  }
+  const fullSongSuffixPattern = /\s*-\s*FULL SONG\s*-\s*$/i;
+  if (fullSongSuffixPattern.test(title)) {
+    return title.replace(fullSongSuffixPattern, ' - FULL SONG -');
   }
 
   const isShortCut = normalizedFlags.includes('cut:1')
@@ -35,6 +41,11 @@ function resolveKnownSongVariantTitle(rawTitle, songKey = '', flags = '') {
     return `${title} - SHORT CUT -`;
   }
 
+  const isFullSong = normalizedFlags.includes('cut:4');
+  if (isFullSong && !/full\s*song/i.test(title)) {
+    return `${title} - FULL SONG -`;
+  }
+
   return title;
 }
 
@@ -44,6 +55,14 @@ function hasShortCutSuffix(title) {
 
 function normalizeShortCutSuffix(title) {
   return String(title || '').replace(/\s*-\s*short cut\s*-\s*$/i, ' - short cut -');
+}
+
+function hasFullSongSuffix(title) {
+  return /\s*-\s*full song\s*-\s*$/i.test(String(title || ''));
+}
+
+function normalizeFullSongSuffix(title) {
+  return String(title || '').replace(/\s*-\s*full song\s*-\s*$/i, ' - full song -');
 }
 
 function normalizeMode(mode) {
@@ -58,17 +77,30 @@ function toCanonicalTitle(title, aliases) {
   let normalized = normalizeSongName(title);
   if (!normalized) return '';
   const wantsShortCut = hasShortCutSuffix(normalized);
+  const wantsFullSong = hasFullSongSuffix(normalized);
+
+  // Strip suffix before alias resolution (aliases map base names)
+  let baseNormalized = normalized;
+  if (wantsShortCut) baseNormalized = normalizeSongName(normalized.replace(/\s*-\s*short cut\s*-\s*$/i, ''));
+  if (wantsFullSong) baseNormalized = normalizeSongName(normalized.replace(/\s*-\s*full song\s*-\s*$/i, ''));
 
   const seen = new Set();
-  while (aliases[normalized] && !seen.has(normalized)) {
-    seen.add(normalized);
-    normalized = aliases[normalized];
+  while (aliases[baseNormalized] && !seen.has(baseNormalized)) {
+    seen.add(baseNormalized);
+    baseNormalized = aliases[baseNormalized];
   }
-  normalized = normalizeSongName(normalized);
+  normalized = normalizeSongName(baseNormalized);
+
+  // Re-apply suffix after alias resolution
   if (hasShortCutSuffix(normalized)) {
     normalized = normalizeShortCutSuffix(normalized);
   } else if (wantsShortCut) {
     normalized = `${normalized} - short cut -`;
+  }
+  if (hasFullSongSuffix(normalized)) {
+    normalized = normalizeFullSongSuffix(normalized);
+  } else if (wantsFullSong) {
+    normalized = `${normalized} - full song -`;
   }
   return normalized;
 }
