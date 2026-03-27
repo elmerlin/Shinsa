@@ -22,6 +22,8 @@ import {
   buildScoreSnapshotLinkShare,
   buildUpscoreChallengeOptions,
   buildUpscoreLinkShare,
+  buildWcPlayLinkShare,
+  buildWcPlayChallengeOptions,
 } from '../utils/directMessageShares';
 
 function getRank(score) {
@@ -1300,6 +1302,18 @@ function WeeklyChallengePlayCard({ item, jacketLookup, chartKeyMap }) {
   const flag = getCountryFlag(item.nationality);
   const hasMore = plays.length > 5;
   const visiblePlays = showAll ? plays : plays.slice(0, 5);
+  const wcLinkShare = buildWcPlayLinkShare({
+    playPostId: item.id,
+    username: item.username,
+    avatar: item.avatar ? getAvatarUrl(item.avatar) : '',
+    weekKey,
+    plays,
+  });
+  const wcChallengeOptions = buildWcPlayChallengeOptions({
+    playPostId: item.id,
+    username: item.username,
+    plays,
+  });
 
   if (plays.length === 0) return null;
 
@@ -1400,6 +1414,20 @@ function WeeklyChallengePlayCard({ item, jacketLookup, chartKeyMap }) {
           <WcPlayPumpButton playPostId={item.id} initialCount={item.pump_count || 0} initialPumped={item.user_pumped} />
           <WcPlayCommentSection playPostId={item.id} commentCount={item.comment_count || 0} />
           <ShareButton path={`/weekly-play/${item.id}`} />
+          <SendToDirectMessageButton
+            linkShare={wcLinkShare}
+            variant="icon"
+            title="Send weekly challenge"
+          />
+          {wcChallengeOptions.length > 0 && (
+            <SendToDirectMessageButton
+              challengeOptions={wcChallengeOptions}
+              variant="icon"
+              tone="amber"
+              title="Challenge a player"
+              description="Choose the chart to challenge on."
+            />
+          )}
         </div>
       </div>
     </div>

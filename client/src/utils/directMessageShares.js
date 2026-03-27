@@ -861,3 +861,115 @@ export function buildChallengeLifecycleCard({
     statusLabel: isAccepted ? `Accepted by ${actor}` : `Expired by ${actor}`,
   };
 }
+
+// ─── Weekly Challenge Play shares ─────────────────────────
+
+export function buildWcPlayLinkShare({
+  playPostId,
+  username,
+  avatar = '',
+  weekKey = '',
+  plays,
+}) {
+  const id = String(playPostId || '').trim();
+  if (!id) return null;
+
+  const rows = Array.isArray(plays) ? plays.filter(Boolean) : [];
+  const authorName = String(username || 'Player').trim() || 'Player';
+
+  if (rows.length === 0) {
+    return {
+      kind: 'weekly_challenge',
+      path: `/weekly-play/${id}`,
+      title: `${authorName}'s weekly challenge`,
+      subtitle: weekKey ? `Week ${weekKey}` : 'Open on Shinsa.',
+      buttonLabel: 'Open weekly challenge',
+      songTitle: '',
+      mode: '',
+      level: 0,
+      targetScore: 0,
+    };
+  }
+
+  if (rows.length === 1) {
+    const [entry] = rows;
+    const scoreNum = Number(entry?.score) || 0;
+    return {
+      kind: 'weekly_challenge',
+      path: `/weekly-play/${id}`,
+      title: `${authorName}'s weekly challenge`,
+      subtitle: [
+        formatChartLabel(entry?.song_title, entry?.mode, entry?.level),
+        formatScore(scoreNum),
+        entry?.weekly_challenge_rank ? `WC #${entry.weekly_challenge_rank}` : '',
+      ].filter(Boolean).join(' • '),
+      buttonLabel: 'Open weekly challenge',
+      songTitle: String(entry?.song_title || ''),
+      mode: String(entry?.mode || ''),
+      level: Number(entry?.level) || 0,
+      targetScore: scoreNum,
+      score: scoreNum,
+      grade: compactText(entry?.grade, 20),
+      jacketUrl: String(entry?.background_url || '').trim(),
+      playerName: authorName,
+      playerAvatar: String(avatar || '').trim(),
+    };
+  }
+
+  const bestEntry = rows.reduce((best, entry) => {
+    const sc = Number(entry?.score) || 0;
+    if (!best) return { entry, score: sc };
+    return sc > best.score ? { entry, score: sc } : best;
+  }, null);
+
+  return {
+    kind: 'weekly_challenge',
+    path: `/weekly-play/${id}`,
+    title: `${authorName}'s ${rows.length} weekly challenges`,
+    subtitle: bestEntry?.entry
+      ? `Best: ${formatChartLabel(bestEntry.entry.song_title, bestEntry.entry.mode, bestEntry.entry.level)} ${formatScore(bestEntry.score)}`
+      : `${rows.length} charts played`,
+    buttonLabel: 'Open weekly challenge',
+    songTitle: String(bestEntry?.entry?.song_title || ''),
+    mode: String(bestEntry?.entry?.mode || ''),
+    level: Number(bestEntry?.entry?.level) || 0,
+    targetScore: Number(bestEntry?.score) || 0,
+  };
+}
+
+export function buildWcPlayChallengeOptions({
+  playPostId,
+  username,
+  plays,
+}) {
+  const id = String(playPostId || '').trim();
+  if (!id) return [];
+
+  const rows = Array.isArray(plays) ? plays.filter(Boolean) : [];
+  return rows.map((entry, index) => {
+    const targetScore = Number(entry?.score) || 0;
+    const chartLabel = formatChartLabel(entry?.song_title, entry?.mode, entry?.level);
+    return {
+      id: `wc-${id}-${index}-${String(entry?.song_title || '').trim()}-${String(entry?.mode || '').trim()}-${Number(entry?.level) || 0}`,
+      title: chartLabel,
+      subtitle: [
+        targetScore > 0 ? formatScore(targetScore) : '',
+        compactText(entry?.grade, 20),
+        entry?.weekly_challenge_rank ? `WC #${entry.weekly_challenge_rank}` : '',
+      ].filter(Boolean).join(' • '),
+      challengeCard: {
+        kind: 'challenge',
+        path: `/weekly-play/${id}`,
+        title: `Beat my weekly challenge score!`,
+        subtitle: chartLabel,
+        buttonLabel: 'Open challenge',
+        songTitle: String(entry?.song_title || ''),
+        mode: String(entry?.mode || ''),
+        level: Number(entry?.level) || 0,
+        targetScore,
+        targetGrade: compactText(entry?.grade, 20),
+        originUsername: String(username || ''),
+      },
+    };
+  }).filter(Boolean);
+}
