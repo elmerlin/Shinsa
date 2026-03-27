@@ -123,8 +123,9 @@ router.get('/home', optionalAuth, (req, res) => {
       setCache(cacheKey, publicData);
     }
 
-    // Compose viewer summary post-cache
+    // Compose viewer summary + personalized previews post-cache
     let viewerSummary = null;
+    let viewerPreviews = null;
     if (req.user?.id) {
       const db2 = getDb();
       if (week.status === 'finalized') {
@@ -135,9 +136,31 @@ router.get('/home', optionalAuth, (req, res) => {
           viewerSummary = getActiveViewerBests(agg.userChartBests, req.user.id);
         }
       }
+
+      // Pick viewer's lowest unplayed challenge charts
+      const playedChartIds = new Set();
+      if (viewerSummary?.bests) {
+        for (const chartId of Object.keys(viewerSummary.bests)) {
+          playedChartIds.add(Number(chartId));
+        }
+      }
+      if (playedChartIds.size > 0) {
+        const allCharts = db2.prepare(
+          'SELECT * FROM weekly_challenge_charts WHERE week_id = ? ORDER BY sort_order'
+        ).all(week.id);
+
+        const unplayed = allCharts.filter(c => !playedChartIds.has(c.id));
+        if (unplayed.length > 0) {
+          viewerPreviews = unplayed.slice(0, 4).map(c => ({
+            ...c, top3: [], participantCount: 0,
+          }));
+        }
+      }
     }
 
-    res.json({ ...publicData, viewerSummary });
+    const response = { ...publicData, viewerSummary };
+    if (viewerPreviews) response.challengePreviews = viewerPreviews;
+    res.json(response);
   } catch (err) {
     console.error('[WeeklyChallenges] /home error:', err.message);
     res.status(500).json({ error: 'Failed to load weekly challenges' });
