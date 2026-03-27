@@ -102,15 +102,19 @@ function formatDateLabel(value) {
     return raw.length >= 10 ? raw.slice(0, 10) : raw;
   }
 
+  // Always display in Europe/London timezone
+  const opts = { timeZone: 'Europe/London' };
   const hasTime = /(?:T|\s)\d{2}:\d{2}/.test(raw);
   return hasTime
-    ? parsed.toLocaleString(undefined, {
+    ? parsed.toLocaleString('en-GB', {
+      ...opts,
       month: 'short',
       day: 'numeric',
       hour: 'numeric',
       minute: '2-digit',
     })
-    : parsed.toLocaleDateString(undefined, {
+    : parsed.toLocaleDateString('en-GB', {
+      ...opts,
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -158,7 +162,7 @@ export default function ScoreSnapshotCard({
 
   const songTitle = String(score.song_title || score.songTitle || 'Score details').trim() || 'Score details';
   const username = String(score.username || score.playerName || '').trim();
-  const playedAt = formatDateLabel(score.date_played || score.playedAt);
+  const playedAt = formatDateLabel(score.played_at_utc || score.date_played || score.playedAt);
   const machineName = String(score.machine_name || score.machineName || '').trim();
   const resolvedAvatarUrl = String(avatarUrl || score.playerAvatar || score.avatar || '').trim();
   const resolvedSkillTitle = String(skillTitle || score.playerSkillTitle || score.skillTitle || score.skill_title || '').trim();

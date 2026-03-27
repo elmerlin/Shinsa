@@ -356,7 +356,7 @@ let sessionReplayLinkStmt = null;
 function getRecentPlayJudgmentsBeforeStmt(db) {
   if (!recentPlayJudgmentsBeforeStmt) {
     recentPlayJudgmentsBeforeStmt = db.prepare(`
-      SELECT perfect, great, good, bad, miss, max_combo, plate, background_url, date_played, over_top100_rank, machine_name
+      SELECT perfect, great, good, bad, miss, max_combo, plate, background_url, date_played, played_at_utc, over_top100_rank, machine_name
       FROM user_recently_played
       WHERE user_id = ?
         AND song_title = ?
@@ -382,7 +382,7 @@ function getRecentPlayJudgmentsBeforeStmt(db) {
 function getRecentPlayJudgmentsAnyStmt(db) {
   if (!recentPlayJudgmentsAnyStmt) {
     recentPlayJudgmentsAnyStmt = db.prepare(`
-      SELECT perfect, great, good, bad, miss, max_combo, plate, background_url, date_played, over_top100_rank, machine_name
+      SELECT perfect, great, good, bad, miss, max_combo, plate, background_url, date_played, played_at_utc, over_top100_rank, machine_name
       FROM user_recently_played
       WHERE user_id = ?
         AND song_title = ?
@@ -408,7 +408,7 @@ function getRecentPlayMetadataBeforeStmt(db) {
   if (!recentPlayMetadataBeforeStmt) {
     recentPlayMetadataBeforeStmt = db.prepare(`
       SELECT
-        perfect, great, good, bad, miss, max_combo, background_url, date_played, over_top100_rank,
+        perfect, great, good, bad, miss, max_combo, background_url, date_played, played_at_utc, over_top100_rank,
         replay_embed_url, replay_video_id, replay_start_seconds, replay_end_seconds, machine_name
       FROM user_recently_played
       WHERE user_id = ?
@@ -430,7 +430,7 @@ function getRecentPlayMetadataAnyStmt(db) {
   if (!recentPlayMetadataAnyStmt) {
     recentPlayMetadataAnyStmt = db.prepare(`
       SELECT
-        perfect, great, good, bad, miss, max_combo, background_url, date_played, over_top100_rank,
+        perfect, great, good, bad, miss, max_combo, background_url, date_played, played_at_utc, over_top100_rank,
         replay_embed_url, replay_video_id, replay_start_seconds, replay_end_seconds, machine_name
       FROM user_recently_played
       WHERE user_id = ?
@@ -551,13 +551,15 @@ function enrichEntryWithJudgments(db, userId, createdAt, entry, scoreKey = 'scor
       background_url: entry.background_url || lookup.background_url || '',
       over_top100_rank: toInt(entry.over_top100_rank) || toInt(lookup.over_top100_rank),
       machine_name: entry.machine_name || lookup.machine_name || '',
+      played_at_utc: entry.played_at_utc || lookup.played_at_utc || '',
     };
   }
 
-  // Already has judgments, just enrich machine_name
+  // Already has judgments, just enrich machine_name + played_at_utc
   return {
     ...entry,
     machine_name: lookup.machine_name || '',
+    played_at_utc: entry.played_at_utc || lookup.played_at_utc || '',
   };
 }
 
@@ -606,6 +608,7 @@ function enrichSessionShareRow(db, userId, createdAt, row) {
     over_top100_rank: toInt(row.over_top100_rank) || toInt(lookup?.over_top100_rank),
     jacket_url: row.jacket_url || lookup?.background_url || '',
     date_played: row.date_played || lookup?.date_played || '',
+    played_at_utc: row.played_at_utc || lookup?.played_at_utc || '',
     replay_embed_url: String(row.replay_embed_url || '').trim()
       || String(lookup?.replay_embed_url || '').trim()
       || replay?.replay_embed_url
@@ -2149,7 +2152,7 @@ router.get('/daily-highlights', (req, res) => {
     SELECT rp.id, rp.user_id, rp.song_title, rp.mode, rp.level, rp.score, rp.grade, rp.plate,
            rp.perfect, rp.great, rp.good, rp.bad, rp.miss, rp.max_combo,
            rp.replay_embed_url, rp.replay_video_id, rp.replay_start_seconds, rp.replay_end_seconds,
-           rp.background_url, rp.date_played, rp.machine_name,
+           rp.background_url, rp.date_played, rp.played_at_utc, rp.machine_name,
            u.username, u.avatar, u.nationality
     FROM user_recently_played rp
     JOIN users u ON rp.user_id = u.id
@@ -2165,7 +2168,7 @@ router.get('/daily-highlights', (req, res) => {
            rp.perfect, rp.great, rp.good, rp.bad, rp.miss, rp.max_combo,
            yt.session_youtube_url AS replay_embed_url, '' AS replay_video_id,
            0 AS replay_start_seconds, 0 AS replay_end_seconds,
-           rp.background_url, rp.date_played, rp.machine_name,
+           rp.background_url, rp.date_played, rp.played_at_utc, rp.machine_name,
            u.username, u.avatar, u.nationality
     FROM user_recently_played rp
     JOIN users u ON rp.user_id = u.id
