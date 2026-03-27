@@ -19,6 +19,7 @@ const {
 const { createUserNotification } = require('../lib/notifications');
 const { notifyActivitySubscribers, buildProfilePath } = require('../lib/activitySubscriptions');
 const { getUserTitleProgress, updateUserSkillTitleFromBestScores, LEVEL_BASE_POINTS, GRADE_MULTIPLIER, SCORE_TO_GRADE, calculateRatingPoints, gradeFromScore, normalizeGrade } = require('../lib/titleProgress');
+const { buildPumbilityCandidates, getNextGradeThreshold, isPassingScore, isFailGrade, SCORE_TO_GRADE_ASC } = require('../lib/pumbilityCandidates');
 const { checkSssAchievements, checkStreakAchievements } = require('../lib/achievements');
 const { normalizePiugamePlayedAtUtc } = require('../lib/piugameDate');
 const {
@@ -70,7 +71,7 @@ function normalizeShoeColorway(value, max = 120) {
   return String(value || '').replace(/\s+/g, ' ').trim().slice(0, max);
 }
 
-const SCORE_TO_GRADE_ASC = [...SCORE_TO_GRADE].sort((a, b) => a.min - b.min);
+// SCORE_TO_GRADE_ASC → imported from ../lib/pumbilityCandidates
 const LEADERBOARD_GRADE_ORDER = ['F', 'D', 'C', 'B', 'A', 'A+', 'AA', 'AA+', 'AAA', 'AAA+', 'S', 'S+', 'SS', 'SS+', 'SSS', 'SSS+'];
 const LEADERBOARD_GRADE_INDEX = Object.fromEntries(LEADERBOARD_GRADE_ORDER.map((grade, idx) => [grade, idx]));
 const PLAYER_SHEET_CACHE_TTL_MS = Math.max(30 * 1000, (parseInt(process.env.PLAYER_SHEET_CACHE_TTL_SECONDS, 10) || 300) * 1000);
@@ -156,13 +157,7 @@ function mergePlayDataLevels(existingRaw, incomingRows = []) {
   return serializePlayDataLevels(merged);
 }
 
-function getNextGradeThreshold(score) {
-  const currentScore = parseInt(score, 10) || 0;
-  for (const row of SCORE_TO_GRADE_ASC) {
-    if (row.min > currentScore) return row;
-  }
-  return null;
-}
+// getNextGradeThreshold → imported from ../lib/pumbilityCandidates
 
 function getLeaderboardGradeSortValue(grade) {
   const normalized = normalizeGrade(String(grade || '').trim());
@@ -182,18 +177,7 @@ function normalizeRecommendationMetric(metricRaw, modeRaw) {
   return { metric: 'overall', modeFilter: '' };
 }
 
-function isFailGrade(grade) {
-  const raw = String(grade || '').trim().toUpperCase().replace(/\s+/g, '');
-  if (!raw) return false;
-  if (/^X(?:[_-]|$)/.test(raw)) return true;
-  return normalizeGrade(raw) === 'F';
-}
-
-function isPassingScore(score, grade) {
-  const numeric = parseInt(score, 10) || 0;
-  if (numeric <= 0) return false;
-  return !isFailGrade(grade);
-}
+// isFailGrade, isPassingScore → imported from ../lib/pumbilityCandidates
 
 function chartScoreKey(songTitle, mode, level) {
   const title = String(songTitle || '').trim();
@@ -754,106 +738,8 @@ function computePostPumbilityGains(baseBestScores = [], upscores = [], clears = 
 }
 
 function buildPumbilityRecommendations(bestScores, options = {}) {
-  const modeFilter = String(options.modeFilter || '');
-  const metric = String(options.metric || '').trim() || (modeFilter ? modeFilter.toLowerCase() : 'overall');
-
-  const sourceScores = modeFilter
-    ? bestScores.filter((row) => String(row.mode || '') === modeFilter)
-    : bestScores;
-
-  if (!sourceScores.length) {
-    return {
-      recommendations: [],
-      min_pumbility_rating: 0,
-      pumbility_scores_count: 0,
-      metric,
-      mode_filter: modeFilter || null,
-    };
-  }
-
-  const ratedEntries = [];
-  for (const s of sourceScores) {
-    const level = parseInt(s.level, 10) || 0;
-    if (!LEVEL_BASE_POINTS[level]) continue;
-    const score = parseInt(s.score, 10) || 0;
-    if (score <= 0) continue;
-
-    const currentGrade = s.grade || gradeFromScore(score);
-    const currentRating = calculateRatingPoints(level, currentGrade, score);
-    if (currentRating <= 0) continue;
-    ratedEntries.push({
-      song_title: s.song_title,
-      mode: s.mode,
-      level,
-      current_score: score,
-      current_grade: currentGrade,
-      current_rating: currentRating,
-      background_url: s.background_url || '',
-    });
-  }
-  if (!ratedEntries.length) {
-    return {
-      recommendations: [],
-      min_pumbility_rating: 0,
-      pumbility_scores_count: 0,
-      metric,
-      mode_filter: modeFilter || null,
-    };
-  }
-
-  const baselineRatings = ratedEntries.map((entry) => entry.current_rating);
-  const baselineSorted = [...baselineRatings].sort((a, b) => b - a);
-  const pumbilityTopCount = Math.min(50, baselineSorted.length);
-  const baselinePumbility = baselineSorted.slice(0, pumbilityTopCount)
-    .reduce((sum, value) => sum + (parseInt(value, 10) || 0), 0);
-  const minPumbilityRating = pumbilityTopCount >= 50
-    ? (parseInt(baselineSorted[49], 10) || 0)
-    : 0;
-
-  const candidates = [];
-  for (let idx = 0; idx < ratedEntries.length; idx++) {
-    const entry = ratedEntries[idx];
-    const nextTier = getNextGradeThreshold(entry.current_score);
-    if (!nextTier) continue;
-
-    const nextThreshold = parseInt(nextTier.min, 10) || 0;
-    const nextGrade = String(nextTier.grade || '').trim();
-    if (!nextThreshold || !nextGrade) continue;
-
-    const scoreNeeded = nextThreshold - entry.current_score;
-    if (scoreNeeded <= 0) continue;
-
-    const nextRating = calculateRatingPoints(entry.level, nextGrade, nextThreshold);
-    if (nextRating <= entry.current_rating) continue;
-
-    const simulatedRatings = [...baselineRatings];
-    simulatedRatings[idx] = nextRating;
-    simulatedRatings.sort((a, b) => b - a);
-    const simulatedPumbility = simulatedRatings.slice(0, pumbilityTopCount)
-      .reduce((sum, value) => sum + (parseInt(value, 10) || 0), 0);
-    const pumbilityGain = simulatedPumbility - baselinePumbility;
-    if (pumbilityGain <= 0) continue;
-
-    const ratingGain = nextRating - entry.current_rating;
-    const impactPerPoint = pumbilityGain / scoreNeeded;
-    candidates.push({
-      song_title: entry.song_title,
-      mode: entry.mode,
-      level: entry.level,
-      current_score: entry.current_score,
-      current_grade: entry.current_grade,
-      current_rating: entry.current_rating,
-      next_grade: nextGrade,
-      next_threshold: nextThreshold,
-      next_rating: nextRating,
-      score_needed: scoreNeeded,
-      rating_gain: ratingGain,
-      pumbility_gain: pumbilityGain,
-      impact_per_point: Math.round(impactPerPoint * 1000000) / 1000000,
-      background_url: entry.background_url || '',
-      _key: `${entry.song_title}|${entry.mode}|${entry.level}`,
-    });
-  }
+  const result = buildPumbilityCandidates(bestScores, options);
+  const { candidates, minPumbilityRating, pumbilityTopCount, metric, modeFilter } = result;
 
   if (!candidates.length) {
     return {
@@ -865,6 +751,7 @@ function buildPumbilityRecommendations(bestScores, options = {}) {
     };
   }
 
+  // Selection logic: pin anchors, fill from impact-ranked (unchanged)
   const easiest = [...candidates].sort((a, b) => {
     if (a.score_needed !== b.score_needed) return a.score_needed - b.score_needed;
     if (b.pumbility_gain !== a.pumbility_gain) return b.pumbility_gain - a.pumbility_gain;

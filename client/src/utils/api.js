@@ -452,6 +452,17 @@ export const getPumbilityRecommendations = (userId, options = {}) => {
   return request(`/piugame/pumbility-recommendations/${userId}${query ? `?${query}` : ''}`);
 };
 
+// What To Play goal recommendations
+export const getGoalRecommendations = (options = {}) => {
+  const qs = new URLSearchParams();
+  if (options.goal) qs.set('goal', String(options.goal));
+  if (options.mode) qs.set('mode', String(options.mode));
+  if (options.seed != null) qs.set('seed', String(options.seed));
+  if (options.limit != null) qs.set('limit', String(options.limit));
+  const query = qs.toString();
+  return request(`/songs/recommendations/goals${query ? `?${query}` : ''}`);
+};
+
 // YouTube Integration
 export const getYoutubeConnectionStatus = () => request('/youtube/status');
 export const startYoutubeConnection = (nextPath) => request('/youtube/connect/start', {

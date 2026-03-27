@@ -5,6 +5,11 @@ const path = require('path');
 const { getDb } = require('../db/schema');
 const { optionalAuth, requireAuth, isAdminUser } = require('./auth');
 const { normalizeUserAvatarForList } = require('../lib/avatarProxy');
+const {
+  normalizeSongName, parseSongFlags, resolveKnownSongVariantTitle,
+  hasShortCutSuffix, normalizeShortCutSuffix, normalizeMode,
+  toCanonicalTitle, makeChartKey, makeSongGroupKey,
+} = require('../lib/chartKeys');
 
 // Cache the jacket map in memory (loaded once from pump-phoenix.json)
 let cachedJacketMap = null;
@@ -121,58 +126,9 @@ const GRADE_MULTIPLIER = {
   'SSS+': 1.50,
 };
 
-function normalizeSongName(name) {
-  return String(name || '').toLowerCase().replace(/\s+/g, ' ').trim();
-}
-
-function parseSongFlags(flags) {
-  if (Array.isArray(flags)) {
-    return flags
-      .map((flag) => String(flag || '').trim())
-      .filter(Boolean);
-  }
-  return String(flags || '')
-    .split(',')
-    .map((flag) => flag.trim())
-    .filter(Boolean);
-}
-
-function resolveKnownSongVariantTitle(rawTitle, songKey = '', flags = '') {
-  const title = String(rawTitle || '').replace(/\s+/g, ' ').trim();
-  if (!title) return '';
-  const normalizedFlags = parseSongFlags(flags).map((flag) => flag.toLowerCase());
-  const shortCutSuffixPattern = /\s*-\s*SHORT CUT\s*-\s*$/i;
-  if (shortCutSuffixPattern.test(title)) {
-    return title.replace(shortCutSuffixPattern, ' - SHORT CUT -');
-  }
-
-  const isShortCut = normalizedFlags.includes('cut:1')
-    || (
-      normalizeSongName(title) === 'yog-sothoth'
-      && String(songKey || '').trim() === '313'
-    );
-  if (isShortCut) {
-    return `${title} - SHORT CUT -`;
-  }
-
-  return title;
-}
-
-function hasShortCutSuffix(title) {
-  return /\s*-\s*short cut\s*-\s*$/i.test(String(title || ''));
-}
-
-function normalizeShortCutSuffix(title) {
-  return String(title || '').replace(/\s*-\s*short cut\s*-\s*$/i, ' - short cut -');
-}
-
-function normalizeMode(mode) {
-  const m = String(mode || '').trim().toLowerCase();
-  if (m === 'single' || m === 'singles' || m === 's') return 'Single';
-  if (m === 'double' || m === 'doubles' || m === 'd') return 'Double';
-  if (m === 'coop' || m === 'co-op' || m === 'co op' || m === 'cooperative' || m === 'c') return 'CoOp';
-  return '';
-}
+// normalizeSongName, parseSongFlags, resolveKnownSongVariantTitle,
+// hasShortCutSuffix, normalizeShortCutSuffix, normalizeMode
+// → imported from ../lib/chartKeys
 
 function normalizeSkillSlug(value) {
   const raw = String(value || '').trim().toLowerCase();
@@ -484,32 +440,7 @@ function compareRecords(a, b) {
   return a;
 }
 
-function toCanonicalTitle(title, aliases) {
-  let normalized = normalizeSongName(title);
-  if (!normalized) return '';
-  const wantsShortCut = hasShortCutSuffix(normalized);
-
-  const seen = new Set();
-  while (aliases[normalized] && !seen.has(normalized)) {
-    seen.add(normalized);
-    normalized = aliases[normalized];
-  }
-  normalized = normalizeSongName(normalized);
-  if (hasShortCutSuffix(normalized)) {
-    normalized = normalizeShortCutSuffix(normalized);
-  } else if (wantsShortCut) {
-    normalized = `${normalized} - short cut -`;
-  }
-  return normalized;
-}
-
-function makeChartKey(title, mode, level, aliases) {
-  const canonicalTitle = toCanonicalTitle(title, aliases);
-  const canonicalMode = normalizeMode(mode);
-  const lv = parseInt(level, 10) || 0;
-  if (!canonicalTitle || !canonicalMode || !lv) return '';
-  return `${canonicalTitle}|${canonicalMode}|${lv}`;
-}
+// toCanonicalTitle, makeChartKey → imported from ../lib/chartKeys
 
 function levelModeSort(a, b) {
   const modeOrder = { Single: 0, Double: 1, CoOp: 2 };
@@ -538,14 +469,7 @@ function expandMode(mode) {
   return ['Single', 'Double'];
 }
 
-function makeSongGroupKey(row, aliases) {
-  const resolvedTitle = resolveKnownSongVariantTitle(row.title, row.song_key, row.flags);
-  const canonicalTitle = toCanonicalTitle(resolvedTitle, aliases);
-  const artistNorm = normalizeSongName(row.artist);
-  return (row.song_key && String(row.song_key).trim())
-    ? `song_key:${String(row.song_key).trim()}`
-    : `${canonicalTitle}|${artistNorm}`;
-}
+// makeSongGroupKey → imported from ../lib/chartKeys
 
 function formatChartLabel(mode, level) {
   const normalizedMode = normalizeMode(mode);
@@ -4015,6 +3939,67 @@ function buildTrainingRecommendations({
     source_low_score_passed_count: lowScorePassed.length,
   };
 }
+
+// GET /recommendations/goals — What To Play recommendations
+router.get('/recommendations/goals', requireAuth, (req, res) => {
+  const { buildTitleGoalRecommendations, buildPumbilityGoalRecommendations } = require('../lib/goalRecommendations');
+
+  const userId = String(req.user?.id || '').trim();
+  if (!userId) return res.status(401).json({ error: 'Authentication required' });
+
+  const goal = String(req.query.goal || 'title').toLowerCase();
+  const rawMode = String(req.query.mode || '').toLowerCase();
+  const seed = parseInt(req.query.seed, 10) || Date.now();
+  const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 6, 1), 24);
+
+  // Mode validation per goal
+  if (goal === 'title') {
+    if (rawMode && rawMode !== 'single' && rawMode !== 'double') {
+      return res.status(400).json({ error: 'Title goal accepts mode: single or double' });
+    }
+  } else if (goal === 'pumbility') {
+    if (rawMode && rawMode !== 'single' && rawMode !== 'both') {
+      return res.status(400).json({ error: 'Pumbility goal accepts mode: single or both' });
+    }
+  } else {
+    return res.status(400).json({ error: 'goal must be title or pumbility' });
+  }
+
+  const mode = rawMode || (goal === 'title' ? 'double' : 'both');
+
+  try {
+    const db = getDb();
+    const aliases = loadSongAliases();
+    const bestScores = queryUserBestScores(db, userId);
+    const recentScores = queryUserRecentScores(db, userId);
+    const pumbilityScores = queryUserPumbilityScores(db, userId);
+
+    if (goal === 'pumbility') {
+      const allowedModes = mode === 'single' ? ['Single'] : ['Single', 'Double'];
+      const songCatalog = getSongCatalog(db, aliases, allowedModes);
+      const result = buildPumbilityGoalRecommendations({
+        db, userId, bestScores, songCatalog, aliases, mode, seed, limit,
+      });
+      return res.json(result);
+    }
+
+    // Title goal
+    const modeFilter = mode === 'single' ? 'Single' : 'Double';
+    const songCatalog = getSongCatalog(db, aliases, [modeFilter]);
+    const { bestByChart, passBest, failBest } = buildUserBestByChartMap({
+      bestScores, recentScores, pumbilityScores, aliases,
+      validChartKeys: new Set(songCatalog.charts.map((c) => c.key)),
+    });
+
+    const result = buildTitleGoalRecommendations({
+      db, userId, songCatalog, bestByChart, passBest, failBest, aliases, mode, seed, limit,
+    });
+    return res.json(result);
+  } catch (err) {
+    console.error('[recommendations/goals] Error:', err);
+    return res.status(500).json({ error: 'Failed to build recommendations' });
+  }
+});
 
 router.get('/recommendations/training', optionalAuth, (req, res) => {
   const userId = String(req.user?.id || '').trim();
