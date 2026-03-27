@@ -128,6 +128,24 @@ export default function RecommendationSongCard({ rec, goal, index, animKey }) {
         <span className={`inline-flex items-center self-start px-1.5 py-0.5 rounded text-[9px] font-display font-bold border leading-none mt-0.5 ${reasonColors}`}>
           {rec.reason_label}
         </span>
+
+        {/* Personalized reasoning */}
+        {rec.reasoning && (
+          <p className="text-[9px] text-gray-500 font-body leading-snug mt-0.5 line-clamp-2">
+            {rec.reasoning}
+          </p>
+        )}
+
+        {/* Skill tags */}
+        {rec.skills?.length > 0 && (
+          <div className="flex flex-wrap gap-0.5 mt-0.5">
+            {rec.skills.slice(0, 3).map((s) => (
+              <span key={s} className="text-[8px] text-gray-500 bg-gray-800 rounded px-1 py-px font-body">
+                {s}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

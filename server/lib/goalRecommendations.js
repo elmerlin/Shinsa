@@ -50,16 +50,16 @@ function seededShuffle(arr, seed) {
 // ---------------------------------------------------------------------------
 // Skill profile builder
 // ---------------------------------------------------------------------------
+/**
+ * Build per-skill averages from the user's passed charts.
+ * Returns Map<slug, { avg, rawAvg, name }> where:
+ *   avg    = 0-1 normalized (for fit scoring)
+ *   rawAvg = raw 0-1M scale (for reasoning text like "you average 940k")
+ *   name   = human-readable skill name
+ */
 function buildSkillProfile(songCatalog, passBest) {
-  // Build avg score per skill slug from passed charts
-  const skillStats = new Map(); // slug → { totalScore, count }
-  for (const [, record] of passBest) {
-    if (!record || !record.is_pass) continue;
-    const chart = songCatalog.chartsByKey.get(record.song_title
-      ? undefined : undefined); // We'll look up differently below
-  }
+  const skillStats = new Map(); // slug → { totalScore, count, name }
 
-  // Iterate catalog charts that the user has passed
   for (const chart of songCatalog.charts) {
     const best = passBest.get(chart.key);
     if (!best || !best.is_pass) continue;
@@ -69,43 +69,115 @@ function buildSkillProfile(songCatalog, passBest) {
     for (const skill of chart.skills || []) {
       const slug = skill.slug || skill.skill_slug;
       if (!slug) continue;
-      const entry = skillStats.get(slug) || { totalScore: 0, count: 0 };
+      const entry = skillStats.get(slug) || { totalScore: 0, count: 0, name: skill.name || slug };
       entry.totalScore += score;
       entry.count += 1;
       skillStats.set(slug, entry);
     }
   }
 
-  // Return map of slug → avg score (0-1 normalized to 1M)
   const profile = new Map();
   for (const [slug, stats] of skillStats) {
     if (stats.count >= 2) {
-      profile.set(slug, stats.totalScore / stats.count / 1000000);
+      const rawAvg = stats.totalScore / stats.count;
+      profile.set(slug, {
+        avg: rawAvg / 1000000,
+        rawAvg,
+        name: stats.name,
+      });
     }
   }
   return profile;
 }
 
 /**
- * Compute fit score for a chart against the user's skill profile.
- * Higher = player is better suited to this chart.
+ * Compute fit score + per-skill breakdown for a chart against the user's skill profile.
+ * Returns { fitScore, matchedSkills: [{ name, slug, playerRawAvg }] }
  */
-function computeFitScore(chart, skillProfile) {
+function computeFitBreakdown(chart, skillProfile) {
   const skills = chart.skills || [];
-  if (!skills.length || !skillProfile.size) return 0.5; // neutral
+  if (!skills.length || !skillProfile.size) return { fitScore: 0.5, matchedSkills: [] };
   let total = 0;
   let matched = 0;
+  const matchedSkills = [];
   for (const skill of skills) {
     const slug = skill.slug || skill.skill_slug;
     if (!slug) continue;
-    const value = skillProfile.get(slug);
-    if (value !== undefined) {
-      total += value;
+    const entry = skillProfile.get(slug);
+    if (entry !== undefined) {
+      total += entry.avg;
       matched += 1;
+      matchedSkills.push({ name: entry.name, slug, playerRawAvg: entry.rawAvg });
     }
   }
-  if (!matched) return 0.5;
-  return total / matched; // already 0-1 range (normalized to 1M)
+  if (!matched) return { fitScore: 0.5, matchedSkills: [] };
+  // Sort by strongest skill first
+  matchedSkills.sort((a, b) => b.playerRawAvg - a.playerRawAvg);
+  return { fitScore: total / matched, matchedSkills };
+}
+
+// ---------------------------------------------------------------------------
+// Reasoning text builders
+// ---------------------------------------------------------------------------
+function formatScoreK(score) {
+  return `${Math.round(score / 1000)}k`;
+}
+
+function skillNamesText(matchedSkills, max) {
+  return matchedSkills.slice(0, max).map((s) => s.name).join(' and ');
+}
+
+function buildTitleReasoning(reasonType, { failScore, matchedSkills, tierName, chartSkillNames }) {
+  const topSkills = (matchedSkills || []).slice(0, 2);
+  switch (reasonType) {
+    case 'easy_tier': {
+      if (topSkills.length) {
+        const avgK = formatScoreK(topSkills.reduce((s, sk) => s + sk.playerRawAvg, 0) / topSkills.length);
+        return `Rated Easy. Features ${skillNamesText(topSkills, 2)} — you average ${avgK} on those.`;
+      }
+      return 'Rated Easy by the community.';
+    }
+    case 'high_fail': {
+      const fk = formatScoreK(failScore);
+      if (failScore >= 900000) return `You scored ${fk} on a fail — a strong sign you can clear this.`;
+      if (failScore >= 850000) return `You scored ${fk} on a fail. A focused session could get you there.`;
+      return `You scored ${fk} on a fail. Keep pushing.`;
+    }
+    case 'skill_fit': {
+      if (topSkills.length) {
+        const details = topSkills.map((s) => `${s.name} (avg ${formatScoreK(s.playerRawAvg)})`).join(', ');
+        return `Matches your strengths: ${details}.`;
+      }
+      return 'Matches your skill profile.';
+    }
+    case 'unpassed': {
+      if (tierName && tierName !== 'Unrated') return `${tierName} tier — no attempts yet.`;
+      return 'Unplayed at your target level.';
+    }
+    default:
+      return '';
+  }
+}
+
+function buildPumbilityReasoning(reasonType, { scoreNeeded, nextGrade, pumbilityGain }) {
+  const sk = scoreNeeded != null ? formatScoreK(scoreNeeded) : '?';
+  switch (reasonType) {
+    case 'easiest':
+      return `Only ${sk} from ${nextGrade} — your lowest-effort upgrade.`;
+    case 'best_impact':
+      return `+${pumbilityGain} Pumbility for ${sk}. Best return on effort.`;
+    case 'easiest_and_best_impact':
+      return `Only ${sk} from ${nextGrade} and your best Pumbility return.`;
+    case 'impact_ranked':
+      return `+${pumbilityGain} Pumbility if you reach ${nextGrade}. ${sk} to go.`;
+    default:
+      return '';
+  }
+}
+
+function getChartSkillNames(chart, max) {
+  if (!chart || !chart.skills || !chart.skills.length) return [];
+  return chart.skills.slice(0, max).map((s) => s.name || s.slug);
 }
 
 // ---------------------------------------------------------------------------
@@ -184,10 +256,12 @@ function buildTitleGoalRecommendations({
 
     const fail = failBest.get(chart.key);
     const tier = tierMap.get(chart.chart_id);
-    const fitScore = computeFitScore(chart, skillProfile);
+    const { fitScore, matchedSkills } = computeFitBreakdown(chart, skillProfile);
     const failScore = fail ? (parseInt(fail.score, 10) || 0) : 0;
     const bestScore = pass ? (parseInt(pass.score, 10) || 0) : (fail ? failScore : null);
     const bestGrade = pass ? pass.grade : (fail ? fail.grade : null);
+    const chartSkillNames = getChartSkillNames(chart, 3);
+    const tierName = tier ? tier.tier_name : 'Unrated';
 
     const candidate = {
       chart_id: chart.chart_id,
@@ -196,30 +270,35 @@ function buildTitleGoalRecommendations({
       mode: chart.mode,
       level: chart.level,
       jacket_url: chart.jacket_url || '',
-      tier_name: tier ? tier.tier_name : 'Unrated',
+      tier_name: tierName,
       tier_rank: tier ? tier.tier_rank : 999,
       best_score: bestScore,
       best_grade: bestGrade,
       fail_score: failScore || null,
       is_pass: false,
       fit_score: Math.round(fitScore * 100) / 100,
+      skills: chartSkillNames,
     };
 
     if (tier && tier.tier_rank <= 2) {
       candidate.reason_type = 'easy_tier';
       candidate.reason_label = 'Easy Tier';
+      candidate.reasoning = buildTitleReasoning('easy_tier', { matchedSkills, chartSkillNames });
       bucketA.push(candidate);
     } else if (failScore > 0) {
       candidate.reason_type = 'high_fail';
-      candidate.reason_label = `Almost Cleared (${Math.round(failScore / 1000)}k)`;
+      candidate.reason_label = `Failed ${Math.round(failScore / 1000)}k`;
+      candidate.reasoning = buildTitleReasoning('high_fail', { failScore, matchedSkills, chartSkillNames });
       bucketB.push(candidate);
     } else if (fitScore > 0.7) {
       candidate.reason_type = 'skill_fit';
       candidate.reason_label = 'Best Match';
+      candidate.reasoning = buildTitleReasoning('skill_fit', { matchedSkills, chartSkillNames });
       bucketC.push(candidate);
     } else {
       candidate.reason_type = 'unpassed';
       candidate.reason_label = tier ? tier.tier_name : 'Unplayed';
+      candidate.reasoning = buildTitleReasoning('unpassed', { tierName, chartSkillNames });
       bucketD.push(candidate);
     }
   }
@@ -347,6 +426,12 @@ function buildPumbilityGoalRecommendations({
       impact_per_point: candidate.impact_per_point,
       reason_type: reasonType,
       reason_label: reasonLabel,
+      reasoning: buildPumbilityReasoning(reasonType, {
+        scoreNeeded: candidate.score_needed,
+        nextGrade: candidate.next_grade,
+        pumbilityGain: candidate.pumbility_gain,
+      }),
+      skills: getChartSkillNames(catalogChart, 3),
     };
   };
 
