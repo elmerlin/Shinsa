@@ -47,34 +47,41 @@ function ScrollArrow({ direction, onClick, visible }) {
 
 function ChallengePreview({ chart }) {
   const top1 = chart.top3?.[0];
+  const avatarUrl = top1?.avatar ? getAvatarUrl(top1.avatar, 'sm') : '';
   return (
-    <div className="w-[130px] shrink-0 snap-start rounded-lg border border-white/[0.06] bg-white/[0.02] overflow-hidden">
-      <div className="relative h-[56px] w-full">
-        {chart.jacket_url_snapshot ? (
-          <img src={chart.jacket_url_snapshot} alt="" className="h-full w-full object-cover" loading="lazy" />
-        ) : (
-          <div className="h-full w-full bg-gradient-to-br from-gray-800 to-gray-900" />
+    <div className="relative flex-shrink-0 snap-start w-[140px] h-[105px] overflow-hidden rounded-lg border border-piu-border/50">
+      {/* Full-bleed jacket background */}
+      {chart.jacket_url_snapshot ? (
+        <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${chart.jacket_url_snapshot})` }} />
+      ) : (
+        <div className="absolute inset-0 bg-gradient-to-br from-[#152238] via-[#0f1a2d] to-[#090d18]" />
+      )}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-black/15" />
+
+      {/* Level badge — top right */}
+      <span className={`absolute top-1 right-1 z-10 inline-flex items-center justify-center rounded-md border px-1 py-px font-display text-[9px] font-black leading-none tracking-[-0.04em] text-white ${getLevelBadgeTone(chart.mode)}`}>
+        {getModeShort(chart.mode)}{chart.level}
+      </span>
+
+      {/* Content at bottom */}
+      <div className="relative z-10 flex h-full flex-col justify-end p-2">
+        {top1 && (
+          <div className="flex items-center gap-1 mb-0.5">
+            <span className="text-[8px] text-piu-gold">🥇</span>
+            {avatarUrl && (
+              <img src={avatarUrl} alt="" className="h-[14px] w-[14px] shrink-0 rounded-full border border-white/20 object-cover" />
+            )}
+            <span className="truncate text-[9px] font-display font-bold text-white/80 drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">{top1.username}</span>
+          </div>
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
-        <span className={`absolute top-1 right-1 z-10 inline-flex items-center justify-center rounded-md border px-1 py-px font-display text-[8px] font-black leading-none tracking-[-0.04em] text-white ${getLevelBadgeTone(chart.mode)}`}>
-          {getModeShort(chart.mode)}{chart.level}
-        </span>
-        <div className="absolute bottom-1 left-1.5 right-1.5">
-          <p className="truncate text-[9px] font-display font-bold text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">
-            {chart.song_title_snapshot}
-          </p>
+        <p className="font-display text-[11px] font-black leading-tight text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] line-clamp-1">
+          {chart.song_title_snapshot}
+        </p>
+        <div className="mt-0.5 flex items-center justify-between">
+          <span className="text-[9px] font-display text-white/40">{chart.participantCount || 0} played</span>
+          {top1 && <span className="text-[9px] font-display font-bold text-white/60">{(top1.score || 0).toLocaleString()}</span>}
         </div>
       </div>
-      {top1 && (
-        <div className="flex items-center gap-1 px-1.5 py-1 border-t border-white/[0.04]">
-          <span className="text-[8px] text-piu-gold">🥇</span>
-          {getAvatarUrl(top1.avatar, 'sm') && (
-            <img src={getAvatarUrl(top1.avatar, 'sm')} alt="" className="h-3 w-3 rounded-full border border-white/15 object-cover" />
-          )}
-          <span className="truncate text-[8px] font-display font-bold text-white/70">{top1.username}</span>
-          <span className="ml-auto text-[8px] font-display text-white/40">{(top1.score || 0).toLocaleString()}</span>
-        </div>
-      )}
     </div>
   );
 }
