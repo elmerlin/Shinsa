@@ -1,7 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { getWeeklyChallengeWeek, getWeeklyChallengeWeeks } from '../utils/api';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { getWeeklyChallengeWeek, getWeeklyChallengeWeeks, getWeeklyChallengeChartScores } from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
+import { getAvatarUrl } from '../components/AvatarPicker';
+import { getCountryFlag } from '../components/PlayerRegistration';
+import ScoreSnapshotModal from '../components/ScoreSnapshotModal';
+import YouTubeReplayModal from '../components/YouTubeReplayModal';
+import { buildReplayModalTitle } from '../utils/replayTitle';
+import { getProfilePath } from '../utils/profile';
 import WeeklyChallengePodiumStrip from '../components/weeklyChallenges/WeeklyChallengePodiumStrip';
 import WeeklyChallengeLeaderboard from '../components/weeklyChallenges/WeeklyChallengeLeaderboard';
 import WeeklyChallengeLevelRow from '../components/weeklyChallenges/WeeklyChallengeLevelRow';
@@ -79,6 +85,13 @@ export default function WeeklyChallengesPage() {
   const [leaderboardMode, setLeaderboardMode] = useState('both');
   const [skillFamily, setSkillFamily] = useState('all');
 
+  // Chart scores modal
+  const [selectedChart, setSelectedChart] = useState(null);
+  const [chartScores, setChartScores] = useState(null);
+  const [chartScoresLoading, setChartScoresLoading] = useState(false);
+  const [selectedScore, setSelectedScore] = useState(null);
+  const [selectedReplay, setSelectedReplay] = useState(null);
+
   // Load week list
   useEffect(() => {
     getWeeklyChallengeWeeks().then(setWeeks).catch(() => {});
@@ -105,6 +118,15 @@ export default function WeeklyChallengesPage() {
   }, [weekKey, chartMode, leaderboardMode, skillFamily]);
 
   useEffect(() => { loadWeek(); }, [loadWeek]);
+
+  const handleChartClick = useCallback((chart) => {
+    setSelectedChart(chart);
+    setChartScoresLoading(true);
+    getWeeklyChallengeChartScores(chart.id)
+      .then(data => setChartScores(data))
+      .catch(() => setChartScores(null))
+      .finally(() => setChartScoresLoading(false));
+  }, []);
 
   const handleWeekSelect = (key) => {
     setWeekKey(key);
@@ -219,10 +241,90 @@ export default function WeeklyChallengesPage() {
                 level={level}
                 charts={groupedByLevel[level]}
                 viewerBests={viewerBests}
+                onChartClick={handleChartClick}
               />
             ))}
           </div>
         </>
+      )}
+
+      {/* Chart scores modal */}
+      {selectedChart && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm" onClick={() => { setSelectedChart(null); setChartScores(null); }}>
+          <div className="w-full max-w-md max-h-[80vh] overflow-y-auto rounded-2xl border border-piu-border bg-[#0a1929] shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-piu-border/40 bg-[#0a1929]/95 backdrop-blur-sm px-4 py-3">
+              {selectedChart.jacket_url_snapshot && (
+                <img src={selectedChart.jacket_url_snapshot} alt="" className="h-10 w-10 rounded-lg object-cover" />
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-display font-bold text-white truncate">{selectedChart.song_title_snapshot}</p>
+                <p className="text-[10px] text-gray-400">
+                  {selectedChart.mode} {selectedChart.level}
+                  {chartScores ? ` \u2022 ${chartScores.scores.length} players` : ''}
+                </p>
+              </div>
+              <button type="button" onClick={() => { setSelectedChart(null); setChartScores(null); }} className="text-sm font-display font-bold text-gray-400 hover:text-white transition-colors">Close</button>
+            </div>
+
+            {chartScoresLoading && (
+              <div className="py-8 text-center text-gray-500 text-xs font-display">Loading...</div>
+            )}
+            {!chartScoresLoading && chartScores?.scores?.length === 0 && (
+              <div className="py-8 text-center text-gray-500 text-xs font-display">No scores yet</div>
+            )}
+            {!chartScoresLoading && chartScores?.scores?.length > 0 && (
+              <div className="divide-y divide-piu-border/20">
+                {chartScores.scores.map((entry, i) => {
+                  const avatarUrl = entry.avatar ? getAvatarUrl(entry.avatar, 'sm') : '';
+                  const flag = entry.nationality ? getCountryFlag(entry.nationality) : '';
+                  const hasReplay = !!entry.replay_embed_url;
+                  return (
+                    <div key={entry.user_id} className="flex items-center gap-2.5 px-4 py-2.5 hover:bg-white/[0.02]">
+                      <span className={`w-5 shrink-0 text-center text-[10px] font-display font-black ${
+                        i === 0 ? 'text-piu-gold' : i === 1 ? 'text-piu-silver' : i === 2 ? 'text-piu-bronze' : 'text-gray-600'
+                      }`}>{entry.rank}</span>
+                      <Link to={getProfilePath(entry.user_id, entry.username)} className="shrink-0">
+                        {avatarUrl ? (
+                          <img src={avatarUrl} alt="" className="h-7 w-7 rounded-full border border-white/10 object-cover" />
+                        ) : (
+                          <div className="h-7 w-7 rounded-full bg-piu-dark flex items-center justify-center text-[10px] font-bold">{(entry.username || '?')[0]}</div>
+                        )}
+                      </Link>
+                      <div className="flex-1 min-w-0">
+                        <Link to={getProfilePath(entry.user_id, entry.username)} className="text-[11px] font-display font-bold text-white hover:text-piu-accent truncate block">
+                          {flag && <span className="mr-1">{flag}</span>}
+                          {entry.username}
+                        </Link>
+                        {entry.skill_title && <p className="text-[8px] text-gray-600 truncate">{entry.skill_title}</p>}
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {hasReplay && (
+                          <button type="button" onClick={() => setSelectedReplay({ url: entry.replay_embed_url, title: buildReplayModalTitle(entry) })} className="text-sky-400/70 hover:text-sky-300" title="Watch replay">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" className="w-3.5 h-3.5"><path d="M8 5v14l11-7z" /></svg>
+                          </button>
+                        )}
+                        <button type="button" onClick={() => setSelectedScore({
+                          ...entry, song_title: chartScores.chart.song_title, mode: chartScores.chart.mode, level: chartScores.chart.level,
+                          background_url: entry.background_url || chartScores.chart.jacket_url || '', _jacketUrl: entry.background_url || chartScores.chart.jacket_url || '',
+                        })} className="text-right hover:opacity-80 transition-opacity" title="View score details">
+                          <span className="text-[11px] font-display font-bold text-white">{(entry.score || 0).toLocaleString()}</span>
+                          <p className="text-[9px] font-display text-gray-500">{entry.grade}{entry.plate ? ` ${entry.plate}` : ''}</p>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {selectedScore && (
+        <ScoreSnapshotModal score={selectedScore} jacketUrl={selectedScore._jacketUrl || ''} modalLabel="WC Score" onClose={() => setSelectedScore(null)} playId={selectedScore.play_id} />
+      )}
+      {selectedReplay && (
+        <YouTubeReplayModal url={selectedReplay.url} title={selectedReplay.title} onClose={() => setSelectedReplay(null)} />
       )}
     </div>
   );

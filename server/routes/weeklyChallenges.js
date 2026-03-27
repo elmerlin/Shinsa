@@ -388,4 +388,63 @@ router.get('/users/:userId/history', (req, res) => {
   }
 });
 
+// GET /api/weekly-challenges/charts/:chartId/scores — full chart leaderboard
+router.get('/charts/:chartId/scores', (req, res) => {
+  try {
+    const db = getDb();
+    const chartId = parseInt(req.params.chartId);
+    const chart = db.prepare(`
+      SELECT wcc.*, w.week_key, w.starts_at_utc, w.ends_at_utc, w.status
+      FROM weekly_challenge_charts wcc
+      JOIN weekly_challenge_weeks w ON w.id = wcc.week_id
+      WHERE wcc.id = ?
+    `).get(chartId);
+    if (!chart) return res.status(404).json({ error: 'Chart not found' });
+
+    // Get best score per user for this chart in the week window
+    const rows = db.prepare(`
+      SELECT rp.id as play_id, rp.user_id, rp.score, rp.grade, rp.plate,
+             rp.perfect, rp.great, rp.good, rp.bad, rp.miss, rp.max_combo,
+             rp.background_url, rp.date_played, rp.played_at_utc,
+             rp.replay_embed_url, rp.replay_video_id, rp.replay_start_seconds, rp.replay_end_seconds,
+             u.username, u.avatar, u.avatar_v, u.nationality, u.skill_title
+      FROM user_recently_played rp
+      JOIN users u ON rp.user_id = u.id
+      WHERE rp.song_title = ? AND rp.mode = ? AND rp.level = ?
+        AND COALESCE(NULLIF(rp.played_at_utc, ''), rp.date_played) >= ?
+        AND COALESCE(NULLIF(rp.played_at_utc, ''), rp.date_played) <= ?
+        AND rp.score > 0
+      ORDER BY rp.score DESC, rp.id ASC
+    `).all(chart.song_title_snapshot, chart.mode, chart.level, chart.starts_at_utc, chart.ends_at_utc);
+
+    // Keep only best per user
+    const seen = new Set();
+    const scores = [];
+    for (const row of rows) {
+      if (seen.has(row.user_id)) continue;
+      seen.add(row.user_id);
+      scores.push({
+        ...row,
+        rank: scores.length + 1,
+      });
+    }
+
+    res.json({
+      chart: {
+        id: chart.id,
+        song_title: chart.song_title_snapshot,
+        artist: chart.artist_snapshot,
+        mode: chart.mode,
+        level: chart.level,
+        jacket_url: chart.jacket_url_snapshot,
+        week_key: chart.week_key,
+      },
+      scores,
+    });
+  } catch (err) {
+    console.error('[WeeklyChallenges] /charts/:chartId/scores error:', err.message);
+    res.status(500).json({ error: 'Failed to load chart scores' });
+  }
+});
+
 module.exports = router;

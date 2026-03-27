@@ -31,12 +31,16 @@ function getGradeColor(grade) {
   return 'text-gray-400';
 }
 
-function ChartCard({ chart, viewerBest }) {
+function ChartCard({ chart, viewerBest, onClick }) {
   const jacketUrl = chart.jacket_url_snapshot || '';
   const top3 = chart.top3 || [];
 
   return (
-    <div className={`rounded-lg border border-white/[0.06] bg-gradient-to-br ${getModeBg(chart.mode)} overflow-hidden`}>
+    <div
+      className={`rounded-lg border border-white/[0.06] bg-gradient-to-br ${getModeBg(chart.mode)} overflow-hidden ${onClick ? 'cursor-pointer hover:border-white/15 transition-colors' : ''}`}
+      onClick={() => onClick && onClick(chart)}
+      role={onClick ? 'button' : undefined}
+    >
       <div className="flex gap-2.5 p-2.5">
         {/* Jacket thumbnail */}
         <div className="relative h-14 w-14 shrink-0 rounded-md overflow-hidden bg-black/40">
@@ -118,7 +122,7 @@ function ChartCard({ chart, viewerBest }) {
   );
 }
 
-export default function WeeklyChallengeLevelRow({ level, charts = [], viewerBests = {} }) {
+export default function WeeklyChallengeLevelRow({ level, charts = [], viewerBests = {}, onChartClick }) {
   const [collapsed, setCollapsed] = useState(false);
 
   if (charts.length === 0) return null;
@@ -149,6 +153,7 @@ export default function WeeklyChallengeLevelRow({ level, charts = [], viewerBest
               key={chart.id}
               chart={chart}
               viewerBest={viewerBests?.[chart.id]}
+              onClick={onChartClick}
             />
           ))}
         </div>

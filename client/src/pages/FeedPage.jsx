@@ -1300,7 +1300,7 @@ function WcPlayCommentSection({ playPostId, commentCount: initialCount }) {
   );
 }
 
-function WeeklyChallengePlayCard({ item, jacketLookup, chartKeyMap }) {
+function WeeklyChallengePlayCard({ item, jacketLookup, chartKeyMap, onScoreClick }) {
   const [showAll, setShowAll] = useState(false);
   const plays = (() => {
     try { return JSON.parse(item.plays_json || '[]'); } catch { return []; }
@@ -1393,7 +1393,25 @@ function WeeklyChallengePlayCard({ item, jacketLookup, chartKeyMap }) {
                   )}
                 </div>
               </div>
-              <div className="text-right shrink-0">
+              <button
+                type="button"
+                className="text-right shrink-0 hover:opacity-80 transition-opacity cursor-pointer"
+                onClick={() => onScoreClick && onScoreClick({
+                  song_title: play.song_title,
+                  mode: play.mode,
+                  level: play.level,
+                  score: play.score,
+                  grade: play.grade,
+                  plate: play.plate || '',
+                  background_url: play.background_url || '',
+                  play_id: play.play_id || '',
+                  user_id: item.user_id,
+                  username: item.username,
+                  _jacketUrl: jacketUrl,
+                  _chartLink: chartLink,
+                })}
+                title="View score details"
+              >
                 <span
                   className={`text-xs font-display font-bold ${getGradeColor(grade.display, play.score)} ${grade.isBroken ? 'grade-broken' : ''}`}
                   data-grade={grade.display}
@@ -1401,7 +1419,7 @@ function WeeklyChallengePlayCard({ item, jacketLookup, chartKeyMap }) {
                   {grade.display}
                 </span>
                 <p className="text-xs font-mono font-bold text-gray-300">{(parseInt(play.score, 10) || 0).toLocaleString()}</p>
-              </div>
+              </button>
             </div>
           );
         })}
@@ -1516,7 +1534,7 @@ export default function FeedPage() {
             } else if (item.type === 'clear') {
               return <NewClearCard key={`clear-${item.id}`} item={item} jacketLookup={jacketLookup} chartKeyMap={chartKeyMap} onScoreClick={setSelectedScore} onReplayClick={(url, title) => setSelectedReplay({ url, title })} />;
             } else if (item.type === 'weekly_challenge') {
-              return <WeeklyChallengePlayCard key={`wc-${item.id}`} item={item} jacketLookup={jacketLookup} chartKeyMap={chartKeyMap} />;
+              return <WeeklyChallengePlayCard key={`wc-${item.id}`} item={item} jacketLookup={jacketLookup} chartKeyMap={chartKeyMap} onScoreClick={setSelectedScore} />;
             }
             return null;
           })}

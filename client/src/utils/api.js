@@ -903,6 +903,8 @@ export const getWeeklyChallengeWeek = (weekKey, params = {}) => {
 };
 export const getUserWeeklyChallengeHistory = (userId) =>
   request(`/weekly-challenges/users/${userId}/history`);
+export const getWeeklyChallengeChartScores = (chartId) =>
+  request(`/weekly-challenges/charts/${chartId}/scores`);
 
 // ─── Weekly Challenge Play Posts ─────────────────────
 export const getWeeklyChallengePlay = (id) => request(`/social/weekly-challenge-plays/${id}`);
