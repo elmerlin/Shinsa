@@ -52,7 +52,6 @@ import {
 import { renderFormattedText } from '../utils/formatText';
 import { isStickerOnlyMessage, STICKER_GROUPS } from '../utils/stickers';
 import { buildLiveSessionLinkShare, buildScoreSnapshotLinkShare } from '../utils/directMessageShares';
-import { calculatePlayLoad } from '../utils/clearRating';
 import { useMentionComposer } from '../hooks/useMentionComposer';
 import {
   getLiveOverlaySceneOptions,
@@ -4287,15 +4286,6 @@ export default function LivePage() {
     return filtered;
   }, [playModeFilter, playPassOnly, playUserFilter, snapshot?.plays]);
 
-  const sessionTrainingLoad = useMemo(() => {
-    const rows = Array.isArray(snapshot?.plays) ? snapshot.plays : [];
-    let total = 0;
-    for (const play of rows) {
-      total += calculatePlayLoad(play.level, play.grade, play.score);
-    }
-    return total;
-  }, [snapshot?.plays]);
-
   const requestLookup = useMemo(() => {
     const map = new Map();
     for (const request of requests) {
@@ -5020,14 +5010,7 @@ export default function LivePage() {
       <div className="flex flex-wrap items-center justify-between gap-2.5 sm:gap-3">
         <div>
           <p className="text-[11px] font-display font-semibold text-gray-400">Songs this session</p>
-          <div className="flex items-center gap-2">
-            <p className={`${isCompactSongCardLayout ? 'text-[13px]' : 'text-sm'} font-display font-bold text-white`}>{visiblePlays.length} visible plays</p>
-            {sessionTrainingLoad > 0 && (
-              <span className="inline-flex items-center gap-1 rounded-full border border-amber-400/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-display font-bold text-amber-300">
-                ⚡ {sessionTrainingLoad.toLocaleString()} load
-              </span>
-            )}
-          </div>
+          <p className={`${isCompactSongCardLayout ? 'text-[13px]' : 'text-sm'} font-display font-bold text-white`}>{visiblePlays.length} visible plays</p>
           {isHopSession ? (
             <p className="mt-1 text-[11px] text-gray-400">Warmup clears stay visible and are marked as not counted.</p>
           ) : null}

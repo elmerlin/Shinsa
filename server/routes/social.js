@@ -356,7 +356,7 @@ let sessionReplayLinkStmt = null;
 function getRecentPlayJudgmentsBeforeStmt(db) {
   if (!recentPlayJudgmentsBeforeStmt) {
     recentPlayJudgmentsBeforeStmt = db.prepare(`
-      SELECT perfect, great, good, bad, miss, max_combo, plate, background_url, date_played, over_top100_rank, machine_name
+      SELECT id AS play_id, perfect, great, good, bad, miss, max_combo, plate, background_url, date_played, played_at_utc, over_top100_rank, machine_name
       FROM user_recently_played
       WHERE user_id = ?
         AND song_title = ?
@@ -382,7 +382,7 @@ function getRecentPlayJudgmentsBeforeStmt(db) {
 function getRecentPlayJudgmentsAnyStmt(db) {
   if (!recentPlayJudgmentsAnyStmt) {
     recentPlayJudgmentsAnyStmt = db.prepare(`
-      SELECT perfect, great, good, bad, miss, max_combo, plate, background_url, date_played, over_top100_rank, machine_name
+      SELECT id AS play_id, perfect, great, good, bad, miss, max_combo, plate, background_url, date_played, played_at_utc, over_top100_rank, machine_name
       FROM user_recently_played
       WHERE user_id = ?
         AND song_title = ?
@@ -408,7 +408,7 @@ function getRecentPlayMetadataBeforeStmt(db) {
   if (!recentPlayMetadataBeforeStmt) {
     recentPlayMetadataBeforeStmt = db.prepare(`
       SELECT
-        perfect, great, good, bad, miss, max_combo, background_url, date_played, over_top100_rank,
+        id AS play_id, perfect, great, good, bad, miss, max_combo, background_url, date_played, played_at_utc, over_top100_rank,
         replay_embed_url, replay_video_id, replay_start_seconds, replay_end_seconds, machine_name
       FROM user_recently_played
       WHERE user_id = ?
@@ -430,7 +430,7 @@ function getRecentPlayMetadataAnyStmt(db) {
   if (!recentPlayMetadataAnyStmt) {
     recentPlayMetadataAnyStmt = db.prepare(`
       SELECT
-        perfect, great, good, bad, miss, max_combo, background_url, date_played, over_top100_rank,
+        id AS play_id, perfect, great, good, bad, miss, max_combo, background_url, date_played, played_at_utc, over_top100_rank,
         replay_embed_url, replay_video_id, replay_start_seconds, replay_end_seconds, machine_name
       FROM user_recently_played
       WHERE user_id = ?
@@ -525,8 +525,9 @@ function enrichEntryWithJudgments(db, userId, createdAt, entry, scoreKey = 'scor
 
   const needsJudgments = !hasJudgmentData(entry);
   const needsMachine = !String(entry.machine_name || '').trim();
+  const needsPlayId = !entry.play_id;
 
-  if (!needsJudgments && !needsMachine) return entry;
+  if (!needsJudgments && !needsMachine && !needsPlayId) return entry;
 
   const lookup = findRecentPlayJudgments(db, {
     userId,
@@ -551,13 +552,17 @@ function enrichEntryWithJudgments(db, userId, createdAt, entry, scoreKey = 'scor
       background_url: entry.background_url || lookup.background_url || '',
       over_top100_rank: toInt(entry.over_top100_rank) || toInt(lookup.over_top100_rank),
       machine_name: entry.machine_name || lookup.machine_name || '',
+      played_at_utc: entry.played_at_utc || lookup.played_at_utc || '',
+      play_id: entry.play_id || lookup.play_id || null,
     };
   }
 
-  // Already has judgments, just enrich machine_name
+  // Already has judgments, just enrich machine_name + played_at_utc + play_id
   return {
     ...entry,
     machine_name: lookup.machine_name || '',
+    played_at_utc: entry.played_at_utc || lookup.played_at_utc || '',
+    play_id: entry.play_id || lookup.play_id || null,
   };
 }
 
@@ -568,7 +573,8 @@ function enrichSessionShareRow(db, userId, createdAt, row) {
     toInt(row.over_top100_rank) <= 0 ||
     !String(row.jacket_url || '').trim() ||
     !String(row.date_played || '').trim() ||
-    !String(row.replay_embed_url || '').trim()
+    !String(row.replay_embed_url || '').trim() ||
+    !row.play_id
   );
   if (!needsLookup) return row;
 
@@ -617,6 +623,7 @@ function enrichSessionShareRow(db, userId, createdAt, row) {
     replay_start_seconds: toInt(row.replay_start_seconds) || toInt(lookup?.replay_start_seconds),
     replay_end_seconds: toInt(row.replay_end_seconds) || toInt(lookup?.replay_end_seconds),
     machine_name: row.machine_name || lookup?.machine_name || '',
+    play_id: row.play_id || lookup?.play_id || null,
   };
 }
 
@@ -856,6 +863,7 @@ router.get('/counts/:userId', (req, res) => {
         (SELECT COUNT(*) FROM comment_pumps cp JOIN post_comments pc ON cp.comment_type = 'post' AND cp.comment_id = pc.id WHERE pc.user_id = ?) +
         (SELECT COUNT(*) FROM comment_pumps cp JOIN upscore_comments uc ON cp.comment_type = 'upscore' AND cp.comment_id = uc.id WHERE uc.user_id = ?) +
         (SELECT COUNT(*) FROM comment_pumps cp JOIN new_clear_comments ncc ON cp.comment_type = 'clear' AND cp.comment_id = ncc.id WHERE ncc.user_id = ?) +
+        (SELECT COUNT(*) FROM comment_pumps cp JOIN play_comments pc2 ON cp.comment_type = 'play' AND cp.comment_id = pc2.id WHERE pc2.user_id = ?) +
         (SELECT COUNT(*) FROM community_post_pumps cpp JOIN community_posts cpo ON cpp.post_id = cpo.id WHERE cpo.user_id = ?) +
         (SELECT COUNT(*) FROM community_comment_pumps ccp JOIN community_post_comments cpc ON ccp.comment_id = cpc.id WHERE cpc.user_id = ?) +
         (
@@ -871,7 +879,7 @@ router.get('/counts/:userId', (req, res) => {
         ) +
         (SELECT COUNT(*) FROM user_story_pumps usp WHERE usp.owner_user_id = ?)
         as total
-    `).get(userId, userId, userId, userId, userId, userId, userId, userId, userId, userId);
+    `).get(userId, userId, userId, userId, userId, userId, userId, userId, userId, userId, userId);
     totalPumps = pumpResult.total || 0;
   } catch {}
 
@@ -1901,6 +1909,151 @@ router.delete('/clears/comments/:id', requireAuth, (req, res) => {
   res.json({ success: true });
 });
 
+// ─── Play Comments ──────────────────────────────────────
+
+// GET /api/social/plays/:id — fetch single play with user info + comment count
+router.get('/plays/:id', optionalAuth, (req, res) => {
+  const db = getDb();
+  const playId = parseInt(req.params.id);
+
+  const play = db.prepare(`
+    SELECT rp.*, u.username, u.avatar, u.avatar_v, u.skill_title, u.nationality,
+           (SELECT COUNT(*) FROM play_comments WHERE play_id = rp.id) as comment_count
+    FROM user_recently_played rp
+    JOIN users u ON rp.user_id = u.id
+    WHERE rp.id = ?
+  `).get(playId);
+  if (!play) return res.status(404).json({ error: 'Play not found' });
+
+  play.avatar = normalizeUserAvatarForList(play.avatar, play.user_id, 40, play.avatar_v);
+
+  res.json(play);
+});
+
+// GET /api/social/plays/:id/comments — threaded comments with pump counts
+router.get('/plays/:id/comments', optionalAuth, (req, res) => {
+  const db = getDb();
+  const playId = parseInt(req.params.id);
+
+  const allComments = db.prepare(`
+    SELECT c.*, u.username, u.avatar, u.avatar_v
+    FROM play_comments c JOIN users u ON c.user_id = u.id
+    WHERE c.play_id = ?
+    ORDER BY c.created_at ASC
+  `).all(playId);
+
+  if (allComments.length === 0) return res.json([]);
+
+  const commentIds = allComments.map(c => c.id);
+  const placeholders = commentIds.map(() => '?').join(',');
+
+  const pumpCounts = db.prepare(`
+    SELECT comment_id, COUNT(*) as cnt FROM comment_pumps
+    WHERE comment_type = 'play' AND comment_id IN (${placeholders})
+    GROUP BY comment_id
+  `).all(...commentIds);
+  const pumpMap = {};
+  for (const row of pumpCounts) pumpMap[row.comment_id] = row.cnt;
+
+  let userPumpSet;
+  if (req.user) {
+    const userPumps = db.prepare(`
+      SELECT comment_id FROM comment_pumps
+      WHERE comment_type = 'play' AND user_id = ? AND comment_id IN (${placeholders})
+    `).all(req.user.id, ...commentIds);
+    userPumpSet = new Set(userPumps.map(r => r.comment_id));
+  }
+
+  for (const c of allComments) {
+    c.pump_count = pumpMap[c.id] || 0;
+    c.user_pumped = userPumpSet ? userPumpSet.has(c.id) : false;
+  }
+  const normalizedComments = normalizeCommentUserRows(allComments, 40);
+
+  const topLevel = [];
+  const replyMap = {};
+  for (const c of normalizedComments) {
+    if (!c.parent_id) { c.replies = []; topLevel.push(c); replyMap[c.id] = c.replies; }
+  }
+  for (const c of normalizedComments) {
+    if (c.parent_id && replyMap[c.parent_id]) replyMap[c.parent_id].push(c);
+  }
+
+  res.json(topLevel);
+});
+
+// POST /api/social/plays/:id/comments — add comment/reply
+router.post('/plays/:id/comments', requireAuth, (req, res) => {
+  const db = getDb();
+  const playId = parseInt(req.params.id);
+  const { content, parent_id } = req.body;
+  const trimmedContent = String(content || '').trim();
+  if (!trimmedContent) return res.status(400).json({ error: 'Comment cannot be empty' });
+
+  const play = db.prepare('SELECT id, user_id FROM user_recently_played WHERE id = ?').get(playId);
+  if (!play) return res.status(404).json({ error: 'Play not found' });
+
+  if (parent_id) {
+    const parent = db.prepare('SELECT id FROM play_comments WHERE id = ? AND play_id = ?').get(parent_id, playId);
+    if (!parent) return res.status(404).json({ error: 'Parent comment not found' });
+  }
+
+  const result = db.prepare(
+    'INSERT INTO play_comments (play_id, user_id, parent_id, content) VALUES (?, ?, ?, ?)'
+  ).run(playId, req.user.id, parent_id || null, trimmedContent);
+
+  const comment = db.prepare(`
+    SELECT c.*, u.username, u.avatar, u.avatar_v
+    FROM play_comments c JOIN users u ON c.user_id = u.id
+    WHERE c.id = ?
+  `).get(result.lastInsertRowid);
+  const normalizedComment = normalizeCommentUserRows([comment], 40)[0];
+  normalizedComment.replies = [];
+  const commentLink = `/play/${playId}?comment=${encodeURIComponent(String(comment.id))}`;
+
+  const me = db.prepare('SELECT username FROM users WHERE id = ?').get(req.user.id);
+  if (parent_id) {
+    const parentComment = db.prepare('SELECT user_id FROM play_comments WHERE id = ?').get(parent_id);
+    if (parentComment && parentComment.user_id !== req.user.id) {
+      createNotification(db, parentComment.user_id, 'play_reply', 'New Reply', `${me.username} replied to your comment`, commentLink);
+    }
+  }
+  if (play.user_id !== req.user.id) {
+    createNotification(db, play.user_id, 'play_comment', 'New Comment', `${me.username} commented on your play`, commentLink);
+  }
+
+  const mentionedUsers = findMentionedUsers(db, trimmedContent);
+  notifyMentionedUsers(db, {
+    mentionedUsers,
+    actorUserId: req.user.id,
+    actorUsername: me?.username || 'Someone',
+    type: 'play_mention',
+    title: 'Mentioned in Comment',
+    message: `${me?.username || 'Someone'} mentioned you in a play comment`,
+    link: commentLink,
+  });
+
+  res.status(201).json(normalizedComment);
+});
+
+// DELETE /api/social/plays/comments/:id — delete if commenter OR play owner
+router.delete('/plays/comments/:id', requireAuth, (req, res) => {
+  const db = getDb();
+  const commentId = parseInt(req.params.id);
+  const comment = db.prepare(`
+    SELECT c.*, rp.user_id as play_author_id
+    FROM play_comments c
+    JOIN user_recently_played rp ON c.play_id = rp.id
+    WHERE c.id = ?
+  `).get(commentId);
+  if (!comment) return res.status(404).json({ error: 'Comment not found' });
+  if (comment.user_id !== req.user.id && comment.play_author_id !== req.user.id) {
+    return res.status(403).json({ error: 'Not authorized' });
+  }
+  db.prepare('DELETE FROM play_comments WHERE id = ? OR parent_id = ?').run(commentId, commentId);
+  res.json({ success: true });
+});
+
 // ─── Comment Pumps ──────────────────────────────────────
 
 // POST /api/social/comments/:type/:commentId/pump — toggle pump on a comment
@@ -1908,7 +2061,7 @@ router.post('/comments/:type/:commentId/pump', requireAuth, (req, res) => {
   const db = getDb();
   const { type, commentId } = req.params;
   const cid = parseInt(commentId);
-  if (!['post', 'upscore', 'clear'].includes(type)) return res.status(400).json({ error: 'Invalid comment type' });
+  if (!['post', 'upscore', 'clear', 'play'].includes(type)) return res.status(400).json({ error: 'Invalid comment type' });
 
   // Verify comment exists and get author
   let comment;
@@ -1916,8 +2069,10 @@ router.post('/comments/:type/:commentId/pump', requireAuth, (req, res) => {
     comment = db.prepare('SELECT id, user_id, post_id as parent_item_id FROM post_comments WHERE id = ?').get(cid);
   } else if (type === 'upscore') {
     comment = db.prepare('SELECT id, user_id, upscore_id as parent_item_id FROM upscore_comments WHERE id = ?').get(cid);
-  } else {
+  } else if (type === 'clear') {
     comment = db.prepare('SELECT id, user_id, clear_id as parent_item_id FROM new_clear_comments WHERE id = ?').get(cid);
+  } else {
+    comment = db.prepare('SELECT id, user_id, play_id as parent_item_id FROM play_comments WHERE id = ?').get(cid);
   }
   if (!comment) return res.status(404).json({ error: 'Comment not found' });
 
@@ -2180,8 +2335,9 @@ router.get('/daily-highlights', (req, res) => {
     SELECT rp.id, rp.user_id, rp.song_title, rp.mode, rp.level, rp.score, rp.grade, rp.plate,
            rp.perfect, rp.great, rp.good, rp.bad, rp.miss, rp.max_combo,
            rp.replay_embed_url, rp.replay_video_id, rp.replay_start_seconds, rp.replay_end_seconds,
-           rp.background_url, rp.date_played, rp.machine_name,
-           u.username, u.avatar, u.nationality
+           rp.background_url, rp.date_played, rp.played_at_utc, rp.machine_name,
+           u.username, u.avatar, u.nationality,
+           (SELECT COUNT(*) FROM play_comments WHERE play_id = rp.id) as comment_count
     FROM user_recently_played rp
     JOIN users u ON rp.user_id = u.id
     WHERE rp.replay_embed_url IS NOT NULL AND rp.replay_embed_url != ''
@@ -2196,8 +2352,9 @@ router.get('/daily-highlights', (req, res) => {
            rp.perfect, rp.great, rp.good, rp.bad, rp.miss, rp.max_combo,
            yt.session_youtube_url AS replay_embed_url, '' AS replay_video_id,
            0 AS replay_start_seconds, 0 AS replay_end_seconds,
-           rp.background_url, rp.date_played, rp.machine_name,
-           u.username, u.avatar, u.nationality
+           rp.background_url, rp.date_played, rp.played_at_utc, rp.machine_name,
+           u.username, u.avatar, u.nationality,
+           (SELECT COUNT(*) FROM play_comments WHERE play_id = rp.id) as comment_count
     FROM user_recently_played rp
     JOIN users u ON rp.user_id = u.id
     JOIN songs s ON s.title = rp.song_title AND s.mode = rp.mode AND s.level = rp.level

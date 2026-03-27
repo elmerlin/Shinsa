@@ -26,6 +26,7 @@ import OnlineDuelRoom from './pages/OnlineDuelRoom';
 import FeedPage from './pages/FeedPage';
 import PostsPage from './pages/PostsPage';
 import { SinglePostPage, SingleUpscorePage, SingleClearPage, SingleWeeklyChallengePlayPage } from './pages/SingleItemPage';
+import SinglePlayPage from './pages/SinglePlayPage';
 import CommunityPage from './pages/CommunityPage';
 import CommunitySetupPage from './pages/CommunitySetupPage';
 import CommunitySettingsPage from './pages/CommunitySettingsPage';
@@ -1458,6 +1459,7 @@ export default function App() {
           <Route path="/post/:id" element={<SinglePostPage />} />
           <Route path="/upscore/:id" element={<SingleUpscorePage />} />
           <Route path="/clear/:id" element={<SingleClearPage />} />
+          <Route path="/play/:id" element={<SinglePlayPage />} />
           <Route path="/weekly-play/:id" element={<SingleWeeklyChallengePlayPage />} />
           <Route path="/communities" element={<CommunitiesListPage />} />
           <Route path="/community/new" element={<CommunitySetupPage />} />

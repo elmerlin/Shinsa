@@ -374,6 +374,7 @@ export default function SessionShareCard({
         directMessageLinkShare={activeRowDmShare}
         modalLabel={isHopShare ? 'Session result' : 'Shared result'}
         onClose={() => setActiveRow(null)}
+        playId={activeRow?.play_id}
       />
       {selectedReplay ? (
         <YouTubeReplayModal

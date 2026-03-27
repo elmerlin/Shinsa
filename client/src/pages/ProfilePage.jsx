@@ -17,6 +17,7 @@ import {
   getOrCreateDirectConversation,
   createMessageStoryItem,
   getUserWeeklyChallengeHistory,
+  getPlayComments, addPlayComment, deletePlayComment,
 } from '../utils/api';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag, getSkillColor, GENDER_SYMBOLS } from '../components/PlayerRegistration';
@@ -32,6 +33,7 @@ import LiveDirectoryCard from '../components/LiveDirectoryCard';
 import { getProfilePath } from '../utils/profile';
 import { parseGrade } from '../utils/grades';
 import ScoreSnapshotCard from '../components/ScoreSnapshotCard';
+import ItemCommentSection from '../components/ItemCommentSection';
 import { StoryShareModal, buildStoryDraft } from '../components/ScoreSnapshotModal';
 import SendToDirectMessageButton from '../components/SendToDirectMessageButton';
 import { buildScoreSnapshotLinkShare } from '../utils/directMessageShares';
@@ -4443,6 +4445,19 @@ export default function ProfilePage() {
                     skillTitle={profile?.skill_title || ''}
                     roleLabel={profile?.role_label || ''}
                   />
+                  {selectedPlay?.id && (
+                    <div className="mt-2 px-3 pb-3">
+                      <ItemCommentSection
+                        itemId={selectedPlay.id}
+                        commentType="play"
+                        getCommentsFn={getPlayComments}
+                        addCommentFn={addPlayComment}
+                        deleteCommentFn={deletePlayComment}
+                        initialOpen={false}
+                        ownerId={selectedPlay.user_id}
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
               {classicStoryOpen && (() => {
