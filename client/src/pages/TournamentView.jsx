@@ -197,10 +197,10 @@ export default function TournamentView() {
       phaseTabs.push({ key: 'final', label: 'Final', icon: '\u{1F3C6}', phase: null, status: null });
     }
 
-    // Auto-select active phase tab (only when tab is empty to avoid infinite re-render)
-    if (!activeTab) {
+    // Auto-select active phase tab
+    if (!activeTab || activeTab === 'players') {
       if (activePhase) setActiveTab(`phase-${activePhase.id}`);
-      else setActiveTab('players');
+      else if (tournament.phase === 'SETUP') setActiveTab('players');
     }
 
     const currentTabPhase = phaseTabs.find(t => t.key === activeTab)?.phase;

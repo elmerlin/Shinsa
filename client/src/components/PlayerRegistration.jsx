@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
-import { createPlayer, updatePlayer, deletePlayer, searchUsers } from '../utils/api';
-import { getAvatarUrl } from './AvatarPicker';
+import { createPlayer, updatePlayer, deletePlayer, searchUsers, sendInvitation } from '../utils/api';
+import AvatarPicker, { getAvatarUrl } from './AvatarPicker';
 import { Link } from 'react-router-dom';
 import { getProfilePath } from '../utils/profile';
 import SeedingPanel from './tournament/SeedingPanel';
@@ -265,17 +265,16 @@ const avatarColors = [
 ];
 
 export default function PlayerRegistration({ tournamentId, players, isSetup, onUpdate }) {
-  const [showSearch, setShowSearch] = useState(false);
+  const [showForm, setShowForm] = useState(false);
   const [editingPlayer, setEditingPlayer] = useState(null);
-  const [editForm, setEditForm] = useState({ skill_title: 'Beginner', skill_level: 1, description: '' });
+  const [form, setForm] = useState({
+    name: '', skill_title: 'Beginner', skill_level: 1, pumbility: '', description: '', avatar: '', gender: '', nationality: '', user_id: '',
+  });
   const [saving, setSaving] = useState(false);
   const [userSearch, setUserSearch] = useState('');
   const [userResults, setUserResults] = useState([]);
   const [searching, setSearching] = useState(false);
-  const [adding, setAdding] = useState({});
-
-  // Set of user_ids already in the tournament
-  const addedUserIds = new Set(players.filter(p => p.user_id).map(p => p.user_id));
+  const [inviteSent, setInviteSent] = useState({});
 
   const handleUserSearch = useCallback(async (q) => {
     if (q.length < 1) { setUserResults([]); return; }
@@ -290,51 +289,66 @@ export default function PlayerRegistration({ tournamentId, players, isSetup, onU
     }
   }, []);
 
-  const handleAddUser = async (user) => {
-    if (adding[user.id]) return;
-    setAdding(prev => ({ ...prev, [user.id]: true }));
+  const fillFromUser = (user) => {
+    const titleParts = (user.skill_title || '').match(/^(Beginner|Intermediate|Advanced|Expert)\s*lvl\.\s*(\d+)/);
+    setForm({
+      name: user.username,
+      skill_title: titleParts ? titleParts[1] : 'Beginner',
+      skill_level: titleParts ? parseInt(titleParts[2]) : 1,
+      pumbility: user.pumbility || '',
+      description: user.description || '',
+      avatar: user.avatar || '',
+      gender: user.gender || '',
+      nationality: user.nationality || '',
+      user_id: user.id,
+    });
+    setUserSearch('');
+    setUserResults([]);
+  };
+
+  const handleInviteUser = async (user) => {
     try {
-      await createPlayer({
-        tournament_id: tournamentId,
-        name: user.username,
-        skill_title: user.skill_title || 'Beginner lvl. 1',
-        skill_level: parseInt((user.skill_title || '').match(/lvl\.\s*(\d+)/)?.[1]) || user.skill_level || 1,
-        pumbility: user.pumbility || 0,
-        description: user.description || '',
-        avatar: user.avatar || '',
-        gender: user.gender || '',
-        nationality: user.nationality || '',
-        user_id: user.id,
-      });
-      onUpdate();
+      await sendInvitation({ user_id: user.id, type: 'tournament', tournament_id: tournamentId });
+      setInviteSent(prev => ({ ...prev, [user.id]: true }));
     } catch (err) {
       alert(err.message);
-    } finally {
-      setAdding(prev => ({ ...prev, [user.id]: false }));
     }
   };
 
-  const handleEdit = (player) => {
-    const titleParts = (player.skill_title || '').match(/^(Beginner|Intermediate|Advanced|Expert)\s*lvl\.\s*(\d+)/);
-    setEditForm({
-      skill_title: titleParts ? titleParts[1] : 'Beginner',
-      skill_level: titleParts ? parseInt(titleParts[2]) : (player.skill_level || 1),
-      description: player.description || '',
-    });
-    setEditingPlayer(player);
-    setShowSearch(false);
+  const resetForm = () => {
+    setForm({ name: '', skill_title: 'Beginner', skill_level: 1, pumbility: '', description: '', avatar: '', gender: '', nationality: '', user_id: '' });
+    setEditingPlayer(null);
+    setUserSearch('');
+    setUserResults([]);
   };
 
-  const handleEditSubmit = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!form.name.trim()) return;
     setSaving(true);
     try {
-      await updatePlayer(editingPlayer.id, {
-        skill_title: `${editForm.skill_title} lvl. ${editForm.skill_level}`,
-        skill_level: parseInt(editForm.skill_level) || 1,
-        description: editForm.description,
-      });
-      setEditingPlayer(null);
+      const payload = {
+        name: form.name,
+        skill_title: `${form.skill_title} lvl. ${form.skill_level}`,
+        skill_level: parseInt(form.skill_level) || 1,
+        description: form.description,
+        avatar: form.avatar,
+        gender: form.gender,
+        nationality: form.nationality,
+      };
+
+      if (editingPlayer) {
+        await updatePlayer(editingPlayer.id, payload);
+      } else {
+        await createPlayer({
+          tournament_id: tournamentId,
+          pumbility: parseInt(form.pumbility) || 0,
+          user_id: form.user_id || '',
+          ...payload,
+        });
+      }
+      resetForm();
+      setShowForm(false);
       onUpdate();
     } catch (err) {
       alert(err.message);
@@ -343,132 +357,168 @@ export default function PlayerRegistration({ tournamentId, players, isSetup, onU
     }
   };
 
+  const handleEdit = (player) => {
+    const titleParts = (player.skill_title || '').match(/^(Beginner|Intermediate|Advanced|Expert)\s*lvl\.\s*(\d+)/);
+    setForm({
+      name: player.name,
+      skill_title: titleParts ? titleParts[1] : 'Beginner',
+      skill_level: titleParts ? parseInt(titleParts[2]) : (player.skill_level || 1),
+      pumbility: player.pumbility || '',
+      description: player.description || '',
+      avatar: player.avatar || '',
+      gender: player.gender || '',
+      nationality: player.nationality || '',
+    });
+    setEditingPlayer(player);
+    setShowForm(true);
+  };
+
   const handleDelete = async (playerId) => {
     if (!confirm('Remove this player?')) return;
     await deletePlayer(playerId);
     onUpdate();
   };
 
-  const handleCancelSearch = () => {
-    setShowSearch(false);
-    setUserSearch('');
-    setUserResults([]);
+  const handleCancel = () => {
+    resetForm();
+    setShowForm(false);
   };
 
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
         <h2 className="section-title">Players ({players.length})</h2>
-        {isSetup && !showSearch && !editingPlayer && (
-          <button onClick={() => { setShowSearch(true); setEditingPlayer(null); }} className="btn-primary">
-            + Add Player
+        {!showForm && (
+          <button onClick={() => { resetForm(); setShowForm(true); }} className="btn-primary">
+            {isSetup ? '+ Add Player' : 'Edit Players'}
           </button>
         )}
       </div>
 
-      {/* Search-and-add panel */}
-      {showSearch && (
-        <div className="card mb-6 space-y-3 animate-slide-up">
-          <div className="flex items-center justify-between">
-            <h3 className="font-display font-bold text-piu-accent">Add Shinsa Player</h3>
-            <button onClick={handleCancelSearch} className="text-gray-500 hover:text-gray-300 text-sm font-display">Cancel</button>
-          </div>
-          <input
-            type="text"
-            className="input-field"
-            placeholder="Search by username..."
-            value={userSearch}
-            onChange={e => {
-              setUserSearch(e.target.value);
-              handleUserSearch(e.target.value);
-            }}
-            autoFocus
-          />
-          {searching && <p className="text-xs text-gray-500">Searching...</p>}
-          {userSearch.length > 0 && !searching && userResults.length === 0 && (
-            <p className="text-xs text-gray-500">No users found for "{userSearch}"</p>
-          )}
-          {userResults.length > 0 && (
-            <div className="bg-piu-dark border border-piu-border rounded-lg overflow-hidden max-h-80 overflow-y-auto">
-              {userResults.map(u => {
-                const alreadyAdded = addedUserIds.has(u.id);
-                return (
-                  <div key={u.id} className={`flex items-center gap-3 px-3 py-2.5 border-b border-piu-border/50 last:border-0 transition-colors ${alreadyAdded ? 'opacity-50' : 'hover:bg-piu-card/50'}`}>
-                    {u.avatar ? (
-                      <img src={getAvatarUrl(u.avatar)} alt="" className="w-9 h-9 rounded-full object-cover shrink-0" />
-                    ) : (
-                      <div className="w-9 h-9 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-xs shrink-0">
-                        {u.username[0].toUpperCase()}
-                      </div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-display font-bold truncate">{u.username}</p>
-                      <div className="flex items-center gap-1.5 text-xs text-gray-500 flex-wrap">
-                        {u.nationality && <span>{getCountryFlag(u.nationality)}</span>}
-                        {u.skill_title && <span className={`badge border text-[10px] ${getSkillColor(u.skill_title)}`}>{u.skill_title}</span>}
-                        {u.pumbility > 0 && <span className="text-piu-gold font-mono">{u.pumbility}</span>}
-                      </div>
-                    </div>
-                    <div className="shrink-0">
-                      {alreadyAdded ? (
-                        <span className="px-2.5 py-1 bg-piu-green/15 text-piu-green text-xs font-display font-bold rounded">Added</span>
+      {showForm && (
+        <form onSubmit={handleSubmit} className="card mb-6 space-y-4 animate-slide-up">
+          <h3 className="font-display font-bold text-piu-accent">
+            {editingPlayer ? `Edit: ${editingPlayer.name}` : 'Add New Player'}
+          </h3>
+
+          {/* Search registered users */}
+          {!editingPlayer && (
+            <div className="space-y-2">
+              <label className="block text-sm text-gray-400">Search registered players</label>
+              <input
+                type="text"
+                className="input-field"
+                placeholder="Type a username to search..."
+                value={userSearch}
+                onChange={e => {
+                  setUserSearch(e.target.value);
+                  handleUserSearch(e.target.value);
+                }}
+              />
+              {form.user_id && (
+                <div className="flex items-center gap-2 text-xs text-piu-green bg-piu-green/10 px-3 py-1.5 rounded-lg">
+                  <span>Linked to registered user: <strong>{form.name}</strong></span>
+                  <button type="button" onClick={() => setForm(f => ({ ...f, user_id: '' }))} className="text-gray-400 hover:text-red-400 ml-auto">
+                    &#10005;
+                  </button>
+                </div>
+              )}
+              {userResults.length > 0 && (
+                <div className="bg-piu-dark border border-piu-border rounded-lg overflow-hidden">
+                  {userResults.map(u => (
+                    <div key={u.id} className="flex items-center gap-3 px-3 py-2 hover:bg-piu-card/50 transition-colors border-b border-piu-border/50 last:border-0">
+                      {u.avatar ? (
+                        <img src={getAvatarUrl(u.avatar)} alt="" className="w-8 h-8 rounded-full object-cover shrink-0" />
                       ) : (
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-xs shrink-0">
+                          {u.username[0].toUpperCase()}
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-display font-bold truncate">{u.username}</p>
+                        <div className="flex items-center gap-1 text-xs text-gray-500">
+                          {u.nationality && <span>{getCountryFlag(u.nationality)}</span>}
+                          {u.skill_title && <span className={`badge border text-[10px] ${getSkillColor(u.skill_title)}`}>{u.skill_title}</span>}
+                          {u.pumbility > 0 && <span className="text-piu-gold font-mono">{u.pumbility}</span>}
+                        </div>
+                      </div>
+                      <div className="flex gap-1 shrink-0">
                         <button
                           type="button"
-                          onClick={() => handleAddUser(u)}
-                          disabled={adding[u.id]}
-                          className="px-3 py-1 bg-piu-accent/20 text-piu-accent text-xs font-display font-bold rounded hover:bg-piu-accent/30 transition-colors disabled:opacity-50"
+                          onClick={() => fillFromUser(u)}
+                          className="px-2 py-1 bg-piu-accent/20 text-piu-accent text-xs font-display font-bold rounded hover:bg-piu-accent/30 transition-colors"
                         >
-                          {adding[u.id] ? 'Adding...' : 'Add'}
+                          Add directly
                         </button>
-                      )}
+                        <button
+                          type="button"
+                          onClick={() => handleInviteUser(u)}
+                          disabled={inviteSent[u.id]}
+                          className="px-2 py-1 bg-blue-500/20 text-blue-400 text-xs font-display font-bold rounded hover:bg-blue-500/30 transition-colors disabled:opacity-50"
+                        >
+                          {inviteSent[u.id] ? 'Sent' : 'Invite'}
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  ))}
+                </div>
+              )}
+              {searching && <p className="text-xs text-gray-500">Searching...</p>}
             </div>
           )}
-          {!userSearch && (
-            <p className="text-xs text-gray-500 text-center py-2">Type a username to search registered Shinsa players</p>
-          )}
-        </div>
-      )}
 
-      {/* Edit form (simplified — only editable tournament-specific fields) */}
-      {editingPlayer && (
-        <form onSubmit={handleEditSubmit} className="card mb-6 space-y-4 animate-slide-up">
-          <h3 className="font-display font-bold text-piu-accent">Edit: {editingPlayer.name}</h3>
+          {/* Avatar picker */}
+          <AvatarPicker
+            value={form.avatar}
+            onChange={(avatar) => setForm(f => ({ ...f, avatar }))}
+            shape="circle"
+            size="md"
+          />
 
-          {/* Read-only profile info */}
-          <div className="flex items-center gap-3 bg-piu-dark/50 rounded-lg px-3 py-2">
-            {editingPlayer.avatar ? (
-              <img src={getAvatarUrl(editingPlayer.avatar)} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">Player Name *</label>
+              <input
+                type="text"
+                className="input-field"
+                placeholder="Player name"
+                value={form.name}
+                onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                required
+                autoFocus
+              />
+            </div>
+            {!editingPlayer ? (
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Pumbility (Seeding)</label>
+                <input
+                  type="number"
+                  className="input-field"
+                  placeholder="e.g. 2500"
+                  value={form.pumbility}
+                  onChange={e => setForm(f => ({ ...f, pumbility: e.target.value }))}
+                />
+              </div>
             ) : (
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-sm shrink-0">
-                {getInitials(editingPlayer.name)}
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Pumbility (locked)</label>
+                <input
+                  type="number"
+                  className="input-field opacity-50"
+                  value={editingPlayer.pumbility || 0}
+                  disabled
+                />
               </div>
             )}
-            <div className="flex-1 min-w-0">
-              <p className="font-display font-bold">{editingPlayer.name}</p>
-              <div className="flex items-center gap-2 text-xs text-gray-500">
-                {editingPlayer.nationality && <span>{getCountryFlag(editingPlayer.nationality)}</span>}
-                {editingPlayer.gender && (
-                  <span className={editingPlayer.gender === 'male' ? 'text-blue-400' : 'text-pink-400'}>
-                    {GENDER_SYMBOLS[editingPlayer.gender]}
-                  </span>
-                )}
-                {editingPlayer.pumbility > 0 && <span className="text-piu-gold font-mono">{editingPlayer.pumbility}</span>}
-              </div>
-            </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div>
               <label className="block text-sm text-gray-400 mb-1">Skill Title</label>
               <select
                 className="input-field"
-                value={editForm.skill_title}
-                onChange={e => setEditForm(f => ({ ...f, skill_title: e.target.value }))}
+                value={form.skill_title}
+                onChange={e => setForm(f => ({ ...f, skill_title: e.target.value }))}
               >
                 {SKILL_TITLES.map(t => (
                   <option key={t} value={t}>{t}</option>
@@ -479,11 +529,35 @@ export default function PlayerRegistration({ tournamentId, players, isSetup, onU
               <label className="block text-sm text-gray-400 mb-1">Skill Level</label>
               <select
                 className="input-field"
-                value={editForm.skill_level}
-                onChange={e => setEditForm(f => ({ ...f, skill_level: parseInt(e.target.value) }))}
+                value={form.skill_level}
+                onChange={e => setForm(f => ({ ...f, skill_level: parseInt(e.target.value) }))}
               >
                 {SKILL_LEVELS.map(l => (
                   <option key={l} value={l}>Level {l}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">Gender</label>
+              <select
+                className="input-field"
+                value={form.gender}
+                onChange={e => setForm(f => ({ ...f, gender: e.target.value }))}
+              >
+                {GENDER_OPTIONS.map(g => (
+                  <option key={g.value} value={g.value}>{g.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">Nationality</label>
+              <select
+                className="input-field"
+                value={form.nationality}
+                onChange={e => setForm(f => ({ ...f, nationality: e.target.value }))}
+              >
+                {COUNTRIES.map(c => (
+                  <option key={c.code} value={c.code}>{c.flag ? `${c.flag} ` : ''}{c.name}</option>
                 ))}
               </select>
             </div>
@@ -495,16 +569,32 @@ export default function PlayerRegistration({ tournamentId, players, isSetup, onU
               className="input-field resize-none"
               rows="2"
               placeholder="Short bio or notes about the player..."
-              value={editForm.description}
-              onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))}
+              value={form.description}
+              onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
             />
+          </div>
+
+          {/* Skill preview */}
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-gray-500">Preview:</span>
+            {form.nationality && (
+              <span className="text-base">{getCountryFlag(form.nationality)}</span>
+            )}
+            <span className={`badge border ${getSkillColor(form.skill_title)}`}>
+              {form.skill_title} lvl. {form.skill_level}
+            </span>
+            {form.gender && (
+              <span className={`text-sm ${form.gender === 'male' ? 'text-blue-400' : 'text-pink-400'}`}>
+                {GENDER_SYMBOLS[form.gender]}
+              </span>
+            )}
           </div>
 
           <div className="flex gap-3">
             <button type="submit" className="btn-primary flex-1" disabled={saving}>
-              {saving ? 'Saving...' : 'Save Changes'}
+              {saving ? 'Saving...' : editingPlayer ? 'Save Changes' : 'Add Player'}
             </button>
-            <button type="button" onClick={() => setEditingPlayer(null)} className="btn-secondary">
+            <button type="button" onClick={handleCancel} className="btn-secondary">
               Cancel
             </button>
           </div>
