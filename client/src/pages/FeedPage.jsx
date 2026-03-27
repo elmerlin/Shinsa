@@ -104,10 +104,6 @@ function getClearItems(item) {
       replay_video_id: item.replay_video_id || '',
       replay_start_seconds: parseInt(item.replay_start_seconds, 10) || 0,
       replay_end_seconds: parseInt(item.replay_end_seconds, 10) || 0,
-      machine_name: item.machine_name || '',
-      played_at_utc: item.played_at_utc || '',
-      play_id: item.play_id || '',
-      user_id: item.user_id || '',
     }];
 
   try {
@@ -137,10 +133,6 @@ function getClearItems(item) {
       replay_video_id: c.replay_video_id || '',
       replay_start_seconds: parseInt(c.replay_start_seconds, 10) || 0,
       replay_end_seconds: parseInt(c.replay_end_seconds, 10) || 0,
-      machine_name: c.machine_name || '',
-      played_at_utc: c.played_at_utc || '',
-      play_id: c.play_id || item.play_id || '',
-      user_id: c.user_id || item.user_id || '',
     }));
   } catch {
     return fallback;
@@ -204,7 +196,6 @@ function ScoreDetailModal({ score, jacketUrl, chartLink, onClose }) {
       directMessageLinkShare={score?._dmLinkShare || null}
       modalLabel="Score details"
       onClose={onClose}
-      playId={score?.play_id}
     />
   );
 }
@@ -563,6 +554,11 @@ function UpscoreCard({ item, jacketLookup, chartKeyMap, onScoreClick, onReplayCl
                       +{songSinglesPumbilityGain.toLocaleString()} SPB
                     </span>
                   )}
+                  {u.weekly_challenge_rank && (
+                    <Link to={`/weekly-challenges?week=${u.weekly_challenge_week_key || ''}`} className="text-[9px] px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-300 border border-purple-500/25 font-display font-black hover:bg-purple-500/25 transition-colors">
+                      WC #{u.weekly_challenge_rank}
+                    </Link>
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
@@ -582,7 +578,6 @@ function UpscoreCard({ item, jacketLookup, chartKeyMap, onScoreClick, onReplayCl
                   onClick={() => onScoreClick && onScoreClick({
                     ...u,
                     username: item.username,
-                    user_id: u.user_id || item.user_id,
                     date_played: u.date_played || item.created_at,
                     _jacketUrl: jacketUrl,
                     _chartLink: chartLink,
@@ -1012,6 +1007,11 @@ function NewClearCard({ item, jacketLookup, chartKeyMap, onScoreClick, onReplayC
                       +{songSinglesPumbilityGain.toLocaleString()} SPB
                     </span>
                   )}
+                  {clear.weekly_challenge_rank && (
+                    <Link to={`/weekly-challenges?week=${clear.weekly_challenge_week_key || ''}`} className="text-[9px] px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-300 border border-purple-500/25 font-display font-black hover:bg-purple-500/25 transition-colors">
+                      WC #{clear.weekly_challenge_rank}
+                    </Link>
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
@@ -1031,7 +1031,6 @@ function NewClearCard({ item, jacketLookup, chartKeyMap, onScoreClick, onReplayC
                   onClick={() => onScoreClick && onScoreClick({
                     ...clear,
                     username: item.username,
-                    user_id: clear.user_id || item.user_id,
                     date_played: clear.date_played || item.created_at,
                     _jacketUrl: jacketUrl,
                     _chartLink: chartLink,
@@ -1094,6 +1093,79 @@ function NewClearCard({ item, jacketLookup, chartKeyMap, onScoreClick, onReplayC
             />
           ) : null}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function WeeklyChallengePlayCard({ item, jacketLookup, chartKeyMap }) {
+  let plays;
+  try { plays = JSON.parse(item.plays_json || '[]'); } catch { plays = []; }
+  const weekKey = item.week_key || '';
+  const avatarUrl = item.avatar ? getAvatarUrl(item.avatar) : '';
+
+  return (
+    <div className="card mb-3">
+      <div className="flex items-center gap-3 mb-3">
+        {avatarUrl && (
+          <Link to={`/profile/${item.user_id}`}>
+            <img src={avatarUrl} alt="" className="w-10 h-10 rounded-full border-2 border-piu-border object-cover" />
+          </Link>
+        )}
+        <div className="flex-1 min-w-0">
+          <Link to={`/profile/${item.user_id}`} className="font-display font-bold text-white hover:text-piu-accent transition-colors">
+            {item.nationality ? <>{getCountryFlag(item.nationality, 'h-4 inline-block mr-1')} </> : null}
+            {item.username}
+          </Link>
+          <span className="text-gray-400 ml-1.5">played weekly challenges!</span>
+        </div>
+        <Link to={`/weekly-challenges?week=${weekKey}`} className="text-[9px] px-2 py-1 rounded bg-purple-500/15 text-purple-300 border border-purple-500/25 font-display font-bold hover:bg-purple-500/25 transition-colors shrink-0">
+          {weekKey}
+        </Link>
+      </div>
+
+      <div className="space-y-2">
+        {plays.slice(0, 5).map((play, i) => {
+          const isSingle = play.mode === 'Single';
+          const jacketUrl = resolveChartJacketUrl({ title: play.song_title, mode: play.mode, level: play.level, jacketLookup, backgroundUrl: play.background_url });
+          return (
+            <div key={`${play.song_title}-${play.mode}-${play.level}-${i}`} className="flex items-center gap-3 py-1.5">
+              <div className="w-9 h-9 shrink-0 rounded overflow-hidden bg-piu-dark">
+                {jacketUrl ? <img src={jacketUrl} alt="" className="w-full h-full object-cover" /> : null}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-display font-bold truncate text-white">{play.song_title}</p>
+                <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-display font-bold ${isSingle ? 'bg-red-600/20 text-red-400' : 'bg-green-600/20 text-green-400'}`}>
+                    {isSingle ? 'S' : 'D'}{play.level}
+                  </span>
+                  {play.weekly_challenge_rank && (
+                    <Link to={`/weekly-challenges?week=${play.weekly_challenge_week_key || weekKey}`} className="text-[9px] px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-300 border border-purple-500/25 font-display font-black hover:bg-purple-500/25 transition-colors">
+                      WC #{play.weekly_challenge_rank}
+                    </Link>
+                  )}
+                </div>
+              </div>
+              <div className="text-right shrink-0">
+                <span className={`font-display font-bold text-xs ${getGradeColor(play.grade, play.score)}`}>{play.grade || getRank(play.score).label}</span>
+                <p className="font-mono text-xs font-bold text-gray-300">{(parseInt(play.score, 10) || 0).toLocaleString()}</p>
+              </div>
+            </div>
+          );
+        })}
+        {plays.length > 5 && (
+          <p className="text-center text-gray-500 text-[10px] py-1">+{plays.length - 5} more</p>
+        )}
+      </div>
+
+      <div className="flex items-center gap-4 mt-3 pt-2 border-t border-piu-border/30">
+        <span className="text-[10px] text-gray-500">{timeAgo(item.created_at)}</span>
+        <span className="text-[10px] text-gray-500">
+          {item.pump_count || 0} pump{item.pump_count !== 1 ? 's' : ''}
+        </span>
+        <span className="text-[10px] text-gray-500">
+          {item.comment_count || 0} comment{item.comment_count !== 1 ? 's' : ''}
+        </span>
       </div>
     </div>
   );
@@ -1173,6 +1245,8 @@ export default function FeedPage() {
               return <UpscoreCard key={`upscore-${item.id}`} item={item} jacketLookup={jacketLookup} chartKeyMap={chartKeyMap} onScoreClick={setSelectedScore} onReplayClick={(url, title) => setSelectedReplay({ url, title })} />;
             } else if (item.type === 'clear') {
               return <NewClearCard key={`clear-${item.id}`} item={item} jacketLookup={jacketLookup} chartKeyMap={chartKeyMap} onScoreClick={setSelectedScore} onReplayClick={(url, title) => setSelectedReplay({ url, title })} />;
+            } else if (item.type === 'weekly_challenge') {
+              return <WeeklyChallengePlayCard key={`wc-${item.id}`} item={item} jacketLookup={jacketLookup} chartKeyMap={chartKeyMap} />;
             }
             return null;
           })}

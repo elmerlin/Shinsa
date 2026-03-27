@@ -51,6 +51,7 @@ function sanitizeSongRows(rows) {
     rating: toNumber(row?._rating ?? row?.rating),
     over_top100_rank: toInt(row?._over_top100_rank ?? row?.over_top100_rank),
     jacket_url: String((row?._jacketUrl ?? row?.jacket_url) || ''),
+    weekly_challenge_week_key: String(row?.weekly_challenge_week_key || ''),
   }));
 }
 
@@ -88,7 +89,6 @@ function sanitizeSummary(summary) {
       miss: toInt(src?.judgmentTotals?.miss),
     },
     perfectRate: toInt(src.perfectRate),
-    trainingLoad: toInt(src.trainingLoad),
     topSongsByScore: sanitizeSongRows(src.topSongsByScore),
     topSongsByRating: sanitizeSongRows(src.topSongsByRating),
   };

@@ -798,6 +798,126 @@ function getUserWeeklyChallengeHistory(db, userId) {
   return history;
 }
 
+// ---------------------------------------------------------------------------
+// Play row annotation for WC chips
+// ---------------------------------------------------------------------------
+
+/**
+ * Annotate play rows in-place with weekly_challenge_rank and weekly_challenge_week_key.
+ * Each play's timestamp determines which week it belongs to, so a delayed sync
+ * spanning multiple weeks resolves correctly.
+ *
+ * @param {Object} db - database connection
+ * @param {Array} plays - play objects with song_title, mode, level, and a timestamp
+ * @param {string} userId - the player's user ID
+ * @returns {Array} the same plays array, mutated with annotations
+ */
+function annotateWeeklyChallengePlayRows(db, plays, userId) {
+  if (!plays || plays.length === 0) return plays;
+
+  const aliases = getAliases();
+
+  // Load all weeks that could be relevant (active + recent finalized)
+  const allWeeks = db.prepare(`
+    SELECT * FROM weekly_challenge_weeks
+    WHERE status IN ('active', 'finalized')
+    ORDER BY starts_at_utc DESC
+    LIMIT 10
+  `).all();
+
+  if (allWeeks.length === 0) return plays;
+
+  // Pre-load charts for each week
+  const weekChartLookups = {}; // weekId -> { chartKeyToChart }
+  const weekById = {};
+  for (const week of allWeeks) {
+    weekById[week.id] = week;
+    const charts = db.prepare(
+      'SELECT * FROM weekly_challenge_charts WHERE week_id = ?'
+    ).all(week.id);
+    const lookup = {};
+    for (const c of charts) {
+      const ck = makeChartKey(c.song_title_snapshot, c.mode, c.level, aliases);
+      if (ck) lookup[ck] = c;
+    }
+    weekChartLookups[week.id] = lookup;
+  }
+
+  // For each play, find its week and check for chart match
+  for (const play of plays) {
+    const playTime = String(play.played_at_utc || play.date_played || '').trim();
+    if (!playTime) continue;
+
+    const ck = makeChartKey(
+      play.song_title || play.new_song_title || '',
+      play.mode || play.new_mode || '',
+      play.level || play.new_level || 0,
+      aliases
+    );
+    if (!ck) continue;
+
+    // Find which week this play belongs to
+    let matchedWeek = null;
+    let matchedChart = null;
+    for (const week of allWeeks) {
+      if (playTime >= week.starts_at_utc && playTime <= week.ends_at_utc) {
+        const chartLookup = weekChartLookups[week.id];
+        if (chartLookup[ck]) {
+          matchedWeek = week;
+          matchedChart = chartLookup[ck];
+          break;
+        }
+      }
+    }
+
+    if (!matchedWeek || !matchedChart) continue;
+
+    // Compute rank for this user on this chart
+    let rank = 0;
+    if (matchedWeek.status === 'finalized') {
+      // Use frozen results
+      const results = db.prepare(`
+        SELECT user_id, score FROM weekly_challenge_results
+        WHERE weekly_chart_id = ?
+        ORDER BY score DESC, played_at ASC
+      `).all(matchedChart.id);
+      for (let i = 0; i < results.length; i++) {
+        if (results[i].user_id === userId) { rank = i + 1; break; }
+      }
+    } else {
+      // Live aggregation — query user_recently_played for this chart in the week window
+      const chartPlays = db.prepare(`
+        SELECT rp.user_id, rp.score
+        FROM user_recently_played rp
+        WHERE rp.mode = ? AND rp.level = ?
+          AND COALESCE(NULLIF(rp.played_at_utc, ''), rp.date_played) >= ?
+          AND COALESCE(NULLIF(rp.played_at_utc, ''), rp.date_played) <= ?
+          AND rp.score > 0
+        ORDER BY rp.score DESC
+      `).all(matchedChart.mode, matchedChart.level, matchedWeek.starts_at_utc, matchedWeek.ends_at_utc);
+
+      // Dedupe to best per user, then find rank
+      const bestByUser = {};
+      for (const cp of chartPlays) {
+        // Simple title match (could also use alias-aware matching, but chart is already matched)
+        if (!bestByUser[cp.user_id] || cp.score > bestByUser[cp.user_id]) {
+          bestByUser[cp.user_id] = cp.score;
+        }
+      }
+      const sorted = Object.entries(bestByUser).sort(([, a], [, b]) => b - a);
+      for (let i = 0; i < sorted.length; i++) {
+        if (sorted[i][0] === userId) { rank = i + 1; break; }
+      }
+    }
+
+    play.weekly_challenge_rank = rank || null;
+    play.weekly_challenge_week_key = matchedWeek.week_key;
+    play.weekly_challenge_chart_id = matchedChart.id;
+  }
+
+  return plays;
+}
+
 module.exports = {
   ensureCurrentWeeklyChallengeWeek,
   aggregateWeeklyResults,
@@ -810,4 +930,6 @@ module.exports = {
   getUserWeeklyChallengeHistory,
   getWeekBoundary,
   getGlobalChallengeMaxLevel,
+  annotateWeeklyChallengePlayRows,
+  computeIsoWeekKey,
 };

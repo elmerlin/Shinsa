@@ -903,6 +903,14 @@ export const getWeeklyChallengeWeek = (weekKey, params = {}) => {
 export const getUserWeeklyChallengeHistory = (userId) =>
   request(`/weekly-challenges/users/${userId}/history`);
 
+// ─── Weekly Challenge Play Posts ─────────────────────
+export const getWeeklyChallengePlay = (id) => request(`/social/weekly-challenge-plays/${id}`);
+export const getWeeklyChallengePlayComments = (playId) => request(`/social/weekly-challenge-plays/${playId}/comments`);
+export const addWeeklyChallengePlayComment = (playId, content, parentId) => request(`/social/weekly-challenge-plays/${playId}/comments`, { method: 'POST', body: JSON.stringify({ content, parent_id: parentId || null }) });
+export const deleteWeeklyChallengePlayComment = (id) => request(`/social/weekly-challenge-plays/comments/${id}`, { method: 'DELETE' });
+export const pumpWeeklyChallengePlay = (id) => pumpRequestWithHaptic(`/social/weekly-challenge-plays/${id}/pump`, { method: 'POST' });
+export const getWeeklyChallengePlayPumpers = (id) => request(`/social/weekly-challenge-plays/${id}/pumps`);
+
 // ─── Communities ─────────────────────────────────────
 
 export async function createCommunity(formData) {

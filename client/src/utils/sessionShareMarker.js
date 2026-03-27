@@ -48,6 +48,7 @@ function sanitizeRows(rows) {
     miss: toInt(row?.miss),
     max_combo: toInt(row?.max_combo),
     date_played: String(row?.date_played || ''),
+    weekly_challenge_week_key: String(row?.weekly_challenge_week_key || ''),
   }));
 }
 

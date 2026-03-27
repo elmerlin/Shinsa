@@ -109,6 +109,13 @@ function SongTable({ title, rows, type }) {
                             </span>
                           </p>
                         )}
+                        {row.weekly_challenge_week_key ? (
+                          <p className={overRank > 0 ? 'mt-0.5' : 'mt-1'}>
+                            <a href={`/weekly-challenges?week=${row.weekly_challenge_week_key}`} className="inline-flex items-center rounded border border-purple-500/25 bg-purple-500/15 px-1.5 py-0.5 text-[9px] leading-none text-purple-300 font-display font-black hover:bg-purple-500/25 transition-colors">
+                              WC
+                            </a>
+                          </p>
+                        ) : null}
                       </div>
                     </div>
                   </td>
@@ -161,15 +168,7 @@ export default function SessionSummaryCard({
             <p className="text-[11px] text-emerald-300/90 mt-0.5">Shoe: {summary.sessionShoeLabel}</p>
           ) : null}
         </div>
-        <div className="flex items-center gap-2">
-          {(summary.trainingLoad || 0) > 0 ? (
-            <div className="rounded-lg border border-amber-400/30 bg-amber-500/10 px-2.5 py-1.5 text-right">
-              <p className="text-[9px] text-amber-400/70 font-display uppercase tracking-wide">Training Load</p>
-              <p className="text-sm font-display font-bold text-amber-300">⚡ {formatNumber(summary.trainingLoad)}</p>
-            </div>
-          ) : null}
-          {actions ? <div className="flex items-center gap-1">{actions}</div> : null}
-        </div>
+        {actions ? <div className="flex items-center gap-1">{actions}</div> : null}
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3">

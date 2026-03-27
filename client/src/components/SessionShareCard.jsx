@@ -282,6 +282,11 @@ export default function SessionShareCard({
                                   TOP #{getOverTop100Rank(row.over_top100_rank)}
                                 </span>
                               ) : null}
+                              {row.weekly_challenge_week_key ? (
+                                <a href={`/weekly-challenges?week=${row.weekly_challenge_week_key}`} className="inline-flex items-center rounded border border-purple-500/25 bg-purple-500/15 px-1.5 py-0.5 text-[9px] leading-none text-purple-300 font-display font-black hover:bg-purple-500/25 transition-colors">
+                                  WC
+                                </a>
+                              ) : null}
                             </div>
                           </div>
                         </div>
@@ -369,7 +374,6 @@ export default function SessionShareCard({
         directMessageLinkShare={activeRowDmShare}
         modalLabel={isHopShare ? 'Session result' : 'Shared result'}
         onClose={() => setActiveRow(null)}
-        playId={activeRow?.play_id}
       />
       {selectedReplay ? (
         <YouTubeReplayModal

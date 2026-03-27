@@ -1423,6 +1423,13 @@ router.get('/feed', requireAuth, (req, res) => {
       FROM user_new_clears nc
       WHERE nc.user_id IN (SELECT following_id FROM user_follows WHERE follower_id = ?)
          OR nc.user_id = ?
+
+      UNION ALL
+
+      SELECT 'weekly_challenge' as type, wcp.id, wcp.created_at
+      FROM user_weekly_challenge_plays wcp
+      WHERE wcp.user_id IN (SELECT following_id FROM user_follows WHERE follower_id = ?)
+         OR wcp.user_id = ?
     ) feed_items
     ORDER BY
       datetime(COALESCE(created_at, '1970-01-01 00:00:00')) DESC,
@@ -1430,7 +1437,7 @@ router.get('/feed', requireAuth, (req, res) => {
       id DESC,
       type ASC
     LIMIT ? OFFSET ?
-  `).all(req.user.id, req.user.id, req.user.id, req.user.id, req.user.id, req.user.id, limit, offset);
+  `).all(req.user.id, req.user.id, req.user.id, req.user.id, req.user.id, req.user.id, req.user.id, req.user.id, limit, offset);
 
   if (feedRefs.length === 0) {
     return res.json([]);
@@ -1439,6 +1446,7 @@ router.get('/feed', requireAuth, (req, res) => {
   const postIds = feedRefs.filter((item) => item.type === 'post').map((item) => item.id);
   const upscoreIds = feedRefs.filter((item) => item.type === 'upscore').map((item) => item.id);
   const clearIds = feedRefs.filter((item) => item.type === 'clear').map((item) => item.id);
+  const wcPlayIds = feedRefs.filter((item) => item.type === 'weekly_challenge').map((item) => item.id);
 
   const itemMap = new Map();
 
@@ -1503,6 +1511,29 @@ router.get('/feed', requireAuth, (req, res) => {
     for (const clear of clears) {
       clear.avatar = normalizeUserAvatarForList(clear.avatar, clear.user_id, 64);
       itemMap.set(`clear:${clear.id}`, enrichClearRow(db, clear));
+    }
+  }
+
+  if (wcPlayIds.length > 0) {
+    const placeholders = wcPlayIds.map(() => '?').join(',');
+    const wcPlays = db.prepare(`
+      SELECT wcp.id, wcp.user_id, wcp.week_id, wcp.plays_json, wcp.created_at,
+             u.username, u.avatar, u.nationality,
+             w.week_key,
+             (SELECT COUNT(*) FROM weekly_challenge_play_pumps WHERE play_post_id = wcp.id) as pump_count,
+             (SELECT COUNT(*) FROM weekly_challenge_play_comments WHERE play_post_id = wcp.id) as comment_count,
+             CASE WHEN wpp_me.user_id IS NULL THEN 0 ELSE 1 END as user_pumped,
+             'weekly_challenge' as type
+      FROM user_weekly_challenge_plays wcp
+      JOIN users u ON wcp.user_id = u.id
+      JOIN weekly_challenge_weeks w ON w.id = wcp.week_id
+      LEFT JOIN weekly_challenge_play_pumps wpp_me ON wpp_me.play_post_id = wcp.id AND wpp_me.user_id = ?
+      WHERE wcp.id IN (${placeholders})
+    `).all(req.user.id, ...wcPlayIds);
+
+    for (const wcp of wcPlays) {
+      wcp.avatar = normalizeUserAvatarForList(wcp.avatar, wcp.user_id, 64);
+      itemMap.set(`weekly_challenge:${wcp.id}`, wcp);
     }
   }
 
@@ -2384,6 +2415,123 @@ router.get('/daily-highlights', (req, res) => {
 
   writeDailyHighlightsCache(result);
   res.json(result);
+});
+
+// ─── Weekly Challenge Play Posts ───────────────────────────
+
+// GET /api/social/weekly-challenge-plays/:id
+router.get('/weekly-challenge-plays/:id', optionalAuth, (req, res) => {
+  const db = getDb();
+  const id = parseInt(req.params.id);
+  const row = db.prepare(`
+    SELECT wcp.*, u.username, u.avatar, u.nationality, w.week_key,
+           (SELECT COUNT(*) FROM weekly_challenge_play_pumps WHERE play_post_id = wcp.id) as pump_count,
+           (SELECT COUNT(*) FROM weekly_challenge_play_comments WHERE play_post_id = wcp.id) as comment_count,
+           CASE WHEN wpp_me.user_id IS NULL THEN 0 ELSE 1 END as user_pumped,
+           'weekly_challenge' as type
+    FROM user_weekly_challenge_plays wcp
+    JOIN users u ON wcp.user_id = u.id
+    JOIN weekly_challenge_weeks w ON w.id = wcp.week_id
+    LEFT JOIN weekly_challenge_play_pumps wpp_me ON wpp_me.play_post_id = wcp.id AND wpp_me.user_id = ?
+    WHERE wcp.id = ?
+  `).get(req.user?.id || '', id);
+  if (!row) return res.status(404).json({ error: 'Not found' });
+  row.avatar = normalizeUserAvatarForList(row.avatar, row.user_id, 64);
+  res.json(row);
+});
+
+// POST /api/social/weekly-challenge-plays/:id/pump
+router.post('/weekly-challenge-plays/:id/pump', requireAuth, (req, res) => {
+  const db = getDb();
+  const postId = parseInt(req.params.id);
+  const post = db.prepare('SELECT id, user_id FROM user_weekly_challenge_plays WHERE id = ?').get(postId);
+  if (!post) return res.status(404).json({ error: 'Not found' });
+
+  const existing = db.prepare(
+    'SELECT 1 FROM weekly_challenge_play_pumps WHERE play_post_id = ? AND user_id = ?'
+  ).get(postId, req.user.id);
+
+  if (existing) {
+    db.prepare('DELETE FROM weekly_challenge_play_pumps WHERE play_post_id = ? AND user_id = ?').run(postId, req.user.id);
+  } else {
+    db.prepare('INSERT INTO weekly_challenge_play_pumps (play_post_id, user_id) VALUES (?, ?)').run(postId, req.user.id);
+  }
+
+  const count = db.prepare('SELECT COUNT(*) as cnt FROM weekly_challenge_play_pumps WHERE play_post_id = ?').get(postId);
+  res.json({ pumped: !existing, pump_count: count?.cnt || 0 });
+});
+
+// GET /api/social/weekly-challenge-plays/:id/pumps
+router.get('/weekly-challenge-plays/:id/pumps', (req, res) => {
+  const db = getDb();
+  const postId = parseInt(req.params.id);
+  const pumpers = db.prepare(`
+    SELECT u.id, u.username, u.avatar, u.nationality, wpp.created_at
+    FROM weekly_challenge_play_pumps wpp
+    JOIN users u ON wpp.user_id = u.id
+    WHERE wpp.play_post_id = ?
+    ORDER BY wpp.created_at DESC
+  `).all(postId);
+  for (const p of pumpers) p.avatar = normalizeUserAvatarForList(p.avatar, p.id, 40);
+  res.json(pumpers);
+});
+
+// GET /api/social/weekly-challenge-plays/:id/comments
+router.get('/weekly-challenge-plays/:id/comments', optionalAuth, (req, res) => {
+  const db = getDb();
+  const postId = parseInt(req.params.id);
+  const comments = db.prepare(`
+    SELECT c.id, c.play_post_id, c.user_id, c.content, c.parent_id, c.created_at,
+           u.username, u.avatar, u.nationality
+    FROM weekly_challenge_play_comments c
+    JOIN users u ON c.user_id = u.id
+    WHERE c.play_post_id = ?
+    ORDER BY c.created_at ASC
+  `).all(postId);
+
+  // Count pumps per comment (reuse comment_pumps if it supports this type, otherwise skip)
+  for (const c of comments) {
+    c.avatar = normalizeUserAvatarForList(c.avatar, c.user_id, 40);
+    c.pump_count = 0;
+    c.user_pumped = 0;
+  }
+  res.json(comments);
+});
+
+// POST /api/social/weekly-challenge-plays/:id/comments
+router.post('/weekly-challenge-plays/:id/comments', requireAuth, (req, res) => {
+  const db = getDb();
+  const postId = parseInt(req.params.id);
+  const post = db.prepare('SELECT id FROM user_weekly_challenge_plays WHERE id = ?').get(postId);
+  if (!post) return res.status(404).json({ error: 'Not found' });
+
+  const content = String(req.body?.content || '').trim();
+  if (!content) return res.status(400).json({ error: 'Content is required' });
+
+  const parentId = req.body?.parent_id ? parseInt(req.body.parent_id) : null;
+
+  const result = db.prepare(
+    'INSERT INTO weekly_challenge_play_comments (play_post_id, user_id, content, parent_id) VALUES (?, ?, ?, ?)'
+  ).run(postId, req.user.id, content, parentId);
+
+  const comment = db.prepare(`
+    SELECT c.*, u.username, u.avatar, u.nationality
+    FROM weekly_challenge_play_comments c
+    JOIN users u ON c.user_id = u.id
+    WHERE c.id = ?
+  `).get(result.lastInsertRowid);
+  if (comment) comment.avatar = normalizeUserAvatarForList(comment.avatar, comment.user_id, 40);
+  res.status(201).json(comment);
+});
+
+// DELETE /api/social/weekly-challenge-plays/comments/:id
+router.delete('/weekly-challenge-plays/comments/:id', requireAuth, (req, res) => {
+  const db = getDb();
+  const comment = db.prepare('SELECT id, user_id FROM weekly_challenge_play_comments WHERE id = ?').get(parseInt(req.params.id));
+  if (!comment) return res.status(404).json({ error: 'Not found' });
+  if (comment.user_id !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
+  db.prepare('DELETE FROM weekly_challenge_play_comments WHERE id = ?').run(comment.id);
+  res.json({ success: true });
 });
 
 module.exports = router;

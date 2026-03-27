@@ -21,6 +21,7 @@ const { notifyActivitySubscribers, buildProfilePath } = require('../lib/activity
 const { getUserTitleProgress, updateUserSkillTitleFromBestScores, LEVEL_BASE_POINTS, GRADE_MULTIPLIER, SCORE_TO_GRADE, calculateRatingPoints, gradeFromScore, normalizeGrade } = require('../lib/titleProgress');
 const { buildPumbilityCandidates, getNextGradeThreshold, isPassingScore, isFailGrade, SCORE_TO_GRADE_ASC } = require('../lib/pumbilityCandidates');
 const { checkSssAchievements, checkStreakAchievements } = require('../lib/achievements');
+const { annotateWeeklyChallengePlayRows, ensureCurrentWeeklyChallengeWeek } = require('../lib/weeklyChallenges');
 const { normalizePiugamePlayedAtUtc } = require('../lib/piugameDate');
 const {
   calculatePlayLoad,
@@ -2577,6 +2578,7 @@ async function syncRecentlyPlayedForUser(user, options = {}) {
   let updatedCount = 0;
   const upscoresFromRecent = [];
   const newClearsFromRecent = [];
+  const wcOnlyPlays = []; // passing WC plays that aren't upscores or new clears
   let upscorePostId = null;
   let newClearPostId = null;
   let titleUnlockPostId = null;
@@ -2730,6 +2732,23 @@ async function syncRecentlyPlayedForUser(user, options = {}) {
             touchedPlayDataLevels.add(String(level));
           }
           updatedCount += 1;
+        } else {
+          // Passing play but not an upscore or new clear — candidate for WC-only post
+          wcOnlyPlays.push({
+            song_title: songTitle,
+            mode,
+            level,
+            score,
+            grade: grade || '',
+            plate: plate || '',
+            background_url: backgroundUrl || '',
+            played_at_utc: playedAtUtc || datePlayed || '',
+            perfect,
+            great,
+            good,
+            bad,
+            miss,
+          });
         }
       }
     }
@@ -2741,6 +2760,21 @@ async function syncRecentlyPlayedForUser(user, options = {}) {
     pumbilityGains = computePostPumbilityGains(baselineBestScores, upscoresFromRecent, newClearsFromRecent);
     upscoreRowsWithGains = pumbilityGains.upscores;
     clearRowsWithGains = pumbilityGains.clears;
+
+    // Annotate upscore/clear entries with weekly challenge rank (frozen at post time)
+    if (persistActivityPosts) {
+      try {
+        ensureCurrentWeeklyChallengeWeek(db);
+        if (upscoreRowsWithGains.length > 0) {
+          annotateWeeklyChallengePlayRows(db, upscoreRowsWithGains, userId);
+        }
+        if (clearRowsWithGains.length > 0) {
+          annotateWeeklyChallengePlayRows(db, clearRowsWithGains, userId);
+        }
+      } catch (wcErr) {
+        console.warn(`[WeeklyChallenge] Annotation failed for ${userId}: ${wcErr.message}`);
+      }
+    }
 
     if (persistActivityPosts && upscoreRowsWithGains.length > 0) {
       const upscoreInsert = db.prepare(`
@@ -2758,6 +2792,60 @@ async function syncRecentlyPlayedForUser(user, options = {}) {
     }
   });
   txn();
+
+  // Create weekly challenge play posts for WC-only plays (not upscores/clears)
+  if (persistActivityPosts && wcOnlyPlays.length > 0) {
+    try {
+      ensureCurrentWeeklyChallengeWeek(db);
+      // Annotate with WC data
+      annotateWeeklyChallengePlayRows(db, wcOnlyPlays, userId);
+      // Filter to only plays that matched a WC chart
+      const wcMatched = wcOnlyPlays.filter(p => p.weekly_challenge_week_key);
+      if (wcMatched.length > 0) {
+        // Group by week
+        const byWeek = {};
+        for (const p of wcMatched) {
+          const wk = p.weekly_challenge_week_key;
+          if (!byWeek[wk]) byWeek[wk] = [];
+          byWeek[wk].push(p);
+        }
+        for (const [weekKey, plays] of Object.entries(byWeek)) {
+          const weekRow = db.prepare('SELECT id FROM weekly_challenge_weeks WHERE week_key = ?').get(weekKey);
+          if (!weekRow) continue;
+          // Build content hash for dedupe
+          const hashInput = plays
+            .map(p => `${p.song_title}|${p.mode}|${p.level}|${p.played_at_utc}|${p.score}`)
+            .sort()
+            .join('\n');
+          const contentHash = crypto.createHash('sha256').update(hashInput).digest('hex').slice(0, 32);
+          // Check for duplicate
+          const existing = db.prepare(
+            'SELECT id FROM user_weekly_challenge_plays WHERE user_id = ? AND week_id = ? AND content_hash = ?'
+          ).get(userId, weekRow.id, contentHash);
+          if (existing) continue;
+          // Insert
+          const playsJson = JSON.stringify(plays.map(p => ({
+            song_title: p.song_title,
+            mode: p.mode,
+            level: p.level,
+            score: p.score,
+            grade: p.grade,
+            plate: p.plate || '',
+            background_url: p.background_url || '',
+            weekly_challenge_rank: p.weekly_challenge_rank || null,
+            weekly_challenge_week_key: p.weekly_challenge_week_key,
+            weekly_challenge_chart_id: p.weekly_challenge_chart_id || null,
+            rating_points: calculateRatingPoints(p.level, p.grade, p.score),
+          })));
+          db.prepare(
+            'INSERT INTO user_weekly_challenge_plays (user_id, week_id, plays_json, content_hash) VALUES (?, ?, ?, ?)'
+          ).run(userId, weekRow.id, playsJson, contentHash);
+        }
+      }
+    } catch (wcErr) {
+      console.warn(`[WeeklyChallenge] WC play post creation failed for ${userId}: ${wcErr.message}`);
+    }
+  }
 
   if (touchedPlayDataLevels.size > 0) {
     try {
@@ -4278,6 +4366,15 @@ router.get('/recently-played/:userId', (req, res) => {
     replay_start_seconds: Math.max(0, parseInt(play?.replay_start_seconds, 10) || 0),
     replay_end_seconds: Math.max(0, parseInt(play?.replay_end_seconds, 10) || 0),
   }));
+
+  // Annotate plays with weekly challenge week keys for session share/summary WC chips
+  try {
+    ensureCurrentWeeklyChallengeWeek(db);
+    annotateWeeklyChallengePlayRows(db, normalizedPlays, req.params.userId);
+  } catch (wcErr) {
+    // Non-fatal — plays still return without WC annotations
+  }
+
   res.json({
     last_sync: sync?.last_recently_played_sync || null,
     plays: normalizedPlays,

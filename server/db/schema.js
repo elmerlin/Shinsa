@@ -3764,6 +3764,32 @@ function initializeDb() {
       skill_title_snapshot TEXT DEFAULT '',
       UNIQUE(week_id, award_key, rank)
     );
+
+    CREATE TABLE IF NOT EXISTS user_weekly_challenge_plays (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      week_id INTEGER NOT NULL REFERENCES weekly_challenge_weeks(id) ON DELETE CASCADE,
+      plays_json TEXT NOT NULL DEFAULT '[]',
+      content_hash TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS weekly_challenge_play_pumps (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      play_post_id INTEGER NOT NULL REFERENCES user_weekly_challenge_plays(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(play_post_id, user_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS weekly_challenge_play_comments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      play_post_id INTEGER NOT NULL REFERENCES user_weekly_challenge_plays(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      content TEXT NOT NULL,
+      parent_id INTEGER DEFAULT NULL,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
   `);
 
   ensureBuiltInAchievementSeries(db);

@@ -38,7 +38,7 @@ function PodiumCard({ award }) {
       )}
       <div className="min-w-0 flex-1">
         <Link
-          to={`/profile/${award.user_id}`}
+          to="/weekly-challenges"
           className="block truncate text-[11px] font-display font-bold text-white hover:text-piu-gold transition-colors"
         >
           {award.nationality_snapshot && (
