@@ -308,6 +308,10 @@ function aggregateWeeklyResults(db, weekId) {
   const userChartBests = new Map();
   const userProfiles = new Map(); // userId -> user profile data
 
+  // Cache for resolving localized song titles via background_url
+  const bgTitleCache = {};
+  let bgResolveStmt = null;
+
   for (const play of plays) {
     // Try alias-aware chart key match first
     const ck = makeChartKey(play.song_title, play.mode, play.level, aliases);
@@ -316,6 +320,32 @@ function aggregateWeeklyResults(db, weekId) {
     // Fallback: direct title match
     if (!wc) {
       wc = directLookup[`${play.song_title}|${play.mode}|${play.level}`];
+    }
+
+    // Fallback: resolve localized title via background_url
+    if (!wc && play.background_url) {
+      const bgMatch = play.background_url.match(/song_img\/([a-f0-9]+)\./);
+      if (bgMatch) {
+        const bgKey = `${bgMatch[1]}|${play.mode}|${play.level}`;
+        if (!(bgKey in bgTitleCache)) {
+          if (!bgResolveStmt) {
+            bgResolveStmt = db.prepare(`
+              SELECT DISTINCT song_title FROM user_recently_played
+              WHERE background_url = ? AND mode = ? AND level = ?
+                AND song_title GLOB '[A-Za-z0-9]*'
+              LIMIT 1
+            `);
+          }
+          const row = bgResolveStmt.get(play.background_url, play.mode, play.level);
+          bgTitleCache[bgKey] = row ? row.song_title : null;
+        }
+        const canonicalTitle = bgTitleCache[bgKey];
+        if (canonicalTitle) {
+          const fallbackCk = makeChartKey(canonicalTitle, play.mode, play.level, aliases);
+          wc = fallbackCk ? chartKeyLookup[fallbackCk] : null;
+          if (!wc) wc = directLookup[`${canonicalTitle}|${play.mode}|${play.level}`];
+        }
+      }
     }
 
     if (!wc) continue; // not a weekly challenge chart
@@ -843,18 +873,45 @@ function annotateWeeklyChallengePlayRows(db, plays, userId) {
     weekChartLookups[week.id] = lookup;
   }
 
+  // Build background_url-based fallback lookup for localized titles (Korean, etc.)
+  // Maps "bgHash|mode|level" -> canonical English song title
+  const bgUrlTitleCache = {};
+  let bgUrlResolveStmt = null;
+
+  function resolveCanonicalTitle(bgUrl, mode, level) {
+    if (!bgUrl) return null;
+    // Extract the piugame hash from the URL
+    const match = bgUrl.match(/song_img\/([a-f0-9]+)\./);
+    if (!match) return null;
+    const cacheKey = `${match[1]}|${mode}|${level}`;
+    if (cacheKey in bgUrlTitleCache) return bgUrlTitleCache[cacheKey];
+
+    // Find a play from another user with the same background_url + mode + level that has an English title
+    if (!bgUrlResolveStmt) {
+      bgUrlResolveStmt = db.prepare(`
+        SELECT DISTINCT rp2.song_title
+        FROM user_recently_played rp2
+        WHERE rp2.background_url = ? AND rp2.mode = ? AND rp2.level = ?
+          AND rp2.song_title GLOB '[A-Za-z0-9]*'
+        LIMIT 1
+      `);
+    }
+    const row = bgUrlResolveStmt.get(bgUrl, mode, level);
+    const resolved = row ? row.song_title : null;
+    bgUrlTitleCache[cacheKey] = resolved;
+    return resolved;
+  }
+
   // For each play, find its week and check for chart match
   for (const play of plays) {
     const playTime = String(play.played_at_utc || play.date_played || '').trim();
     if (!playTime) continue;
 
-    const ck = makeChartKey(
-      play.song_title || play.new_song_title || '',
-      play.mode || play.new_mode || '',
-      play.level || play.new_level || 0,
-      aliases
-    );
-    if (!ck) continue;
+    const playTitle = play.song_title || play.new_song_title || '';
+    const playMode = play.mode || play.new_mode || '';
+    const playLevel = play.level || play.new_level || 0;
+
+    let ck = makeChartKey(playTitle, playMode, playLevel, aliases);
 
     // Find which week this play belongs to
     let matchedWeek = null;
@@ -862,10 +919,22 @@ function annotateWeeklyChallengePlayRows(db, plays, userId) {
     for (const week of allWeeks) {
       if (playTime >= week.starts_at_utc && playTime <= week.ends_at_utc) {
         const chartLookup = weekChartLookups[week.id];
-        if (chartLookup[ck]) {
+        if (ck && chartLookup[ck]) {
           matchedWeek = week;
           matchedChart = chartLookup[ck];
           break;
+        }
+        // Fallback: resolve localized title via background_url
+        const canonicalTitle = resolveCanonicalTitle(
+          play.background_url || '', playMode, playLevel
+        );
+        if (canonicalTitle) {
+          const fallbackCk = makeChartKey(canonicalTitle, playMode, playLevel, aliases);
+          if (fallbackCk && chartLookup[fallbackCk]) {
+            matchedWeek = week;
+            matchedChart = chartLookup[fallbackCk];
+            break;
+          }
         }
       }
     }
