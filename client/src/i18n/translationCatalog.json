@@ -263,6 +263,13 @@
     "korean": "신발"
   },
   {
+    "key": "app.nav.what_to_play",
+    "category": "navigation",
+    "pages": ["app"],
+    "english": "What To Play",
+    "korean": "무엇을 플레이할까"
+  },
+  {
     "key": "app.nav.optimise",
     "category": "navigation",
     "pages": ["app"],
