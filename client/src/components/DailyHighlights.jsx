@@ -4,11 +4,9 @@ import { getAvatarUrl } from './AvatarPicker';
 import { resolveChartJacketUrl } from './PiuChartJacket';
 import YouTubeReplayModal from './YouTubeReplayModal';
 import ScoreSnapshotModal from './ScoreSnapshotModal';
-import ItemCommentSection from './ItemCommentSection';
 import { getCountryFlag } from './PlayerRegistration';
 import { buildScoreSnapshotLinkShare } from '../utils/directMessageShares';
 import { buildReplayModalTitle } from '../utils/replayTitle';
-import { getPlayComments, addPlayComment, deletePlayComment } from '../utils/api';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -400,7 +398,7 @@ export default function DailyHighlights({ data, jacketLookup = {}, chartKeyMap =
           <SectionLabel icon="🎬" title="Top Replays" accent="from-red-500/30" />
           <ScrollRail>
             {topReplays.map((play, i) => (
-              <ReplayCard key={play.id || i} play={play} rank={i + 1} jacketLookup={jacketLookup} onReplayClick={(url, title) => setReplayModal({ url, title, playId: play.id, playUserId: play.user_id })} visible={replayAnim.visible.includes(i)} />
+              <ReplayCard key={play.id || i} play={play} rank={i + 1} jacketLookup={jacketLookup} onReplayClick={(url, title) => setReplayModal({ url, title })} visible={replayAnim.visible.includes(i)} />
             ))}
           </ScrollRail>
         </div>
@@ -408,7 +406,7 @@ export default function DailyHighlights({ data, jacketLookup = {}, chartKeyMap =
 
       {hasUpscores && (
         <div ref={upscoreAnim.ref} className="mb-3">
-          <SectionLabel icon="📈" title="Best Upscores" accent="from-piu-green/30" />
+          <SectionLabel icon="📈" title={data?.topUpscoresIsFallback ? 'Recent Top Upscores' : 'Best Upscores'} accent="from-piu-green/30" />
           <ScrollRail>
             {topUpscores.map((item, i) => (
               <UpscoreCard key={`${item.upscore_id}-${i}`} item={item} rank={i + 1} jacketLookup={jacketLookup} chartKeyMap={chartKeyMap} visible={upscoreAnim.visible.includes(i)} onScoreClick={setSelectedScore} />
@@ -419,7 +417,7 @@ export default function DailyHighlights({ data, jacketLookup = {}, chartKeyMap =
 
       {hasClears && (
         <div ref={clearAnim.ref}>
-          <SectionLabel icon="🎯" title="Best New Clears" accent="from-sky-400/30" />
+          <SectionLabel icon="🎯" title={data?.topClearsIsFallback ? 'Recent New Clears' : 'Best New Clears'} accent="from-sky-400/30" />
           <ScrollRail>
             {topClears.map((item, i) => (
               <ClearCard key={`${item.clear_id}-${i}`} item={item} rank={i + 1} jacketLookup={jacketLookup} chartKeyMap={chartKeyMap} visible={clearAnim.visible.includes(i)} onScoreClick={setSelectedScore} />
@@ -429,21 +427,7 @@ export default function DailyHighlights({ data, jacketLookup = {}, chartKeyMap =
       )}
 
       {replayModal && (
-        <YouTubeReplayModal url={replayModal.url} title={replayModal.title} onClose={() => setReplayModal(null)}>
-          {replayModal.playId && (
-            <div className="px-4 py-3 border-t border-piu-border/30">
-              <ItemCommentSection
-                itemId={replayModal.playId}
-                commentType="play"
-                getCommentsFn={getPlayComments}
-                addCommentFn={addPlayComment}
-                deleteCommentFn={deletePlayComment}
-                initialOpen={false}
-                ownerId={replayModal.playUserId}
-              />
-            </div>
-          )}
-        </YouTubeReplayModal>
+        <YouTubeReplayModal url={replayModal.url} title={replayModal.title} onClose={() => setReplayModal(null)} />
       )}
 
       {selectedScore && (
@@ -454,7 +438,6 @@ export default function DailyHighlights({ data, jacketLookup = {}, chartKeyMap =
           directMessageLinkShare={selectedScore._dmLinkShare || null}
           modalLabel="Score details"
           onClose={() => setSelectedScore(null)}
-          playId={selectedScore.play_id || selectedScore.id}
         />
       )}
     </div>
