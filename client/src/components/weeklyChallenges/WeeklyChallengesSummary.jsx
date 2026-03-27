@@ -5,10 +5,12 @@ import WeeklyChallengePodiumStrip from './WeeklyChallengePodiumStrip';
 import { getAvatarUrl } from '../AvatarPicker';
 import { getCountryFlag } from '../PlayerRegistration';
 
-function getModeColor(mode) {
-  if (mode === 'Single') return 'border-rose-500/40 text-rose-400';
-  if (mode === 'Double') return 'border-emerald-500/40 text-emerald-400';
-  return 'border-sky-500/40 text-sky-400';
+function getLevelBadgeTone(mode) {
+  if (String(mode || '').trim() === 'Single')
+    return 'border-rose-200/45 bg-gradient-to-br from-[#ff7a7a] via-[#d93d62] to-[#7a1730] shadow-[0_2px_8px_rgba(217,61,98,0.3)]';
+  if (String(mode || '').trim() === 'Double')
+    return 'border-emerald-200/45 bg-gradient-to-br from-[#4cf4aa] via-[#16b77f] to-[#0b5d48] shadow-[0_2px_8px_rgba(22,183,127,0.28)]';
+  return 'border-sky-200/45 bg-gradient-to-br from-[#69c8ff] via-[#2b88de] to-[#12457c] shadow-[0_2px_8px_rgba(43,136,222,0.28)]';
 }
 
 function getModeShort(mode) {
@@ -54,7 +56,7 @@ function ChallengePreview({ chart }) {
           <div className="h-full w-full bg-gradient-to-br from-gray-800 to-gray-900" />
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
-        <span className={`absolute top-1 right-1 inline-flex items-center rounded border px-1 py-px font-display text-[8px] font-black text-white ${getModeColor(chart.mode)}`}>
+        <span className={`absolute top-1 right-1 z-10 inline-flex items-center justify-center rounded-md border px-1 py-px font-display text-[8px] font-black leading-none tracking-[-0.04em] text-white ${getLevelBadgeTone(chart.mode)}`}>
           {getModeShort(chart.mode)}{chart.level}
         </span>
         <div className="absolute bottom-1 left-1.5 right-1.5">

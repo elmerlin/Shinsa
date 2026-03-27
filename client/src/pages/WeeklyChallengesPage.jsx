@@ -164,16 +164,9 @@ export default function WeeklyChallengesPage() {
             </div>
           )}
 
-          {/* Sticky filters */}
+          {/* Sticky filters — leaderboard scope + skill family */}
           <div className="sticky top-0 z-30 bg-[#0a0a10]/95 backdrop-blur-sm -mx-4 px-4 py-2 mb-3 border-b border-white/[0.04]">
             <div className="flex flex-wrap gap-1 items-center">
-              <span className="text-[8px] font-display font-bold text-white/25 uppercase mr-1">Charts</span>
-              <FilterChip label="Both" active={chartMode === 'both'} onClick={() => setChartMode('both')} />
-              <FilterChip label="Singles" active={chartMode === 'single'} onClick={() => setChartMode('single')} />
-              <FilterChip label="Doubles" active={chartMode === 'double'} onClick={() => setChartMode('double')} />
-
-              <span className="text-white/10 mx-1">|</span>
-
               <span className="text-[8px] font-display font-bold text-white/25 uppercase mr-1">Board</span>
               <FilterChip label="Both" active={leaderboardMode === 'both'} onClick={() => setLeaderboardMode('both')} />
               <FilterChip label="Singles" active={leaderboardMode === 'single'} onClick={() => setLeaderboardMode('single')} />
@@ -202,14 +195,22 @@ export default function WeeklyChallengesPage() {
 
           {/* Challenge list by level */}
           <div>
-            <h3 className="font-display text-[9px] font-black tracking-[0.14em] uppercase text-white/40 mb-3">
-              Challenges
-              {week && (
-                <span className="ml-1.5 text-white/20">
-                  Lv.{week.challenge_min_level || 10}–{week.challenge_max_level}
-                </span>
-              )}
-            </h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-display text-[9px] font-black tracking-[0.14em] uppercase text-white/40">
+                Challenges
+                {week && (
+                  <span className="ml-1.5 text-white/20">
+                    Lv.{week.challenge_min_level || 10}–{week.challenge_max_level}
+                  </span>
+                )}
+              </h3>
+              <div className="flex gap-1 items-center">
+                <span className="text-[8px] font-display font-bold text-white/25 uppercase mr-1">Charts</span>
+                <FilterChip label="Both" active={chartMode === 'both'} onClick={() => setChartMode('both')} />
+                <FilterChip label="Singles" active={chartMode === 'single'} onClick={() => setChartMode('single')} />
+                <FilterChip label="Doubles" active={chartMode === 'double'} onClick={() => setChartMode('double')} />
+              </div>
+            </div>
             {levels.length === 0 && (
               <p className="text-center text-gray-500 text-[11px] py-6">No challenges for this filter</p>
             )}
