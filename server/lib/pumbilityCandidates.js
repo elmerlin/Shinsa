@@ -34,6 +34,20 @@ function isPassingScore(score, grade) {
 }
 
 /**
+ * Strict pass check for a play record (e.g. from user_recently_played).
+ * Resolves grade via normalizeGrade, falls back to gradeFromScore when
+ * grade is blank/messy. Matches the strictness of the route-local
+ * isPassRecord in songs.js — extracted here to keep lib modules
+ * independent of route code.
+ */
+function isPassRecord(record) {
+  const score = parseInt(record?.score, 10) || 0;
+  if (score <= 0) return false;
+  const resolved = normalizeGrade(record?.grade) || gradeFromScore(score);
+  return resolved !== 'F';
+}
+
+/**
  * Build pumbility upgrade candidates from user's best scores.
  * Defensively filters to passing scores only, so callers
  * don't need to pre-filter (matching piugame.js:5518 behavior).
@@ -160,6 +174,7 @@ module.exports = {
   buildPumbilityCandidates,
   getNextGradeThreshold,
   isPassingScore,
+  isPassRecord,
   isFailGrade,
   SCORE_TO_GRADE_ASC,
 };

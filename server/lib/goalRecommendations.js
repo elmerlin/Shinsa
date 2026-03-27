@@ -3,8 +3,9 @@
 // Pumbility goal: anchored selection with seeded frontier variety.
 
 const { LEVEL_BASE_POINTS, getUserTitleProgress } = require('./titleProgress');
-const { buildPumbilityCandidates } = require('./pumbilityCandidates');
+const { buildPumbilityCandidates, isPassRecord } = require('./pumbilityCandidates');
 const { makeChartKey } = require('./chartKeys');
+const { getPassabilityWeight } = require('./chartFeedback');
 
 // ---------------------------------------------------------------------------
 // Seeded PRNG (Mulberry32)
@@ -117,6 +118,33 @@ function computeFitBreakdown(chart, skillProfile) {
 }
 
 // ---------------------------------------------------------------------------
+// Play history builder
+// ---------------------------------------------------------------------------
+/**
+ * Build a map of chart_id → { logged_plays, logged_passes } from recentPlays.
+ * Uses the hardened isPassRecord for pass detection (normalizeGrade + gradeFromScore fallback).
+ */
+function buildPlayHistoryMap(recentPlays, songCatalog, aliases) {
+  const map = new Map(); // chart_id → { logged_plays, logged_passes }
+  if (!recentPlays || !recentPlays.length) return map;
+
+  for (const play of recentPlays) {
+    const chartKey = makeChartKey(play.song_title, play.mode, play.level, aliases);
+    if (!chartKey) continue;
+    const chart = songCatalog.chartsByKey.get(chartKey);
+    if (!chart) continue;
+    const cid = chart.chart_id;
+    const entry = map.get(cid) || { logged_plays: 0, logged_passes: 0 };
+    entry.logged_plays += 1;
+    if (isPassRecord(play)) {
+      entry.logged_passes += 1;
+    }
+    map.set(cid, entry);
+  }
+  return map;
+}
+
+// ---------------------------------------------------------------------------
 // Reasoning text builders
 // ---------------------------------------------------------------------------
 function formatScoreK(score) {
@@ -185,7 +213,10 @@ function getChartSkillNames(chart, max) {
 // ---------------------------------------------------------------------------
 function buildTitleGoalRecommendations({
   db, userId, songCatalog, bestByChart, passBest, failBest, aliases, mode, seed, limit,
+  feedbackMap, recentPlays,
 }) {
+  feedbackMap = feedbackMap || new Map();
+  const playHistoryMap = buildPlayHistoryMap(recentPlays, songCatalog, aliases);
   const titleProgress = getUserTitleProgress(db, userId);
 
   if (!titleProgress.imported) {
@@ -303,7 +334,10 @@ function buildTitleGoalRecommendations({
     }
   }
 
-  // Bucket A: sub-sort by tier_rank asc, seeded shuffle within each sub-tier
+  // Helper: passability weight for a candidate
+  const pw = (c) => getPassabilityWeight(feedbackMap.get(c.chart_id)?.passability_rating);
+
+  // Bucket A: sub-sort by tier_rank asc, seeded weighted shuffle within each sub-tier
   const tierGroups = new Map();
   for (const c of bucketA) {
     const rank = c.tier_rank;
@@ -313,22 +347,28 @@ function buildTitleGoalRecommendations({
   const sortedBucketA = [];
   for (const rank of [...tierGroups.keys()].sort((a, b) => a - b)) {
     const group = tierGroups.get(rank);
-    seededShuffle(group, seed + rank);
-    sortedBucketA.push(...group);
+    const sampled = seededWeightedSample(group, pw, seed + rank, group.length);
+    sortedBucketA.push(...sampled);
   }
 
-  // Bucket B: strictly fail_score desc (no shuffle)
-  bucketB.sort((a, b) => (b.fail_score || 0) - (a.fail_score || 0));
+  // Bucket B: strictly fail_score desc, passability as secondary tiebreaker
+  bucketB.sort((a, b) => {
+    const diff = (b.fail_score || 0) - (a.fail_score || 0);
+    if (diff !== 0) return diff;
+    return pw(b) - pw(a);
+  });
 
-  // Bucket C: seeded shuffle (weighted by fit_score)
+  // Bucket C: seeded shuffle (weighted by fit_score * passability)
   const shuffledC = seededWeightedSample(
-    bucketC, (c) => c.fit_score, seed + 100, bucketC.length,
+    bucketC, (c) => c.fit_score * pw(c), seed + 100, bucketC.length,
   );
 
-  // Bucket D: seeded shuffle
-  seededShuffle(bucketD, seed + 200);
+  // Bucket D: seeded weighted shuffle by passability
+  const shuffledD = seededWeightedSample(
+    bucketD, pw, seed + 200, bucketD.length,
+  );
 
-  // Fill from buckets in order
+  // Fill from buckets in order, attach feedback + play history
   const recommendations = [];
   const seen = new Set();
   const pushRows = (rows) => {
@@ -336,6 +376,8 @@ function buildTitleGoalRecommendations({
       if (recommendations.length >= limit) break;
       if (seen.has(row.chart_id)) continue;
       seen.add(row.chart_id);
+      row.player_feedback = feedbackMap.get(row.chart_id) || null;
+      row.play_history = playHistoryMap.get(row.chart_id) || { logged_plays: 0, logged_passes: 0 };
       recommendations.push(row);
     }
   };
@@ -343,7 +385,7 @@ function buildTitleGoalRecommendations({
   pushRows(sortedBucketA);
   pushRows(bucketB);
   pushRows(shuffledC);
-  pushRows(bucketD);
+  pushRows(shuffledD);
 
   return {
     goal: 'title',
@@ -367,7 +409,10 @@ function buildTitleGoalRecommendations({
 // ---------------------------------------------------------------------------
 function buildPumbilityGoalRecommendations({
   db, userId, bestScores, songCatalog, aliases, mode, seed, limit,
+  feedbackMap, recentPlays,
 }) {
+  feedbackMap = feedbackMap || new Map();
+  const playHistoryMap = buildPlayHistoryMap(recentPlays, songCatalog, aliases);
   const modeFilter = mode === 'single' ? 'Single' : '';
   const metric = mode === 'single' ? 'singles' : 'overall';
 
@@ -390,29 +435,57 @@ function buildPumbilityGoalRecommendations({
     };
   }
 
+  // Helper: get feedback rating for a candidate by resolving chart_id
+  const getCandidateRating = (c) => {
+    const ck = makeChartKey(c.song_title, c.mode, c.level, aliases);
+    const chart = ck ? songCatalog.chartsByKey.get(ck) : null;
+    return chart ? (feedbackMap.get(chart.chart_id)?.passability_rating || null) : null;
+  };
+
+  /**
+   * If the top anchor has rating 5 ("Not yet"), try to swap with a nearby
+   * alternative (within 20% of the same metric) that has rating ≤ 3.
+   */
+  const maybeSwapAnchor = (sorted, metricFn) => {
+    const top = sorted[0];
+    if (!top) return top;
+    if (getCandidateRating(top) !== 5) return top;
+    const topVal = metricFn(top);
+    const threshold = topVal * 0.8; // 20% tolerance
+    for (let i = 1; i < sorted.length; i++) {
+      const alt = sorted[i];
+      const altRating = getCandidateRating(alt);
+      if (altRating != null && altRating > 3) continue;
+      if (metricFn(alt) >= threshold) return alt;
+    }
+    return top; // no suitable alternative
+  };
+
   // Pin anchor slots (same as piugame.js selection logic)
-  const easiest = [...candidates].sort((a, b) => {
+  const easiestSorted = [...candidates].sort((a, b) => {
     if (a.score_needed !== b.score_needed) return a.score_needed - b.score_needed;
     if (b.pumbility_gain !== a.pumbility_gain) return b.pumbility_gain - a.pumbility_gain;
     return b.impact_per_point - a.impact_per_point;
-  })[0];
+  });
+  const easiest = maybeSwapAnchor(easiestSorted, (c) => 1 / Math.max(c.score_needed, 1));
 
-  const bestEfficiency = [...candidates].sort((a, b) => {
+  const efficiencySorted = [...candidates].sort((a, b) => {
     if (b.impact_per_point !== a.impact_per_point) return b.impact_per_point - a.impact_per_point;
     if (b.pumbility_gain !== a.pumbility_gain) return b.pumbility_gain - a.pumbility_gain;
     return a.score_needed - b.score_needed;
-  })[0];
+  });
+  const bestEfficiency = maybeSwapAnchor(efficiencySorted, (c) => c.impact_per_point);
 
   const recommendations = [];
   const used = new Set();
 
   const enrichCandidate = (candidate, reasonType, reasonLabel) => {
-    // Enrich with catalog data using alias-aware chart key
     const chartKey = makeChartKey(candidate.song_title, candidate.mode, candidate.level, aliases);
     const catalogChart = chartKey ? songCatalog.chartsByKey.get(chartKey) : null;
+    const chartId = catalogChart ? catalogChart.chart_id : null;
 
     return {
-      chart_id: catalogChart ? catalogChart.chart_id : null,
+      chart_id: chartId,
       song_title: candidate.song_title,
       artist: catalogChart ? catalogChart.artist : '',
       mode: candidate.mode,
@@ -432,13 +505,19 @@ function buildPumbilityGoalRecommendations({
         pumbilityGain: candidate.pumbility_gain,
       }),
       skills: getChartSkillNames(catalogChart, 3),
+      player_feedback: chartId ? (feedbackMap.get(chartId) || null) : null,
+      play_history: chartId ? (playHistoryMap.get(chartId) || { logged_plays: 0, logged_passes: 0 }) : { logged_plays: 0, logged_passes: 0 },
     };
   };
 
   const pushCandidate = (candidate, reasonType, reasonLabel) => {
     if (!candidate || used.has(candidate._key)) return;
     used.add(candidate._key);
-    recommendations.push(enrichCandidate(candidate, reasonType, reasonLabel));
+    const enriched = enrichCandidate(candidate, reasonType, reasonLabel);
+    // Only include candidates with real chart_id
+    if (enriched.chart_id != null) {
+      recommendations.push(enriched);
+    }
   };
 
   // Pin easiest
@@ -453,11 +532,15 @@ function buildPumbilityGoalRecommendations({
     pushCandidate(bestEfficiency, 'best_impact', 'Best Efficiency');
   }
 
-  // Frontier fill: seeded weighted sample from remaining candidates
+  // Frontier fill: seeded weighted sample with passability weighting
   const remaining = candidates.filter((c) => !used.has(c._key));
-  const frontierCount = Math.max(0, limit - recommendations.length);
+  // Request more than needed to account for null chart_id filtering
+  const frontierCount = Math.max(0, (limit - recommendations.length) + 10);
   const frontier = seededWeightedSample(
-    remaining, (c) => c.impact_per_point, seed, frontierCount,
+    remaining,
+    (c) => c.impact_per_point * getPassabilityWeight(getCandidateRating(c)),
+    seed,
+    frontierCount,
   );
 
   for (const c of frontier) {

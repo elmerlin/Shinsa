@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { getGoalRecommendations } from '../utils/api';
 import GoalSummaryCard from '../components/recommendations/GoalSummaryCard';
 import RecommendationSongCard from '../components/recommendations/RecommendationSongCard';
+import RecommendationTrackSheet from '../components/recommendations/RecommendationTrackSheet';
 
 function GoalToggle({ goal, onChange }) {
   return (
@@ -80,6 +81,7 @@ export default function WhatToPlayPage() {
   const [loading, setLoading] = useState(false);
   const [animKey, setAnimKey] = useState(0);
   const [spinning, setSpinning] = useState(false);
+  const [trackTarget, setTrackTarget] = useState(null);
 
   const fetchData = useCallback(async (g, m, s) => {
     if (!user?.id) return;
@@ -111,6 +113,20 @@ export default function WhatToPlayPage() {
     setSpinning(true);
     setSeed(Date.now());
     setTimeout(() => setSpinning(false), 500);
+  };
+
+  const handleTrack = (rec) => setTrackTarget(rec);
+  const handleTrackClose = () => setTrackTarget(null);
+  const handleFeedbackSaved = (chartId, feedback) => {
+    // Patch local pill display immediately — no auto-refetch.
+    // Reranking happens on next manual Refresh (new seed).
+    setData((prev) => ({
+      ...prev,
+      recommendations: (prev?.recommendations || []).map((r) =>
+        r.chart_id === chartId ? { ...r, player_feedback: feedback } : r,
+      ),
+    }));
+    setTrackTarget(null);
   };
 
   if (!user) {
@@ -171,6 +187,7 @@ export default function WhatToPlayPage() {
                 goal={goal}
                 index={i}
                 animKey={animKey}
+                onTrack={handleTrack}
               />
             ))}
           </div>
@@ -185,6 +202,15 @@ export default function WhatToPlayPage() {
           </div>
         )}
       </div>
+
+      {/* Track sheet */}
+      <RecommendationTrackSheet
+        rec={trackTarget}
+        goal={goal}
+        open={!!trackTarget}
+        onClose={handleTrackClose}
+        onFeedbackSaved={handleFeedbackSaved}
+      />
     </div>
   );
 }

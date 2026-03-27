@@ -2100,6 +2100,32 @@ router.delete('/chart/:chartId/youtube', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// PUT /api/songs/chart/:chartId/feedback — save private chart feedback
+router.put('/chart/:chartId/feedback', requireAuth, (req, res) => {
+  const db = getDb();
+  const chartId = parseInt(req.params.chartId, 10);
+  if (!Number.isFinite(chartId) || chartId <= 0) {
+    return res.status(400).json({ error: 'Invalid chart ID' });
+  }
+  const chart = db.prepare('SELECT id FROM songs WHERE id = ?').get(chartId);
+  if (!chart) return res.status(404).json({ error: 'Chart not found' });
+
+  const rawRating = req.body.passability_rating;
+  const rating = rawRating != null ? parseInt(rawRating, 10) : null;
+  if (rating != null && (!Number.isFinite(rating) || rating < 1 || rating > 5)) {
+    return res.status(400).json({ error: 'passability_rating must be 1–5 or null' });
+  }
+  const note = String(req.body.note || '').trim().slice(0, 1000);
+
+  const { upsertChartFeedback } = require('../lib/chartFeedback');
+  const feedback = upsertChartFeedback(db, req.user.id, chartId, {
+    passability_rating: rating,
+    note,
+  });
+
+  res.json({ ok: true, feedback });
+});
+
 // GET /api/songs/chart/:chartId — chart page payload
 router.get('/chart/:chartId', optionalAuth, (req, res) => {
   const db = getDb();
@@ -3974,11 +4000,16 @@ router.get('/recommendations/goals', requireAuth, (req, res) => {
     const recentScores = queryUserRecentScores(db, userId);
     const pumbilityScores = queryUserPumbilityScores(db, userId);
 
+    const { getChartFeedbackMap } = require('../lib/chartFeedback');
+
     if (goal === 'pumbility') {
       const allowedModes = mode === 'single' ? ['Single'] : ['Single', 'Double'];
       const songCatalog = getSongCatalog(db, aliases, allowedModes);
+      const chartIds = songCatalog.charts.map((c) => c.chart_id);
+      const feedbackMap = getChartFeedbackMap(db, userId, chartIds);
       const result = buildPumbilityGoalRecommendations({
         db, userId, bestScores, songCatalog, aliases, mode, seed, limit,
+        feedbackMap, recentPlays: recentScores,
       });
       return res.json(result);
     }
@@ -3986,6 +4017,8 @@ router.get('/recommendations/goals', requireAuth, (req, res) => {
     // Title goal
     const modeFilter = mode === 'single' ? 'Single' : 'Double';
     const songCatalog = getSongCatalog(db, aliases, [modeFilter]);
+    const chartIds = songCatalog.charts.map((c) => c.chart_id);
+    const feedbackMap = getChartFeedbackMap(db, userId, chartIds);
     const { bestByChart, passBest, failBest } = buildUserBestByChartMap({
       bestScores, recentScores, pumbilityScores, aliases,
       validChartKeys: new Set(songCatalog.charts.map((c) => c.key)),
@@ -3993,6 +4026,7 @@ router.get('/recommendations/goals', requireAuth, (req, res) => {
 
     const result = buildTitleGoalRecommendations({
       db, userId, songCatalog, bestByChart, passBest, failBest, aliases, mode, seed, limit,
+      feedbackMap, recentPlays: recentScores,
     });
     return res.json(result);
   } catch (err) {
