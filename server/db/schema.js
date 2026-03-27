@@ -2142,20 +2142,6 @@ function initializeDb() {
     CREATE INDEX IF NOT EXISTS idx_new_clears_created ON user_new_clears(created_at);
     CREATE INDEX IF NOT EXISTS idx_new_clear_pumps ON new_clear_pumps(clear_id);
     CREATE INDEX IF NOT EXISTS idx_new_clear_comments ON new_clear_comments(clear_id);
-
-    CREATE TABLE IF NOT EXISTS play_comments (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      play_id INTEGER NOT NULL,
-      user_id TEXT NOT NULL,
-      parent_id INTEGER DEFAULT NULL,
-      content TEXT NOT NULL,
-      created_at TEXT DEFAULT (datetime('now')),
-      FOREIGN KEY (play_id) REFERENCES user_recently_played(id) ON DELETE CASCADE,
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-      FOREIGN KEY (parent_id) REFERENCES play_comments(id) ON DELETE CASCADE
-    );
-    CREATE INDEX IF NOT EXISTS idx_play_comments_play ON play_comments(play_id);
-    CREATE INDEX IF NOT EXISTS idx_play_comments_parent ON play_comments(parent_id);
   `);
 
   // Comment pumps table (pumps on any comment or reply)
@@ -3683,6 +3669,100 @@ function initializeDb() {
       status TEXT DEFAULT 'active',
       FOREIGN KEY (phase_id) REFERENCES tournament_phases(id) ON DELETE CASCADE,
       FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS weekly_challenge_weeks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      week_key TEXT UNIQUE NOT NULL,
+      timezone TEXT DEFAULT 'Europe/London',
+      starts_at_utc TEXT NOT NULL,
+      ends_at_utc TEXT NOT NULL,
+      challenge_min_level INTEGER DEFAULT 10,
+      challenge_max_level INTEGER NOT NULL,
+      chart_count INTEGER DEFAULT 0,
+      status TEXT DEFAULT 'active',
+      generated_at TEXT DEFAULT (datetime('now')),
+      closed_at TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS weekly_challenge_charts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      week_id INTEGER NOT NULL REFERENCES weekly_challenge_weeks(id) ON DELETE CASCADE,
+      chart_id INTEGER NOT NULL REFERENCES songs(id),
+      mode TEXT NOT NULL,
+      level INTEGER NOT NULL,
+      sort_order INTEGER DEFAULT 0,
+      song_title_snapshot TEXT DEFAULT '',
+      artist_snapshot TEXT DEFAULT '',
+      jacket_url_snapshot TEXT DEFAULT '',
+      UNIQUE(week_id, mode, level)
+    );
+
+    CREATE TABLE IF NOT EXISTS weekly_challenge_user_snapshots (
+      week_id INTEGER NOT NULL REFERENCES weekly_challenge_weeks(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      username_snapshot TEXT DEFAULT '',
+      avatar_snapshot TEXT DEFAULT '',
+      nationality_snapshot TEXT DEFAULT '',
+      skill_title_snapshot TEXT DEFAULT '',
+      skill_level_snapshot INTEGER DEFAULT 1,
+      skill_family_snapshot TEXT DEFAULT '',
+      first_seen_at TEXT DEFAULT (datetime('now')),
+      last_seen_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY(week_id, user_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS weekly_challenge_results (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      weekly_chart_id INTEGER NOT NULL REFERENCES weekly_challenge_charts(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      score INTEGER NOT NULL,
+      raw_grade TEXT DEFAULT '',
+      resolved_grade TEXT NOT NULL DEFAULT '',
+      plate TEXT DEFAULT '',
+      perfect INTEGER DEFAULT 0,
+      great INTEGER DEFAULT 0,
+      good INTEGER DEFAULT 0,
+      bad INTEGER DEFAULT 0,
+      miss INTEGER DEFAULT 0,
+      max_combo INTEGER DEFAULT 0,
+      rating_points INTEGER NOT NULL DEFAULT 0,
+      played_at TEXT NOT NULL,
+      source_play_id INTEGER DEFAULT NULL,
+      UNIQUE(weekly_chart_id, user_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS weekly_challenge_leaderboard (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      week_id INTEGER NOT NULL REFERENCES weekly_challenge_weeks(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      scope_mode TEXT NOT NULL DEFAULT 'both',
+      points INTEGER NOT NULL DEFAULT 0,
+      clears INTEGER NOT NULL DEFAULT 0,
+      total_score INTEGER NOT NULL DEFAULT 0,
+      best_result_achieved_at TEXT,
+      rank INTEGER DEFAULT 0,
+      UNIQUE(week_id, user_id, scope_mode)
+    );
+
+    CREATE TABLE IF NOT EXISTS weekly_challenge_awards (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      week_id INTEGER NOT NULL REFERENCES weekly_challenge_weeks(id) ON DELETE CASCADE,
+      award_key TEXT NOT NULL,
+      award_label TEXT DEFAULT '',
+      scope_mode TEXT DEFAULT '',
+      skill_family TEXT DEFAULT '',
+      user_id TEXT NOT NULL,
+      rank INTEGER NOT NULL,
+      points INTEGER DEFAULT 0,
+      clears INTEGER DEFAULT 0,
+      total_score INTEGER DEFAULT 0,
+      best_result_achieved_at TEXT,
+      username_snapshot TEXT DEFAULT '',
+      avatar_snapshot TEXT DEFAULT '',
+      nationality_snapshot TEXT DEFAULT '',
+      skill_title_snapshot TEXT DEFAULT '',
+      UNIQUE(week_id, award_key, rank)
     );
   `);
 

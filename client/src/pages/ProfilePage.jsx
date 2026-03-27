@@ -16,7 +16,7 @@ import {
   getProfileLiveSessions, updateLiveSessionProfileVisibility, deleteLiveSession,
   getOrCreateDirectConversation,
   createMessageStoryItem,
-  getPlayComments, addPlayComment, deletePlayComment,
+  getUserWeeklyChallengeHistory,
 } from '../utils/api';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag, getSkillColor, GENDER_SYMBOLS } from '../components/PlayerRegistration';
@@ -32,7 +32,6 @@ import LiveDirectoryCard from '../components/LiveDirectoryCard';
 import { getProfilePath } from '../utils/profile';
 import { parseGrade } from '../utils/grades';
 import ScoreSnapshotCard from '../components/ScoreSnapshotCard';
-import ItemCommentSection from '../components/ItemCommentSection';
 import { StoryShareModal, buildStoryDraft } from '../components/ScoreSnapshotModal';
 import SendToDirectMessageButton from '../components/SendToDirectMessageButton';
 import { buildScoreSnapshotLinkShare } from '../utils/directMessageShares';
@@ -1102,6 +1101,7 @@ export default function ProfilePage() {
   const [myFollowingIds, setMyFollowingIds] = useState(new Set());
   const [followBackLoading, setFollowBackLoading] = useState({});
   const [competitionsSub, setCompetitionsSub] = useState('tournaments');
+  const [weeklyChallengeHistory, setWeeklyChallengeHistory] = useState([]);
   const [songAnalytics, setSongAnalytics] = useState(null);
   const [profileLive, setProfileLive] = useState({ active_session: null, ended_sessions: [] });
   const [liveVisibilityBusyId, setLiveVisibilityBusyId] = useState('');
@@ -1199,6 +1199,9 @@ export default function ProfilePage() {
         if (Array.isArray(activityData)) setActivityItems(activityData);
         if (titleData) setPiuTitles(titleData);
         setProfileLive(liveData || { active_session: null, ended_sessions: [] });
+
+        // Load weekly challenge history (non-blocking)
+        getUserWeeklyChallengeHistory(uid).then(setWeeklyChallengeHistory).catch(() => {});
 
         if (authUser) {
           const status = await getFollowStatus(uid).catch(() => null);
@@ -3070,6 +3073,14 @@ export default function ProfilePage() {
             >
               Songs ({songScores.length})
             </button>
+            <button
+              onClick={() => setCompetitionsSub('weekly')}
+              className={`px-3 py-1 rounded text-[11px] font-display font-bold transition-colors ${
+                competitionsSub === 'weekly' ? 'bg-piu-dark text-white' : 'text-gray-500 hover:text-gray-300'
+              }`}
+            >
+              Weekly Challenges ({weeklyChallengeHistory.length})
+            </button>
           </div>
 
           {competitionsSub === 'tournaments' && (
@@ -3255,6 +3266,58 @@ export default function ProfilePage() {
                         {s.draw && <span className="text-gray-500 text-xs">D</span>}
                       </div>
                     </div>
+                  );
+                })
+              )}
+            </div>
+          )}
+
+          {competitionsSub === 'weekly' && (
+            <div className="space-y-2">
+              {weeklyChallengeHistory.length === 0 ? (
+                <p className="text-center text-gray-500 py-8">No weekly challenge participation yet</p>
+              ) : (
+                weeklyChallengeHistory.map(w => {
+                  const trophyAwards = (w.awards || []).filter(a => a.rank <= 3);
+                  return (
+                    <Link
+                      key={w.week_key}
+                      to={`/weekly-challenges?week=${w.week_key}`}
+                      className="card-hover flex items-center justify-between group py-2.5 px-3"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] font-display font-bold text-white">{w.week_key}</span>
+                          {trophyAwards.map(a => (
+                            <span key={`${a.award_key}-${a.rank}`} className="text-[10px]">
+                              {a.rank === 1 ? '🥇' : a.rank === 2 ? '🥈' : '🥉'}
+                            </span>
+                          ))}
+                        </div>
+                        <div className="flex items-center gap-3 mt-0.5">
+                          {w.overall && (
+                            <span className="text-[9px] text-white/40">
+                              Overall #{w.overall.rank}
+                              <span className="text-white/20 ml-1">{(w.overall.points || 0).toLocaleString()}pts</span>
+                            </span>
+                          )}
+                          {w.singles && (
+                            <span className="text-[9px] text-rose-400/50">S #{w.singles.rank}</span>
+                          )}
+                          {w.doubles && (
+                            <span className="text-[9px] text-emerald-400/50">D #{w.doubles.rank}</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className="text-[10px] font-display font-bold text-white/60">
+                          {(w.overall?.points || 0).toLocaleString()}<span className="text-white/25 ml-0.5">pts</span>
+                        </span>
+                        <span className="block text-[9px] text-white/30">
+                          {w.overall?.clears || 0} clears
+                        </span>
+                      </div>
+                    </Link>
                   );
                 })
               )}
@@ -4380,19 +4443,6 @@ export default function ProfilePage() {
                     skillTitle={profile?.skill_title || ''}
                     roleLabel={profile?.role_label || ''}
                   />
-                  {selectedPlay?.id && (
-                    <div className="mt-2 px-3 pb-3">
-                      <ItemCommentSection
-                        itemId={selectedPlay.id}
-                        commentType="play"
-                        getCommentsFn={getPlayComments}
-                        addCommentFn={addPlayComment}
-                        deleteCommentFn={deletePlayComment}
-                        initialOpen={false}
-                        ownerId={selectedPlay.user_id}
-                      />
-                    </div>
-                  )}
                 </div>
               </div>
               {classicStoryOpen && (() => {

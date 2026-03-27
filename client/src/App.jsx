@@ -26,7 +26,6 @@ import OnlineDuelRoom from './pages/OnlineDuelRoom';
 import FeedPage from './pages/FeedPage';
 import PostsPage from './pages/PostsPage';
 import { SinglePostPage, SingleUpscorePage, SingleClearPage } from './pages/SingleItemPage';
-import SinglePlayPage from './pages/SinglePlayPage';
 import CommunityPage from './pages/CommunityPage';
 import CommunitySetupPage from './pages/CommunitySetupPage';
 import CommunitySettingsPage from './pages/CommunitySettingsPage';
@@ -53,6 +52,7 @@ import MembershipPage from './pages/MembershipPage';
 import DojoPage from './pages/DojoPage';
 import LeaderboardsPage from './pages/LeaderboardsPage';
 import LivePage from './pages/LivePage';
+import WeeklyChallengesPage from './pages/WeeklyChallengesPage';
 import LiveOverlayPage from './pages/LiveOverlayPage';
 import TournamentWatch from './pages/TournamentWatch';
 import TournamentOverlay from './pages/TournamentOverlay';
@@ -1449,6 +1449,7 @@ export default function App() {
           <Route path="/account" element={<MyAccountPage />} />
         <Route path="/online-duel/new" element={<OnlineDuelSetup />} />
         <Route path="/online-duel/:id" element={<OnlineDuelRoom />} />
+        <Route path="/weekly-challenges" element={<WeeklyChallengesPage />} />
         <Route path="/live" element={<LivePage />} />
         <Route path="/live/:sessionId" element={<LivePage />} />
         <Route path="/live/:sessionId/overlay" element={<LiveOverlayPage />} />
@@ -1457,7 +1458,6 @@ export default function App() {
           <Route path="/post/:id" element={<SinglePostPage />} />
           <Route path="/upscore/:id" element={<SingleUpscorePage />} />
           <Route path="/clear/:id" element={<SingleClearPage />} />
-          <Route path="/play/:id" element={<SinglePlayPage />} />
           <Route path="/communities" element={<CommunitiesListPage />} />
           <Route path="/community/new" element={<CommunitySetupPage />} />
           <Route path="/c/:communityName" element={<CommunityPage />} />

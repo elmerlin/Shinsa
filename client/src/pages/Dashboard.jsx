@@ -9,6 +9,7 @@ import { extractCommunityPalette, getCommunityCardStyle } from '../utils/communi
 import LiveDirectoryCard from '../components/LiveDirectoryCard';
 import ArchiveBrowser from '../components/tournament/ArchiveBrowser';
 import DailyHighlights from '../components/DailyHighlights';
+import WeeklyChallengesSummary from '../components/weeklyChallenges/WeeklyChallengesSummary';
 
 function timeAgo(dateStr) {
   const date = new Date(dateStr + (dateStr.endsWith('Z') ? '' : 'Z'));
@@ -470,6 +471,8 @@ export default function Dashboard() {
       {dailyHighlights && searchResults === null && (
         <DailyHighlights data={dailyHighlights} jacketLookup={jacketLookup} chartKeyMap={chartKeyMap} />
       )}
+
+      {searchResults === null && <WeeklyChallengesSummary />}
 
       {/* Communities Section */}
       {featuredCommunities.length > 0 && searchResults === null && (
