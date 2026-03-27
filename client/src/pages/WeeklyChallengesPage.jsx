@@ -164,32 +164,31 @@ export default function WeeklyChallengesPage() {
             </div>
           )}
 
-          {/* Sticky filters — leaderboard scope + skill family */}
+          {/* Sticky filters — leaderboard mode scope */}
           <div className="sticky top-0 z-30 bg-[#0a0a10]/95 backdrop-blur-sm -mx-4 px-4 py-2 mb-3 border-b border-white/[0.04]">
             <div className="flex flex-wrap gap-1 items-center">
               <span className="text-[8px] font-display font-bold text-white/25 uppercase mr-1">Board</span>
               <FilterChip label="Both" active={leaderboardMode === 'both'} onClick={() => setLeaderboardMode('both')} />
               <FilterChip label="Singles" active={leaderboardMode === 'single'} onClick={() => setLeaderboardMode('single')} />
               <FilterChip label="Doubles" active={leaderboardMode === 'double'} onClick={() => setLeaderboardMode('double')} />
-
-              <span className="text-white/10 mx-1">|</span>
-
-              <span className="text-[8px] font-display font-bold text-white/25 uppercase mr-1">Skill</span>
-              <FilterChip label="Everyone" active={skillFamily === 'all'} onClick={() => setSkillFamily('all')} />
-              <FilterChip label="Intermediate" active={skillFamily === 'intermediate'} onClick={() => setSkillFamily('intermediate')} />
-              <FilterChip label="Advanced" active={skillFamily === 'advanced'} onClick={() => setSkillFamily('advanced')} />
-              <FilterChip label="Expert" active={skillFamily === 'expert'} onClick={() => setSkillFamily('expert')} />
             </div>
           </div>
 
           {/* Leaderboard */}
           <div className="mb-5">
-            <h3 className="font-display text-[9px] font-black tracking-[0.14em] uppercase text-white/40 mb-2">
-              Leaderboard
-              {weekData.participantCount > 0 && (
-                <span className="ml-1.5 text-white/20">({weekData.participantCount})</span>
-              )}
-            </h3>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-display text-[9px] font-black tracking-[0.14em] uppercase text-white/40">
+                Leaderboard
+                {weekData.participantCount > 0 && (
+                  <span className="ml-1.5 text-white/20">({weekData.participantCount})</span>
+                )}
+              </h3>
+              <div className="flex gap-1 items-center">
+                <FilterChip label="Everyone" active={skillFamily === 'all'} onClick={() => setSkillFamily('all')} />
+                <FilterChip label="Intermediate" active={skillFamily === 'intermediate'} onClick={() => setSkillFamily('intermediate')} />
+                <FilterChip label="Advanced" active={skillFamily === 'advanced'} onClick={() => setSkillFamily('advanced')} />
+              </div>
+            </div>
             <WeeklyChallengeLeaderboard leaderboard={weekData.leaderboard} />
           </div>
 

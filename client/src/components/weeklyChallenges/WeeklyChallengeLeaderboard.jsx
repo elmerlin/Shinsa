@@ -64,11 +64,11 @@ export default function WeeklyChallengeLeaderboard({ leaderboard = [], maxRows =
               {entry.username}
             </Link>
 
-            <div className="flex items-center gap-3 shrink-0">
-              <span className="text-[10px] font-display font-bold text-white/70">
-                {(entry.points || 0).toLocaleString()}<span className="text-white/30 ml-0.5">pts</span>
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-[10px] font-display font-bold text-white/70 tabular-nums">
+                {(entry.points || 0).toLocaleString()}<span className="text-white/30 ml-0.5 text-[8px]">pts</span>
               </span>
-              <span className="text-[10px] font-display text-white/40">
+              <span className="text-[9px] font-display text-white/40 tabular-nums">
                 {entry.clears || 0}<span className="ml-0.5">clr</span>
               </span>
             </div>
@@ -94,11 +94,11 @@ export default function WeeklyChallengeLeaderboard({ leaderboard = [], maxRows =
               )}
               {viewerEntry.username}
             </span>
-            <div className="flex items-center gap-3 shrink-0">
-              <span className="text-[10px] font-display font-bold text-white/70">
-                {(viewerEntry.points || 0).toLocaleString()}<span className="text-white/30 ml-0.5">pts</span>
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-[10px] font-display font-bold text-white/70 tabular-nums">
+                {(viewerEntry.points || 0).toLocaleString()}<span className="text-white/30 ml-0.5 text-[8px]">pts</span>
               </span>
-              <span className="text-[10px] font-display text-white/40">
+              <span className="text-[9px] font-display text-white/40 tabular-nums">
                 {viewerEntry.clears || 0}<span className="ml-0.5">clr</span>
               </span>
             </div>
