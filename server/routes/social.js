@@ -1541,6 +1541,24 @@ router.get('/feed', requireAuth, (req, res) => {
 
     for (const wcp of wcPlays) {
       wcp.avatar = normalizeUserAvatarForList(wcp.avatar, wcp.user_id, 64);
+      // Enrich plays_json entries with judgments, replay URLs, and play_id
+      try {
+        const parsedPlays = JSON.parse(wcp.plays_json || '[]');
+        const enriched = parsedPlays.map(p => {
+          if (p.play_id && p.perfect > 0) return p; // already enriched
+          const rp = db.prepare(`
+            SELECT id as play_id, perfect, great, good, bad, miss, max_combo, plate,
+                   replay_embed_url, replay_video_id, replay_start_seconds, replay_end_seconds,
+                   date_played, played_at_utc
+            FROM user_recently_played
+            WHERE user_id = ? AND song_title = ? AND mode = ? AND level = ? AND score = ?
+            ORDER BY id DESC LIMIT 1
+          `).get(wcp.user_id, p.song_title, p.mode, p.level, p.score);
+          if (!rp) return p;
+          return { ...p, ...rp, play_id: rp.play_id };
+        });
+        wcp.plays_json = JSON.stringify(enriched);
+      } catch {}
       itemMap.set(`weekly_challenge:${wcp.id}`, wcp);
     }
   }
