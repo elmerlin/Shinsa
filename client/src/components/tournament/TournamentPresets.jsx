@@ -1,4 +1,6 @@
 import React from 'react';
+import { Badge } from '../ui/badge';
+import { Card, CardContent } from '../ui/card';
 
 const PRESETS = [
   {
@@ -202,13 +204,28 @@ export default function TournamentPresets({ onSelect }) {
             key={preset.id}
             type="button"
             onClick={() => onSelect(preset.phases)}
-            className={`card border text-left p-3 transition-all cursor-pointer ${preset.color}`}
+            className="text-left"
           >
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-lg">{preset.icon}</span>
-              <span className="font-display font-bold text-sm text-white">{preset.name}</span>
-            </div>
-            <p className="text-[10px] text-gray-400 leading-relaxed">{preset.description}</p>
+            <Card className={`h-full border transition-all hover:-translate-y-0.5 ${preset.color}`}>
+              <CardContent className="flex h-full flex-col gap-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-black/20 text-xl shadow-[0_12px_24px_rgba(0,0,0,0.24)]">
+                      {preset.icon}
+                    </div>
+                    <div>
+                      <p className="font-display text-base font-bold text-white">{preset.name}</p>
+                      <p className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">
+                        {preset.phases.length} phase{preset.phases.length === 1 ? '' : 's'}
+                      </p>
+                    </div>
+                  </div>
+                  <Badge variant="default">Preset</Badge>
+                </div>
+
+                <p className="text-sm leading-relaxed text-zinc-300">{preset.description}</p>
+              </CardContent>
+            </Card>
           </button>
         ))}
       </div>

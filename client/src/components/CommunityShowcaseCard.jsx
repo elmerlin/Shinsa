@@ -53,12 +53,12 @@ export default function CommunityShowcaseCard({ community, palette, action = nul
                 <img
                   src={getAvatarUrl(community.avatar)}
                   alt={title}
-                  className="h-14 w-14 rounded-2xl object-cover ring-1 ring-white/10 shadow-[0_14px_30px_rgba(0,0,0,0.28)]"
+                  className="h-14 w-14 rounded-xl object-cover ring-1 ring-white/10 shadow-[0_14px_30px_rgba(0,0,0,0.28)]"
                   loading="lazy"
                   decoding="async"
                 />
               ) : (
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-piu-accent/70 to-sky-500/70 font-display text-2xl font-bold text-white ring-1 ring-white/10 shadow-[0_14px_30px_rgba(0,0,0,0.28)]">
+                <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-gradient-to-br from-piu-accent/70 to-sky-500/70 font-display text-2xl font-bold text-white ring-1 ring-white/10 shadow-[0_14px_30px_rgba(0,0,0,0.28)]">
                   {title.charAt(0).toUpperCase()}
                 </div>
               )}

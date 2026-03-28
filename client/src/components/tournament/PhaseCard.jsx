@@ -1,5 +1,7 @@
 import React from 'react';
 import { FORMAT_LABELS, FORMAT_DESCRIPTIONS, FORMAT_ICONS, ADVANCEMENT_TYPES } from '../../utils/tournamentConstants';
+import { Badge } from '../ui/badge';
+import { Card, CardContent } from '../ui/card';
 
 const FORMAT_COLORS = {
   round_robin: 'border-sky-400/40 bg-sky-500/8',
@@ -85,81 +87,79 @@ export default function PhaseCard({
         <div className="absolute left-6 -bottom-4 w-px h-4 bg-piu-border/60" />
       )}
 
-      <div
-        className={`card border ${colorClass} transition-all ${isExpanded ? 'ring-1 ring-piu-accent/30' : 'cursor-pointer hover:border-piu-accent/40'}`}
+      <Card
+        className={`border ${colorClass} transition-all ${isExpanded ? 'ring-1 ring-piu-accent/30' : 'cursor-pointer hover:border-piu-accent/40'} overflow-hidden`}
         onClick={!isExpanded ? onToggle : undefined}
       >
-        <div className="flex items-start gap-3">
-          {/* Phase number */}
-          <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-piu-border/50 bg-piu-dark font-display text-sm font-bold ${textColor}`}>
-            {index + 1}
-          </div>
+        <CardContent className="space-y-4">
+          <div className="flex items-start gap-3">
+            <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-piu-border/50 bg-piu-dark font-display text-sm font-bold ${textColor}`}>
+              {index + 1}
+            </div>
 
-          {/* Phase info */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-lg">{FORMAT_ICONS[format] || ''}</span>
-              <h3 className={`font-display font-bold text-sm ${textColor}`}>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="secondary">
+                  <span aria-hidden="true">{FORMAT_ICONS[format] || ''}</span>
+                  <span>{FORMAT_LABELS[format] || format}</span>
+                </Badge>
+                {advancementSummary ? <Badge variant="default">{advancementSummary}</Badge> : null}
+              </div>
+              <h3 className={`mt-3 font-display text-lg font-bold ${textColor}`}>
                 {phase.name || FORMAT_LABELS[format] || format}
               </h3>
-              {configSummary && (
-                <span className="text-[10px] text-gray-500 font-mono">{configSummary}</span>
-              )}
-            </div>
-            {advancementSummary && (
-              <p className="text-[10px] text-gray-400 mt-1 flex items-center gap-1">
-                <span className="text-piu-green">&#9654;</span> {advancementSummary}
+              <p className="mt-1 text-sm leading-relaxed text-zinc-400">
+                {configSummary || FORMAT_DESCRIPTIONS[format] || 'Configure this phase.'}
               </p>
-            )}
-          </div>
+            </div>
 
-          {/* Actions */}
-          <div className="flex items-center gap-1 shrink-0">
-            {index > 0 && (
+            <div className="flex items-center gap-1 shrink-0">
+              {index > 0 && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onMoveUp?.(); }}
+                  className="rounded-full border border-white/8 bg-white/5 px-2 py-1 text-xs text-zinc-400 transition-colors hover:text-white"
+                  title="Move up"
+                >
+                  &#9650;
+                </button>
+              )}
+              {index < total - 1 && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onMoveDown?.(); }}
+                  className="rounded-full border border-white/8 bg-white/5 px-2 py-1 text-xs text-zinc-400 transition-colors hover:text-white"
+                  title="Move down"
+                >
+                  &#9660;
+                </button>
+              )}
               <button
                 type="button"
-                onClick={(e) => { e.stopPropagation(); onMoveUp?.(); }}
-                className="p-1 text-gray-500 hover:text-white transition-colors"
-                title="Move up"
+                onClick={(e) => { e.stopPropagation(); onRemove?.(); }}
+                className="rounded-full border border-white/8 bg-white/5 px-2 py-1 text-xs text-zinc-400 transition-colors hover:text-piu-accent"
+                title="Remove phase"
               >
-                &#9650;
+                &#10005;
               </button>
-            )}
-            {index < total - 1 && (
               <button
                 type="button"
-                onClick={(e) => { e.stopPropagation(); onMoveDown?.(); }}
-                className="p-1 text-gray-500 hover:text-white transition-colors"
-                title="Move down"
+                onClick={(e) => { e.stopPropagation(); onToggle?.(); }}
+                className="rounded-full border border-white/8 bg-white/5 px-2 py-1 text-xs text-zinc-400 transition-colors hover:text-white"
+                title={isExpanded ? 'Collapse phase' : 'Expand phase'}
               >
-                &#9660;
+                {isExpanded ? '\u25BC' : '\u25B6'}
               </button>
-            )}
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); onRemove?.(); }}
-              className="p-1 text-gray-500 hover:text-piu-accent transition-colors"
-              title="Remove phase"
-            >
-              &#10005;
-            </button>
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); onToggle?.(); }}
-              className="p-1 text-gray-500 hover:text-white transition-colors"
-            >
-              {isExpanded ? '\u25BC' : '\u25B6'}
-            </button>
+            </div>
           </div>
-        </div>
 
-        {/* Expanded config panel */}
-        {isExpanded && (
-          <div className="mt-4 pt-4 border-t border-piu-border/40 animate-fade-in" onClick={(e) => e.stopPropagation()}>
-            {children}
-          </div>
-        )}
-      </div>
+          {isExpanded && (
+            <div className="border-t border-piu-border/40 pt-4 animate-fade-in" onClick={(e) => e.stopPropagation()}>
+              {children}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

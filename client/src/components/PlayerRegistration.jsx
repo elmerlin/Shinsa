@@ -1,9 +1,11 @@
 import React, { useState, useCallback } from 'react';
-import { createPlayer, updatePlayer, deletePlayer, searchUsers, sendInvitation } from '../utils/api';
-import AvatarPicker, { getAvatarUrl } from './AvatarPicker';
+import { createPlayer, deletePlayer, searchUsers, sendInvitation } from '../utils/api';
+import { getAvatarUrl } from './AvatarPicker';
 import { Link } from 'react-router-dom';
 import { getProfilePath } from '../utils/profile';
 import SeedingPanel from './tournament/SeedingPanel';
+import { Badge } from './ui/badge';
+import { Card, CardContent } from './ui/card';
 
 export const SKILL_TITLES = ['Beginner', 'Intermediate', 'Advanced', 'Expert'];
 export const SKILL_LEVELS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
@@ -264,23 +266,35 @@ const avatarColors = [
   'from-teal-500 to-green-500',
 ];
 
+function MetaPill({ children }) {
+  if (!children) return null;
+  return (
+    <span className="inline-flex items-center rounded-full border border-white/8 bg-white/6 px-2.5 py-1 text-[11px] text-zinc-300">
+      {children}
+    </span>
+  );
+}
+
 export default function PlayerRegistration({ tournamentId, players, isSetup, onUpdate }) {
   const [showForm, setShowForm] = useState(false);
-  const [editingPlayer, setEditingPlayer] = useState(null);
-  const [form, setForm] = useState({
-    name: '', skill_title: 'Beginner', skill_level: 1, pumbility: '', description: '', avatar: '', gender: '', nationality: '', user_id: '',
-  });
-  const [saving, setSaving] = useState(false);
   const [userSearch, setUserSearch] = useState('');
   const [userResults, setUserResults] = useState([]);
   const [searching, setSearching] = useState(false);
   const [inviteSent, setInviteSent] = useState({});
+  const [savingUserId, setSavingUserId] = useState('');
+
+  const registeredUserIds = new Set(
+    players
+      .map((player) => String(player.user_id || '').trim())
+      .filter(Boolean)
+  );
 
   const handleUserSearch = useCallback(async (q) => {
-    if (q.length < 1) { setUserResults([]); return; }
+    const query = String(q || '').trim();
+    if (query.length < 1) { setUserResults([]); return; }
     setSearching(true);
     try {
-      const results = await searchUsers(q);
+      const results = await searchUsers(query);
       setUserResults(results);
     } catch (e) {
       setUserResults([]);
@@ -288,23 +302,6 @@ export default function PlayerRegistration({ tournamentId, players, isSetup, onU
       setSearching(false);
     }
   }, []);
-
-  const fillFromUser = (user) => {
-    const titleParts = (user.skill_title || '').match(/^(Beginner|Intermediate|Advanced|Expert)\s*lvl\.\s*(\d+)/);
-    setForm({
-      name: user.username,
-      skill_title: titleParts ? titleParts[1] : 'Beginner',
-      skill_level: titleParts ? parseInt(titleParts[2]) : 1,
-      pumbility: user.pumbility || '',
-      description: user.description || '',
-      avatar: user.avatar || '',
-      gender: user.gender || '',
-      nationality: user.nationality || '',
-      user_id: user.id,
-    });
-    setUserSearch('');
-    setUserResults([]);
-  };
 
   const handleInviteUser = async (user) => {
     try {
@@ -315,373 +312,276 @@ export default function PlayerRegistration({ tournamentId, players, isSetup, onU
     }
   };
 
-  const resetForm = () => {
-    setForm({ name: '', skill_title: 'Beginner', skill_level: 1, pumbility: '', description: '', avatar: '', gender: '', nationality: '', user_id: '' });
-    setEditingPlayer(null);
+  const resetPicker = () => {
     setUserSearch('');
     setUserResults([]);
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!form.name.trim()) return;
-    setSaving(true);
+  const handleAddUser = async (user) => {
+    if (!user?.id || registeredUserIds.has(String(user.id))) return;
+    setSavingUserId(String(user.id));
     try {
-      const payload = {
-        name: form.name,
-        skill_title: `${form.skill_title} lvl. ${form.skill_level}`,
-        skill_level: parseInt(form.skill_level) || 1,
-        description: form.description,
-        avatar: form.avatar,
-        gender: form.gender,
-        nationality: form.nationality,
-      };
-
-      if (editingPlayer) {
-        await updatePlayer(editingPlayer.id, payload);
-      } else {
-        await createPlayer({
-          tournament_id: tournamentId,
-          pumbility: parseInt(form.pumbility) || 0,
-          user_id: form.user_id || '',
-          ...payload,
-        });
-      }
-      resetForm();
-      setShowForm(false);
+      await createPlayer({
+        tournament_id: tournamentId,
+        user_id: user.id,
+      });
+      resetPicker();
       onUpdate();
     } catch (err) {
       alert(err.message);
     } finally {
-      setSaving(false);
+      setSavingUserId('');
     }
-  };
-
-  const handleEdit = (player) => {
-    const titleParts = (player.skill_title || '').match(/^(Beginner|Intermediate|Advanced|Expert)\s*lvl\.\s*(\d+)/);
-    setForm({
-      name: player.name,
-      skill_title: titleParts ? titleParts[1] : 'Beginner',
-      skill_level: titleParts ? parseInt(titleParts[2]) : (player.skill_level || 1),
-      pumbility: player.pumbility || '',
-      description: player.description || '',
-      avatar: player.avatar || '',
-      gender: player.gender || '',
-      nationality: player.nationality || '',
-    });
-    setEditingPlayer(player);
-    setShowForm(true);
   };
 
   const handleDelete = async (playerId) => {
     if (!confirm('Remove this player?')) return;
-    await deletePlayer(playerId);
-    onUpdate();
-  };
-
-  const handleCancel = () => {
-    resetForm();
-    setShowForm(false);
+    try {
+      await deletePlayer(playerId);
+      onUpdate();
+    } catch (err) {
+      alert(err.message);
+    }
   };
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="section-title">Players ({players.length})</h2>
-        {!showForm && (
-          <button onClick={() => { resetForm(); setShowForm(true); }} className="btn-primary">
-            {isSetup ? '+ Add Player' : 'Edit Players'}
+    <div className="space-y-4">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="section-title">Players ({players.length})</h2>
+          <p className="mt-1 text-sm text-zinc-400">
+            Tournament entries are tied to registered Shinsa profiles. Player details stay read-only here.
+          </p>
+        </div>
+        {isSetup && !showForm && (
+          <button
+            type="button"
+            onClick={() => setShowForm(true)}
+            className="btn-primary"
+          >
+            + Add Registered Player
           </button>
         )}
       </div>
 
-      {showForm && (
-        <form onSubmit={handleSubmit} className="card mb-6 space-y-4 animate-slide-up">
-          <h3 className="font-display font-bold text-piu-accent">
-            {editingPlayer ? `Edit: ${editingPlayer.name}` : 'Add New Player'}
-          </h3>
-
-          {/* Search registered users */}
-          {!editingPlayer && (
-            <div className="space-y-2">
-              <label className="block text-sm text-gray-400">Search registered players</label>
-              <input
-                type="text"
-                className="input-field"
-                placeholder="Type a username to search..."
-                value={userSearch}
-                onChange={e => {
-                  setUserSearch(e.target.value);
-                  handleUserSearch(e.target.value);
-                }}
-              />
-              {form.user_id && (
-                <div className="flex items-center gap-2 text-xs text-piu-green bg-piu-green/10 px-3 py-1.5 rounded-lg">
-                  <span>Linked to registered user: <strong>{form.name}</strong></span>
-                  <button type="button" onClick={() => setForm(f => ({ ...f, user_id: '' }))} className="text-gray-400 hover:text-red-400 ml-auto">
-                    &#10005;
-                  </button>
+      {isSetup && (
+        <Card className="overflow-hidden border-white/8 bg-[radial-gradient(circle_at_top_left,rgba(255,51,102,0.14),transparent_34%),radial-gradient(circle_at_85%_15%,rgba(58,170,255,0.16),transparent_28%),rgba(9,12,22,0.9)]">
+          <CardContent className="flex flex-col gap-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="secondary">Registered Players Only</Badge>
+                  <MetaPill>Profiles stay read-only in tournament setup</MetaPill>
                 </div>
+                <p className="max-w-3xl text-sm leading-relaxed text-zinc-300">
+                  Search for existing Shinsa members and add them directly to the bracket. Names, avatars, flags, skill titles, and pumbility all come from each player&apos;s own account.
+                </p>
+              </div>
+              {showForm && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    resetPicker();
+                    setShowForm(false);
+                  }}
+                  className="btn-secondary"
+                >
+                  Close Picker
+                </button>
               )}
-              {userResults.length > 0 && (
-                <div className="bg-piu-dark border border-piu-border rounded-lg overflow-hidden">
-                  {userResults.map(u => (
-                    <div key={u.id} className="flex items-center gap-3 px-3 py-2 hover:bg-piu-card/50 transition-colors border-b border-piu-border/50 last:border-0">
-                      {u.avatar ? (
-                        <img src={getAvatarUrl(u.avatar)} alt="" className="w-8 h-8 rounded-full object-cover shrink-0" />
-                      ) : (
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-xs shrink-0">
-                          {u.username[0].toUpperCase()}
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-display font-bold truncate">{u.username}</p>
-                        <div className="flex items-center gap-1 text-xs text-gray-500">
-                          {u.nationality && <span>{getCountryFlag(u.nationality)}</span>}
-                          {u.skill_title && <span className={`badge border text-[10px] ${getSkillColor(u.skill_title)}`}>{u.skill_title}</span>}
-                          {u.pumbility > 0 && <span className="text-piu-gold font-mono">{u.pumbility}</span>}
-                        </div>
-                      </div>
-                      <div className="flex gap-1 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => fillFromUser(u)}
-                          className="px-2 py-1 bg-piu-accent/20 text-piu-accent text-xs font-display font-bold rounded hover:bg-piu-accent/30 transition-colors"
-                        >
-                          Add directly
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleInviteUser(u)}
-                          disabled={inviteSent[u.id]}
-                          className="px-2 py-1 bg-blue-500/20 text-blue-400 text-xs font-display font-bold rounded hover:bg-blue-500/30 transition-colors disabled:opacity-50"
-                        >
-                          {inviteSent[u.id] ? 'Sent' : 'Invite'}
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+            </div>
+
+            {showForm ? (
+              <div className="rounded-[1rem] border border-white/8 bg-black/20 p-4">
+                <label className="block text-sm text-zinc-300">Search registered players</label>
+                <div className="mt-2 flex flex-col gap-3 sm:flex-row">
+                  <input
+                    type="text"
+                    className="input-field"
+                    placeholder="Type a username to search..."
+                    value={userSearch}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      setUserSearch(value);
+                      handleUserSearch(value);
+                    }}
+                    autoFocus
+                  />
                 </div>
-              )}
-              {searching && <p className="text-xs text-gray-500">Searching...</p>}
-            </div>
-          )}
 
-          {/* Avatar picker */}
-          <AvatarPicker
-            value={form.avatar}
-            onChange={(avatar) => setForm(f => ({ ...f, avatar }))}
-            shape="circle"
-            size="md"
-          />
+                <div className="mt-3 flex flex-wrap gap-2 text-xs text-zinc-500">
+                  <MetaPill>Add from the player&apos;s live profile snapshot</MetaPill>
+                  <MetaPill>Remove from the tournament if plans change</MetaPill>
+                </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">Player Name *</label>
-              <input
-                type="text"
-                className="input-field"
-                placeholder="Player name"
-                value={form.name}
-                onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                required
-                autoFocus
-              />
-            </div>
-            {!editingPlayer ? (
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">Pumbility (Seeding)</label>
-                <input
-                  type="number"
-                  className="input-field"
-                  placeholder="e.g. 2500"
-                  value={form.pumbility}
-                  onChange={e => setForm(f => ({ ...f, pumbility: e.target.value }))}
-                />
+                {searching && <p className="mt-4 text-sm text-zinc-500">Searching players...</p>}
+                {!searching && userSearch.trim() && userResults.length === 0 && (
+                  <p className="mt-4 text-sm text-zinc-500">No registered players matched that search.</p>
+                )}
+                {!searching && !userSearch.trim() && (
+                  <p className="mt-4 text-sm text-zinc-500">Start typing to find registered Shinsa members.</p>
+                )}
+
+                {userResults.length > 0 && (
+                  <div className="mt-4 space-y-2">
+                    {userResults.map((user) => {
+                      const alreadyAdded = registeredUserIds.has(String(user.id || '').trim());
+                      const isSaving = savingUserId === String(user.id);
+                      return (
+                        <div
+                          key={user.id}
+                          className="flex flex-col gap-3 rounded-[1rem] border border-white/8 bg-zinc-950/70 p-3 sm:flex-row sm:items-center"
+                        >
+                          {user.avatar ? (
+                            <img
+                              src={getAvatarUrl(user.avatar)}
+                              alt=""
+                              className="h-11 w-11 rounded-full object-cover ring-1 ring-white/10"
+                            />
+                          ) : (
+                            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-piu-accent to-purple-700 font-display text-sm font-bold text-white ring-1 ring-white/10">
+                              {String(user.username || '?').charAt(0).toUpperCase()}
+                            </div>
+                          )}
+
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="truncate font-display text-sm font-bold text-white">{user.username}</p>
+                              {user.nationality ? <span className="text-base">{getCountryFlag(user.nationality)}</span> : null}
+                              <Badge variant={alreadyAdded ? 'warning' : 'default'}>
+                                {alreadyAdded ? 'Already Added' : 'Registered'}
+                              </Badge>
+                            </div>
+                            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                              {user.skill_title ? (
+                                <span className={`badge border ${getSkillColor(user.skill_title)}`}>{user.skill_title}</span>
+                              ) : null}
+                              {user.pumbility > 0 ? (
+                                <MetaPill>{Number(user.pumbility).toLocaleString()} pumbility</MetaPill>
+                              ) : null}
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap gap-2 sm:justify-end">
+                            <button
+                              type="button"
+                              onClick={() => handleAddUser(user)}
+                              disabled={alreadyAdded || isSaving}
+                              className="btn-primary"
+                            >
+                              {alreadyAdded ? 'Added' : isSaving ? 'Adding...' : 'Add Player'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleInviteUser(user)}
+                              disabled={inviteSent[user.id]}
+                              className="btn-secondary"
+                            >
+                              {inviteSent[user.id] ? 'Invite Sent' : 'Invite'}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             ) : (
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">Pumbility (locked)</label>
-                <input
-                  type="number"
-                  className="input-field opacity-50"
-                  value={editingPlayer.pumbility || 0}
-                  disabled
-                />
+              <div className="rounded-[1rem] border border-dashed border-white/10 bg-black/15 px-4 py-4 text-sm text-zinc-400">
+                Open the picker to add existing Shinsa members to the tournament. If someone needs a different name, avatar, or country, they should update their own profile first.
               </div>
             )}
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">Skill Title</label>
-              <select
-                className="input-field"
-                value={form.skill_title}
-                onChange={e => setForm(f => ({ ...f, skill_title: e.target.value }))}
-              >
-                {SKILL_TITLES.map(t => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">Skill Level</label>
-              <select
-                className="input-field"
-                value={form.skill_level}
-                onChange={e => setForm(f => ({ ...f, skill_level: parseInt(e.target.value) }))}
-              >
-                {SKILL_LEVELS.map(l => (
-                  <option key={l} value={l}>Level {l}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">Gender</label>
-              <select
-                className="input-field"
-                value={form.gender}
-                onChange={e => setForm(f => ({ ...f, gender: e.target.value }))}
-              >
-                {GENDER_OPTIONS.map(g => (
-                  <option key={g.value} value={g.value}>{g.label}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">Nationality</label>
-              <select
-                className="input-field"
-                value={form.nationality}
-                onChange={e => setForm(f => ({ ...f, nationality: e.target.value }))}
-              >
-                {COUNTRIES.map(c => (
-                  <option key={c.code} value={c.code}>{c.flag ? `${c.flag} ` : ''}{c.name}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm text-gray-400 mb-1">Description</label>
-            <textarea
-              className="input-field resize-none"
-              rows="2"
-              placeholder="Short bio or notes about the player..."
-              value={form.description}
-              onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-            />
-          </div>
-
-          {/* Skill preview */}
-          <div className="flex items-center gap-2 text-sm">
-            <span className="text-gray-500">Preview:</span>
-            {form.nationality && (
-              <span className="text-base">{getCountryFlag(form.nationality)}</span>
-            )}
-            <span className={`badge border ${getSkillColor(form.skill_title)}`}>
-              {form.skill_title} lvl. {form.skill_level}
-            </span>
-            {form.gender && (
-              <span className={`text-sm ${form.gender === 'male' ? 'text-blue-400' : 'text-pink-400'}`}>
-                {GENDER_SYMBOLS[form.gender]}
-              </span>
-            )}
-          </div>
-
-          <div className="flex gap-3">
-            <button type="submit" className="btn-primary flex-1" disabled={saving}>
-              {saving ? 'Saving...' : editingPlayer ? 'Save Changes' : 'Add Player'}
-            </button>
-            <button type="button" onClick={handleCancel} className="btn-secondary">
-              Cancel
-            </button>
-          </div>
-        </form>
+          </CardContent>
+        </Card>
       )}
 
-      <div className="grid gap-3">
-        {players.map((player, idx) => {
-          const genderSymbol = player.gender ? GENDER_SYMBOLS[player.gender] || '' : '';
-          const flag = getCountryFlag(player.nationality);
+      {players.length === 0 ? (
+        <Card className="border-dashed border-white/10 bg-zinc-950/45">
+          <CardContent className="py-12 text-center">
+            <p className="text-lg font-display font-bold text-zinc-200">No players registered yet</p>
+            <p className="mt-2 text-sm text-zinc-500">
+              {isSetup ? 'Use Add Registered Player to bring in participants from their Shinsa accounts.' : 'Players will appear here once the tournament organizer adds them.'}
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-3">
+          {players.map((player, idx) => {
+            const genderSymbol = player.gender ? GENDER_SYMBOLS[player.gender] || '' : '';
+            const flag = getCountryFlag(player.nationality);
 
-          return (
-            <div key={player.id} className="card flex items-center gap-3 sm:gap-4 group">
-              <div className="text-gray-600 font-mono text-sm w-6 text-right shrink-0">
-                #{idx + 1}
-              </div>
+            return (
+              <Card key={player.id} className="overflow-hidden border-white/8 bg-zinc-950/60">
+                <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                  <div className="flex items-center gap-3 sm:gap-4">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full border border-white/8 bg-white/5 font-mono text-sm text-zinc-400">
+                      #{idx + 1}
+                    </div>
 
-              {player.avatar ? (
-                <img src={getAvatarUrl(player.avatar)} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" />
-              ) : (
-                <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${avatarColors[idx % avatarColors.length]} flex items-center justify-center font-display font-bold text-sm shrink-0`}>
-                  {getInitials(player.name)}
-                </div>
-              )}
+                    {player.avatar ? (
+                      <img src={getAvatarUrl(player.avatar)} alt="" className="h-12 w-12 rounded-full object-cover ring-1 ring-white/10" />
+                    ) : (
+                      <div className={`flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br ${avatarColors[idx % avatarColors.length]} font-display text-sm font-bold text-white ring-1 ring-white/10`}>
+                        {getInitials(player.name)}
+                      </div>
+                    )}
+                  </div>
 
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  {flag && <span className="text-base shrink-0">{flag}</span>}
-                  {player.user_id ? (
-                    <Link to={getProfilePath(player.user_id, player.name)} className="font-display font-bold text-piu-accent hover:underline">
-                      {player.name}
-                    </Link>
-                  ) : (
-                    <span className="font-display font-bold">{player.name}</span>
-                  )}
-                  {genderSymbol && (
-                    <span className={`text-sm ${player.gender === 'male' ? 'text-blue-400' : 'text-pink-400'}`}>
-                      {genderSymbol}
-                    </span>
-                  )}
-                  {player.skill_title && (
-                    <span className={`badge border ${getSkillColor(player.skill_title)}`}>
-                      {player.skill_title}
-                    </span>
-                  )}
-                </div>
-                {player.description && (
-                  <p className="text-xs text-gray-500 truncate mt-0.5">{player.description}</p>
-                )}
-              </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {flag ? <span className="text-base shrink-0">{flag}</span> : null}
+                      {player.user_id ? (
+                        <Link to={getProfilePath(player.user_id, player.name)} className="truncate font-display font-bold text-piu-accent hover:underline">
+                          {player.name}
+                        </Link>
+                      ) : (
+                        <span className="truncate font-display font-bold text-white">{player.name}</span>
+                      )}
+                      {genderSymbol ? (
+                        <span className={`text-sm ${player.gender === 'male' ? 'text-blue-400' : 'text-pink-400'}`}>
+                          {genderSymbol}
+                        </span>
+                      ) : null}
+                      {player.skill_title ? (
+                        <span className={`badge border ${getSkillColor(player.skill_title)}`}>
+                          {player.skill_title}
+                        </span>
+                      ) : null}
+                      {player.user_id ? <Badge variant="default">Registered</Badge> : null}
+                    </div>
 
-              <div className="text-right shrink-0">
-                {player.pumbility > 0 && (
-                  <div className="text-sm text-piu-gold font-mono font-bold">{player.pumbility.toLocaleString()}</div>
-                )}
-                <div className="text-xs text-gray-500">
-                  {player.wins}W - {player.losses}L
-                </div>
-              </div>
+                    <p className="mt-2 text-sm leading-relaxed text-zinc-400">
+                      {player.description || 'Profile details come from the player’s Shinsa account and stay read-only in tournament setup.'}
+                    </p>
+                  </div>
 
-              <div className="flex items-center gap-1 shrink-0">
-                <button
-                  onClick={() => handleEdit(player)}
-                  className="text-gray-600 hover:text-piu-accent transition-colors sm:opacity-0 sm:group-hover:opacity-100 p-1"
-                  title="Edit player"
-                >
-                  &#9998;
-                </button>
-                {isSetup && (
-                  <button
-                    onClick={() => handleDelete(player.id)}
-                    className="text-gray-600 hover:text-red-500 transition-colors sm:opacity-0 sm:group-hover:opacity-100 p-1"
-                    title="Delete player"
-                  >
-                    &#10005;
-                  </button>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+                  <div className="flex items-center justify-between gap-3 sm:justify-end">
+                    <div className="text-right">
+                      {player.pumbility > 0 ? (
+                        <div className="text-sm font-mono font-bold text-piu-gold">{Number(player.pumbility).toLocaleString()}</div>
+                      ) : (
+                        <div className="text-sm text-zinc-500">No pumbility yet</div>
+                      )}
+                      <div className="text-xs text-zinc-500">
+                        {player.wins}W - {player.losses}L
+                      </div>
+                    </div>
 
-      {players.length === 0 && (
-        <div className="text-center py-12 text-gray-500">
-          <p className="text-lg">No players registered yet</p>
-          {isSetup && <p className="text-sm mt-1">Click "+ Add Player" to register participants</p>}
+                    {isSetup && (
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(player.id)}
+                        className="rounded-full border border-white/8 bg-white/6 px-3 py-2 text-xs font-display font-bold uppercase tracking-[0.14em] text-zinc-300 transition-colors hover:border-rose-400/30 hover:text-rose-200"
+                        title="Remove player"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
 

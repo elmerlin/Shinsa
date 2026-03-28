@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createTournament, createPhase } from '../utils/api';
-import { FORMAT_LABELS, FORMAT_ICONS, FORMAT_DESCRIPTIONS } from '../utils/tournamentConstants';
+import { FORMAT_DESCRIPTIONS, FORMAT_ICONS, FORMAT_LABELS } from '../utils/tournamentConstants';
 import AvatarPicker from '../components/AvatarPicker';
 import PhaseCard from '../components/tournament/PhaseCard';
 import PhaseConfigPanel from '../components/tournament/PhaseConfigPanel';
 import TournamentPresets from '../components/tournament/TournamentPresets';
+import { TournamentEmptyPanel } from '../components/tournament/TournamentChrome';
+import { Badge } from '../components/ui/badge';
+import { Card, CardContent } from '../components/ui/card';
 
 const ALL_FORMATS = ['round_robin', 'pools', 'single_elim', 'double_elim', 'gauntlet', 'hour_of_power', 'b15'];
 
@@ -62,6 +65,19 @@ const DEFAULT_CONFIGS = {
   },
 };
 
+function SetupSectionHeader({ eyebrow, title, description, action = null }) {
+  return (
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div>
+        {eyebrow ? <Badge variant="default">{eyebrow}</Badge> : null}
+        {title ? <h2 className="mt-2 font-display text-2xl font-bold text-white">{title}</h2> : null}
+        {description ? <p className="mt-1 max-w-3xl text-sm leading-relaxed text-zinc-400">{description}</p> : null}
+      </div>
+      {action ? <div className="shrink-0">{action}</div> : null}
+    </div>
+  );
+}
+
 export default function TournamentSetup() {
   const navigate = useNavigate();
   const [form, setForm] = useState({
@@ -83,17 +99,17 @@ export default function TournamentSetup() {
       config: { ...DEFAULT_CONFIGS[format] },
       advancement: { type: 'all' },
     };
-    setPhases(prev => [...prev, newPhase]);
-    setExpandedPhase(prev => prev === null ? phases.length : prev);
+    setPhases((prev) => [...prev, newPhase]);
+    setExpandedPhase((prev) => (prev === null ? phases.length : prev));
     setShowFormatPicker(false);
   };
 
   const updatePhase = (idx, updated) => {
-    setPhases(prev => prev.map((p, i) => i === idx ? { ...p, ...updated } : p));
+    setPhases((prev) => prev.map((phase, index) => (index === idx ? { ...phase, ...updated } : phase)));
   };
 
   const removePhase = (idx) => {
-    setPhases(prev => prev.filter((_, i) => i !== idx));
+    setPhases((prev) => prev.filter((_, index) => index !== idx));
     if (expandedPhase === idx) setExpandedPhase(null);
     else if (expandedPhase > idx) setExpandedPhase(expandedPhase - 1);
   };
@@ -101,7 +117,7 @@ export default function TournamentSetup() {
   const movePhase = (idx, direction) => {
     const newIdx = idx + direction;
     if (newIdx < 0 || newIdx >= phases.length) return;
-    setPhases(prev => {
+    setPhases((prev) => {
       const updated = [...prev];
       [updated[idx], updated[newIdx]] = [updated[newIdx], updated[idx]];
       return updated;
@@ -111,7 +127,7 @@ export default function TournamentSetup() {
   };
 
   const loadPreset = (presetPhases) => {
-    setPhases(presetPhases.map((p, i) => ({ ...p, _key: Date.now() + i })));
+    setPhases(presetPhases.map((phase, index) => ({ ...phase, _key: Date.now() + index })));
     setExpandedPhase(0);
   };
 
@@ -121,7 +137,6 @@ export default function TournamentSetup() {
     if (phases.length === 0) return;
     setSaving(true);
     try {
-      // Build legacy config from first phase for backwards compat
       const firstPhase = phases[0];
       const legacyConfig = firstPhase.config || {};
 
@@ -137,22 +152,20 @@ export default function TournamentSetup() {
         },
       });
 
-      // Create phases in order
-      for (let i = 0; i < phases.length; i++) {
-        const p = phases[i];
+      for (let index = 0; index < phases.length; index += 1) {
+        const phase = phases[index];
         await createPhase({
           tournament_id: tournament.id,
-          phase_order: i + 1,
-          format: p.format,
-          name: p.name || '',
-          config: p.config || {},
-          advancement: p.advancement || { type: 'all' },
+          phase_order: index + 1,
+          format: phase.format,
+          name: phase.name || '',
+          config: phase.config || {},
+          advancement: phase.advancement || { type: 'all' },
         });
       }
 
       navigate(`/tournament/${tournament.id}`);
     } catch (err) {
-      // Toast will handle this once integrated, fall back to alert for now
       alert(err.message);
     } finally {
       setSaving(false);
@@ -161,202 +174,263 @@ export default function TournamentSetup() {
 
   const getFlowPreview = () => {
     if (phases.length === 0) return null;
-    return phases.map((p, i) => {
-      const label = p.name || FORMAT_LABELS[p.format] || p.format;
-      const adv = p.advancement;
+    return phases.map((phase, index) => {
+      const label = phase.name || FORMAT_LABELS[phase.format] || phase.format;
+      const advancement = phase.advancement;
       let arrow = '';
-      if (i < phases.length - 1 && adv && adv.type !== 'all') {
-        if (adv.type === 'top_n') arrow = ` \u2192 Top ${adv.count || 8}`;
-        else if (adv.type === 'per_pool_top_n') arrow = ` \u2192 Top ${adv.count || 2}/pool`;
-        else if (adv.type === 'threshold') arrow = ` \u2192 ${adv.points || 0}+ pts`;
+      if (index < phases.length - 1 && advancement && advancement.type !== 'all') {
+        if (advancement.type === 'top_n') arrow = `Top ${advancement.count || 8}`;
+        else if (advancement.type === 'per_pool_top_n') arrow = `Top ${advancement.count || 2}/pool`;
+        else if (advancement.type === 'threshold') arrow = `${advancement.points || 0}+ pts`;
       }
-      return { label, arrow, icon: FORMAT_ICONS[p.format] || '' };
+      return { label, arrow, icon: FORMAT_ICONS[phase.format] || '' };
     });
   };
 
   const flowPreview = getFlowPreview();
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-8">
-      <h1 className="section-title mb-6">CREATE TOURNAMENT</h1>
+    <div className="mx-auto max-w-5xl px-4 py-8">
+      <div className="space-y-6">
+        <Card className="overflow-hidden border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(255,51,102,0.18),transparent_34%),radial-gradient(circle_at_85%_15%,rgba(58,170,255,0.18),transparent_28%),rgba(8,11,20,0.92)]">
+          <CardContent className="space-y-5">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="secondary">Tournament Setup</Badge>
+              <Badge variant={phases.length > 0 ? 'success' : 'warning'}>
+                {phases.length > 0 ? `${phases.length} phase${phases.length === 1 ? '' : 's'} configured` : 'Add at least one phase'}
+              </Badge>
+            </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* General Info */}
-        <div className="card space-y-4">
-          <h2 className="font-display font-bold text-lg text-piu-accent">General Info</h2>
+            <div className="grid gap-5 lg:grid-cols-[1.25fr_0.75fr]">
+              <div>
+                <h1 className="font-display text-3xl font-bold text-white sm:text-4xl">Build the bracket before match one</h1>
+                <p className="mt-3 max-w-3xl text-sm leading-relaxed text-zinc-300">
+                  Create the tournament shell, define the phase flow, and then add participants from registered Shinsa profiles after creation. Player names, avatars, skill titles, and flags now come from each player&apos;s own account rather than local edits.
+                </p>
+              </div>
 
-          <div>
-            <label className="block text-sm text-gray-400 mb-1">Tournament Name *</label>
-            <input
-              type="text"
-              className="input-field"
-              placeholder='e.g. "Shinsa Season 1"'
-              value={form.name}
-              onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-              required
+              <div className="rounded-[1rem] border border-white/8 bg-black/18 p-4">
+                <p className="font-display text-sm font-bold uppercase tracking-[0.16em] text-zinc-400">Checklist</p>
+                <div className="mt-3 space-y-2 text-sm text-zinc-300">
+                  <p>1. Name the tournament and set the date.</p>
+                  <p>2. Pick a preset or assemble phases manually.</p>
+                  <p>3. Add registered players after the tournament is created.</p>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <Card className="border-white/8 bg-zinc-950/60">
+            <CardContent className="space-y-5">
+              <SetupSectionHeader
+                eyebrow="General Info"
+                title="Tournament details"
+                description="These details appear across the setup, overview, and watch pages."
+              />
+
+              <div className="grid gap-5 lg:grid-cols-[1.15fr_0.85fr]">
+                <div className="space-y-4">
+                  <div>
+                    <label className="mb-1 block text-sm text-gray-400">Tournament Name *</label>
+                    <input
+                      type="text"
+                      className="input-field"
+                      placeholder='e.g. "Shinsa Season 1"'
+                      value={form.name}
+                      onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
+                      required
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1 block text-sm text-gray-400">Location</label>
+                      <input
+                        type="text"
+                        className="input-field"
+                        placeholder="Pump Dojo"
+                        value={form.location}
+                        onChange={(e) => setForm((prev) => ({ ...prev, location: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm text-gray-400">Date</label>
+                      <input
+                        type="date"
+                        className="input-field"
+                        value={form.date}
+                        onChange={(e) => setForm((prev) => ({ ...prev, date: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-[1rem] border border-white/8 bg-black/18 p-4">
+                  <p className="font-display text-sm font-bold uppercase tracking-[0.16em] text-zinc-400">Card Avatar</p>
+                  <p className="mt-1 text-sm text-zinc-500">Used on the tournament card and header.</p>
+                  <div className="mt-4">
+                    <AvatarPicker
+                      value={form.avatar}
+                      onChange={(avatar) => setForm((prev) => ({ ...prev, avatar }))}
+                      shape="square"
+                      size="md"
+                    />
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {phases.length === 0 ? (
+            <TournamentPresets onSelect={loadPreset} />
+          ) : null}
+
+          <div className="space-y-4">
+            <SetupSectionHeader
+              eyebrow="Phase Pipeline"
+              title="Design the tournament flow"
+              description="Stack formats in order and define how each stage feeds into the next one."
+              action={phases.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setPhases([])}
+                  className="rounded-full border border-white/8 bg-white/5 px-3 py-2 text-xs font-display font-bold uppercase tracking-[0.14em] text-zinc-300 transition-colors hover:border-white/14 hover:text-white"
+                >
+                  Clear all
+                </button>
+              ) : null}
             />
-          </div>
 
-          <AvatarPicker
-            value={form.avatar}
-            onChange={(avatar) => setForm(f => ({ ...f, avatar }))}
-            shape="square"
-            size="md"
-          />
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">Location</label>
-              <input
-                type="text"
-                className="input-field"
-                placeholder="Pump Dojo"
-                value={form.location}
-                onChange={e => setForm(f => ({ ...f, location: e.target.value }))}
+            {phases.length === 0 ? (
+              <TournamentEmptyPanel
+                title="No phases added yet"
+                description="Choose a preset above or add formats manually below."
               />
-            </div>
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">Date</label>
-              <input
-                type="date"
-                className="input-field"
-                value={form.date}
-                onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
-              />
-            </div>
-          </div>
-        </div>
+            ) : (
+              <div className="space-y-6">
+                {phases.map((phase, idx) => (
+                  <PhaseCard
+                    key={phase._key}
+                    phase={phase}
+                    index={idx}
+                    total={phases.length}
+                    isExpanded={expandedPhase === idx}
+                    onToggle={() => setExpandedPhase(expandedPhase === idx ? null : idx)}
+                    onRemove={() => removePhase(idx)}
+                    onMoveUp={() => movePhase(idx, -1)}
+                    onMoveDown={() => movePhase(idx, 1)}
+                  >
+                    <PhaseConfigPanel
+                      phase={phase}
+                      onChange={(updated) => updatePhase(idx, updated)}
+                      isLastPhase={idx === phases.length - 1}
+                    />
+                  </PhaseCard>
+                ))}
+              </div>
+            )}
 
-        {/* Presets */}
-        {phases.length === 0 && (
-          <TournamentPresets onSelect={loadPreset} />
-        )}
+            {showFormatPicker ? (
+              <Card className="border-piu-accent/25 bg-zinc-950/60">
+                <CardContent className="space-y-4">
+                  <SetupSectionHeader
+                    eyebrow="Add Phase"
+                    title="Choose the next format"
+                    description="Each phase becomes its own tab in the tournament view and watch view."
+                    action={(
+                      <button
+                        type="button"
+                        onClick={() => setShowFormatPicker(false)}
+                        className="rounded-full border border-white/8 bg-white/5 px-3 py-2 text-xs font-display font-bold uppercase tracking-[0.14em] text-zinc-300 transition-colors hover:border-white/14 hover:text-white"
+                      >
+                        Cancel
+                      </button>
+                    )}
+                  />
 
-        {/* Phase Pipeline */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="font-display font-bold text-lg text-piu-accent">
-              Tournament Phases {phases.length > 0 && <span className="text-gray-500 text-sm">({phases.length})</span>}
-            </h2>
-            {phases.length > 0 && (
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    {ALL_FORMATS.map((format) => (
+                      <button
+                        key={format}
+                        type="button"
+                        onClick={() => addPhase(format)}
+                        className="rounded-xl border border-white/8 bg-black/18 p-4 text-left transition-colors hover:border-piu-accent/35 hover:bg-black/26"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/6 text-lg">
+                            {FORMAT_ICONS[format] || ''}
+                          </div>
+                          <div>
+                            <p className="font-display text-sm font-bold text-white">{FORMAT_LABELS[format] || format}</p>
+                            <p className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">Add phase</p>
+                          </div>
+                        </div>
+                        <p className="mt-3 text-sm leading-relaxed text-zinc-400">{FORMAT_DESCRIPTIONS[format] || ''}</p>
+                      </button>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
               <button
                 type="button"
-                onClick={() => setPhases([])}
-                className="text-xs text-gray-500 hover:text-piu-accent transition-colors"
+                onClick={() => setShowFormatPicker(true)}
+                className="w-full rounded-xl border border-dashed border-white/12 bg-zinc-950/40 px-4 py-5 text-center transition-colors hover:border-piu-accent/35 hover:bg-zinc-950/55"
               >
-                Clear all
+                <span className="font-display text-sm font-bold uppercase tracking-[0.16em] text-zinc-300">+ Add Phase</span>
               </button>
             )}
           </div>
 
-          {phases.length === 0 && (
-            <div className="card border-dashed border-piu-border/50 text-center py-8">
-              <p className="text-gray-500 text-sm mb-3">No phases added yet</p>
-              <p className="text-gray-600 text-xs">Choose a preset above or add phases manually below</p>
-            </div>
-          )}
-
-          <div className="space-y-6">
-            {phases.map((phase, idx) => (
-              <PhaseCard
-                key={phase._key}
-                phase={phase}
-                index={idx}
-                total={phases.length}
-                isExpanded={expandedPhase === idx}
-                onToggle={() => setExpandedPhase(expandedPhase === idx ? null : idx)}
-                onRemove={() => removePhase(idx)}
-                onMoveUp={() => movePhase(idx, -1)}
-                onMoveDown={() => movePhase(idx, 1)}
-              >
-                <PhaseConfigPanel
-                  phase={phase}
-                  onChange={(updated) => updatePhase(idx, updated)}
-                  isLastPhase={idx === phases.length - 1}
+          {flowPreview && flowPreview.length > 0 ? (
+            <Card className="border-white/8 bg-zinc-950/60">
+              <CardContent className="space-y-4">
+                <SetupSectionHeader
+                  eyebrow="Tournament Flow"
+                  title="How the day will run"
+                  description="A quick preview of the format progression players will move through."
                 />
-              </PhaseCard>
-            ))}
-          </div>
 
-          {/* Add Phase */}
-          {showFormatPicker ? (
-            <div className="card border-piu-accent/30 space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="font-display font-bold text-sm text-piu-accent">Add Phase</h3>
-                <button
-                  type="button"
-                  onClick={() => setShowFormatPicker(false)}
-                  className="text-gray-500 hover:text-white text-xs transition-colors"
-                >
-                  Cancel
-                </button>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {ALL_FORMATS.map((format) => (
-                  <button
-                    key={format}
-                    type="button"
-                    onClick={() => addPhase(format)}
-                    className="card border border-piu-border/50 hover:border-piu-accent/50 p-3 text-left transition-all cursor-pointer"
-                  >
-                    <div className="flex items-center gap-2 mb-1">
-                      <span>{FORMAT_ICONS[format] || ''}</span>
-                      <span className="font-display font-bold text-xs text-white">{FORMAT_LABELS[format] || format}</span>
-                    </div>
-                    <p className="text-[9px] text-gray-500 leading-relaxed">{FORMAT_DESCRIPTIONS[format] || ''}</p>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setShowFormatPicker(true)}
-              className="w-full card border-dashed border-piu-border/50 hover:border-piu-accent/40 text-center py-3 transition-all cursor-pointer"
-            >
-              <span className="text-gray-400 text-sm font-display font-bold">+ Add Phase</span>
-            </button>
-          )}
-        </div>
-
-        {/* Flow Preview */}
-        {flowPreview && flowPreview.length > 0 && (
-          <div className="card bg-piu-dark/50 border-piu-border/30 p-3">
-            <h3 className="font-display font-bold text-[10px] text-gray-500 uppercase tracking-wider mb-2">Tournament Flow</h3>
-            <div className="flex items-center gap-1 flex-wrap text-xs">
-              {flowPreview.map((step, i) => (
-                <React.Fragment key={i}>
-                  {i > 0 && <span className="text-piu-accent font-bold mx-1">{'\u2192'}</span>}
-                  <span className="inline-flex items-center gap-1 rounded-full border border-piu-border/40 bg-piu-card px-2.5 py-1 font-display font-bold text-white">
-                    <span>{step.icon}</span> {step.label}
+                <div className="flex flex-wrap items-center gap-2 text-sm">
+                  {flowPreview.map((step, index) => (
+                    <React.Fragment key={`${step.label}-${index}`}>
+                      {index > 0 ? <span className="text-piu-accent">→</span> : null}
+                      <span className="inline-flex items-center gap-2 rounded-full border border-white/8 bg-white/6 px-3 py-1.5 font-display font-bold text-white">
+                        <span aria-hidden="true">{step.icon}</span>
+                        <span>{step.label}</span>
+                      </span>
+                      {step.arrow ? (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/15 bg-emerald-400/8 px-2.5 py-1 text-xs font-mono text-emerald-200">
+                          {step.arrow}
+                        </span>
+                      ) : null}
+                    </React.Fragment>
+                  ))}
+                  <span className="text-piu-accent">→</span>
+                  <span className="inline-flex items-center gap-2 rounded-full border border-piu-gold/25 bg-piu-gold/10 px-3 py-1.5 font-display font-bold text-piu-gold">
+                    {'\u{1F3C6}'} Champion
                   </span>
-                  {step.arrow && (
-                    <span className="text-[10px] text-piu-green font-mono">{step.arrow}</span>
-                  )}
-                </React.Fragment>
-              ))}
-              <span className="text-piu-accent font-bold mx-1">{'\u2192'}</span>
-              <span className="inline-flex items-center gap-1 rounded-full border border-piu-gold/40 bg-piu-gold/10 px-2.5 py-1 font-display font-bold text-piu-gold">
-                {'\u{1F3C6}'} Champion
-              </span>
-            </div>
-          </div>
-        )}
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
 
-        {/* Submit */}
-        <div className="flex gap-3">
-          <button
-            type="submit"
-            className="btn-primary flex-1"
-            disabled={saving || phases.length === 0 || !form.name.trim()}
-          >
-            {saving ? 'Creating...' : 'Create Tournament'}
-          </button>
-          <button type="button" onClick={() => navigate('/')} className="btn-secondary">
-            Cancel
-          </button>
-        </div>
-      </form>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <button
+              type="submit"
+              className="btn-primary flex-1"
+              disabled={saving || phases.length === 0 || !form.name.trim()}
+            >
+              {saving ? 'Creating...' : 'Create Tournament'}
+            </button>
+            <button type="button" onClick={() => navigate('/')} className="btn-secondary">
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

@@ -111,12 +111,12 @@ export default function TournamentShowcaseCard({ tournament, onDelete }) {
                 <img
                   src={getAvatarUrl(tournament.avatar)}
                   alt={tournament?.name || 'Tournament'}
-                  className="h-14 w-14 rounded-2xl object-cover ring-1 ring-white/10 shadow-[0_14px_30px_rgba(0,0,0,0.35)]"
+                  className="h-14 w-14 rounded-xl object-cover ring-1 ring-white/10 shadow-[0_14px_30px_rgba(0,0,0,0.35)]"
                   loading="lazy"
                   decoding="async"
                 />
               ) : (
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-piu-accent/85 via-rose-500/70 to-sky-500/70 font-display text-2xl font-bold text-white ring-1 ring-white/10 shadow-[0_14px_30px_rgba(0,0,0,0.35)]">
+                <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-gradient-to-br from-piu-accent/85 via-rose-500/70 to-sky-500/70 font-display text-2xl font-bold text-white ring-1 ring-white/10 shadow-[0_14px_30px_rgba(0,0,0,0.35)]">
                   {getTournamentInitial(tournament?.name)}
                 </div>
               )}
