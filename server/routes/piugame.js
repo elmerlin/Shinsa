@@ -2745,6 +2745,14 @@ async function syncRecentlyPlayedForUser(user, options = {}) {
         }
 
         // ALL passing plays are candidates for WC post (upscores, clears, and non-improvements)
+        // Look up replay data from the recently played row
+        const rpRow = db.prepare(`
+          SELECT replay_embed_url, replay_video_id, replay_start_seconds, replay_end_seconds
+          FROM user_recently_played
+          WHERE user_id = ? AND song_title = ? AND mode = ? AND level = ? AND score = ?
+          ORDER BY id DESC LIMIT 1
+        `).get(userId, songTitle, mode, level, score);
+
         wcAllPlays.push({
           song_title: songTitle,
           mode,
@@ -2759,6 +2767,10 @@ async function syncRecentlyPlayedForUser(user, options = {}) {
           good,
           bad,
           miss,
+          replay_embed_url: rpRow?.replay_embed_url || '',
+          replay_video_id: rpRow?.replay_video_id || '',
+          replay_start_seconds: rpRow?.replay_start_seconds || 0,
+          replay_end_seconds: rpRow?.replay_end_seconds || 0,
         });
       }
     }
@@ -2812,7 +2824,7 @@ async function syncRecentlyPlayedForUser(user, options = {}) {
   });
   txn();
 
-  // Create weekly challenge play posts for WC-only plays (not upscores/clears)
+  // Create or update weekly challenge play posts
   if (persistActivityPosts && wcAllPlays.length > 0) {
     try {
       ensureCurrentWeeklyChallengeWeek(db);
@@ -2828,22 +2840,12 @@ async function syncRecentlyPlayedForUser(user, options = {}) {
           if (!byWeek[wk]) byWeek[wk] = [];
           byWeek[wk].push(p);
         }
-        for (const [weekKey, plays] of Object.entries(byWeek)) {
+        for (const [weekKey, newPlays] of Object.entries(byWeek)) {
           const weekRow = db.prepare('SELECT id FROM weekly_challenge_weeks WHERE week_key = ?').get(weekKey);
           if (!weekRow) continue;
-          // Build content hash for dedupe
-          const hashInput = plays
-            .map(p => `${p.song_title}|${p.mode}|${p.level}|${p.played_at_utc}|${p.score}`)
-            .sort()
-            .join('\n');
-          const contentHash = crypto.createHash('sha256').update(hashInput).digest('hex').slice(0, 32);
-          // Check for duplicate
-          const existing = db.prepare(
-            'SELECT id FROM user_weekly_challenge_plays WHERE user_id = ? AND week_id = ? AND content_hash = ?'
-          ).get(userId, weekRow.id, contentHash);
-          if (existing) continue;
-          // Insert
-          const playsJson = JSON.stringify(plays.map(p => ({
+
+          // Build play entry for each new play
+          const newEntries = newPlays.map(p => ({
             song_title: p.song_title,
             mode: p.mode,
             level: p.level,
@@ -2856,11 +2858,68 @@ async function syncRecentlyPlayedForUser(user, options = {}) {
             good: p.good || 0,
             bad: p.bad || 0,
             miss: p.miss || 0,
+            replay_embed_url: p.replay_embed_url || '',
+            replay_video_id: p.replay_video_id || '',
+            replay_start_seconds: p.replay_start_seconds || 0,
+            replay_end_seconds: p.replay_end_seconds || 0,
             weekly_challenge_rank: p.weekly_challenge_rank || null,
             weekly_challenge_week_key: p.weekly_challenge_week_key,
             weekly_challenge_chart_id: p.weekly_challenge_chart_id || null,
             rating_points: calculateRatingPoints(p.level, p.grade, p.score),
-          })));
+          }));
+
+          // Dedupe new entries to best per chart
+          const bestByChart = new Map();
+          for (const p of newEntries) {
+            const key = `${p.song_title}|${p.mode}|${p.level}`;
+            const existing = bestByChart.get(key);
+            if (!existing || p.score > existing.score) {
+              bestByChart.set(key, p);
+            }
+          }
+
+          // Check existing posts for this user+week to find previously posted scores
+          const existingPosts = db.prepare(
+            'SELECT id, plays_json FROM user_weekly_challenge_plays WHERE user_id = ? AND week_id = ? ORDER BY id ASC'
+          ).all(userId, weekRow.id);
+
+          // Build map of all previously posted best scores
+          const previousBests = new Map();
+          for (const post of existingPosts) {
+            try {
+              const oldPlays = JSON.parse(post.plays_json || '[]');
+              for (const p of oldPlays) {
+                const key = `${p.song_title}|${p.mode}|${p.level}`;
+                const prev = previousBests.get(key);
+                if (!prev || p.score > prev.score) previousBests.set(key, p);
+              }
+            } catch {}
+          }
+
+          // Filter to only charts that are new or have a higher score than previously posted
+          const differential = [];
+          for (const [key, play] of bestByChart) {
+            const prev = previousBests.get(key);
+            if (!prev || play.score > prev.score) {
+              differential.push(play);
+            }
+          }
+
+          if (differential.length === 0) continue; // nothing new to post
+
+          const playsJson = JSON.stringify(differential);
+          const hashInput = differential
+            .map(p => `${p.song_title}|${p.mode}|${p.level}|${p.score}`)
+            .sort()
+            .join('\n');
+          const contentHash = crypto.createHash('sha256').update(hashInput).digest('hex').slice(0, 32);
+
+          // Check for exact duplicate (same scores already posted)
+          const dupeCheck = db.prepare(
+            'SELECT id FROM user_weekly_challenge_plays WHERE user_id = ? AND week_id = ? AND content_hash = ? LIMIT 1'
+          ).get(userId, weekRow.id, contentHash);
+          if (dupeCheck) continue;
+
           db.prepare(
             'INSERT INTO user_weekly_challenge_plays (user_id, week_id, plays_json, content_hash) VALUES (?, ?, ?, ?)'
           ).run(userId, weekRow.id, playsJson, contentHash);
