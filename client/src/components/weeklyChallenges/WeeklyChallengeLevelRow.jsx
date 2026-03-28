@@ -1,7 +1,12 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getAvatarUrl } from '../AvatarPicker';
-import { getCountryFlag } from '../PlayerRegistration';
+import { getCountryFlag } from '../../utils/countryFlags';
+
+const LEVEL_ROW_STYLE = {
+  contentVisibility: 'auto',
+  containIntrinsicSize: '260px',
+};
 
 function getLevelBadgeTone(mode) {
   if (String(mode || '').trim() === 'Single')
@@ -88,7 +93,7 @@ function ChartCard({ chart, viewerBest, onClick }) {
                   {i + 1}
                 </span>
                 {avatarUrl && (
-                  <img src={avatarUrl} alt="" className="h-3.5 w-3.5 shrink-0 rounded-full border border-white/15 object-cover" />
+                  <img src={avatarUrl} alt="" className="h-3.5 w-3.5 shrink-0 rounded-full border border-white/15 object-cover" loading="lazy" decoding="async" />
                 )}
                 <Link
                   to={`/profile/${entry.user_id}`}
@@ -128,7 +133,7 @@ export default function WeeklyChallengeLevelRow({ level, charts = [], viewerBest
   if (charts.length === 0) return null;
 
   return (
-    <div className="mb-3">
+    <div className="mb-3" style={LEVEL_ROW_STYLE}>
       <button
         type="button"
         onClick={() => setCollapsed(!collapsed)}

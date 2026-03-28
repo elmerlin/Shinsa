@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { getAvatarUrl } from '../AvatarPicker';
-import { getCountryFlag } from '../PlayerRegistration';
+import { getCountryFlag } from '../../utils/countryFlags';
 
 const PODIUM_COLORS = [
   { bg: 'from-amber-500/20 via-yellow-600/10 to-transparent', border: 'border-amber-500/40', icon: 'text-piu-gold', label: '1st' },
@@ -34,7 +34,7 @@ function PodiumCard({ award }) {
     <div className={`flex items-center gap-2 rounded-lg border ${style.border} bg-gradient-to-r ${style.bg} px-2.5 py-1.5 min-w-0`}>
       <TrophyIcon rank={award.rank} className="text-sm shrink-0" />
       {avatarUrl && (
-        <img src={avatarUrl} alt="" className="h-5 w-5 shrink-0 rounded-full border border-white/20 object-cover" />
+        <img src={avatarUrl} alt="" className="h-5 w-5 shrink-0 rounded-full border border-white/20 object-cover" loading="lazy" decoding="async" />
       )}
       <div className="min-w-0 flex-1">
         <Link

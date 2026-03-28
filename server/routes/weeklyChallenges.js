@@ -30,6 +30,30 @@ function setCache(key, data) {
   cache.set(key, { data, expiresAt: Date.now() + CACHE_TTL_MS });
 }
 
+function getLiveWeekAggregate(db, week) {
+  if (!week?.id) return null;
+  const cacheKey = `aggregate:${week.id}`;
+  let aggregate = getCached(cacheKey);
+  if (!aggregate) {
+    aggregate = aggregateWeeklyResults(db, week.id);
+    if (aggregate) setCache(cacheKey, aggregate);
+  }
+  return aggregate;
+}
+
+function getAggregateLeaderboard(aggregate, scopeMode = 'both', skillFamily = 'all') {
+  if (!aggregate) return [];
+  if (!aggregate.leaderboardCache) aggregate.leaderboardCache = new Map();
+  const cacheKey = `${scopeMode}:${skillFamily}`;
+  if (!aggregate.leaderboardCache.has(cacheKey)) {
+    aggregate.leaderboardCache.set(
+      cacheKey,
+      buildLeaderboard(aggregate.userTotals, scopeMode, skillFamily, aggregate.snapshots || null)
+    );
+  }
+  return aggregate.leaderboardCache.get(cacheKey);
+}
+
 // ---------------------------------------------------------------------------
 // GET /home — Dashboard summary
 // ---------------------------------------------------------------------------
@@ -69,20 +93,12 @@ router.get('/home', optionalAuth, (req, res) => {
         `).get(week.id);
         participantCount = cnt?.cnt || 0;
       } else {
-        const agg = aggregateWeeklyResults(db, week.id);
+        const agg = getLiveWeekAggregate(db, week);
         if (agg) {
           participantCount = agg.participantCount;
-
-          // Build overall leaderboard for podium
-          const snapRows = db.prepare(
-            'SELECT * FROM weekly_challenge_user_snapshots WHERE week_id = ?'
-          ).all(week.id);
-          const snapMap = {};
-          for (const s of snapRows) snapMap[s.user_id] = s;
-
-          const overallLb = buildLeaderboard(agg.userTotals, 'both', 'all', snapMap);
-          const singlesLb = buildLeaderboard(agg.userTotals, 'single', 'all', snapMap);
-          const doublesLb = buildLeaderboard(agg.userTotals, 'double', 'all', snapMap);
+          const overallLb = getAggregateLeaderboard(agg, 'both', 'all');
+          const singlesLb = getAggregateLeaderboard(agg, 'single', 'all');
+          const doublesLb = getAggregateLeaderboard(agg, 'double', 'all');
 
           // Mock awards from live leaderboard for display
           const makeAwards = (key, label, lb) =>
@@ -131,7 +147,7 @@ router.get('/home', optionalAuth, (req, res) => {
       if (week.status === 'finalized') {
         viewerSummary = getViewerWeeklyBests(db2, week.id, req.user.id);
       } else {
-        const agg = aggregateWeeklyResults(db2, week.id);
+        const agg = getLiveWeekAggregate(db2, week);
         if (agg) {
           viewerSummary = getActiveViewerBests(agg.userChartBests, req.user.id);
         }
@@ -176,22 +192,28 @@ router.get('/weeks', (req, res) => {
     const db = getDb();
     ensureCurrentWeeklyChallengeWeek(db);
 
-    const weeks = db.prepare(`
-      SELECT w.*,
-        (SELECT COUNT(DISTINCT s.user_id) FROM weekly_challenge_user_snapshots s WHERE s.week_id = w.id) as participant_count
-      FROM weekly_challenge_weeks w
-      ORDER BY w.week_key DESC
-    `).all();
+    let weeks = getCached('weeks:list');
+    if (!weeks) {
+      const rows = db.prepare(`
+        SELECT w.*,
+          (SELECT COUNT(DISTINCT s.user_id) FROM weekly_challenge_user_snapshots s WHERE s.week_id = w.id) as participant_count
+        FROM weekly_challenge_weeks w
+        ORDER BY w.week_key DESC
+      `).all();
 
-    res.json(weeks.map(w => ({
-      week_key: w.week_key,
-      starts_at_utc: w.starts_at_utc,
-      ends_at_utc: w.ends_at_utc,
-      status: w.status,
-      chart_count: w.chart_count,
-      challenge_max_level: w.challenge_max_level,
-      participant_count: w.participant_count,
-    })));
+      weeks = rows.map(w => ({
+        week_key: w.week_key,
+        starts_at_utc: w.starts_at_utc,
+        ends_at_utc: w.ends_at_utc,
+        status: w.status,
+        chart_count: w.chart_count,
+        challenge_max_level: w.challenge_max_level,
+        participant_count: w.participant_count,
+      }));
+      setCache('weeks:list', weeks);
+    }
+
+    res.json(weeks);
   } catch (err) {
     console.error('[WeeklyChallenges] /weeks error:', err.message);
     res.status(500).json({ error: 'Failed to load weeks' });
@@ -199,14 +221,14 @@ router.get('/weeks', (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// GET /week/current — Redirect to current week key
+// GET /week/current — Resolve current week without an extra redirect
 // ---------------------------------------------------------------------------
 
-router.get('/week/current', (req, res) => {
+router.get('/week/current', optionalAuth, (req, res) => {
   try {
     const db = getDb();
     const week = ensureCurrentWeeklyChallengeWeek(db);
-    res.redirect(`/api/weekly-challenges/week/${week.week_key}${req._parsedUrl.search || ''}`);
+    return sendWeekDetail(req, res, week.week_key);
   } catch (err) {
     console.error('[WeeklyChallenges] /week/current error:', err.message);
     res.status(500).json({ error: 'Failed to resolve current week' });
@@ -217,12 +239,12 @@ router.get('/week/current', (req, res) => {
 // GET /week/:weekKey — Full week detail
 // ---------------------------------------------------------------------------
 
-router.get('/week/:weekKey', optionalAuth, (req, res) => {
+function sendWeekDetail(req, res, resolvedWeekKey = null) {
   try {
     const db = getDb();
     ensureCurrentWeeklyChallengeWeek(db);
 
-    const { weekKey } = req.params;
+    const weekKey = resolvedWeekKey || req.params.weekKey;
     const chartMode = req.query.chart_mode || 'both';
     const leaderboardMode = req.query.leaderboard_mode || 'both';
     const skillFamily = req.query.skill_family || 'all';
@@ -246,17 +268,10 @@ router.get('/week/:weekKey', optionalAuth, (req, res) => {
           'SELECT * FROM weekly_challenge_awards WHERE week_id = ? ORDER BY award_key, rank'
         ).all(week.id);
       } else {
-        const agg = aggregateWeeklyResults(db, week.id);
+        const agg = getLiveWeekAggregate(db, week);
         charts = agg?.weeklyCharts || [];
         chartResults = agg?.chartResults || {};
-
-        const snapRows = db.prepare(
-          'SELECT * FROM weekly_challenge_user_snapshots WHERE week_id = ?'
-        ).all(week.id);
-        const snapMap = {};
-        for (const s of snapRows) snapMap[s.user_id] = s;
-
-        leaderboard = agg ? buildLeaderboard(agg.userTotals, leaderboardMode, skillFamily, snapMap) : [];
+        leaderboard = agg ? getAggregateLeaderboard(agg, leaderboardMode, skillFamily) : [];
 
         // Live awards
         awards = [];
@@ -269,9 +284,9 @@ router.get('/week/:weekKey', optionalAuth, (req, res) => {
             { key: 'intermediate', label: 'Weekly Intermediate', scope: 'both', family: 'intermediate' },
           ];
           for (const cfg of configs) {
-            const lb = buildLeaderboard(agg.userTotals, cfg.scope, cfg.family, snapMap);
+            const lb = getAggregateLeaderboard(agg, cfg.scope, cfg.family);
             for (const entry of lb.slice(0, 3)) {
-              const snap = snapMap[entry.user_id] || {};
+              const snap = agg.snapshots?.[entry.user_id] || {};
               awards.push({
                 award_key: cfg.key, award_label: cfg.label, rank: entry.rank,
                 user_id: entry.user_id, points: entry.points, clears: entry.clears,
@@ -339,16 +354,11 @@ router.get('/week/:weekKey', optionalAuth, (req, res) => {
       if (week.status === 'finalized') {
         viewerSummary = getViewerWeeklyBests(db, week.id, req.user.id);
       } else {
-        const agg = aggregateWeeklyResults(db, week.id);
+        const agg = getLiveWeekAggregate(db, week);
         if (agg) {
           viewerSummary = getActiveViewerBests(agg.userChartBests, req.user.id);
           // Also find viewer rank
-          const snapRows = db.prepare(
-            'SELECT * FROM weekly_challenge_user_snapshots WHERE week_id = ?'
-          ).all(week.id);
-          const snapMap = {};
-          for (const s of snapRows) snapMap[s.user_id] = s;
-          const lb = buildLeaderboard(agg.userTotals, 'both', 'all', snapMap);
+          const lb = getAggregateLeaderboard(agg, 'both', 'all');
           const viewerEntry = lb.find(e => e.user_id === req.user.id);
           if (viewerSummary && viewerEntry) {
             viewerSummary.rank = viewerEntry.rank;
@@ -371,7 +381,9 @@ router.get('/week/:weekKey', optionalAuth, (req, res) => {
     console.error('[WeeklyChallenges] /week/:weekKey error:', err.message);
     res.status(500).json({ error: 'Failed to load week' });
   }
-});
+}
+
+router.get('/week/:weekKey', optionalAuth, (req, res) => sendWeekDetail(req, res));
 
 // ---------------------------------------------------------------------------
 // GET /users/:userId/history — Profile tab

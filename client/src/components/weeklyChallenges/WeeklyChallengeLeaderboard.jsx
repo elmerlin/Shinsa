@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { getAvatarUrl } from '../AvatarPicker';
-import { getCountryFlag } from '../PlayerRegistration';
+import { getCountryFlag } from '../../utils/countryFlags';
 import { useAuth } from '../../contexts/AuthContext';
 
 const MEDAL_COLORS = ['text-piu-gold', 'text-piu-silver', 'text-piu-bronze'];
@@ -25,6 +25,7 @@ export default function WeeklyChallengeLeaderboard({ leaderboard = [], maxRows =
   const viewerEntry = !viewerInTop && user
     ? leaderboard.find(e => e.user_id === user.id)
     : null;
+  const viewerAvatarUrl = viewerEntry ? getAvatarUrl(viewerEntry.avatar, 'sm') : '';
 
   return (
     <div className="space-y-0.5">
@@ -51,7 +52,7 @@ export default function WeeklyChallengeLeaderboard({ leaderboard = [], maxRows =
             </span>
 
             {avatarUrl && (
-              <img src={avatarUrl} alt="" className="h-5 w-5 shrink-0 rounded-full border border-white/20 object-cover" />
+              <img src={avatarUrl} alt="" className="h-5 w-5 shrink-0 rounded-full border border-white/20 object-cover" loading="lazy" decoding="async" />
             )}
 
             <Link
@@ -85,8 +86,8 @@ export default function WeeklyChallengeLeaderboard({ leaderboard = [], maxRows =
             <span className="w-6 shrink-0 text-center font-display text-[11px] font-black text-white/40">
               {viewerEntry.rank}
             </span>
-            {getAvatarUrl(viewerEntry.avatar, 'sm') && (
-              <img src={getAvatarUrl(viewerEntry.avatar, 'sm')} alt="" className="h-5 w-5 shrink-0 rounded-full border border-white/20 object-cover" />
+            {viewerAvatarUrl && (
+              <img src={viewerAvatarUrl} alt="" className="h-5 w-5 shrink-0 rounded-full border border-white/20 object-cover" loading="lazy" decoding="async" />
             )}
             <span className="min-w-0 flex-1 truncate text-[11px] font-display font-bold text-piu-gold">
               {viewerEntry.nationality && (

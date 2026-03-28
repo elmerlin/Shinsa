@@ -11,7 +11,7 @@ function formatWeekRange(startsAt, endsAt) {
   }
 }
 
-export default function WeeklyChallengeWeekPicker({ weeks = [], currentWeekKey, onSelect }) {
+export default function WeeklyChallengeWeekPicker({ weeks = [], currentWeekKey, currentWeek = null, loadingWeeks = false, onOpen, onSelect }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
@@ -24,13 +24,20 @@ export default function WeeklyChallengeWeekPicker({ weeks = [], currentWeekKey, 
     return () => document.removeEventListener('mousedown', handleClick);
   }, [open]);
 
-  const current = weeks.find(w => w.week_key === currentWeekKey);
+  const current = weeks.find(w => w.week_key === currentWeekKey)
+    || (currentWeek?.week_key === currentWeekKey ? currentWeek : null);
+
+  const toggleOpen = () => {
+    const nextOpen = !open;
+    setOpen(nextOpen);
+    if (nextOpen) onOpen?.();
+  };
 
   return (
     <div className="relative" ref={ref}>
       <button
         type="button"
-        onClick={() => setOpen(!open)}
+        onClick={toggleOpen}
         className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] transition-colors text-left"
       >
         <svg className="h-3.5 w-3.5 text-white/40 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -77,7 +84,7 @@ export default function WeeklyChallengeWeekPicker({ weeks = [], currentWeekKey, 
             );
           })}
           {weeks.length === 0 && (
-            <p className="text-center text-[11px] text-white/30 py-4">No weeks yet</p>
+            <p className="text-center text-[11px] text-white/30 py-4">{loadingWeeks ? 'Loading weeks...' : 'No weeks yet'}</p>
           )}
         </div>
       )}

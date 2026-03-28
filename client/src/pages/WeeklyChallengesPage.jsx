@@ -1,11 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { getWeeklyChallengeWeek, getWeeklyChallengeWeeks, getWeeklyChallengeChartScores } from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
 import { getAvatarUrl } from '../components/AvatarPicker';
-import { getCountryFlag } from '../components/PlayerRegistration';
-import ScoreSnapshotModal from '../components/ScoreSnapshotModal';
-import YouTubeReplayModal from '../components/YouTubeReplayModal';
+import { getCountryFlag } from '../utils/countryFlags';
 import { buildReplayModalTitle } from '../utils/replayTitle';
 import { getProfilePath } from '../utils/profile';
 import WeeklyChallengePodiumStrip from '../components/weeklyChallenges/WeeklyChallengePodiumStrip';
@@ -13,6 +11,9 @@ import WeeklyChallengeLeaderboard from '../components/weeklyChallenges/WeeklyCha
 import WeeklyChallengeLevelRow from '../components/weeklyChallenges/WeeklyChallengeLevelRow';
 import WeeklyChallengeWeekPicker, { formatWeekRange } from '../components/weeklyChallenges/WeeklyChallengeWeekPicker';
 import { TrophyIcon } from '../components/weeklyChallenges/WeeklyChallengePodiumStrip';
+
+const ScoreSnapshotModal = lazy(() => import('../components/ScoreSnapshotModal'));
+const YouTubeReplayModal = lazy(() => import('../components/YouTubeReplayModal'));
 
 // ── Filter chip ──────────────────────────────────────
 
@@ -75,9 +76,12 @@ export default function WeeklyChallengesPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const canonicalizingWeekRef = useRef(false);
 
   const [weekKey, setWeekKey] = useState(searchParams.get('week') || 'current');
   const [weeks, setWeeks] = useState([]);
+  const [weeksLoading, setWeeksLoading] = useState(false);
+  const [weeksLoaded, setWeeksLoaded] = useState(false);
   const [weekData, setWeekData] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -92,10 +96,17 @@ export default function WeeklyChallengesPage() {
   const [selectedScore, setSelectedScore] = useState(null);
   const [selectedReplay, setSelectedReplay] = useState(null);
 
-  // Load week list
-  useEffect(() => {
-    getWeeklyChallengeWeeks().then(setWeeks).catch(() => {});
-  }, []);
+  const loadWeeks = useCallback(() => {
+    if (weeksLoaded || weeksLoading) return;
+    setWeeksLoading(true);
+    getWeeklyChallengeWeeks()
+      .then((data) => {
+        setWeeks(Array.isArray(data) ? data : []);
+        setWeeksLoaded(true);
+      })
+      .catch(() => {})
+      .finally(() => setWeeksLoading(false));
+  }, [weeksLoaded, weeksLoading]);
 
   // Load week data when filters change
   const loadWeek = useCallback(() => {
@@ -105,19 +116,27 @@ export default function WeeklyChallengesPage() {
     if (leaderboardMode !== 'both') params.leaderboard_mode = leaderboardMode;
     if (skillFamily !== 'all') params.skill_family = skillFamily;
 
-    getWeeklyChallengeWeek(weekKey, params)
+    const requestedWeekKey = weekKey || 'current';
+    getWeeklyChallengeWeek(requestedWeekKey, params)
       .then(data => {
         setWeekData(data);
-        // Update weekKey if we got redirected from 'current'
-        if (weekKey === 'current' && data.week?.week_key) {
+        if (requestedWeekKey === 'current' && data.week?.week_key) {
+          canonicalizingWeekRef.current = true;
           setWeekKey(data.week.week_key);
+          navigate(`/weekly-challenges?week=${data.week.week_key}`, { replace: true });
         }
       })
       .catch(() => setWeekData(null))
       .finally(() => setLoading(false));
-  }, [weekKey, chartMode, leaderboardMode, skillFamily]);
+  }, [weekKey, chartMode, leaderboardMode, skillFamily, navigate]);
 
-  useEffect(() => { loadWeek(); }, [loadWeek]);
+  useEffect(() => {
+    if (canonicalizingWeekRef.current) {
+      canonicalizingWeekRef.current = false;
+      return;
+    }
+    loadWeek();
+  }, [loadWeek]);
 
   const handleChartClick = useCallback((chart) => {
     setSelectedChart(chart);
@@ -157,7 +176,10 @@ export default function WeeklyChallengesPage() {
         </div>
         <WeeklyChallengeWeekPicker
           weeks={weeks}
+          loadingWeeks={weeksLoading}
           currentWeekKey={weekKey}
+          currentWeek={week}
+          onOpen={loadWeeks}
           onSelect={handleWeekSelect}
         />
       </div>
@@ -254,7 +276,7 @@ export default function WeeklyChallengesPage() {
           <div className="w-full max-w-md max-h-[80vh] overflow-y-auto rounded-2xl border border-piu-border bg-[#0a1929] shadow-2xl" onClick={e => e.stopPropagation()}>
             <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-piu-border/40 bg-[#0a1929]/95 backdrop-blur-sm px-4 py-3">
               {selectedChart.jacket_url_snapshot && (
-                <img src={selectedChart.jacket_url_snapshot} alt="" className="h-10 w-10 rounded-lg object-cover" />
+                <img src={selectedChart.jacket_url_snapshot} alt="" className="h-10 w-10 rounded-lg object-cover" loading="lazy" decoding="async" />
               )}
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-display font-bold text-white truncate">{selectedChart.song_title_snapshot}</p>
@@ -285,7 +307,7 @@ export default function WeeklyChallengesPage() {
                       }`}>{entry.rank}</span>
                       <Link to={getProfilePath(entry.user_id, entry.username)} className="shrink-0">
                         {avatarUrl ? (
-                          <img src={avatarUrl} alt="" className="h-7 w-7 rounded-full border border-white/10 object-cover" />
+                          <img src={avatarUrl} alt="" className="h-7 w-7 rounded-full border border-white/10 object-cover" loading="lazy" decoding="async" />
                         ) : (
                           <div className="h-7 w-7 rounded-full bg-piu-dark flex items-center justify-center text-[10px] font-bold">{(entry.username || '?')[0]}</div>
                         )}
@@ -321,10 +343,14 @@ export default function WeeklyChallengesPage() {
       )}
 
       {selectedScore && (
-        <ScoreSnapshotModal score={selectedScore} jacketUrl={selectedScore._jacketUrl || ''} modalLabel="WC Score" onClose={() => setSelectedScore(null)} playId={selectedScore.play_id} />
+        <Suspense fallback={null}>
+          <ScoreSnapshotModal score={selectedScore} jacketUrl={selectedScore._jacketUrl || ''} modalLabel="WC Score" onClose={() => setSelectedScore(null)} playId={selectedScore.play_id} />
+        </Suspense>
       )}
       {selectedReplay && (
-        <YouTubeReplayModal url={selectedReplay.url} title={selectedReplay.title} onClose={() => setSelectedReplay(null)} />
+        <Suspense fallback={null}>
+          <YouTubeReplayModal url={selectedReplay.url} title={selectedReplay.title} onClose={() => setSelectedReplay(null)} />
+        </Suspense>
       )}
     </div>
   );

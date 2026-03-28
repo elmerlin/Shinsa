@@ -395,7 +395,17 @@ function aggregateWeeklyResults(db, weekId) {
       last_seen_at = datetime('now')
   `);
 
+  const snapshots = {};
   for (const [, profile] of userProfiles) {
+    snapshots[profile.user_id] = {
+      user_id: profile.user_id,
+      username_snapshot: profile.username || '',
+      avatar_snapshot: profile.avatar || '',
+      nationality_snapshot: profile.nationality || '',
+      skill_title_snapshot: profile.skill_title || '',
+      skill_level_snapshot: profile.skill_level || 1,
+      skill_family_snapshot: profile.skill_family || '',
+    };
     upsertSnapshot.run(
       weekId, profile.user_id,
       profile.username || '', profile.avatar || '', profile.nationality || '',
@@ -487,6 +497,7 @@ function aggregateWeeklyResults(db, weekId) {
     week,
     weeklyCharts,
     chartResults,
+    snapshots,
     userTotals,
     userChartBests,
     participantCount: userProfiles.size,
