@@ -1,7 +1,9 @@
 const express = require('express');
+const path = require('path');
 const router = express.Router();
 const { getDb } = require('../db/schema');
 const { optionalAuth } = require('./auth');
+const { makeChartKey, toCanonicalTitle } = require('../lib/chartKeys');
 const {
   ensureCurrentWeeklyChallengeWeek,
   aggregateWeeklyResults,
@@ -12,6 +14,28 @@ const {
   getActiveViewerBests,
   getUserWeeklyChallengeHistory,
 } = require('../lib/weeklyChallenges');
+
+const SONG_ALIAS_PATH = path.join(__dirname, '..', 'data', 'piugame-song-aliases.json');
+let cachedSongAliases = null;
+
+function getSongAliases() {
+  if (cachedSongAliases) return cachedSongAliases;
+  try {
+    const payload = require(SONG_ALIAS_PATH);
+    const rawAliases = (payload && typeof payload.aliases === 'object' && payload.aliases) || {};
+    const normalized = {};
+    for (const [alias, canonical] of Object.entries(rawAliases)) {
+      const aliasNorm = toCanonicalTitle(alias, {});
+      const canonicalNorm = toCanonicalTitle(canonical, {});
+      if (!aliasNorm || !canonicalNorm || aliasNorm === canonicalNorm) continue;
+      if (!normalized[aliasNorm]) normalized[aliasNorm] = canonicalNorm;
+    }
+    cachedSongAliases = normalized;
+  } catch {
+    cachedSongAliases = {};
+  }
+  return cachedSongAliases;
+}
 
 // ---------------------------------------------------------------------------
 // Cache — public aggregates only (viewer data composed post-cache)
@@ -413,49 +437,35 @@ router.get('/charts/:chartId/scores', (req, res) => {
     `).get(chartId);
     if (!chart) return res.status(404).json({ error: 'Chart not found' });
 
-    // Get best score per user for this chart in the week window
-    // Also match localized titles by finding background_urls that match the English title
-    const bgUrls = db.prepare(`
-      SELECT DISTINCT rp.background_url FROM user_recently_played rp
-      WHERE rp.song_title = ? AND rp.mode = ? AND rp.level = ?
-        AND rp.background_url IS NOT NULL AND rp.background_url != ''
-      LIMIT 5
-    `).all(chart.song_title_snapshot, chart.mode, chart.level).map(r => r.background_url);
+    const aliases = getSongAliases();
+    const targetChartKey = makeChartKey(chart.song_title_snapshot, chart.mode, chart.level, aliases);
+    const candidateRows = db.prepare(`
+      SELECT rp.id as play_id, rp.user_id, rp.song_title, rp.mode, rp.level, rp.score, rp.grade, rp.plate,
+             rp.perfect, rp.great, rp.good, rp.bad, rp.miss, rp.max_combo,
+             rp.background_url, rp.date_played, rp.played_at_utc,
+             rp.replay_embed_url, rp.replay_video_id, rp.replay_start_seconds, rp.replay_end_seconds,
+             u.username, u.avatar, u.avatar_v, u.nationality, u.skill_title
+      FROM user_recently_played rp
+      JOIN users u ON rp.user_id = u.id
+      WHERE rp.mode = ? AND rp.level = ?
+        AND COALESCE(NULLIF(rp.played_at_utc, ''), rp.date_played) >= ?
+        AND COALESCE(NULLIF(rp.played_at_utc, ''), rp.date_played) <= ?
+        AND rp.score > 0
+      ORDER BY rp.score DESC, rp.id ASC
+    `).all(chart.mode, chart.level, chart.starts_at_utc, chart.ends_at_utc);
 
-    let rows;
-    if (bgUrls.length > 0) {
-      const bgPlaceholders = bgUrls.map(() => '?').join(',');
-      rows = db.prepare(`
-        SELECT rp.id as play_id, rp.user_id, rp.score, rp.grade, rp.plate,
-               rp.perfect, rp.great, rp.good, rp.bad, rp.miss, rp.max_combo,
-               rp.background_url, rp.date_played, rp.played_at_utc,
-               rp.replay_embed_url, rp.replay_video_id, rp.replay_start_seconds, rp.replay_end_seconds,
-               u.username, u.avatar, u.avatar_v, u.nationality, u.skill_title
-        FROM user_recently_played rp
-        JOIN users u ON rp.user_id = u.id
-        WHERE (rp.song_title = ? OR rp.background_url IN (${bgPlaceholders}))
-          AND rp.mode = ? AND rp.level = ?
-          AND COALESCE(NULLIF(rp.played_at_utc, ''), rp.date_played) >= ?
-          AND COALESCE(NULLIF(rp.played_at_utc, ''), rp.date_played) <= ?
-          AND rp.score > 0
-        ORDER BY rp.score DESC, rp.id ASC
-      `).all(chart.song_title_snapshot, ...bgUrls, chart.mode, chart.level, chart.starts_at_utc, chart.ends_at_utc);
-    } else {
-      rows = db.prepare(`
-        SELECT rp.id as play_id, rp.user_id, rp.score, rp.grade, rp.plate,
-               rp.perfect, rp.great, rp.good, rp.bad, rp.miss, rp.max_combo,
-               rp.background_url, rp.date_played, rp.played_at_utc,
-               rp.replay_embed_url, rp.replay_video_id, rp.replay_start_seconds, rp.replay_end_seconds,
-               u.username, u.avatar, u.avatar_v, u.nationality, u.skill_title
-        FROM user_recently_played rp
-        JOIN users u ON rp.user_id = u.id
-        WHERE rp.song_title = ? AND rp.mode = ? AND rp.level = ?
-          AND COALESCE(NULLIF(rp.played_at_utc, ''), rp.date_played) >= ?
-          AND COALESCE(NULLIF(rp.played_at_utc, ''), rp.date_played) <= ?
-          AND rp.score > 0
-        ORDER BY rp.score DESC, rp.id ASC
-      `).all(chart.song_title_snapshot, chart.mode, chart.level, chart.starts_at_utc, chart.ends_at_utc);
-    }
+    const matchedBgUrls = new Set(
+      candidateRows
+        .filter((row) => row.song_title === chart.song_title_snapshot && row.background_url)
+        .map((row) => row.background_url)
+    );
+
+    const rows = candidateRows.filter((row) => {
+      if (row.song_title === chart.song_title_snapshot) return true;
+      const rowChartKey = makeChartKey(row.song_title, row.mode, row.level, aliases);
+      if (targetChartKey && rowChartKey === targetChartKey) return true;
+      return !!row.background_url && matchedBgUrls.has(row.background_url);
+    });
 
     // Keep only best per user
     const seen = new Set();

@@ -23,7 +23,20 @@ const SONG_ALIAS_PATH = path.join(__dirname, '..', 'data', 'piugame-song-aliases
 let _aliases = null;
 function getAliases() {
   if (!_aliases) {
-    try { _aliases = require(SONG_ALIAS_PATH); } catch { _aliases = {}; }
+    try {
+      const payload = require(SONG_ALIAS_PATH);
+      const rawAliases = (payload && typeof payload.aliases === 'object' && payload.aliases) || {};
+      const normalized = {};
+      for (const [alias, canonical] of Object.entries(rawAliases)) {
+        const aliasNorm = toCanonicalTitle(alias, {});
+        const canonicalNorm = toCanonicalTitle(canonical, {});
+        if (!aliasNorm || !canonicalNorm || aliasNorm === canonicalNorm) continue;
+        if (!normalized[aliasNorm]) normalized[aliasNorm] = canonicalNorm;
+      }
+      _aliases = normalized;
+    } catch {
+      _aliases = {};
+    }
   }
   return _aliases;
 }
