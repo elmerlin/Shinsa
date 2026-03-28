@@ -248,8 +248,8 @@ export default function TournamentView() {
             live={tournament.phase !== 'COMPLETED' && tournament.phase !== 'SETUP'}
             stats={[
               `${players.length} players`,
-              `${completedPhases.length}/${phases.length} phases complete`,
-              activePhase ? `Current: ${activePhase.name || FORMAT_LABELS[activePhase.format]}` : 'Waiting for first phase',
+              `${completedPhases.length}/${phases.length} done`,
+              activePhase ? `${activePhase.name || FORMAT_LABELS[activePhase.format]} live` : 'Waiting to start',
             ]}
             flow={<TournamentPhaseTimeline phases={phases} />}
           />
@@ -259,9 +259,9 @@ export default function TournamentView() {
         {tournament.phase === 'SETUP' && !activePhase && pendingPhases.length > 0 && (
           <TournamentCallout
             className="mb-6"
-            eyebrow="Tournament Setup"
-            title="Ready to begin?"
-            description={`${players.length} players registered. First phase: ${nextPending.name || FORMAT_LABELS[nextPending.format]}.`}
+            eyebrow="Setup"
+            title={`Start ${nextPending.name || FORMAT_LABELS[nextPending.format]}?`}
+            description={`${players.length} players ready.`}
             primaryAction={(
               <button onClick={() => handleActivatePhase(nextPending)} className="btn-primary" disabled={players.length < 2}>
                 Start {nextPending.name || FORMAT_LABELS[nextPending.format]}
@@ -275,8 +275,8 @@ export default function TournamentView() {
             className="mb-6"
             tone="success"
             eyebrow="Phase Complete"
-            title={`${activePhase.name || FORMAT_LABELS[activePhase.format]} is finished`}
-            description={`Next up: ${nextPending.name || FORMAT_LABELS[nextPending.format]}.`}
+            title={`${activePhase.name || FORMAT_LABELS[activePhase.format]} complete`}
+            description={`Next: ${nextPending.name || FORMAT_LABELS[nextPending.format]}.`}
             secondaryAction={(
               <button onClick={() => handleCompletePhase(activePhase)} className="btn-secondary text-sm">
                 Finalize
@@ -296,7 +296,7 @@ export default function TournamentView() {
             tone="gold"
             eyebrow="Final Step"
             title="Final phase complete"
-            description="Complete the tournament to lock standings and crown the champion."
+            description="Lock standings and finish the tournament."
             primaryAction={(
               <button onClick={() => handleCompletePhase(activePhase)} className="btn-primary">
                 Complete Tournament
@@ -309,8 +309,8 @@ export default function TournamentView() {
           <TournamentCallout
             className="mb-6"
             eyebrow="Match Queue"
-            title="Generate matches for this phase"
-            description="The phase is active, but the bracket has not been created yet."
+            title="Generate matches"
+            description="This phase is live but has no matches yet."
             primaryAction={(
               <button onClick={() => handleGeneratePhaseMatches(activePhase)} className="btn-primary">
                 Generate Matches
@@ -434,7 +434,7 @@ export default function TournamentView() {
           stats={[
             `${players.length} players`,
             currentRound > 0 ? `Round ${currentRound}/${totalRounds}` : 'Setup mode',
-            matchesPerRound > 0 ? `${matchesPerRound} matches per round` : 'Matches begin after registration',
+            matchesPerRound > 0 ? `${matchesPerRound} matches per round` : 'Add players to begin',
           ]}
         />
       </div>
@@ -443,9 +443,9 @@ export default function TournamentView() {
       {tournament.phase === 'SETUP' && (
         <TournamentCallout
           className="mb-6"
-          eyebrow="Tournament Setup"
-          title="Ready to start round robin?"
-          description={`${players.length} players means ${matchesPerRound} matches per round.`}
+          eyebrow="Setup"
+          title="Start round robin?"
+          description={`${players.length} players, ${matchesPerRound} matches per round.`}
           primaryAction={(
             <button onClick={handleStartRound} className="btn-primary" disabled={players.length < 2}>
               Start Round 1
@@ -459,8 +459,8 @@ export default function TournamentView() {
           className="mb-6"
           tone="success"
           eyebrow="Round Complete"
-          title={`Round ${currentRound} is complete`}
-          description={`All ${currentRoundMatches.length} matches have been played.`}
+          title={`Round ${currentRound} complete`}
+          description={`${currentRoundMatches.length} matches finished.`}
           primaryAction={(
             <button onClick={handleNextRound} className="btn-primary">
               Start Round {currentRound + 1}
@@ -474,7 +474,7 @@ export default function TournamentView() {
           className="mb-6"
           eyebrow="Next Format"
           title="Round robin complete"
-          description={`All ${totalRounds} rounds are finished. The tournament is ready for gauntlet.`}
+          description="The tournament is ready for gauntlet."
           primaryAction={(
             <button onClick={handleStartGauntlet} className="btn-primary">
               Start Gauntlet
@@ -489,7 +489,7 @@ export default function TournamentView() {
           tone="gold"
           eyebrow="Tournament Complete"
           title="All rounds are finished"
-          description={`The full ${totalRounds}-round run is complete. Check standings for the final result.`}
+          description="Check standings for the final result."
         />
       )}
 

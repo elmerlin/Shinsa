@@ -350,7 +350,7 @@ export default function PlayerRegistration({ tournamentId, players, isSetup, onU
         <div>
           <h2 className="section-title">Players ({players.length})</h2>
           <p className="mt-1 text-sm text-zinc-400">
-            Tournament entries are tied to registered Shinsa profiles. Player details stay read-only here.
+            Add registered Shinsa players. Profile details stay read-only here.
           </p>
         </div>
         {isSetup && !showForm && (
@@ -365,16 +365,13 @@ export default function PlayerRegistration({ tournamentId, players, isSetup, onU
       </div>
 
       {isSetup && (
-        <Card className="overflow-hidden border-white/8 bg-[radial-gradient(circle_at_top_left,rgba(255,51,102,0.14),transparent_34%),radial-gradient(circle_at_85%_15%,rgba(58,170,255,0.16),transparent_28%),rgba(9,12,22,0.9)]">
-          <CardContent className="flex flex-col gap-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div className="space-y-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="secondary">Registered Players Only</Badge>
-                  <MetaPill>Profiles stay read-only in tournament setup</MetaPill>
-                </div>
-                <p className="max-w-3xl text-sm leading-relaxed text-zinc-300">
-                  Search for existing Shinsa members and add them directly to the bracket. Names, avatars, flags, skill titles, and pumbility all come from each player&apos;s own account.
+        <Card className="overflow-hidden border-white/8 bg-[radial-gradient(circle_at_top_left,rgba(255,51,102,0.14),transparent_36%),radial-gradient(circle_at_82%_20%,rgba(255,199,92,0.12),transparent_28%),rgba(9,12,22,0.92)]">
+          <CardContent className="space-y-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="font-display text-base font-bold text-white">Registered players only</p>
+                <p className="mt-1 max-w-2xl text-sm text-zinc-300">
+                  Search Shinsa members and add them to the bracket. Profiles stay read-only here.
                 </p>
               </div>
               {showForm && (
@@ -386,19 +383,19 @@ export default function PlayerRegistration({ tournamentId, players, isSetup, onU
                   }}
                   className="btn-secondary"
                 >
-                  Close Picker
+                  Close
                 </button>
               )}
             </div>
 
             {showForm ? (
-              <div className="rounded-[1rem] border border-white/8 bg-black/20 p-4">
-                <label className="block text-sm text-zinc-300">Search registered players</label>
+              <div className="border-t border-white/8 pt-4">
+                <label className="block text-sm text-zinc-300">Find a player</label>
                 <div className="mt-2 flex flex-col gap-3 sm:flex-row">
                   <input
                     type="text"
                     className="input-field"
-                    placeholder="Type a username to search..."
+                    placeholder="Search username"
                     value={userSearch}
                     onChange={(event) => {
                       const value = event.target.value;
@@ -409,17 +406,12 @@ export default function PlayerRegistration({ tournamentId, players, isSetup, onU
                   />
                 </div>
 
-                <div className="mt-3 flex flex-wrap gap-2 text-xs text-zinc-500">
-                  <MetaPill>Add from the player&apos;s live profile snapshot</MetaPill>
-                  <MetaPill>Remove from the tournament if plans change</MetaPill>
-                </div>
-
                 {searching && <p className="mt-4 text-sm text-zinc-500">Searching players...</p>}
                 {!searching && userSearch.trim() && userResults.length === 0 && (
-                  <p className="mt-4 text-sm text-zinc-500">No registered players matched that search.</p>
+                  <p className="mt-4 text-sm text-zinc-500">No players matched that search.</p>
                 )}
                 {!searching && !userSearch.trim() && (
-                  <p className="mt-4 text-sm text-zinc-500">Start typing to find registered Shinsa members.</p>
+                  <p className="mt-4 text-sm text-zinc-500">Start typing to search registered players.</p>
                 )}
 
                 {userResults.length > 0 && (
@@ -430,7 +422,7 @@ export default function PlayerRegistration({ tournamentId, players, isSetup, onU
                       return (
                         <div
                           key={user.id}
-                          className="flex flex-col gap-3 rounded-[1rem] border border-white/8 bg-zinc-950/70 p-3 sm:flex-row sm:items-center"
+                          className="flex flex-col gap-3 rounded-xl border border-white/10 bg-black/18 p-3 sm:flex-row sm:items-center"
                         >
                           {user.avatar ? (
                             <img
@@ -448,7 +440,7 @@ export default function PlayerRegistration({ tournamentId, players, isSetup, onU
                             <div className="flex flex-wrap items-center gap-2">
                               <p className="truncate font-display text-sm font-bold text-white">{user.username}</p>
                               {user.nationality ? <span className="text-base">{getCountryFlag(user.nationality)}</span> : null}
-                              <Badge variant={alreadyAdded ? 'warning' : 'default'}>
+                              <Badge variant={alreadyAdded ? 'warning' : 'default'} className={alreadyAdded ? '' : 'border-piu-accent/20 bg-piu-accent/10 text-rose-100'}>
                                 {alreadyAdded ? 'Already Added' : 'Registered'}
                               </Badge>
                             </div>
@@ -487,8 +479,8 @@ export default function PlayerRegistration({ tournamentId, players, isSetup, onU
                 )}
               </div>
             ) : (
-              <div className="rounded-[1rem] border border-dashed border-white/10 bg-black/15 px-4 py-4 text-sm text-zinc-400">
-                Open the picker to add existing Shinsa members to the tournament. If someone needs a different name, avatar, or country, they should update their own profile first.
+              <div className="border-t border-white/8 pt-4 text-sm text-zinc-400">
+                Open the picker to search and add players.
               </div>
             )}
           </CardContent>
@@ -500,7 +492,7 @@ export default function PlayerRegistration({ tournamentId, players, isSetup, onU
           <CardContent className="py-12 text-center">
             <p className="text-lg font-display font-bold text-zinc-200">No players registered yet</p>
             <p className="mt-2 text-sm text-zinc-500">
-              {isSetup ? 'Use Add Registered Player to bring in participants from their Shinsa accounts.' : 'Players will appear here once the tournament organizer adds them.'}
+              {isSetup ? 'Use Add Registered Player to build the bracket.' : 'Players will appear here once the organizer adds them.'}
             </p>
           </CardContent>
         </Card>
@@ -512,7 +504,7 @@ export default function PlayerRegistration({ tournamentId, players, isSetup, onU
 
             return (
               <Card key={player.id} className="overflow-hidden border-white/8 bg-zinc-950/60">
-                <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center">
                   <div className="flex items-center gap-3 sm:gap-4">
                     <div className="flex h-10 w-10 items-center justify-center rounded-full border border-white/8 bg-white/5 font-mono text-sm text-zinc-400">
                       #{idx + 1}
@@ -547,12 +539,9 @@ export default function PlayerRegistration({ tournamentId, players, isSetup, onU
                           {player.skill_title}
                         </span>
                       ) : null}
-                      {player.user_id ? <Badge variant="default">Registered</Badge> : null}
                     </div>
 
-                    <p className="mt-2 text-sm leading-relaxed text-zinc-400">
-                      {player.description || 'Profile details come from the player’s Shinsa account and stay read-only in tournament setup.'}
-                    </p>
+                    {player.description ? <p className="mt-1 text-sm text-zinc-400">{player.description}</p> : null}
                   </div>
 
                   <div className="flex items-center justify-between gap-3 sm:justify-end">
@@ -560,7 +549,7 @@ export default function PlayerRegistration({ tournamentId, players, isSetup, onU
                       {player.pumbility > 0 ? (
                         <div className="text-sm font-mono font-bold text-piu-gold">{Number(player.pumbility).toLocaleString()}</div>
                       ) : (
-                        <div className="text-sm text-zinc-500">No pumbility yet</div>
+                        <div className="text-sm text-zinc-500">No pumbility</div>
                       )}
                       <div className="text-xs text-zinc-500">
                         {player.wins}W - {player.losses}L

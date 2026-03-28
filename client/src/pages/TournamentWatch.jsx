@@ -177,13 +177,13 @@ export default function TournamentWatch() {
             live={isActive}
             stats={[
               `${players.length} players`,
-              `${completedPhases.length}/${phases.length} phases complete`,
-              isActive ? 'Viewer mode with live refresh' : 'Viewer mode',
+              `${completedPhases.length}/${phases.length} done`,
+              isActive ? 'Live refresh' : 'Viewer mode',
             ]}
             action={(
               <button
                 onClick={handleShare}
-                className="rounded-full border border-white/10 bg-white/6 px-3 py-2 text-xs font-display font-bold uppercase tracking-[0.16em] text-zinc-300 transition-colors hover:border-white/18 hover:text-white"
+                className="rounded-full border border-piu-accent/20 bg-piu-accent/10 px-3 py-2 text-xs font-display font-bold uppercase tracking-[0.16em] text-rose-100 transition-colors hover:border-piu-accent/30 hover:text-white"
               >
                 {copied ? 'Copied!' : 'Share'}
               </button>
@@ -304,12 +304,12 @@ export default function TournamentWatch() {
           stats={[
             `${players.length} players`,
             currentRound > 0 ? `Round ${currentRound}/${totalRounds}` : 'Setup mode',
-            tournament.phase === 'COMPLETED' ? 'Finished tournament' : 'Spectator view',
+            tournament.phase === 'COMPLETED' ? 'Finished' : 'Spectator view',
           ]}
           action={(
             <button
               onClick={handleShare}
-              className="rounded-full border border-white/10 bg-white/6 px-3 py-2 text-xs font-display font-bold uppercase tracking-[0.16em] text-zinc-300 transition-colors hover:border-white/18 hover:text-white"
+              className="rounded-full border border-piu-accent/20 bg-piu-accent/10 px-3 py-2 text-xs font-display font-bold uppercase tracking-[0.16em] text-rose-100 transition-colors hover:border-piu-accent/30 hover:text-white"
             >
               {copied ? 'Copied!' : 'Share'}
             </button>

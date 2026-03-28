@@ -192,30 +192,33 @@ export default function TournamentSetup() {
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
       <div className="space-y-6">
-        <Card className="overflow-hidden border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(255,51,102,0.18),transparent_34%),radial-gradient(circle_at_85%_15%,rgba(58,170,255,0.18),transparent_28%),rgba(8,11,20,0.92)]">
+        <Card className="overflow-hidden border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(255,51,102,0.18),transparent_36%),radial-gradient(circle_at_82%_20%,rgba(255,199,92,0.14),transparent_28%),rgba(8,11,20,0.94)]">
           <CardContent className="space-y-5">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="secondary">Tournament Setup</Badge>
+              <Badge variant="default" className="border-piu-accent/25 bg-piu-accent/12 text-rose-100">Tournament Setup</Badge>
               <Badge variant={phases.length > 0 ? 'success' : 'warning'}>
                 {phases.length > 0 ? `${phases.length} phase${phases.length === 1 ? '' : 's'} configured` : 'Add at least one phase'}
               </Badge>
             </div>
 
-            <div className="grid gap-5 lg:grid-cols-[1.25fr_0.75fr]">
+            <div className="space-y-4">
               <div>
                 <h1 className="font-display text-3xl font-bold text-white sm:text-4xl">Build the bracket before match one</h1>
-                <p className="mt-3 max-w-3xl text-sm leading-relaxed text-zinc-300">
-                  Create the tournament shell, define the phase flow, and then add participants from registered Shinsa profiles after creation. Player names, avatars, skill titles, and flags now come from each player&apos;s own account rather than local edits.
+                <p className="mt-3 max-w-3xl text-sm text-zinc-300">
+                  Set the shell, line up the phases, then add registered players.
                 </p>
               </div>
 
-              <div className="rounded-[1rem] border border-white/8 bg-black/18 p-4">
-                <p className="font-display text-sm font-bold uppercase tracking-[0.16em] text-zinc-400">Checklist</p>
-                <div className="mt-3 space-y-2 text-sm text-zinc-300">
-                  <p>1. Name the tournament and set the date.</p>
-                  <p>2. Pick a preset or assemble phases manually.</p>
-                  <p>3. Add registered players after the tournament is created.</p>
-                </div>
+              <div className="flex flex-wrap gap-2">
+                <span className="inline-flex items-center rounded-full border border-white/10 bg-black/18 px-3 py-1.5 text-[11px] font-display font-bold uppercase tracking-[0.14em] text-zinc-300">
+                  1. Details
+                </span>
+                <span className="inline-flex items-center rounded-full border border-white/10 bg-black/18 px-3 py-1.5 text-[11px] font-display font-bold uppercase tracking-[0.14em] text-zinc-300">
+                  2. Phases
+                </span>
+                <span className="inline-flex items-center rounded-full border border-white/10 bg-black/18 px-3 py-1.5 text-[11px] font-display font-bold uppercase tracking-[0.14em] text-zinc-300">
+                  3. Players
+                </span>
               </div>
             </div>
           </CardContent>
@@ -227,7 +230,7 @@ export default function TournamentSetup() {
               <SetupSectionHeader
                 eyebrow="General Info"
                 title="Tournament details"
-                description="These details appear across the setup, overview, and watch pages."
+                description="Shown on setup, overview, and watch pages."
               />
 
               <div className="grid gap-5 lg:grid-cols-[1.15fr_0.85fr]">
@@ -288,11 +291,11 @@ export default function TournamentSetup() {
           ) : null}
 
           <div className="space-y-4">
-            <SetupSectionHeader
-              eyebrow="Phase Pipeline"
-              title="Design the tournament flow"
-              description="Stack formats in order and define how each stage feeds into the next one."
-              action={phases.length > 0 ? (
+              <SetupSectionHeader
+                eyebrow="Phase Pipeline"
+                title="Design the tournament flow"
+                description="Stack formats in order and define how each stage feeds the next."
+                action={phases.length > 0 ? (
                 <button
                   type="button"
                   onClick={() => setPhases([])}
@@ -338,7 +341,7 @@ export default function TournamentSetup() {
                   <SetupSectionHeader
                     eyebrow="Add Phase"
                     title="Choose the next format"
-                    description="Each phase becomes its own tab in the tournament view and watch view."
+                    description="Each phase becomes its own tournament tab."
                     action={(
                       <button
                         type="button"
@@ -389,8 +392,8 @@ export default function TournamentSetup() {
               <CardContent className="space-y-4">
                 <SetupSectionHeader
                   eyebrow="Tournament Flow"
-                  title="How the day will run"
-                  description="A quick preview of the format progression players will move through."
+                  title="Phase order"
+                  description="Preview the progression from opening phase to champion."
                 />
 
                 <div className="flex flex-wrap items-center gap-2 text-sm">

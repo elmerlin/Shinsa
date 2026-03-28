@@ -2,7 +2,7 @@ import React from 'react';
 import { getAvatarUrl } from '../AvatarPicker';
 import { Badge } from '../ui/badge';
 import { Card, CardContent } from '../ui/card';
-import { FORMAT_DESCRIPTIONS, FORMAT_ICONS, FORMAT_LABELS, PHASE_STATUS_LABELS } from '../../utils/tournamentConstants';
+import { FORMAT_DESCRIPTIONS, FORMAT_ICONS, FORMAT_LABELS } from '../../utils/tournamentConstants';
 
 function cx(...classes) {
   return classes.filter(Boolean).join(' ');
@@ -11,26 +11,36 @@ function cx(...classes) {
 function MetaPill({ children }) {
   if (!children) return null;
   return (
-    <span className="inline-flex items-center rounded-full border border-white/8 bg-white/6 px-2.5 py-1 text-[11px] text-zinc-300">
+    <span className="inline-flex items-center rounded-full border border-white/10 bg-black/18 px-2.5 py-1 text-[11px] text-zinc-300">
       {children}
     </span>
   );
 }
 
-function getStatusVariant(phase) {
-  if (phase === 'COMPLETED') return 'success';
-  if (phase === 'SETUP') return 'warning';
-  return 'secondary';
+function getStatusTone(phase) {
+  if (phase === 'COMPLETED') {
+    return 'border-piu-gold/25 bg-piu-gold/10 text-piu-gold';
+  }
+  if (phase === 'SETUP') {
+    return 'border-white/10 bg-white/6 text-zinc-200';
+  }
+  return 'border-piu-accent/25 bg-piu-accent/12 text-rose-100';
 }
 
 function getPhaseTone(status) {
   if (status === 'COMPLETED') {
-    return 'border-emerald-400/25 bg-emerald-400/10 text-emerald-200';
+    return 'border-piu-gold/25 bg-piu-gold/10 text-piu-gold';
   }
   if (status === 'ACTIVE') {
-    return 'border-cyan-400/25 bg-cyan-400/10 text-cyan-100';
+    return 'border-piu-accent/25 bg-piu-accent/12 text-rose-100';
   }
-  return 'border-white/8 bg-white/5 text-zinc-400';
+  return 'border-white/10 bg-white/4 text-zinc-300';
+}
+
+function getPhaseStateMark(status) {
+  if (status === 'COMPLETED') return '✓';
+  if (status === 'ACTIVE') return '•';
+  return null;
 }
 
 export function formatTournamentDate(value) {
@@ -72,7 +82,7 @@ export function TournamentHero({
   return (
     <Card
       className={cx(
-        'relative overflow-hidden border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(255,51,102,0.18),transparent_34%),radial-gradient(circle_at_85%_15%,rgba(58,170,255,0.18),transparent_28%),rgba(8,11,20,0.92)]',
+        'relative overflow-hidden border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(255,51,102,0.18),transparent_36%),radial-gradient(circle_at_82%_18%,rgba(255,199,92,0.14),transparent_28%),rgba(8,11,20,0.94)]',
         className
       )}
     >
@@ -80,9 +90,9 @@ export function TournamentHero({
         <div className="absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" />
       </div>
 
-      <CardContent className="relative flex flex-col gap-5">
+      <CardContent className="relative flex flex-col gap-4">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="flex min-w-0 items-start gap-4">
+          <div className="flex min-w-0 items-start gap-3.5">
             <div className="hidden shrink-0 sm:block">
               {tournament?.avatar ? (
                 <img
@@ -93,7 +103,7 @@ export function TournamentHero({
                   decoding="async"
                 />
               ) : (
-                <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-gradient-to-br from-piu-accent/80 via-rose-500/65 to-sky-500/70 font-display text-2xl font-bold text-white ring-1 ring-white/10 shadow-[0_8px_18px_rgba(0,0,0,0.24)]">
+                <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-gradient-to-br from-piu-accent/85 via-rose-500/70 to-piu-gold/75 font-display text-2xl font-bold text-white ring-1 ring-white/10 shadow-[0_8px_18px_rgba(0,0,0,0.24)]">
                   {title.charAt(0).toUpperCase()}
                 </div>
               )}
@@ -101,18 +111,24 @@ export function TournamentHero({
 
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                {live ? <Badge variant="secondary">Live</Badge> : null}
-                <Badge variant={getStatusVariant(tournament?.phase)}>{statusLabel || tournament?.phase || 'Setup'}</Badge>
+                {live ? (
+                  <Badge variant="default" className="border-piu-accent/25 bg-piu-accent/12 text-rose-100">
+                    Live
+                  </Badge>
+                ) : null}
+                <Badge variant="default" className={getStatusTone(tournament?.phase)}>
+                  {statusLabel || tournament?.phase || 'Setup'}
+                </Badge>
                 {formattedDate ? <MetaPill>{formattedDate}</MetaPill> : null}
                 {tournament?.location ? <MetaPill>{tournament.location}</MetaPill> : null}
               </div>
 
-              <h1 className="mt-3 text-2xl font-display font-bold tracking-[0.02em] text-white sm:text-3xl">
+              <h1 className="mt-2.5 text-2xl font-display font-bold tracking-[0.02em] text-white sm:text-3xl">
                 {title}
               </h1>
 
               {stats.length > 0 ? (
-                <div className="mt-4 flex flex-wrap gap-2">
+                <div className="mt-3 flex flex-wrap gap-1.5">
                   {stats.map((stat, index) => (
                     <MetaPill key={`stat-${index}`}>{stat}</MetaPill>
                   ))}
@@ -125,7 +141,7 @@ export function TournamentHero({
         </div>
 
         {flow ? (
-          <div className="rounded-[1rem] border border-white/8 bg-black/18 p-3">
+          <div className="border-t border-white/8 pt-3">
             {flow}
           </div>
         ) : null}
@@ -138,21 +154,19 @@ export function TournamentPhaseTimeline({ phases = [] }) {
   if (!Array.isArray(phases) || phases.length === 0) return null;
 
   return (
-    <div className="flex flex-wrap items-center gap-2 text-[11px]">
+    <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
       {phases.map((phase, index) => (
         <React.Fragment key={phase.id || `${phase.format}-${index}`}>
-          {index > 0 ? <span className="text-zinc-600">→</span> : null}
+          {index > 0 ? <span className="px-0.5 text-zinc-600">→</span> : null}
           <span
             className={cx(
-              'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-display font-bold uppercase tracking-[0.14em]',
+              'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-display text-[10px] font-bold uppercase tracking-[0.12em]',
               getPhaseTone(phase.status)
             )}
           >
             <span aria-hidden="true">{FORMAT_ICONS[phase.format] || '•'}</span>
             <span>{phase.name || FORMAT_LABELS[phase.format] || phase.format}</span>
-            <span className="text-[10px] opacity-70">
-              {PHASE_STATUS_LABELS[phase.status] || phase.status}
-            </span>
+            {getPhaseStateMark(phase.status) ? <span className="text-[11px]">{getPhaseStateMark(phase.status)}</span> : null}
           </span>
         </React.Fragment>
       ))}
@@ -164,35 +178,33 @@ export function TournamentTabs({ tabs = [], activeTab, onChange, className = '' 
   if (!Array.isArray(tabs) || tabs.length === 0) return null;
 
   return (
-    <Card className={cx('border-white/8 bg-zinc-950/55', className)}>
-      <CardContent className="flex gap-2 overflow-x-auto p-2">
-        {tabs.map((tab) => (
-          <button
-            key={tab.key}
-            type="button"
-            onClick={() => onChange?.(tab.key)}
-            className={cx(
-              'inline-flex shrink-0 items-center gap-2 rounded-full border px-3.5 py-2 font-display text-xs font-bold uppercase tracking-[0.16em] transition-colors',
-              activeTab === tab.key
-                ? 'border-cyan-400/30 bg-cyan-400/12 text-cyan-100'
-                : 'border-white/8 bg-white/4 text-zinc-400 hover:border-white/14 hover:text-zinc-100'
-            )}
-          >
-            {tab.icon ? <span aria-hidden="true">{tab.icon}</span> : null}
-            <span>{tab.label}</span>
-            {tab.status === 'COMPLETED' ? <span className="text-emerald-300">✓</span> : null}
-            {tab.status === 'ACTIVE' ? <span className="text-cyan-200">•</span> : null}
-          </button>
-        ))}
-      </CardContent>
-    </Card>
+    <div className={cx('flex gap-1.5 overflow-x-auto rounded-xl border border-white/10 bg-black/18 p-1.5', className)}>
+      {tabs.map((tab) => (
+        <button
+          key={tab.key}
+          type="button"
+          onClick={() => onChange?.(tab.key)}
+          className={cx(
+            'inline-flex shrink-0 items-center gap-2 rounded-full border px-3 py-1.5 font-display text-[11px] font-bold uppercase tracking-[0.14em] transition-colors',
+            activeTab === tab.key
+              ? 'border-piu-accent/30 bg-piu-accent/12 text-rose-100'
+              : 'border-transparent bg-transparent text-zinc-400 hover:border-white/10 hover:bg-white/5 hover:text-zinc-100'
+          )}
+        >
+          {tab.icon ? <span aria-hidden="true">{tab.icon}</span> : null}
+          <span>{tab.label}</span>
+          {tab.status === 'COMPLETED' ? <span className="text-piu-gold">✓</span> : null}
+          {tab.status === 'ACTIVE' ? <span className="text-piu-accent">•</span> : null}
+        </button>
+      ))}
+    </div>
   );
 }
 
 const CALLOUT_TONE_CLASSES = {
-  default: 'border-cyan-400/18 bg-cyan-400/8',
+  default: 'border-piu-accent/18 bg-piu-accent/8',
   success: 'border-emerald-400/18 bg-emerald-400/8',
-  warning: 'border-amber-400/20 bg-amber-400/8',
+  warning: 'border-white/10 bg-white/5',
   gold: 'border-piu-gold/22 bg-piu-gold/8',
 };
 
@@ -207,13 +219,13 @@ export function TournamentCallout({
 }) {
   return (
     <Card className={cx(CALLOUT_TONE_CLASSES[tone] || CALLOUT_TONE_CLASSES.default, className)}>
-      <CardContent className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <CardContent className="flex flex-col gap-3.5 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
           {eyebrow ? (
             <p className="text-[10px] font-display font-bold uppercase tracking-[0.2em] text-zinc-500">{eyebrow}</p>
           ) : null}
-          <p className="mt-1 font-display text-lg font-bold text-white">{title}</p>
-          {description ? <p className="mt-1 text-sm leading-relaxed text-zinc-300">{description}</p> : null}
+          <p className="mt-1 font-display text-base font-bold text-white">{title}</p>
+          {description ? <p className="mt-1 text-sm text-zinc-300">{description}</p> : null}
         </div>
 
         {(primaryAction || secondaryAction) ? (
@@ -244,24 +256,24 @@ export function TournamentPhaseRuleCard({ phase, className = '' }) {
   ].filter(Boolean);
 
   return (
-    <Card className={cx('border-white/8 bg-zinc-950/60', className)}>
-      <CardContent className="flex flex-col gap-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <Card className={cx('border-white/8 bg-zinc-950/48', className)}>
+      <CardContent className="flex flex-col gap-3.5 p-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="secondary">
+              <Badge variant="default" className="border-piu-accent/25 bg-piu-accent/12 text-rose-100">
                 <span aria-hidden="true">{FORMAT_ICONS[format] || '•'}</span>
                 <span>{phase.name || FORMAT_LABELS[format] || format}</span>
               </Badge>
             </div>
-            <p className="mt-3 text-sm leading-relaxed text-zinc-300">
+            <p className="mt-2 text-sm text-zinc-300">
               {FORMAT_DESCRIPTIONS[format] || 'Tournament format details'}
             </p>
           </div>
         </div>
 
         {rules.length > 0 ? (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1.5">
             {rules.map((rule) => (
               <MetaPill key={rule}>{rule}</MetaPill>
             ))}
