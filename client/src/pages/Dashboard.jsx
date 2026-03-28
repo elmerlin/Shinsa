@@ -5,7 +5,9 @@ import { useAuth } from '../contexts/AuthContext';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag } from '../utils/countryFlags';
 import { renderFormattedText } from '../utils/formatText';
-import { extractCommunityPalette, getCommunityCardStyle } from '../utils/communityColors';
+import { extractCommunityPalette } from '../utils/communityColors';
+import TournamentShowcaseCard from '../components/TournamentShowcaseCard';
+import CommunityShowcaseCard from '../components/CommunityShowcaseCard';
 
 const LiveDirectoryCard = lazy(() => import('../components/LiveDirectoryCard'));
 const ArchiveBrowser = lazy(() => import('../components/tournament/ArchiveBrowser'));
@@ -37,12 +39,6 @@ const ACTIVITY_ICONS = {
   tournament_win: { icon: '🥇', color: 'text-piu-gold' },
   duel_win: { icon: '🏅', color: 'text-amber-400' },
   online_duel_win: { icon: '🏅', color: 'text-blue-400' },
-};
-
-const PHASE_LABELS = {
-  SETUP: 'Setup',
-  ROUND_ROBIN: 'Round Robin',
-  COMPLETED: 'Completed',
 };
 
 const DEFERRED_SECTION_STYLE = {
@@ -288,54 +284,6 @@ export default function Dashboard() {
     ? 0
     : (searchResults.tournaments.length + searchResults.duels.length + searchResults.onlineDuels.length);
 
-  const TournamentCard = ({ t }) => (
-    <Link
-      key={t.id}
-      to={`/tournament/${t.id}`}
-      className="card-hover flex items-center justify-between group"
-    >
-      <div className="flex items-center gap-4">
-        {t.avatar ? (
-          <img
-            src={getAvatarUrl(t.avatar)}
-            alt={t.name}
-            className="w-12 h-12 rounded-lg object-cover shadow-md"
-            loading="lazy"
-            decoding="async"
-          />
-        ) : (
-          <div className="w-12 h-12 bg-gradient-to-br from-piu-accent to-purple-700 rounded-lg flex items-center justify-center font-display text-xl font-bold shadow-md">
-            {t.name.charAt(0).toUpperCase()}
-          </div>
-        )}
-        <div>
-          <h3 className="font-display text-lg font-bold group-hover:text-piu-accent transition-colors">
-            {t.name}
-          </h3>
-          <div className="flex gap-3 text-sm text-gray-400">
-            {t.location && <span>{t.location}</span>}
-            {t.date && <span>{t.date}</span>}
-          </div>
-        </div>
-      </div>
-      <div className="flex items-center gap-3">
-        <span className={`badge ${
-          t.phase === 'SETUP' ? 'badge-pending' :
-          t.phase === 'COMPLETED' ? 'badge-completed' : 'badge-active'
-        }`}>
-          {PHASE_LABELS[t.phase] || t.phase}
-        </span>
-        <button
-          onClick={(e) => handleDelete(e, t.id)}
-          className="text-gray-600 hover:text-red-500 transition-colors p-1"
-          title="Delete tournament"
-        >
-          &#10005;
-        </button>
-      </div>
-    </Link>
-  );
-
   const DuelCard = ({ d }) => {
     const creatorUserId = d.creator_user_id || d.player1_user_id || '';
     const canDeleteDuel = !!(user && creatorUserId && creatorUserId === user.id);
@@ -409,10 +357,7 @@ export default function Dashboard() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-4xl font-display font-bold tracking-wider">
-          <span className="text-piu-gold">PUMP</span> SHINSA
-        </h1>
+      <div className="mb-6">
         <div className="grid grid-cols-4 gap-2 w-full sm:w-auto sm:flex sm:items-center sm:gap-2">
           <Link
             to="/live"
@@ -558,90 +503,46 @@ export default function Dashboard() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {featuredCommunities.map(c => {
               const cardPalette = communityPalettes[c.id];
+              const action = user && !c.joined && !c.pending_request ? (
+                <button
+                  onClick={async (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setJoiningCommunity(c.id);
+                    try {
+                      const result = await joinCommunity(c.id);
+                      setFeaturedCommunities(prev => prev.map((fc) => {
+                        if (fc.id !== c.id) return fc;
+                        if (result?.status === 'pending') {
+                          return { ...fc, pending_request: true };
+                        }
+                        return { ...fc, joined: true, member_count: (fc.member_count || 0) + 1 };
+                      }));
+                    } catch (err) {
+                      if (!err.message.includes('Already')) alert(err.message);
+                    } finally {
+                      setJoiningCommunity(null);
+                    }
+                  }}
+                  disabled={joiningCommunity === c.id}
+                  className="rounded-full border border-piu-accent/30 bg-piu-accent/15 px-3 py-1.5 text-[10px] font-display font-bold uppercase tracking-[0.16em] text-piu-accent transition-colors hover:bg-piu-accent/25 disabled:opacity-50"
+                >
+                  {joiningCommunity === c.id ? 'Joining' : (c.is_invite_only ? 'Request' : 'Join')}
+                </button>
+              ) : user && c.pending_request ? (
+                <span className="inline-flex rounded-full border border-yellow-400/20 bg-yellow-400/12 px-3 py-1.5 text-[10px] font-display font-bold uppercase tracking-[0.16em] text-yellow-300">
+                  Pending
+                </span>
+              ) : null;
 
               return (
-                <div
+                <CommunityShowcaseCard
                   key={c.id}
-                  className="card-hover flex items-start gap-3 group relative"
-                  style={getCommunityCardStyle(cardPalette) || undefined}
-                >
-                  <Link to={`/c/${c.name}`} className="flex items-start gap-3 flex-1 min-w-0">
-                    <div className="relative shrink-0">
-                      {c.avatar ? (
-                        <img src={getAvatarUrl(c.avatar)} alt="" className="w-12 h-12 rounded-lg object-cover shadow-md" loading="lazy" decoding="async" />
-                      ) : (
-                        <div className="w-12 h-12 bg-gradient-to-br from-piu-accent to-purple-700 rounded-lg flex items-center justify-center font-display text-xl font-bold shadow-md">
-                          {c.display_name[0]?.toUpperCase()}
-                        </div>
-                      )}
-                      {!!c.is_invite_only && (
-                        <div className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-500 rounded-full flex items-center justify-center" title="Private">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="w-2.5 h-2.5 text-black" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
-                          </svg>
-                        </div>
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <h3 className="font-display font-bold text-sm group-hover:text-piu-accent transition-colors truncate">{c.display_name}</h3>
-                      <p className="text-[10px] text-gray-500 line-clamp-2 mt-0.5">{c.description || 'A community'}</p>
-                      <div className="flex items-center gap-1.5 mt-1">
-                        <span
-                          className="inline-flex items-center gap-1 rounded-full border border-piu-border/60 bg-piu-dark/50 px-1.5 py-0.5 text-[9px] text-gray-300"
-                          title={`${c.member_count} members`}
-                          aria-label={`${c.member_count} members`}
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 text-cyan-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-                          </svg>
-                          <span>{c.member_count}</span>
-                        </span>
-                        <span
-                          className="inline-flex items-center gap-1 rounded-full border border-piu-border/60 bg-piu-dark/50 px-1.5 py-0.5 text-[9px] text-gray-300"
-                          title={`${c.posts_last_week || 0} posts this week`}
-                          aria-label={`${c.posts_last_week || 0} posts this week`}
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 text-rose-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                          </svg>
-                          <span>{c.posts_last_week || 0}</span>
-                        </span>
-                      </div>
-                    </div>
-                  </Link>
-                  {user && !c.joined && !c.pending_request && (
-                    <button
-                      onClick={async (e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setJoiningCommunity(c.id);
-                        try {
-                          const result = await joinCommunity(c.id);
-                          setFeaturedCommunities(prev => prev.map((fc) => {
-                            if (fc.id !== c.id) return fc;
-                            if (result?.status === 'pending') {
-                              return { ...fc, pending_request: true };
-                            }
-                            return { ...fc, joined: true, member_count: (fc.member_count || 0) + 1 };
-                          }));
-                        } catch (err) {
-                          if (!err.message.includes('Already')) alert(err.message);
-                        } finally {
-                          setJoiningCommunity(null);
-                        }
-                      }}
-                      disabled={joiningCommunity === c.id}
-                      className="shrink-0 mt-1 px-2.5 py-1 rounded-lg text-[9px] font-display font-bold transition-colors bg-piu-accent/20 text-piu-accent hover:bg-piu-accent/30 disabled:opacity-50"
-                    >
-                      {joiningCommunity === c.id ? '...' : (c.is_invite_only ? 'Request' : 'Join')}
-                    </button>
-                  )}
-                  {user && c.pending_request && (
-                    <span className="shrink-0 mt-1 px-2.5 py-1 rounded-lg text-[9px] font-display font-bold bg-yellow-500/20 text-yellow-400">
-                      Pending
-                    </span>
-                  )}
-                </div>
+                  community={c}
+                  palette={cardPalette}
+                  action={action}
+                  className="h-full"
+                />
               );
             })}
           </div>
@@ -761,8 +662,14 @@ export default function Dashboard() {
             </div>
           )
         ) : (
-          <div className="grid gap-4">
-            {displayTournaments.map(t => <TournamentCard key={t.id} t={t} />)}
+          <div className="grid gap-4 lg:grid-cols-2">
+            {displayTournaments.map((t) => (
+              <TournamentShowcaseCard
+                key={t.id}
+                tournament={t}
+                onDelete={handleDelete}
+              />
+            ))}
           </div>
         )}
       </div>

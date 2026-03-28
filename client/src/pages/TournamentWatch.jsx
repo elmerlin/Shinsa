@@ -73,14 +73,27 @@ export default function TournamentWatch() {
       setPlayers(p);
       setMatches(m);
 
+      let loadedPhases = [];
       try {
         const ph = await getPhases(id);
-        setPhases(ph || []);
-      } catch { setPhases([]); }
+        loadedPhases = Array.isArray(ph) ? ph : [];
+        setPhases(loadedPhases);
+      } catch {
+        loadedPhases = [];
+        setPhases([]);
+      }
 
       if (!activeTabRef.current) {
-        const tabs = LEGACY_PHASE_TABS[t.phase] || [];
-        setActiveTab(tabs[0] || '');
+        if (loadedPhases.length > 0) {
+          const activePhase = loadedPhases.find((phase) => phase.status === 'ACTIVE');
+          const allPhasesComplete = loadedPhases.every((phase) => phase.status === 'COMPLETED');
+          if (activePhase) setActiveTab(`phase-${activePhase.id}`);
+          else if (allPhasesComplete) setActiveTab('final');
+          else setActiveTab(`phase-${loadedPhases[0].id}`);
+        } else {
+          const tabs = LEGACY_PHASE_TABS[t.phase] || [];
+          setActiveTab(tabs[0] || '');
+        }
       }
       if (t.current_round > 0 && !selectedRoundRef.current) {
         setSelectedRound(t.current_round);
@@ -99,6 +112,28 @@ export default function TournamentWatch() {
     const interval = setInterval(loadData, REFRESH_INTERVAL);
     return () => clearInterval(interval);
   }, [loadData]);
+
+  useEffect(() => {
+    if (!tournament || !isPhaseMode) return;
+
+    const allPhasesComplete = phases.length > 0 && phases.every((phase) => phase.status === 'COMPLETED');
+    const validTabs = phases.map((phase) => `phase-${phase.id}`);
+    validTabs.push('standings');
+    if (allPhasesComplete) validTabs.push('final');
+
+    if (activeTab && validTabs.includes(activeTab)) return;
+
+    const activePhase = phases.find((phase) => phase.status === 'ACTIVE');
+    if (activePhase) {
+      setActiveTab(`phase-${activePhase.id}`);
+      return;
+    }
+    if (allPhasesComplete) {
+      setActiveTab('final');
+      return;
+    }
+    setActiveTab(validTabs[0] || 'standings');
+  }, [activeTab, isPhaseMode, phases, tournament]);
 
   const handleShare = async () => {
     try {
@@ -143,12 +178,6 @@ export default function TournamentWatch() {
     phaseTabs.push({ key: 'standings', label: 'Standings', icon: '', phase: null, status: null });
     if (allPhasesComplete) {
       phaseTabs.push({ key: 'final', label: 'Final', icon: '\u{1F3C6}', phase: null, status: null });
-    }
-
-    if (!activeTab || !phaseTabs.find(t => t.key === activeTab)) {
-      if (activePhase) setActiveTab(`phase-${activePhase.id}`);
-      else if (allPhasesComplete) setActiveTab('final');
-      else setActiveTab(phaseTabs[0]?.key || '');
     }
 
     const currentTabPhase = phaseTabs.find(t => t.key === activeTab)?.phase;

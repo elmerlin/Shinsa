@@ -3,6 +3,7 @@ const cors = require('cors');
 const path = require('path');
 const { initializeDb, getDb } = require('./db/schema');
 const { registerSharePreviewRoutes } = require('./sharePreviews');
+const { enrichTournamentSummaries } = require('./lib/tournamentSummary');
 
 const tournamentRoutes = require('./routes/tournaments');
 const playerRoutes = require('./routes/players');
@@ -54,7 +55,12 @@ app.use(express.json({
 app.get('/api/dashboard', (req, res) => {
   const db = getDb();
   let tournaments = [], duels = [], notices = [];
-  try { tournaments = db.prepare('SELECT * FROM tournaments WHERE archived = 0 ORDER BY created_at DESC LIMIT 50').all(); } catch (e) { console.error('Dashboard tournaments:', e.message); }
+  try {
+    const rows = db.prepare('SELECT * FROM tournaments WHERE archived = 0 ORDER BY created_at DESC LIMIT 50').all();
+    tournaments = enrichTournamentSummaries(db, rows);
+  } catch (e) {
+    console.error('Dashboard tournaments:', e.message);
+  }
   try { duels = db.prepare('SELECT * FROM duels ORDER BY created_at DESC LIMIT 50').all(); } catch (e) { console.error('Dashboard duels:', e.message); }
   try { notices = db.prepare('SELECT * FROM notices ORDER BY pinned DESC, created_at DESC LIMIT 50').all(); } catch (e) { console.error('Dashboard notices:', e.message); }
   res.json({ tournaments, duels, notices });

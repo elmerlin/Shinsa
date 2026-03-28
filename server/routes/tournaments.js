@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { getDb } = require('../db/schema');
+const { enrichTournamentSummaries, parseTournamentConfig } = require('../lib/tournamentSummary');
 
 // GET all tournaments (excludes archived by default, ?include_archived=1 to include)
 router.get('/', (req, res) => {
@@ -30,8 +31,9 @@ router.get('/search', (req, res) => {
       AND (t.name LIKE ? OR t.location LIKE ? OR p.name LIKE ?)
     ORDER BY t.created_at DESC
   `).all(pattern, pattern, pattern);
+  const enriched = enrichTournamentSummaries(db, tournaments);
   db.close();
-  res.json(tournaments);
+  res.json(enriched);
 });
 
 // GET archived tournaments
@@ -47,7 +49,7 @@ router.get('/:id', (req, res) => {
   const tournament = db.prepare('SELECT * FROM tournaments WHERE id = ?').get(req.params.id);
   db.close();
   if (!tournament) return res.status(404).json({ error: 'Tournament not found' });
-  tournament.config = JSON.parse(tournament.config || '{}');
+  tournament.config = parseTournamentConfig(tournament.config);
   res.json(tournament);
 });
 
@@ -75,7 +77,7 @@ router.post('/', (req, res) => {
 
   const tournament = db.prepare('SELECT * FROM tournaments WHERE id = ?').get(id);
   db.close();
-  tournament.config = JSON.parse(tournament.config);
+  tournament.config = parseTournamentConfig(tournament.config);
   res.status(201).json(tournament);
 });
 
@@ -101,7 +103,7 @@ router.put('/:id', (req, res) => {
 
   const updated = db.prepare('SELECT * FROM tournaments WHERE id = ?').get(req.params.id);
   db.close();
-  updated.config = JSON.parse(updated.config);
+  updated.config = parseTournamentConfig(updated.config);
   res.json(updated);
 });
 

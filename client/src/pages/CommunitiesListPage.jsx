@@ -2,21 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getCommunities } from '../utils/api';
-import CommunityBadge from '../components/CommunityBadge';
 import { getAvatarUrl } from '../components/AvatarPicker';
-import { extractCommunityPalette, getCommunityCardStyle } from '../utils/communityColors';
-
-function parseCommunityIndexTags(raw) {
-  const value = String(raw || '').trim();
-  if (!value) return [];
-  try {
-    const parsed = JSON.parse(value);
-    if (Array.isArray(parsed)) {
-      return parsed.map(tag => String(tag || '').trim()).filter(Boolean).slice(0, 4);
-    }
-  } catch {}
-  return value.split(',').map(tag => tag.trim()).filter(Boolean).slice(0, 4);
-}
+import { extractCommunityPalette } from '../utils/communityColors';
+import CommunityShowcaseCard from '../components/CommunityShowcaseCard';
 
 export default function CommunitiesListPage() {
   const { user } = useAuth();
@@ -91,64 +79,16 @@ export default function CommunitiesListPage() {
           {user && <p className="text-gray-600 text-sm mt-1">Be the first to create one!</p>}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {communities.map(c => {
-            const indexTags = parseCommunityIndexTags(c.index_tags);
             const cardPalette = communityPalettes[c.id];
             return (
-              <Link
+              <CommunityShowcaseCard
                 key={c.id}
-                to={`/c/${c.name}`}
-                className="card-hover flex items-center gap-4 group"
-                style={getCommunityCardStyle(cardPalette) || undefined}
-              >
-                {c.avatar ? (
-                  <img src={getAvatarUrl(c.avatar)} alt="" className="w-14 h-14 rounded-xl object-cover shadow-md shrink-0" />
-                ) : (
-                  <div className="w-14 h-14 bg-gradient-to-br from-piu-accent to-purple-700 rounded-xl flex items-center justify-center font-display text-2xl font-bold shadow-md shrink-0">
-                    {c.display_name[0]?.toUpperCase()}
-                  </div>
-                )}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="font-display font-bold text-base group-hover:text-piu-accent transition-colors">{c.display_name}</h3>
-                    {c.badge_text && <CommunityBadge text={c.badge_text} bgColor={c.badge_color} textColor={c.badge_text_color} size="xs" />}
-                    {c.is_invite_only ? <span className="text-[9px] font-display text-yellow-500 bg-yellow-500/10 px-1.5 py-0.5 rounded-full">Invite Only</span> : null}
-                  </div>
-                  {c.description && <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">{c.description}</p>}
-                  {indexTags.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {indexTags.map((tag) => (
-                        <span key={tag} className="text-[9px] px-1.5 py-0.5 rounded-full border border-piu-border/60 bg-piu-dark/60 text-gray-400">
-                          #{tag}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                  <div className="flex items-center gap-2 mt-1 text-[10px]">
-                    <span
-                      className="inline-flex items-center gap-1 rounded-full border border-piu-border/60 bg-piu-dark/50 px-1.5 py-0.5 text-gray-300"
-                      title={`${c.member_count} members`}
-                      aria-label={`${c.member_count} members`}
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 text-cyan-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-                      </svg>
-                      <span>{c.member_count}</span>
-                    </span>
-                    <span
-                      className="inline-flex items-center gap-1 rounded-full border border-piu-border/60 bg-piu-dark/50 px-1.5 py-0.5 text-gray-300"
-                      title={`${c.posts_last_week || 0} posts this week`}
-                      aria-label={`${c.posts_last_week || 0} posts this week`}
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 text-rose-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                      </svg>
-                      <span>{c.posts_last_week || 0}</span>
-                    </span>
-                  </div>
-                </div>
-              </Link>
+                community={c}
+                palette={cardPalette}
+                className="h-full"
+              />
             );
           })}
         </div>
