@@ -978,21 +978,43 @@ function annotateWeeklyChallengePlayRows(db, plays, userId) {
         if (results[i].user_id === userId) { rank = i + 1; break; }
       }
     } else {
-      // Live aggregation — query user_recently_played for this chart in the week window
-      const chartPlays = db.prepare(`
-        SELECT rp.user_id, rp.score
-        FROM user_recently_played rp
-        WHERE rp.mode = ? AND rp.level = ?
-          AND COALESCE(NULLIF(rp.played_at_utc, ''), rp.date_played) >= ?
-          AND COALESCE(NULLIF(rp.played_at_utc, ''), rp.date_played) <= ?
-          AND rp.score > 0
-        ORDER BY rp.score DESC
-      `).all(matchedChart.mode, matchedChart.level, matchedWeek.starts_at_utc, matchedWeek.ends_at_utc);
+      // Live aggregation — query user_recently_played for this specific chart in the week window
+      // Find background_urls that match this chart's song (handles localized titles)
+      const chartBgUrls = db.prepare(`
+        SELECT DISTINCT background_url FROM user_recently_played
+        WHERE song_title = ? AND mode = ? AND level = ?
+          AND background_url IS NOT NULL AND background_url != ''
+        LIMIT 5
+      `).all(matchedChart.song_title_snapshot, matchedChart.mode, matchedChart.level).map(r => r.background_url);
+
+      let chartPlays;
+      if (chartBgUrls.length > 0) {
+        const bgPlaceholders = chartBgUrls.map(() => '?').join(',');
+        chartPlays = db.prepare(`
+          SELECT rp.user_id, rp.score
+          FROM user_recently_played rp
+          WHERE (rp.song_title = ? OR rp.background_url IN (${bgPlaceholders}))
+            AND rp.mode = ? AND rp.level = ?
+            AND COALESCE(NULLIF(rp.played_at_utc, ''), rp.date_played) >= ?
+            AND COALESCE(NULLIF(rp.played_at_utc, ''), rp.date_played) <= ?
+            AND rp.score > 0
+          ORDER BY rp.score DESC
+        `).all(matchedChart.song_title_snapshot, ...chartBgUrls, matchedChart.mode, matchedChart.level, matchedWeek.starts_at_utc, matchedWeek.ends_at_utc);
+      } else {
+        chartPlays = db.prepare(`
+          SELECT rp.user_id, rp.score
+          FROM user_recently_played rp
+          WHERE rp.song_title = ? AND rp.mode = ? AND rp.level = ?
+            AND COALESCE(NULLIF(rp.played_at_utc, ''), rp.date_played) >= ?
+            AND COALESCE(NULLIF(rp.played_at_utc, ''), rp.date_played) <= ?
+            AND rp.score > 0
+          ORDER BY rp.score DESC
+        `).all(matchedChart.song_title_snapshot, matchedChart.mode, matchedChart.level, matchedWeek.starts_at_utc, matchedWeek.ends_at_utc);
+      }
 
       // Dedupe to best per user, then find rank
       const bestByUser = {};
       for (const cp of chartPlays) {
-        // Simple title match (could also use alias-aware matching, but chart is already matched)
         if (!bestByUser[cp.user_id] || cp.score > bestByUser[cp.user_id]) {
           bestByUser[cp.user_id] = cp.score;
         }

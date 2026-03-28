@@ -1559,6 +1559,25 @@ router.get('/feed', requireAuth, (req, res) => {
         });
         wcp.plays_json = JSON.stringify(enriched);
       } catch {}
+
+      // Compute total WC points for the player across all posts this week
+      try {
+        const allPostsForWeek = db.prepare(
+          'SELECT plays_json FROM user_weekly_challenge_plays WHERE user_id = ? AND week_id = ?'
+        ).all(wcp.user_id, wcp.week_id);
+        const bestByChart = new Map();
+        for (const post of allPostsForWeek) {
+          const postPlays = JSON.parse(post.plays_json || '[]');
+          for (const p of postPlays) {
+            const key = `${p.song_title}|${p.mode}|${p.level}`;
+            const prev = bestByChart.get(key);
+            if (!prev || (p.rating_points || 0) > (prev.rating_points || 0)) bestByChart.set(key, p);
+          }
+        }
+        wcp.total_rating_points = Array.from(bestByChart.values()).reduce((sum, p) => sum + (p.rating_points || 0), 0);
+        wcp.total_charts_played = bestByChart.size;
+      } catch { wcp.total_rating_points = 0; wcp.total_charts_played = 0; }
+
       itemMap.set(`weekly_challenge:${wcp.id}`, wcp);
     }
   }

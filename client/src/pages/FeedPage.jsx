@@ -1300,7 +1300,7 @@ function WcPlayCommentSection({ playPostId, commentCount: initialCount }) {
   );
 }
 
-function WeeklyChallengePlayCard({ item, jacketLookup, chartKeyMap, onScoreClick }) {
+function WeeklyChallengePlayCard({ item, jacketLookup, chartKeyMap, onScoreClick, onReplayClick }) {
   const [showAll, setShowAll] = useState(false);
   const plays = (() => {
     try { return JSON.parse(item.plays_json || '[]'); } catch { return []; }
@@ -1346,6 +1346,11 @@ function WeeklyChallengePlayCard({ item, jacketLookup, chartKeyMap, onScoreClick
             <Link to={`/weekly-challenges?week=${weekKey}`} className="text-[9px] px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-300 border border-purple-500/25 font-display font-bold hover:bg-purple-500/25 transition-colors">
               {weekKey}
             </Link>
+            {item.total_rating_points > 0 && (
+              <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 font-display font-black">
+                {item.total_rating_points.toLocaleString()} pts
+              </span>
+            )}
           </div>
           <p className="text-[10px] text-gray-500">{timeAgo(item.created_at)}</p>
         </div>
@@ -1393,46 +1398,58 @@ function WeeklyChallengePlayCard({ item, jacketLookup, chartKeyMap, onScoreClick
                   )}
                 </div>
               </div>
-              <button
-                type="button"
-                className="text-right shrink-0 hover:opacity-80 transition-opacity cursor-pointer"
-                onClick={() => onScoreClick && onScoreClick({
-                  song_title: play.song_title,
-                  mode: play.mode,
-                  level: play.level,
-                  score: play.score,
-                  new_score: play.score,
-                  grade: play.grade,
-                  new_grade: play.grade,
-                  plate: play.plate || '',
-                  background_url: play.background_url || '',
-                  perfect: play.perfect || 0,
-                  great: play.great || 0,
-                  good: play.good || 0,
-                  bad: play.bad || 0,
-                  miss: play.miss || 0,
-                  max_combo: play.max_combo || 0,
-                  replay_embed_url: play.replay_embed_url || '',
-                  replay_video_id: play.replay_video_id || '',
-                  replay_start_seconds: play.replay_start_seconds || 0,
-                  replay_end_seconds: play.replay_end_seconds || 0,
-                  date_played: play.date_played || play.played_at_utc || '',
-                  play_id: play.play_id || '',
-                  user_id: item.user_id,
-                  username: item.username,
-                  _jacketUrl: jacketUrl,
-                  _chartLink: chartLink,
-                })}
-                title="View score details"
-              >
-                <span
-                  className={`text-xs font-display font-bold ${getGradeColor(grade.display, play.score)} ${grade.isBroken ? 'grade-broken' : ''}`}
-                  data-grade={grade.display}
+              <div className="flex items-center gap-2 shrink-0">
+                {play.replay_embed_url && (
+                  <button
+                    type="button"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-sky-400/35 bg-sky-500/10 transition-colors hover:bg-sky-500/20"
+                    title="Open replay clip"
+                    onClick={() => onReplayClick && onReplayClick(play.replay_embed_url, buildReplayModalTitle(play))}
+                  >
+                    <YouTubeBadgeIcon className="h-4 w-4 text-sky-300" />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="text-right shrink-0 hover:opacity-80 transition-opacity cursor-pointer"
+                  onClick={() => onScoreClick && onScoreClick({
+                    song_title: play.song_title,
+                    mode: play.mode,
+                    level: play.level,
+                    score: play.score,
+                    new_score: play.score,
+                    grade: play.grade,
+                    new_grade: play.grade,
+                    plate: play.plate || '',
+                    background_url: play.background_url || '',
+                    perfect: play.perfect || 0,
+                    great: play.great || 0,
+                    good: play.good || 0,
+                    bad: play.bad || 0,
+                    miss: play.miss || 0,
+                    max_combo: play.max_combo || 0,
+                    replay_embed_url: play.replay_embed_url || '',
+                    replay_video_id: play.replay_video_id || '',
+                    replay_start_seconds: play.replay_start_seconds || 0,
+                    replay_end_seconds: play.replay_end_seconds || 0,
+                    date_played: play.date_played || play.played_at_utc || '',
+                    play_id: play.play_id || '',
+                    user_id: item.user_id,
+                    username: item.username,
+                    _jacketUrl: jacketUrl,
+                    _chartLink: chartLink,
+                  })}
+                  title="View score details"
                 >
-                  {grade.display}
-                </span>
-                <p className="text-xs font-mono font-bold text-gray-300">{(parseInt(play.score, 10) || 0).toLocaleString()}</p>
-              </button>
+                  <span
+                    className={`text-xs font-display font-bold ${getGradeColor(grade.display, play.score)} ${grade.isBroken ? 'grade-broken' : ''}`}
+                    data-grade={grade.display}
+                  >
+                    {grade.display}
+                  </span>
+                  <p className="text-xs font-mono font-bold text-gray-300">{(parseInt(play.score, 10) || 0).toLocaleString()}</p>
+                </button>
+              </div>
             </div>
           );
         })}
@@ -1547,7 +1564,7 @@ export default function FeedPage() {
             } else if (item.type === 'clear') {
               return <NewClearCard key={`clear-${item.id}`} item={item} jacketLookup={jacketLookup} chartKeyMap={chartKeyMap} onScoreClick={setSelectedScore} onReplayClick={(url, title) => setSelectedReplay({ url, title })} />;
             } else if (item.type === 'weekly_challenge') {
-              return <WeeklyChallengePlayCard key={`wc-${item.id}`} item={item} jacketLookup={jacketLookup} chartKeyMap={chartKeyMap} onScoreClick={setSelectedScore} />;
+              return <WeeklyChallengePlayCard key={`wc-${item.id}`} item={item} jacketLookup={jacketLookup} chartKeyMap={chartKeyMap} onScoreClick={setSelectedScore} onReplayClick={(url, title) => setSelectedReplay({ url, title })} />;
             }
             return null;
           })}
