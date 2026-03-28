@@ -497,59 +497,60 @@ export default function PlayerRegistration({ tournamentId, players, isSetup, onU
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-3">
+        <div className="grid gap-2.5">
           {players.map((player, idx) => {
             const genderSymbol = player.gender ? GENDER_SYMBOLS[player.gender] || '' : '';
             const flag = getCountryFlag(player.nationality);
 
             return (
               <Card key={player.id} className="overflow-hidden border-white/8 bg-zinc-950/60">
-                <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                  <div className="flex items-center gap-3 sm:gap-4">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full border border-white/8 bg-white/5 font-mono text-sm text-zinc-400">
+                <CardContent className="p-3 sm:p-3.5">
+                  <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:gap-3">
+                    <div className="flex items-center gap-2.5 sm:min-w-0">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full border border-white/8 bg-white/5 font-mono text-xs text-zinc-400">
                       #{idx + 1}
                     </div>
 
                     {player.avatar ? (
-                      <img src={getAvatarUrl(player.avatar)} alt="" className="h-12 w-12 rounded-full object-cover ring-1 ring-white/10" />
+                      <img src={getAvatarUrl(player.avatar)} alt="" className="h-10 w-10 rounded-full object-cover ring-1 ring-white/10" />
                     ) : (
-                      <div className={`flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br ${avatarColors[idx % avatarColors.length]} font-display text-sm font-bold text-white ring-1 ring-white/10`}>
+                      <div className={`flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br ${avatarColors[idx % avatarColors.length]} font-display text-xs font-bold text-white ring-1 ring-white/10`}>
                         {getInitials(player.name)}
                       </div>
                     )}
-                  </div>
 
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-1.5">
                       {flag ? <span className="text-base shrink-0">{flag}</span> : null}
                       {player.user_id ? (
-                        <Link to={getProfilePath(player.user_id, player.name)} className="truncate font-display font-bold text-piu-accent hover:underline">
+                        <Link to={getProfilePath(player.user_id, player.name)} className="truncate font-display text-sm font-bold text-piu-accent hover:underline">
                           {player.name}
                         </Link>
                       ) : (
-                        <span className="truncate font-display font-bold text-white">{player.name}</span>
+                        <span className="truncate font-display text-sm font-bold text-white">{player.name}</span>
                       )}
                       {genderSymbol ? (
-                        <span className={`text-sm ${player.gender === 'male' ? 'text-blue-400' : 'text-pink-400'}`}>
+                        <span className={`text-xs ${player.gender === 'male' ? 'text-blue-400' : 'text-pink-400'}`}>
                           {genderSymbol}
                         </span>
                       ) : null}
                       {player.skill_title ? (
-                        <span className={`badge border ${getSkillColor(player.skill_title)}`}>
+                        <span className={`badge border !px-2 !py-0.5 !text-[9px] ${getSkillColor(player.skill_title)}`}>
                           {player.skill_title}
                         </span>
                       ) : null}
                     </div>
 
-                    {player.description ? <p className="mt-1 text-sm text-zinc-400">{player.description}</p> : null}
-                  </div>
+                    {player.description ? <p className="mt-0.5 line-clamp-1 text-xs text-zinc-500">{player.description}</p> : null}
+                    </div>
+                    </div>
 
-                  <div className="flex items-center justify-between gap-3 sm:justify-end">
-                    <div className="text-right">
+                    <div className="flex items-center justify-between gap-3 sm:ml-auto sm:justify-end">
+                    <div className="flex items-center gap-2.5 sm:text-right">
                       {player.pumbility > 0 ? (
                         <div className="text-sm font-mono font-bold text-piu-gold">{Number(player.pumbility).toLocaleString()}</div>
                       ) : (
-                        <div className="text-sm text-zinc-500">No pumbility</div>
+                        <div className="text-xs text-zinc-500">No pumbility</div>
                       )}
                       <div className="text-xs text-zinc-500">
                         {player.wins}W - {player.losses}L
@@ -560,12 +561,13 @@ export default function PlayerRegistration({ tournamentId, players, isSetup, onU
                       <button
                         type="button"
                         onClick={() => handleDelete(player.id)}
-                        className="rounded-full border border-white/8 bg-white/6 px-3 py-2 text-xs font-display font-bold uppercase tracking-[0.14em] text-zinc-300 transition-colors hover:border-rose-400/30 hover:text-rose-200"
+                        className="rounded-full border border-white/8 bg-white/6 px-2.5 py-1.5 text-[10px] font-display font-bold uppercase tracking-[0.14em] text-zinc-300 transition-colors hover:border-rose-400/30 hover:text-rose-200"
                         title="Remove player"
                       >
                         Remove
                       </button>
                     )}
+                  </div>
                   </div>
                 </CardContent>
               </Card>
