@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { Routes, Route, Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { useAuth } from './contexts/AuthContext';
@@ -7,60 +7,64 @@ import { getAvatarUrl } from './components/AvatarPicker';
 import MarkdownContent from './components/MarkdownContent';
 import { searchUsers, consumeGroupPopup, getMyCheckinStatus, sendCheckinProximity, checkout, getMyVenueAccess } from './utils/api';
 import { getCheckinClientSessionId } from './utils/checkinClient';
+import { getCountryFlag } from './utils/countryFlags';
 import { getProfilePath } from './utils/profile';
-import { getCountryFlag } from './components/PlayerRegistration';
-import Dashboard from './pages/Dashboard';
-import TournamentSetup from './pages/TournamentSetup';
-import TournamentView from './pages/TournamentView';
-import MatchView from './pages/MatchView';
-import DuelSetup from './pages/DuelSetup';
-import DuelView from './pages/DuelView';
-import AdminPanel from './pages/AdminPanel';
-import LoginPage from './pages/LoginPage';
-import QrLoginApprovePage from './pages/QrLoginApprovePage';
-import RegisterPage from './pages/RegisterPage';
-import ProfilePage from './pages/ProfilePage';
-import MyAccountPage from './pages/MyAccountPage';
-import OnlineDuelSetup from './pages/OnlineDuelSetup';
-import OnlineDuelRoom from './pages/OnlineDuelRoom';
-import FeedPage from './pages/FeedPage';
-import PostsPage from './pages/PostsPage';
-import { SinglePostPage, SingleUpscorePage, SingleClearPage, SingleWeeklyChallengePlayPage } from './pages/SingleItemPage';
-import SinglePlayPage from './pages/SinglePlayPage';
-import CommunityPage from './pages/CommunityPage';
-import CommunitySetupPage from './pages/CommunitySetupPage';
-import CommunitySettingsPage from './pages/CommunitySettingsPage';
-import CommunitiesListPage from './pages/CommunitiesListPage';
-import WorldMaxPage from './pages/WorldMaxPage';
-import WorldMaxMachinePage from './pages/WorldMaxMachinePage';
-import SongsPage from './pages/SongsPage';
-import ShoesPage from './pages/ShoesPage';
-import SongChartPage from './pages/SongChartPage';
-import HeadToHeadPage from './pages/HeadToHeadPage';
-import TrainingPage from './pages/TrainingPage';
-import ListsPage from './pages/ListsPage';
-import TiersPage from './pages/TiersPage';
-import SkillsPage from './pages/SkillsPage';
-import SkillChartsPage from './pages/SkillChartsPage';
-import ChatPage from './pages/ChatPage';
-import MessagesPage from './pages/MessagesPage';
-import FunPage from './pages/FunPage';
-import OptimisePage from './pages/OptimisePage';
-import WhatToPlayPage from './pages/WhatToPlayPage';
-import ChangeLogPage from './pages/ChangeLogPage';
-import CheckinPage from './pages/CheckinPage';
-import MembershipPage from './pages/MembershipPage';
-import DojoPage from './pages/DojoPage';
-import LeaderboardsPage from './pages/LeaderboardsPage';
-import LivePage from './pages/LivePage';
-import WeeklyChallengesPage from './pages/WeeklyChallengesPage';
-import LiveOverlayPage from './pages/LiveOverlayPage';
-import TournamentWatch from './pages/TournamentWatch';
-import TournamentOverlay from './pages/TournamentOverlay';
-import TournamentEmbed from './pages/TournamentEmbed';
-import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
-import TranslationEditorDrawer from './components/TranslationEditorDrawer';
 import { useI18n } from './i18n/TranslationContext';
+
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const TournamentSetup = lazy(() => import('./pages/TournamentSetup'));
+const TournamentView = lazy(() => import('./pages/TournamentView'));
+const MatchView = lazy(() => import('./pages/MatchView'));
+const DuelSetup = lazy(() => import('./pages/DuelSetup'));
+const DuelView = lazy(() => import('./pages/DuelView'));
+const AdminPanel = lazy(() => import('./pages/AdminPanel'));
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+const QrLoginApprovePage = lazy(() => import('./pages/QrLoginApprovePage'));
+const RegisterPage = lazy(() => import('./pages/RegisterPage'));
+const ProfilePage = lazy(() => import('./pages/ProfilePage'));
+const MyAccountPage = lazy(() => import('./pages/MyAccountPage'));
+const OnlineDuelSetup = lazy(() => import('./pages/OnlineDuelSetup'));
+const OnlineDuelRoom = lazy(() => import('./pages/OnlineDuelRoom'));
+const FeedPage = lazy(() => import('./pages/FeedPage'));
+const PostsPage = lazy(() => import('./pages/PostsPage'));
+const SinglePostPage = lazy(() => import('./pages/SingleItemPage').then((module) => ({ default: module.SinglePostPage })));
+const SingleUpscorePage = lazy(() => import('./pages/SingleItemPage').then((module) => ({ default: module.SingleUpscorePage })));
+const SingleClearPage = lazy(() => import('./pages/SingleItemPage').then((module) => ({ default: module.SingleClearPage })));
+const SingleWeeklyChallengePlayPage = lazy(() => import('./pages/SingleItemPage').then((module) => ({ default: module.SingleWeeklyChallengePlayPage })));
+const SinglePlayPage = lazy(() => import('./pages/SinglePlayPage'));
+const CommunityPage = lazy(() => import('./pages/CommunityPage'));
+const CommunitySetupPage = lazy(() => import('./pages/CommunitySetupPage'));
+const CommunitySettingsPage = lazy(() => import('./pages/CommunitySettingsPage'));
+const CommunitiesListPage = lazy(() => import('./pages/CommunitiesListPage'));
+const WorldMaxPage = lazy(() => import('./pages/WorldMaxPage'));
+const WorldMaxMachinePage = lazy(() => import('./pages/WorldMaxMachinePage'));
+const SongsPage = lazy(() => import('./pages/SongsPage'));
+const ShoesPage = lazy(() => import('./pages/ShoesPage'));
+const SongChartPage = lazy(() => import('./pages/SongChartPage'));
+const HeadToHeadPage = lazy(() => import('./pages/HeadToHeadPage'));
+const TrainingPage = lazy(() => import('./pages/TrainingPage'));
+const ListsPage = lazy(() => import('./pages/ListsPage'));
+const TiersPage = lazy(() => import('./pages/TiersPage'));
+const SkillsPage = lazy(() => import('./pages/SkillsPage'));
+const SkillChartsPage = lazy(() => import('./pages/SkillChartsPage'));
+const ChatPage = lazy(() => import('./pages/ChatPage'));
+const MessagesPage = lazy(() => import('./pages/MessagesPage'));
+const FunPage = lazy(() => import('./pages/FunPage'));
+const OptimisePage = lazy(() => import('./pages/OptimisePage'));
+const WhatToPlayPage = lazy(() => import('./pages/WhatToPlayPage'));
+const ChangeLogPage = lazy(() => import('./pages/ChangeLogPage'));
+const CheckinPage = lazy(() => import('./pages/CheckinPage'));
+const MembershipPage = lazy(() => import('./pages/MembershipPage'));
+const DojoPage = lazy(() => import('./pages/DojoPage'));
+const LeaderboardsPage = lazy(() => import('./pages/LeaderboardsPage'));
+const LivePage = lazy(() => import('./pages/LivePage'));
+const WeeklyChallengesPage = lazy(() => import('./pages/WeeklyChallengesPage'));
+const LiveOverlayPage = lazy(() => import('./pages/LiveOverlayPage'));
+const TournamentWatch = lazy(() => import('./pages/TournamentWatch'));
+const TournamentOverlay = lazy(() => import('./pages/TournamentOverlay'));
+const TournamentEmbed = lazy(() => import('./pages/TournamentEmbed'));
+const PrivacyPolicyPage = lazy(() => import('./pages/PrivacyPolicyPage'));
+const TranslationEditorDrawer = lazy(() => import('./components/TranslationEditorDrawer'));
 
 const KOREAN_LOCALE_ENABLED = import.meta.env.VITE_ENABLE_KR_LOCALE === 'true';
 const DOJO_TARGET_GROUP = 'pump dojo';
@@ -83,6 +87,17 @@ const DOJO_GEOFENCE = {
   radiusMeters: 180,
   maxAccuracyMeters: 120,
 };
+
+function RouteLoadingFallback({ chromeless = false }) {
+  return (
+    <div className={chromeless ? 'min-h-screen bg-piu-dark' : 'mx-auto flex min-h-[40vh] w-full max-w-6xl items-center justify-center px-4 py-10'}>
+      <div className="flex items-center gap-3 rounded-full border border-piu-border/60 bg-piu-card/80 px-4 py-2.5 text-sm text-gray-300 shadow-lg">
+        <span className="h-2 w-2 animate-pulse rounded-full bg-piu-accent" />
+        Loading...
+      </div>
+    </div>
+  );
+}
 
 function normalizeGroupName(value) {
   return String(value || '').trim().toLowerCase();
@@ -1431,67 +1446,69 @@ export default function App() {
 
       {/* Main */}
       <main className={isChromeless ? 'min-h-screen' : `flex-1 ${isMessagesConversationRoute ? 'overflow-hidden' : ''} ${user && !hideMobileBottomNav ? 'pb-16 sm:pb-0' : ''}`}>
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/tournament/new" element={<TournamentSetup />} />
-          <Route path="/tournament/:id/watch" element={<TournamentWatch />} />
-          <Route path="/tournament/:id/overlay" element={<TournamentOverlay />} />
-          <Route path="/tournament/:id/embed" element={<TournamentEmbed />} />
-          <Route path="/tournament/:id/*" element={<TournamentView />} />
-          <Route path="/match/:id" element={<MatchView />} />
-          <Route path="/duel/new" element={<DuelSetup />} />
-          <Route path="/duel/:id" element={<DuelView />} />
-          <Route path="/admin" element={<AdminPanel />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/login/approve" element={<QrLoginApprovePage />} />
-          <Route path="/register" element={<RegisterPage />} />
-          <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
-          <Route path="/profile/:id" element={<ProfilePage />} />
-          <Route path="/account" element={<MyAccountPage />} />
-        <Route path="/online-duel/new" element={<OnlineDuelSetup />} />
-        <Route path="/online-duel/:id" element={<OnlineDuelRoom />} />
-        <Route path="/weekly-challenges" element={<WeeklyChallengesPage />} />
-        <Route path="/live" element={<LivePage />} />
-        <Route path="/live/:sessionId" element={<LivePage />} />
-        <Route path="/live/:sessionId/overlay" element={<LiveOverlayPage />} />
-        <Route path="/feed" element={<FeedPage />} />
-          <Route path="/posts" element={<PostsPage />} />
-          <Route path="/post/:id" element={<SinglePostPage />} />
-          <Route path="/upscore/:id" element={<SingleUpscorePage />} />
-          <Route path="/clear/:id" element={<SingleClearPage />} />
-          <Route path="/play/:id" element={<SinglePlayPage />} />
-          <Route path="/weekly-play/:id" element={<SingleWeeklyChallengePlayPage />} />
-          <Route path="/communities" element={<CommunitiesListPage />} />
-          <Route path="/community/new" element={<CommunitySetupPage />} />
-          <Route path="/c/:communityName" element={<CommunityPage />} />
-          <Route path="/c/:communityName/settings" element={<CommunitySettingsPage />} />
-          <Route path="/world-max" element={<WorldMaxPage />} />
-          <Route path="/world-max/machine/:id" element={<WorldMaxMachinePage />} />
-          <Route path="/songs" element={<SongsPage />} />
-          <Route path="/lists" element={<ListsPage />} />
-          <Route path="/shoes" element={<ShoesPage />} />
-          <Route path="/optimise" element={<OptimisePage />} />
-          <Route path="/optimize" element={<OptimisePage />} />
-          <Route path="/what-to-play" element={<WhatToPlayPage />} />
-          <Route path="/songs/chart/:chartId" element={<SongChartPage />} />
-          <Route path="/skill" element={<SkillsPage />} />
-          <Route path="/skill/:skillSlug" element={<SkillChartsPage />} />
-          <Route path="/tiers" element={<TiersPage />} />
-          <Route path="/training" element={<TrainingPage />} />
-          <Route path="/head-to-head" element={<HeadToHeadPage />} />
-          <Route path="/fun" element={<FunPage />} />
-          <Route path="/motion" element={<Navigate to="/fun?tab=motion" replace />} />
-          <Route path="/chat" element={<ChatPage />} />
-          <Route path="/messages" element={<MessagesPage />} />
-          <Route path="/messages/:conversationId" element={<MessagesPage />} />
-          <Route path="/changelog" element={<ChangeLogPage />} />
-          <Route path="/checkin" element={<CheckinPage />} />
-          <Route path="/membership" element={<MembershipPage />} />
-          <Route path="/dojo" element={<Navigate to="/membership" replace />} />
-          <Route path="/dojoadmin" element={<DojoPage />} />
-          <Route path="/leaderboards" element={<LeaderboardsPage />} />
-          <Route path="/:username" element={<ProfilePage />} />
-        </Routes>
+        <Suspense fallback={<RouteLoadingFallback chromeless={isChromeless} />}>
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/tournament/new" element={<TournamentSetup />} />
+            <Route path="/tournament/:id/watch" element={<TournamentWatch />} />
+            <Route path="/tournament/:id/overlay" element={<TournamentOverlay />} />
+            <Route path="/tournament/:id/embed" element={<TournamentEmbed />} />
+            <Route path="/tournament/:id/*" element={<TournamentView />} />
+            <Route path="/match/:id" element={<MatchView />} />
+            <Route path="/duel/new" element={<DuelSetup />} />
+            <Route path="/duel/:id" element={<DuelView />} />
+            <Route path="/admin" element={<AdminPanel />} />
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/login/approve" element={<QrLoginApprovePage />} />
+            <Route path="/register" element={<RegisterPage />} />
+            <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
+            <Route path="/profile/:id" element={<ProfilePage />} />
+            <Route path="/account" element={<MyAccountPage />} />
+            <Route path="/online-duel/new" element={<OnlineDuelSetup />} />
+            <Route path="/online-duel/:id" element={<OnlineDuelRoom />} />
+            <Route path="/weekly-challenges" element={<WeeklyChallengesPage />} />
+            <Route path="/live" element={<LivePage />} />
+            <Route path="/live/:sessionId" element={<LivePage />} />
+            <Route path="/live/:sessionId/overlay" element={<LiveOverlayPage />} />
+            <Route path="/feed" element={<FeedPage />} />
+            <Route path="/posts" element={<PostsPage />} />
+            <Route path="/post/:id" element={<SinglePostPage />} />
+            <Route path="/upscore/:id" element={<SingleUpscorePage />} />
+            <Route path="/clear/:id" element={<SingleClearPage />} />
+            <Route path="/play/:id" element={<SinglePlayPage />} />
+            <Route path="/weekly-play/:id" element={<SingleWeeklyChallengePlayPage />} />
+            <Route path="/communities" element={<CommunitiesListPage />} />
+            <Route path="/community/new" element={<CommunitySetupPage />} />
+            <Route path="/c/:communityName" element={<CommunityPage />} />
+            <Route path="/c/:communityName/settings" element={<CommunitySettingsPage />} />
+            <Route path="/world-max" element={<WorldMaxPage />} />
+            <Route path="/world-max/machine/:id" element={<WorldMaxMachinePage />} />
+            <Route path="/songs" element={<SongsPage />} />
+            <Route path="/lists" element={<ListsPage />} />
+            <Route path="/shoes" element={<ShoesPage />} />
+            <Route path="/optimise" element={<OptimisePage />} />
+            <Route path="/optimize" element={<OptimisePage />} />
+            <Route path="/what-to-play" element={<WhatToPlayPage />} />
+            <Route path="/songs/chart/:chartId" element={<SongChartPage />} />
+            <Route path="/skill" element={<SkillsPage />} />
+            <Route path="/skill/:skillSlug" element={<SkillChartsPage />} />
+            <Route path="/tiers" element={<TiersPage />} />
+            <Route path="/training" element={<TrainingPage />} />
+            <Route path="/head-to-head" element={<HeadToHeadPage />} />
+            <Route path="/fun" element={<FunPage />} />
+            <Route path="/motion" element={<Navigate to="/fun?tab=motion" replace />} />
+            <Route path="/chat" element={<ChatPage />} />
+            <Route path="/messages" element={<MessagesPage />} />
+            <Route path="/messages/:conversationId" element={<MessagesPage />} />
+            <Route path="/changelog" element={<ChangeLogPage />} />
+            <Route path="/checkin" element={<CheckinPage />} />
+            <Route path="/membership" element={<MembershipPage />} />
+            <Route path="/dojo" element={<Navigate to="/membership" replace />} />
+            <Route path="/dojoadmin" element={<DojoPage />} />
+            <Route path="/leaderboards" element={<LeaderboardsPage />} />
+            <Route path="/:username" element={<ProfilePage />} />
+          </Routes>
+        </Suspense>
       </main>
 
       {!isChromeless && groupPopup && (
@@ -1538,7 +1555,9 @@ export default function App() {
 
       {/* Mobile Bottom Navigation — Instagram style */}
       {!isChromeless && user && !hideMobileBottomNav && <MobileBottomNav />}
-      <TranslationEditorDrawer />
+      <Suspense fallback={null}>
+        <TranslationEditorDrawer />
+      </Suspense>
     </div>
   );
 }

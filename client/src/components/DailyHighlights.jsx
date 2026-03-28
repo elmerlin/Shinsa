@@ -5,7 +5,7 @@ import { resolveChartJacketUrl } from './PiuChartJacket';
 import YouTubeReplayModal from './YouTubeReplayModal';
 import ScoreSnapshotModal from './ScoreSnapshotModal';
 import ItemCommentSection from './ItemCommentSection';
-import { getCountryFlag } from './PlayerRegistration';
+import { getCountryFlag } from '../utils/countryFlags';
 import { buildScoreSnapshotLinkShare } from '../utils/directMessageShares';
 import { buildReplayModalTitle } from '../utils/replayTitle';
 import { getPlayComments, addPlayComment, deletePlayComment } from '../utils/api';
@@ -124,7 +124,7 @@ function PlayerRow({ avatarUrl, username, nationality }) {
   return (
     <div className="flex items-center gap-1.5 min-w-0">
       {avatarUrl ? (
-        <img src={avatarUrl} alt="" className="h-[18px] w-[18px] shrink-0 rounded-full border border-white/25 object-cover shadow-sm" />
+        <img src={avatarUrl} alt="" className="h-[18px] w-[18px] shrink-0 rounded-full border border-white/25 object-cover shadow-sm" loading="lazy" decoding="async" />
       ) : null}
       <span className="min-w-0 truncate text-[11px] font-display font-bold text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">
         {nationality ? <>{getCountryFlag(nationality, 'h-[11px] inline-block')} </> : null}{username}

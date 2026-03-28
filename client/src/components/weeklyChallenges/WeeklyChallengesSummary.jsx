@@ -69,7 +69,7 @@ function ChallengePreview({ chart }) {
           <div className="flex items-center gap-1 mb-0.5">
             <span className="text-[8px] text-piu-gold">🥇</span>
             {avatarUrl && (
-              <img src={avatarUrl} alt="" className="h-[14px] w-[14px] shrink-0 rounded-full border border-white/20 object-cover" />
+              <img src={avatarUrl} alt="" className="h-[14px] w-[14px] shrink-0 rounded-full border border-white/20 object-cover" loading="lazy" decoding="async" />
             )}
             <span className="truncate text-[9px] font-display font-bold text-white/80 drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">{top1.username}</span>
           </div>

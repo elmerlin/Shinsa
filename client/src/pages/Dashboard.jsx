@@ -1,15 +1,16 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getTournaments, getDuels, getNotices, deleteTournament, searchTournaments, deleteDuel, getOnlineDuels, deleteOnlineDuel, getRecentActivity, getFeaturedCommunities, getLiveSessions, joinCommunity, getDailyHighlights, getJacketMap, getChartKeyMap } from '../utils/api';
+import { getDashboard, deleteTournament, searchTournaments, deleteDuel, getOnlineDuels, deleteOnlineDuel, getRecentActivity, getFeaturedCommunities, getLiveSessions, joinCommunity, getDailyHighlights, getJacketMap, getChartKeyMap } from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
 import { getAvatarUrl } from '../components/AvatarPicker';
-import { getCountryFlag } from '../components/PlayerRegistration';
+import { getCountryFlag } from '../utils/countryFlags';
 import { renderFormattedText } from '../utils/formatText';
 import { extractCommunityPalette, getCommunityCardStyle } from '../utils/communityColors';
-import LiveDirectoryCard from '../components/LiveDirectoryCard';
-import ArchiveBrowser from '../components/tournament/ArchiveBrowser';
-import DailyHighlights from '../components/DailyHighlights';
-import WeeklyChallengesSummary from '../components/weeklyChallenges/WeeklyChallengesSummary';
+
+const LiveDirectoryCard = lazy(() => import('../components/LiveDirectoryCard'));
+const ArchiveBrowser = lazy(() => import('../components/tournament/ArchiveBrowser'));
+const DailyHighlights = lazy(() => import('../components/DailyHighlights'));
+const WeeklyChallengesSummary = lazy(() => import('../components/weeklyChallenges/WeeklyChallengesSummary'));
 
 function timeAgo(dateStr) {
   const date = new Date(dateStr + (dateStr.endsWith('Z') ? '' : 'Z'));
@@ -44,13 +45,38 @@ const PHASE_LABELS = {
   COMPLETED: 'Completed',
 };
 
+const DEFERRED_SECTION_STYLE = {
+  contentVisibility: 'auto',
+  containIntrinsicSize: '420px',
+};
+
+function scheduleLowPriorityTask(task) {
+  if (typeof window === 'undefined') {
+    task();
+    return () => {};
+  }
+  if ('requestIdleCallback' in window) {
+    const id = window.requestIdleCallback(task, { timeout: 1500 });
+    return () => window.cancelIdleCallback(id);
+  }
+  const timeoutId = window.setTimeout(task, 250);
+  return () => window.clearTimeout(timeoutId);
+}
+
+function DashboardSectionFallback({ className = 'mb-6', heightClass = 'h-28' }) {
+  return (
+    <div className={className}>
+      <div className={`w-full animate-pulse rounded-2xl border border-piu-border/30 bg-piu-card/50 ${heightClass}`} />
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const { user } = useAuth();
   const [tournaments, setTournaments] = useState([]);
   const [duels, setDuels] = useState([]);
   const [onlineDuels, setOnlineDuels] = useState([]);
   const [notices, setNotices] = useState([]);
-  const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState(null);
   const [searching, setSearching] = useState(false);
@@ -74,23 +100,52 @@ export default function Dashboard() {
   );
 
   useEffect(() => {
-    // Fire all requests independently — page renders immediately,
-    // each section fills in as its data arrives
-    getTournaments().then(setTournaments).catch(() => {});
-    getDuels().then(setDuels).catch(() => {});
-    getOnlineDuels().then(setOnlineDuels).catch(() => {});
-    getNotices().then(setNotices).catch(() => {});
-    getRecentActivity().then(setRecentActivity).catch(() => {});
-    getDailyHighlights().then(setDailyHighlights).catch(() => {});
-    getJacketMap().then(setJacketLookup).catch(() => {});
-    getChartKeyMap().then(setChartKeyMap).catch(() => {});
-    getFeaturedCommunities()
-      .then((rows) => setFeaturedCommunities((rows || []).map((community) => ({
-        ...community,
-        joined: !!community.joined,
-        pending_request: !!community.pending_request,
-      }))))
+    let cancelled = false;
+
+    // Load the primary home rails in as few critical requests as possible.
+    getDashboard()
+      .then((data) => {
+        if (cancelled) return;
+        setTournaments(Array.isArray(data?.tournaments) ? data.tournaments : []);
+        setDuels(Array.isArray(data?.duels) ? data.duels : []);
+        setNotices(Array.isArray(data?.notices) ? data.notices : []);
+      })
       .catch(() => {});
+
+    getOnlineDuels().then((rows) => {
+      if (!cancelled) setOnlineDuels(Array.isArray(rows) ? rows : []);
+    }).catch(() => {});
+
+    getRecentActivity().then((rows) => {
+      if (!cancelled) setRecentActivity(Array.isArray(rows) ? rows : []);
+    }).catch(() => {});
+
+    const cancelDeferredLoad = scheduleLowPriorityTask(() => {
+      getDailyHighlights().then((data) => {
+        if (!cancelled) setDailyHighlights(data || null);
+      }).catch(() => {});
+      getJacketMap().then((map) => {
+        if (!cancelled) setJacketLookup(map || {});
+      }).catch(() => {});
+      getChartKeyMap().then((map) => {
+        if (!cancelled) setChartKeyMap(map || {});
+      }).catch(() => {});
+      getFeaturedCommunities()
+        .then((rows) => {
+          if (cancelled) return;
+          setFeaturedCommunities((rows || []).map((community) => ({
+            ...community,
+            joined: !!community.joined,
+            pending_request: !!community.pending_request,
+          })));
+        })
+        .catch(() => {});
+    });
+
+    return () => {
+      cancelled = true;
+      cancelDeferredLoad();
+    };
   }, []);
 
   useEffect(() => {
@@ -245,6 +300,8 @@ export default function Dashboard() {
             src={getAvatarUrl(t.avatar)}
             alt={t.name}
             className="w-12 h-12 rounded-lg object-cover shadow-md"
+            loading="lazy"
+            decoding="async"
           />
         ) : (
           <div className="w-12 h-12 bg-gradient-to-br from-piu-accent to-purple-700 rounded-lg flex items-center justify-center font-display text-xl font-bold shadow-md">
@@ -294,7 +351,7 @@ export default function Dashboard() {
           <div className="flex items-center shrink-0">
             <div className="w-9 h-9 rounded-full overflow-hidden border border-red-500/40 -mr-2 z-10">
               {d.player1_avatar ? (
-                <img src={getAvatarUrl(d.player1_avatar)} alt="" className="w-full h-full object-cover" />
+                <img src={getAvatarUrl(d.player1_avatar)} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
               ) : (
                 <div className="w-full h-full bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center font-display font-bold text-xs">
                   {d.player1_name[0].toUpperCase()}
@@ -309,7 +366,7 @@ export default function Dashboard() {
             </div>
             <div className="w-9 h-9 rounded-full overflow-hidden border border-blue-500/40 -ml-2">
               {d.player2_avatar ? (
-                <img src={getAvatarUrl(d.player2_avatar)} alt="" className="w-full h-full object-cover" />
+                <img src={getAvatarUrl(d.player2_avatar)} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
               ) : (
                 <div className="w-full h-full bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center font-display font-bold text-xs">
                   {d.player2_name[0].toUpperCase()}
@@ -429,11 +486,13 @@ export default function Dashboard() {
               </svg>
             </Link>
           </div>
-          <div className="grid gap-3 xl:grid-cols-3">
-            {liveSessions.map((item) => (
-              <LiveDirectoryCard key={item?.session?.id || item?.session?.host_user_id || 'live-session'} item={item} compact />
-            ))}
-          </div>
+          <Suspense fallback={<DashboardSectionFallback className="mb-0" heightClass="h-40" />}>
+            <div className="grid gap-3 xl:grid-cols-3">
+              {liveSessions.map((item) => (
+                <LiveDirectoryCard key={item?.session?.id || item?.session?.host_user_id || 'live-session'} item={item} compact />
+              ))}
+            </div>
+          </Suspense>
         </div>
       )}
 
@@ -452,7 +511,7 @@ export default function Dashboard() {
                 >
                   <span className="text-base shrink-0 w-6 text-center">{ai.icon}</span>
                   {a.avatar && (
-                    <img src={getAvatarUrl(a.avatar)} alt="" className="w-6 h-6 rounded-full object-cover border border-piu-border shrink-0" />
+                    <img src={getAvatarUrl(a.avatar)} alt="" className="w-6 h-6 rounded-full object-cover border border-piu-border shrink-0" loading="lazy" decoding="async" />
                   )}
                   <div className="flex-1 min-w-0">
                     <p className="text-xs text-gray-200 truncate">
@@ -469,14 +528,24 @@ export default function Dashboard() {
       )}
 
       {dailyHighlights && searchResults === null && (
-        <DailyHighlights data={dailyHighlights} jacketLookup={jacketLookup} chartKeyMap={chartKeyMap} />
+        <div style={DEFERRED_SECTION_STYLE}>
+          <Suspense fallback={<DashboardSectionFallback />}>
+            <DailyHighlights data={dailyHighlights} jacketLookup={jacketLookup} chartKeyMap={chartKeyMap} />
+          </Suspense>
+        </div>
       )}
 
-      {searchResults === null && <WeeklyChallengesSummary />}
+      {searchResults === null && (
+        <div style={DEFERRED_SECTION_STYLE}>
+          <Suspense fallback={<DashboardSectionFallback />}>
+            <WeeklyChallengesSummary />
+          </Suspense>
+        </div>
+      )}
 
       {/* Communities Section */}
       {featuredCommunities.length > 0 && searchResults === null && (
-        <div className="mb-8">
+        <div className="mb-8" style={DEFERRED_SECTION_STYLE}>
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-lg font-display font-bold tracking-wider text-piu-accent">COMMUNITIES</h2>
             <Link to="/communities" className="flex items-center gap-1 text-xs font-display text-gray-400 hover:text-piu-accent transition-colors">
@@ -499,7 +568,7 @@ export default function Dashboard() {
                   <Link to={`/c/${c.name}`} className="flex items-start gap-3 flex-1 min-w-0">
                     <div className="relative shrink-0">
                       {c.avatar ? (
-                        <img src={getAvatarUrl(c.avatar)} alt="" className="w-12 h-12 rounded-lg object-cover shadow-md" />
+                        <img src={getAvatarUrl(c.avatar)} alt="" className="w-12 h-12 rounded-lg object-cover shadow-md" loading="lazy" decoding="async" />
                       ) : (
                         <div className="w-12 h-12 bg-gradient-to-br from-piu-accent to-purple-700 rounded-lg flex items-center justify-center font-display text-xl font-bold shadow-md">
                           {c.display_name[0]?.toUpperCase()}
@@ -581,7 +650,7 @@ export default function Dashboard() {
 
       {/* Online Duels Section */}
       {displayOnlineDuels.length > 0 && (
-        <div className="mb-8">
+        <div className="mb-8" style={DEFERRED_SECTION_STYLE}>
           <h2 className="text-lg font-display font-bold tracking-wider text-piu-accent mb-3">ONLINE DUELS</h2>
           <div className="grid gap-3">
             {displayOnlineDuels.map(d => (
@@ -594,7 +663,7 @@ export default function Dashboard() {
                   <div className="flex items-center shrink-0">
                     <div className="w-9 h-9 rounded-full overflow-hidden border border-red-500/40 -mr-2 z-10">
                       {d.player1_avatar ? (
-                        <img src={getAvatarUrl(d.player1_avatar)} alt="" className="w-full h-full object-cover" />
+                        <img src={getAvatarUrl(d.player1_avatar)} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
                       ) : (
                         <div className="w-full h-full bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center font-display font-bold text-xs">
                           {(d.player1_name || '?')[0].toUpperCase()}
@@ -606,7 +675,7 @@ export default function Dashboard() {
                     </div>
                     <div className="w-9 h-9 rounded-full overflow-hidden border border-blue-500/40 -ml-2">
                       {d.player2_avatar ? (
-                        <img src={getAvatarUrl(d.player2_avatar)} alt="" className="w-full h-full object-cover" />
+                        <img src={getAvatarUrl(d.player2_avatar)} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
                       ) : d.player2_name ? (
                         <div className="w-full h-full bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center font-display font-bold text-xs">
                           {d.player2_name[0].toUpperCase()}
@@ -651,7 +720,7 @@ export default function Dashboard() {
 
       {/* Offline Duels Section */}
       {displayDuels.length > 0 && (
-        <div className="mb-8">
+        <div className="mb-8" style={DEFERRED_SECTION_STYLE}>
           <h2 className="text-lg font-display font-bold tracking-wider text-piu-accent mb-3">OFFLINE DUELS</h2>
           <div className="grid gap-3">
             {displayDuels.map(d => <DuelCard key={d.id} d={d} />)}
@@ -660,7 +729,7 @@ export default function Dashboard() {
       )}
 
       {/* Tournaments Section */}
-      <div className="mb-6">
+      <div className="mb-6" style={DEFERRED_SECTION_STYLE}>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-display font-bold tracking-wider text-piu-accent">TOURNAMENTS</h2>
           <button
@@ -673,7 +742,9 @@ export default function Dashboard() {
 
         {showArchived && (
           <div className="mb-6">
-            <ArchiveBrowser />
+            <Suspense fallback={<DashboardSectionFallback className="mb-0" heightClass="h-64" />}>
+              <ArchiveBrowser />
+            </Suspense>
           </div>
         )}
         {displayTournaments.length === 0 ? (

@@ -2,7 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { HourOfPowerLogo } from './HourOfPowerBrand';
 import PiuChartJacket from './PiuChartJacket';
-import { getCountryFlag } from './PlayerRegistration';
+import { getCountryFlag } from '../utils/countryFlags';
 import { parseGrade } from '../utils/grades';
 
 function modeShort(mode) {
@@ -141,7 +141,7 @@ export default function LiveDirectoryCard({ item, className = '', compact = fals
       <div className="mt-2.5 flex min-w-0 items-center gap-2.5">
         <div className={`flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden border border-piu-border bg-piu-dark text-xs font-display font-bold text-white ${avatarRadiusClass}`}>
           {host.avatar ? (
-            <img src={host.avatar} alt={host.username || 'Host'} className="h-full w-full object-cover" />
+            <img src={host.avatar} alt={host.username || 'Host'} className="h-full w-full object-cover" loading="lazy" decoding="async" />
           ) : (
             <span>{String(host.username || 'P').trim().charAt(0).toUpperCase() || 'P'}</span>
           )}
