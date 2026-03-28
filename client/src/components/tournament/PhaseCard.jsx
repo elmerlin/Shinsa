@@ -1,5 +1,5 @@
 import React from 'react';
-import { FORMAT_LABELS, FORMAT_DESCRIPTIONS, FORMAT_ICONS, ADVANCEMENT_TYPES } from '../../utils/tournamentConstants';
+import { FORMAT_LABELS, FORMAT_DESCRIPTIONS, FORMAT_ICONS } from '../../utils/tournamentConstants';
 import { Badge } from '../ui/badge';
 import { Card, CardContent } from '../ui/card';
 
@@ -21,6 +21,11 @@ const FORMAT_TEXT_COLORS = {
   gauntlet: 'text-piu-accent',
   hour_of_power: 'text-emerald-300',
   b15: 'text-violet-300',
+};
+
+const PHASE_CARD_PERF_STYLE = {
+  contentVisibility: 'auto',
+  containIntrinsicSize: '240px',
 };
 
 function getConfigSummary(format, config) {
@@ -78,7 +83,7 @@ export default function PhaseCard({
   const advancementSummary = getAdvancementSummary(advancement);
 
   return (
-    <div className="relative">
+    <div className="relative" style={PHASE_CARD_PERF_STYLE}>
       {/* Connector line */}
       {index > 0 && (
         <div className="absolute left-6 -top-4 w-px h-4 bg-piu-border/60" />
@@ -88,7 +93,7 @@ export default function PhaseCard({
       )}
 
       <Card
-        className={`border ${colorClass} transition-all ${isExpanded ? 'ring-1 ring-piu-accent/30' : 'cursor-pointer hover:border-piu-accent/40'} overflow-hidden`}
+        className={`border ${colorClass} overflow-hidden transition-colors ${isExpanded ? 'ring-1 ring-piu-accent/30' : 'cursor-pointer hover:border-piu-accent/40'}`}
         onClick={!isExpanded ? onToggle : undefined}
       >
         <CardContent className="space-y-4">

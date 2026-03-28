@@ -8,7 +8,7 @@ export function Card({ className = '', ...props }) {
   return (
     <div
       className={cx(
-        'rounded-xl border border-white/10 bg-zinc-950/70 shadow-[0_24px_70px_rgba(0,0,0,0.35)] backdrop-blur-sm',
+        'rounded-xl border border-white/10 bg-zinc-950/78 shadow-[0_12px_30px_rgba(0,0,0,0.22)]',
         className
       )}
       {...props}

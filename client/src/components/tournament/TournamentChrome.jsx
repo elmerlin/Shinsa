@@ -78,8 +78,6 @@ export function TournamentHero({
     >
       <div className="pointer-events-none absolute inset-0 opacity-90">
         <div className="absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" />
-        <div className="absolute -left-20 top-12 h-40 w-40 rounded-full bg-piu-accent/12 blur-3xl" />
-        <div className="absolute right-0 top-0 h-44 w-44 rounded-full bg-sky-500/10 blur-3xl" />
       </div>
 
       <CardContent className="relative flex flex-col gap-5">
@@ -90,12 +88,12 @@ export function TournamentHero({
                 <img
                   src={getAvatarUrl(tournament.avatar)}
                   alt={title}
-                  className="h-14 w-14 rounded-xl object-cover ring-1 ring-white/10 shadow-[0_14px_28px_rgba(0,0,0,0.32)]"
+                  className="h-14 w-14 rounded-xl object-cover ring-1 ring-white/10 shadow-[0_8px_18px_rgba(0,0,0,0.24)]"
                   loading="lazy"
                   decoding="async"
                 />
               ) : (
-                <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-gradient-to-br from-piu-accent/80 via-rose-500/65 to-sky-500/70 font-display text-2xl font-bold text-white ring-1 ring-white/10 shadow-[0_14px_28px_rgba(0,0,0,0.32)]">
+                <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-gradient-to-br from-piu-accent/80 via-rose-500/65 to-sky-500/70 font-display text-2xl font-bold text-white ring-1 ring-white/10 shadow-[0_8px_18px_rgba(0,0,0,0.24)]">
                   {title.charAt(0).toUpperCase()}
                 </div>
               )}

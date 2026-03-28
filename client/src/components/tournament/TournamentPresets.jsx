@@ -2,6 +2,11 @@ import React from 'react';
 import { Badge } from '../ui/badge';
 import { Card, CardContent } from '../ui/card';
 
+const PRESET_CARD_PERF_STYLE = {
+  contentVisibility: 'auto',
+  containIntrinsicSize: '190px',
+};
+
 const PRESETS = [
   {
     id: 'round_robin_only',
@@ -205,12 +210,13 @@ export default function TournamentPresets({ onSelect }) {
             type="button"
             onClick={() => onSelect(preset.phases)}
             className="text-left"
+            style={PRESET_CARD_PERF_STYLE}
           >
-            <Card className={`h-full border transition-all hover:-translate-y-0.5 ${preset.color}`}>
+            <Card className={`h-full border transition-colors ${preset.color}`}>
               <CardContent className="flex h-full flex-col gap-3">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-black/20 text-xl shadow-[0_12px_24px_rgba(0,0,0,0.24)]">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-black/20 text-xl shadow-[0_8px_18px_rgba(0,0,0,0.18)]">
                       {preset.icon}
                     </div>
                     <div>

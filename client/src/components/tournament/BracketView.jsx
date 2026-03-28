@@ -1,12 +1,5 @@
 import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getAvatarUrl } from '../AvatarPicker';
-
-function nextPowerOf2(n) {
-  let v = 1;
-  while (v < n) v *= 2;
-  return v;
-}
 
 function BracketMatch({ match, playerMap, onClick, isFinal }) {
   const p1 = playerMap[match.player1_id];
@@ -20,14 +13,15 @@ function BracketMatch({ match, playerMap, onClick, isFinal }) {
   return (
     <div
       onClick={() => !isBye && !isWaiting && onClick?.(match.id)}
-      className={`w-44 sm:w-52 rounded-lg border bg-piu-card/90 overflow-hidden transition-all shrink-0
+      className={`w-44 sm:w-52 rounded-lg border bg-piu-card/92 overflow-hidden transition-colors shrink-0
         ${isComplete ? 'border-piu-green/30' : ''}
-        ${isActive ? 'border-piu-accent/40 animate-pulse-glow cursor-pointer' : ''}
+        ${isActive ? 'border-piu-accent/40 ring-1 ring-piu-accent/20 cursor-pointer' : ''}
         ${isBye ? 'opacity-40 border-piu-border/30' : ''}
         ${isWaiting ? 'opacity-50 border-piu-border/30' : ''}
-        ${!isBye && !isWaiting ? 'cursor-pointer hover:border-piu-accent/50 hover:shadow-lg hover:shadow-piu-accent/10' : ''}
+        ${!isBye && !isWaiting ? 'cursor-pointer hover:border-piu-accent/50' : ''}
         ${isFinal ? 'ring-1 ring-piu-gold/40' : ''}
       `}
+      style={{ contain: 'layout paint' }}
     >
       {/* Player 1 */}
       <div className={`flex items-center gap-2 px-2.5 py-2 ${match.winner_id === match.player1_id ? 'bg-piu-green/8' : ''}`}>

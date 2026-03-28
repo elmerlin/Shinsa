@@ -12,14 +12,15 @@ function BracketMatchCard({ match, playerMap, onClick, highlight }) {
   return (
     <div
       onClick={() => !isWaiting && onClick?.(match.id)}
-      className={`w-40 sm:w-48 rounded-lg border bg-piu-card/90 overflow-hidden transition-all shrink-0
+      className={`w-40 sm:w-48 rounded-lg border bg-piu-card/92 overflow-hidden transition-colors shrink-0
         ${isComplete ? 'border-piu-green/30' : ''}
-        ${isActive ? 'border-piu-accent/40 animate-pulse-glow' : ''}
+        ${isActive ? 'border-piu-accent/40 ring-1 ring-piu-accent/20' : ''}
         ${isWaiting ? 'opacity-50 border-piu-border/30' : ''}
         ${!isWaiting ? 'cursor-pointer hover:border-piu-accent/50' : ''}
         ${highlight === 'gold' ? 'ring-1 ring-piu-gold/40' : ''}
         ${highlight === 'losers' ? 'border-rose-500/25' : ''}
       `}
+      style={{ contain: 'layout paint' }}
     >
       <PlayerRow
         player={p1}
