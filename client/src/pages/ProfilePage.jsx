@@ -23,6 +23,7 @@ import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag, getSkillColor, GENDER_SYMBOLS } from '../components/PlayerRegistration';
 import PostCard, { timeAgo } from '../components/PostCard';
 import SongAnalyticsPanel from '../components/SongAnalyticsPanel';
+import PlayerIdentityMapPanel from '../components/PlayerIdentityMapPanel';
 import SkillBreakdownPanel from '../components/SkillBreakdownPanel';
 import RankingsPanel from '../components/RankingsPanel';
 import GradeGoalTracker from '../components/GradeGoalTracker';
@@ -2255,6 +2256,7 @@ export default function ProfilePage() {
     </Link>
   ) : avatarCore;
   const overviewCardsById = {
+    'player-identity': { title: 'Player Identity Map' },
     ...(songAnalytics ? { 'song-analytics': { title: 'Song Analytics' } } : {}),
     'skill-breakdown': { title: 'Skill Breakdown' },
     rankings: { title: 'Rankings' },
@@ -2262,10 +2264,13 @@ export default function ProfilePage() {
     ...(showOverviewHeatmapCard ? { 'play-heatmap': { title: 'Play Activity Heatmap' } } : {}),
   };
 
-  const orderedOverviewCardIds = ['play-heatmap', 'song-analytics', 'skill-breakdown', 'rankings', 'grade-goals']
+  const orderedOverviewCardIds = ['player-identity', 'play-heatmap', 'song-analytics', 'skill-breakdown', 'rankings', 'grade-goals']
     .filter((cardId) => overviewCardsById[cardId]);
 
   const renderOverviewCardBody = (cardId) => {
+    if (cardId === 'player-identity') {
+      return <PlayerIdentityMapPanel userId={profileId} />;
+    }
     if (cardId === 'song-analytics') {
       return songAnalytics ? <SongAnalyticsPanel analytics={songAnalytics} /> : null;
     }

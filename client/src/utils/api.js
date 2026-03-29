@@ -156,6 +156,10 @@ export const setChartYoutubeLink = (chartId, youtubeUrl) =>
 export const removeChartYoutubeLink = (chartId) =>
   request(`/songs/chart/${chartId}/youtube`, { method: 'DELETE' });
 export const getSongAnalytics = (userId) => request(`/songs/analytics/user/${userId}`);
+export const getPlayerIdentitySummary = (userId, params = {}) => {
+  const qs = new URLSearchParams(params).toString();
+  return request(`/songs/analytics/identity/${userId}${qs ? `?${qs}` : ''}`);
+};
 export const getGradeGoals = (userId, params = {}) => {
   const qs = new URLSearchParams(params).toString();
   return request(`/songs/analytics/grade-goals/${userId}${qs ? `?${qs}` : ''}`);

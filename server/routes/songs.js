@@ -84,6 +84,7 @@ const SONG_ALIAS_OVERRIDES = {
   'papasito (feat. kutina)': 'papasito feat. kutina',
   '파파시토 (feat. kutina)': 'papasito feat. kutina',
 };
+const IDENTITY_RECENT_WINDOW_DAYS = 90;
 
 const LEVEL_BASE_RATING = {
   10: 100,
@@ -1063,6 +1064,487 @@ function getUserAnalytics(db, userId, aliases, songCatalog) {
     passBestByChart: passBest,
     analytics: formatAnalytics(userId, profile, syncRow, songCatalog, bestByChart, passBest),
   };
+}
+
+function formatIdentityModeLevel(mode, level) {
+  const prefix = mode === 'Double' ? 'D' : mode === 'CoOp' ? 'C' : 'S';
+  const numericLevel = parseInt(level, 10) || 0;
+  return numericLevel > 0 ? `${prefix}${numericLevel}` : prefix;
+}
+
+function isIdentitySssGrade(grade) {
+  const normalized = normalizeGrade(grade);
+  return normalized === 'SSS' || normalized === 'SSS+';
+}
+
+function getIdentityGradeTier(grade) {
+  const normalized = normalizeGrade(grade);
+  if (normalized === 'SSS+') return 2;
+  if (normalized === 'SSS') return 1;
+  return 0;
+}
+
+function getIdentityModeProfile(singleStrength, doubleStrength) {
+  const totalStrength = Math.max(0, singleStrength) + Math.max(0, doubleStrength);
+  const singleShare = totalStrength > 0 ? (singleStrength / totalStrength) : 0.5;
+  const doubleShare = totalStrength > 0 ? (doubleStrength / totalStrength) : 0.5;
+
+  if (singleShare >= 0.78) {
+    return {
+      dominant_mode: 'Single',
+      dominant_label: 'Singles specialist',
+      detail_label: 'Most of this player profile lives on Singles charts.',
+      single_share: Number(singleShare.toFixed(3)),
+      double_share: Number(doubleShare.toFixed(3)),
+      total_strength: totalStrength,
+    };
+  }
+  if (singleShare >= 0.58) {
+    return {
+      dominant_mode: 'Single',
+      dominant_label: 'Singles leaning',
+      detail_label: 'Singles carries the bigger share of this profile.',
+      single_share: Number(singleShare.toFixed(3)),
+      double_share: Number(doubleShare.toFixed(3)),
+      total_strength: totalStrength,
+    };
+  }
+  if (doubleShare >= 0.78) {
+    return {
+      dominant_mode: 'Double',
+      dominant_label: 'Doubles specialist',
+      detail_label: 'This player identity is anchored around Doubles charts.',
+      single_share: Number(singleShare.toFixed(3)),
+      double_share: Number(doubleShare.toFixed(3)),
+      total_strength: totalStrength,
+    };
+  }
+  if (doubleShare >= 0.58) {
+    return {
+      dominant_mode: 'Double',
+      dominant_label: 'Doubles leaning',
+      detail_label: 'Doubles carries the bigger share of this profile.',
+      single_share: Number(singleShare.toFixed(3)),
+      double_share: Number(doubleShare.toFixed(3)),
+      total_strength: totalStrength,
+    };
+  }
+  return {
+    dominant_mode: 'Balanced',
+    dominant_label: 'Balanced across both pads',
+    detail_label: 'Singles and Doubles are both meaningful parts of this profile.',
+    single_share: Number(singleShare.toFixed(3)),
+    double_share: Number(doubleShare.toFixed(3)),
+    total_strength: totalStrength,
+  };
+}
+
+function buildIdentityLevelRows(rows, mode) {
+  const normalizedRows = Array.isArray(rows) ? rows : [];
+  const shaped = normalizedRows
+    .map((row) => {
+      const level = parseInt(row?.level, 10) || 0;
+      const clearedCharts = parseInt(row?.cleared_charts, 10) || 0;
+      const totalCharts = parseInt(row?.total_charts, 10) || 0;
+      const averageScore = parseInt(row?.average_score, 10) || 0;
+      const ratingTotal = Math.max(0, parseInt(row?.rating_total, 10) || 0);
+      const clearPercentage = Number(row?.clear_percentage) || 0;
+      const weight = ratingTotal + (clearedCharts * 120);
+      return {
+        mode,
+        level,
+        label: formatIdentityModeLevel(mode, level),
+        cleared_charts: clearedCharts,
+        total_charts: totalCharts,
+        clear_percentage: clearPercentage,
+        average_score: averageScore,
+        average_grade: row?.average_grade || '',
+        rating_total: ratingTotal,
+        weight,
+      };
+    })
+    .filter((row) => row.level > 0 && row.weight > 0)
+    .sort((a, b) => {
+      if (b.weight !== a.weight) return b.weight - a.weight;
+      if (b.cleared_charts !== a.cleared_charts) return b.cleared_charts - a.cleared_charts;
+      if (b.average_score !== a.average_score) return b.average_score - a.average_score;
+      return b.level - a.level;
+    });
+
+  const totalWeight = shaped.reduce((sum, row) => sum + row.weight, 0);
+  return shaped.map((row) => ({
+    ...row,
+    share: totalWeight > 0 ? Number((row.weight / totalWeight).toFixed(3)) : 0,
+  }));
+}
+
+function buildIdentityLevelRange(mode, rows) {
+  const topRows = (Array.isArray(rows) ? rows : []).slice(0, 3);
+  const uniqueLevels = Array.from(new Set(topRows.map((row) => parseInt(row.level, 10) || 0).filter((level) => level > 0)))
+    .sort((a, b) => a - b);
+  if (uniqueLevels.length === 0) {
+    return {
+      mode,
+      label: '',
+      levels: [],
+    };
+  }
+
+  const prefix = mode === 'Double' ? 'D' : mode === 'CoOp' ? 'C' : 'S';
+  if (uniqueLevels.length === 1) {
+    return {
+      mode,
+      label: `${prefix}${uniqueLevels[0]}`,
+      levels: uniqueLevels,
+    };
+  }
+
+  const contiguous = uniqueLevels[uniqueLevels.length - 1] - uniqueLevels[0] <= uniqueLevels.length;
+  return {
+    mode,
+    label: contiguous
+      ? `${prefix}${uniqueLevels[0]}-${uniqueLevels[uniqueLevels.length - 1]}`
+      : uniqueLevels.map((level) => `${prefix}${level}`).join(' · '),
+    levels: uniqueLevels,
+  };
+}
+
+function compareIdentitySignatureCharts(a, b) {
+  const tierDiff = getIdentityGradeTier(b?.grade) - getIdentityGradeTier(a?.grade);
+  if (tierDiff !== 0) return tierDiff;
+  if ((b?.score || 0) !== (a?.score || 0)) return (b?.score || 0) - (a?.score || 0);
+  if ((b?.rating || 0) !== (a?.rating || 0)) return (b?.rating || 0) - (a?.rating || 0);
+  const dateDiff = parseDateMs(b?.date_played) - parseDateMs(a?.date_played);
+  if (dateDiff !== 0) return dateDiff;
+  return String(a?.title || '').localeCompare(String(b?.title || ''), undefined, { sensitivity: 'base' });
+}
+
+function buildIdentityStrongholds(passBestByChart, songCatalog) {
+  const strongholds = new Map();
+  const fallbackCandidates = [];
+
+  for (const [chartKey, record] of passBestByChart.entries()) {
+    if (!record) continue;
+    const chart = songCatalog.chartsByKey.get(chartKey);
+    if (!chart) continue;
+
+    const shaped = {
+      chart_id: chart.chart_id,
+      title: chart.title,
+      artist: chart.artist || '',
+      mode: chart.mode,
+      level: chart.level,
+      label: formatIdentityModeLevel(chart.mode, chart.level),
+      score: scoreValue(record.score),
+      grade: record.grade || '',
+      rating: parseInt(record.rating, 10) || calculateRating(chart.level, record.grade, true),
+      date_played: record.date_played || '',
+      jacket_url: chart.jacket_url || record.background_url || '',
+    };
+    fallbackCandidates.push(shaped);
+
+    if (!isIdentitySssGrade(record.grade)) continue;
+
+    const key = `${chart.mode}|${chart.level}`;
+    if (!strongholds.has(key)) {
+      strongholds.set(key, {
+        key,
+        mode: chart.mode,
+        level: chart.level,
+        label: formatIdentityModeLevel(chart.mode, chart.level),
+        count: 0,
+        sss_plus_count: 0,
+        score_sum: 0,
+        top_score: 0,
+        jackets: [],
+      });
+    }
+    const entry = strongholds.get(key);
+    entry.count += 1;
+    entry.score_sum += shaped.score;
+    entry.top_score = Math.max(entry.top_score, shaped.score);
+    if (normalizeGrade(shaped.grade) === 'SSS+') entry.sss_plus_count += 1;
+    entry.jackets.push(shaped);
+  }
+
+  const clusters = Array.from(strongholds.values())
+    .map((entry) => ({
+      ...entry,
+      average_score: entry.count > 0 ? Math.round(entry.score_sum / entry.count) : 0,
+      jackets: entry.jackets.sort(compareIdentitySignatureCharts).slice(0, 8),
+    }))
+    .sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count;
+      if (b.sss_plus_count !== a.sss_plus_count) return b.sss_plus_count - a.sss_plus_count;
+      if (b.average_score !== a.average_score) return b.average_score - a.average_score;
+      return b.level - a.level;
+    });
+
+  fallbackCandidates.sort(compareIdentitySignatureCharts);
+
+  return {
+    clusters,
+    fallback_candidates: fallbackCandidates,
+  };
+}
+
+function selectIdentitySignatureJackets(clusters, fallbackCandidates, limit = 12) {
+  const picks = [];
+  const seen = new Set();
+  const clusterList = Array.isArray(clusters) ? clusters : [];
+
+  let depth = 0;
+  while (picks.length < limit) {
+    let added = false;
+    for (const cluster of clusterList) {
+      const candidate = cluster?.jackets?.[depth];
+      if (!candidate) continue;
+      if (seen.has(candidate.chart_id)) continue;
+      picks.push({
+        ...candidate,
+        stronghold_key: cluster.key,
+        stronghold_label: cluster.label,
+      });
+      seen.add(candidate.chart_id);
+      added = true;
+      if (picks.length >= limit) break;
+    }
+    if (!added) break;
+    depth += 1;
+  }
+
+  for (const candidate of (Array.isArray(fallbackCandidates) ? fallbackCandidates : [])) {
+    if (picks.length >= limit) break;
+    if (seen.has(candidate.chart_id)) continue;
+    picks.push({
+      ...candidate,
+      stronghold_key: '',
+      stronghold_label: '',
+    });
+    seen.add(candidate.chart_id);
+  }
+
+  return picks;
+}
+
+function buildIdentityAnalyticsSnapshot(songCatalog, passBestByChart) {
+  const singleLevels = new Map();
+  const doubleLevels = new Map();
+  const allLevels = new Map();
+
+  for (const [level, count] of songCatalog.levelModeTotals.Single.entries()) {
+    getLevelEntry(singleLevels, level).total_charts = count;
+    getLevelEntry(allLevels, level).total_charts += count;
+  }
+  for (const [level, count] of songCatalog.levelModeTotals.Double.entries()) {
+    getLevelEntry(doubleLevels, level).total_charts = count;
+    getLevelEntry(allLevels, level).total_charts += count;
+  }
+
+  for (const [chartKey, record] of passBestByChart.entries()) {
+    if (!record) continue;
+    const chart = songCatalog.chartsByKey.get(chartKey);
+    if (!chart) continue;
+
+    const rating = parseInt(record.rating, 10) || calculateRating(chart.level, record.grade, true);
+    const modeMap = chart.mode === 'Single' ? singleLevels : doubleLevels;
+    const modeEntry = getLevelEntry(modeMap, chart.level);
+    const allEntry = getLevelEntry(allLevels, chart.level);
+
+    modeEntry.cleared_charts += 1;
+    modeEntry.rating_total += rating;
+    modeEntry.score_sum += scoreValue(record.score);
+    modeEntry.score_count += 1;
+
+    allEntry.cleared_charts += 1;
+    allEntry.rating_total += rating;
+    allEntry.score_sum += scoreValue(record.score);
+    allEntry.score_count += 1;
+  }
+
+  finalizeLevelEntries(singleLevels, songCatalog.levelModeTotals.Single);
+  finalizeLevelEntries(doubleLevels, songCatalog.levelModeTotals.Double);
+
+  const bothTotalsByLevel = new Map();
+  for (const level of songCatalog.levels) {
+    bothTotalsByLevel.set(
+      level,
+      (songCatalog.levelModeTotals.Single.get(level) || 0) + (songCatalog.levelModeTotals.Double.get(level) || 0)
+    );
+  }
+  finalizeLevelEntries(allLevels, bothTotalsByLevel);
+
+  const singleEntries = Array.from(singleLevels.values()).sort((a, b) => a.level - b.level);
+  const doubleEntries = Array.from(doubleLevels.values()).sort((a, b) => a.level - b.level);
+  const bothEntries = Array.from(allLevels.values()).sort((a, b) => a.level - b.level);
+
+  return {
+    levels: {
+      single: singleEntries,
+      double: doubleEntries,
+      both: bothEntries,
+    },
+    competitive_levels: {
+      single: getCompetitiveLevel(singleEntries),
+      double: getCompetitiveLevel(doubleEntries),
+    },
+    sync: {
+      best_scores_imported: false,
+      last_best_scores_sync: null,
+      pumbility_value: 0,
+    },
+  };
+}
+
+function buildIdentityTimeframeMeta(view, cutoffMs = 0) {
+  if (view === 'recent') {
+    const cutoffLabel = cutoffMs > 0
+      ? new Date(cutoffMs).toISOString().slice(0, 10)
+      : '';
+    return {
+      key: 'recent',
+      label: 'Recent form',
+      description: `Passing charts from the last ${IDENTITY_RECENT_WINDOW_DAYS} days.`,
+      window_days: IDENTITY_RECENT_WINDOW_DAYS,
+      cutoff_date: cutoffLabel,
+    };
+  }
+
+  return {
+    key: 'all',
+    label: 'All-time',
+    description: 'Best clears and score peaks across the full synced profile.',
+    window_days: 0,
+    cutoff_date: '',
+  };
+}
+
+function filterIdentityRecentRows(rows, cutoffMs) {
+  const list = Array.isArray(rows) ? rows : [];
+  return list.filter((row) => parseDateMs(row?.date_played || row?.created_at || '') >= cutoffMs);
+}
+
+function buildPlayerIdentitySummary(userId, profile, analytics, passBestByChart, songCatalog, options = {}) {
+  const timeframe = options?.timeframe || buildIdentityTimeframeMeta('all');
+  const singleRows = buildIdentityLevelRows(analytics?.levels?.single || [], 'Single');
+  const doubleRows = buildIdentityLevelRows(analytics?.levels?.double || [], 'Double');
+  const singleStrength = singleRows.reduce((sum, row) => sum + row.weight, 0);
+  const doubleStrength = doubleRows.reduce((sum, row) => sum + row.weight, 0);
+  const modeProfile = getIdentityModeProfile(singleStrength, doubleStrength);
+  const singleRange = buildIdentityLevelRange('Single', singleRows);
+  const doubleRange = buildIdentityLevelRange('Double', doubleRows);
+  const allHomeLevels = [...singleRows.slice(0, 3), ...doubleRows.slice(0, 3)]
+    .sort((a, b) => {
+      if (b.weight !== a.weight) return b.weight - a.weight;
+      if (b.share !== a.share) return b.share - a.share;
+      return b.level - a.level;
+    })
+    .slice(0, 6);
+
+  const strongholdData = buildIdentityStrongholds(passBestByChart, songCatalog);
+  const strongholds = strongholdData.clusters.slice(0, 4);
+  const signatureJackets = selectIdentitySignatureJackets(
+    strongholdData.clusters,
+    strongholdData.fallback_candidates,
+    12
+  );
+  const topStronghold = strongholds[0] || null;
+  const totalSss = strongholdData.clusters.reduce((sum, row) => sum + (parseInt(row.count, 10) || 0), 0);
+
+  let homeLabel = '';
+  if (modeProfile.dominant_mode === 'Single' && singleRange.label) {
+    homeLabel = singleRange.label;
+  } else if (modeProfile.dominant_mode === 'Double' && doubleRange.label) {
+    homeLabel = doubleRange.label;
+  } else if (singleRange.label && doubleRange.label) {
+    homeLabel = `${singleRange.label} / ${doubleRange.label}`;
+  } else {
+    homeLabel = singleRange.label || doubleRange.label || '';
+  }
+
+  const narrativeParts = [modeProfile.dominant_label];
+  if (homeLabel) narrativeParts.push(`home in ${homeLabel}`);
+  if (topStronghold) narrativeParts.push(`SSS peak at ${topStronghold.label}`);
+
+  return {
+    user_id: userId,
+    user: profile ? {
+      id: profile.id,
+      username: profile.username,
+      avatar: normalizeUserAvatarForList(profile.avatar, profile.id, 64),
+    } : null,
+    timeframe,
+    summary: {
+      dominant_label: modeProfile.dominant_label,
+      detail_label: modeProfile.detail_label,
+      home_label: homeLabel,
+      stronghold_label: topStronghold ? `Most SSSs at ${topStronghold.label}` : 'No SSS stronghold yet',
+      narrative: `${narrativeParts.join(' • ')}.`,
+    },
+    totals: {
+      passed_charts: passBestByChart.size,
+      sss_charts: totalSss,
+    },
+    mode_split: {
+      dominant_mode: modeProfile.dominant_mode,
+      dominant_label: modeProfile.dominant_label,
+      single_share: modeProfile.single_share,
+      double_share: modeProfile.double_share,
+      total_strength: modeProfile.total_strength,
+      single: {
+        share: modeProfile.single_share,
+        competitive_level: analytics?.competitive_levels?.single || null,
+        home_range: singleRange.label,
+        top_levels: singleRows.slice(0, 3),
+      },
+      double: {
+        share: modeProfile.double_share,
+        competitive_level: analytics?.competitive_levels?.double || null,
+        home_range: doubleRange.label,
+        top_levels: doubleRows.slice(0, 3),
+      },
+    },
+    home_levels: allHomeLevels,
+    sss_strongholds: strongholds,
+    signature_jackets: signatureJackets,
+    sync: analytics?.sync || null,
+  };
+}
+
+function getPlayerIdentitySummaryPayload(db, userId, aliases, songCatalog, view = 'all') {
+  const profile = db.prepare('SELECT id, username, avatar FROM users WHERE id = ?').get(userId) || null;
+  if (!profile) return null;
+
+  if (view === 'recent') {
+    const cutoffMs = Date.now() - (IDENTITY_RECENT_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+    const recentScores = filterIdentityRecentRows(queryUserRecentScores(db, userId), cutoffMs);
+    const { passBest } = buildUserBestByChartMap({
+      bestScores: [],
+      recentScores,
+      pumbilityScores: [],
+      aliases,
+      validChartKeys: songCatalog.chartsByKey,
+    });
+    const analytics = buildIdentityAnalyticsSnapshot(songCatalog, passBest);
+    return buildPlayerIdentitySummary(
+      userId,
+      profile,
+      analytics,
+      passBest,
+      songCatalog,
+      { timeframe: buildIdentityTimeframeMeta('recent', cutoffMs) }
+    );
+  }
+
+  const analyticsResult = getUserAnalytics(db, userId, aliases, songCatalog);
+  return buildPlayerIdentitySummary(
+    userId,
+    profile,
+    analyticsResult.analytics,
+    analyticsResult.passBestByChart,
+    songCatalog,
+    { timeframe: buildIdentityTimeframeMeta('all') }
+  );
 }
 
 function parseLevelQuery(levelRaw) {
@@ -2437,6 +2919,21 @@ router.get('/analytics/user/:userId', (req, res) => {
 
   const result = getUserAnalytics(db, userId, aliases, songCatalog);
   res.json(result.analytics);
+});
+
+// GET /api/songs/analytics/identity/:userId — player identity summary for profile overview
+router.get('/analytics/identity/:userId', (req, res) => {
+  const db = getDb();
+  const aliases = loadSongAliases();
+  const songCatalog = getSongCatalog(db, aliases);
+  const userId = String(req.params.userId || '').trim();
+  const view = String(req.query.view || 'all').trim().toLowerCase() === 'recent' ? 'recent' : 'all';
+  if (!userId) return res.status(400).json({ error: 'User ID is required' });
+
+  const user = db.prepare('SELECT id, username, avatar FROM users WHERE id = ?').get(userId);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  const payload = getPlayerIdentitySummaryPayload(db, userId, aliases, songCatalog, view);
+  res.json(payload);
 });
 
 // GET /api/songs/analytics/grade-goals/:userId — per-level grade goal tracker
