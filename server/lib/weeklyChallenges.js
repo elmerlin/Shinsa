@@ -61,47 +61,44 @@ function resolveGrade(rawGrade, score) {
 // Week boundary helpers (Europe/London)
 // ---------------------------------------------------------------------------
 
+function getLondonDateParts(date) {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/London',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.filter((part) => part.type !== 'literal').map((part) => [part.type, part.value]));
+  return {
+    day: parseInt(values.day, 10),
+    month: parseInt(values.month, 10),
+    year: parseInt(values.year, 10),
+  };
+}
+
+function normalizeUtcDateParts(y, m, d) {
+  const normalized = new Date(Date.UTC(y, m - 1, d));
+  return {
+    year: normalized.getUTCFullYear(),
+    month: normalized.getUTCMonth() + 1,
+    day: normalized.getUTCDate(),
+  };
+}
+
 function getWeekBoundary(now) {
   // Compute Monday 00:00 to Sunday 23:59:59.999 in Europe/London
-  const londonStr = now.toLocaleString('en-GB', { timeZone: 'Europe/London' });
-  // Parse "DD/MM/YYYY, HH:MM:SS"
-  const parts = londonStr.match(/(\d+)\/(\d+)\/(\d+),\s*(\d+):(\d+):(\d+)/);
-  if (!parts) throw new Error('Failed to parse London date');
-  const [, day, month, year] = parts.map(Number);
-
-  // Reconstruct as a Date in London time
-  const londonDate = new Date(`${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T00:00:00`);
-  const dow = londonDate.getDay(); // 0=Sun, 1=Mon...
+  const { day, month, year } = getLondonDateParts(now);
+  const londonCalendarDate = new Date(Date.UTC(year, month - 1, day));
+  const dow = londonCalendarDate.getUTCDay(); // 0=Sun, 1=Mon...
   const diffToMonday = dow === 0 ? -6 : 1 - dow;
+  const monday = normalizeUtcDateParts(year, month, day + diffToMonday);
+  const sunday = normalizeUtcDateParts(monday.year, monday.month, monday.day + 6);
 
-  // Monday 00:00 London
-  const monday = new Date(londonDate);
-  monday.setDate(monday.getDate() + diffToMonday);
-  const mondayLondon = new Date(
-    monday.toLocaleString('en-US', { timeZone: 'Europe/London' })
-  );
+  const startsAt = computeUtcFromLondon(monday.year, monday.month, monday.day, 0, 0, 0);
+  const endsAt = computeUtcFromLondon(sunday.year, sunday.month, sunday.day, 23, 59, 59);
 
-  // Sunday 23:59:59 London
-  const sunday = new Date(mondayLondon);
-  sunday.setDate(sunday.getDate() + 6);
-  sunday.setHours(23, 59, 59, 999);
-
-  // Convert to UTC ISO strings for DB storage
-  // We need the actual UTC instant for Monday 00:00 London
-  const startFormatter = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit',
-  });
-  const startParts = startFormatter.formatToParts(now);
-  const yearNow = parseInt(startParts.find(p => p.type === 'year').value, 10);
-
-  // Use a simpler approach: build the London dates and convert
-  const mondayStr = `${year}-${String(month).padStart(2, '0')}-${String(day + diffToMonday).padStart(2, '0')}`;
-  // Actually, let's use a more robust approach
-  const startsAt = computeUtcFromLondon(year, month, day + diffToMonday, 0, 0, 0);
-  const endsAt = computeUtcFromLondon(year, month, day + diffToMonday + 6, 23, 59, 59);
-
-  // ISO week key
-  const weekKey = computeIsoWeekKey(startsAt);
+  // ISO week key must follow the London calendar date, not the UTC instant.
+  const weekKey = computeIsoWeekKey(new Date(Date.UTC(monday.year, monday.month - 1, monday.day)));
 
   return { weekKey, startsAtUtc: startsAt.toISOString(), endsAtUtc: endsAt.toISOString() };
 }
