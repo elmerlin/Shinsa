@@ -89,11 +89,21 @@ for (const userId of userIds) {
       }
     }
     if (wc) {
+      // Resolve replay URL from user_chart_youtube_links if not in recently_played
+      let replayUrl = p.replay_embed_url || '';
+      if (!replayUrl) {
+        const chart = db.prepare('SELECT id FROM songs WHERE title = ? AND mode = ? AND level = ? LIMIT 1').get(wc.song_title_snapshot, p.mode, p.level);
+        if (chart) {
+          const yt = db.prepare('SELECT session_youtube_url FROM user_chart_youtube_links WHERE user_id = ? AND chart_id = ? LIMIT 1').get(userId, chart.id);
+          if (yt?.session_youtube_url) replayUrl = yt.session_youtube_url;
+        }
+      }
       wcMatched.push({
         song_title: p.song_title, mode: p.mode, level: p.level, score: p.score,
         grade: p.grade || '', plate: p.plate || '', background_url: p.background_url || '',
+        machine_name: p.machine_name || '', played_at_utc: p.played_at_utc || '', date_played: p.date_played || '',
         perfect: p.perfect || 0, great: p.great || 0, good: p.good || 0, bad: p.bad || 0, miss: p.miss || 0,
-        replay_embed_url: p.replay_embed_url || '', replay_video_id: p.replay_video_id || '',
+        replay_embed_url: replayUrl, replay_video_id: p.replay_video_id || '',
         weekly_challenge_week_key: week.week_key,
         weekly_challenge_chart_id: wc.id,
         rating_points: calculateRatingPoints(p.level, p.grade, p.score),
