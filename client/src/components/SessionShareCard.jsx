@@ -169,7 +169,7 @@ export default function SessionShareCard({
   const ratingCellClass = 'py-1.5 pl-0 pr-1.5 text-right whitespace-nowrap sm:px-2';
   const gradeCellClass = 'py-1.5 pl-0 pr-2.5 text-right whitespace-nowrap sm:px-1';
   const wrapperClass = flush
-    ? (compact ? 'p-2.5' : 'p-3')
+    ? `${isHopShare ? 'bg-[linear-gradient(135deg,rgba(18,25,56,0.5),rgba(11,57,73,0.4)_48%,rgba(24,18,42,0.5))]' : 'bg-gradient-to-br from-cyan-500/8 via-emerald-500/5 to-transparent'} ${compact ? 'p-2.5' : 'p-3'}`
     : isHopShare
       ? `rounded-xl border border-yellow-300/30 bg-[linear-gradient(135deg,rgba(18,25,56,0.98),rgba(11,57,73,0.92)_48%,rgba(24,18,42,0.98))] ${compact ? 'p-2.5' : 'p-3'} shadow-[0_10px_30px_rgba(0,0,0,0.3)]`
       : `rounded-xl border border-cyan-400/30 bg-gradient-to-br from-cyan-500/15 via-emerald-500/10 to-transparent ${compact ? 'p-2.5' : 'p-3'}`;

@@ -88,7 +88,7 @@ export default function LiveSessionCard({ summary, className = '', title = 'Shin
   }
 
   return (
-    <div className={`${flush ? '' : 'rounded-2xl border border-rose-400/35 bg-gradient-to-br from-rose-500/18 via-orange-500/10 to-cyan-500/8'} ${compact ? 'p-2.5' : 'p-3'} ${className}`.trim()}>
+    <div className={`${flush ? 'bg-gradient-to-br from-rose-500/10 via-orange-500/5 to-cyan-500/4' : 'rounded-2xl border border-rose-400/35 bg-gradient-to-br from-rose-500/18 via-orange-500/10 to-cyan-500/8'} ${compact ? 'p-2.5' : 'p-3'} ${className}`.trim()}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-[10px] font-display font-black uppercase tracking-[0.28em] text-rose-300">{title}</p>

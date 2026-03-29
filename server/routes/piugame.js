@@ -64,6 +64,11 @@ function parseBoolean(value) {
   return null;
 }
 
+function safeParseJsonArray(raw) {
+  try { const arr = JSON.parse(raw || '[]'); return Array.isArray(arr) ? arr : []; }
+  catch { return []; }
+}
+
 function normalizeShoeText(value, max = 80) {
   return String(value || '').replace(/\s+/g, ' ').trim().slice(0, max);
 }

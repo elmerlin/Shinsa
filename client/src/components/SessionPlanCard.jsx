@@ -103,7 +103,7 @@ export default function SessionPlanCard({ plan, className = '', defaultScoringEx
     : '';
 
   return (
-    <div className={`${flush ? '' : 'rounded-xl border border-amber-400/30 bg-gradient-to-br from-amber-500/10 via-cyan-500/5 to-transparent'} p-3 space-y-2.5 ${className}`.trim()}>
+    <div className={`${flush ? 'bg-gradient-to-br from-amber-500/5 via-cyan-500/3 to-transparent' : 'rounded-xl border border-amber-400/30 bg-gradient-to-br from-amber-500/10 via-cyan-500/5 to-transparent'} p-3 space-y-2.5 ${className}`.trim()}>
       {/* Header */}
       <div className="flex items-start justify-between gap-2">
         <div>

@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import PiuChartJacket from './PiuChartJacket';
+import ScoreSnapshotModal from './ScoreSnapshotModal';
+import { getChartKeyMap } from '../utils/api';
 
 function formatNumber(value) {
   return (parseInt(value, 10) || 0).toLocaleString();
@@ -48,7 +50,7 @@ function SongJacket({ row }) {
   );
 }
 
-function SongTable({ title, rows, type }) {
+function SongTable({ title, rows, type, onRowClick }) {
   const list = Array.isArray(rows) ? rows : [];
   const emptyLabel = type === 'score'
     ? 'No scored songs in this session.'
@@ -95,7 +97,11 @@ function SongTable({ title, rows, type }) {
               const rowRating = row?._rating ?? row?.rating;
               const overRank = getOverTop100Rank(row?._over_top100_rank ?? row?.over_top100_rank);
               return (
-                <tr key={`${type}-${idx}-${row.song_title}-${row.mode}-${row.level}`} className="border-b border-piu-border/20 last:border-0">
+                <tr
+                  key={`${type}-${idx}-${row.song_title}-${row.mode}-${row.level}`}
+                  className={`border-b border-piu-border/20 last:border-0 ${onRowClick ? 'cursor-pointer hover:bg-white/[0.03] transition-colors' : ''}`}
+                  onClick={onRowClick ? () => onRowClick(row) : undefined}
+                >
                   <td className={rankCellClass}>{idx + 1}</td>
                   <td className={songCellClass}>
                     <div className="flex items-start gap-2">
@@ -151,9 +157,38 @@ export default function SessionSummaryCard({
   flush = false,
 }) {
   const [topPlaysExpanded, setTopPlaysExpanded] = useState(false);
+  const [selectedScore, setSelectedScore] = useState(null);
+  const [chartKeyMap, setChartKeyMap] = useState(null);
+
+  useEffect(() => {
+    getChartKeyMap().then(setChartKeyMap).catch(() => {});
+  }, []);
+
+  const handleRowClick = useMemo(() => {
+    if (!chartKeyMap) return null;
+    return (row) => {
+      const norm = (row.song_title || '').toLowerCase().replace(/\s+/g, ' ').trim();
+      const exactKey = `${norm}|${row.mode}|${row._level ?? row.level}`;
+      const chartId = chartKeyMap[exactKey] || chartKeyMap[norm];
+      const chartLink = chartId ? `/songs/chart/${chartId}` : `/songs?q=${encodeURIComponent(row.song_title || '')}`;
+      setSelectedScore({
+        ...row,
+        song_title: row.song_title,
+        score: row._score ?? row.score,
+        grade: row._grade ?? row.grade,
+        mode: row.mode,
+        level: row._level ?? row.level,
+        replay_embed_url: row.replay_embed_url || '',
+        _jacketUrl: row.jacket_url || row._jacketUrl || '',
+        _chartLink: chartLink,
+      });
+    };
+  }, [chartKeyMap]);
+
   if (!summary) return null;
   return (
-    <div className={`${flush ? '' : 'rounded-xl border border-emerald-400/30 bg-gradient-to-br from-emerald-500/15 via-cyan-500/10 to-transparent'} ${compact ? 'p-2.5' : 'p-3'} ${className}`.trim()}>
+    <>
+    <div className={`${flush ? 'bg-gradient-to-br from-emerald-500/8 via-cyan-500/5 to-transparent' : 'rounded-xl border border-emerald-400/30 bg-gradient-to-br from-emerald-500/15 via-cyan-500/10 to-transparent'} ${compact ? 'p-2.5' : 'p-3'} ${className}`.trim()}>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <p className="text-[10px] font-display font-bold uppercase tracking-wider text-emerald-300">{title}</p>
@@ -169,16 +204,17 @@ export default function SessionSummaryCard({
             <p className="text-[11px] text-emerald-300/90 mt-0.5">Shoe: {summary.sessionShoeLabel}</p>
           ) : null}
         </div>
-        <div className="flex items-center gap-2">
-          {(summary.trainingLoad || 0) > 0 ? (
-            <div className="rounded-lg border border-amber-400/30 bg-amber-500/10 px-2.5 py-1.5 text-right">
-              <p className="text-[9px] text-amber-400/70 font-display uppercase tracking-wide">Training Load</p>
-              <p className="text-sm font-display font-bold text-amber-300 tabular-nums">{formatNumber(summary.trainingLoad)}</p>
-            </div>
-          ) : null}
-          {actions}
-        </div>
+        {actions ? <div className="flex items-center gap-1">{actions}</div> : null}
       </div>
+
+      {(summary.trainingLoad || 0) > 0 ? (
+        <div className="mt-3 inline-flex rounded-lg border border-amber-400/30 bg-amber-500/10 px-2.5 py-1.5">
+          <div>
+            <p className="text-[9px] text-amber-400/70 font-display uppercase tracking-wide">Training Load</p>
+            <p className="text-sm font-display font-bold text-amber-300 tabular-nums">{formatNumber(summary.trainingLoad)}</p>
+          </div>
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3">
         <Stat label="Songs" value={summary.songCount} />
@@ -256,8 +292,8 @@ export default function SessionSummaryCard({
           </button>
           {topPlaysExpanded ? (
             <div className="space-y-2 mt-2">
-              <SongTable title="Top 3 songs by score" rows={summary?.topSongsByScore || []} type="score" />
-              <SongTable title="Top 3 songs by rating" rows={summary?.topSongsByRating || []} type="rating" />
+              <SongTable title="Top 3 songs by score" rows={summary?.topSongsByScore || []} type="score" onRowClick={handleRowClick} />
+              <SongTable title="Top 3 songs by rating" rows={summary?.topSongsByRating || []} type="rating" onRowClick={handleRowClick} />
             </div>
           ) : (
             <p className="text-[10px] text-gray-500 mt-1.5">Tap to expand</p>
@@ -265,5 +301,16 @@ export default function SessionSummaryCard({
         </div>
       ) : null}
     </div>
+
+    {selectedScore ? (
+      <ScoreSnapshotModal
+        score={selectedScore}
+        jacketUrl={selectedScore._jacketUrl || ''}
+        chartLink={selectedScore._chartLink || ''}
+        onClose={() => setSelectedScore(null)}
+        modalLabel="Play details"
+      />
+    ) : null}
+    </>
   );
 }

@@ -353,7 +353,7 @@ export default function WeeklyChallengeSummaryPostCard({ summary, className = ''
   return (
     <>
       <div
-        className={`overflow-hidden ${flush ? '' : 'rounded-xl border border-piu-border/50 bg-gradient-to-b from-piu-dark via-piu-darker to-piu-dark'} ${className}`}
+        className={`overflow-hidden ${flush ? 'bg-gradient-to-b from-piu-dark/50 via-piu-darker/40 to-piu-dark/50' : 'rounded-xl border border-piu-border/50 bg-gradient-to-b from-piu-dark via-piu-darker to-piu-dark'} ${className}`}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
