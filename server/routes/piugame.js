@@ -4438,9 +4438,12 @@ router.get('/recently-played/:userId', (req, res) => {
       p.*,
       COALESCE(s.make, '') AS shoe_make,
       COALESCE(s.model, '') AS shoe_model,
-      COALESCE(s.colorway, '') AS shoe_colorway
+      COALESCE(s.colorway, '') AS shoe_colorway,
+      COALESCE(NULLIF(yt.session_youtube_url, ''), p.replay_embed_url, '') AS replay_embed_url
     FROM user_recently_played p
     LEFT JOIN user_shoes s ON s.id = p.shoe_id
+    LEFT JOIN songs chart ON chart.title = p.song_title AND chart.mode = p.mode AND chart.level = p.level
+    LEFT JOIN user_chart_youtube_links yt ON yt.user_id = p.user_id AND yt.chart_id = chart.id
     ${whereClause}
     ORDER BY ${
       hasYearFilter
