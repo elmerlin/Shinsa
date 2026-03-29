@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { getPlayerScoutingCard } from '../utils/api';
 import { Card, CardContent } from './ui/card';
 import { Badge } from './ui/badge';
+import { getCountryFlag } from '../utils/countryFlags';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -152,19 +153,78 @@ function SpecialtyChips({ specialties, competitive }) {
   );
 }
 
+function CadenceMetric({ label, value, detail, accent = 'text-zinc-100' }) {
+  return (
+    <div className="rounded-lg border border-white/[0.06] bg-black/20 px-2.5 py-2">
+      <div className="text-[9px] font-display font-black uppercase tracking-[0.16em] text-zinc-500">
+        {label}
+      </div>
+      <div className={cx('mt-1 font-display text-lg font-bold leading-none tabular-nums', accent)}>
+        {value}
+      </div>
+      <div className="mt-1 text-[10px] font-display text-zinc-500">
+        {detail}
+      </div>
+    </div>
+  );
+}
+
 function CadenceStrip({ cadence }) {
   if (!cadence || cadence.activeDays30 <= 0) return null;
   return (
-    <div className="flex items-center gap-3 flex-wrap text-[11px] font-display text-zinc-400">
-      <span className="flex items-center gap-1">
-        <span className="font-bold text-zinc-200">Cadence {cadence.score100}</span>
-      </span>
-      <span className="text-zinc-600">|</span>
-      <span>{cadence.activeDays30} active days / 30</span>
-      <span className="text-zinc-600">|</span>
-      <span>{cadence.sessionsPerWeekApprox} sessions/week</span>
-      <span className="text-zinc-600">|</span>
-      <span className="text-zinc-500 italic">vs Shinsa users</span>
+    <div className="rounded-xl border border-white/[0.06] bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-3 sm:p-3.5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-[9px] font-display font-black uppercase tracking-[0.18em] text-zinc-500">
+            Cadence
+          </div>
+          <div className="mt-1 flex items-end gap-2">
+            <span className={cx('font-display text-2xl sm:text-3xl font-bold leading-none tabular-nums', ratingColor(cadence.score100))}>
+              {cadence.score100}
+            </span>
+            <span className="mb-0.5 rounded-full border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 font-display text-[9px] font-bold uppercase tracking-[0.16em] text-zinc-300">
+              {cadence.label}
+            </span>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center justify-end gap-1.5 text-[10px] font-display">
+          <span className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-2 py-1 font-bold text-cyan-200">
+            F {cadence.frequencyPercentile}
+          </span>
+          <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2 py-1 font-bold text-emerald-200">
+            V {cadence.volumePercentile}
+          </span>
+        </div>
+      </div>
+
+      <div className="mt-3 grid grid-cols-3 gap-2">
+        <CadenceMetric
+          label="Days"
+          value={cadence.activeDays30}
+          detail={`${cadence.activeDaysPerWeek}/wk active`}
+          accent="text-cyan-200"
+        />
+        <CadenceMetric
+          label="Sessions"
+          value={cadence.sessions30}
+          detail={`${cadence.sessionsPerWeek}/wk`}
+          accent="text-emerald-200"
+        />
+        <CadenceMetric
+          label="Plays"
+          value={cadence.plays30}
+          detail={`${cadence.playsPerSession}/session`}
+          accent="text-amber-200"
+        />
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] font-display text-zinc-500">
+        <span>frequency + volume blend</span>
+        <span className="text-zinc-700">|</span>
+        <span>last 30 days</span>
+        <span className="text-zinc-700">|</span>
+        <span>vs {cadence.cohortSize || '?'} Shinsa users</span>
+      </div>
     </div>
   );
 }
@@ -269,11 +329,12 @@ export default function PlayerScoutingCard({ userId }) {
   }
   if (!data || !data.coverage?.hasPiuData) return <EmptyState />;
 
-  const { user, ratings, attributes, cadence, competitive, specialties, signature } = data;
+  const { user, ratings, attributes, cadence, competitive, specialties } = data;
   const tint = SCOPE_TINT[activeScope];
   const scopeAttrs = attributes?.[activeScope] || { speed: 0, stamina: 0, mobility: 0, tech: 0 };
   const hasDoubles = (ratings?.doubles?.raw || 0) > 0;
   const attributeModeLabel = getAttributeModeLabel(data.coverage?.attributeMode);
+  const nationalityFlag = user.nationality ? getCountryFlag(user.nationality, 'h-[11px] sm:h-[12px]') : null;
 
   // Mode-based border tint
   const borderTint = competitive?.dominantMode === 'Single'
@@ -310,9 +371,12 @@ export default function PlayerScoutingCard({ userId }) {
             <h3 className="font-display font-bold text-base sm:text-lg text-white truncate leading-tight">
               {user.username}
             </h3>
-            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+            <div className="mt-1 flex items-center gap-1.5 flex-wrap">
               {user.nationality && (
-                <span className="text-[11px] text-zinc-400 font-display">{user.nationality}</span>
+                <span className="inline-flex items-center gap-1 rounded-full border border-white/[0.06] bg-white/[0.03] px-2 py-0.5 text-[10px] sm:text-[11px] text-zinc-300 font-display">
+                  {nationalityFlag}
+                  <span>{user.nationality}</span>
+                </span>
               )}
               {user.skillTitle && (
                 <span className="text-[11px] text-zinc-500 font-display">{user.skillTitle}</span>

@@ -97,3 +97,43 @@ describe('player scouting card Shinsa baseline', () => {
     );
   });
 });
+
+describe('player scouting card cadence', () => {
+  it('groups nearby plays into the same session and splits long gaps', () => {
+    const sessions = __test.countCadenceSessions([
+      { played_at_utc: '2026-03-28 10:00:00', date_played: '2026-03-28 19:00:00 (GMT+9)' },
+      { played_at_utc: '2026-03-28 10:24:00', date_played: '2026-03-28 19:24:00 (GMT+9)' },
+      { played_at_utc: '2026-03-28 12:05:00', date_played: '2026-03-28 21:05:00 (GMT+9)' },
+      { played_at_utc: '2026-03-29 09:10:00', date_played: '2026-03-29 18:10:00 (GMT+9)' },
+    ], 2);
+
+    assert.equal(sessions, 3);
+  });
+
+  it('falls back to active-day session count when timestamps are unavailable', () => {
+    const sessions = __test.countCadenceSessions([
+      { played_at_utc: '', date_played: '' },
+      { played_at_utc: '', date_played: '' },
+    ], 4);
+
+    assert.equal(sessions, 4);
+  });
+
+  it('blends frequency and volume percentiles into the headline cadence score', () => {
+    const cadence = __test.buildCadenceSummary({
+      activeDays30: 12,
+      plays30: 48,
+      sessions30: 15,
+      frequencyPercentile: 80,
+      volumePercentile: 55,
+      cohortSize: 42,
+    });
+
+    assert.equal(cadence.score100, 70);
+    assert.equal(cadence.label, 'Regular');
+    assert.equal(cadence.activeDaysPerWeek, 2.8);
+    assert.equal(cadence.sessionsPerWeek, 3.5);
+    assert.equal(cadence.playsPerSession, 3.2);
+    assert.equal(cadence.cohortSize, 42);
+  });
+});

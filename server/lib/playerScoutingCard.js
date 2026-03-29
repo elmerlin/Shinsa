@@ -1,6 +1,8 @@
 'use strict';
 
 const { normalizeUserAvatarForList } = require('./avatarProxy');
+const { parsePiugamePlayedAtUtc } = require('./piugameDate');
+const { parseUtcSqliteDateTime } = require('./liveSessionSummary');
 
 // ────────────────────────────────────────────────────────────────────────────
 // Scouting-card skill bucket taxonomy
@@ -23,6 +25,7 @@ for (const [bucket, slugs] of Object.entries(SCOUTING_SKILL_BUCKETS)) {
 
 const BUCKET_KEYS = ['speed', 'stamina', 'mobility', 'tech'];
 const SHINSA_BASELINE_TTL_MS = 2 * 60 * 1000;
+const CADENCE_SESSION_GAP_MS = 90 * 60 * 1000;
 let shinsaBaselineCache = { data: null, expiresAt: 0 };
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -148,6 +151,89 @@ function buildRelativeBucketScores(userFam, baselineFam) {
       : 0;
   }
   return result;
+}
+
+function round1(value) {
+  return Math.round((Number(value) || 0) * 10) / 10;
+}
+
+function parseCadencePlayedAt(row) {
+  const playedAtUtc = parseUtcSqliteDateTime(row?.played_at_utc);
+  if (playedAtUtc) return playedAtUtc;
+  return parsePiugamePlayedAtUtc(row?.date_played);
+}
+
+function countCadenceSessions(playRows = [], fallbackSessionCount = 0) {
+  const timestamped = (Array.isArray(playRows) ? playRows : [])
+    .map((row, index) => ({
+      index,
+      playedAt: parseCadencePlayedAt(row),
+    }))
+    .filter((row) => row.playedAt instanceof Date && !Number.isNaN(row.playedAt.getTime()))
+    .sort((a, b) => {
+      const diff = a.playedAt.getTime() - b.playedAt.getTime();
+      return diff !== 0 ? diff : a.index - b.index;
+    });
+
+  if (timestamped.length === 0) {
+    return Math.max(0, fallbackSessionCount || 0);
+  }
+
+  let sessions = 1;
+  for (let i = 1; i < timestamped.length; i++) {
+    const gapMs = timestamped[i].playedAt.getTime() - timestamped[i - 1].playedAt.getTime();
+    if (gapMs > CADENCE_SESSION_GAP_MS) sessions += 1;
+  }
+  return sessions;
+}
+
+function buildPercentileRank(rows, userId, compareFn) {
+  const normalizedRows = Array.isArray(rows) ? rows.slice() : [];
+  if (normalizedRows.length <= 1) return normalizedRows.length === 1 ? 100 : 0;
+
+  normalizedRows.sort((a, b) => {
+    const compared = compareFn(a, b);
+    if (compared !== 0) return compared;
+    return String(a?.user_id || '').localeCompare(String(b?.user_id || ''));
+  });
+
+  const userIndex = normalizedRows.findIndex((row) => String(row?.user_id || '') === String(userId || ''));
+  if (userIndex < 0) return 50;
+  return Math.round((userIndex / (normalizedRows.length - 1)) * 100);
+}
+
+function buildCadenceLabel(score100) {
+  if (score100 >= 90) return 'Locked in';
+  if (score100 >= 75) return 'Consistent';
+  if (score100 >= 55) return 'Regular';
+  if (score100 >= 35) return 'On and off';
+  return 'Light';
+}
+
+function buildCadenceSummary({ activeDays30, plays30, sessions30, frequencyPercentile, volumePercentile, cohortSize }) {
+  const normalizedActiveDays = Math.max(0, parseInt(activeDays30, 10) || 0);
+  const normalizedPlays = Math.max(0, parseInt(plays30, 10) || 0);
+  const normalizedSessions = Math.max(0, parseInt(sessions30, 10) || 0);
+  const normalizedFrequency = clamp(0, 100, Math.round(Number(frequencyPercentile) || 0));
+  const normalizedVolume = clamp(0, 100, Math.round(Number(volumePercentile) || 0));
+  const score100 = clamp(0, 100, Math.round((normalizedFrequency * 0.6) + (normalizedVolume * 0.4)));
+
+  return {
+    score100,
+    percentile: score100,
+    label: buildCadenceLabel(score100),
+    cohortSize: Math.max(0, parseInt(cohortSize, 10) || 0),
+    frequencyPercentile: normalizedFrequency,
+    volumePercentile: normalizedVolume,
+    activeDays30: normalizedActiveDays,
+    activeDaysPerWeek: round1((normalizedActiveDays / 30) * 7),
+    plays30: normalizedPlays,
+    sessions30: normalizedSessions,
+    sessionsPerWeek: round1((normalizedSessions / 30) * 7),
+    playsPerSession: normalizedSessions > 0
+      ? round1(normalizedPlays / normalizedSessions)
+      : 0,
+  };
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -328,21 +414,39 @@ function buildCadenceStats(db, userId) {
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const cutoffDate = thirtyDaysAgo.toISOString().slice(0, 10);
 
-  // Count user's active days and plays in last 30 days
-  // date_played may contain timestamps like "2026-03-29 05:17:14 (GMT+9)" so extract the date portion
-  const userActivity = db.prepare(`
-    SELECT SUBSTR(date_played, 1, 10) as play_date, COUNT(*) as play_count
+  const recentRows = db.prepare(`
+    SELECT id, played_at_utc, date_played
     FROM user_recently_played
-    WHERE user_id = ? AND SUBSTR(date_played, 1, 10) >= ?
-    GROUP BY play_date
+    WHERE user_id = ?
+      AND SUBSTR(date_played, 1, 10) >= ?
+    ORDER BY datetime(COALESCE(NULLIF(played_at_utc, ''), SUBSTR(date_played, 1, 19))) ASC, id ASC
   `).all(userId, cutoffDate);
 
-  const activeDays30 = userActivity.length;
-  const plays30 = userActivity.reduce((sum, row) => sum + (parseInt(row.play_count, 10) || 0), 0);
-  const sessionsPerWeekApprox = Number((activeDays30 / 30 * 7).toFixed(1));
+  const playDates = new Set();
+  for (const row of recentRows) {
+    const playDate = String(row?.date_played || '').slice(0, 10);
+    if (playDate) playDates.add(playDate);
+  }
+
+  const activeDays30 = playDates.size;
+  const plays30 = recentRows.length;
+  const sessions30 = countCadenceSessions(recentRows, activeDays30);
 
   if (activeDays30 === 0) {
-    return { score100: 0, percentile: 0, activeDays30: 0, plays30: 0, sessionsPerWeekApprox: 0, label: 'No recent activity' };
+    return {
+      score100: 0,
+      percentile: 0,
+      label: 'No recent activity',
+      cohortSize: 0,
+      frequencyPercentile: 0,
+      volumePercentile: 0,
+      activeDays30: 0,
+      activeDaysPerWeek: 0,
+      plays30: 0,
+      sessions30: 0,
+      sessionsPerWeek: 0,
+      playsPerSession: 0,
+    };
   }
 
   // Compare across all synced Shinsa users
@@ -355,34 +459,33 @@ function buildCadenceStats(db, userId) {
   `).all(cutoffDate);
 
   if (allUsers.length <= 1) {
-    return { score100: 100, percentile: 100, activeDays30, plays30, sessionsPerWeekApprox, label: 'Only active Shinsa user' };
+    return buildCadenceSummary({
+      activeDays30,
+      plays30,
+      sessions30,
+      frequencyPercentile: 100,
+      volumePercentile: 100,
+      cohortSize: allUsers.length,
+    });
   }
 
-  // Rank by activeDays primarily, plays as tie-break
-  allUsers.sort((a, b) => {
+  const frequencyPercentile = buildPercentileRank(allUsers, userId, (a, b) => {
     if (a.active_days !== b.active_days) return a.active_days - b.active_days;
     return a.total_plays - b.total_plays;
   });
+  const volumePercentile = buildPercentileRank(allUsers, userId, (a, b) => {
+    if (a.total_plays !== b.total_plays) return a.total_plays - b.total_plays;
+    return a.active_days - b.active_days;
+  });
 
-  const userIndex = allUsers.findIndex((u) => u.user_id === userId);
-  const percentile = userIndex >= 0
-    ? Math.round((userIndex / (allUsers.length - 1)) * 100)
-    : 50;
-
-  let label = 'Moderate';
-  if (percentile >= 90) label = 'Very active';
-  else if (percentile >= 70) label = 'Active';
-  else if (percentile >= 40) label = 'Moderate';
-  else label = 'Casual';
-
-  return {
-    score100: clamp(0, 100, percentile),
-    percentile,
+  return buildCadenceSummary({
     activeDays30,
     plays30,
-    sessionsPerWeekApprox,
-    label,
-  };
+    sessions30,
+    frequencyPercentile,
+    volumePercentile,
+    cohortSize: allUsers.length,
+  });
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -560,9 +663,11 @@ function buildPlayerScoutingCard(db, userId, helpers) {
 module.exports = {
   buildPlayerScoutingCard,
   __test: {
+    buildCadenceSummary,
     buildRelativeBucketScores,
     buildRelativeRating,
     buildShinsaBaselineFromSnapshots,
+    countCadenceSessions,
     createEmptyShinsaBaseline,
     mergeSnapshotIntoShinsaBaseline,
   },
