@@ -27,6 +27,7 @@ import PlayerIdentityMapPanel from '../components/PlayerIdentityMapPanel';
 import SkillBreakdownPanel from '../components/SkillBreakdownPanel';
 import RankingsPanel from '../components/RankingsPanel';
 import GradeGoalTracker from '../components/GradeGoalTracker';
+import PlayerScoutingCard from '../components/PlayerScoutingCard';
 import TitleProgressTab from '../components/TitleProgressTab';
 import PumbilityBreakdownModal from '../components/PumbilityBreakdownModal';
 import PiuChartJacket, { resolveChartJacketUrl } from '../components/PiuChartJacket';
@@ -2256,6 +2257,7 @@ export default function ProfilePage() {
     </Link>
   ) : avatarCore;
   const overviewCardsById = {
+    'scouting-card': { title: 'Scouting Card' },
     ...(songAnalytics ? { 'song-analytics': { title: 'Song Analytics' } } : {}),
     'skill-breakdown': { title: 'Skill Breakdown' },
     rankings: { title: 'Rankings' },
@@ -2263,10 +2265,13 @@ export default function ProfilePage() {
     ...(showOverviewHeatmapCard ? { 'play-heatmap': { title: 'Play Activity Heatmap' } } : {}),
   };
 
-  const orderedOverviewCardIds = ['play-heatmap', 'song-analytics', 'skill-breakdown', 'rankings', 'grade-goals']
+  const orderedOverviewCardIds = ['scouting-card', 'play-heatmap', 'song-analytics', 'skill-breakdown', 'rankings', 'grade-goals']
     .filter((cardId) => overviewCardsById[cardId]);
 
   const renderOverviewCardBody = (cardId) => {
+    if (cardId === 'scouting-card') {
+      return <PlayerScoutingCard userId={profileId} />;
+    }
     if (cardId === 'song-analytics') {
       return songAnalytics ? <SongAnalyticsPanel analytics={songAnalytics} /> : null;
     }

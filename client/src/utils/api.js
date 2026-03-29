@@ -160,6 +160,8 @@ export const getPlayerIdentitySummary = (userId, params = {}) => {
   const qs = new URLSearchParams(params).toString();
   return request(`/songs/analytics/identity/${userId}${qs ? `?${qs}` : ''}`);
 };
+export const getPlayerScoutingCard = (userId) =>
+  request(`/songs/analytics/scouting-card/${encodeURIComponent(userId)}`);
 export const getGradeGoals = (userId, params = {}) => {
   const qs = new URLSearchParams(params).toString();
   return request(`/songs/analytics/grade-goals/${userId}${qs ? `?${qs}` : ''}`);

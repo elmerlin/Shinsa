@@ -5,6 +5,7 @@ const path = require('path');
 const { getDb } = require('../db/schema');
 const { optionalAuth, requireAuth, isAdminUser } = require('./auth');
 const { normalizeUserAvatarForList } = require('../lib/avatarProxy');
+const { buildPlayerScoutingCard } = require('../lib/playerScoutingCard');
 const {
   normalizeSongName, parseSongFlags, resolveKnownSongVariantTitle,
   hasShortCutSuffix, normalizeShortCutSuffix, normalizeMode,
@@ -3469,6 +3470,34 @@ router.get('/analytics/skill-breakdown/:userId', (req, res) => {
     strengths,
     weaknesses,
   });
+});
+
+// GET /api/songs/analytics/scouting-card/:userId — player scouting card payload
+router.get('/analytics/scouting-card/:userId', (req, res) => {
+  const db = getDb();
+  const aliases = loadSongAliases();
+  const songCatalog = getSongCatalog(db, aliases);
+  const userId = String(req.params.userId || '').trim();
+  if (!userId) return res.status(400).json({ error: 'User ID is required' });
+
+  const user = db.prepare('SELECT id FROM users WHERE id = ?').get(userId);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+
+  const payload = buildPlayerScoutingCard(db, userId, {
+    aliases,
+    songCatalog,
+    queryUserBestScores,
+    queryUserRecentScores,
+    queryUserPumbilityScores,
+    buildUserBestByChartMap,
+    formatAnalytics,
+    getCompetitiveLevel,
+    getIdentityModeProfile,
+    buildIdentityLevelRows,
+  });
+
+  if (!payload) return res.status(404).json({ error: 'User not found' });
+  res.json(payload);
 });
 
 // GET /api/songs/analytics/rankings/:userId — percentile rankings among synced users

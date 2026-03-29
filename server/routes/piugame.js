@@ -5057,7 +5057,7 @@ router.get('/leaderboards/pumbility', requireAuth, (req, res) => {
 router.get('/leaderboards/pumbility/player-sheet', requireAuth, (req, res) => {
   const db = getDb();
   const metricRaw = String(req.query?.metric || 'overall').trim().toLowerCase();
-  const metric = metricRaw === 'singles' ? 'singles' : 'overall';
+  const metric = metricRaw === 'singles' ? 'singles' : metricRaw === 'doubles' ? 'doubles' : 'overall';
   const requestedName = String(req.query?.player_name || '').replace(/\s+/g, ' ').trim();
   const requestedUserId = String(req.query?.user_id || '').trim();
   if (!requestedName && !requestedUserId) {
@@ -5127,6 +5127,7 @@ router.get('/leaderboards/pumbility/player-sheet', requireAuth, (req, res) => {
       const mode = String(scoreRow?.mode || '').trim();
       if (mode !== 'Single' && mode !== 'Double') continue;
       if (metric === 'singles' && mode !== 'Single') continue;
+      if (metric === 'doubles' && mode !== 'Double') continue;
       if (!isPassingScore(score, scoreRow?.grade)) continue;
       const grade = normalizeGrade(scoreRow?.grade || gradeFromScore(score));
       const rating = getChartRatingPoints(score, grade, level);
@@ -5158,7 +5159,9 @@ router.get('/leaderboards/pumbility/player-sheet', requireAuth, (req, res) => {
   if (!rows.length) {
     const modeSqlFilter = metric === 'singles'
       ? `AND c.mode = 'Single'`
-      : `AND c.mode IN ('Single', 'Double')`;
+      : metric === 'doubles'
+        ? `AND c.mode = 'Double'`
+        : `AND c.mode IN ('Single', 'Double')`;
     let overRows = db.prepare(`
       SELECT r.chart_key, r.rank, r.score, r.grade, r.played_at, r.player_name, r.player_avatar_url,
              c.song_title, c.mode, c.level, c.jacket_url,
@@ -5218,6 +5221,7 @@ router.get('/leaderboards/pumbility/player-sheet', requireAuth, (req, res) => {
       const mode = String(row?.mode || '').trim();
       if (mode !== 'Single' && mode !== 'Double') continue;
       if (metric === 'singles' && mode !== 'Single') continue;
+      if (metric === 'doubles' && mode !== 'Double') continue;
       if (!isPassingScore(score, row?.grade)) continue;
       const grade = normalizeGrade(row?.grade || gradeFromScore(score));
       const rating = getChartRatingPoints(score, grade, level);
