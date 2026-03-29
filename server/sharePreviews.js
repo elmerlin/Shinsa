@@ -6,6 +6,7 @@ const { getDb, SYSTEM_USER_ID } = require('./db/schema');
 const { buildUserAvatarPath, isInlineDataAvatar } = require('./lib/avatarProxy');
 const { splitLiveSessionContent } = require('./lib/liveSessionMarker');
 const { splitWcSummaryContent } = require('./lib/weeklyChallengeSummaryMarker');
+const { splitWcPersonalContent } = require('./lib/weeklyChallengePersonalMarker');
 
 const SHARE_MARKER_REGEX = /\[\[SHINSA_SHARE_V1:([A-Za-z0-9+/=_-]+)\]\]/;
 const SUMMARY_MARKER_REGEX = /\[\[SHINSA_SUMMARY_V1:[A-Za-z0-9+/=_-]+\]\]/g;
@@ -70,6 +71,7 @@ function splitSessionShareContent(content) {
 function stripPreviewMarkers(content) {
   return String(content || '')
     .replace(/\[\[SHINSA_WC_SUMMARY_V1:[A-Za-z0-9+/=_-]+\]\]/g, '')
+    .replace(/\[\[SHINSA_WC_PERSONAL_V1:[A-Za-z0-9+/=_-]+\]\]/g, '')
     .replace(SUMMARY_MARKER_REGEX, '')
     .replace(SHARE_MARKER_REGEX, '')
     .replace(/\[\[SHINSA_LIVE_V1:[A-Za-z0-9+/=_-]+\]\]/g, '')
@@ -83,6 +85,12 @@ function summarizePostContent(post, maxLen = 160) {
   const { summary: wcSummary } = splitWcSummaryContent(post?.content || '');
   if (wcSummary) {
     return textSnippet(`${wcSummary.weekLabel} \u2014 ${wcSummary.participantCount} players, ${wcSummary.totalClears} clears`, maxLen);
+  }
+
+  // Check for personal recap marker
+  const { personal: wcPersonal } = splitWcPersonalContent(post?.content || '');
+  if (wcPersonal) {
+    return textSnippet(`${wcPersonal.weekLabel} \u2014 Weekly challenge recap`, maxLen);
   }
 
   const { text: shareStrippedText, share } = splitSessionShareContent(post?.content || '');

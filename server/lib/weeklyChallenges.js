@@ -6,8 +6,9 @@ const crypto = require('crypto');
 const { calculateRatingPoints, normalizeGrade, gradeFromScore, GRADE_MULTIPLIER, TITLE_REQUIREMENTS } = require('./titleProgress');
 const { isPassRecord } = require('./pumbilityCandidates');
 const { makeChartKey, toCanonicalTitle, normalizeMode } = require('./chartKeys');
-const { buildWeeklyChallengeSummary } = require('./weeklyChallengeSummary');
+const { buildWeeklyChallengeSummary, buildPersonalSummaries } = require('./weeklyChallengeSummary');
 const { serializeWcSummaryMarker } = require('./weeklyChallengeSummaryMarker');
+const { serializeWcPersonalMarker } = require('./weeklyChallengePersonalMarker');
 const { SYSTEM_USER_ID } = require('../db/schema');
 
 // Build a lookup from skill_title → skill_family
@@ -293,6 +294,11 @@ function ensureCurrentWeeklyChallengeWeek(db, now = new Date()) {
         publishWeeklyChallengeSummary(db, aw.id, w.id);
       } catch (err) {
         console.error(`[WC Summary] Publish failed for week ${aw.id}:`, err);
+      }
+      try {
+        publishWeeklyChallengePersonalSummaries(db, aw.id, w.id);
+      } catch (err) {
+        console.error(`[WC Personal] Publish failed for week ${aw.id}:`, err);
       }
     }
 
@@ -1084,6 +1090,35 @@ function publishWeeklyChallengeSummary(db, weekId, targetWeekId) {
   return row.lastInsertRowid;
 }
 
+function publishWeeklyChallengePersonalSummaries(db, weekId, targetWeekId) {
+  // Collect user_ids that already have a personal post for this week
+  const existingRows = db.prepare(
+    "SELECT user_id FROM user_posts WHERE post_kind = 'weekly_challenge_personal' AND source_week_id = ?"
+  ).all(weekId);
+  const existingSet = new Set(existingRows.map((r) => r.user_id));
+
+  const summaries = buildPersonalSummaries(db, weekId);
+  if (summaries.length === 0) return 0;
+
+  const insert = db.prepare(`
+    INSERT OR IGNORE INTO user_posts (user_id, content, post_kind, source_week_id, target_week_id, content_hash)
+    VALUES (?, ?, 'weekly_challenge_personal', ?, ?, ?)
+  `);
+
+  let count = 0;
+  for (const { userId, payload, contentHash } of summaries) {
+    if (existingSet.has(userId)) continue;
+    const markerContent = serializeWcPersonalMarker(payload);
+    insert.run(userId, markerContent, weekId, targetWeekId, contentHash);
+    count++;
+  }
+
+  if (count > 0) {
+    console.log(`[WC Personal] Published ${count} personal summary posts for week ${weekId}`);
+  }
+  return count;
+}
+
 function repairMissingSummaryPosts(db) {
   // Only repair finalized weeks that had participants (skip empty weeks to avoid infinite retry)
   const missing = db.prepare(`
@@ -1112,11 +1147,39 @@ function repairMissingSummaryPosts(db) {
       console.error(`[WC Summary] Repair failed for week ${m.id}:`, err);
     }
   }
+
+  // Repair personal posts: find finalized weeks with at least one missing user recap
+  const missingPersonal = db.prepare(`
+    SELECT DISTINCT w.id, w.ends_at_utc FROM weekly_challenge_weeks w
+    JOIN weekly_challenge_leaderboard lb ON lb.week_id = w.id AND lb.scope_mode = 'both'
+    WHERE w.status = 'finalized'
+      AND NOT EXISTS (
+        SELECT 1 FROM user_posts p
+        WHERE p.post_kind = 'weekly_challenge_personal'
+          AND p.source_week_id = w.id
+          AND p.user_id = lb.user_id
+      )
+  `).all();
+
+  for (const m of missingPersonal) {
+    const successor = db.prepare(`
+      SELECT id FROM weekly_challenge_weeks
+      WHERE starts_at_utc >= ?
+      ORDER BY starts_at_utc ASC LIMIT 1
+    `).get(m.ends_at_utc);
+    const targetWeekId = successor ? successor.id : null;
+    try {
+      publishWeeklyChallengePersonalSummaries(db, m.id, targetWeekId);
+    } catch (err) {
+      console.error(`[WC Personal] Repair failed for week ${m.id}:`, err);
+    }
+  }
 }
 
 module.exports = {
   ensureCurrentWeeklyChallengeWeek,
   aggregateWeeklyResults,
+  publishWeeklyChallengePersonalSummaries,
   buildLeaderboard,
   finalizeWeek,
   getFrozenChartResults,

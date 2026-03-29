@@ -19,7 +19,9 @@ import { splitSessionShareContent, serializeSessionShareMarker } from '../utils/
 import { mergeLiveSessionSummary, splitLiveSessionContent, serializeLiveSessionMarker } from '../utils/liveSessionMarker';
 import { splitSessionPlanContent, serializeSessionPlanMarker } from '../utils/sessionPlanMarker';
 import { splitWcSummaryContent, serializeWcSummaryMarker } from '../utils/weeklyChallengeSummaryMarker';
+import { splitWcPersonalContent } from '../utils/weeklyChallengePersonalMarker';
 import WeeklyChallengeSummaryPostCard from './WeeklyChallengeSummaryPostCard';
+import WeeklyChallengePersonalCard from './WeeklyChallengePersonalCard';
 import { buildYouTubeEmbedSrc } from '../utils/youtube';
 import { buildPostLinkShare, parseAchievementBadgePost } from '../utils/directMessageShares';
 
@@ -901,7 +903,8 @@ function CommentSection({ postId, postAuthorId, commentsDisabled, commentCount, 
 export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, isOwner = false, focusCommentId = null }) {
   const { user } = useAuth();
   const initialWcSummarySplit = useMemo(() => splitWcSummaryContent(post.content || ''), [post.content]);
-  const initialSummarySplit = useMemo(() => splitSessionSummaryContent(initialWcSummarySplit.text || ''), [initialWcSummarySplit.text]);
+  const initialWcPersonalSplit = useMemo(() => splitWcPersonalContent(initialWcSummarySplit.text || ''), [initialWcSummarySplit.text]);
+  const initialSummarySplit = useMemo(() => splitSessionSummaryContent(initialWcPersonalSplit.text || ''), [initialWcPersonalSplit.text]);
   const initialShareSplit = useMemo(() => splitSessionShareContent(initialSummarySplit.text || ''), [initialSummarySplit.text]);
   const initialLiveSplit = useMemo(() => splitLiveSessionContent(initialShareSplit.text || ''), [initialShareSplit.text]);
   const [lightboxIndex, setLightboxIndex] = useState(null);
@@ -914,12 +917,14 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
   const [currentLiveMetrics, setCurrentLiveMetrics] = useState(post.live_summary_metrics || null);
   const [wasEdited, setWasEdited] = useState(!!post.updated_at);
   const wcSummaryParsed = useMemo(() => splitWcSummaryContent(currentContent), [currentContent]);
-  const parsedSummary = useMemo(() => splitSessionSummaryContent(wcSummaryParsed.text || ''), [wcSummaryParsed.text]);
+  const wcPersonalParsed = useMemo(() => splitWcPersonalContent(wcSummaryParsed.text || ''), [wcSummaryParsed.text]);
+  const parsedSummary = useMemo(() => splitSessionSummaryContent(wcPersonalParsed.text || ''), [wcPersonalParsed.text]);
   const parsedShare = useMemo(() => splitSessionShareContent(parsedSummary.text || ''), [parsedSummary.text]);
   const parsedLive = useMemo(() => splitLiveSessionContent(parsedShare.text || ''), [parsedShare.text]);
   const planParsed = useMemo(() => splitSessionPlanContent(parsedLive.text || ''), [parsedLive.text]);
   const rawVisibleContent = planParsed.text || '';
   const currentWcSummary = wcSummaryParsed.summary;
+  const currentWcPersonal = wcPersonalParsed.personal;
   const currentSummary = parsedSummary.summary;
   const currentShare = parsedShare.share;
   const currentLive = useMemo(
@@ -943,7 +948,8 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
   const achievementBadgePost = parseAchievementBadgePost(visibleContent, images);
 
   const flag = showAuthor ? getCountryFlag(post.nationality) : null;
-  const canEdit = user && user.id === post.user_id;
+  const isSystemGenerated = post.post_kind === 'weekly_challenge_personal' || post.post_kind === 'weekly_challenge_summary';
+  const canEdit = user && user.id === post.user_id && !isSystemGenerated;
 
   useEffect(() => {
     setCurrentLiveMetrics(post.live_summary_metrics || null);
@@ -1039,7 +1045,7 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
               </svg>
             </button>
           )}
-          {onDelete && isOwner && (
+          {onDelete && isOwner && !isSystemGenerated && (
             <button
               onClick={() => onDelete(post.id)}
               className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-600 hover:text-red-400 hover:bg-piu-dark/50 transition-colors"
@@ -1105,6 +1111,9 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
               )}
               {currentWcSummary && (
                 <WeeklyChallengeSummaryPostCard summary={currentWcSummary} className="mb-3" />
+              )}
+              {currentWcPersonal && (
+                <WeeklyChallengePersonalCard personal={currentWcPersonal} className="mb-3" />
               )}
               {currentSummary && (
                 <SessionSummaryCard summary={currentSummary} title="Session Summary" className="mb-3" />

@@ -40,6 +40,7 @@ function parseBooleanInput(value) {
 function stripSessionSummaryMarkers(text) {
   return String(text || '')
     .replace(/\[\[SHINSA_WC_SUMMARY_V1:[A-Za-z0-9+/=_-]+\]\]/g, '')
+    .replace(/\[\[SHINSA_WC_PERSONAL_V1:[A-Za-z0-9+/=_-]+\]\]/g, '')
     .replace(/\[\[SHINSA_SUMMARY_V1:[A-Za-z0-9+/=_-]+\]\]/g, '')
     .replace(/\[\[SHINSA_SHARE_V1:[A-Za-z0-9+/=_-]+\]\]/g, '')
     .replace(/\[\[SHINSA_LIVE_V1:[A-Za-z0-9+/=_-]+\]\]/g, '')
@@ -1019,6 +1020,7 @@ router.put('/posts/:id', requireAuth, (req, res) => {
   const db = getDb();
   const post = db.prepare('SELECT * FROM user_posts WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
   if (!post) return res.status(404).json({ error: 'Post not found' });
+  if (post.post_kind === 'weekly_challenge_personal') return res.status(403).json({ error: 'Cannot modify system-generated posts' });
 
   const { content, youtube_url } = req.body;
   db.prepare(
@@ -1041,6 +1043,7 @@ router.delete('/posts/:id', requireAuth, (req, res) => {
   const db = getDb();
   const post = db.prepare('SELECT * FROM user_posts WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
   if (!post) return res.status(404).json({ error: 'Post not found' });
+  if (post.post_kind === 'weekly_challenge_personal') return res.status(403).json({ error: 'Cannot modify system-generated posts' });
 
   db.prepare('DELETE FROM user_posts WHERE id = ?').run(req.params.id);
   res.json({ success: true });
@@ -2225,7 +2228,7 @@ router.get('/recent-activity', (req, res) => {
   const posts = db.prepare(`
     SELECT p.id, p.created_at, p.content, u.id as user_id, u.username, u.avatar, u.nationality
     FROM user_posts p JOIN users u ON p.user_id = u.id
-    WHERE (p.post_kind IS NULL OR p.post_kind != 'weekly_challenge_summary')
+    WHERE (p.post_kind IS NULL OR p.post_kind NOT IN ('weekly_challenge_summary', 'weekly_challenge_personal'))
     ORDER BY p.created_at DESC LIMIT 10
   `).all();
   for (const p of posts) {

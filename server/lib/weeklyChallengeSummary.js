@@ -508,7 +508,195 @@ function buildWeeklyChallengeSummary(db, weekId, targetWeekId = null) {
   return { payload, contentHash };
 }
 
+// ---------------------------------------------------------------------------
+// Per-user personal summary builder
+// ---------------------------------------------------------------------------
+
+function buildPersonalSummaries(db, weekId) {
+  const week = db.prepare('SELECT * FROM weekly_challenge_weeks WHERE id = ?').get(weekId);
+  if (!week || week.status !== 'finalized') return [];
+
+  const chartCount = week.chart_count || 0;
+  const weekLabel = formatWeekLabel(week);
+
+  // Load all user snapshots for this week
+  const snapshots = {};
+  for (const row of db.prepare('SELECT * FROM weekly_challenge_user_snapshots WHERE week_id = ?').all(weekId)) {
+    snapshots[row.user_id] = row;
+  }
+
+  // Average score and clear count per user
+  const avgScoreMap = {};
+  for (const row of db.prepare(`
+    SELECT r.user_id, AVG(r.score) as avg_score, COUNT(*) as clears
+    FROM weekly_challenge_results r
+    JOIN weekly_challenge_charts wc ON wc.id = r.weekly_chart_id
+    WHERE wc.week_id = ?
+    GROUP BY r.user_id
+  `).all(weekId)) {
+    avgScoreMap[row.user_id] = { avgScore: Math.round(row.avg_score || 0), clears: row.clears || 0 };
+  }
+
+  // Highest rated play per user (ordered by rating_points DESC, score DESC)
+  const bestPlayMap = {};
+  for (const row of db.prepare(`
+    SELECT r.user_id, r.score, r.resolved_grade, r.rating_points,
+           wc.song_title_snapshot, wc.mode, wc.level, wc.jacket_url_snapshot
+    FROM weekly_challenge_results r
+    JOIN weekly_challenge_charts wc ON wc.id = r.weekly_chart_id
+    WHERE wc.week_id = ?
+    ORDER BY r.rating_points DESC, r.score DESC
+  `).all(weekId)) {
+    if (!bestPlayMap[row.user_id]) {
+      bestPlayMap[row.user_id] = {
+        songTitle: row.song_title_snapshot || '',
+        mode: row.mode || '',
+        level: row.level || 0,
+        jacketUrl: row.jacket_url_snapshot || '',
+        score: row.score || 0,
+        grade: row.resolved_grade || '',
+        ratingPoints: row.rating_points || 0,
+      };
+    }
+  }
+
+  // SSS count per user
+  const sssMap = {};
+  for (const row of db.prepare(`
+    SELECT r.user_id, COUNT(*) as sss_count
+    FROM weekly_challenge_results r
+    JOIN weekly_challenge_charts wc ON wc.id = r.weekly_chart_id
+    WHERE wc.week_id = ? AND r.resolved_grade IN ('SSS', 'SSS+')
+    GROUP BY r.user_id
+  `).all(weekId)) {
+    sssMap[row.user_id] = row.sss_count || 0;
+  }
+
+  // Leaderboard: group by user_id with sub-maps by scope_mode
+  const lbRows = db.prepare('SELECT * FROM weekly_challenge_leaderboard WHERE week_id = ?').all(weekId);
+  const lbByUser = {};
+  const scopeTotals = {};
+  for (const row of lbRows) {
+    if (!lbByUser[row.user_id]) lbByUser[row.user_id] = {};
+    lbByUser[row.user_id][row.scope_mode] = row;
+    scopeTotals[row.scope_mode] = (scopeTotals[row.scope_mode] || 0) + 1;
+  }
+
+  // Awards/podiums: group by user_id
+  const awardsByUser = {};
+  for (const row of db.prepare('SELECT * FROM weekly_challenge_awards WHERE week_id = ?').all(weekId)) {
+    if (!awardsByUser[row.user_id]) awardsByUser[row.user_id] = [];
+    awardsByUser[row.user_id].push({
+      awardKey: row.award_key || '',
+      awardLabel: row.award_label || '',
+      rank: row.rank || 0,
+    });
+  }
+
+  // Bracket comparison data for intermediate/advanced
+  const bracketData = {};
+  for (const family of ['intermediate', 'advanced']) {
+    const bracketUsers = Object.entries(snapshots)
+      .filter(([, snap]) => snap.skill_family_snapshot === family)
+      .map(([uid]) => uid);
+    if (bracketUsers.length < 3) continue;
+
+    const bracketLbRows = lbRows.filter(
+      (row) => row.scope_mode === 'both' && bracketUsers.includes(row.user_id)
+    );
+    if (bracketLbRows.length < 3) continue;
+
+    // Sort by same criteria as main leaderboard
+    bracketLbRows.sort((a, b) =>
+      (b.points - a.points)
+      || (b.clears - a.clears)
+      || (b.total_score - a.total_score)
+    );
+
+    const totalScore = bracketLbRows.reduce((sum, r) => sum + (r.total_score || 0), 0);
+    const avgScore = Math.round(totalScore / bracketLbRows.length);
+
+    for (let i = 0; i < bracketLbRows.length; i++) {
+      bracketData[bracketLbRows[i].user_id] = {
+        bracketName: family.charAt(0).toUpperCase() + family.slice(1),
+        bracketRank: i + 1,
+        bracketParticipantCount: bracketLbRows.length,
+        bracketAverageScore: avgScore,
+      };
+    }
+  }
+
+  // Assemble personal summaries for all participants (scope_mode = 'both')
+  const participants = lbRows.filter((row) => row.scope_mode === 'both');
+  const results = [];
+
+  for (const lb of participants) {
+    const userId = lb.user_id;
+    const snap = snapshots[userId] || {};
+    const userLb = lbByUser[userId] || {};
+    const scores = avgScoreMap[userId] || { avgScore: 0, clears: 0 };
+
+    // Build rankings
+    const overallLb = userLb.both;
+    const singlesLb = userLb.single;
+    const doublesLb = userLb.double;
+    const rankings = {
+      overall: overallLb ? { rank: overallLb.rank || 0, total: scopeTotals.both || 0 } : null,
+      singles: singlesLb ? { rank: singlesLb.rank || 0, total: scopeTotals.single || 0 } : null,
+      doubles: doublesLb ? { rank: doublesLb.rank || 0, total: scopeTotals.double || 0 } : null,
+    };
+
+    // Average rank across available scopes
+    const rankValues = [rankings.overall, rankings.singles, rankings.doubles]
+      .filter(Boolean)
+      .map((r) => r.rank)
+      .filter((r) => r > 0);
+    const averageRank = rankValues.length > 0
+      ? Math.round((rankValues.reduce((s, v) => s + v, 0) / rankValues.length) * 10) / 10
+      : 0;
+
+    const payload = {
+      version: 1,
+      weekId,
+      weekKey: week.week_key || '',
+      weekLabel,
+      userId,
+      username: snap.username_snapshot || '',
+      avatar: snap.avatar_snapshot || '',
+      nationality: snap.nationality_snapshot || '',
+      skillFamily: snap.skill_family_snapshot || '',
+      skillTitle: snap.skill_title_snapshot || '',
+      averageScore: scores.avgScore,
+      highestRatedPlay: bestPlayMap[userId] || null,
+      sssCount: sssMap[userId] || 0,
+      totalClears: scores.clears,
+      chartCount,
+      rankings,
+      averageRank,
+      bracketComparison: bracketData[userId] || null,
+      podiums: awardsByUser[userId] || [],
+      generatedAt: new Date().toISOString(),
+    };
+
+    const hashInput = JSON.stringify({
+      weekId,
+      userId,
+      avgScore: scores.avgScore,
+      sssCount: sssMap[userId] || 0,
+      clears: scores.clears,
+      rankings,
+      podiums: awardsByUser[userId] || [],
+    });
+    const contentHash = crypto.createHash('sha256').update(hashInput).digest('hex');
+
+    results.push({ userId, payload, contentHash });
+  }
+
+  return results;
+}
+
 module.exports = {
   buildWeeklyChallengeSummary,
+  buildPersonalSummaries,
   formatWeekLabel,
 };

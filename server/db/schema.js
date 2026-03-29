@@ -2097,6 +2097,11 @@ function initializeDb() {
       ON user_posts(post_kind, source_week_id)
       WHERE post_kind = 'weekly_challenge_summary'
   `);
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_posts_wc_personal
+      ON user_posts(post_kind, source_week_id, user_id)
+      WHERE post_kind = 'weekly_challenge_personal'
+  `);
 
   // Migrations for upscore interactions (pumps + comments)
   db.exec(`
