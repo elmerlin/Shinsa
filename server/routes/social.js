@@ -1962,26 +1962,8 @@ router.delete('/clears/comments/:id', requireAuth, (req, res) => {
 
 // ─── Play Comments ──────────────────────────────────────
 
-// GET /api/social/plays/:id — fetch single play with user info + comment count
-router.get('/plays/:id', optionalAuth, (req, res) => {
-  const db = getDb();
-  const playId = parseInt(req.params.id);
-
-  const play = db.prepare(`
-    SELECT rp.*, u.username, u.avatar, u.avatar_v, u.skill_title, u.nationality,
-           (SELECT COUNT(*) FROM play_comments WHERE play_id = rp.id) as comment_count
-    FROM user_recently_played rp
-    JOIN users u ON rp.user_id = u.id
-    WHERE rp.id = ?
-  `).get(playId);
-  if (!play) return res.status(404).json({ error: 'Play not found' });
-
-  play.avatar = normalizeUserAvatarForList(play.avatar, play.user_id, 40, play.avatar_v);
-
-  res.json(play);
-});
-
 // GET /api/social/plays/lookup — find a play by song/mode/level/score/user
+// NOTE: Must be registered BEFORE /plays/:id to avoid :id capturing "lookup"
 router.get('/plays/lookup', optionalAuth, (req, res) => {
   const db = getDb();
   const { song_title, mode, level, score, user_id } = req.query;
@@ -2003,6 +1985,25 @@ router.get('/plays/lookup', optionalAuth, (req, res) => {
   play.avatar = normalizeUserAvatarForList(play.avatar, play.user_id, 40, play.avatar_v);
   if (play.resolved_replay_url) play.replay_embed_url = play.resolved_replay_url;
   delete play.resolved_replay_url;
+  res.json(play);
+});
+
+// GET /api/social/plays/:id — fetch single play with user info + comment count
+router.get('/plays/:id', optionalAuth, (req, res) => {
+  const db = getDb();
+  const playId = parseInt(req.params.id);
+
+  const play = db.prepare(`
+    SELECT rp.*, u.username, u.avatar, u.avatar_v, u.skill_title, u.nationality,
+           (SELECT COUNT(*) FROM play_comments WHERE play_id = rp.id) as comment_count
+    FROM user_recently_played rp
+    JOIN users u ON rp.user_id = u.id
+    WHERE rp.id = ?
+  `).get(playId);
+  if (!play) return res.status(404).json({ error: 'Play not found' });
+
+  play.avatar = normalizeUserAvatarForList(play.avatar, play.user_id, 40, play.avatar_v);
+
   res.json(play);
 });
 
