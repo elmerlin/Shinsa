@@ -1692,6 +1692,7 @@ function initializeDb() {
     CREATE INDEX IF NOT EXISTS idx_conversation_message_reactions_user ON conversation_message_reactions(user_id, updated_at DESC);
     CREATE INDEX IF NOT EXISTS idx_user_inbox_notes_user_active ON user_inbox_notes(user_id, cleared_at, expires_at, created_at);
     CREATE INDEX IF NOT EXISTS idx_user_story_items_user_active ON user_story_items(user_id, deleted_at, expires_at, created_at);
+    CREATE INDEX IF NOT EXISTS idx_user_story_items_user_history ON user_story_items(user_id, created_at DESC, id DESC);
     CREATE INDEX IF NOT EXISTS idx_user_story_views_owner ON user_story_views(owner_user_id, viewed_at DESC);
     CREATE INDEX IF NOT EXISTS idx_user_story_pumps_owner ON user_story_pumps(owner_user_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_user_story_comments_story ON user_story_comments(story_id, created_at DESC);

@@ -932,11 +932,53 @@ function getInboxHighlights(db, viewerUserId) {
   };
 }
 
+function getAllStoryItemsPaginated(db, userId, { beforeDate, beforeId, limit = 200 } = {}) {
+  if (!userId) return { stories: [], hasMore: false };
+  const effectiveLimit = Math.min(Math.max(1, limit), 500);
+  // Strip "story:" prefix from cursor ID — client sends "story:uuid" but DB stores "uuid"
+  const rawBeforeId = beforeId && String(beforeId).startsWith('story:') ? String(beforeId).slice(6) : beforeId;
+  const hasCursor = beforeDate && rawBeforeId;
+  const rows = db.prepare(`
+    SELECT *
+    FROM user_story_items
+    WHERE user_id = ?
+      AND COALESCE(deleted_at, '') = ''
+      ${hasCursor ? 'AND (created_at < ? OR (created_at = ? AND id < ?))' : ''}
+    ORDER BY created_at DESC, id DESC
+    LIMIT ?
+  `).all(...[
+    userId,
+    ...(hasCursor ? [beforeDate, beforeDate, rawBeforeId] : []),
+    effectiveLimit + 1,
+  ]);
+  const hasMore = rows.length > effectiveLimit;
+  const trimmed = hasMore ? rows.slice(0, effectiveLimit) : rows;
+  const user = db.prepare(`
+    SELECT id, username, avatar, avatar_v
+    FROM users WHERE id = ? LIMIT 1
+  `).get(userId);
+  const normalizedUser = user ? {
+    ...user,
+    avatar: normalizeStoryUser(user, 72)?.avatar || '',
+  } : { id: userId, username: '', avatar: '', avatar_v: 0 };
+
+  const stories = trimmed.map((row) => {
+    const resolvedSource = buildResolvedStorySource(db, normalizedUser, row.source_kind, row.source_id);
+    const item = buildManualStoryItem(row, normalizedUser, resolvedSource);
+    return item ? {
+      original_created_at: row.created_at || '',
+      story: item,
+    } : null;
+  }).filter(Boolean);
+  return { stories, hasMore };
+}
+
 module.exports = {
   NOTE_TTL_HOURS,
   STORY_TTL_HOURS,
   addHours,
   buildResolvedStorySource,
+  getAllStoryItemsPaginated,
   getEffectiveNote,
   getInboxHighlights,
   getStoryItemsForUser,

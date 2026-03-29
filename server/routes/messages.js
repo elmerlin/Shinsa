@@ -21,6 +21,7 @@ const {
   NOTE_TTL_HOURS,
   STORY_TTL_HOURS,
   addHours,
+  getAllStoryItemsPaginated,
   getInboxHighlights,
   getStoryItemsForUser,
   normalizeNotePayload,
@@ -619,14 +620,23 @@ function getArchivedStoriesPaginated(db, ownerUserId, { beforeDate, beforeId, li
 }
 
 function findArchivedStoryForOwner(db, ownerUserId, storyId) {
-  const row = db.prepare(`
+  // Check user_story_archives first (explicitly archived)
+  const archiveRow = db.prepare(`
     SELECT story_payload_json
     FROM user_story_archives
     WHERE story_id = ? AND owner_user_id = ?
   `).get(storyId, ownerUserId);
-  if (!row) return null;
-  const parsed = parseJsonObject(row.story_payload_json, {});
-  return parsed && typeof parsed === 'object' && parsed.id ? parsed : null;
+  if (archiveRow) {
+    const parsed = parseJsonObject(archiveRow.story_payload_json, {});
+    if (parsed && typeof parsed === 'object' && parsed.id) return parsed;
+  }
+  // Fall back to user_story_items (story IDs are prefixed with "story:")
+  const rawId = String(storyId || '').startsWith('story:') ? String(storyId).slice(6) : storyId;
+  const itemRow = db.prepare(`
+    SELECT id FROM user_story_items
+    WHERE id = ? AND user_id = ? AND COALESCE(deleted_at, '') = ''
+  `).get(rawId, ownerUserId);
+  return itemRow ? { id: storyId } : null;
 }
 
 function deleteManualStoryRowIfPresent(db, ownerUserId, storyId, deletedAt) {
@@ -1687,11 +1697,11 @@ router.get('/highlights/archive', requireAuth, (req, res) => {
   const beforeDate = req.query.before_date || '';
   const beforeId = req.query.before_id || '';
   const limit = parseInt(req.query.limit, 10) || 200;
-  if (beforeDate && beforeId) {
-    const result = getArchivedStoriesPaginated(db, req.user.id, { beforeDate, beforeId, limit });
-    return res.json(result);
-  }
-  const result = getArchivedStoriesPaginated(db, req.user.id, { limit });
+  const result = getAllStoryItemsPaginated(db, req.user.id, {
+    beforeDate: beforeDate || undefined,
+    beforeId: beforeId || undefined,
+    limit,
+  });
   res.json(result);
 });
 
