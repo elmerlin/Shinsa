@@ -117,6 +117,16 @@ function formatDateLabel(value) {
     });
 }
 
+function getPlayedAtValue(score) {
+  return String(
+    score?.played_at_utc
+    || score?.playedAtUtc
+    || score?.date_played
+    || score?.playedAt
+    || ''
+  ).trim();
+}
+
 function normalizeMetaBadges(badges = []) {
   if (!Array.isArray(badges)) return [];
   return badges
@@ -160,7 +170,8 @@ export default function ScoreSnapshotCard({
 
   const songTitle = String(score.song_title || score.songTitle || 'Score details').trim() || 'Score details';
   const username = String(score.username || score.playerName || '').trim();
-  const playedAt = formatDateLabel(score.date_played || score.playedAt);
+  const playedAt = formatDateLabel(getPlayedAtValue(score));
+  const playedAtLabel = playedAt ? `Played ${playedAt}` : '';
   const machineName = String(score.machine_name || score.machineName || '').trim();
   const resolvedAvatarUrl = String(avatarUrl || score.playerAvatar || score.avatar || '').trim();
   const resolvedSkillTitle = String(skillTitle || score.playerSkillTitle || score.skillTitle || score.skill_title || '').trim();
@@ -243,10 +254,10 @@ export default function ScoreSnapshotCard({
                   />
                 ) : null}
                 <div className="min-w-0 flex-1">
-                  {(username || playedAt || machineName) ? (
+                  {(username || playedAtLabel || machineName) ? (
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] leading-none text-gray-200/90">
                       {username ? <span className="font-display font-bold text-white">{username}</span> : null}
-                      {playedAt ? <span>{playedAt}</span> : null}
+                      {playedAtLabel ? <span>{playedAtLabel}</span> : null}
                       {machineName ? <span className="text-gray-400">at {machineName}</span> : null}
                     </div>
                   ) : null}

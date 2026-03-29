@@ -344,7 +344,7 @@ export function buildUpscoreLinkShare({
       playerName: authorName,
       playerAvatar: String(avatar || '').trim(),
       playerSkillTitle: String(skillTitle || '').trim(),
-      playedAt: String(entry?.date_played || '').trim(),
+      playedAt: String(entry?.played_at_utc || entry?.playedAtUtc || entry?.date_played || '').trim(),
     };
   }
 
@@ -404,7 +404,7 @@ export function buildScoreSnapshotLinkShare({
     ? Number(row.scoreDelta)
     : (displayScore > 0 && oldScore > 0 ? displayScore - oldScore : 0);
   const grade = compactText(row.new_grade || row.grade, 20);
-  const playedAt = String(row.date_played || row.playedAt || '').trim();
+  const playedAt = String(row.played_at_utc || row.playedAtUtc || row.date_played || row.playedAt || '').trim();
   const summaryLabel = normalizedKind === 'clear' ? 'clear' : 'score';
   const replayUrl = String(
     row.replayUrl
@@ -518,7 +518,7 @@ export function buildClearLinkShare({
       playerName: authorName,
       playerAvatar: String(avatar || '').trim(),
       playerSkillTitle: String(skillTitle || '').trim(),
-      playedAt: String(entry?.date_played || '').trim(),
+      playedAt: String(entry?.played_at_utc || entry?.playedAtUtc || entry?.date_played || '').trim(),
     };
   }
 

@@ -613,7 +613,8 @@ export function SingleUpscorePage() {
                     onClick={() => setSelectedScore({
                       ...u,
                       username: item.username,
-                      date_played: u.date_played || item.created_at,
+                      played_at_utc: u.played_at_utc || '',
+                      date_played: u.played_at_utc || u.date_played || '',
                       _jacketUrl: jacketUrl,
                       _chartLink: chartLink,
                       _dmLinkShare: buildScoreSnapshotLinkShare({
@@ -624,7 +625,8 @@ export function SingleUpscorePage() {
                         score: {
                           ...u,
                           username: item.username,
-                          date_played: u.date_played || item.created_at,
+                          played_at_utc: u.played_at_utc || '',
+                          date_played: u.played_at_utc || u.date_played || '',
                         },
                         path: `/upscore/${item.id}`,
                         chartPath: chartLink,
@@ -832,7 +834,8 @@ export function SingleClearPage() {
                     onClick={() => setSelectedScore({
                       ...clear,
                       username: item.username,
-                      date_played: clear.date_played || item.created_at,
+                      played_at_utc: clear.played_at_utc || '',
+                      date_played: clear.played_at_utc || clear.date_played || '',
                       _jacketUrl: jacketUrl,
                       _chartLink: chartLink,
                       _dmLinkShare: buildScoreSnapshotLinkShare({
@@ -843,7 +846,8 @@ export function SingleClearPage() {
                         score: {
                           ...clear,
                           username: item.username,
-                          date_played: clear.date_played || item.created_at,
+                          played_at_utc: clear.played_at_utc || '',
+                          date_played: clear.played_at_utc || clear.date_played || '',
                         },
                         path: `/clear/${item.id}`,
                         chartPath: chartLink,

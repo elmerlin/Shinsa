@@ -586,7 +586,8 @@ function UpscoreCard({ item, jacketLookup, chartKeyMap, onScoreClick, onReplayCl
                     ...u,
                     username: item.username,
                     user_id: u.user_id || item.user_id,
-                    date_played: u.date_played || item.created_at,
+                    played_at_utc: u.played_at_utc || '',
+                    date_played: u.played_at_utc || u.date_played || '',
                     _jacketUrl: jacketUrl,
                     _chartLink: chartLink,
                     _dmLinkShare: buildScoreSnapshotLinkShare({
@@ -597,7 +598,8 @@ function UpscoreCard({ item, jacketLookup, chartKeyMap, onScoreClick, onReplayCl
                       score: {
                         ...u,
                         username: item.username,
-                        date_played: u.date_played || item.created_at,
+                        played_at_utc: u.played_at_utc || '',
+                        date_played: u.played_at_utc || u.date_played || '',
                       },
                       path: `/upscore/${item.id}`,
                       chartPath: chartLink,
@@ -1040,7 +1042,8 @@ function NewClearCard({ item, jacketLookup, chartKeyMap, onScoreClick, onReplayC
                     ...clear,
                     username: item.username,
                     user_id: clear.user_id || item.user_id,
-                    date_played: clear.date_played || item.created_at,
+                    played_at_utc: clear.played_at_utc || '',
+                    date_played: clear.played_at_utc || clear.date_played || '',
                     _jacketUrl: jacketUrl,
                     _chartLink: chartLink,
                     _dmLinkShare: buildScoreSnapshotLinkShare({
@@ -1051,7 +1054,8 @@ function NewClearCard({ item, jacketLookup, chartKeyMap, onScoreClick, onReplayC
                       score: {
                         ...clear,
                         username: item.username,
-                        date_played: clear.date_played || item.created_at,
+                        played_at_utc: clear.played_at_utc || '',
+                        date_played: clear.played_at_utc || clear.date_played || '',
                       },
                       path: `/clear/${item.id}`,
                       chartPath: chartLink,
