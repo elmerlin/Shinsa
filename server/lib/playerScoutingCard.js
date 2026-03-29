@@ -243,11 +243,12 @@ function buildCadenceStats(db, userId) {
   const cutoffDate = thirtyDaysAgo.toISOString().slice(0, 10);
 
   // Count user's active days and plays in last 30 days
+  // date_played may contain timestamps like "2026-03-29 05:17:14 (GMT+9)" so extract the date portion
   const userActivity = db.prepare(`
-    SELECT date_played, COUNT(*) as play_count
+    SELECT SUBSTR(date_played, 1, 10) as play_date, COUNT(*) as play_count
     FROM user_recently_played
-    WHERE user_id = ? AND date_played >= ?
-    GROUP BY date_played
+    WHERE user_id = ? AND SUBSTR(date_played, 1, 10) >= ?
+    GROUP BY play_date
   `).all(userId, cutoffDate);
 
   const activeDays30 = userActivity.length;
@@ -260,9 +261,9 @@ function buildCadenceStats(db, userId) {
 
   // Compare across all synced Shinsa users
   const allUsers = db.prepare(`
-    SELECT user_id, COUNT(DISTINCT date_played) as active_days, COUNT(*) as total_plays
+    SELECT user_id, COUNT(DISTINCT SUBSTR(date_played, 1, 10)) as active_days, COUNT(*) as total_plays
     FROM user_recently_played
-    WHERE date_played >= ?
+    WHERE SUBSTR(date_played, 1, 10) >= ?
     GROUP BY user_id
     HAVING active_days > 0
   `).all(cutoffDate);
