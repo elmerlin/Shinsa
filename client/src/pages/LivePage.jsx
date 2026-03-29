@@ -3848,16 +3848,21 @@ export default function LivePage() {
     if (!node) return undefined;
 
     const updateHeight = () => {
-      const nextHeight = Math.round(node.getBoundingClientRect().height);
+      const rect = node.getBoundingClientRect();
+      // Use width-based 16:9 calculation as floor when iframe hasn't rendered yet
+      const nextHeight = Math.round(rect.height || (rect.width * 0.5625));
       setDesktopMediaHeight((prev) => (prev === nextHeight ? prev : nextHeight));
     };
 
     updateHeight();
+    // Re-measure after iframe layout settlement on cold loads
+    const timer = setTimeout(updateHeight, 300);
     const observer = new ResizeObserver(() => updateHeight());
     observer.observe(node);
     window.addEventListener('resize', updateHeight);
 
     return () => {
+      clearTimeout(timer);
       observer.disconnect();
       window.removeEventListener('resize', updateHeight);
     };

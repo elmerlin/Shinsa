@@ -79,6 +79,7 @@ function sanitizeLiveSummary(summary) {
     averageScore: toInt(src.averageScore),
     averageLevel: toNumber(src.averageLevel),
     averageRating: toInt(src.averageRating),
+    trainingLoad: toInt(src.trainingLoad),
     viewerCount: toInt(src.viewerCount),
     viewerPeak: toInt(src.viewerPeak),
     messageCount: toInt(src.messageCount),

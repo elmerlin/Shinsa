@@ -14,12 +14,12 @@ import SessionPlanCard from './SessionPlanCard';
 import SendToDirectMessageButton from './SendToDirectMessageButton';
 import ActionIconButton from './ActionIconButton';
 import DojoCatStickerPicker from './DojoCatStickerPicker';
-import { splitSessionSummaryContent, serializeSessionSummaryMarker } from '../utils/sessionSummaryMarker';
-import { splitSessionShareContent, serializeSessionShareMarker } from '../utils/sessionShareMarker';
-import { mergeLiveSessionSummary, splitLiveSessionContent, serializeLiveSessionMarker } from '../utils/liveSessionMarker';
-import { splitSessionPlanContent, serializeSessionPlanMarker } from '../utils/sessionPlanMarker';
-import { splitWcSummaryContent, serializeWcSummaryMarker } from '../utils/weeklyChallengeSummaryMarker';
-import { splitWcPersonalContent } from '../utils/weeklyChallengePersonalMarker';
+import { serializeSessionSummaryMarker } from '../utils/sessionSummaryMarker';
+import { serializeSessionShareMarker } from '../utils/sessionShareMarker';
+import { mergeLiveSessionSummary, serializeLiveSessionMarker } from '../utils/liveSessionMarker';
+import { serializeSessionPlanMarker } from '../utils/sessionPlanMarker';
+import { serializeWcSummaryMarker } from '../utils/weeklyChallengeSummaryMarker';
+import { parseAllMarkers } from '../utils/postMarkers';
 import WeeklyChallengeSummaryPostCard from './WeeklyChallengeSummaryPostCard';
 import WeeklyChallengePersonalCard from './WeeklyChallengePersonalCard';
 import { buildYouTubeEmbedSrc } from '../utils/youtube';
@@ -902,36 +902,27 @@ function CommentSection({ postId, postAuthorId, commentsDisabled, commentCount, 
 // Full Post Card used in Feed and Profile
 export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, isOwner = false, focusCommentId = null }) {
   const { user } = useAuth();
-  const initialWcSummarySplit = useMemo(() => splitWcSummaryContent(post.content || ''), [post.content]);
-  const initialWcPersonalSplit = useMemo(() => splitWcPersonalContent(initialWcSummarySplit.text || ''), [initialWcSummarySplit.text]);
-  const initialSummarySplit = useMemo(() => splitSessionSummaryContent(initialWcPersonalSplit.text || ''), [initialWcPersonalSplit.text]);
-  const initialShareSplit = useMemo(() => splitSessionShareContent(initialSummarySplit.text || ''), [initialSummarySplit.text]);
-  const initialLiveSplit = useMemo(() => splitLiveSessionContent(initialShareSplit.text || ''), [initialShareSplit.text]);
+  const initialParsed = useMemo(() => parseAllMarkers(post.content || ''), [post.content]);
   const [lightboxIndex, setLightboxIndex] = useState(null);
   const [editing, setEditing] = useState(false);
-  const [editContent, setEditContent] = useState(initialLiveSplit.text || '');
+  const [editContent, setEditContent] = useState(initialParsed.text || '');
   const [editYoutubeUrl, setEditYoutubeUrl] = useState(post.youtube_url || '');
   const [saving, setSaving] = useState(false);
   const [currentContent, setCurrentContent] = useState(post.content || '');
   const [currentYoutubeUrl, setCurrentYoutubeUrl] = useState(post.youtube_url || '');
   const [currentLiveMetrics, setCurrentLiveMetrics] = useState(post.live_summary_metrics || null);
   const [wasEdited, setWasEdited] = useState(!!post.updated_at);
-  const wcSummaryParsed = useMemo(() => splitWcSummaryContent(currentContent), [currentContent]);
-  const wcPersonalParsed = useMemo(() => splitWcPersonalContent(wcSummaryParsed.text || ''), [wcSummaryParsed.text]);
-  const parsedSummary = useMemo(() => splitSessionSummaryContent(wcPersonalParsed.text || ''), [wcPersonalParsed.text]);
-  const parsedShare = useMemo(() => splitSessionShareContent(parsedSummary.text || ''), [parsedSummary.text]);
-  const parsedLive = useMemo(() => splitLiveSessionContent(parsedShare.text || ''), [parsedShare.text]);
-  const planParsed = useMemo(() => splitSessionPlanContent(parsedLive.text || ''), [parsedLive.text]);
-  const rawVisibleContent = planParsed.text || '';
-  const currentWcSummary = wcSummaryParsed.summary;
-  const currentWcPersonal = wcPersonalParsed.personal;
-  const currentSummary = parsedSummary.summary;
-  const currentShare = parsedShare.share;
+  const currentParsed = useMemo(() => parseAllMarkers(currentContent), [currentContent]);
+  const rawVisibleContent = currentParsed.text || '';
+  const currentWcSummary = currentParsed.wcSummary;
+  const currentWcPersonal = currentParsed.wcPersonal;
+  const currentSummary = currentParsed.sessionSummary;
+  const currentShare = currentParsed.sessionShare;
   const currentLive = useMemo(
-    () => mergeLiveSessionSummary(parsedLive.live, currentLiveMetrics),
-    [parsedLive.live, currentLiveMetrics]
+    () => mergeLiveSessionSummary(currentParsed.liveSession, currentLiveMetrics),
+    [currentParsed.liveSession, currentLiveMetrics]
   );
-  const currentPlan = planParsed.plan;
+  const currentPlan = currentParsed.sessionPlan;
   const visibleContent = currentLive && rawVisibleContent.trim().startsWith('🔴 **Shinsa Live Recap**')
     ? ''
     : rawVisibleContent;
@@ -1110,19 +1101,20 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
                 </div>
               )}
               {currentWcSummary && (
-                <WeeklyChallengeSummaryPostCard summary={currentWcSummary} className="mb-3" />
+                <WeeklyChallengeSummaryPostCard summary={currentWcSummary} className="mb-3" flush />
               )}
               {currentWcPersonal && (
-                <WeeklyChallengePersonalCard personal={currentWcPersonal} className="mb-3" />
+                <WeeklyChallengePersonalCard personal={currentWcPersonal} className="mb-3" flush />
               )}
               {currentSummary && (
-                <SessionSummaryCard summary={currentSummary} title="Session Summary" className="mb-3" />
+                <SessionSummaryCard summary={currentSummary} title="Session Summary" className="mb-3" flush />
               )}
               {currentShare && (
                 <SessionShareCard
                   share={currentShare}
                   title={currentShare?.shareType === 'hour_of_power' ? 'Hour of Power Recap' : 'Session Share'}
                   className="mb-3"
+                  flush
                   actions={user ? (
                     <SendToDirectMessageButton
                       share={currentShare}
@@ -1133,10 +1125,10 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
                 />
               )}
               {currentLive && (
-                <LiveSessionCard summary={currentLive} title="Shinsa Live Recap" className="mb-3" />
+                <LiveSessionCard summary={currentLive} title="Shinsa Live Recap" className="mb-3" flush />
               )}
               {currentPlan && (
-                <SessionPlanCard plan={currentPlan} className="mb-3" defaultScoringExpanded={false} defaultPassingExpanded={false} />
+                <SessionPlanCard plan={currentPlan} className="mb-3" defaultScoringExpanded={false} defaultPassingExpanded={false} flush />
               )}
             </>
           )}

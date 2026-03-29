@@ -90,7 +90,7 @@ function CollapsibleSection({ title, subtitle, songs, borderColor, bgGradient, d
   );
 }
 
-export default function SessionPlanCard({ plan, className = '', defaultScoringExpanded = true, defaultPassingExpanded = true }) {
+export default function SessionPlanCard({ plan, className = '', defaultScoringExpanded = true, defaultPassingExpanded = true, flush = false }) {
   if (!plan) return null;
 
   const feelingMeta = FEELING_META[plan.feeling] || FEELING_META.normal;
@@ -103,7 +103,7 @@ export default function SessionPlanCard({ plan, className = '', defaultScoringEx
     : '';
 
   return (
-    <div className={`rounded-xl border border-amber-400/30 bg-gradient-to-br from-amber-500/10 via-cyan-500/5 to-transparent p-3 space-y-2.5 ${className}`.trim()}>
+    <div className={`${flush ? '' : 'rounded-xl border border-amber-400/30 bg-gradient-to-br from-amber-500/10 via-cyan-500/5 to-transparent'} p-3 space-y-2.5 ${className}`.trim()}>
       {/* Header */}
       <div className="flex items-start justify-between gap-2">
         <div>

@@ -27,7 +27,7 @@ function StatTile({ label, value, sub }) {
   );
 }
 
-export default function WeeklyChallengePersonalCard({ personal, className = '' }) {
+export default function WeeklyChallengePersonalCard({ personal, className = '', flush = false }) {
   if (!personal) return null;
 
   const {
@@ -48,7 +48,7 @@ export default function WeeklyChallengePersonalCard({ personal, className = '' }
   const modeLabel = highestRatedPlay?.mode === 'Double' ? 'D' : 'S';
 
   return (
-    <div className={`overflow-hidden rounded-xl border border-piu-border/50 bg-piu-dark ${className}`}>
+    <div className={`overflow-hidden ${flush ? '' : 'rounded-xl border border-piu-border/50 bg-piu-dark'} ${className}`}>
       {/* Header */}
       <div className="border-b border-white/[0.06] px-4 py-3">
         <p className="text-[9px] font-display font-bold uppercase tracking-[0.14em] text-piu-accent/80">

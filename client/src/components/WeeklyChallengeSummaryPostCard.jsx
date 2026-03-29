@@ -306,7 +306,7 @@ function PageNextWeek({ summary }) {
 // Main component
 // ---------------------------------------------------------------------------
 
-export default function WeeklyChallengeSummaryPostCard({ summary, className = '' }) {
+export default function WeeklyChallengeSummaryPostCard({ summary, className = '', flush = false }) {
   const [currentPage, setCurrentPage] = useState(0);
   const [selectedReplay, setSelectedReplay] = useState(null);
   const [touchStart, setTouchStart] = useState(null);
@@ -353,7 +353,7 @@ export default function WeeklyChallengeSummaryPostCard({ summary, className = ''
   return (
     <>
       <div
-        className={`rounded-xl border border-piu-border/50 bg-gradient-to-b from-piu-dark via-piu-darker to-piu-dark overflow-hidden ${className}`}
+        className={`overflow-hidden ${flush ? '' : 'rounded-xl border border-piu-border/50 bg-gradient-to-b from-piu-dark via-piu-darker to-piu-dark'} ${className}`}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >

@@ -1,4 +1,5 @@
 const { calculateRatingPoints, gradeFromScore, normalizeGrade } = require('./titleProgress');
+const { calculatePlayLoad } = require('./trainingLoad');
 
 const PIU_SESSION_MET = 11.8;
 const PIU_SONG_LENGTH_MINUTES = 2;
@@ -170,6 +171,7 @@ function buildLiveSessionSummary(rows, userProfile = {}, extras = {}) {
   let ratingCount = 0;
   let ratingTotal = 0;
   let totalSteps = 0;
+  let sessionTrainingLoad = 0;
   const judgmentTotals = { perfect: 0, great: 0, good: 0, bad: 0, miss: 0 };
   const shoeCounts = new Map();
 
@@ -193,6 +195,8 @@ function buildLiveSessionSummary(rows, userProfile = {}, extras = {}) {
       ratingCount += 1;
       ratingTotal += row._rating;
     }
+
+    sessionTrainingLoad += calculatePlayLoad(row._level, row._grade || row.grade, row._score);
 
     const perfect = toInt(row?.perfect);
     const great = toInt(row?.great);
@@ -285,6 +289,7 @@ function buildLiveSessionSummary(rows, userProfile = {}, extras = {}) {
     clearCount,
     clearRate,
     totalSteps,
+    trainingLoad: sessionTrainingLoad,
     estimatedKcal: calorieEstimate.estimatedKcal,
     estimatedKcalPerHour: calorieEstimate.kcalPerHour,
     calorieEstimatePersonalized: calorieEstimate.personalized,
