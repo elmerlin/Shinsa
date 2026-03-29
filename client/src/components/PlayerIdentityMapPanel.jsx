@@ -306,6 +306,308 @@ function InsightCard({ eyebrow, title, detail, tone = 'gray' }) {
   );
 }
 
+function getToneFromMode(mode) {
+  if (mode === 'Double') return 'emerald';
+  if (mode === 'Single') return 'rose';
+  return 'sky';
+}
+
+function formatTimelineDate(value) {
+  if (!value) return '';
+  const date = new Date(String(value).endsWith('Z') ? value : `${value}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+function formatTimelineRange(start, end, isCurrent = false) {
+  const startLabel = formatTimelineDate(start);
+  const endLabel = formatTimelineDate(end);
+  if (!startLabel && !endLabel) return '';
+  if (!endLabel || startLabel === endLabel) return startLabel;
+  return isCurrent ? `${startLabel} to now` : `${startLabel} to ${endLabel}`;
+}
+
+function getEvolutionBarHeight(level, hasData) {
+  if (!hasData) return 10;
+  const numericLevel = parseInt(level, 10) || 0;
+  if (numericLevel <= 0) return 16;
+  return Math.max(16, Math.min(54, 10 + ((numericLevel - 10) * 3)));
+}
+
+function EvolutionTimelineStrip({ points, selectedKey, onSelect }) {
+  const list = Array.isArray(points) ? points : [];
+  if (list.length === 0) return null;
+
+  return (
+    <div className="-mx-1 mt-4 overflow-x-auto px-1 pb-1">
+      <div className="flex min-w-max gap-2">
+        {list.map((point) => {
+          const selected = selectedKey === point.key;
+          const tone = getToneFromMode(point.dominant_mode);
+          const toneClasses = getInsightToneClasses(tone);
+          const barHeight = getEvolutionBarHeight(point.focus_level, point.has_data);
+          return (
+            <button
+              key={point.key}
+              type="button"
+              onClick={() => onSelect(point.key)}
+              className={`group flex w-[88px] shrink-0 snap-start flex-col rounded-[22px] border px-2.5 py-3 text-left transition-all duration-200 ${
+                selected
+                  ? `${toneClasses.border} bg-white/[0.06] shadow-[0_10px_24px_rgba(0,0,0,0.22)]`
+                  : 'border-white/8 bg-[#0a1220]/78 hover:border-white/18 hover:bg-white/[0.04]'
+              } ${point.has_data ? '' : 'opacity-55'}`}
+            >
+              <span className={`text-[10px] font-display font-black uppercase tracking-[0.18em] ${
+                selected ? toneClasses.eyebrow : 'text-gray-500'
+              }`}>
+                {point.is_current ? 'Now' : formatTimelineDate(point.start_date)}
+              </span>
+
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/8">
+                <div className="flex h-full w-full">
+                  <div
+                    className="h-full bg-gradient-to-r from-rose-300 via-rose-400 to-fuchsia-500"
+                    style={{ width: `${Math.max(6, (Number(point.single_share) || 0.5) * 100)}%` }}
+                  />
+                  <div
+                    className="h-full bg-gradient-to-r from-emerald-300 via-emerald-400 to-teal-500"
+                    style={{ width: `${Math.max(6, (Number(point.double_share) || 0.5) * 100)}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="mt-3 flex h-[70px] items-end justify-center">
+                <div className="relative flex h-[70px] w-10 items-end justify-center rounded-full border border-white/8 bg-[#050a14] px-1.5 py-1">
+                  <div
+                    className={`w-full rounded-full ${
+                      tone === 'emerald'
+                        ? 'bg-gradient-to-t from-emerald-500 to-emerald-300'
+                        : tone === 'rose'
+                          ? 'bg-gradient-to-t from-rose-500 to-rose-300'
+                          : 'bg-gradient-to-t from-sky-500 to-sky-300'
+                    }`}
+                    style={{ height: `${barHeight}px` }}
+                  />
+                  {point.sss_charts > 0 ? (
+                    <span className="absolute -top-1 right-0 h-2.5 w-2.5 rounded-full bg-sky-300 ring-2 ring-[#0a1220]" />
+                  ) : null}
+                </div>
+              </div>
+
+              <span className="mt-3 line-clamp-2 text-[11px] leading-tight text-gray-300">
+                {point.focus_label || point.home_label || (point.has_data ? point.dominant_label : 'Quiet week')}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function EvolutionPointDetail({ point }) {
+  if (!point) return null;
+
+  const tone = getToneFromMode(point.dominant_mode);
+  const toneClasses = getInsightToneClasses(tone);
+  const chips = [
+    point.home_label ? { key: 'home', label: `Home ${point.home_label}` } : null,
+    point.stronghold_label ? { key: 'stronghold', label: `Hot spot ${point.stronghold_label}` } : null,
+    point.focus_label ? { key: 'focus', label: `Peak ${point.focus_label}` } : null,
+    point.new_passes > 0 ? { key: 'passes', label: `+${formatNumber(point.new_passes)} new passes` } : null,
+  ].filter(Boolean);
+
+  return (
+    <div className={`rounded-[24px] border px-4 py-4 ${toneClasses.border} bg-[#0b1322]/78`}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className={`text-[10px] font-display font-black uppercase tracking-[0.24em] ${toneClasses.eyebrow}`}>
+            {point.is_current ? 'Current snapshot' : formatTimelineRange(point.start_date, point.end_date, point.is_current)}
+          </p>
+          <h3 className={`mt-2 text-lg font-display font-black ${toneClasses.text}`}>
+            {point.has_data ? (point.home_label || point.dominant_label || 'Recent shape') : 'No passing charts yet'}
+          </h3>
+          <p className="mt-2 text-sm leading-relaxed text-gray-400">
+            {point.has_data
+              ? (point.detail_label || `By this point, the profile had ${formatNumber(point.passed_charts)} passing charts and ${formatNumber(point.sss_charts)} SSS results in the current stretch.`)
+              : 'No synced passing charts had landed by this point in the timeline yet.'}
+          </p>
+        </div>
+
+        <div className="text-right">
+          <p className="text-[10px] font-display font-black uppercase tracking-[0.18em] text-gray-500">
+            Cumulative
+          </p>
+          <p className="mt-1 text-sm font-display font-black text-white">
+            {formatNumber(point.passed_charts)} clears
+          </p>
+          <p className="mt-1 text-xs text-gray-400">
+            {formatNumber(point.sss_charts)} SSS / SSS+
+          </p>
+        </div>
+      </div>
+
+      {chips.length > 0 ? (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {chips.map((chip) => (
+            <span
+              key={chip.key}
+              className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-display font-black text-gray-200"
+            >
+              {chip.label}
+            </span>
+          ))}
+        </div>
+      ) : null}
+
+      {point.signature_jackets?.length > 0 ? (
+        <div className="mt-4">
+          <p className="text-[10px] font-display font-black uppercase tracking-[0.2em] text-gray-500">
+            Songs shaping this point
+          </p>
+          <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+            {point.signature_jackets.map((item) => (
+              <Link
+                key={`${point.key}-${item.chart_id}`}
+                to={item.chart_id ? `/songs/chart/${item.chart_id}` : '#'}
+                className="group relative block h-16 w-16 shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-[#101726]"
+              >
+                {item.jacket_url ? (
+                  <img
+                    src={item.jacket_url}
+                    alt={item.title || 'Song jacket'}
+                    className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.04]"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center font-display text-lg font-black text-gray-500">
+                    {(item.title || '?').charAt(0).toUpperCase() || '?'}
+                  </div>
+                )}
+                <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/75 via-black/15 to-transparent" />
+                <div className="absolute bottom-1 left-1 right-1">
+                  <p className="truncate text-[9px] font-display font-black text-white">{item.label}</p>
+                </div>
+              </Link>
+            ))}
+          </div>
+
+          {point.feature_chart?.title ? (
+            <p className="mt-3 text-xs text-gray-400">
+              Featured chart: <span className="font-display font-black text-white">{point.feature_chart.title}</span>
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function EvolutionHighlights({ highlights, onSelect }) {
+  const list = Array.isArray(highlights) ? highlights : [];
+
+  return (
+    <section className="rounded-[24px] border border-white/8 bg-white/[0.03] px-4 py-4">
+      <p className="text-[11px] font-display font-black uppercase tracking-[0.22em] text-gray-500">
+        Breakthroughs
+      </p>
+      <p className="mt-1 text-sm text-gray-400">
+        The moments that explain how the profile shape changed.
+      </p>
+
+      {list.length === 0 ? (
+        <p className="mt-4 text-sm text-gray-500">
+          More recent play data will turn this into a clearer progression story.
+        </p>
+      ) : (
+        <div className="mt-4 space-y-2">
+          {list.map((item) => {
+            const toneClasses = getInsightToneClasses(item.tone || 'gray');
+            return (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => onSelect(item.point_key)}
+                className="flex w-full items-start gap-3 rounded-[20px] border border-white/8 bg-[#0a1220]/72 px-3 py-3 text-left transition-colors hover:border-white/18 hover:bg-white/[0.04]"
+              >
+                {item.chart?.jacket_url ? (
+                  <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-[#101726]">
+                    <img
+                      src={item.chart.jacket_url}
+                      alt={item.chart.title || 'Song jacket'}
+                      className="h-full w-full object-cover"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                  </div>
+                ) : null}
+
+                <div className="min-w-0 flex-1">
+                  <p className={`text-[10px] font-display font-black uppercase tracking-[0.2em] ${toneClasses.eyebrow}`}>
+                    {item.eyebrow}
+                  </p>
+                  <p className={`mt-1 text-sm font-display font-black ${toneClasses.text}`}>
+                    {item.title}
+                  </p>
+                  <p className="mt-1 text-xs leading-relaxed text-gray-400">
+                    {item.detail}
+                  </p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function IdentityEvolutionSection({ evolution, selectedKey, onSelect, selectedPoint }) {
+  if (!evolution) return null;
+
+  return (
+    <section className="border-t border-white/8 pt-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-display font-black uppercase tracking-[0.22em] text-gray-500">
+            Identity Evolution
+          </p>
+          <p className="mt-1 max-w-2xl text-sm text-gray-400">
+            {evolution.description}
+          </p>
+        </div>
+        <p className="text-[11px] text-gray-500">
+          {formatTimelineRange(evolution.start_date, evolution.end_date, true)}
+        </p>
+      </div>
+
+      {!evolution?.has_data ? (
+        <p className="mt-4 text-sm text-gray-500">
+          There is not enough recent passing-chart activity yet to draw a trajectory.
+        </p>
+      ) : (
+        <>
+          <EvolutionTimelineStrip
+            points={evolution.points}
+            selectedKey={selectedKey}
+            onSelect={onSelect}
+          />
+
+          <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)]">
+            <EvolutionPointDetail point={selectedPoint} />
+            <EvolutionHighlights highlights={evolution.highlights} onSelect={onSelect} />
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
 function ModeBiasField({ summary }) {
   const singleShare = clamp01(summary?.mode_split?.single_share);
   const doubleShare = clamp01(summary?.mode_split?.double_share);
@@ -606,6 +908,8 @@ export default function PlayerIdentityMapPanel({ userId }) {
   const [ready, setReady] = useState(false);
   const [selectedChartId, setSelectedChartId] = useState('');
   const [selectedStrongholdKey, setSelectedStrongholdKey] = useState('');
+  const [openStrongholdKey, setOpenStrongholdKey] = useState('');
+  const [selectedEvolutionKey, setSelectedEvolutionKey] = useState('');
 
   useEffect(() => {
     if (!userId) return undefined;
@@ -640,6 +944,7 @@ export default function PlayerIdentityMapPanel({ userId }) {
   const data = summaries?.[view] || summaries?.all || summaries?.recent || null;
   const allSummary = summaries?.all || null;
   const recentSummary = summaries?.recent || null;
+  const evolution = allSummary?.evolution || recentSummary?.evolution || data?.evolution || null;
 
   useEffect(() => {
     if (!data?.signature_jackets?.length) {
@@ -652,6 +957,7 @@ export default function PlayerIdentityMapPanel({ userId }) {
   useEffect(() => {
     const firstStronghold = Array.isArray(data?.sss_strongholds) ? data.sss_strongholds[0]?.key || '' : '';
     setSelectedStrongholdKey(firstStronghold);
+    setOpenStrongholdKey('');
   }, [data, view]);
 
   useEffect(() => {
@@ -671,6 +977,20 @@ export default function PlayerIdentityMapPanel({ userId }) {
     return list.find((item) => item.key === selectedStrongholdKey) || null;
   }, [data, selectedStrongholdKey]);
 
+  const openStronghold = useMemo(() => {
+    const list = Array.isArray(data?.sss_strongholds) ? data.sss_strongholds : [];
+    return list.find((item) => item.key === openStrongholdKey) || null;
+  }, [data, openStrongholdKey]);
+
+  const selectedEvolutionPoint = useMemo(() => {
+    const points = Array.isArray(evolution?.points) ? evolution.points : [];
+    if (points.length === 0) return null;
+    return points.find((item) => item.key === selectedEvolutionKey)
+      || [...points].reverse().find((item) => item?.has_data)
+      || points[points.length - 1]
+      || null;
+  }, [evolution, selectedEvolutionKey]);
+
   const hasIdentityData = (data?.mode_split?.total_strength || 0) > 0
     || (data?.signature_jackets?.length || 0) > 0
     || (data?.home_levels?.length || 0) > 0;
@@ -684,6 +1004,14 @@ export default function PlayerIdentityMapPanel({ userId }) {
       : 'This profile needs synced passing charts before the identity map can take shape.');
   const archetype = getIdentityArchetype(data, data?.timeframe?.key || view);
   const shiftInsight = getIdentityShiftInsight(allSummary, recentSummary);
+
+  useEffect(() => {
+    const points = Array.isArray(evolution?.points) ? evolution.points : [];
+    const fallbackKey = [...points].reverse().find((item) => item?.has_data)?.key
+      || points[points.length - 1]?.key
+      || '';
+    setSelectedEvolutionKey(fallbackKey);
+  }, [evolution]);
 
   if (!userId) return null;
 
@@ -702,16 +1030,16 @@ export default function PlayerIdentityMapPanel({ userId }) {
         >
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-            <p className="text-[10px] font-display font-black uppercase tracking-[0.28em] text-piu-accent/80">
-              Player Identity Map
-            </p>
-            <h2 className="mt-2 text-lg font-display font-black text-white sm:text-xl">
-              {headerTitle}
-            </h2>
-            <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-300">
-              {headerNarrative}
-            </p>
-          </div>
+              <p className="text-[10px] font-display font-black uppercase tracking-[0.28em] text-piu-accent/80">
+                Player Identity Map
+              </p>
+              <h2 className="mt-2 text-lg font-display font-black text-white sm:text-xl">
+                {headerTitle}
+              </h2>
+              <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-300">
+                {headerNarrative}
+              </p>
+            </div>
 
             <IdentityViewToggle
               view={view}
@@ -758,147 +1086,157 @@ export default function PlayerIdentityMapPanel({ userId }) {
                 />
               </div>
 
+              <IdentityEvolutionSection
+                evolution={evolution}
+                selectedKey={selectedEvolutionKey}
+                onSelect={setSelectedEvolutionKey}
+                selectedPoint={selectedEvolutionPoint}
+              />
+
               <div className="grid gap-6 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-              <div className="space-y-5">
-                <ModeBiasField summary={data} />
+                <div className="space-y-5">
+                  <ModeBiasField summary={data} />
 
-                <div className="grid gap-5 sm:grid-cols-2 sm:gap-6">
-                  <ModeColumn
-                    title="Singles Field"
-                    mode="Single"
-                    details={data?.mode_split?.single}
-                    timeframeKey={data?.timeframe?.key}
-                  />
-                  <ModeColumn
-                    title="Doubles Field"
-                    mode="Double"
-                    details={data?.mode_split?.double}
-                    timeframeKey={data?.timeframe?.key}
+                  <div className="grid gap-5 sm:grid-cols-2 sm:gap-6">
+                    <ModeColumn
+                      title="Singles Field"
+                      mode="Single"
+                      details={data?.mode_split?.single}
+                      timeframeKey={data?.timeframe?.key}
+                    />
+                    <ModeColumn
+                      title="Doubles Field"
+                      mode="Double"
+                      details={data?.mode_split?.double}
+                      timeframeKey={data?.timeframe?.key}
+                    />
+                  </div>
+
+                  <StrongholdRow
+                    strongholds={data?.sss_strongholds}
+                    selectedKey={selectedStrongholdKey}
+                    onSelect={(key) => {
+                      setSelectedStrongholdKey(key);
+                      setOpenStrongholdKey(key);
+                    }}
                   />
                 </div>
 
-                <StrongholdRow
-                  strongholds={data?.sss_strongholds}
-                  selectedKey={selectedStrongholdKey}
-                  onSelect={setSelectedStrongholdKey}
-                />
-              </div>
-
-              <div className="border-t border-white/8 pt-5 xl:border-l xl:border-t-0 xl:pl-6 xl:pt-0">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <p className="text-[11px] font-display font-black uppercase tracking-[0.22em] text-gray-500">
-                      SSS Mosaic
-                    </p>
-                    <p className="mt-1 text-sm text-gray-400">
-                      Signature jackets from the cleanest part of the profile
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[11px] text-gray-500">{formatNumber(data?.totals?.sss_charts)} total SSS / SSS+</p>
-                    {selectedStronghold ? (
-                      <p className="mt-1 text-[10px] text-gray-500">
-                        Focused on <span className="font-display font-black text-piu-accent">{selectedStronghold.label}</span>
+                <div className="border-t border-white/8 pt-5 xl:border-l xl:border-t-0 xl:pl-6 xl:pt-0">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[11px] font-display font-black uppercase tracking-[0.22em] text-gray-500">
+                        SSS Mosaic
                       </p>
-                    ) : null}
-                  </div>
-                </div>
-
-                <div className="mt-4 grid auto-rows-[56px] grid-cols-4 gap-2 sm:auto-rows-[64px] sm:grid-cols-6">
-                  {(data?.signature_jackets || []).map((item, index) => {
-                    const isSelected = String(item.chart_id) === String(selectedChartId);
-                    const inSelectedStronghold = !selectedStrongholdKey || selectedStrongholdKey === item.stronghold_key;
-                    return (
-                      <button
-                        key={item.chart_id}
-                        type="button"
-                        onClick={() => setSelectedChartId(String(item.chart_id))}
-                        className={`group relative overflow-hidden rounded-2xl border transition-all duration-300 ease-out motion-reduce:transition-none ${
-                          getTileSpanClass(index)
-                        } ${
-                          isSelected
-                            ? 'border-white/70 ring-1 ring-piu-accent/65'
-                            : inSelectedStronghold
-                              ? 'border-white/10 hover:border-white/35'
-                              : 'border-white/10 opacity-45 hover:opacity-75'
-                        }`}
-                      >
-                        {item.jacket_url ? (
-                          <img
-                            src={item.jacket_url}
-                            alt={item.title || 'Song jacket'}
-                            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
-                            loading={index > 3 ? 'lazy' : 'eager'}
-                            decoding="async"
-                          />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#141b2f] to-[#090d19] font-display text-xl font-black text-gray-500">
-                            {(item.title || '?').charAt(0).toUpperCase() || '?'}
-                          </div>
-                        )}
-                        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent" />
-                        <div className="absolute bottom-1.5 left-1.5 flex items-center gap-1.5">
-                          <span className={`rounded-full border px-1.5 py-0.5 text-[9px] font-display font-black ${
-                            item.mode === 'Double'
-                              ? 'border-emerald-300/40 bg-emerald-500/18 text-emerald-200'
-                              : 'border-rose-300/40 bg-rose-500/18 text-rose-100'
-                          }`}>
-                            {item.label}
-                          </span>
-                          <span className={`text-[10px] font-display font-black ${getGradeTone(item.grade)}`}>
-                            {item.grade}
-                          </span>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {selectedJacket ? (
-                  <div className="mt-4 border-t border-white/8 pt-4">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-display font-black text-white sm:text-base">
-                          {selectedJacket.title}
+                      <p className="mt-1 text-sm text-gray-400">
+                        Signature jackets from the cleanest part of the profile
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[11px] text-gray-500">{formatNumber(data?.totals?.sss_charts)} total SSS / SSS+</p>
+                      {selectedStronghold ? (
+                        <p className="mt-1 text-[10px] text-gray-500">
+                          Focused on <span className="font-display font-black text-piu-accent">{selectedStronghold.label}</span>
                         </p>
-                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-400">
-                          <span className={selectedJacket.mode === 'Double' ? 'text-emerald-200' : 'text-rose-200'}>
-                            {selectedJacket.label}
-                          </span>
-                          <span className={getGradeTone(selectedJacket.grade)}>{selectedJacket.grade}</span>
-                          <span>{formatNumber(selectedJacket.score)}</span>
-                          {selectedJacket.date_played ? <span>Played {formatChartDate(selectedJacket.date_played)}</span> : null}
-                        </div>
-                      </div>
-
-                      {selectedJacket.chart_id ? (
-                        <Link
-                          to={`/songs/chart/${selectedJacket.chart_id}`}
-                          className="inline-flex items-center rounded-full border border-piu-border/60 px-3 py-1.5 text-xs font-display font-black text-gray-200 transition-colors hover:border-piu-accent/60 hover:text-white"
-                        >
-                          Open chart
-                        </Link>
                       ) : null}
                     </div>
-
-                    {selectedJacket.stronghold_label ? (
-                      <p className="mt-3 text-xs text-gray-400">
-                        Stronghold: <span className="font-display font-black text-piu-accent">{selectedJacket.stronghold_label}</span>
-                      </p>
-                    ) : null}
                   </div>
-                ) : null}
+
+                  <div className="mt-4 grid auto-rows-[56px] grid-cols-4 gap-2 sm:auto-rows-[64px] sm:grid-cols-6">
+                    {(data?.signature_jackets || []).map((item, index) => {
+                      const isSelected = String(item.chart_id) === String(selectedChartId);
+                      const inSelectedStronghold = !selectedStrongholdKey || selectedStrongholdKey === item.stronghold_key;
+                      return (
+                        <button
+                          key={item.chart_id}
+                          type="button"
+                          onClick={() => setSelectedChartId(String(item.chart_id))}
+                          className={`group relative overflow-hidden rounded-2xl border transition-all duration-300 ease-out motion-reduce:transition-none ${
+                            getTileSpanClass(index)
+                          } ${
+                            isSelected
+                              ? 'border-white/70 ring-1 ring-piu-accent/65'
+                              : inSelectedStronghold
+                                ? 'border-white/10 hover:border-white/35'
+                                : 'border-white/10 opacity-45 hover:opacity-75'
+                          }`}
+                        >
+                          {item.jacket_url ? (
+                            <img
+                              src={item.jacket_url}
+                              alt={item.title || 'Song jacket'}
+                              className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                              loading={index > 3 ? 'lazy' : 'eager'}
+                              decoding="async"
+                            />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#141b2f] to-[#090d19] font-display text-xl font-black text-gray-500">
+                              {(item.title || '?').charAt(0).toUpperCase() || '?'}
+                            </div>
+                          )}
+                          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent" />
+                          <div className="absolute bottom-1.5 left-1.5 flex items-center gap-1.5">
+                            <span className={`rounded-full border px-1.5 py-0.5 text-[9px] font-display font-black ${
+                              item.mode === 'Double'
+                                ? 'border-emerald-300/40 bg-emerald-500/18 text-emerald-200'
+                                : 'border-rose-300/40 bg-rose-500/18 text-rose-100'
+                            }`}>
+                              {item.label}
+                            </span>
+                            <span className={`text-[10px] font-display font-black ${getGradeTone(item.grade)}`}>
+                              {item.grade}
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {selectedJacket ? (
+                    <div className="mt-4 border-t border-white/8 pt-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-display font-black text-white sm:text-base">
+                            {selectedJacket.title}
+                          </p>
+                          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-400">
+                            <span className={selectedJacket.mode === 'Double' ? 'text-emerald-200' : 'text-rose-200'}>
+                              {selectedJacket.label}
+                            </span>
+                            <span className={getGradeTone(selectedJacket.grade)}>{selectedJacket.grade}</span>
+                            <span>{formatNumber(selectedJacket.score)}</span>
+                            {selectedJacket.date_played ? <span>Played {formatChartDate(selectedJacket.date_played)}</span> : null}
+                          </div>
+                        </div>
+
+                        {selectedJacket.chart_id ? (
+                          <Link
+                            to={`/songs/chart/${selectedJacket.chart_id}`}
+                            className="inline-flex items-center rounded-full border border-piu-border/60 px-3 py-1.5 text-xs font-display font-black text-gray-200 transition-colors hover:border-piu-accent/60 hover:text-white"
+                          >
+                            Open chart
+                          </Link>
+                        ) : null}
+                      </div>
+
+                      {selectedJacket.stronghold_label ? (
+                        <p className="mt-3 text-xs text-gray-400">
+                          Stronghold: <span className="font-display font-black text-piu-accent">{selectedJacket.stronghold_label}</span>
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
               </div>
-            </div>
             </div>
           )}
         </div>
       </div>
 
       <StrongholdDetailSheet
-        cluster={selectedStronghold}
+        cluster={openStronghold}
         timeframeLabel={data?.timeframe?.label || 'Identity'}
-        onClose={() => setSelectedStrongholdKey('')}
+        onClose={() => setOpenStrongholdKey('')}
       />
     </>
   );

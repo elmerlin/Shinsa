@@ -2186,11 +2186,11 @@ export default function ProfilePage() {
   const hasActiveProfileLiveSession = !!activeProfileLiveUrl;
 
   const tabs = hasPiuData
-    ? ['overview', 'piu', 'posts', 'live', 'shoes', 'competitions', 'activity']
-    : ['overview', 'posts', 'live', 'shoes', 'competitions', 'activity'];
+    ? ['overview', 'piu', 'posts', 'live', 'shoes', 'competitions', 'identity', 'activity']
+    : ['overview', 'posts', 'live', 'shoes', 'competitions', 'identity', 'activity'];
 
   const tabLabels = {
-    overview: 'Overview', live: 'Live', posts: 'Posts', competitions: 'Competitions', shoes: 'Shoes', activity: 'Activity',
+    overview: 'Overview', live: 'Live', posts: 'Posts', competitions: 'Competitions', shoes: 'Shoes', identity: 'Identity', activity: 'Activity',
     piu: 'PIU',
     pumbility: 'Pumbility', 'best-scores': 'Best Scores', titles: 'Titles', 'recently-played': 'Recently Played',
   };
@@ -2256,7 +2256,6 @@ export default function ProfilePage() {
     </Link>
   ) : avatarCore;
   const overviewCardsById = {
-    'player-identity': { title: 'Player Identity Map' },
     ...(songAnalytics ? { 'song-analytics': { title: 'Song Analytics' } } : {}),
     'skill-breakdown': { title: 'Skill Breakdown' },
     rankings: { title: 'Rankings' },
@@ -2264,13 +2263,10 @@ export default function ProfilePage() {
     ...(showOverviewHeatmapCard ? { 'play-heatmap': { title: 'Play Activity Heatmap' } } : {}),
   };
 
-  const orderedOverviewCardIds = ['player-identity', 'play-heatmap', 'song-analytics', 'skill-breakdown', 'rankings', 'grade-goals']
+  const orderedOverviewCardIds = ['play-heatmap', 'song-analytics', 'skill-breakdown', 'rankings', 'grade-goals']
     .filter((cardId) => overviewCardsById[cardId]);
 
   const renderOverviewCardBody = (cardId) => {
-    if (cardId === 'player-identity') {
-      return <PlayerIdentityMapPanel userId={profileId} />;
-    }
     if (cardId === 'song-analytics') {
       return songAnalytics ? <SongAnalyticsPanel analytics={songAnalytics} /> : null;
     }
@@ -2982,6 +2978,12 @@ export default function ProfilePage() {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {tab === 'identity' && (
+        <div className="space-y-4">
+          <PlayerIdentityMapPanel userId={profileId} />
         </div>
       )}
 

@@ -85,6 +85,9 @@ const SONG_ALIAS_OVERRIDES = {
   '파파시토 (feat. kutina)': 'papasito feat. kutina',
 };
 const IDENTITY_RECENT_WINDOW_DAYS = 90;
+const IDENTITY_EVOLUTION_POINT_COUNT = 12;
+const IDENTITY_DAY_MS = 24 * 60 * 60 * 1000;
+const IDENTITY_WEEK_MS = 7 * IDENTITY_DAY_MS;
 
 const LEVEL_BASE_RATING = {
   10: 100,
@@ -1419,9 +1422,279 @@ function buildIdentityTimeframeMeta(view, cutoffMs = 0) {
   };
 }
 
+function toIdentityIsoDate(ms) {
+  if (!ms || !Number.isFinite(ms)) return '';
+  try {
+    return new Date(ms).toISOString().slice(0, 10);
+  } catch {
+    return '';
+  }
+}
+
+function startOfUtcWeek(ms) {
+  const date = new Date(ms || Date.now());
+  if (Number.isNaN(date.getTime())) return 0;
+  date.setUTCHours(0, 0, 0, 0);
+  const day = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() - day + 1);
+  return date.getTime();
+}
+
 function filterIdentityRecentRows(rows, cutoffMs) {
   const list = Array.isArray(rows) ? rows : [];
   return list.filter((row) => parseDateMs(row?.date_played || row?.created_at || '') >= cutoffMs);
+}
+
+function shapeIdentityEvolutionChartPreview(item) {
+  if (!item) return null;
+  const level = parseInt(item.level, 10) || 0;
+  const mode = normalizeMode(item.mode);
+  return {
+    chart_id: parseInt(item.chart_id, 10) || 0,
+    title: String(item.title || ''),
+    mode,
+    level,
+    label: item.label || formatIdentityModeLevel(mode, level),
+    score: scoreValue(item.score),
+    grade: normalizeGrade(item.grade) || String(item.grade || ''),
+    jacket_url: String(item.jacket_url || ''),
+    date_played: String(item.date_played || ''),
+    stronghold_label: String(item.stronghold_label || ''),
+  };
+}
+
+function getIdentityEvolutionFocus(summary) {
+  const homeLevels = Array.isArray(summary?.home_levels) ? summary.home_levels : [];
+  const topHome = homeLevels[0] || null;
+  if (topHome) {
+    return {
+      level: parseInt(topHome.level, 10) || 0,
+      label: topHome.label || '',
+    };
+  }
+
+  const singleTop = summary?.mode_split?.single?.top_levels?.[0] || null;
+  const doubleTop = summary?.mode_split?.double?.top_levels?.[0] || null;
+  const candidate = [singleTop, doubleTop]
+    .filter(Boolean)
+    .sort((a, b) => {
+      if ((b?.share || 0) !== (a?.share || 0)) return (b?.share || 0) - (a?.share || 0);
+      return (b?.level || 0) - (a?.level || 0);
+    })[0] || null;
+
+  return {
+    level: parseInt(candidate?.level, 10) || 0,
+    label: candidate?.label || summary?.summary?.home_label || '',
+  };
+}
+
+function buildIdentityEvolutionPoint(summary, weekStartMs, weekEndMs, activityRows, isCurrent = false) {
+  const hasData = (summary?.mode_split?.total_strength || 0) > 0
+    || (summary?.signature_jackets?.length || 0) > 0
+    || (summary?.home_levels?.length || 0) > 0;
+  const focus = getIdentityEvolutionFocus(summary);
+  const signatureJackets = (Array.isArray(summary?.signature_jackets) ? summary.signature_jackets : [])
+    .slice(0, 4)
+    .map(shapeIdentityEvolutionChartPreview)
+    .filter(Boolean);
+  const fallbackChart = summary?.sss_strongholds?.[0]?.jackets?.[0] || null;
+  const featureChart = signatureJackets[0] || shapeIdentityEvolutionChartPreview(fallbackChart) || null;
+  const rows = Array.isArray(activityRows) ? activityRows : [];
+
+  return {
+    key: toIdentityIsoDate(weekStartMs) || `week-${weekStartMs}`,
+    start_date: toIdentityIsoDate(weekStartMs),
+    end_date: toIdentityIsoDate(weekEndMs),
+    is_current: !!isCurrent,
+    has_data: hasData,
+    dominant_mode: summary?.mode_split?.dominant_mode || 'Balanced',
+    dominant_label: summary?.summary?.dominant_label || '',
+    detail_label: summary?.summary?.detail_label || '',
+    home_label: summary?.summary?.home_label || '',
+    stronghold_label: summary?.sss_strongholds?.[0]?.label || '',
+    single_share: Number(summary?.mode_split?.single_share) || 0.5,
+    double_share: Number(summary?.mode_split?.double_share) || 0.5,
+    focus_level: focus.level,
+    focus_label: focus.label || '',
+    passed_charts: parseInt(summary?.totals?.passed_charts, 10) || 0,
+    sss_charts: parseInt(summary?.totals?.sss_charts, 10) || 0,
+    activity_count: rows.length,
+    new_passes: rows.filter((row) => isPassRecord(row)).length,
+    signature_jackets: signatureJackets,
+    feature_chart: featureChart,
+  };
+}
+
+function buildIdentityEvolutionHighlights(points) {
+  const activePoints = (Array.isArray(points) ? points : []).filter((point) => point?.has_data);
+  if (activePoints.length === 0) return [];
+
+  const highlights = [];
+  const seenKeys = new Set();
+  const pushHighlight = (entry) => {
+    if (!entry || seenKeys.has(entry.key)) return;
+    seenKeys.add(entry.key);
+    highlights.push(entry);
+  };
+  const getTone = (mode) => (mode === 'Double' ? 'emerald' : mode === 'Single' ? 'rose' : 'sky');
+
+  const latest = activePoints[activePoints.length - 1];
+  pushHighlight({
+    key: `current-${latest.key}`,
+    eyebrow: 'Current lane',
+    title: latest.home_label || latest.dominant_label || 'Current profile shape',
+    detail: latest.stronghold_label
+      ? `The current profile is leaning ${String(latest.dominant_label || '').toLowerCase()}, with the cleanest pocket at ${latest.stronghold_label}.`
+      : `The current profile is leaning ${String(latest.dominant_label || '').toLowerCase()} across ${latest.home_label || 'its active folders'}.`,
+    tone: getTone(latest.dominant_mode),
+    point_key: latest.key,
+    chart: latest.feature_chart || null,
+  });
+
+  const highestPush = activePoints.reduce((best, point) => {
+    if (!best) return point;
+    if ((point.focus_level || 0) !== (best.focus_level || 0)) {
+      return (point.focus_level || 0) > (best.focus_level || 0) ? point : best;
+    }
+    if ((point.sss_charts || 0) !== (best.sss_charts || 0)) {
+      return (point.sss_charts || 0) > (best.sss_charts || 0) ? point : best;
+    }
+    if ((point.passed_charts || 0) !== (best.passed_charts || 0)) {
+      return (point.passed_charts || 0) > (best.passed_charts || 0) ? point : best;
+    }
+    return point;
+  }, null);
+
+  if (highestPush && (highestPush.focus_level > 0 || highestPush.home_label)) {
+    pushHighlight({
+      key: `peak-${highestPush.key}`,
+      eyebrow: 'Highest push',
+      title: highestPush.focus_label
+        ? `Centered at ${highestPush.focus_label}`
+        : (highestPush.home_label || 'Highest stretch'),
+      detail: highestPush.stronghold_label
+        ? `${highestPush.start_date} marked the highest center of gravity in this stretch, with ${highestPush.stronghold_label} as the trophy pocket.`
+        : `${highestPush.start_date} marked the highest center of gravity in this stretch.`,
+      tone: getTone(highestPush.dominant_mode),
+      point_key: highestPush.key,
+      chart: highestPush.feature_chart || null,
+    });
+  }
+
+  let shiftHighlight = null;
+  for (let index = activePoints.length - 1; index > 0; index -= 1) {
+    const current = activePoints[index];
+    const previous = activePoints[index - 1];
+
+    if (current.stronghold_label && current.stronghold_label !== previous.stronghold_label) {
+      shiftHighlight = {
+        key: `hotspot-${current.key}`,
+        eyebrow: 'Hot spot',
+        title: `SSS pocket at ${current.stronghold_label}`,
+        detail: previous.stronghold_label
+          ? `${current.start_date} shifted the cleanest pocket away from ${previous.stronghold_label} and into ${current.stronghold_label}.`
+          : `${current.start_date} is where the first clear SSS pocket took shape around ${current.stronghold_label}.`,
+        tone: getTone(current.dominant_mode),
+        point_key: current.key,
+        chart: current.feature_chart || null,
+      };
+      break;
+    }
+
+    if (current.home_label && previous.home_label && current.home_label !== previous.home_label) {
+      shiftHighlight = {
+        key: `range-${current.key}`,
+        eyebrow: 'Range move',
+        title: `Range moved to ${current.home_label}`,
+        detail: `${current.start_date} pulled the center of gravity away from ${previous.home_label} and into ${current.home_label}.`,
+        tone: getTone(current.dominant_mode),
+        point_key: current.key,
+        chart: current.feature_chart || null,
+      };
+      break;
+    }
+
+    if ((current.dominant_mode || 'Balanced') !== (previous.dominant_mode || 'Balanced') && current.dominant_mode !== 'Balanced') {
+      shiftHighlight = {
+        key: `swing-${current.key}`,
+        eyebrow: 'Mode swing',
+        title: current.dominant_mode === 'Double' ? 'Momentum into Doubles' : 'Momentum into Singles',
+        detail: `${current.start_date} tipped the recent profile away from ${String(previous.dominant_label || 'its previous shape').toLowerCase()} and into ${String(current.dominant_label || 'a new lane').toLowerCase()}.`,
+        tone: getTone(current.dominant_mode),
+        point_key: current.key,
+        chart: current.feature_chart || null,
+      };
+      break;
+    }
+  }
+
+  if (shiftHighlight) pushHighlight(shiftHighlight);
+
+  return highlights.slice(0, 3);
+}
+
+function buildIdentityEvolution(userId, recentRows, aliases, songCatalog) {
+  const nowMs = Date.now();
+  const currentWeekStartMs = startOfUtcWeek(nowMs);
+  const firstWeekStartMs = currentWeekStartMs - ((IDENTITY_EVOLUTION_POINT_COUNT - 1) * IDENTITY_WEEK_MS);
+  const scopedRows = (Array.isArray(recentRows) ? recentRows : [])
+    .map((row) => ({
+      ...row,
+      _played_ms: parseDateMs(row?.date_played || row?.created_at || ''),
+    }))
+    .filter((row) => row._played_ms > 0 && row._played_ms >= firstWeekStartMs)
+    .sort((a, b) => a._played_ms - b._played_ms);
+
+  const points = [];
+  const cumulativeRows = [];
+  let cursor = 0;
+
+  for (let index = 0; index < IDENTITY_EVOLUTION_POINT_COUNT; index += 1) {
+    const weekStartMs = firstWeekStartMs + (index * IDENTITY_WEEK_MS);
+    const weekEndMs = index === IDENTITY_EVOLUTION_POINT_COUNT - 1
+      ? nowMs
+      : Math.min(nowMs, weekStartMs + IDENTITY_WEEK_MS - 1);
+    const weekRows = [];
+
+    while (cursor < scopedRows.length && scopedRows[cursor]._played_ms <= weekEndMs) {
+      cumulativeRows.push(scopedRows[cursor]);
+      if (scopedRows[cursor]._played_ms >= weekStartMs) {
+        weekRows.push(scopedRows[cursor]);
+      }
+      cursor += 1;
+    }
+
+    const { passBest } = buildUserBestByChartMap({
+      bestScores: [],
+      recentScores: cumulativeRows,
+      pumbilityScores: [],
+      aliases,
+      validChartKeys: songCatalog.chartsByKey,
+    });
+    const analytics = buildIdentityAnalyticsSnapshot(songCatalog, passBest);
+    const summary = buildPlayerIdentitySummary(
+      userId,
+      null,
+      analytics,
+      passBest,
+      songCatalog,
+      { timeframe: buildIdentityTimeframeMeta('recent', firstWeekStartMs) }
+    );
+
+    points.push(buildIdentityEvolutionPoint(summary, weekStartMs, weekEndMs, weekRows, index === IDENTITY_EVOLUTION_POINT_COUNT - 1));
+  }
+
+  const hasData = points.some((point) => point?.has_data);
+  return {
+    label: 'Identity evolution',
+    description: `The last ${IDENTITY_EVOLUTION_POINT_COUNT} weeks of mode tilt, home range, and SSS momentum.`,
+    start_date: toIdentityIsoDate(firstWeekStartMs),
+    end_date: toIdentityIsoDate(nowMs),
+    window_weeks: IDENTITY_EVOLUTION_POINT_COUNT,
+    has_data: hasData,
+    points,
+    highlights: hasData ? buildIdentityEvolutionHighlights(points) : [],
+  };
 }
 
 function buildPlayerIdentitySummary(userId, profile, analytics, passBestByChart, songCatalog, options = {}) {
@@ -1514,13 +1787,13 @@ function buildPlayerIdentitySummary(userId, profile, analytics, passBestByChart,
 function getPlayerIdentitySummaryPayload(db, userId, aliases, songCatalog, view = 'all') {
   const profile = db.prepare('SELECT id, username, avatar FROM users WHERE id = ?').get(userId) || null;
   if (!profile) return null;
+  const recentCutoffMs = Date.now() - (IDENTITY_RECENT_WINDOW_DAYS * IDENTITY_DAY_MS);
+  const recentScoresWindow = filterIdentityRecentRows(queryUserRecentScores(db, userId), recentCutoffMs);
 
   if (view === 'recent') {
-    const cutoffMs = Date.now() - (IDENTITY_RECENT_WINDOW_DAYS * 24 * 60 * 60 * 1000);
-    const recentScores = filterIdentityRecentRows(queryUserRecentScores(db, userId), cutoffMs);
     const { passBest } = buildUserBestByChartMap({
       bestScores: [],
-      recentScores,
+      recentScores: recentScoresWindow,
       pumbilityScores: [],
       aliases,
       validChartKeys: songCatalog.chartsByKey,
@@ -1532,19 +1805,22 @@ function getPlayerIdentitySummaryPayload(db, userId, aliases, songCatalog, view 
       analytics,
       passBest,
       songCatalog,
-      { timeframe: buildIdentityTimeframeMeta('recent', cutoffMs) }
+      { timeframe: buildIdentityTimeframeMeta('recent', recentCutoffMs) }
     );
   }
 
   const analyticsResult = getUserAnalytics(db, userId, aliases, songCatalog);
-  return buildPlayerIdentitySummary(
-    userId,
-    profile,
-    analyticsResult.analytics,
-    analyticsResult.passBestByChart,
-    songCatalog,
-    { timeframe: buildIdentityTimeframeMeta('all') }
-  );
+  return {
+    ...buildPlayerIdentitySummary(
+      userId,
+      profile,
+      analyticsResult.analytics,
+      analyticsResult.passBestByChart,
+      songCatalog,
+      { timeframe: buildIdentityTimeframeMeta('all') }
+    ),
+    evolution: buildIdentityEvolution(userId, recentScoresWindow, aliases, songCatalog),
+  };
 }
 
 function parseLevelQuery(levelRaw) {
