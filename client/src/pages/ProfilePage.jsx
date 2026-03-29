@@ -1048,6 +1048,7 @@ export default function ProfilePage() {
   const [recentlyPlayedSyncFeedback, setRecentlyPlayedSyncFeedback] = useState('');
   const [piuDataLoaded, setPiuDataLoaded] = useState(false);
   const [showPumbilityThresholdModal, setShowPumbilityThresholdModal] = useState(false);
+  const [showScoutingCardModal, setShowScoutingCardModal] = useState(false);
   const [selectedGroupBadge, setSelectedGroupBadge] = useState(null);
   const [selectedAchievementBadge, setSelectedAchievementBadge] = useState(null);
   const [selectedOverviewDateKey, setSelectedOverviewDateKey] = useState('');
@@ -2257,7 +2258,6 @@ export default function ProfilePage() {
     </Link>
   ) : avatarCore;
   const overviewCardsById = {
-    'scouting-card': { title: 'Scouting Card' },
     ...(songAnalytics ? { 'song-analytics': { title: 'Song Analytics' } } : {}),
     'skill-breakdown': { title: 'Skill Breakdown' },
     rankings: { title: 'Rankings' },
@@ -2265,13 +2265,10 @@ export default function ProfilePage() {
     ...(showOverviewHeatmapCard ? { 'play-heatmap': { title: 'Play Activity Heatmap' } } : {}),
   };
 
-  const orderedOverviewCardIds = ['scouting-card', 'play-heatmap', 'song-analytics', 'skill-breakdown', 'rankings', 'grade-goals']
+  const orderedOverviewCardIds = ['play-heatmap', 'song-analytics', 'skill-breakdown', 'rankings', 'grade-goals']
     .filter((cardId) => overviewCardsById[cardId]);
 
   const renderOverviewCardBody = (cardId) => {
-    if (cardId === 'scouting-card') {
-      return <PlayerScoutingCard userId={profileId} />;
-    }
     if (cardId === 'song-analytics') {
       return songAnalytics ? <SongAnalyticsPanel analytics={songAnalytics} /> : null;
     }
@@ -2586,7 +2583,13 @@ export default function ProfilePage() {
             <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
               {flag && <span className="shrink-0">{flag}</span>}
               <div className="flex items-center gap-1 min-w-0">
-                <h1 className="text-lg sm:text-2xl font-display font-bold truncate">{profile.username}</h1>
+                <button
+                  type="button"
+                  onClick={() => setShowScoutingCardModal(true)}
+                  className="text-lg sm:text-2xl font-display font-bold truncate text-left hover:text-piu-accent transition-colors cursor-pointer"
+                >
+                  {profile.username}
+                </button>
                 {genderSymbol && (
                   <span className={`shrink-0 text-base sm:text-lg ${profile.gender === 'male' ? 'text-blue-400' : 'text-pink-400'}`}>
                     {genderSymbol}
@@ -4682,6 +4685,18 @@ export default function ProfilePage() {
           </>
         );
       })()}
+
+      {/* Scouting Card Modal */}
+      {showScoutingCardModal && (
+        <div
+          className="fixed inset-0 z-[150] flex items-center justify-center bg-black/85 p-3 backdrop-blur-sm"
+          onClick={() => setShowScoutingCardModal(false)}
+        >
+          <div className="w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
+            <PlayerScoutingCard userId={profileId} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

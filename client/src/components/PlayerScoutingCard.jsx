@@ -263,7 +263,7 @@ export default function PlayerScoutingCard({ userId }) {
   }
   if (!data || !data.coverage?.hasPiuData) return <EmptyState />;
 
-  const { user, ratings, attributes, cadence, competitive, specialties, benchmark, signature } = data;
+  const { user, ratings, attributes, cadence, competitive, specialties, signature } = data;
   const tint = SCOPE_TINT[activeScope];
   const scopeAttrs = attributes?.[activeScope] || { speed: 0, stamina: 0, mobility: 0, tech: 0 };
   const hasDoubles = (ratings?.doubles?.raw || 0) > 0;
@@ -311,9 +311,9 @@ export default function PlayerScoutingCard({ userId }) {
                 <span className="text-[11px] text-zinc-500 font-display">{user.skillTitle}</span>
               )}
             </div>
-            {benchmark && (
+            {data.coverage?.attributeMode === 'profile_relative' && (
               <span className="text-[9px] text-zinc-600 font-display uppercase tracking-[0.16em]">
-                vs {benchmark.label}{benchmark.source === 'global_fallback' ? ' (partial)' : ''}
+                Profile-relative attributes
               </span>
             )}
           </div>

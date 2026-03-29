@@ -37,15 +37,15 @@ function weightedMean(values, weights) {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Build scoped skill-family raw scores
+// Build scoped skill-family raw scores (difficulty-aware via best.rating)
 //
-// Mirrors the skill-breakdown logic: for each chart with skills, compute
-// a performance score per skill slug, then aggregate into bucket families.
+// Uses pumbility rating points from bestByChart entries, which already
+// factor in chart level and grade (e.g., SSS on S24 = 2880, SSS on S15 = 1200).
 //
 // modeFilter: null → all, 'Single' → singles only, 'Double' → doubles only
 // ────────────────────────────────────────────────────────────────────────────
 function buildScopedSkillFamilyScores(songCatalog, bestByChart, modeFilter) {
-  // Step 1: aggregate per-slug stats exactly like skill-breakdown route
+  // Step 1: aggregate per-slug rating stats
   const slugStats = new Map();
 
   for (const chart of songCatalog.charts) {
@@ -63,54 +63,34 @@ function buildScopedSkillFamilyScores(songCatalog, bestByChart, modeFilter) {
           slug,
           bucket: SLUG_TO_BUCKET[slug],
           total_charts: 0,
-          played_charts: 0,
-          passed_charts: 0,
-          score_sum: 0,
-          score_count: 0,
+          rating_sum: 0,
+          rating_count: 0,
         });
       }
       const entry = slugStats.get(slug);
       entry.total_charts += 1;
 
-      if (best && best.score > 0) {
-        entry.played_charts += 1;
-        entry.score_sum += best.score;
-        entry.score_count += 1;
-        if (best.is_pass) entry.passed_charts += 1;
+      const rating = best ? (best.rating || 0) : 0;
+      if (rating > 0) {
+        entry.rating_sum += rating;
+        entry.rating_count += 1;
       }
     }
   }
 
-  // Step 2: compute performance score per slug
-  const slugPerf = new Map();
-  for (const entry of slugStats.values()) {
-    const avgScore = entry.score_count > 0 ? Math.round(entry.score_sum / entry.score_count) : 0;
-    const passRate = entry.played_charts > 0
-      ? (entry.passed_charts / entry.played_charts) * 100
-      : 0;
-    const normalizedAvgScore = avgScore > 0 ? Math.max(0, (avgScore - 700000) / 300000) * 100 : 0;
-    const performanceScore = entry.score_count > 0
-      ? normalizedAvgScore * 0.7 + passRate * 0.3
-      : 0;
-    slugPerf.set(entry.slug, {
-      performanceScore,
-      weight: Math.min(entry.played_charts, 8),
-      bucket: entry.bucket,
-      played_charts: entry.played_charts,
-    });
-  }
-
-  // Step 3: aggregate into bucket families via weighted mean
+  // Step 2: aggregate into bucket families via weighted mean of avg ratings
   const bucketScores = {};
   for (const bucket of BUCKET_KEYS) {
     const slugsInBucket = SCOUTING_SKILL_BUCKETS[bucket];
     const values = [];
     const weights = [];
     for (const slug of slugsInBucket) {
-      const sp = slugPerf.get(slug);
-      if (!sp || sp.weight <= 0) continue;
-      values.push(sp.performanceScore);
-      weights.push(sp.weight);
+      const entry = slugStats.get(slug);
+      if (!entry || entry.rating_count <= 0) continue;
+      const avgRating = entry.rating_sum / entry.rating_count;
+      const weight = Math.min(entry.rating_count, 8);
+      values.push(avgRating);
+      weights.push(weight);
     }
     bucketScores[bucket] = values.length > 0
       ? Number(weightedMean(values, weights).toFixed(2))
@@ -426,15 +406,35 @@ function buildPlayerScoutingCard(db, userId, helpers) {
   };
 
   // ── Benchmark-relative family attributes ──
+  // When benchmark families exist: scale user vs benchmark (0-100 = % of benchmark)
+  // When benchmark families are null (global fallback): self-normalize —
+  //   strongest bucket = 100, others show proportion relative to strongest.
+  //   This shows internal balance rather than absolute strength.
+  const hasBenchmarkFamilies = !!(benchmark.families);
+
   const benchmarkFamily = (userFam, bmFamilies, scope) => {
-    const result = {};
     const bmFam = bmFamilies ? bmFamilies[scope] : null;
+
+    if (bmFam) {
+      // True benchmark: scale each bucket against the benchmark player
+      const result = {};
+      for (const bucket of BUCKET_KEYS) {
+        const userVal = userFam[bucket] || 0;
+        const bmVal = bmFam[bucket] || 0;
+        result[bucket] = bmVal > 0
+          ? clamp(0, 100, Math.round((userVal / bmVal) * 100))
+          : 0;
+      }
+      return result;
+    }
+
+    // Self-normalize: scale each bucket relative to the user's own strongest bucket
+    const maxBucket = Math.max(...BUCKET_KEYS.map((k) => userFam[k] || 0));
+    if (maxBucket <= 0) return { speed: 0, stamina: 0, mobility: 0, tech: 0 };
+    const result = {};
     for (const bucket of BUCKET_KEYS) {
       const userVal = userFam[bucket] || 0;
-      const bmVal = bmFam ? (bmFam[bucket] || 0) : 0;
-      result[bucket] = bmVal > 0
-        ? clamp(0, 100, Math.round((userVal / bmVal) * 100))
-        : (userVal > 0 ? clamp(0, 100, Math.round(userVal)) : 0);
+      result[bucket] = clamp(0, 100, Math.round((userVal / maxBucket) * 100));
     }
     return result;
   };
@@ -503,6 +503,7 @@ function buildPlayerScoutingCard(db, userId, helpers) {
       hasPiuData: true,
       hasBenchmark,
       doublesBenchmarkPartial: benchmark.doublesPartial,
+      attributeMode: hasBenchmarkFamilies ? 'benchmarked' : 'profile_relative',
     },
   };
 }
