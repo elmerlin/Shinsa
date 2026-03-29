@@ -588,6 +588,47 @@ function getArchivedStories(db, ownerUserId) {
   }).filter((entry) => entry.story?.id);
 }
 
+function getArchivedStoriesPaginated(db, ownerUserId, { beforeDate, beforeId, limit = 200 } = {}) {
+  const effectiveLimit = Math.min(Math.max(1, limit), 500);
+  const hasCursor = beforeDate && beforeId;
+  const rows = db.prepare(`
+    SELECT story_id, story_payload_json, archived_at, original_created_at
+    FROM user_story_archives
+    WHERE owner_user_id = ?
+      ${hasCursor ? 'AND (original_created_at < ? OR (original_created_at = ? AND story_id < ?))' : ''}
+    ORDER BY original_created_at DESC, story_id DESC
+    LIMIT ?
+  `).all(...[
+    ownerUserId,
+    ...(hasCursor ? [beforeDate, beforeDate, beforeId] : []),
+    effectiveLimit + 1,
+  ]);
+  const hasMore = rows.length > effectiveLimit;
+  const trimmed = hasMore ? rows.slice(0, effectiveLimit) : rows;
+  return {
+    stories: trimmed.map((row) => {
+      const parsed = parseJsonObject(row.story_payload_json, {});
+      return {
+        archived_at: row.archived_at || '',
+        original_created_at: row.original_created_at || '',
+        story: parsed && typeof parsed === 'object' ? parsed : null,
+      };
+    }).filter((entry) => entry.story?.id),
+    hasMore,
+  };
+}
+
+function findArchivedStoryForOwner(db, ownerUserId, storyId) {
+  const row = db.prepare(`
+    SELECT story_payload_json
+    FROM user_story_archives
+    WHERE story_id = ? AND owner_user_id = ?
+  `).get(storyId, ownerUserId);
+  if (!row) return null;
+  const parsed = parseJsonObject(row.story_payload_json, {});
+  return parsed && typeof parsed === 'object' && parsed.id ? parsed : null;
+}
+
 function deleteManualStoryRowIfPresent(db, ownerUserId, storyId, deletedAt) {
   const manualId = String(storyId || '').startsWith('story:') ? String(storyId).slice(6) : '';
   if (!manualId) return false;
@@ -1643,9 +1684,15 @@ router.post('/highlights/story', requireAuth, highlightUpload.single('image'), a
 
 router.get('/highlights/archive', requireAuth, (req, res) => {
   const db = getDb();
-  res.json({
-    stories: getArchivedStories(db, req.user.id),
-  });
+  const beforeDate = req.query.before_date || '';
+  const beforeId = req.query.before_id || '';
+  const limit = parseInt(req.query.limit, 10) || 200;
+  if (beforeDate && beforeId) {
+    const result = getArchivedStoriesPaginated(db, req.user.id, { beforeDate, beforeId, limit });
+    return res.json(result);
+  }
+  const result = getArchivedStoriesPaginated(db, req.user.id, { limit });
+  res.json(result);
 });
 
 router.post('/highlights/:userId/story/:storyId/view', requireAuth, (req, res) => {
@@ -1844,6 +1891,46 @@ router.delete('/highlights/:userId/story/:storyId', requireAuth, (req, res) => {
     success: true,
     stories: getStoryBundleForUser(db, ownerUserId)?.stories || [],
   });
+});
+
+// --- Owner-only archive engagement endpoints ---
+
+router.get('/highlights/archive/:storyId/engagement', requireAuth, (req, res) => {
+  const db = getDb();
+  const storyId = String(req.params.storyId || '').trim();
+  if (!storyId) return res.status(400).json({ error: 'Story ID required' });
+  const archived = findArchivedStoryForOwner(db, req.user.id, storyId);
+  if (!archived) return res.status(404).json({ error: 'Archived story not found' });
+  const counts = getStoryCounts(db, req.user.id, storyId, req.user.id);
+  res.json({ engagement: counts });
+});
+
+router.get('/highlights/archive/:storyId/stats', requireAuth, (req, res) => {
+  const db = getDb();
+  const storyId = String(req.params.storyId || '').trim();
+  if (!storyId) return res.status(400).json({ error: 'Story ID required' });
+  const archived = findArchivedStoryForOwner(db, req.user.id, storyId);
+  if (!archived) return res.status(404).json({ error: 'Archived story not found' });
+  const counts = getStoryCounts(db, req.user.id, storyId, req.user.id);
+  const viewers = db.prepare(`
+    SELECT v.viewed_at, u.id AS user_id, u.username, u.avatar, u.avatar_v
+    FROM user_story_views v
+    JOIN users u ON u.id = v.viewer_user_id
+    WHERE v.owner_user_id = ? AND v.story_id = ?
+    ORDER BY datetime(v.viewed_at) DESC
+    LIMIT 50
+  `).all(req.user.id, storyId);
+  res.json({ ...counts, viewers });
+});
+
+router.get('/highlights/archive/:storyId/comments', requireAuth, (req, res) => {
+  const db = getDb();
+  const storyId = String(req.params.storyId || '').trim();
+  if (!storyId) return res.status(400).json({ error: 'Story ID required' });
+  const archived = findArchivedStoryForOwner(db, req.user.id, storyId);
+  if (!archived) return res.status(404).json({ error: 'Archived story not found' });
+  const comments = listStoryComments(db, req.user.id, storyId);
+  res.json({ comments });
 });
 
 router.post('/squads', requireAuth, (req, res) => {

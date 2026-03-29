@@ -1697,6 +1697,7 @@ function initializeDb() {
     CREATE INDEX IF NOT EXISTS idx_user_story_comments_story ON user_story_comments(story_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_user_story_comments_owner ON user_story_comments(owner_user_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_user_story_archives_owner ON user_story_archives(owner_user_id, archived_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_user_story_archives_owner_created ON user_story_archives(owner_user_id, original_created_at DESC, story_id DESC);
     CREATE INDEX IF NOT EXISTS idx_user_story_hidden_items_owner ON user_story_hidden_items(owner_user_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_auth_qr_login_challenges_status ON auth_qr_login_challenges(status, expires_at);
     CREATE INDEX IF NOT EXISTS idx_auth_qr_login_challenges_approved_user ON auth_qr_login_challenges(approved_user_id, created_at);

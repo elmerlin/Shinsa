@@ -727,6 +727,17 @@ export const getSharedMessageStory = (userId, storyId, options = {}) => {
   return request(`/messages/highlights/${encodeURIComponent(userId)}/story/${encodeURIComponent(storyId)}/shared${qs ? `?${qs}` : ''}`);
 };
 export const getMessageStoryArchive = () => request('/messages/highlights/archive');
+export const getMessageStoryArchivePaginated = ({ beforeDate, beforeId, limit } = {}) => {
+  const params = new URLSearchParams();
+  if (beforeDate) params.set('before_date', beforeDate);
+  if (beforeId) params.set('before_id', beforeId);
+  if (limit) params.set('limit', String(limit));
+  const qs = params.toString();
+  return request(`/messages/highlights/archive${qs ? `?${qs}` : ''}`);
+};
+export const getArchivedStoryEngagement = (storyId) => request(`/messages/highlights/archive/${encodeURIComponent(storyId)}/engagement`);
+export const getArchivedStoryStats = (storyId) => request(`/messages/highlights/archive/${encodeURIComponent(storyId)}/stats`);
+export const getArchivedStoryComments = (storyId) => request(`/messages/highlights/archive/${encodeURIComponent(storyId)}/comments`);
 export const markMessageStoryViewed = (userId, storyId) => request(`/messages/highlights/${encodeURIComponent(userId)}/story/${encodeURIComponent(storyId)}/view`, {
   method: 'POST',
 });

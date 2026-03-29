@@ -64,6 +64,7 @@ const TournamentWatch = lazy(() => import('./pages/TournamentWatch'));
 const TournamentOverlay = lazy(() => import('./pages/TournamentOverlay'));
 const TournamentEmbed = lazy(() => import('./pages/TournamentEmbed'));
 const PrivacyPolicyPage = lazy(() => import('./pages/PrivacyPolicyPage'));
+const StoryArchivePage = lazy(() => import('./pages/StoryArchivePage'));
 const TranslationEditorDrawer = lazy(() => import('./components/TranslationEditorDrawer'));
 
 const KOREAN_LOCALE_ENABLED = import.meta.env.VITE_ENABLE_KR_LOCALE === 'true';
@@ -1498,6 +1499,7 @@ export default function App() {
             <Route path="/fun" element={<FunPage />} />
             <Route path="/motion" element={<Navigate to="/fun?tab=motion" replace />} />
             <Route path="/chat" element={<ChatPage />} />
+            <Route path="/stories/archive" element={<StoryArchivePage />} />
             <Route path="/messages" element={<MessagesPage />} />
             <Route path="/messages/:conversationId" element={<MessagesPage />} />
             <Route path="/changelog" element={<ChangeLogPage />} />

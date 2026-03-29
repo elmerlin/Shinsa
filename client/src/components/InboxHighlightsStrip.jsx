@@ -18,6 +18,9 @@ import {
   addMessageStoryComment,
   archiveMessageStory,
   deleteMessageStory,
+  getArchivedStoryComments,
+  getArchivedStoryEngagement,
+  getArchivedStoryStats,
   getMessageStoryComments,
   getMessageStoryEngagement,
   getMessageStoryStats,
@@ -561,6 +564,7 @@ function StoryCommentsModal({
   sending = false,
   onDraftChange,
   onSend,
+  readOnly = false,
 }) {
   const { user: authUser } = useAuth();
   const draftInputRef = useRef(null);
@@ -647,42 +651,44 @@ function StoryCommentsModal({
 
         {error ? <p className="text-[13px] text-red-300">{error}</p> : null}
 
-        <div className="space-y-2.5">
-          <div className="relative">
-            <MentionSuggestionsPanel
-              open={showMentions || mentionLoading}
-              loading={mentionLoading}
-              users={mentionUsers}
-              onSelect={applyMention}
-            />
-            <textarea
-              ref={draftInputRef}
-              value={draft}
-              onChange={(event) => {
-                onDraftChange?.(event.target.value);
-                updateMentionState(event.target.value, event.target.selectionStart);
-              }}
-              onClick={(event) => updateMentionState(draft, event.currentTarget.selectionStart)}
-              onKeyDown={handleMentionKeyDown}
-              rows={2}
-              maxLength={280}
-              placeholder={`Comment on ${ownerUser?.username || 'this story'}...`}
-              className={`resize-none ${MODAL_INPUT_CLASS}`}
-              style={MODAL_INPUT_STYLE}
-            />
+        {!readOnly ? (
+          <div className="space-y-2.5">
+            <div className="relative">
+              <MentionSuggestionsPanel
+                open={showMentions || mentionLoading}
+                loading={mentionLoading}
+                users={mentionUsers}
+                onSelect={applyMention}
+              />
+              <textarea
+                ref={draftInputRef}
+                value={draft}
+                onChange={(event) => {
+                  onDraftChange?.(event.target.value);
+                  updateMentionState(event.target.value, event.target.selectionStart);
+                }}
+                onClick={(event) => updateMentionState(draft, event.currentTarget.selectionStart)}
+                onKeyDown={handleMentionKeyDown}
+                rows={2}
+                maxLength={280}
+                placeholder={`Comment on ${ownerUser?.username || 'this story'}...`}
+                className={`resize-none ${MODAL_INPUT_CLASS}`}
+                style={MODAL_INPUT_STYLE}
+              />
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-[11px] tabular-nums text-gray-600">{draft.trim().length}<span className="text-gray-700">/280</span></span>
+              <button
+                type="button"
+                onClick={onSend}
+                disabled={sending || !draft.trim()}
+                className="rounded-full bg-cyan-500 px-5 py-2 text-sm font-display font-black text-white shadow-[0_2px_8px_rgba(6,182,212,0.25)] transition-all hover:bg-cyan-400 hover:shadow-[0_4px_14px_rgba(6,182,212,0.3)] active:scale-[0.97] active:shadow-none disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
+              >
+                {sending ? 'Sending...' : 'Send comment'}
+              </button>
+            </div>
           </div>
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-[11px] tabular-nums text-gray-600">{draft.trim().length}<span className="text-gray-700">/280</span></span>
-            <button
-              type="button"
-              onClick={onSend}
-              disabled={sending || !draft.trim()}
-              className="rounded-full bg-cyan-500 px-5 py-2 text-sm font-display font-black text-white shadow-[0_2px_8px_rgba(6,182,212,0.25)] transition-all hover:bg-cyan-400 hover:shadow-[0_4px_14px_rgba(6,182,212,0.3)] active:scale-[0.97] active:shadow-none disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
-            >
-              {sending ? 'Sending...' : 'Send comment'}
-            </button>
-          </div>
-        </div>
+        ) : null}
       </div>
     </OverlayShell>
   );
@@ -761,14 +767,23 @@ export function StoryArchiveModal({ open, onClose, stories = [], onOpenStory }) 
             <p className="text-[10px] font-display font-bold uppercase tracking-[0.2em] text-cyan-300/70">Archive</p>
             <h2 className="mt-0.5 truncate font-display text-xl font-black text-white">Past stories</h2>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/6 text-gray-400 transition-colors hover:border-white/20 hover:bg-white/10 hover:text-white active:scale-95"
-            aria-label="Close"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4"><path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" /></svg>
-          </button>
+          <div className="flex items-center gap-2">
+            <Link
+              to="/stories/archive"
+              onClick={onClose}
+              className="rounded-full border border-cyan-300/20 bg-cyan-500/10 px-3 py-1.5 text-xs font-display font-bold text-cyan-200 transition-colors hover:bg-cyan-500/20"
+            >
+              Full archive
+            </Link>
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/6 text-gray-400 transition-colors hover:border-white/20 hover:bg-white/10 hover:text-white active:scale-95"
+              aria-label="Close"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4"><path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" /></svg>
+            </button>
+          </div>
         </div>
 
         {stories.length === 0 ? (
@@ -822,6 +837,7 @@ export function StoryViewerModal({
   onStoriesChange,
   onArchiveChange,
   readonly = false,
+  archiveMode = false,
   initialIndex = 0,
   hasPreviousUser = false,
   hasNextUser = false,
@@ -845,7 +861,7 @@ export function StoryViewerModal({
 
   const story = stories[index] || null;
   const ownerUserId = String(user?.id || '');
-  const isOwner = !readonly && String(authUser?.id || '') === ownerUserId;
+  const isOwner = (archiveMode || !readonly) && String(authUser?.id || '') === ownerUserId;
   const isPaused = menuOpen || commentsOpen || statsOpen || sharePickerOpen;
   const activeEngagement = story?.id
     ? (engagementById[story.id] || story.engagement || {
@@ -898,7 +914,7 @@ export function StoryViewerModal({
   }, [story?.id]);
 
   useEffect(() => {
-    if (!open || !story || loading || error || isPaused || readonly) return undefined;
+    if (!open || !story || loading || error || isPaused || readonly || archiveMode) return undefined;
     const durationMs = 6000;
     const startAt = performance.now();
 
@@ -927,7 +943,7 @@ export function StoryViewerModal({
   }, [open, story?.id, loading, error, isPaused, index, stories.length, onClose, readonly, hasNextUser, onNavigateNextUser]);
 
   useEffect(() => {
-    if (!open || !story?.id || !ownerUserId || readonly) return undefined;
+    if (!open || !story?.id || !ownerUserId || readonly || archiveMode) return undefined;
     let cancelled = false;
 
     markMessageStoryViewed(ownerUserId, story.id)
@@ -949,7 +965,20 @@ export function StoryViewerModal({
     return () => {
       cancelled = true;
     };
-  }, [open, story?.id, ownerUserId, readonly]);
+  }, [open, story?.id, ownerUserId, readonly, archiveMode]);
+
+  useEffect(() => {
+    if (!open || !story?.id || !archiveMode) return undefined;
+    let cancelled = false;
+    getArchivedStoryEngagement(story.id)
+      .then((payload) => {
+        if (!cancelled && payload?.engagement) {
+          setEngagementById((prev) => ({ ...prev, [story.id]: payload.engagement }));
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [open, story?.id, archiveMode]);
 
   useEffect(() => {
     const previewComments = Array.isArray(activeEngagement?.preview_comments) ? activeEngagement.preview_comments : [];
@@ -997,7 +1026,9 @@ export function StoryViewerModal({
       items: Array.isArray(activeEngagement?.preview_comments) ? activeEngagement.preview_comments : prev.items,
     }));
     try {
-      const payload = await getMessageStoryComments(ownerUserId, story.id);
+      const payload = archiveMode
+        ? await getArchivedStoryComments(story.id)
+        : await getMessageStoryComments(ownerUserId, story.id);
       setCommentsState((prev) => ({
         ...prev,
         loading: false,
@@ -1013,6 +1044,7 @@ export function StoryViewerModal({
   };
 
   const handleSendComment = async () => {
+    if (archiveMode) return;
     const content = String(commentsState.draft || '').trim();
     if (!content || commentsState.sending || !story?.id || !ownerUserId) return;
     setCommentsState((prev) => ({ ...prev, sending: true, error: '' }));
@@ -1042,7 +1074,9 @@ export function StoryViewerModal({
     setMenuOpen(false);
     setStatsState({ loading: true, data: null, error: '' });
     try {
-      const payload = await getMessageStoryStats(ownerUserId, story.id);
+      const payload = archiveMode
+        ? await getArchivedStoryStats(story.id)
+        : await getMessageStoryStats(ownerUserId, story.id);
       setStatsState({ loading: false, data: payload || null, error: '' });
     } catch (err) {
       setStatsState({ loading: false, data: null, error: err?.message || 'Failed to load story stats.' });
@@ -1051,7 +1085,7 @@ export function StoryViewerModal({
 
   const handleTogglePump = async (event) => {
     stopStoryEvent(event);
-    if (readonly || !story?.id || !ownerUserId) return;
+    if (readonly || archiveMode || !story?.id || !ownerUserId) return;
     try {
       const payload = await toggleMessageStoryPump(ownerUserId, story.id);
       if (payload?.engagement) {
@@ -1185,8 +1219,12 @@ export function StoryViewerModal({
                   {menuOpen ? (
                     <div data-story-interactive="true" className="absolute right-0 top-12 z-[70] w-44 overflow-hidden rounded-[1.1rem] border border-white/10 bg-[#0d1320] shadow-[0_18px_42px_rgba(0,0,0,0.32)]">
                       <button data-story-interactive="true" type="button" onClick={openStats} className="w-full px-4 py-3 text-left text-sm text-white hover:bg-white/8">Story stats</button>
-                      <button data-story-interactive="true" type="button" onClick={handleArchiveStory} className="w-full px-4 py-3 text-left text-sm text-white hover:bg-white/8">Archive story</button>
-                      <button data-story-interactive="true" type="button" onClick={handleDeleteStory} className="w-full px-4 py-3 text-left text-sm text-rose-200 hover:bg-rose-500/10">Delete story</button>
+                      {!archiveMode ? (
+                        <>
+                          <button data-story-interactive="true" type="button" onClick={handleArchiveStory} className="w-full px-4 py-3 text-left text-sm text-white hover:bg-white/8">Archive story</button>
+                          <button data-story-interactive="true" type="button" onClick={handleDeleteStory} className="w-full px-4 py-3 text-left text-sm text-rose-200 hover:bg-rose-500/10">Delete story</button>
+                        </>
+                      ) : null}
                     </div>
                   ) : null}
                 </div>
@@ -1240,18 +1278,16 @@ export function StoryViewerModal({
             </button>
           ) : null}
 
-          {!readonly && story ? (
+          {(!readonly || archiveMode) && story ? (
             <div
               data-story-interactive="true"
               className="absolute bottom-4 left-1/2 z-40 flex w-[calc(100%-1.4rem)] max-w-[24rem] -translate-x-1/2 items-center justify-between gap-1.5 rounded-full border border-white/12 bg-black/48 px-2 py-1.5 shadow-[0_18px_42px_rgba(0,0,0,0.3)] backdrop-blur-md"
             >
-              <button
-                type="button"
-                onClick={handleTogglePump}
-                data-story-interactive="true"
-                className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs font-display font-black transition-colors ${
-                  activeEngagement.user_pumped ? 'bg-cyan-500/18 text-cyan-100' : 'text-white hover:bg-white/8'
-                }`}
+              <span
+                className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs font-display font-black ${
+                  activeEngagement.user_pumped ? 'bg-cyan-500/18 text-cyan-100' : 'text-white'
+                } ${archiveMode ? 'opacity-70' : 'transition-colors hover:bg-white/8 cursor-pointer'}`}
+                {...(archiveMode ? {} : { role: 'button', tabIndex: 0, onClick: handleTogglePump, 'data-story-interactive': 'true' })}
               >
                 <img
                   src={activeEngagement.user_pumped ? '/piu/stomp-yellow.svg' : '/piu/stomp-gray.svg'}
@@ -1260,21 +1296,23 @@ export function StoryViewerModal({
                 />
                 <span>Pumps</span>
                 <span className="text-[11px] text-cyan-100/90">{activeEngagement.pump_count || 0}</span>
-              </button>
-              <button
-                type="button"
-                data-story-interactive="true"
-                onClick={(event) => {
-                  stopStoryEvent(event);
-                  setSharePickerOpen(true);
-                }}
-                className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs font-display font-black text-white transition-colors hover:bg-white/8"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9} className="h-4 w-4">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M7 12l10-7-3 14-4-5-3-2z" />
-                </svg>
-                <span>Share</span>
-              </button>
+              </span>
+              {!archiveMode ? (
+                <button
+                  type="button"
+                  data-story-interactive="true"
+                  onClick={(event) => {
+                    stopStoryEvent(event);
+                    setSharePickerOpen(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs font-display font-black text-white transition-colors hover:bg-white/8"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9} className="h-4 w-4">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M7 12l10-7-3 14-4-5-3-2z" />
+                  </svg>
+                  <span>Share</span>
+                </button>
+              ) : null}
               <button
                 type="button"
                 data-story-interactive="true"
@@ -1306,6 +1344,7 @@ export function StoryViewerModal({
         sending={commentsState.sending}
         onDraftChange={(value) => setCommentsState((prev) => ({ ...prev, draft: value }))}
         onSend={handleSendComment}
+        readOnly={archiveMode}
       />
 
       <StoryStatsModal
