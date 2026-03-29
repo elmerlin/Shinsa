@@ -127,6 +127,12 @@ function getPlayedAtValue(score) {
   ).trim();
 }
 
+function getMachineNameValue(score) {
+  const raw = String(score?.machine_name || score?.machineName || '').trim();
+  if (!raw || raw === '-' || raw === '—') return '';
+  return raw;
+}
+
 function normalizeMetaBadges(badges = []) {
   if (!Array.isArray(badges)) return [];
   return badges
@@ -172,7 +178,7 @@ export default function ScoreSnapshotCard({
   const username = String(score.username || score.playerName || '').trim();
   const playedAt = formatDateLabel(getPlayedAtValue(score));
   const playedAtLabel = playedAt ? `Played ${playedAt}` : '';
-  const machineName = String(score.machine_name || score.machineName || '').trim();
+  const machineName = getMachineNameValue(score);
   const resolvedAvatarUrl = String(avatarUrl || score.playerAvatar || score.avatar || '').trim();
   const resolvedSkillTitle = String(skillTitle || score.playerSkillTitle || score.skillTitle || score.skill_title || '').trim();
   const resolvedRoleLabel = String(roleLabel || score.playerRoleLabel || score.roleLabel || '').trim();

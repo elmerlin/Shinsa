@@ -288,6 +288,9 @@ function getClearItems(item) {
     level: parseInt(item?.level, 10) || 0,
     score: parseInt(item?.score, 10) || 0,
     grade: item?.grade || '',
+    date_played: item?.date_played || '',
+    played_at_utc: item?.played_at_utc || '',
+    machine_name: item?.machine_name || '',
   }];
 
   try {
@@ -300,6 +303,9 @@ function getClearItems(item) {
       level: parseInt(entry?.level, 10) || fallback[0].level,
       score: parseInt(entry?.score, 10) || 0,
       grade: entry?.grade || '',
+      date_played: entry?.date_played || item?.date_played || '',
+      played_at_utc: entry?.played_at_utc || item?.played_at_utc || '',
+      machine_name: entry?.machine_name || item?.machine_name || '',
     }));
   } catch {
     return fallback;
