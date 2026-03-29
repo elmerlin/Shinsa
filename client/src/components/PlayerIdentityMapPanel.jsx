@@ -63,6 +63,205 @@ function getTileSpanClass(index) {
   return 'col-span-1 row-span-1';
 }
 
+function getIdentityArchetype(summary, view) {
+  const dominantMode = summary?.mode_split?.dominant_mode || 'Balanced';
+  const homeLabel = summary?.summary?.home_label || '';
+  const stronghold = summary?.sss_strongholds?.[0] || null;
+  const sssCharts = parseInt(summary?.totals?.sss_charts, 10) || 0;
+  const passedCharts = parseInt(summary?.totals?.passed_charts, 10) || 0;
+
+  if (view === 'recent') {
+    if (dominantMode === 'Single') {
+      return {
+        title: sssCharts > 0 ? 'Current singles heat' : 'Current singles push',
+        detail: stronghold
+          ? `Recent form is concentrating around ${stronghold.label}.`
+          : `Recent passing charts are leaning into ${homeLabel || 'Singles lanes'}.`,
+        tone: 'rose',
+      };
+    }
+    if (dominantMode === 'Double') {
+      return {
+        title: sssCharts > 0 ? 'Current doubles heat' : 'Current doubles push',
+        detail: stronghold
+          ? `Recent form is concentrating around ${stronghold.label}.`
+          : `Recent passing charts are leaning into ${homeLabel || 'Doubles lanes'}.`,
+        tone: 'emerald',
+      };
+    }
+    return {
+      title: 'Current dual-pad run',
+      detail: stronghold
+        ? `Recent form is balanced, with the cleanest pocket at ${stronghold.label}.`
+        : 'Recent passing charts are spread across both pads.',
+      tone: 'sky',
+    };
+  }
+
+  if (dominantMode === 'Single') {
+    if (sssCharts >= 10) {
+      return {
+        title: 'Singles precision hunter',
+        detail: stronghold
+          ? `The biggest trophy stack sits in ${stronghold.label}.`
+          : `This profile peaks around ${homeLabel || 'Singles folders'}.`,
+        tone: 'rose',
+      };
+    }
+    if (passedCharts >= 120) {
+      return {
+        title: 'Singles route grinder',
+        detail: `A deep Singles base built around ${homeLabel || 'core singles folders'}.`,
+        tone: 'rose',
+      };
+    }
+    return {
+      title: 'Singles builder',
+      detail: `Most of the profile’s growth is taking shape on ${homeLabel || 'Singles charts'}.`,
+      tone: 'rose',
+    };
+  }
+
+  if (dominantMode === 'Double') {
+    if (sssCharts >= 10) {
+      return {
+        title: 'Doubles route hunter',
+        detail: stronghold
+          ? `The cleanest Doubles trophies pile up in ${stronghold.label}.`
+          : `This profile peaks around ${homeLabel || 'Doubles folders'}.`,
+        tone: 'emerald',
+      };
+    }
+    if (passedCharts >= 120) {
+      return {
+        title: 'Doubles pad specialist',
+        detail: `A deep Doubles base built around ${homeLabel || 'core doubles folders'}.`,
+        tone: 'emerald',
+      };
+    }
+    return {
+      title: 'Doubles builder',
+      detail: `Most of the profile’s growth is taking shape on ${homeLabel || 'Doubles charts'}.`,
+      tone: 'emerald',
+    };
+  }
+
+  if (sssCharts >= 12) {
+    return {
+      title: 'Dual-pad chart collector',
+      detail: stronghold
+        ? `The profile stays balanced, but ${stronghold.label} is the brightest trophy pocket.`
+        : 'The profile stays balanced across both pads, with a broad high-end spread.',
+      tone: 'sky',
+    };
+  }
+
+  return {
+    title: 'Dual-pad all-rounder',
+    detail: homeLabel
+      ? `Strength is spread across both pads, with home folders around ${homeLabel}.`
+      : 'Strength is spread across both pads without a single dominant lane.',
+    tone: 'sky',
+  };
+}
+
+function getIdentityShiftInsight(allSummary, recentSummary) {
+  const recentHasData = (recentSummary?.mode_split?.total_strength || 0) > 0
+    || (recentSummary?.signature_jackets?.length || 0) > 0
+    || (recentSummary?.home_levels?.length || 0) > 0;
+  if (!recentHasData) {
+    return {
+      title: 'Recent window is quiet',
+      detail: `No passing charts landed in the last ${recentSummary?.timeframe?.window_days || 90} days.`,
+      tone: 'gray',
+    };
+  }
+
+  const allMode = allSummary?.mode_split?.dominant_mode || 'Balanced';
+  const recentMode = recentSummary?.mode_split?.dominant_mode || 'Balanced';
+  const allHome = allSummary?.summary?.home_label || '';
+  const recentHome = recentSummary?.summary?.home_label || '';
+  const allStronghold = allSummary?.sss_strongholds?.[0]?.label || '';
+  const recentStronghold = recentSummary?.sss_strongholds?.[0]?.label || '';
+
+  if (allMode !== recentMode) {
+    if (recentMode === 'Single') {
+      return {
+        title: 'Swinging into Singles',
+        detail: `Recent form is tilting away from the all-time ${String(allMode).toLowerCase()} profile.`,
+        tone: 'rose',
+      };
+    }
+    if (recentMode === 'Double') {
+      return {
+        title: 'Swinging into Doubles',
+        detail: `Recent form is tilting away from the all-time ${String(allMode).toLowerCase()} profile.`,
+        tone: 'emerald',
+      };
+    }
+    return {
+      title: 'Leveling back out',
+      detail: 'Recent form looks more balanced than the all-time profile.',
+      tone: 'sky',
+    };
+  }
+
+  if (allHome && recentHome && allHome !== recentHome) {
+    return {
+      title: 'Home range is moving',
+      detail: `The center of gravity has shifted from ${allHome} to ${recentHome}.`,
+      tone: recentMode === 'Double' ? 'emerald' : recentMode === 'Single' ? 'rose' : 'sky',
+    };
+  }
+
+  if (allStronghold && recentStronghold && allStronghold !== recentStronghold) {
+    return {
+      title: 'New hot spot',
+      detail: `The cleanest recent pocket moved from ${allStronghold} to ${recentStronghold}.`,
+      tone: recentMode === 'Double' ? 'emerald' : recentMode === 'Single' ? 'rose' : 'sky',
+    };
+  }
+
+  return {
+    title: 'Holding the same shape',
+    detail: 'Recent form still looks a lot like the full long-term profile.',
+    tone: recentMode === 'Double' ? 'emerald' : recentMode === 'Single' ? 'rose' : 'sky',
+  };
+}
+
+function getInsightToneClasses(tone) {
+  if (tone === 'rose') {
+    return {
+      border: 'border-rose-400/30',
+      bg: 'bg-rose-500/8',
+      text: 'text-rose-100',
+      eyebrow: 'text-rose-200/80',
+    };
+  }
+  if (tone === 'emerald') {
+    return {
+      border: 'border-emerald-400/30',
+      bg: 'bg-emerald-500/8',
+      text: 'text-emerald-100',
+      eyebrow: 'text-emerald-200/80',
+    };
+  }
+  if (tone === 'sky') {
+    return {
+      border: 'border-sky-400/30',
+      bg: 'bg-sky-500/8',
+      text: 'text-sky-100',
+      eyebrow: 'text-sky-200/80',
+    };
+  }
+  return {
+    border: 'border-white/10',
+    bg: 'bg-white/[0.03]',
+    text: 'text-white',
+    eyebrow: 'text-gray-400',
+  };
+}
+
 function IdentityViewToggle({ view, onChange, meta, loading }) {
   return (
     <div className="flex flex-col items-start gap-2 sm:items-end">
@@ -85,6 +284,23 @@ function IdentityViewToggle({ view, onChange, meta, loading }) {
       </div>
       <p className="max-w-[18rem] text-[11px] leading-relaxed text-gray-500 sm:text-right">
         {loading && meta ? 'Refreshing identity snapshot...' : (meta?.description || '')}
+      </p>
+    </div>
+  );
+}
+
+function InsightCard({ eyebrow, title, detail, tone = 'gray' }) {
+  const toneClasses = getInsightToneClasses(tone);
+  return (
+    <div className={`rounded-[22px] border px-4 py-3 ${toneClasses.border} ${toneClasses.bg}`}>
+      <p className={`text-[10px] font-display font-black uppercase tracking-[0.24em] ${toneClasses.eyebrow}`}>
+        {eyebrow}
+      </p>
+      <p className={`mt-2 text-sm font-display font-black ${toneClasses.text}`}>
+        {title}
+      </p>
+      <p className="mt-2 text-sm leading-relaxed text-gray-400">
+        {detail}
       </p>
     </div>
   );
@@ -385,7 +601,7 @@ function StrongholdDetailSheet({ cluster, timeframeLabel, onClose }) {
 
 export default function PlayerIdentityMapPanel({ userId }) {
   const [view, setView] = useState('all');
-  const [data, setData] = useState(null);
+  const [summaries, setSummaries] = useState({ all: null, recent: null });
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
   const [selectedChartId, setSelectedChartId] = useState('');
@@ -397,14 +613,19 @@ export default function PlayerIdentityMapPanel({ userId }) {
     setLoading(true);
     setReady(false);
 
-    getPlayerIdentitySummary(userId, { view })
-      .then((result) => {
+    Promise.all([
+      getPlayerIdentitySummary(userId, { view: 'all' }).catch(() => null),
+      getPlayerIdentitySummary(userId, { view: 'recent' }).catch(() => null),
+    ])
+      .then(([allSummary, recentSummary]) => {
         if (cancelled) return;
-        setData(result || null);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setData(null);
+        setSummaries({
+          all: allSummary || null,
+          recent: recentSummary || null,
+        });
+        if (!recentSummary && view === 'recent') {
+          setView('all');
+        }
       })
       .finally(() => {
         if (cancelled) return;
@@ -414,7 +635,11 @@ export default function PlayerIdentityMapPanel({ userId }) {
     return () => {
       cancelled = true;
     };
-  }, [userId, view]);
+  }, [userId]);
+
+  const data = summaries?.[view] || summaries?.all || summaries?.recent || null;
+  const allSummary = summaries?.all || null;
+  const recentSummary = summaries?.recent || null;
 
   useEffect(() => {
     if (!data?.signature_jackets?.length) {
@@ -425,7 +650,8 @@ export default function PlayerIdentityMapPanel({ userId }) {
   }, [data]);
 
   useEffect(() => {
-    setSelectedStrongholdKey('');
+    const firstStronghold = Array.isArray(data?.sss_strongholds) ? data.sss_strongholds[0]?.key || '' : '';
+    setSelectedStrongholdKey(firstStronghold);
   }, [data, view]);
 
   useEffect(() => {
@@ -456,6 +682,8 @@ export default function PlayerIdentityMapPanel({ userId }) {
     : (view === 'recent'
       ? `No passing charts landed inside the current ${data?.timeframe?.window_days || 90}-day window.`
       : 'This profile needs synced passing charts before the identity map can take shape.');
+  const archetype = getIdentityArchetype(data, data?.timeframe?.key || view);
+  const shiftInsight = getIdentityShiftInsight(allSummary, recentSummary);
 
   if (!userId) return null;
 
@@ -489,7 +717,7 @@ export default function PlayerIdentityMapPanel({ userId }) {
               view={view}
               onChange={setView}
               meta={data?.timeframe}
-              loading={loading}
+              loading={false}
             />
           </div>
 
@@ -514,7 +742,23 @@ export default function PlayerIdentityMapPanel({ userId }) {
               </p>
             </div>
           ) : (
-            <div className="mt-5 grid gap-6 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+            <div className="mt-5 space-y-5">
+              <div className="grid gap-3 lg:grid-cols-2">
+                <InsightCard
+                  eyebrow="Archetype"
+                  title={archetype.title}
+                  detail={archetype.detail}
+                  tone={archetype.tone}
+                />
+                <InsightCard
+                  eyebrow="Current Shift"
+                  title={shiftInsight.title}
+                  detail={shiftInsight.detail}
+                  tone={shiftInsight.tone}
+                />
+              </div>
+
+              <div className="grid gap-6 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
               <div className="space-y-5">
                 <ModeBiasField summary={data} />
 
@@ -550,12 +794,20 @@ export default function PlayerIdentityMapPanel({ userId }) {
                       Signature jackets from the cleanest part of the profile
                     </p>
                   </div>
-                  <p className="text-[11px] text-gray-500">{formatNumber(data?.totals?.sss_charts)} total SSS / SSS+</p>
+                  <div className="text-right">
+                    <p className="text-[11px] text-gray-500">{formatNumber(data?.totals?.sss_charts)} total SSS / SSS+</p>
+                    {selectedStronghold ? (
+                      <p className="mt-1 text-[10px] text-gray-500">
+                        Focused on <span className="font-display font-black text-piu-accent">{selectedStronghold.label}</span>
+                      </p>
+                    ) : null}
+                  </div>
                 </div>
 
                 <div className="mt-4 grid auto-rows-[56px] grid-cols-4 gap-2 sm:auto-rows-[64px] sm:grid-cols-6">
                   {(data?.signature_jackets || []).map((item, index) => {
                     const isSelected = String(item.chart_id) === String(selectedChartId);
+                    const inSelectedStronghold = !selectedStrongholdKey || selectedStrongholdKey === item.stronghold_key;
                     return (
                       <button
                         key={item.chart_id}
@@ -566,7 +818,9 @@ export default function PlayerIdentityMapPanel({ userId }) {
                         } ${
                           isSelected
                             ? 'border-white/70 ring-1 ring-piu-accent/65'
-                            : 'border-white/10 hover:border-white/35'
+                            : inSelectedStronghold
+                              ? 'border-white/10 hover:border-white/35'
+                              : 'border-white/10 opacity-45 hover:opacity-75'
                         }`}
                       >
                         {item.jacket_url ? (
@@ -635,6 +889,7 @@ export default function PlayerIdentityMapPanel({ userId }) {
                   </div>
                 ) : null}
               </div>
+            </div>
             </div>
           )}
         </div>
