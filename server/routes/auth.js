@@ -57,7 +57,9 @@ function validateTimezone(value) {
 }
 
 function textSnippet(text, max = 90) {
-  const compact = String(text || '').replace(/\s+/g, ' ').trim();
+  const compact = String(text || '')
+    .replace(/\[\[SHINSA_[A-Z0-9_]+_V\d+:[A-Za-z0-9+/=_-]+\]\]/g, '') // strip all rich-card markers
+    .replace(/\s+/g, ' ').trim();
   if (!compact) return '';
   return compact.length > max ? `${compact.slice(0, max - 3)}...` : compact;
 }
@@ -478,17 +480,26 @@ router.post('/register', (req, res) => {
     timezone,
   } = req.body;
 
-  if (!username || !password) {
+  // Normalize username once — used for all checks and insert
+  const normalizedUsername = String(username || '').trim();
+
+  if (!normalizedUsername || !password) {
     return res.status(400).json({ error: 'Username and password are required' });
   }
-  if (username.length < 2 || username.length > 30) {
+  if (normalizedUsername.length < 2 || normalizedUsername.length > 30) {
     return res.status(400).json({ error: 'Username must be 2-30 characters' });
   }
   if (password.length < 4) {
     return res.status(400).json({ error: 'Password must be at least 4 characters' });
   }
 
-  const existing = db.prepare('SELECT id FROM users WHERE LOWER(username) = LOWER(?)').get(username);
+  // Reserved system usernames
+  const RESERVED_USERNAMES = ['__shinsa__'];
+  if (RESERVED_USERNAMES.some(r => r.toLowerCase() === normalizedUsername.toLowerCase())) {
+    return res.status(400).json({ error: 'Username is reserved' });
+  }
+
+  const existing = db.prepare('SELECT id FROM users WHERE LOWER(username) = LOWER(?)').get(normalizedUsername);
   if (existing) {
     return res.status(400).json({ error: 'Username is already taken' });
   }
@@ -509,7 +520,7 @@ router.post('/register', (req, res) => {
       location_country, location_country_code, location_city, location_lat, location_lng, timezone
     )
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, username.trim(), password_hash, email || '', avatar || '', pumbility || 0,
+  `).run(id, normalizedUsername, password_hash, email || '', avatar || '', pumbility || 0,
     skill_title || '', skill_level || 1, gender || '', nationality || '', date_of_birth || '',
     show_age ? 1 : 0, parsedAge.value, parsedHeightCm.value, parsedWeightKg.value, description || '',
     location_country || '', location_country_code || '', location_city || '',

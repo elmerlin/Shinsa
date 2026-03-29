@@ -18,6 +18,8 @@ import { splitSessionSummaryContent, serializeSessionSummaryMarker } from '../ut
 import { splitSessionShareContent, serializeSessionShareMarker } from '../utils/sessionShareMarker';
 import { mergeLiveSessionSummary, splitLiveSessionContent, serializeLiveSessionMarker } from '../utils/liveSessionMarker';
 import { splitSessionPlanContent, serializeSessionPlanMarker } from '../utils/sessionPlanMarker';
+import { splitWcSummaryContent, serializeWcSummaryMarker } from '../utils/weeklyChallengeSummaryMarker';
+import WeeklyChallengeSummaryPostCard from './WeeklyChallengeSummaryPostCard';
 import { buildYouTubeEmbedSrc } from '../utils/youtube';
 import { buildPostLinkShare, parseAchievementBadgePost } from '../utils/directMessageShares';
 
@@ -898,7 +900,8 @@ function CommentSection({ postId, postAuthorId, commentsDisabled, commentCount, 
 // Full Post Card used in Feed and Profile
 export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, isOwner = false, focusCommentId = null }) {
   const { user } = useAuth();
-  const initialSummarySplit = useMemo(() => splitSessionSummaryContent(post.content || ''), [post.content]);
+  const initialWcSummarySplit = useMemo(() => splitWcSummaryContent(post.content || ''), [post.content]);
+  const initialSummarySplit = useMemo(() => splitSessionSummaryContent(initialWcSummarySplit.text || ''), [initialWcSummarySplit.text]);
   const initialShareSplit = useMemo(() => splitSessionShareContent(initialSummarySplit.text || ''), [initialSummarySplit.text]);
   const initialLiveSplit = useMemo(() => splitLiveSessionContent(initialShareSplit.text || ''), [initialShareSplit.text]);
   const [lightboxIndex, setLightboxIndex] = useState(null);
@@ -910,11 +913,13 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
   const [currentYoutubeUrl, setCurrentYoutubeUrl] = useState(post.youtube_url || '');
   const [currentLiveMetrics, setCurrentLiveMetrics] = useState(post.live_summary_metrics || null);
   const [wasEdited, setWasEdited] = useState(!!post.updated_at);
-  const parsedSummary = useMemo(() => splitSessionSummaryContent(currentContent), [currentContent]);
+  const wcSummaryParsed = useMemo(() => splitWcSummaryContent(currentContent), [currentContent]);
+  const parsedSummary = useMemo(() => splitSessionSummaryContent(wcSummaryParsed.text || ''), [wcSummaryParsed.text]);
   const parsedShare = useMemo(() => splitSessionShareContent(parsedSummary.text || ''), [parsedSummary.text]);
   const parsedLive = useMemo(() => splitLiveSessionContent(parsedShare.text || ''), [parsedShare.text]);
   const planParsed = useMemo(() => splitSessionPlanContent(parsedLive.text || ''), [parsedLive.text]);
   const rawVisibleContent = planParsed.text || '';
+  const currentWcSummary = wcSummaryParsed.summary;
   const currentSummary = parsedSummary.summary;
   const currentShare = parsedShare.share;
   const currentLive = useMemo(
@@ -953,11 +958,12 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
   const handleSave = async () => {
     setSaving(true);
     try {
+      const wcSummaryMarker = currentWcSummary ? serializeWcSummaryMarker(currentWcSummary) : '';
       const summaryMarker = currentSummary ? serializeSessionSummaryMarker(currentSummary) : '';
       const shareMarker = currentShare ? serializeSessionShareMarker(currentShare) : '';
       const liveMarker = currentLive ? serializeLiveSessionMarker(currentLive) : '';
       const planMarker = currentPlan ? serializeSessionPlanMarker(currentPlan) : '';
-      const contentToSave = [editContent.trim(), summaryMarker, shareMarker, liveMarker, planMarker].filter(Boolean).join('\n\n');
+      const contentToSave = [editContent.trim(), wcSummaryMarker, summaryMarker, shareMarker, liveMarker, planMarker].filter(Boolean).join('\n\n');
       const updated = await editPost(post.id, { content: contentToSave, youtube_url: editYoutubeUrl });
       setCurrentContent(updated.content || '');
       setCurrentYoutubeUrl(updated.youtube_url || '');
@@ -983,29 +989,43 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-3">
-          {showAuthor && (
-            <Link to={getProfilePath(post.user_id, post.username)}>
-              {post.avatar ? (
-                <img src={getAvatarUrl(post.avatar)} alt="" className="w-9 h-9 rounded-full object-cover border border-piu-border" />
-              ) : (
-                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-sm">
-                  {(post.username || '?')[0].toUpperCase()}
-                </div>
+          {showAuthor && post.user_id === '__shinsa_system__' ? (
+            <>
+              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-piu-gold to-amber-600 flex items-center justify-center font-display font-bold text-sm text-piu-dark">
+                S
+              </div>
+              <div>
+                <span className="font-display font-bold text-sm text-piu-gold">Shinsa</span>
+                <p className="text-[10px] text-gray-500">{timeAgo(post.created_at)}</p>
+              </div>
+            </>
+          ) : (
+            <>
+              {showAuthor && (
+                <Link to={getProfilePath(post.user_id, post.username)}>
+                  {post.avatar ? (
+                    <img src={getAvatarUrl(post.avatar)} alt="" className="w-9 h-9 rounded-full object-cover border border-piu-border" />
+                  ) : (
+                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-piu-accent to-purple-700 flex items-center justify-center font-display font-bold text-sm">
+                      {(post.username || '?')[0].toUpperCase()}
+                    </div>
+                  )}
+                </Link>
               )}
-            </Link>
+              <div>
+                {showAuthor && (
+                  <Link to={getProfilePath(post.user_id, post.username)} className="font-display font-bold text-sm hover:text-piu-accent transition-colors">
+                    {flag && <span className="mr-1">{flag}</span>}
+                    {post.username}
+                  </Link>
+                )}
+                <p className="text-[10px] text-gray-500">
+                  {timeAgo(post.created_at)}
+                  {wasEdited && <span className="ml-1 text-gray-600">(edited)</span>}
+                </p>
+              </div>
+            </>
           )}
-          <div>
-            {showAuthor && (
-              <Link to={getProfilePath(post.user_id, post.username)} className="font-display font-bold text-sm hover:text-piu-accent transition-colors">
-                {flag && <span className="mr-1">{flag}</span>}
-                {post.username}
-              </Link>
-            )}
-            <p className="text-[10px] text-gray-500">
-              {timeAgo(post.created_at)}
-              {wasEdited && <span className="ml-1 text-gray-600">(edited)</span>}
-            </p>
-          </div>
         </div>
         <div className="flex items-center gap-2">
           {canEdit && !editing && (
@@ -1082,6 +1102,9 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
                 <div className="text-sm text-gray-200 whitespace-pre-wrap break-words mb-3 leading-relaxed">
                   {renderFormattedText(visibleContent)}
                 </div>
+              )}
+              {currentWcSummary && (
+                <WeeklyChallengeSummaryPostCard summary={currentWcSummary} className="mb-3" />
               )}
               {currentSummary && (
                 <SessionSummaryCard summary={currentSummary} title="Session Summary" className="mb-3" />

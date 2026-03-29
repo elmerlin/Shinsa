@@ -753,6 +753,8 @@ function bootstrapChangelogEntriesIfEmpty() {
   applySeed(seedEntries);
 }
 
+const SYSTEM_USER_ID = '__shinsa_system__';
+
 function initializeDb() {
   db.exec(`
     CREATE TABLE IF NOT EXISTS tournaments (
@@ -2076,6 +2078,23 @@ function initializeDb() {
   if (!postCols.includes('updated_at')) {
     db.exec("ALTER TABLE user_posts ADD COLUMN updated_at TEXT DEFAULT NULL");
   }
+  if (!postCols.includes('post_kind')) {
+    db.exec("ALTER TABLE user_posts ADD COLUMN post_kind TEXT DEFAULT NULL");
+  }
+  if (!postCols.includes('source_week_id')) {
+    db.exec("ALTER TABLE user_posts ADD COLUMN source_week_id INTEGER DEFAULT NULL");
+  }
+  if (!postCols.includes('target_week_id')) {
+    db.exec("ALTER TABLE user_posts ADD COLUMN target_week_id INTEGER DEFAULT NULL");
+  }
+  if (!postCols.includes('content_hash')) {
+    db.exec("ALTER TABLE user_posts ADD COLUMN content_hash TEXT DEFAULT NULL");
+  }
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_posts_wc_summary
+      ON user_posts(post_kind, source_week_id)
+      WHERE post_kind = 'weekly_challenge_summary'
+  `);
 
   // Migrations for upscore interactions (pumps + comments)
   db.exec(`
@@ -3792,6 +3811,61 @@ function initializeDb() {
     );
   `);
 
+  // Weekly challenge superlatives table
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS weekly_challenge_superlatives (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      week_id INTEGER NOT NULL REFERENCES weekly_challenge_weeks(id) ON DELETE CASCADE,
+      reward_key TEXT NOT NULL,
+      rank INTEGER NOT NULL,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      value REAL NOT NULL DEFAULT 0,
+      detail_json TEXT DEFAULT '{}',
+      username_snapshot TEXT DEFAULT '',
+      avatar_snapshot TEXT DEFAULT '',
+      nationality_snapshot TEXT DEFAULT '',
+      UNIQUE(week_id, reward_key, rank)
+    )
+  `);
+
+  // System user for official posts (weekly challenge summaries, etc.)
+  const PREFERRED_SYSTEM_USERNAME = '__shinsa__';
+  const existingSystemUser = db.prepare('SELECT id, username FROM users WHERE id = ?').get(SYSTEM_USER_ID);
+
+  if (!existingSystemUser) {
+    // First boot: try preferred username, fall back to timestamped name if taken
+    const preferredTaken = db.prepare('SELECT id FROM users WHERE LOWER(username) = LOWER(?)').get(PREFERRED_SYSTEM_USERNAME);
+    const systemUsername = preferredTaken
+      ? `__shinsa_${Date.now()}__`
+      : PREFERRED_SYSTEM_USERNAME;
+
+    if (preferredTaken) {
+      console.warn(`[Schema] System user using fallback username '${systemUsername}' — '${PREFERRED_SYSTEM_USERNAME}' is taken by user ${preferredTaken.id}`);
+    }
+
+    db.prepare(`
+      INSERT INTO users (id, username, password_hash, is_admin, avatar, description)
+      VALUES (?, ?, '', 0, 'system', 'Official Shinsa updates')
+    `).run(SYSTEM_USER_ID, systemUsername);
+  } else {
+    // Row exists from a previous boot. Try to upgrade to preferred username if available,
+    // but DO NOT force-rename if preferred is still taken — keep the fallback username.
+    if (existingSystemUser.username !== PREFERRED_SYSTEM_USERNAME) {
+      const preferredTaken = db.prepare('SELECT id FROM users WHERE LOWER(username) = LOWER(?) AND id != ?')
+        .get(PREFERRED_SYSTEM_USERNAME, SYSTEM_USER_ID);
+      if (!preferredTaken) {
+        db.prepare('UPDATE users SET username = ? WHERE id = ?').run(PREFERRED_SYSTEM_USERNAME, SYSTEM_USER_ID);
+      }
+      // else: preferred still taken, keep current fallback — valid steady state
+    }
+  }
+
+  // Hard check: system user MUST exist for summary posts to work
+  const systemUserRow = db.prepare('SELECT id FROM users WHERE id = ?').get(SYSTEM_USER_ID);
+  if (!systemUserRow) {
+    throw new Error(`[Schema] FATAL: System user '${SYSTEM_USER_ID}' could not be created. Summary posts will fail.`);
+  }
+
   ensureBuiltInAchievementSeries(db);
   bootstrapChangelogEntriesIfEmpty();
 }
@@ -3799,4 +3873,4 @@ function initializeDb() {
 // Prevent route handlers from closing the shared connection
 db.close = () => {};
 
-module.exports = { getDb, initializeDb, DB_PATH };
+module.exports = { getDb, initializeDb, DB_PATH, SYSTEM_USER_ID };

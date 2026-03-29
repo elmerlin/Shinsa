@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const sharp = require('sharp');
-const { getDb } = require('../db/schema');
+const { getDb, SYSTEM_USER_ID } = require('../db/schema');
 const { requireAuth, optionalAuth } = require('./auth');
 const { findMentionedUsers, notifyMentionedUsers } = require('../lib/mentions');
 const { createUserNotification } = require('../lib/notifications');
@@ -39,6 +39,7 @@ function parseBooleanInput(value) {
 
 function stripSessionSummaryMarkers(text) {
   return String(text || '')
+    .replace(/\[\[SHINSA_WC_SUMMARY_V1:[A-Za-z0-9+/=_-]+\]\]/g, '')
     .replace(/\[\[SHINSA_SUMMARY_V1:[A-Za-z0-9+/=_-]+\]\]/g, '')
     .replace(/\[\[SHINSA_SHARE_V1:[A-Za-z0-9+/=_-]+\]\]/g, '')
     .replace(/\[\[SHINSA_LIVE_V1:[A-Za-z0-9+/=_-]+\]\]/g, '')
@@ -1122,13 +1123,16 @@ router.post('/posts/:id/pump', requireAuth, (req, res) => {
   db.prepare('INSERT INTO post_pumps (post_id, user_id) VALUES (?, ?)').run(postId, req.user.id);
   const count = db.prepare('SELECT COUNT(*) as count FROM post_pumps WHERE post_id = ?').get(postId).count;
 
-  // Notify post owner
-  if (post.user_id !== req.user.id) {
+  // Notify post owner (skip for system-user posts — no one to notify, no achievement churn)
+  const isSystemPost = post.user_id === SYSTEM_USER_ID;
+  if (!isSystemPost && post.user_id !== req.user.id) {
     const me = db.prepare('SELECT username FROM users WHERE id = ?').get(req.user.id);
     createNotification(db, post.user_id, 'post_pump', 'New Pump', `${me.username} pumped your post`, `/post/${postId}`);
   }
 
-  checkPumpAchievements(db, post.user_id);
+  if (!isSystemPost) {
+    checkPumpAchievements(db, post.user_id);
+  }
   res.json({ pumped: true, pump_count: count });
 });
 
@@ -1276,7 +1280,7 @@ router.post('/posts/:id/comments', requireAuth, (req, res) => {
       createNotification(db, parentComment.user_id, 'post_reply', 'New Reply', `${me.username} replied to your comment`, commentLink);
     }
   }
-  if (post.user_id !== req.user.id) {
+  if (post.user_id !== req.user.id && post.user_id !== SYSTEM_USER_ID) {
     createNotification(db, post.user_id, 'post_comment', 'New Comment', `${me.username} commented on your post`, commentLink);
   }
 
@@ -1415,8 +1419,15 @@ router.get('/feed', requireAuth, (req, res) => {
     FROM (
       SELECT 'post' as type, p.id, p.created_at
       FROM user_posts p
-      WHERE p.user_id IN (SELECT following_id FROM user_follows WHERE follower_id = ?)
-         OR p.user_id = ?
+      WHERE (p.user_id IN (SELECT following_id FROM user_follows WHERE follower_id = ?)
+         OR p.user_id = ?)
+        AND (p.post_kind IS NULL OR p.post_kind != 'weekly_challenge_summary')
+
+      UNION ALL
+
+      SELECT 'post' as type, p.id, p.created_at
+      FROM user_posts p
+      WHERE p.post_kind = 'weekly_challenge_summary'
 
       UNION ALL
 
@@ -2154,10 +2165,10 @@ router.get('/recent-activity', (req, res) => {
   const db = getDb();
   const activities = [];
 
-  // New user signups (last 50)
+  // New user signups (last 10, excluding system user)
   const newUsers = db.prepare(`
-    SELECT id, username, avatar, nationality, created_at FROM users ORDER BY created_at DESC LIMIT 10
-  `).all();
+    SELECT id, username, avatar, nationality, created_at FROM users WHERE id != ? ORDER BY created_at DESC LIMIT 10
+  `).all(SYSTEM_USER_ID);
   for (const u of newUsers) {
     activities.push({
       type: 'new_user', created_at: u.created_at,
@@ -2210,10 +2221,11 @@ router.get('/recent-activity', (req, res) => {
     });
   }
 
-  // New posts
+  // New posts (exclude weekly challenge summary posts from recent activity)
   const posts = db.prepare(`
     SELECT p.id, p.created_at, p.content, u.id as user_id, u.username, u.avatar, u.nationality
     FROM user_posts p JOIN users u ON p.user_id = u.id
+    WHERE (p.post_kind IS NULL OR p.post_kind != 'weekly_challenge_summary')
     ORDER BY p.created_at DESC LIMIT 10
   `).all();
   for (const p of posts) {

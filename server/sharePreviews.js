@@ -2,9 +2,10 @@ const fs = require('fs');
 const path = require('path');
 const cheerio = require('cheerio');
 const sharp = require('sharp');
-const { getDb } = require('./db/schema');
+const { getDb, SYSTEM_USER_ID } = require('./db/schema');
 const { buildUserAvatarPath, isInlineDataAvatar } = require('./lib/avatarProxy');
 const { splitLiveSessionContent } = require('./lib/liveSessionMarker');
+const { splitWcSummaryContent } = require('./lib/weeklyChallengeSummaryMarker');
 
 const SHARE_MARKER_REGEX = /\[\[SHINSA_SHARE_V1:([A-Za-z0-9+/=_-]+)\]\]/;
 const SUMMARY_MARKER_REGEX = /\[\[SHINSA_SUMMARY_V1:[A-Za-z0-9+/=_-]+\]\]/g;
@@ -68,6 +69,7 @@ function splitSessionShareContent(content) {
 
 function stripPreviewMarkers(content) {
   return String(content || '')
+    .replace(/\[\[SHINSA_WC_SUMMARY_V1:[A-Za-z0-9+/=_-]+\]\]/g, '')
     .replace(SUMMARY_MARKER_REGEX, '')
     .replace(SHARE_MARKER_REGEX, '')
     .replace(/\[\[SHINSA_LIVE_V1:[A-Za-z0-9+/=_-]+\]\]/g, '')
@@ -77,6 +79,12 @@ function stripPreviewMarkers(content) {
 }
 
 function summarizePostContent(post, maxLen = 160) {
+  // Check for WC summary marker first
+  const { summary: wcSummary } = splitWcSummaryContent(post?.content || '');
+  if (wcSummary) {
+    return textSnippet(`${wcSummary.weekLabel} \u2014 ${wcSummary.participantCount} players, ${wcSummary.totalClears} clears`, maxLen);
+  }
+
   const { text: shareStrippedText, share } = splitSessionShareContent(post?.content || '');
   const { text: liveStrippedText, live } = splitLiveSessionContent(shareStrippedText || '');
   const cleanText = textSnippet(stripPreviewMarkers(liveStrippedText || ''), maxLen);
@@ -1793,14 +1801,18 @@ function registerSharePreviewRoutes(app, { clientBuildDir }) {
 
     try {
       const origin = getRequestOrigin(req);
+      const isSystemPost = post.user_id === SYSTEM_USER_ID;
       const brandAssets = await buildBrandAssets({
         clientBuildDir,
         origin,
-        username: post.username,
-        avatar: post.avatar,
+        username: isSystemPost ? '' : post.username,
+        avatar: isSystemPost ? '' : post.avatar,
         userId: post.user_id,
         avatarVersion: post.avatar_v,
       });
+      if (isSystemPost) {
+        brandAssets.usernameLabel = 'Shinsa';
+      }
       const jpeg = await renderPostOgJpeg({
         post,
         brandAssets,
@@ -1845,8 +1857,11 @@ function registerSharePreviewRoutes(app, { clientBuildDir }) {
     const url = `${origin}/post/${postId}`;
     const image = buildPreviewImageUrl(origin, `/og/post/${postId}.jpg`, version);
 
-    const title = post.username ? `@${post.username} on Pump Shinsa` : 'Pump Shinsa Post';
-    const description = summarizePostContent(post, 180) || (post.username ? `View @${post.username}'s post on Pump Shinsa.` : 'View this post on Pump Shinsa.');
+    const isSystemPost = post.user_id === SYSTEM_USER_ID;
+    const title = isSystemPost
+      ? 'Weekly Challenge Recap \u2014 Pump Shinsa'
+      : (post.username ? `@${post.username} on Pump Shinsa` : 'Pump Shinsa Post');
+    const description = summarizePostContent(post, 180) || (isSystemPost ? 'View the weekly challenge recap on Pump Shinsa.' : (post.username ? `View @${post.username}'s post on Pump Shinsa.` : 'View this post on Pump Shinsa.'));
 
     const html = injectSocialMeta(indexHtml, {
       type: 'article',

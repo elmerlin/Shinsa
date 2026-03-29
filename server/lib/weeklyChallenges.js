@@ -6,6 +6,9 @@ const crypto = require('crypto');
 const { calculateRatingPoints, normalizeGrade, gradeFromScore, GRADE_MULTIPLIER, TITLE_REQUIREMENTS } = require('./titleProgress');
 const { isPassRecord } = require('./pumbilityCandidates');
 const { makeChartKey, toCanonicalTitle, normalizeMode } = require('./chartKeys');
+const { buildWeeklyChallengeSummary } = require('./weeklyChallengeSummary');
+const { serializeWcSummaryMarker } = require('./weeklyChallengeSummaryMarker');
+const { SYSTEM_USER_ID } = require('../db/schema');
 
 // Build a lookup from skill_title → skill_family
 const _titleToFamily = {};
@@ -249,32 +252,54 @@ function selectWeeklyCharts(db, weekRow) {
 function ensureCurrentWeeklyChallengeWeek(db, now = new Date()) {
   const { weekKey, startsAtUtc, endsAtUtc } = getWeekBoundary(now);
 
-  // Check if current week already exists
+  // Fast path: week already exists
   let week = db.prepare('SELECT * FROM weekly_challenge_weeks WHERE week_key = ?').get(weekKey);
-  if (week) return week;
-
-  // Finalize any previous active weeks
-  const activeWeeks = db.prepare(
-    "SELECT * FROM weekly_challenge_weeks WHERE status = 'active' AND week_key != ?"
-  ).all(weekKey);
-  for (const aw of activeWeeks) {
-    finalizeWeek(db, aw.id);
+  if (week) {
+    // Repair: publish summaries for any finalized weeks that failed during rollover
+    repairMissingSummaryPosts(db);
+    return week;
   }
 
-  // Create the new week
-  const maxLevel = getGlobalChallengeMaxLevel(db);
-  const result = db.prepare(`
-    INSERT INTO weekly_challenge_weeks (week_key, starts_at_utc, ends_at_utc, challenge_max_level)
-    VALUES (?, ?, ?, ?)
-  `).run(weekKey, startsAtUtc, endsAtUtc, maxLevel);
+  // Atomic rollover: finalize + create + publish in one IMMEDIATE transaction.
+  // .immediate() uses BEGIN IMMEDIATE to acquire the write lock up front.
+  // The re-check inside the transaction handles the in-process race where two
+  // async request handlers both pass the fast-path check.
+  const rollover = db.transaction(() => {
+    // Re-check inside transaction (another request may have won the race)
+    let w = db.prepare('SELECT * FROM weekly_challenge_weeks WHERE week_key = ?').get(weekKey);
+    if (w) return w;
 
-  week = db.prepare('SELECT * FROM weekly_challenge_weeks WHERE id = ?').get(result.lastInsertRowid);
+    // Phase 1: Finalize previous active weeks
+    const activeWeeks = db.prepare(
+      "SELECT * FROM weekly_challenge_weeks WHERE status = 'active' AND week_key != ?"
+    ).all(weekKey);
+    for (const aw of activeWeeks) {
+      finalizeWeek(db, aw.id);
+    }
 
-  // Select charts for this week
-  selectWeeklyCharts(db, week);
+    // Phase 2: Create the new week
+    const maxLevel = getGlobalChallengeMaxLevel(db);
+    const result = db.prepare(`
+      INSERT INTO weekly_challenge_weeks (week_key, starts_at_utc, ends_at_utc, challenge_max_level)
+      VALUES (?, ?, ?, ?)
+    `).run(weekKey, startsAtUtc, endsAtUtc, maxLevel);
+    w = db.prepare('SELECT * FROM weekly_challenge_weeks WHERE id = ?').get(result.lastInsertRowid);
+    selectWeeklyCharts(db, w);
+    w = db.prepare('SELECT * FROM weekly_challenge_weeks WHERE id = ?').get(w.id);
 
-  // Re-fetch with updated chart_count
-  return db.prepare('SELECT * FROM weekly_challenge_weeks WHERE id = ?').get(week.id);
+    // Phase 3: Publish summaries (new week now exists as target)
+    for (const aw of activeWeeks) {
+      try {
+        publishWeeklyChallengeSummary(db, aw.id, w.id);
+      } catch (err) {
+        console.error(`[WC Summary] Publish failed for week ${aw.id}:`, err);
+      }
+    }
+
+    return w;
+  });
+
+  return rollover.immediate();
 }
 
 // ---------------------------------------------------------------------------
@@ -1033,6 +1058,62 @@ function annotateWeeklyChallengePlayRows(db, plays, userId) {
   return plays;
 }
 
+// ---------------------------------------------------------------------------
+// Weekly challenge summary post publishing
+// ---------------------------------------------------------------------------
+
+function publishWeeklyChallengeSummary(db, weekId, targetWeekId) {
+  // Idempotent: skip if summary post already exists for this week
+  const existing = db.prepare(
+    "SELECT id FROM user_posts WHERE post_kind = 'weekly_challenge_summary' AND source_week_id = ?"
+  ).get(weekId);
+  if (existing) return existing.id;
+
+  const result = buildWeeklyChallengeSummary(db, weekId, targetWeekId);
+  if (!result) return null; // empty week or not finalized
+
+  const { payload, contentHash } = result;
+  const markerContent = serializeWcSummaryMarker(payload);
+
+  const insert = db.prepare(`
+    INSERT INTO user_posts (user_id, content, post_kind, source_week_id, target_week_id, content_hash)
+    VALUES (?, ?, 'weekly_challenge_summary', ?, ?, ?)
+  `);
+  const row = insert.run(SYSTEM_USER_ID, markerContent, weekId, targetWeekId, contentHash);
+  console.log(`[WC Summary] Published summary post ${row.lastInsertRowid} for week ${weekId}`);
+  return row.lastInsertRowid;
+}
+
+function repairMissingSummaryPosts(db) {
+  // Only repair finalized weeks that had participants (skip empty weeks to avoid infinite retry)
+  const missing = db.prepare(`
+    SELECT w.id, w.ends_at_utc FROM weekly_challenge_weeks w
+    WHERE w.status = 'finalized'
+      AND EXISTS (
+        SELECT 1 FROM weekly_challenge_leaderboard lb WHERE lb.week_id = w.id
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM user_posts p
+        WHERE p.post_kind = 'weekly_challenge_summary' AND p.source_week_id = w.id
+      )
+  `).all();
+
+  for (const m of missing) {
+    // Find the actual successor week (not current week — keeps target_week_id and payload.nextWeek consistent)
+    const successor = db.prepare(`
+      SELECT id FROM weekly_challenge_weeks
+      WHERE starts_at_utc >= ?
+      ORDER BY starts_at_utc ASC LIMIT 1
+    `).get(m.ends_at_utc);
+    const targetWeekId = successor ? successor.id : null;
+    try {
+      publishWeeklyChallengeSummary(db, m.id, targetWeekId);
+    } catch (err) {
+      console.error(`[WC Summary] Repair failed for week ${m.id}:`, err);
+    }
+  }
+}
+
 module.exports = {
   ensureCurrentWeeklyChallengeWeek,
   aggregateWeeklyResults,
@@ -1047,4 +1128,6 @@ module.exports = {
   getGlobalChallengeMaxLevel,
   annotateWeeklyChallengePlayRows,
   computeIsoWeekKey,
+  publishWeeklyChallengeSummary,
+  repairMissingSummaryPosts,
 };
