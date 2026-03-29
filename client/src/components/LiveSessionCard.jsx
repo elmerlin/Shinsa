@@ -20,7 +20,7 @@ function CompactStat({ label, value, accent = 'text-slate-100' }) {
   );
 }
 
-export default function LiveSessionCard({ summary, className = '', title = 'Shinsa Live Recap', compact = false, flush = false }) {
+export default function LiveSessionCard({ summary, className = '', title = 'Shinsa Live Recap', compact = false, flush = false, postUserId = '' }) {
   if (!summary) return null;
 
   const streamHost = summary.streamUrl
@@ -130,6 +130,7 @@ export default function LiveSessionCard({ summary, className = '', title = 'Shin
         className="mt-3 mb-0 border-rose-400/25 from-rose-500/8 via-orange-500/8 to-transparent"
         compact={compact}
         flush={flush}
+        postUserId={postUserId}
       />
     </div>
   );

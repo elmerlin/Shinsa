@@ -892,6 +892,7 @@ export const deleteNewClearComment = (id) => request(`/social/clears/comments/${
 
 // Social — Play Comments
 export const getPlay = (playId) => request(`/social/plays/${playId}`);
+export const lookupPlay = ({ song_title, mode, level, score, user_id }) => request(`/social/plays/lookup?song_title=${encodeURIComponent(song_title)}&mode=${encodeURIComponent(mode)}&level=${level}&score=${score}&user_id=${encodeURIComponent(user_id)}`);
 export const getPlayComments = (playId) => request(`/social/plays/${playId}/comments`);
 export const addPlayComment = (playId, content, parentId) => request(`/social/plays/${playId}/comments`, { method: 'POST', body: JSON.stringify({ content, parent_id: parentId || null }) });
 export const deletePlayComment = (id) => request(`/social/plays/comments/${id}`, { method: 'DELETE' });

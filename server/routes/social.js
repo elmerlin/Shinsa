@@ -1981,6 +1981,31 @@ router.get('/plays/:id', optionalAuth, (req, res) => {
   res.json(play);
 });
 
+// GET /api/social/plays/lookup — find a play by song/mode/level/score/user
+router.get('/plays/lookup', optionalAuth, (req, res) => {
+  const db = getDb();
+  const { song_title, mode, level, score, user_id } = req.query;
+  if (!song_title || !mode || !level || !score || !user_id) {
+    return res.status(400).json({ error: 'Missing required query parameters' });
+  }
+  const play = db.prepare(`
+    SELECT rp.*, u.username, u.avatar, u.avatar_v, u.skill_title, u.nationality,
+           COALESCE(NULLIF(yt.session_youtube_url, ''), rp.replay_embed_url, '') AS resolved_replay_url,
+           (SELECT COUNT(*) FROM play_comments WHERE play_id = rp.id) as comment_count
+    FROM user_recently_played rp
+    JOIN users u ON rp.user_id = u.id
+    LEFT JOIN songs chart ON chart.title = rp.song_title AND chart.mode = rp.mode AND chart.level = rp.level
+    LEFT JOIN user_chart_youtube_links yt ON yt.user_id = rp.user_id AND yt.chart_id = chart.id
+    WHERE rp.user_id = ? AND rp.song_title = ? AND rp.mode = ? AND rp.level = ? AND rp.score = ?
+    ORDER BY rp.id DESC LIMIT 1
+  `).get(user_id, song_title, mode, parseInt(level), parseInt(score));
+  if (!play) return res.status(404).json({ error: 'Play not found' });
+  play.avatar = normalizeUserAvatarForList(play.avatar, play.user_id, 40, play.avatar_v);
+  if (play.resolved_replay_url) play.replay_embed_url = play.resolved_replay_url;
+  delete play.resolved_replay_url;
+  res.json(play);
+});
+
 // GET /api/social/plays/:id/comments — threaded comments with pump counts
 router.get('/plays/:id/comments', optionalAuth, (req, res) => {
   const db = getDb();

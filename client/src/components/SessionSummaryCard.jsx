@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import PiuChartJacket from './PiuChartJacket';
 import ScoreSnapshotModal from './ScoreSnapshotModal';
-import { getChartKeyMap } from '../utils/api';
+import { getChartKeyMap, lookupPlay } from '../utils/api';
 import { buildScoreSnapshotLinkShare } from '../utils/directMessageShares';
 
 function formatNumber(value) {
@@ -156,6 +156,7 @@ export default function SessionSummaryCard({
   actions = null,
   compact = false,
   flush = false,
+  postUserId = '',
 }) {
   const [topPlaysExpanded, setTopPlaysExpanded] = useState(false);
   const [selectedScore, setSelectedScore] = useState(null);
@@ -167,42 +168,61 @@ export default function SessionSummaryCard({
 
   const handleRowClick = useMemo(() => {
     if (!chartKeyMap) return null;
-    return (row) => {
+    return async (row) => {
       const norm = (row.song_title || '').toLowerCase().replace(/\s+/g, ' ').trim();
       const level = row._level ?? row.level;
+      const score = row._score ?? row.score;
       const exactKey = `${norm}|${row.mode}|${level}`;
       const chartId = chartKeyMap[exactKey] || chartKeyMap[norm];
       const chartLink = chartId ? `/songs/chart/${chartId}` : `/songs?q=${encodeURIComponent(row.song_title || '')}`;
       const jacketUrl = row.jacket_url || row._jacketUrl || '';
+
+      // Try to fetch full play data from server for enrichment
+      let enriched = null;
+      const userId = row.user_id || postUserId || '';
+      if (userId && row.song_title && score > 0) {
+        try {
+          enriched = await lookupPlay({
+            song_title: row.song_title,
+            mode: row.mode,
+            level,
+            score,
+            user_id: userId,
+          });
+        } catch {}
+      }
+
+      const base = enriched || row;
       const scoreObj = {
-        ...row,
-        song_title: row.song_title,
-        score: row._score ?? row.score,
-        new_score: row._score ?? row.score,
-        grade: row._grade ?? row.grade,
-        new_grade: row._grade ?? row.grade,
-        mode: row.mode,
-        level,
-        replay_embed_url: row.replay_embed_url || '',
-        replay_video_id: row.replay_video_id || '',
-        machine_name: row.machine_name || summary?.sessionMachineName || '',
-        date_played: row.date_played || summary?.sessionDateLabel || '',
-        user_id: row.user_id || '',
-        _jacketUrl: jacketUrl,
+        ...base,
+        song_title: base.song_title || row.song_title,
+        score: base.score ?? score,
+        new_score: base.score ?? score,
+        grade: base.grade || row._grade || row.grade || '',
+        new_grade: base.grade || row._grade || row.grade || '',
+        mode: base.mode || row.mode,
+        level: base.level ?? level,
+        replay_embed_url: base.replay_embed_url || row.replay_embed_url || '',
+        replay_video_id: base.replay_video_id || row.replay_video_id || '',
+        machine_name: base.machine_name || row.machine_name || summary?.sessionMachineName || '',
+        date_played: base.played_at_utc || base.date_played || row.date_played || summary?.sessionDateLabel || '',
+        user_id: base.user_id || userId,
+        username: base.username || '',
+        _jacketUrl: base.background_url || jacketUrl,
         _chartLink: chartLink,
-        _playId: row.play_id || 0,
+        _playId: base.id || row.play_id || 0,
       };
       scoreObj._linkShare = buildScoreSnapshotLinkShare({
         kind: 'score_snapshot',
         score: scoreObj,
         path: chartLink,
         chartPath: chartLink,
-        jacketUrl,
-        replayUrl: row.replay_embed_url || '',
+        jacketUrl: scoreObj._jacketUrl,
+        replayUrl: scoreObj.replay_embed_url || '',
       });
       setSelectedScore(scoreObj);
     };
-  }, [chartKeyMap, summary]);
+  }, [chartKeyMap, summary, postUserId]);
 
   if (!summary) return null;
   return (

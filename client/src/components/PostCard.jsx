@@ -1107,7 +1107,7 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
                 <WeeklyChallengePersonalCard personal={currentWcPersonal} className="mb-3" flush />
               )}
               {currentSummary && (
-                <SessionSummaryCard summary={currentSummary} title="Session Summary" className="mb-3" flush />
+                <SessionSummaryCard summary={currentSummary} title="Session Summary" className="mb-3" flush postUserId={post.user_id} />
               )}
               {currentShare && (
                 <SessionShareCard
@@ -1125,7 +1125,7 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
                 />
               )}
               {currentLive && (
-                <LiveSessionCard summary={currentLive} title="Shinsa Live Recap" className="mb-3" flush />
+                <LiveSessionCard summary={currentLive} title="Shinsa Live Recap" className="mb-3" flush postUserId={post.user_id} />
               )}
               {currentPlan && (
                 <SessionPlanCard plan={currentPlan} className="mb-3" defaultScoringExpanded={false} defaultPassingExpanded={false} flush />
