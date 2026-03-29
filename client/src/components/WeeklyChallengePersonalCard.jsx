@@ -109,9 +109,11 @@ export default function WeeklyChallengePersonalCard({ personal, className = '', 
               <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-white/[0.08] bg-piu-card">
                 {highestRatedPlay.jacketUrl ? (
                   <PiuChartJacket
+                    title={highestRatedPlay.songTitle}
+                    mode={highestRatedPlay.mode}
+                    level={highestRatedPlay.level}
                     jacketUrl={highestRatedPlay.jacketUrl}
-                    songTitle={highestRatedPlay.songTitle}
-                    size={48}
+                    size="md"
                   />
                 ) : (
                   <div className="flex h-full w-full items-center justify-center font-display text-base font-black text-white/40">
