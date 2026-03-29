@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import PiuChartJacket from './PiuChartJacket';
 import ScoreSnapshotModal from './ScoreSnapshotModal';
 import { getChartKeyMap } from '../utils/api';
+import { buildScoreSnapshotLinkShare } from '../utils/directMessageShares';
 
 function formatNumber(value) {
   return (parseInt(value, 10) || 0).toLocaleString();
@@ -168,22 +169,40 @@ export default function SessionSummaryCard({
     if (!chartKeyMap) return null;
     return (row) => {
       const norm = (row.song_title || '').toLowerCase().replace(/\s+/g, ' ').trim();
-      const exactKey = `${norm}|${row.mode}|${row._level ?? row.level}`;
+      const level = row._level ?? row.level;
+      const exactKey = `${norm}|${row.mode}|${level}`;
       const chartId = chartKeyMap[exactKey] || chartKeyMap[norm];
       const chartLink = chartId ? `/songs/chart/${chartId}` : `/songs?q=${encodeURIComponent(row.song_title || '')}`;
-      setSelectedScore({
+      const jacketUrl = row.jacket_url || row._jacketUrl || '';
+      const scoreObj = {
         ...row,
         song_title: row.song_title,
         score: row._score ?? row.score,
+        new_score: row._score ?? row.score,
         grade: row._grade ?? row.grade,
+        new_grade: row._grade ?? row.grade,
         mode: row.mode,
-        level: row._level ?? row.level,
+        level,
         replay_embed_url: row.replay_embed_url || '',
-        _jacketUrl: row.jacket_url || row._jacketUrl || '',
+        replay_video_id: row.replay_video_id || '',
+        machine_name: row.machine_name || summary?.sessionMachineName || '',
+        date_played: row.date_played || summary?.sessionDateLabel || '',
+        user_id: row.user_id || '',
+        _jacketUrl: jacketUrl,
         _chartLink: chartLink,
+        _playId: row.play_id || 0,
+      };
+      scoreObj._linkShare = buildScoreSnapshotLinkShare({
+        kind: 'score_snapshot',
+        score: scoreObj,
+        path: chartLink,
+        chartPath: chartLink,
+        jacketUrl,
+        replayUrl: row.replay_embed_url || '',
       });
+      setSelectedScore(scoreObj);
     };
-  }, [chartKeyMap]);
+  }, [chartKeyMap, summary]);
 
   if (!summary) return null;
   return (
@@ -207,16 +226,13 @@ export default function SessionSummaryCard({
         {actions ? <div className="flex items-center gap-1">{actions}</div> : null}
       </div>
 
-      {(summary.trainingLoad || 0) > 0 ? (
-        <div className="mt-3 inline-flex rounded-lg border border-amber-400/30 bg-amber-500/10 px-2.5 py-1.5">
-          <div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3">
+        {(summary.trainingLoad || 0) > 0 ? (
+          <div className="rounded-lg border border-amber-400/30 bg-amber-500/10 px-2.5 py-2">
             <p className="text-[9px] text-amber-400/70 font-display uppercase tracking-wide">Training Load</p>
             <p className="text-sm font-display font-bold text-amber-300 tabular-nums">{formatNumber(summary.trainingLoad)}</p>
           </div>
-        </div>
-      ) : null}
-
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3">
+        ) : null}
         <Stat label="Songs" value={summary.songCount} />
         <Stat label="Clears" value={`${summary.clearCount} (${summary.clearRate}%)`} />
         <Stat label="Steps" value={formatNumber(summary.totalSteps)} />
@@ -309,6 +325,8 @@ export default function SessionSummaryCard({
         chartLink={selectedScore._chartLink || ''}
         onClose={() => setSelectedScore(null)}
         modalLabel="Play details"
+        directMessageLinkShare={selectedScore._linkShare || null}
+        playId={selectedScore._playId || null}
       />
     ) : null}
     </>

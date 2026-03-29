@@ -104,10 +104,23 @@ function sanitizeTopSong(play, rating = 0) {
     level: toInt(play?.level),
     score: toInt(play?.score),
     grade: String(resolvePlayGrade(play) || ''),
+    plate: String(play?.plate || ''),
     rating: Math.max(0, toInt(rating)),
     over_top100_rank: toInt(play?.over_top100_rank),
     jacket_url: String(play?.jacket_url || play?.background_url || ''),
     weekly_challenge_week_key: String(play?.weekly_challenge_week_key || ''),
+    replay_embed_url: String(play?.replay_embed_url || ''),
+    replay_video_id: String(play?.replay_video_id || ''),
+    perfect: toInt(play?.perfect),
+    great: toInt(play?.great),
+    good: toInt(play?.good),
+    bad: toInt(play?.bad),
+    miss: toInt(play?.miss),
+    max_combo: toInt(play?.max_combo),
+    machine_name: String(play?.machine_name || ''),
+    date_played: String(play?.date_played || play?.played_at_utc || ''),
+    play_id: toInt(play?.id),
+    user_id: String(play?.user_id || ''),
   };
 }
 

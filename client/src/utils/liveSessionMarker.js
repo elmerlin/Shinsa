@@ -38,9 +38,22 @@ function sanitizeSongRows(rows) {
     level: toInt(row?.level),
     score: toInt(row?.score),
     grade: String(row?.grade || ''),
+    plate: String(row?.plate || ''),
     rating: toInt(row?.rating),
     over_top100_rank: toInt(row?.over_top100_rank),
     jacket_url: String(row?.jacket_url || ''),
+    replay_embed_url: String(row?.replay_embed_url || ''),
+    replay_video_id: String(row?.replay_video_id || ''),
+    perfect: toInt(row?.perfect),
+    great: toInt(row?.great),
+    good: toInt(row?.good),
+    bad: toInt(row?.bad),
+    miss: toInt(row?.miss),
+    max_combo: toInt(row?.max_combo),
+    machine_name: String(row?.machine_name || ''),
+    date_played: String(row?.date_played || ''),
+    play_id: toInt(row?.play_id),
+    user_id: String(row?.user_id || ''),
   }));
 }
 
