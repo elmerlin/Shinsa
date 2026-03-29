@@ -255,26 +255,26 @@ function getInsightToneClasses(tone) {
     };
   }
   return {
-    border: 'border-white/10',
+    border: 'border-white/[0.08]',
     bg: 'bg-white/[0.03]',
     text: 'text-white',
-    eyebrow: 'text-gray-400',
+    eyebrow: 'text-white/50',
   };
 }
 
 function IdentityViewToggle({ view, onChange, meta, loading }) {
   return (
     <div className="flex flex-col items-start gap-2 sm:items-end">
-      <div className="inline-flex rounded-full border border-piu-border/60 bg-[#0b1322]/85 p-1">
+      <div className="inline-flex rounded-lg border border-piu-border/50 bg-piu-card p-1">
         {VIEW_OPTIONS.map((option) => (
           <button
             key={option.key}
             type="button"
             onClick={() => onChange(option.key)}
-            className={`rounded-full px-3 py-1.5 text-[11px] font-display font-black transition-colors ${
+            className={`rounded-md px-3 py-1.5 text-[11px] font-display font-black transition-colors ${
               view === option.key
                 ? 'bg-piu-accent text-white'
-                : 'text-gray-400 hover:text-white'
+                : 'text-white/50 hover:text-white'
             }`}
             aria-pressed={view === option.key}
           >
@@ -282,7 +282,7 @@ function IdentityViewToggle({ view, onChange, meta, loading }) {
           </button>
         ))}
       </div>
-      <p className="max-w-[18rem] text-[11px] leading-relaxed text-gray-500 sm:text-right">
+      <p className="max-w-[18rem] text-[11px] leading-relaxed text-white/40 sm:text-right">
         {loading && meta ? 'Refreshing identity snapshot...' : (meta?.description || '')}
       </p>
     </div>
@@ -292,14 +292,14 @@ function IdentityViewToggle({ view, onChange, meta, loading }) {
 function InsightCard({ eyebrow, title, detail, tone = 'gray' }) {
   const toneClasses = getInsightToneClasses(tone);
   return (
-    <div className={`rounded-[22px] border px-4 py-3 ${toneClasses.border} ${toneClasses.bg}`}>
-      <p className={`text-[10px] font-display font-black uppercase tracking-[0.24em] ${toneClasses.eyebrow}`}>
+    <div className={`rounded-xl border px-4 py-3 ${toneClasses.border} ${toneClasses.bg}`}>
+      <p className={`text-[10px] font-display font-black uppercase tracking-[0.14em] ${toneClasses.eyebrow}`}>
         {eyebrow}
       </p>
       <p className={`mt-2 text-sm font-display font-black ${toneClasses.text}`}>
         {title}
       </p>
-      <p className="mt-2 text-sm leading-relaxed text-gray-400">
+      <p className="mt-2 text-sm leading-relaxed text-white/60">
         {detail}
       </p>
     </div>
@@ -354,19 +354,19 @@ function EvolutionTimelineStrip({ points, selectedKey, onSelect }) {
               key={point.key}
               type="button"
               onClick={() => onSelect(point.key)}
-              className={`group flex w-[88px] shrink-0 snap-start flex-col rounded-[22px] border px-2.5 py-3 text-left transition-all duration-200 ${
+              className={`group flex w-[88px] shrink-0 snap-start flex-col rounded-xl border px-2.5 py-3 text-left transition-all duration-200 ${
                 selected
-                  ? `${toneClasses.border} bg-white/[0.06] shadow-[0_10px_24px_rgba(0,0,0,0.22)]`
-                  : 'border-white/8 bg-[#0a1220]/78 hover:border-white/18 hover:bg-white/[0.04]'
+                  ? `${toneClasses.border} bg-white/[0.06] shadow-lg`
+                  : 'border-white/[0.06] bg-piu-dark/78 hover:border-white/15 hover:bg-white/[0.04]'
               } ${point.has_data ? '' : 'opacity-55'}`}
             >
-              <span className={`text-[10px] font-display font-black uppercase tracking-[0.18em] ${
-                selected ? toneClasses.eyebrow : 'text-gray-500'
+              <span className={`text-[10px] font-display font-black uppercase tracking-wide ${
+                selected ? toneClasses.eyebrow : 'text-white/40'
               }`}>
                 {point.is_current ? 'Now' : formatTimelineDate(point.start_date)}
               </span>
 
-              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/8">
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
                 <div className="flex h-full w-full">
                   <div
                     className="h-full bg-gradient-to-r from-rose-300 via-rose-400 to-fuchsia-500"
@@ -380,7 +380,7 @@ function EvolutionTimelineStrip({ points, selectedKey, onSelect }) {
               </div>
 
               <div className="mt-3 flex h-[70px] items-end justify-center">
-                <div className="relative flex h-[70px] w-10 items-end justify-center rounded-full border border-white/8 bg-[#050a14] px-1.5 py-1">
+                <div className="relative flex h-[70px] w-10 items-end justify-center rounded-full border border-white/[0.06] bg-piu-bg px-1.5 py-1">
                   <div
                     className={`w-full rounded-full ${
                       tone === 'emerald'
@@ -392,12 +392,12 @@ function EvolutionTimelineStrip({ points, selectedKey, onSelect }) {
                     style={{ height: `${barHeight}px` }}
                   />
                   {point.sss_charts > 0 ? (
-                    <span className="absolute -top-1 right-0 h-2.5 w-2.5 rounded-full bg-sky-300 ring-2 ring-[#0a1220]" />
+                    <span className="absolute -top-1 right-0 h-2.5 w-2.5 rounded-full bg-sky-300 ring-2 ring-piu-bg" />
                   ) : null}
                 </div>
               </div>
 
-              <span className="mt-3 line-clamp-2 text-[11px] leading-tight text-gray-300">
+              <span className="mt-3 line-clamp-2 text-[11px] leading-tight text-white/70">
                 {point.focus_label || point.home_label || (point.has_data ? point.dominant_label : 'Quiet week')}
               </span>
             </button>
@@ -421,16 +421,16 @@ function EvolutionPointDetail({ point }) {
   ].filter(Boolean);
 
   return (
-    <div className={`rounded-[24px] border px-4 py-4 ${toneClasses.border} bg-[#0b1322]/78`}>
+    <div className={`rounded-2xl border px-4 py-4 ${toneClasses.border} bg-piu-dark/78`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className={`text-[10px] font-display font-black uppercase tracking-[0.24em] ${toneClasses.eyebrow}`}>
+          <p className={`text-[10px] font-display font-black uppercase tracking-[0.14em] ${toneClasses.eyebrow}`}>
             {point.is_current ? 'Current snapshot' : formatTimelineRange(point.start_date, point.end_date, point.is_current)}
           </p>
           <h3 className={`mt-2 text-lg font-display font-black ${toneClasses.text}`}>
             {point.has_data ? (point.home_label || point.dominant_label || 'Recent shape') : 'No passing charts yet'}
           </h3>
-          <p className="mt-2 text-sm leading-relaxed text-gray-400">
+          <p className="mt-2 text-sm leading-relaxed text-white/60">
             {point.has_data
               ? (point.detail_label || `By this point, the profile had ${formatNumber(point.passed_charts)} passing charts and ${formatNumber(point.sss_charts)} SSS results in the current stretch.`)
               : 'No synced passing charts had landed by this point in the timeline yet.'}
@@ -438,13 +438,13 @@ function EvolutionPointDetail({ point }) {
         </div>
 
         <div className="text-right">
-          <p className="text-[10px] font-display font-black uppercase tracking-[0.18em] text-gray-500">
+          <p className="text-[10px] font-display font-black uppercase tracking-wide text-white/40">
             Cumulative
           </p>
           <p className="mt-1 text-sm font-display font-black text-white">
             {formatNumber(point.passed_charts)} clears
           </p>
-          <p className="mt-1 text-xs text-gray-400">
+          <p className="mt-1 text-xs text-white/60">
             {formatNumber(point.sss_charts)} SSS / SSS+
           </p>
         </div>
@@ -455,7 +455,7 @@ function EvolutionPointDetail({ point }) {
           {chips.map((chip) => (
             <span
               key={chip.key}
-              className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-display font-black text-gray-200"
+              className="inline-flex items-center rounded-full border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[11px] font-display font-black text-white/80"
             >
               {chip.label}
             </span>
@@ -465,7 +465,7 @@ function EvolutionPointDetail({ point }) {
 
       {point.signature_jackets?.length > 0 ? (
         <div className="mt-4">
-          <p className="text-[10px] font-display font-black uppercase tracking-[0.2em] text-gray-500">
+          <p className="text-[10px] font-display font-black uppercase tracking-[0.14em] text-white/40">
             Songs shaping this point
           </p>
           <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
@@ -473,18 +473,18 @@ function EvolutionPointDetail({ point }) {
               <Link
                 key={`${point.key}-${item.chart_id}`}
                 to={item.chart_id ? `/songs/chart/${item.chart_id}` : '#'}
-                className="group relative block h-16 w-16 shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-[#101726]"
+                className="group relative block h-16 w-16 shrink-0 overflow-hidden rounded-2xl border border-white/[0.08] bg-piu-card"
               >
                 {item.jacket_url ? (
                   <img
                     src={item.jacket_url}
                     alt={item.title || 'Song jacket'}
-                    className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.04]"
+                    className="h-full w-full object-cover"
                     loading="lazy"
                     decoding="async"
                   />
                 ) : (
-                  <div className="flex h-full w-full items-center justify-center font-display text-lg font-black text-gray-500">
+                  <div className="flex h-full w-full items-center justify-center font-display text-lg font-black text-white/40">
                     {(item.title || '?').charAt(0).toUpperCase() || '?'}
                   </div>
                 )}
@@ -497,7 +497,7 @@ function EvolutionPointDetail({ point }) {
           </div>
 
           {point.feature_chart?.title ? (
-            <p className="mt-3 text-xs text-gray-400">
+            <p className="mt-3 text-xs text-white/60">
               Featured chart: <span className="font-display font-black text-white">{point.feature_chart.title}</span>
             </p>
           ) : null}
@@ -511,16 +511,16 @@ function EvolutionHighlights({ highlights, onSelect }) {
   const list = Array.isArray(highlights) ? highlights : [];
 
   return (
-    <section className="rounded-[24px] border border-white/8 bg-white/[0.03] px-4 py-4">
-      <p className="text-[11px] font-display font-black uppercase tracking-[0.22em] text-gray-500">
+    <section className="rounded-2xl border border-white/[0.06] bg-white/[0.03] px-4 py-4">
+      <p className="text-[11px] font-display font-black uppercase tracking-[0.14em] text-white/40">
         Breakthroughs
       </p>
-      <p className="mt-1 text-sm text-gray-400">
+      <p className="mt-1 text-sm text-white/60">
         The moments that explain how the profile shape changed.
       </p>
 
       {list.length === 0 ? (
-        <p className="mt-4 text-sm text-gray-500">
+        <p className="mt-4 text-sm text-white/40">
           More recent play data will turn this into a clearer progression story.
         </p>
       ) : (
@@ -532,10 +532,10 @@ function EvolutionHighlights({ highlights, onSelect }) {
                 key={item.key}
                 type="button"
                 onClick={() => onSelect(item.point_key)}
-                className="flex w-full items-start gap-3 rounded-[20px] border border-white/8 bg-[#0a1220]/72 px-3 py-3 text-left transition-colors hover:border-white/18 hover:bg-white/[0.04]"
+                className="flex w-full items-start gap-3 rounded-xl border border-white/[0.06] bg-piu-dark/70 px-3 py-3 text-left transition-colors hover:border-white/15 hover:bg-white/[0.04]"
               >
                 {item.chart?.jacket_url ? (
-                  <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-[#101726]">
+                  <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl border border-white/[0.08] bg-piu-card">
                     <img
                       src={item.chart.jacket_url}
                       alt={item.chart.title || 'Song jacket'}
@@ -548,13 +548,13 @@ function EvolutionHighlights({ highlights, onSelect }) {
                 ) : null}
 
                 <div className="min-w-0 flex-1">
-                  <p className={`text-[10px] font-display font-black uppercase tracking-[0.2em] ${toneClasses.eyebrow}`}>
+                  <p className={`text-[10px] font-display font-black uppercase tracking-[0.14em] ${toneClasses.eyebrow}`}>
                     {item.eyebrow}
                   </p>
                   <p className={`mt-1 text-sm font-display font-black ${toneClasses.text}`}>
                     {item.title}
                   </p>
-                  <p className="mt-1 text-xs leading-relaxed text-gray-400">
+                  <p className="mt-1 text-xs leading-relaxed text-white/60">
                     {item.detail}
                   </p>
                 </div>
@@ -571,23 +571,23 @@ function IdentityEvolutionSection({ evolution, selectedKey, onSelect, selectedPo
   if (!evolution) return null;
 
   return (
-    <section className="border-t border-white/8 pt-4">
+    <section className="border-t border-white/[0.06] pt-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-[11px] font-display font-black uppercase tracking-[0.22em] text-gray-500">
+          <p className="text-[11px] font-display font-black uppercase tracking-[0.14em] text-white/40">
             Identity Evolution
           </p>
-          <p className="mt-1 max-w-2xl text-sm text-gray-400">
+          <p className="mt-1 max-w-2xl text-sm text-white/60">
             {evolution.description}
           </p>
         </div>
-        <p className="text-[11px] text-gray-500">
+        <p className="text-[11px] text-white/40">
           {formatTimelineRange(evolution.start_date, evolution.end_date, true)}
         </p>
       </div>
 
       {!evolution?.has_data ? (
-        <p className="mt-4 text-sm text-gray-500">
+        <p className="mt-4 text-sm text-white/40">
           There is not enough recent passing-chart activity yet to draw a trajectory.
         </p>
       ) : (
@@ -616,10 +616,10 @@ function ModeBiasField({ summary }) {
   const dominantMode = summary?.mode_split?.dominant_mode || 'Balanced';
 
   return (
-    <div className="relative overflow-hidden rounded-[28px] border border-piu-border/60 bg-[#09101d] px-4 py-4 sm:px-5 sm:py-5">
+    <div className="relative overflow-hidden rounded-2xl border border-piu-border/50 bg-piu-dark px-4 py-4 sm:px-5 sm:py-5">
       <div className="pointer-events-none absolute inset-0 opacity-90">
         <div
-          className="absolute inset-y-3 left-3 rounded-[24px] blur-[1px]"
+          className="absolute inset-y-3 left-3 rounded-2xl blur-[1px]"
           style={{
             width: leftWidth,
             background: getModeAccent('Single').fill,
@@ -627,7 +627,7 @@ function ModeBiasField({ summary }) {
           }}
         />
         <div
-          className="absolute inset-y-3 right-3 rounded-[24px] blur-[1px]"
+          className="absolute inset-y-3 right-3 rounded-2xl blur-[1px]"
           style={{
             width: rightWidth,
             background: getModeAccent('Double').fill,
@@ -640,19 +640,19 @@ function ModeBiasField({ summary }) {
       <div className="relative z-10 flex min-h-[220px] flex-col justify-between">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-[10px] font-display font-black uppercase tracking-[0.3em] text-piu-accent/80">
+            <p className="text-[10px] font-display font-black uppercase tracking-[0.14em] text-piu-accent/80">
               Arcade DNA
             </p>
             <h3 className="mt-2 text-xl font-display font-black text-white sm:text-2xl">
               {summary?.summary?.dominant_label || 'Player identity'}
             </h3>
-            <p className="mt-2 max-w-[22rem] text-xs leading-relaxed text-slate-300 sm:text-sm">
+            <p className="mt-2 max-w-[22rem] text-xs leading-relaxed text-white/70 sm:text-sm">
               {summary?.summary?.detail_label || ''}
             </p>
           </div>
 
           <div className="hidden shrink-0 sm:block text-right">
-            <p className="text-[10px] font-display font-black uppercase tracking-[0.22em] text-gray-500">
+            <p className="text-[10px] font-display font-black uppercase tracking-[0.14em] text-white/40">
               SSS charts
             </p>
             <p className="mt-1 text-2xl font-display font-black text-white">
@@ -663,11 +663,11 @@ function ModeBiasField({ summary }) {
 
         <div className="grid gap-3 pt-4 sm:grid-cols-3 sm:items-end">
           <div className="sm:col-span-2">
-            <div className="flex items-center justify-between text-[10px] font-display font-black uppercase tracking-[0.18em] text-gray-300">
+            <div className="flex items-center justify-between text-[10px] font-display font-black uppercase tracking-wide text-white/70">
               <span className="text-rose-200">Singles {formatPercent(singleShare)}</span>
               <span className="text-emerald-200">Doubles {formatPercent(doubleShare)}</span>
             </div>
-            <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-white/8">
+            <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-white/[0.06]">
               <div className="flex h-full">
                 <div
                   className="h-full bg-gradient-to-r from-rose-300 via-rose-400 to-fuchsia-500"
@@ -682,7 +682,7 @@ function ModeBiasField({ summary }) {
           </div>
 
           <div className="sm:text-right">
-            <p className="text-[10px] font-display font-black uppercase tracking-[0.18em] text-gray-500">
+            <p className="text-[10px] font-display font-black uppercase tracking-wide text-white/40">
               Signature feel
             </p>
             <p className={`mt-1 text-sm font-display font-black ${
@@ -711,18 +711,18 @@ function ModeColumn({ title, mode, details, timeframeKey }) {
     : (compLevel > 0 ? `${mode === 'Double' ? 'D' : 'S'}${compLevel}` : '--');
 
   return (
-    <section className="border-t border-white/8 pt-4">
+    <section className="border-t border-white/[0.06] pt-4">
       <div className="flex items-end justify-between gap-3">
         <div>
-          <p className={`text-[11px] font-display font-black uppercase tracking-[0.22em] ${accent.text}`}>
+          <p className={`text-[11px] font-display font-black uppercase tracking-[0.14em] ${accent.text}`}>
             {title}
           </p>
-          <p className="mt-1 text-[11px] text-gray-400">
+          <p className="mt-1 text-[11px] text-white/60">
             {details?.home_range || 'No established home range yet'}
           </p>
         </div>
         <div className="text-right">
-          <p className="text-[10px] font-display font-black uppercase tracking-[0.18em] text-gray-500">
+          <p className="text-[10px] font-display font-black uppercase tracking-wide text-white/40">
             {metricLabel}
           </p>
           <p className={`mt-1 text-lg font-display font-black ${accent.text}`}>
@@ -738,7 +738,7 @@ function ModeColumn({ title, mode, details, timeframeKey }) {
               <span className={`text-xs font-display font-black ${accent.text}`}>{row.label}</span>
             </div>
             <div className="flex-1">
-              <div className="h-2 overflow-hidden rounded-full bg-white/8">
+              <div className="h-2 overflow-hidden rounded-full bg-white/[0.06]">
                 <div
                   className={`h-full rounded-full ${mode === 'Double' ? 'bg-gradient-to-r from-emerald-300 to-teal-500' : 'bg-gradient-to-r from-rose-300 to-fuchsia-500'}`}
                   style={{ width: `${Math.max(10, clamp01(row.share) * 100)}%` }}
@@ -746,14 +746,14 @@ function ModeColumn({ title, mode, details, timeframeKey }) {
               </div>
             </div>
             <div className="w-16 shrink-0 text-right">
-              <p className="text-[11px] font-mono text-gray-200">{formatNumber(row.cleared_charts)}</p>
+              <p className="text-[11px] font-mono text-white/80">{formatNumber(row.cleared_charts)}</p>
               <p className={`text-[10px] font-display font-black ${getGradeTone(row.average_grade)}`}>
                 {row.average_grade || '--'}
               </p>
             </div>
           </div>
         )) : (
-          <p className="text-sm text-gray-500">No synced passing charts yet.</p>
+          <p className="text-sm text-white/40">No synced passing charts yet.</p>
         )}
       </div>
     </section>
@@ -763,23 +763,23 @@ function ModeColumn({ title, mode, details, timeframeKey }) {
 function StrongholdRow({ strongholds, selectedKey, onSelect }) {
   if (!Array.isArray(strongholds) || strongholds.length === 0) {
     return (
-      <section className="border-t border-white/8 pt-4">
-        <p className="text-[11px] font-display font-black uppercase tracking-[0.22em] text-gray-500">
+      <section className="border-t border-white/[0.06] pt-4">
+        <p className="text-[11px] font-display font-black uppercase tracking-[0.14em] text-white/40">
           SSS Strongholds
         </p>
-        <p className="mt-2 text-sm text-gray-500">No SSS cluster has formed yet.</p>
+        <p className="mt-2 text-sm text-white/40">No SSS cluster has formed yet.</p>
       </section>
     );
   }
 
   return (
-    <section className="border-t border-white/8 pt-4">
+    <section className="border-t border-white/[0.06] pt-4">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-[11px] font-display font-black uppercase tracking-[0.22em] text-gray-500">
+          <p className="text-[11px] font-display font-black uppercase tracking-[0.14em] text-white/40">
             SSS Strongholds
           </p>
-          <p className="mt-1 text-[11px] text-gray-500">Tap a stronghold to inspect the charts behind it</p>
+          <p className="mt-1 text-[11px] text-white/40">Tap a stronghold to inspect the charts behind it</p>
         </div>
       </div>
 
@@ -794,13 +794,13 @@ function StrongholdRow({ strongholds, selectedKey, onSelect }) {
               onClick={() => onSelect(cluster.key)}
               className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-left transition-colors ${
                 isSelected
-                  ? `${accent.border} ${accent.bg} ring-1 ring-white/35`
-                  : `${accent.border} ${accent.bg} hover:border-white/40`
+                  ? `${accent.border} ${accent.bg} ring-1 ring-white/20`
+                  : `${accent.border} ${accent.bg} hover:border-white/20`
               }`}
             >
               <span className={`text-xs font-display font-black ${accent.text}`}>{cluster.label}</span>
-              <span className="text-xs font-mono text-gray-200">{cluster.count}</span>
-              <span className="text-[10px] text-gray-500">{formatNumber(cluster.average_score)}</span>
+              <span className="text-xs font-mono tabular-nums text-white/80">{cluster.count}</span>
+              <span className="text-[10px] tabular-nums text-white/40">{formatNumber(cluster.average_score)}</span>
             </button>
           );
         })}
@@ -826,30 +826,33 @@ function StrongholdDetailSheet({ cluster, timeframeLabel, onClose }) {
   return (
     <div
       className="fixed inset-0 z-[80] bg-black/70 backdrop-blur-sm"
+      role="dialog"
+      aria-label={`${cluster.label} stronghold details`}
       onClick={onClose}
     >
       <div className="flex min-h-full items-end justify-center sm:items-center sm:p-4">
         <div
-          className="w-full max-w-xl overflow-hidden rounded-t-[28px] border border-piu-border bg-[#08111d] shadow-[0_24px_80px_rgba(0,0,0,0.55)] sm:rounded-[28px]"
+          className="w-full max-w-xl overflow-hidden rounded-t-2xl border border-piu-border bg-piu-dark shadow-2xl sm:rounded-2xl"
           onClick={(event) => event.stopPropagation()}
         >
-          <div className="border-b border-white/8 px-4 py-4 sm:px-5">
+          <div className="border-b border-white/[0.06] px-4 py-4 sm:px-5">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-[10px] font-display font-black uppercase tracking-[0.24em] text-gray-500">
+                <p className="text-[10px] font-display font-black uppercase tracking-[0.14em] text-white/40">
                   {timeframeLabel} stronghold
                 </p>
                 <h3 className={`mt-2 text-xl font-display font-black ${cluster.mode === 'Double' ? 'text-emerald-200' : 'text-rose-100'}`}>
                   {cluster.label}
                 </h3>
-                <p className="mt-2 text-sm text-gray-400">
+                <p className="mt-2 text-sm text-white/60">
                   {cluster.count} SSS chart{cluster.count === 1 ? '' : 's'} with an average score of {formatNumber(cluster.average_score)}.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-full border border-piu-border/60 px-3 py-1 text-[11px] font-display font-black text-gray-300 transition-colors hover:border-white/35 hover:text-white"
+                aria-label="Close"
+                className="rounded-full border border-piu-border/50 px-3 py-1 text-[11px] font-display font-black text-white/70 transition-colors hover:border-white/20 hover:text-white"
               >
                 Close
               </button>
@@ -863,9 +866,9 @@ function StrongholdDetailSheet({ cluster, timeframeLabel, onClose }) {
                   key={item.chart_id}
                   to={item.chart_id ? `/songs/chart/${item.chart_id}` : '#'}
                   onClick={onClose}
-                  className="flex items-center gap-3 rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2.5 transition-colors hover:border-white/18 hover:bg-white/[0.05]"
+                  className="flex items-center gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.03] px-3 py-2.5 transition-colors hover:border-white/15 hover:bg-white/[0.05]"
                 >
-                  <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-[#101726]">
+                  <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-white/[0.08] bg-piu-card">
                     {item.jacket_url ? (
                       <img
                         src={item.jacket_url}
@@ -875,7 +878,7 @@ function StrongholdDetailSheet({ cluster, timeframeLabel, onClose }) {
                         decoding="async"
                       />
                     ) : (
-                      <div className="flex h-full w-full items-center justify-center font-display text-lg font-black text-gray-500">
+                      <div className="flex h-full w-full items-center justify-center font-display text-lg font-black text-white/40">
                         {(item.title || '?').charAt(0).toUpperCase() || '?'}
                       </div>
                     )}
@@ -884,7 +887,7 @@ function StrongholdDetailSheet({ cluster, timeframeLabel, onClose }) {
 
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-display font-black text-white">{item.title}</p>
-                    <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-gray-400">
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-white/60">
                       <span className={item.mode === 'Double' ? 'text-emerald-200' : 'text-rose-200'}>{item.label}</span>
                       <span className={getGradeTone(item.grade)}>{item.grade}</span>
                       <span>{formatNumber(item.score)}</span>
@@ -1018,11 +1021,6 @@ export default function PlayerIdentityMapPanel({ userId }) {
   return (
     <>
       <div className="card relative overflow-hidden p-0">
-        <div className="pointer-events-none absolute inset-0">
-          <div className="absolute -left-20 top-0 h-56 w-56 rounded-full bg-rose-500/12 blur-3xl" />
-          <div className="absolute -right-20 bottom-0 h-64 w-64 rounded-full bg-emerald-400/10 blur-3xl" />
-        </div>
-
         <div
           className={`relative p-4 sm:p-5 transition-all duration-500 ease-out motion-reduce:transition-none ${
             ready ? 'translate-y-0 opacity-100' : 'translate-y-3 opacity-0 motion-reduce:translate-y-0'
@@ -1030,13 +1028,13 @@ export default function PlayerIdentityMapPanel({ userId }) {
         >
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <p className="text-[10px] font-display font-black uppercase tracking-[0.28em] text-piu-accent/80">
+              <p className="text-[10px] font-display font-black uppercase tracking-[0.14em] text-piu-accent/80">
                 Player Identity Map
               </p>
               <h2 className="mt-2 text-lg font-display font-black text-white sm:text-xl">
                 {headerTitle}
               </h2>
-              <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-300">
+              <p className="mt-2 max-w-3xl text-sm leading-relaxed text-white/70">
                 {headerNarrative}
               </p>
             </div>
@@ -1051,7 +1049,7 @@ export default function PlayerIdentityMapPanel({ userId }) {
 
           {loading && !data ? (
             <div className="mt-5 animate-pulse space-y-4">
-              <div className="h-28 rounded-[28px] bg-white/5" />
+              <div className="h-28 rounded-2xl bg-white/5" />
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="h-24 rounded-2xl bg-white/5" />
                 <div className="h-24 rounded-2xl bg-white/5" />
@@ -1059,11 +1057,11 @@ export default function PlayerIdentityMapPanel({ userId }) {
               <div className="h-32 rounded-2xl bg-white/5" />
             </div>
           ) : !hasIdentityData ? (
-            <div className="mt-5 rounded-[24px] border border-white/8 bg-white/[0.03] px-4 py-5">
+            <div className="mt-5 rounded-2xl border border-white/[0.06] bg-white/[0.03] px-4 py-5">
               <p className="text-sm font-display font-black text-white">
                 {view === 'recent' ? 'No recent form snapshot yet.' : 'No identity map data yet.'}
               </p>
-              <p className="mt-2 text-sm leading-relaxed text-gray-400">
+              <p className="mt-2 text-sm leading-relaxed text-white/60">
                 {view === 'recent'
                   ? `There are no passing charts in the current ${data?.timeframe?.window_days || 90}-day window. Switch back to All-time to see the full profile shape.`
                   : 'This profile needs synced passing charts before the identity map can take shape.'}
@@ -1122,20 +1120,20 @@ export default function PlayerIdentityMapPanel({ userId }) {
                   />
                 </div>
 
-                <div className="border-t border-white/8 pt-5 xl:border-l xl:border-t-0 xl:pl-6 xl:pt-0">
+                <div className="border-t border-white/[0.06] pt-5 xl:border-l xl:border-t-0 xl:pl-6 xl:pt-0">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <p className="text-[11px] font-display font-black uppercase tracking-[0.22em] text-gray-500">
+                      <p className="text-[11px] font-display font-black uppercase tracking-[0.14em] text-white/40">
                         SSS Mosaic
                       </p>
-                      <p className="mt-1 text-sm text-gray-400">
+                      <p className="mt-1 text-sm text-white/60">
                         Signature jackets from the cleanest part of the profile
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-[11px] text-gray-500">{formatNumber(data?.totals?.sss_charts)} total SSS / SSS+</p>
+                      <p className="text-[11px] text-white/40">{formatNumber(data?.totals?.sss_charts)} total SSS / SSS+</p>
                       {selectedStronghold ? (
-                        <p className="mt-1 text-[10px] text-gray-500">
+                        <p className="mt-1 text-[10px] text-white/40">
                           Focused on <span className="font-display font-black text-piu-accent">{selectedStronghold.label}</span>
                         </p>
                       ) : null}
@@ -1151,26 +1149,26 @@ export default function PlayerIdentityMapPanel({ userId }) {
                           key={item.chart_id}
                           type="button"
                           onClick={() => setSelectedChartId(String(item.chart_id))}
-                          className={`group relative overflow-hidden rounded-2xl border transition-all duration-300 ease-out motion-reduce:transition-none ${
+                          className={`group relative overflow-hidden rounded-2xl border transition-colors duration-200 ease-out motion-reduce:transition-none ${
                             getTileSpanClass(index)
                           } ${
                             isSelected
-                              ? 'border-white/70 ring-1 ring-piu-accent/65'
+                              ? 'border-white/30 ring-1 ring-piu-accent/65'
                               : inSelectedStronghold
-                                ? 'border-white/10 hover:border-white/35'
-                                : 'border-white/10 opacity-45 hover:opacity-75'
+                                ? 'border-white/[0.08] hover:border-white/20'
+                                : 'border-white/[0.08] opacity-45 hover:opacity-75'
                           }`}
                         >
                           {item.jacket_url ? (
                             <img
                               src={item.jacket_url}
                               alt={item.title || 'Song jacket'}
-                              className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                              className="h-full w-full object-cover"
                               loading={index > 3 ? 'lazy' : 'eager'}
                               decoding="async"
                             />
                           ) : (
-                            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#141b2f] to-[#090d19] font-display text-xl font-black text-gray-500">
+                            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-piu-card to-piu-bg font-display text-xl font-black text-white/40">
                               {(item.title || '?').charAt(0).toUpperCase() || '?'}
                             </div>
                           )}
@@ -1193,13 +1191,13 @@ export default function PlayerIdentityMapPanel({ userId }) {
                   </div>
 
                   {selectedJacket ? (
-                    <div className="mt-4 border-t border-white/8 pt-4">
+                    <div className="mt-4 border-t border-white/[0.06] pt-4">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <p className="text-sm font-display font-black text-white sm:text-base">
                             {selectedJacket.title}
                           </p>
-                          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-400">
+                          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-white/60">
                             <span className={selectedJacket.mode === 'Double' ? 'text-emerald-200' : 'text-rose-200'}>
                               {selectedJacket.label}
                             </span>
@@ -1212,7 +1210,7 @@ export default function PlayerIdentityMapPanel({ userId }) {
                         {selectedJacket.chart_id ? (
                           <Link
                             to={`/songs/chart/${selectedJacket.chart_id}`}
-                            className="inline-flex items-center rounded-full border border-piu-border/60 px-3 py-1.5 text-xs font-display font-black text-gray-200 transition-colors hover:border-piu-accent/60 hover:text-white"
+                            className="inline-flex items-center rounded-full border border-piu-border/50 px-3 py-1.5 text-xs font-display font-black text-white/80 transition-colors hover:border-piu-accent/60 hover:text-white"
                           >
                             Open chart
                           </Link>
@@ -1220,7 +1218,7 @@ export default function PlayerIdentityMapPanel({ userId }) {
                       </div>
 
                       {selectedJacket.stronghold_label ? (
-                        <p className="mt-3 text-xs text-gray-400">
+                        <p className="mt-3 text-xs text-white/60">
                           Stronghold: <span className="font-display font-black text-piu-accent">{selectedJacket.stronghold_label}</span>
                         </p>
                       ) : null}
