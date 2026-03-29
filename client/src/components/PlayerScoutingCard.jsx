@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { getPlayerScoutingCard } from '../utils/api';
 import { Card, CardContent } from './ui/card';
 import { Badge } from './ui/badge';
@@ -30,6 +30,12 @@ function ratingColor(v) {
 }
 
 function barWidth(v) { return `${Math.max(0, Math.min(100, v))}%`; }
+
+function getAttributeModeLabel(attributeMode) {
+  if (attributeMode === 'shinsa_relative') return 'Shinsa-relative scores';
+  if (attributeMode === 'profile_relative') return 'Profile-relative attributes';
+  return '';
+}
 
 // ────────────────────────────────────────────────────────────────────────────
 // Sub-components
@@ -267,6 +273,7 @@ export default function PlayerScoutingCard({ userId }) {
   const tint = SCOPE_TINT[activeScope];
   const scopeAttrs = attributes?.[activeScope] || { speed: 0, stamina: 0, mobility: 0, tech: 0 };
   const hasDoubles = (ratings?.doubles?.raw || 0) > 0;
+  const attributeModeLabel = getAttributeModeLabel(data.coverage?.attributeMode);
 
   // Mode-based border tint
   const borderTint = competitive?.dominantMode === 'Single'
@@ -311,9 +318,9 @@ export default function PlayerScoutingCard({ userId }) {
                 <span className="text-[11px] text-zinc-500 font-display">{user.skillTitle}</span>
               )}
             </div>
-            {data.coverage?.attributeMode === 'profile_relative' && (
+            {attributeModeLabel && (
               <span className="text-[9px] text-zinc-600 font-display uppercase tracking-[0.16em]">
-                Profile-relative attributes
+                {attributeModeLabel}
               </span>
             )}
           </div>

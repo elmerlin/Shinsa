@@ -22,6 +22,8 @@ for (const [bucket, slugs] of Object.entries(SCOUTING_SKILL_BUCKETS)) {
 }
 
 const BUCKET_KEYS = ['speed', 'stamina', 'mobility', 'tech'];
+const SHINSA_BASELINE_TTL_MS = 2 * 60 * 1000;
+let shinsaBaselineCache = { data: null, expiresAt: 0 };
 
 // ────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -34,6 +36,118 @@ function weightedMean(values, weights) {
     sumV += values[i] * weights[i];
   }
   return sumW > 0 ? sumV / sumW : 0;
+}
+
+function emptyBucketScores() {
+  return { speed: 0, stamina: 0, mobility: 0, tech: 0 };
+}
+
+function emptyScopedBucketScores() {
+  return {
+    overall: emptyBucketScores(),
+    singles: emptyBucketScores(),
+    doubles: emptyBucketScores(),
+  };
+}
+
+function emptyRatingScores() {
+  return { overall: 0, singles: 0, doubles: 0 };
+}
+
+function cloneScopedBucketScores(scoped) {
+  return {
+    overall: { ...emptyBucketScores(), ...(scoped?.overall || {}) },
+    singles: { ...emptyBucketScores(), ...(scoped?.singles || {}) },
+    doubles: { ...emptyBucketScores(), ...(scoped?.doubles || {}) },
+  };
+}
+
+function cloneRatingScores(ratings) {
+  return { ...emptyRatingScores(), ...(ratings || {}) };
+}
+
+function mergeBucketMaximums(target, source) {
+  for (const bucket of BUCKET_KEYS) {
+    target[bucket] = Math.max(target[bucket] || 0, source?.[bucket] || 0);
+  }
+}
+
+function mergeScopedBucketMaximums(target, source) {
+  for (const scope of ['overall', 'singles', 'doubles']) {
+    mergeBucketMaximums(target[scope], source?.[scope]);
+  }
+}
+
+function mergeRatingMaximums(target, source) {
+  for (const scope of ['overall', 'singles', 'doubles']) {
+    target[scope] = Math.max(target[scope] || 0, source?.[scope] || 0);
+  }
+}
+
+function createEmptyShinsaBaseline() {
+  return {
+    key: 'shinsa',
+    label: 'Shinsa',
+    source: 'shinsa_cohort',
+    cohortSize: 0,
+    ratings: emptyRatingScores(),
+    families: emptyScopedBucketScores(),
+  };
+}
+
+function cloneShinsaBaseline(baseline) {
+  return {
+    key: baseline?.key || 'shinsa',
+    label: baseline?.label || 'Shinsa',
+    source: baseline?.source || 'shinsa_cohort',
+    cohortSize: parseInt(baseline?.cohortSize, 10) || 0,
+    ratings: cloneRatingScores(baseline?.ratings),
+    families: cloneScopedBucketScores(baseline?.families),
+  };
+}
+
+function mergeSnapshotIntoShinsaBaseline(baseline, snapshot, options = {}) {
+  if (!baseline || !snapshot?.hasPiuData) return baseline;
+
+  const shouldCount = options.count !== false;
+  if (shouldCount) baseline.cohortSize += 1;
+
+  mergeRatingMaximums(baseline.ratings, snapshot.ratings);
+  mergeScopedBucketMaximums(baseline.families, snapshot.families);
+  return baseline;
+}
+
+function buildShinsaBaselineFromSnapshots(snapshots = []) {
+  const baseline = createEmptyShinsaBaseline();
+  for (const snapshot of snapshots) {
+    mergeSnapshotIntoShinsaBaseline(baseline, snapshot);
+  }
+  return baseline;
+}
+
+function buildRelativeRating(userVal, baselineVal) {
+  const raw = Math.max(0, userVal || 0);
+  const benchmarkRaw = Math.max(0, baselineVal || 0);
+  if (benchmarkRaw <= 0) {
+    return { score100: 0, raw, benchmarkRaw: 0 };
+  }
+  return {
+    score100: clamp(0, 100, Math.round((raw / benchmarkRaw) * 100)),
+    raw,
+    benchmarkRaw,
+  };
+}
+
+function buildRelativeBucketScores(userFam, baselineFam) {
+  const result = emptyBucketScores();
+  for (const bucket of BUCKET_KEYS) {
+    const userVal = userFam?.[bucket] || 0;
+    const baselineVal = baselineFam?.[bucket] || 0;
+    result[bucket] = baselineVal > 0
+      ? clamp(0, 100, Math.round((userVal / baselineVal) * 100))
+      : 0;
+  }
+  return result;
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -101,118 +215,110 @@ function buildScopedSkillFamilyScores(songCatalog, bestByChart, modeFilter) {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Resolve FEFEMZ benchmark player
+// Shared Shinsa snapshot + cohort baseline
 // ────────────────────────────────────────────────────────────────────────────
-function resolveBenchmarkPlayer(db, songCatalog, helpers) {
-  const benchmarkName = 'fefemz';
-  const localUser = db.prepare(
-    'SELECT id, username, avatar FROM users WHERE LOWER(TRIM(username)) = ? LIMIT 1'
-  ).get(benchmarkName) || null;
+function buildUserScoutingSnapshot(db, userId, helpers, existingProfile = null, existingSyncRow = null) {
+  const { aliases, songCatalog } = helpers;
+  const profile = existingProfile || db.prepare(
+    'SELECT id, username, avatar, pumbility, skill_title, nationality FROM users WHERE id = ?'
+  ).get(userId);
+  if (!profile) return null;
 
-  if (localUser) {
-    // Full local analytics path
-    const { bestByChart: bmBestByChart } = helpers.buildUserBestByChartMap({
-      bestScores: helpers.queryUserBestScores(db, localUser.id),
-      recentScores: helpers.queryUserRecentScores(db, localUser.id),
-      pumbilityScores: helpers.queryUserPumbilityScores(db, localUser.id),
-      aliases: helpers.aliases,
-      validChartKeys: songCatalog.chartsByKey,
-    });
+  const syncRow = existingSyncRow || db.prepare(
+    'SELECT best_scores_imported, last_best_scores_sync, pumbility_value, play_data_levels_json FROM user_piugame_sync WHERE user_id = ?'
+  ).get(userId) || null;
 
-    const bmAnalytics = helpers.formatAnalytics(
-      localUser.id,
-      db.prepare('SELECT id, username, avatar, pumbility FROM users WHERE id = ?').get(localUser.id),
-      db.prepare('SELECT best_scores_imported, last_best_scores_sync, pumbility_value, play_data_levels_json FROM user_piugame_sync WHERE user_id = ?').get(localUser.id) || null,
-      songCatalog,
-      bmBestByChart,
-      bmBestByChart, // passBest same for benchmark
-    );
+  const result = helpers.buildUserBestByChartMap({
+    bestScores: helpers.queryUserBestScores(db, userId),
+    recentScores: helpers.queryUserRecentScores(db, userId),
+    pumbilityScores: helpers.queryUserPumbilityScores(db, userId),
+    aliases,
+    validChartKeys: songCatalog.chartsByKey,
+  });
 
-    const familyOverall = buildScopedSkillFamilyScores(songCatalog, bmBestByChart, null);
-    const familySingle = buildScopedSkillFamilyScores(songCatalog, bmBestByChart, 'Single');
-    const familyDouble = buildScopedSkillFamilyScores(songCatalog, bmBestByChart, 'Double');
+  const bestByChart = result.bestByChart;
+  const passBestByChart = result.passBest;
+  const hasPiuData = bestByChart.size > 0;
 
+  if (!hasPiuData) {
     return {
-      key: benchmarkName,
-      label: 'FEFEMZ',
-      source: 'local',
-      doublesPartial: false,
-      overallPumbility: bmAnalytics.pumbility || 0,
-      singlesPumbility: bmAnalytics.singles_pumbility || 0,
-      doublesPumbility: (bmAnalytics.pumbility_breakdown?.doubles_top50 || [])
-        .slice(0, 50)
-        .reduce((sum, r) => sum + (r.rating || 0), 0),
-      families: {
-        overall: familyOverall,
-        singles: familySingle,
-        doubles: familyDouble,
-      },
+      profile,
+      syncRow,
+      bestByChart,
+      passBestByChart,
+      analytics: null,
+      hasPiuData: false,
+      ratings: emptyRatingScores(),
+      families: emptyScopedBucketScores(),
     };
   }
 
-  // Global fallback — use player-sheet style data from OVER rankings
-  // This is a simplified fallback; only pumbility ratings are available
-  const overallRating = getOverFallbackPumbility(db, benchmarkName, null);
-  const singlesRating = getOverFallbackPumbility(db, benchmarkName, 'Single');
-  const doublesRating = getOverFallbackPumbility(db, benchmarkName, 'Double');
+  const analytics = helpers.formatAnalytics(userId, profile, syncRow, songCatalog, bestByChart, passBestByChart);
+  const doublesRaw = (analytics.pumbility_breakdown?.doubles_top50 || [])
+    .slice(0, 50)
+    .reduce((sum, row) => sum + (row.rating || 0), 0);
 
   return {
-    key: benchmarkName,
-    label: 'FEFEMZ',
-    source: 'global_fallback',
-    doublesPartial: doublesRating <= 0,
-    overallPumbility: overallRating,
-    singlesPumbility: singlesRating,
-    doublesPumbility: doublesRating,
-    families: null, // no skill-family data without local best scores
+    profile,
+    syncRow,
+    bestByChart,
+    passBestByChart,
+    analytics,
+    hasPiuData: true,
+    ratings: {
+      overall: analytics.pumbility || 0,
+      singles: analytics.singles_pumbility || 0,
+      doubles: doublesRaw,
+    },
+    families: {
+      overall: buildScopedSkillFamilyScores(songCatalog, bestByChart, null),
+      singles: buildScopedSkillFamilyScores(songCatalog, bestByChart, 'Single'),
+      doubles: buildScopedSkillFamilyScores(songCatalog, bestByChart, 'Double'),
+    },
   };
 }
 
-function getOverFallbackPumbility(db, playerName, modeFilter) {
-  const { isPassingScore } = require('./pumbilityCandidates');
-  const { normalizeGrade, gradeFromScore, calculateRatingPoints, LEVEL_BASE_POINTS, GRADE_MULTIPLIER } = require('./titleProgress');
-  const normalizedName = String(playerName || '').replace(/\s+/g, ' ').trim().toLowerCase();
-  const modeSqlFilter = modeFilter === 'Single'
-    ? `AND c.mode = 'Single'`
-    : modeFilter === 'Double'
-      ? `AND c.mode = 'Double'`
-      : `AND c.mode IN ('Single', 'Double')`;
+function readShinsaBaselineCache() {
+  if (!shinsaBaselineCache.data) return null;
+  if (Date.now() >= shinsaBaselineCache.expiresAt) {
+    shinsaBaselineCache = { data: null, expiresAt: 0 };
+    return null;
+  }
+  return shinsaBaselineCache.data;
+}
 
-  const overRows = db.prepare(`
-    SELECT r.chart_key, r.score, r.grade,
-           c.song_title, c.mode, c.level
-    FROM over_level_ranking_scores r
-    JOIN over_level_rankings c ON c.chart_key = r.chart_key
-    WHERE c.level >= 20
-      ${modeSqlFilter}
-      AND r.score > 0
-      AND LOWER(TRIM(r.player_name)) = ?
-    ORDER BY c.chart_key ASC, r.row_order ASC
-  `).all(normalizedName);
+function writeShinsaBaselineCache(data) {
+  shinsaBaselineCache = {
+    data: cloneShinsaBaseline(data),
+    expiresAt: Date.now() + SHINSA_BASELINE_TTL_MS,
+  };
+}
 
-  const bestByChart = new Map();
-  for (const row of overRows) {
-    const chartKey = String(row.chart_key || '').trim();
-    if (!chartKey) continue;
-    const existing = bestByChart.get(chartKey);
-    const score = parseInt(row.score, 10) || 0;
-    if (!existing || score > existing.score) {
-      bestByChart.set(chartKey, row);
-    }
+function buildShinsaBaseline(db, helpers) {
+  const cached = readShinsaBaselineCache();
+  if (cached) return cloneShinsaBaseline(cached);
+
+  const cohortRows = db.prepare(`
+    SELECT DISTINCT scoped.user_id
+    FROM (
+      SELECT user_id FROM user_piugame_sync WHERE best_scores_imported = 1
+      UNION ALL
+      SELECT user_id FROM user_best_scores
+    ) scoped
+    WHERE scoped.user_id IS NOT NULL AND TRIM(scoped.user_id) != ''
+  `).all();
+
+  const snapshots = [];
+  for (const row of cohortRows) {
+    const scopedUserId = String(row.user_id || '').trim();
+    if (!scopedUserId) continue;
+    const snapshot = buildUserScoutingSnapshot(db, scopedUserId, helpers);
+    if (snapshot?.hasPiuData) snapshots.push(snapshot);
   }
 
-  const rated = [];
-  for (const [, row] of bestByChart) {
-    const score = parseInt(row.score, 10) || 0;
-    const level = parseInt(row.level, 10) || 0;
-    if (!isPassingScore(score, row.grade)) continue;
-    const grade = normalizeGrade(row.grade || gradeFromScore(score));
-    const rating = calculateRatingPoints(level, grade, score);
-    if (rating > 0) rated.push(rating);
-  }
-
-  rated.sort((a, b) => b - a);
-  return rated.slice(0, 50).reduce((sum, r) => sum + r, 0);
+  const baseline = buildShinsaBaselineFromSnapshots(snapshots);
+  writeShinsaBaselineCache(baseline);
+  return cloneShinsaBaseline(baseline);
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -321,7 +427,7 @@ function buildSpecialtyLabels(modeProfile, activeFamilyScores, activeScope) {
  *   getIdentityModeProfile, buildIdentityLevelRows }
  */
 function buildPlayerScoutingCard(db, userId, helpers) {
-  const { aliases, songCatalog } = helpers;
+  const { songCatalog } = helpers;
 
   // ── User profile ──
   const profile = db.prepare(
@@ -334,18 +440,10 @@ function buildPlayerScoutingCard(db, userId, helpers) {
     'SELECT best_scores_imported, last_best_scores_sync, pumbility_value, play_data_levels_json FROM user_piugame_sync WHERE user_id = ?'
   ).get(userId) || null;
 
-  const { bestByChart, passBestByChart } = (() => {
-    const result = helpers.buildUserBestByChartMap({
-      bestScores: helpers.queryUserBestScores(db, userId),
-      recentScores: helpers.queryUserRecentScores(db, userId),
-      pumbilityScores: helpers.queryUserPumbilityScores(db, userId),
-      aliases,
-      validChartKeys: songCatalog.chartsByKey,
-    });
-    return { bestByChart: result.bestByChart, passBestByChart: result.passBest };
-  })();
+  const snapshot = buildUserScoutingSnapshot(db, userId, helpers, profile, syncRow);
+  if (!snapshot) return null;
 
-  const hasPiuData = bestByChart.size > 0;
+  const { bestByChart, passBestByChart, analytics, ratings: rawRatings, families: rawFamilies, hasPiuData } = snapshot;
 
   if (!hasPiuData) {
     return {
@@ -367,82 +465,32 @@ function buildPlayerScoutingCard(db, userId, helpers) {
     };
   }
 
-  // ── Analytics ──
-  const analytics = helpers.formatAnalytics(userId, profile, syncRow, songCatalog, bestByChart, passBestByChart);
+  const overallRaw = rawRatings.overall || 0;
+  const singlesRaw = rawRatings.singles || 0;
+  const doublesRaw = rawRatings.doubles || 0;
 
-  // ── Pumbility scores ──
-  const overallRaw = analytics.pumbility || 0;
-  const singlesRaw = analytics.singles_pumbility || 0;
-  const doublesRaw = (analytics.pumbility_breakdown?.doubles_top50 || [])
-    .slice(0, 50)
-    .reduce((sum, r) => sum + (r.rating || 0), 0);
+  const familyOverall = rawFamilies.overall || emptyBucketScores();
+  const familySingle = rawFamilies.singles || emptyBucketScores();
+  const familyDouble = rawFamilies.doubles || emptyBucketScores();
 
-  // ── Skill family scores for all scopes ──
-  const familyOverall = buildScopedSkillFamilyScores(songCatalog, bestByChart, null);
-  const familySingle = buildScopedSkillFamilyScores(songCatalog, bestByChart, 'Single');
-  const familyDouble = buildScopedSkillFamilyScores(songCatalog, bestByChart, 'Double');
-
-  // ── Benchmark ──
-  const benchmark = resolveBenchmarkPlayer(db, songCatalog, helpers);
-  const hasBenchmark = !!(benchmark && (benchmark.overallPumbility > 0 || benchmark.singlesPumbility > 0));
-
-  // ── Benchmark-relative ratings ──
-  const benchmarkScore = (userVal, bmVal) => {
-    if (!bmVal || bmVal <= 0) return { score100: 0, raw: userVal, benchmarkRaw: 0 };
-    return {
-      score100: clamp(0, 100, Math.round((userVal / bmVal) * 100)),
-      raw: userVal,
-      benchmarkRaw: bmVal,
-    };
-  };
+  // ── Shinsa-relative baseline ──
+  const benchmark = buildShinsaBaseline(db, helpers);
+  mergeSnapshotIntoShinsaBaseline(benchmark, snapshot, { count: false });
+  const hasBenchmark = benchmark.ratings.overall > 0 || benchmark.ratings.singles > 0 || benchmark.ratings.doubles > 0;
 
   const ratings = {
-    overall: benchmarkScore(overallRaw, benchmark.overallPumbility),
-    singles: benchmarkScore(singlesRaw, benchmark.singlesPumbility),
+    overall: buildRelativeRating(overallRaw, benchmark.ratings.overall),
+    singles: buildRelativeRating(singlesRaw, benchmark.ratings.singles),
     doubles: {
-      ...benchmarkScore(doublesRaw, benchmark.doublesPumbility),
-      partial: benchmark.doublesPartial,
+      ...buildRelativeRating(doublesRaw, benchmark.ratings.doubles),
+      partial: false,
     },
   };
 
-  // ── Benchmark-relative family attributes ──
-  // When benchmark families exist: scale user vs benchmark (0-100 = % of benchmark)
-  // When benchmark families are null (global fallback): self-normalize —
-  //   strongest bucket = 100, others show proportion relative to strongest.
-  //   This shows internal balance rather than absolute strength.
-  const hasBenchmarkFamilies = !!(benchmark.families);
-
-  const benchmarkFamily = (userFam, bmFamilies, scope) => {
-    const bmFam = bmFamilies ? bmFamilies[scope] : null;
-
-    if (bmFam) {
-      // True benchmark: scale each bucket against the benchmark player
-      const result = {};
-      for (const bucket of BUCKET_KEYS) {
-        const userVal = userFam[bucket] || 0;
-        const bmVal = bmFam[bucket] || 0;
-        result[bucket] = bmVal > 0
-          ? clamp(0, 100, Math.round((userVal / bmVal) * 100))
-          : 0;
-      }
-      return result;
-    }
-
-    // Self-normalize: scale each bucket relative to the user's own strongest bucket
-    const maxBucket = Math.max(...BUCKET_KEYS.map((k) => userFam[k] || 0));
-    if (maxBucket <= 0) return { speed: 0, stamina: 0, mobility: 0, tech: 0 };
-    const result = {};
-    for (const bucket of BUCKET_KEYS) {
-      const userVal = userFam[bucket] || 0;
-      result[bucket] = clamp(0, 100, Math.round((userVal / maxBucket) * 100));
-    }
-    return result;
-  };
-
   const attributes = {
-    overall: benchmarkFamily(familyOverall, benchmark.families, 'overall'),
-    singles: benchmarkFamily(familySingle, benchmark.families, 'singles'),
-    doubles: benchmarkFamily(familyDouble, benchmark.families, 'doubles'),
+    overall: buildRelativeBucketScores(familyOverall, benchmark.families.overall),
+    singles: buildRelativeBucketScores(familySingle, benchmark.families.singles),
+    doubles: buildRelativeBucketScores(familyDouble, benchmark.families.doubles),
   };
 
   // ── Competitive levels ──
@@ -483,7 +531,8 @@ function buildPlayerScoutingCard(db, userId, helpers) {
       key: benchmark.key,
       label: benchmark.label,
       source: benchmark.source,
-      doublesPartial: benchmark.doublesPartial,
+      doublesPartial: false,
+      cohortSize: benchmark.cohortSize,
     },
     ratings,
     attributes,
@@ -502,10 +551,19 @@ function buildPlayerScoutingCard(db, userId, helpers) {
     coverage: {
       hasPiuData: true,
       hasBenchmark,
-      doublesBenchmarkPartial: benchmark.doublesPartial,
-      attributeMode: hasBenchmarkFamilies ? 'benchmarked' : 'profile_relative',
+      doublesBenchmarkPartial: false,
+      attributeMode: 'shinsa_relative',
     },
   };
 }
 
-module.exports = { buildPlayerScoutingCard };
+module.exports = {
+  buildPlayerScoutingCard,
+  __test: {
+    buildRelativeBucketScores,
+    buildRelativeRating,
+    buildShinsaBaselineFromSnapshots,
+    createEmptyShinsaBaseline,
+    mergeSnapshotIntoShinsaBaseline,
+  },
+};
