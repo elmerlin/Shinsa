@@ -153,6 +153,20 @@ function buildRelativeBucketScores(userFam, baselineFam) {
   return result;
 }
 
+function buildCompositeScopeRating(relativeBuckets, options = {}) {
+  const values = BUCKET_KEYS.map((bucket) => clamp(0, 100, Number(relativeBuckets?.[bucket]) || 0));
+  const raw = Math.max(0, options.raw || 0);
+  const benchmarkRaw = Math.max(0, options.benchmarkRaw || 0);
+  if (values.every((value) => value <= 0)) {
+    return { score100: 0, raw, benchmarkRaw };
+  }
+  return {
+    score100: clamp(0, 100, Math.round(weightedMean(values, [1, 1, 1, 1]))),
+    raw,
+    benchmarkRaw,
+  };
+}
+
 function round1(value) {
   return Math.round((Number(value) || 0) * 10) / 10;
 }
@@ -581,19 +595,28 @@ function buildPlayerScoutingCard(db, userId, helpers) {
   mergeSnapshotIntoShinsaBaseline(benchmark, snapshot, { count: false });
   const hasBenchmark = benchmark.ratings.overall > 0 || benchmark.ratings.singles > 0 || benchmark.ratings.doubles > 0;
 
-  const ratings = {
-    overall: buildRelativeRating(overallRaw, benchmark.ratings.overall),
-    singles: buildRelativeRating(singlesRaw, benchmark.ratings.singles),
-    doubles: {
-      ...buildRelativeRating(doublesRaw, benchmark.ratings.doubles),
-      partial: false,
-    },
-  };
-
   const attributes = {
     overall: buildRelativeBucketScores(familyOverall, benchmark.families.overall),
     singles: buildRelativeBucketScores(familySingle, benchmark.families.singles),
     doubles: buildRelativeBucketScores(familyDouble, benchmark.families.doubles),
+  };
+
+  const ratings = {
+    overall: buildCompositeScopeRating(attributes.overall, {
+      raw: overallRaw,
+      benchmarkRaw: benchmark.ratings.overall,
+    }),
+    singles: buildCompositeScopeRating(attributes.singles, {
+      raw: singlesRaw,
+      benchmarkRaw: benchmark.ratings.singles,
+    }),
+    doubles: {
+      ...buildCompositeScopeRating(attributes.doubles, {
+        raw: doublesRaw,
+        benchmarkRaw: benchmark.ratings.doubles,
+      }),
+      partial: false,
+    },
   };
 
   // ── Competitive levels ──
@@ -664,6 +687,7 @@ module.exports = {
   buildPlayerScoutingCard,
   __test: {
     buildCadenceSummary,
+    buildCompositeScopeRating,
     buildRelativeBucketScores,
     buildRelativeRating,
     buildShinsaBaselineFromSnapshots,

@@ -96,6 +96,17 @@ describe('player scouting card Shinsa baseline', () => {
       { speed: 100, stamina: 100, mobility: 100, tech: 100 }
     );
   });
+
+  it('derives scope ratings from the visible scoped attribute rails', () => {
+    const rating = __test.buildCompositeScopeRating({
+      speed: 80,
+      stamina: 79,
+      mobility: 77,
+      tech: 75,
+    });
+
+    assert.equal(rating.score100, 78);
+  });
 });
 
 describe('player scouting card cadence', () => {

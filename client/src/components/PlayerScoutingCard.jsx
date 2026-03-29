@@ -189,10 +189,10 @@ function CadenceStrip({ cadence }) {
         </div>
         <div className="flex flex-wrap items-center justify-end gap-1.5 text-[10px] font-display">
           <span className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-2 py-1 font-bold text-cyan-200">
-            F {cadence.frequencyPercentile}
+            Freq {cadence.frequencyPercentile}
           </span>
           <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2 py-1 font-bold text-emerald-200">
-            V {cadence.volumePercentile}
+            Vol {cadence.volumePercentile}
           </span>
         </div>
       </div>
