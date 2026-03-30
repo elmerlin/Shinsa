@@ -9,6 +9,7 @@ const { makeChartKey, toCanonicalTitle, normalizeMode } = require('./chartKeys')
 const { buildWeeklyChallengeSummary, buildPersonalSummaries } = require('./weeklyChallengeSummary');
 const { serializeWcSummaryMarker } = require('./weeklyChallengeSummaryMarker');
 const { serializeWcPersonalMarker } = require('./weeklyChallengePersonalMarker');
+const { normalizeUserAvatarForList } = require('./avatarProxy');
 const { SYSTEM_USER_ID } = require('../db/schema');
 
 // Build a lookup from skill_title → skill_family
@@ -438,10 +439,11 @@ function aggregateWeeklyResults(db, weekId) {
 
   const snapshots = {};
   for (const [, profile] of userProfiles) {
+    const avatarSnapshot = normalizeUserAvatarForList(profile.avatar, profile.user_id, 64);
     snapshots[profile.user_id] = {
       user_id: profile.user_id,
       username_snapshot: profile.username || '',
-      avatar_snapshot: profile.avatar || '',
+      avatar_snapshot: avatarSnapshot,
       nationality_snapshot: profile.nationality || '',
       skill_title_snapshot: profile.skill_title || '',
       skill_level_snapshot: profile.skill_level || 1,
@@ -449,7 +451,7 @@ function aggregateWeeklyResults(db, weekId) {
     };
     upsertSnapshot.run(
       weekId, profile.user_id,
-      profile.username || '', profile.avatar || '', profile.nationality || '',
+      profile.username || '', avatarSnapshot, profile.nationality || '',
       profile.skill_title || '', profile.skill_level || 1, profile.skill_family || ''
     );
   }

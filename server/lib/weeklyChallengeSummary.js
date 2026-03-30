@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const path = require('path');
 const { makeChartKey, toCanonicalTitle } = require('./chartKeys');
 const { calculateRatingPoints, normalizeGrade, gradeFromScore } = require('./titleProgress');
+const { normalizeUserAvatarForList } = require('./avatarProxy');
 
 // ---------------------------------------------------------------------------
 // Alias loading (mirrors weeklyChallenges.js)
@@ -35,6 +36,10 @@ function getAliases() {
 
 function resolveGrade(rawGrade, score) {
   return normalizeGrade(rawGrade) || gradeFromScore(parseInt(score, 10) || 0);
+}
+
+function toSummaryAvatar(avatar, userId) {
+  return normalizeUserAvatarForList(avatar || '', userId, 64);
 }
 
 // ---------------------------------------------------------------------------
@@ -86,7 +91,7 @@ function computeSuperlatives(db, weekId, week, snapshots) {
     const snap = snapshots[r.user_id] || {};
     return {
       rank: i + 1, user_id: r.user_id, value: r.cnt,
-      username: snap.username_snapshot || '', avatar: snap.avatar_snapshot || '',
+      username: snap.username_snapshot || '', avatar: toSummaryAvatar(snap.avatar_snapshot, r.user_id),
       nationality: snap.nationality_snapshot || '',
       detail_json: { sss_count: r.cnt },
     };
@@ -106,7 +111,7 @@ function computeSuperlatives(db, weekId, week, snapshots) {
     const snap = snapshots[r.user_id] || {};
     return {
       rank: i + 1, user_id: r.user_id, value: Math.round(r.pct * 10) / 10,
-      username: snap.username_snapshot || '', avatar: snap.avatar_snapshot || '',
+      username: snap.username_snapshot || '', avatar: toSummaryAvatar(snap.avatar_snapshot, r.user_id),
       nationality: snap.nationality_snapshot || '',
       detail_json: { clears: r.clears, chart_count: chartCount },
     };
@@ -129,7 +134,7 @@ function computeSuperlatives(db, weekId, week, snapshots) {
     const snap = snapshots[r.user_id] || {};
     return {
       rank: i + 1, user_id: r.user_id, value: Math.round(r.avg_rating),
-      username: snap.username_snapshot || '', avatar: snap.avatar_snapshot || '',
+      username: snap.username_snapshot || '', avatar: toSummaryAvatar(snap.avatar_snapshot, r.user_id),
       nationality: snap.nationality_snapshot || '',
       detail_json: { avg_rating: Math.round(r.avg_rating), clear_count: r.clear_count },
     };
@@ -267,7 +272,7 @@ function computeBiggestImprovements(db, weekId, week, snapshots) {
     const snap = snapshots[userId] || {};
     return {
       rank: i + 1, user_id: userId, value: data.totalDelta,
-      username: snap.username_snapshot || '', avatar: snap.avatar_snapshot || '',
+      username: snap.username_snapshot || '', avatar: toSummaryAvatar(snap.avatar_snapshot, userId),
       nationality: snap.nationality_snapshot || '',
       detail_json: { total_delta: data.totalDelta, charts_improved: data.chartsImproved },
     };
@@ -366,7 +371,7 @@ function selectReplayHighlights(db, weekId, awards) {
     selected.push({
       user_id: r.user_id,
       username: r.username_snapshot || '',
-      avatar: r.avatar_snapshot || '',
+      avatar: toSummaryAvatar(r.avatar_snapshot, r.user_id),
       nationality: r.nationality_snapshot || '',
       song_title: r.song_title_snapshot || '',
       mode: r.mode || '',
@@ -424,7 +429,7 @@ function buildWeeklyChallengeSummary(db, weekId, targetWeekId = null) {
       rank: a.rank,
       user_id: a.user_id,
       username: a.username_snapshot || '',
-      avatar: a.avatar_snapshot || '',
+      avatar: toSummaryAvatar(a.avatar_snapshot, a.user_id),
       nationality: a.nationality_snapshot || '',
       skill_title: a.skill_title_snapshot || '',
       points: a.points,
@@ -687,7 +692,7 @@ function buildPersonalSummaries(db, weekId) {
       weekLabel,
       userId,
       username: snap.username_snapshot || '',
-      avatar: snap.avatar_snapshot || '',
+      avatar: toSummaryAvatar(snap.avatar_snapshot, userId),
       nationality: snap.nationality_snapshot || '',
       skillFamily: snap.skill_family_snapshot || '',
       skillTitle: snap.skill_title_snapshot || '',

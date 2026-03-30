@@ -914,8 +914,8 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
   const [wasEdited, setWasEdited] = useState(!!post.updated_at);
   const currentParsed = useMemo(() => parseAllMarkers(currentContent), [currentContent]);
   const rawVisibleContent = currentParsed.text || '';
-  const currentWcSummary = currentParsed.wcSummary;
-  const currentWcPersonal = currentParsed.wcPersonal;
+  const currentWcSummary = currentParsed.wcSummary || post.wc_summary_payload || null;
+  const currentWcPersonal = currentParsed.wcPersonal || post.wc_personal_payload || null;
   const currentSummary = currentParsed.sessionSummary;
   const currentShare = currentParsed.sessionShare;
   const currentLive = useMemo(

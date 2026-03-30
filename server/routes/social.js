@@ -20,6 +20,8 @@ const {
   getSessionMessageCount,
   parseSqliteDateTime,
 } = require('../lib/liveSessionMetrics');
+const { splitWcSummaryContent } = require('../lib/weeklyChallengeSummaryMarker');
+const { splitWcPersonalContent } = require('../lib/weeklyChallengePersonalMarker');
 const {
   applyChartMetadata,
   enrichClearRecord,
@@ -106,6 +108,36 @@ function normalizeComparableUrl(value) {
   } catch {
     return raw.replace(/\/$/, '').toLowerCase();
   }
+}
+
+function attachStructuredPostPayload(post) {
+  if (!post) return post;
+
+  const rawContent = String(post.content || '');
+  if (post.post_kind === 'weekly_challenge_summary') {
+    const { text, summary } = splitWcSummaryContent(rawContent);
+    post.content = text || '';
+    post.wc_summary_payload = summary;
+    post.wc_personal_payload = null;
+    return post;
+  }
+
+  if (post.post_kind === 'weekly_challenge_personal') {
+    const { text, personal } = splitWcPersonalContent(rawContent);
+    post.content = text || '';
+    post.wc_summary_payload = null;
+    post.wc_personal_payload = personal;
+    return post;
+  }
+
+  return post;
+}
+
+function attachStructuredPostPayloads(posts = []) {
+  for (const post of posts) {
+    attachStructuredPostPayload(post);
+  }
+  return posts;
 }
 
 function parseSessionShareMarker(content) {
@@ -1116,7 +1148,9 @@ router.get('/posts/user/:userId', optionalAuth, (req, res) => {
     }
   }
 
-  res.json(enrichPostsWithLiveSummaryMetrics(db, posts));
+  enrichPostsWithLiveSummaryMetrics(db, posts);
+  attachStructuredPostPayloads(posts);
+  res.json(posts);
 });
 
 // PUT /api/social/posts/:id — edit own post (text/youtube only, images unchanged)
@@ -1139,7 +1173,9 @@ router.put('/posts/:id', requireAuth, (req, res) => {
     WHERE p.id = ?
   `).get(req.params.id);
 
-  res.json(enrichPostWithLiveSummaryMetrics(db, updated));
+  enrichPostWithLiveSummaryMetrics(db, updated);
+  attachStructuredPostPayload(updated);
+  res.json(updated);
 });
 
 // DELETE /api/social/posts/:id — delete own post
@@ -1459,7 +1495,9 @@ router.get('/posts/:id', optionalAuth, (req, res) => {
     ).get(post.id, req.user.id);
   }
   post.type = 'post';
-  res.json(enrichPostWithLiveSummaryMetrics(db, post));
+  enrichPostWithLiveSummaryMetrics(db, post);
+  attachStructuredPostPayload(post);
+  res.json(post);
 });
 
 // GET /api/social/upscores/:id — get a single upscore by ID (public)
@@ -1579,7 +1617,7 @@ router.get('/feed', requireAuth, (req, res) => {
   if (postIds.length > 0) {
     const placeholders = postIds.map(() => '?').join(',');
     const posts = db.prepare(`
-      SELECT p.id, p.user_id, p.content, p.images, p.youtube_url, p.comments_disabled, p.created_at,
+      SELECT p.id, p.user_id, p.content, p.images, p.youtube_url, p.comments_disabled, p.created_at, p.post_kind,
              u.username, u.avatar, u.nationality,
              (SELECT COUNT(*) FROM post_pumps WHERE post_id = p.id) as pump_count,
              (SELECT COUNT(*) FROM post_comments WHERE post_id = p.id) as comment_count,
@@ -1592,6 +1630,7 @@ router.get('/feed', requireAuth, (req, res) => {
     `).all(req.user.id, ...postIds);
 
     enrichPostsWithLiveSummaryMetrics(db, posts);
+    attachStructuredPostPayloads(posts);
     for (const post of posts) {
       post.avatar = normalizeUserAvatarForList(post.avatar, post.user_id, 64);
       itemMap.set(`post:${post.id}`, post);

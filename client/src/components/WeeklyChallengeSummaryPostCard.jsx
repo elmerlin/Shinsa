@@ -389,13 +389,27 @@ export default function WeeklyChallengeSummaryPostCard({ summary, className = ''
 
   if (!summary) return null;
 
-  const pages = [
-    <PageHero key="hero" summary={summary} />,
-    <PagePodiums key="podiums" summary={summary} />,
-    <PageRewards key="rewards" summary={summary} />,
-    <PageReplays key="replays" summary={summary} onPlay={handlePlayReplay} />,
-    <PageNextWeek key="next" summary={summary} />,
-  ];
+  let currentPageContent = null;
+  switch (currentPage) {
+    case 0:
+      currentPageContent = <PageHero summary={summary} />;
+      break;
+    case 1:
+      currentPageContent = <PagePodiums summary={summary} />;
+      break;
+    case 2:
+      currentPageContent = <PageRewards summary={summary} />;
+      break;
+    case 3:
+      currentPageContent = <PageReplays summary={summary} onPlay={handlePlayReplay} />;
+      break;
+    case 4:
+      currentPageContent = <PageNextWeek summary={summary} />;
+      break;
+    default:
+      currentPageContent = <PageHero summary={summary} />;
+      break;
+  }
 
   return (
     <>
@@ -405,7 +419,7 @@ export default function WeeklyChallengeSummaryPostCard({ summary, className = ''
         onTouchEnd={handleTouchEnd}
       >
         <div className="p-4 min-h-[200px]">
-          {pages[currentPage]}
+          {currentPageContent}
         </div>
 
         {/* Pagination */}

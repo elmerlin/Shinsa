@@ -18,12 +18,12 @@ const MARKER_REGEXES = [
 export function parseAllMarkers(content) {
   const raw = String(content || '');
 
-  const wcSummary = parseWcSummaryMarker(raw);
-  const wcPersonal = parseWcPersonalMarker(raw);
-  const sessionSummary = parseSessionSummaryMarker(raw);
-  const sessionShare = parseSessionShareMarker(raw);
-  const liveSession = parseLiveSessionMarker(raw);
-  const sessionPlan = parseSessionPlanMarker(raw);
+  const wcSummary = raw.includes('[[SHINSA_WC_SUMMARY_V1:') ? parseWcSummaryMarker(raw) : null;
+  const wcPersonal = raw.includes('[[SHINSA_WC_PERSONAL_V1:') ? parseWcPersonalMarker(raw) : null;
+  const sessionSummary = raw.includes('[[SHINSA_SUMMARY_V1:') ? parseSessionSummaryMarker(raw) : null;
+  const sessionShare = raw.includes('[[SHINSA_SHARE_V1:') ? parseSessionShareMarker(raw) : null;
+  const liveSession = raw.includes('[[SHINSA_LIVE_V1:') ? parseLiveSessionMarker(raw) : null;
+  const sessionPlan = raw.includes('[[SHINSA_SESSION_PLAN_V1:') ? parseSessionPlanMarker(raw) : null;
 
   let text = raw;
   for (const regex of MARKER_REGEXES) {
