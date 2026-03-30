@@ -2175,7 +2175,9 @@ router.post('/comments/:type/:commentId/pump', requireAuth, (req, res) => {
       ? `/post/${parentItemId}?comment=${commentParam}`
       : type === 'upscore'
         ? `/upscore/${parentItemId}?comment=${commentParam}`
-        : `/clear/${parentItemId}?comment=${commentParam}`;
+        : type === 'weekly_challenge'
+          ? `/weekly-challenge/${parentItemId}?comment=${commentParam}`
+          : `/clear/${parentItemId}?comment=${commentParam}`;
     createNotification(db, comment.user_id, 'comment_pump', 'Comment Pumped', `${me.username} pumped your comment`, link);
   }
 
@@ -2668,6 +2670,35 @@ router.get('/daily-highlights', (req, res) => {
 });
 
 // ─── Weekly Challenge Play Posts ───────────────────────────
+
+// GET /api/social/weekly-challenge-plays/lookup?weekId=123&userId=abc
+router.get('/weekly-challenge-plays/lookup', optionalAuth, (req, res) => {
+  const db = getDb();
+  const weekId = parseInt(req.query.weekId, 10);
+  const userId = String(req.query.userId || '').trim();
+
+  if (!Number.isFinite(weekId) || weekId <= 0 || !userId) {
+    return res.status(400).json({ error: 'weekId and userId are required' });
+  }
+
+  const row = db.prepare(`
+    SELECT wcp.id,
+           (
+             SELECT COUNT(*)
+             FROM weekly_challenge_play_comments wcc
+             WHERE wcc.play_post_id = wcp.id
+           ) AS comment_count
+    FROM user_weekly_challenge_plays wcp
+    WHERE wcp.week_id = ? AND wcp.user_id = ?
+    LIMIT 1
+  `).get(weekId, userId);
+
+  if (!row) return res.status(404).json({ error: 'Not found' });
+  res.json({
+    play_post_id: row.id,
+    comment_count: parseInt(row.comment_count, 10) || 0,
+  });
+});
 
 // GET /api/social/weekly-challenge-plays/:id
 router.get('/weekly-challenge-plays/:id', optionalAuth, (req, res) => {

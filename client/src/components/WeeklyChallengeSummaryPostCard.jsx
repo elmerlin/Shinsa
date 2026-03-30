@@ -1,9 +1,11 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { getAvatarUrl } from './AvatarPicker';
 import { getCountryFlag } from '../utils/countryFlags';
 import PiuChartJacket from './PiuChartJacket';
 import YouTubeReplayModal from './YouTubeReplayModal';
+import { getGradeColorClass, getGradeDisplayLabel } from '../utils/grades';
+import { lookupWeeklyChallengePlay } from '../utils/api';
 
 const PODIUM_COLORS = [
   { bg: 'from-amber-500/20 via-yellow-600/10 to-transparent', border: 'border-amber-500/40', icon: 'text-piu-gold', label: '1st', medal: '\uD83E\uDD47' },
@@ -27,6 +29,14 @@ const SUPERLATIVE_LABELS = {
 };
 
 const TOTAL_PAGES = 5;
+
+function ReplayIcon({ className = '' }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.546 12 3.546 12 3.546s-7.505 0-9.377.504A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.504 9.376.504 9.376.504s7.505 0 9.377-.504a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
+    </svg>
+  );
+}
 
 function PodiumRow({ entry, rank }) {
   const style = PODIUM_COLORS[rank - 1] || PODIUM_COLORS[2];
@@ -107,17 +117,30 @@ function SuperlativeTile({ rewardKey, entries }) {
   );
 }
 
-function ReplayHighlightRow({ highlight, onPlay }) {
+function ReplayHighlightRow({ highlight, onPlay, discussionMeta = null }) {
   const avatarUrl = highlight.avatar ? getAvatarUrl(highlight.avatar, 'sm') : null;
   const hasReplay = highlight.replay_embed_url || highlight.replay_video_id;
+  const playPostId = Number(highlight.play_post_id) > 0
+    ? Number(highlight.play_post_id)
+    : Number(discussionMeta?.play_post_id || 0);
+  const playPostCommentCount = Number.isFinite(Number(highlight.play_post_comment_count))
+    ? Number(highlight.play_post_comment_count || 0)
+    : 0;
+  const resolvedCommentCount = playPostCommentCount > 0
+    ? playPostCommentCount
+    : Number(discussionMeta?.comment_count || 0);
+  const hasDiscussion = playPostId > 0;
+  const gradeLabel = getGradeDisplayLabel(highlight.grade, highlight.score);
+  const gradeColorClass = getGradeColorClass(highlight.grade, highlight.score);
 
   return (
     <div className="flex items-center gap-2 rounded-lg border border-piu-border/50 bg-piu-dark/50 px-2.5 py-2">
       <PiuChartJacket
-        url={highlight.jacket_url}
+        title={highlight.song_title}
         mode={highlight.mode}
         level={highlight.level}
-        size="sm"
+        jacketUrl={highlight.jacket_url}
+        size="md"
         className="shrink-0"
       />
       <div className="min-w-0 flex-1">
@@ -127,22 +150,35 @@ function ReplayHighlightRow({ highlight, onPlay }) {
             <img src={avatarUrl} alt="" className="h-3.5 w-3.5 rounded-full border border-white/20 object-cover" loading="lazy" />
           )}
           <span className="truncate">{highlight.username}</span>
-          <span className="text-gray-600">\u2022</span>
-          <span className="text-white/80">{(highlight.score || 0).toLocaleString()}</span>
-          <span className="text-piu-gold font-bold">{highlight.grade}</span>
+          <span className="text-gray-600">&bull;</span>
+          <span className="font-display text-white/80 tabular-nums">{(highlight.score || 0).toLocaleString()}</span>
+          <span className={`font-display font-bold ${gradeColorClass}`}>{gradeLabel}</span>
         </div>
         <p className="text-[9px] text-gray-500 mt-0.5">{highlight.highlight_reason}</p>
       </div>
       {hasReplay && (
         <button
+          type="button"
           onClick={() => onPlay(highlight)}
-          className="shrink-0 w-7 h-7 rounded-full bg-red-600/80 hover:bg-red-500 flex items-center justify-center transition-colors"
-          title="Play replay"
+          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-sky-400/35 bg-sky-500/10 transition-colors hover:bg-sky-500/20"
+          title="Open replay clip"
+          aria-label="Open replay clip"
         >
-          <svg className="w-3 h-3 text-white ml-0.5" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M8 5v14l11-7z" />
-          </svg>
+          <ReplayIcon className="h-4 w-4 text-sky-300" />
         </button>
+      )}
+      {hasDiscussion && (
+        <Link
+          to={`/weekly-challenge/${playPostId}`}
+          className="inline-flex h-8 min-w-[2rem] shrink-0 items-center justify-center gap-1 rounded-lg border border-piu-border/45 bg-piu-dark/65 px-2 text-[10px] font-display font-bold text-gray-300 transition-colors hover:border-piu-border/70 hover:text-white"
+          title="Open replay discussion"
+          aria-label="Open replay discussion"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9} className="h-3.5 w-3.5">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M7 10.5h10M7 14h6m8 4-3.8-1.3a9.2 9.2 0 0 1-3.2.55C7.925 17.25 4 14.22 4 10.5S7.925 3.75 12.75 3.75 21.5 6.78 21.5 10.5c0 1.75-.87 3.34-2.3 4.52L21 18Z" />
+          </svg>
+          {resolvedCommentCount > 0 ? <span>{resolvedCommentCount}</span> : null}
+        </Link>
       )}
     </div>
   );
@@ -189,9 +225,10 @@ function PageHero({ summary }) {
       {summary.nextWeek && (
         <Link
           to="/weekly-challenges"
-          className="block text-center text-xs font-display font-bold text-piu-gold hover:text-amber-300 transition-colors mt-2"
+          className="mt-2 flex items-center justify-center gap-1 text-center text-xs font-display font-bold text-piu-gold transition-colors hover:text-amber-300"
         >
-          New weekly is live \u2192
+          <span>New weekly is live</span>
+          <span aria-hidden="true">&rarr;</span>
         </Link>
       )}
     </div>
@@ -238,7 +275,7 @@ function PageRewards({ summary }) {
   );
 }
 
-function PageReplays({ summary, onPlay }) {
+function PageReplays({ summary, onPlay, discussionLookup }) {
   const highlights = summary.replayHighlights || [];
   if (highlights.length === 0) {
     return <p className="text-xs text-gray-500 text-center py-4">No replays this week.</p>;
@@ -249,7 +286,12 @@ function PageReplays({ summary, onPlay }) {
       <h3 className="font-display font-bold text-sm text-white text-center">Replay Highlights</h3>
       <div className="space-y-1.5">
         {highlights.map((h, i) => (
-          <ReplayHighlightRow key={h.user_id + h.song_title + i} highlight={h} onPlay={onPlay} />
+          <ReplayHighlightRow
+            key={h.user_id + h.song_title + i}
+            highlight={h}
+            onPlay={onPlay}
+            discussionMeta={discussionLookup[h.user_id] || null}
+          />
         ))}
       </div>
     </div>
@@ -264,9 +306,10 @@ function PageNextWeek({ summary }) {
         <p className="text-xs text-gray-500">Next week's challenge hasn't started yet.</p>
         <Link
           to="/weekly-challenges"
-          className="inline-block mt-2 text-xs font-display font-bold text-piu-gold hover:text-amber-300 transition-colors"
+          className="mt-2 inline-flex items-center justify-center gap-1 text-xs font-display font-bold text-piu-gold transition-colors hover:text-amber-300"
         >
-          Check Weekly Challenges \u2192
+          <span>Check Weekly Challenges</span>
+          <span aria-hidden="true">&rarr;</span>
         </Link>
       </div>
     );
@@ -285,7 +328,13 @@ function PageNextWeek({ summary }) {
         <div className="grid grid-cols-3 gap-2">
           {charts.map((c, i) => (
             <div key={i} className="flex flex-col items-center gap-1">
-              <PiuChartJacket url={c.jacket_url} mode={c.mode} level={c.level} size="sm" />
+              <PiuChartJacket
+                title={c.song_title}
+                mode={c.mode}
+                level={c.level}
+                jacketUrl={c.jacket_url}
+                size="wide"
+              />
               <p className="text-[9px] text-gray-400 truncate max-w-full text-center">{c.song_title}</p>
             </div>
           ))}
@@ -310,6 +359,7 @@ export default function WeeklyChallengeSummaryPostCard({ summary, className = ''
   const [currentPage, setCurrentPage] = useState(0);
   const [selectedReplay, setSelectedReplay] = useState(null);
   const [touchStart, setTouchStart] = useState(null);
+  const [discussionLookup, setDiscussionLookup] = useState({});
 
   const goTo = useCallback((page) => {
     setCurrentPage(Math.max(0, Math.min(TOTAL_PAGES - 1, page)));
@@ -340,13 +390,53 @@ export default function WeeklyChallengeSummaryPostCard({ summary, className = ''
     }
   }, []);
 
+  useEffect(() => {
+    if (!summary?.weekId) return;
+
+    const unresolvedUserIds = [...new Set(
+      (summary.replayHighlights || [])
+        .filter((highlight) => !highlight.play_post_id && highlight.user_id)
+        .map((highlight) => highlight.user_id)
+    )];
+
+    if (unresolvedUserIds.length === 0) return;
+
+    let cancelled = false;
+    Promise.all(
+      unresolvedUserIds.map(async (userId) => {
+        try {
+          const result = await lookupWeeklyChallengePlay(summary.weekId, userId);
+          return [userId, result];
+        } catch {
+          return null;
+        }
+      })
+    ).then((results) => {
+      if (cancelled) return;
+      const next = {};
+      for (const entry of results) {
+        if (!entry) continue;
+        const [userId, result] = entry;
+        if (!result?.play_post_id) continue;
+        next[userId] = result;
+      }
+      if (Object.keys(next).length > 0) {
+        setDiscussionLookup((prev) => ({ ...prev, ...next }));
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [summary]);
+
   if (!summary) return null;
 
   const pages = [
     <PageHero key="hero" summary={summary} />,
     <PagePodiums key="podiums" summary={summary} />,
     <PageRewards key="rewards" summary={summary} />,
-    <PageReplays key="replays" summary={summary} onPlay={handlePlayReplay} />,
+    <PageReplays key="replays" summary={summary} onPlay={handlePlayReplay} discussionLookup={discussionLookup} />,
     <PageNextWeek key="next" summary={summary} />,
   ];
 

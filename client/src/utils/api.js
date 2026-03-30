@@ -926,6 +926,7 @@ export const getWeeklyChallengeChartScores = (chartId) =>
 
 // ─── Weekly Challenge Play Posts ─────────────────────
 export const getWeeklyChallengePlay = (id) => request(`/social/weekly-challenge-plays/${id}`);
+export const lookupWeeklyChallengePlay = (weekId, userId) => request(`/social/weekly-challenge-plays/lookup?weekId=${encodeURIComponent(weekId)}&userId=${encodeURIComponent(userId)}`);
 export const getWeeklyChallengePlayComments = (playId) => request(`/social/weekly-challenge-plays/${playId}/comments`);
 export const addWeeklyChallengePlayComment = (playId, content, parentId) => request(`/social/weekly-challenge-plays/${playId}/comments`, { method: 'POST', body: JSON.stringify({ content, parent_id: parentId || null }) });
 export const deleteWeeklyChallengePlayComment = (id) => request(`/social/weekly-challenge-plays/comments/${id}`, { method: 'DELETE' });

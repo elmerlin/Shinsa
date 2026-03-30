@@ -283,11 +283,18 @@ function selectReplayHighlights(db, weekId, awards) {
   const rows = db.prepare(`
     SELECT r.*, wc.song_title_snapshot, wc.mode, wc.level, wc.jacket_url_snapshot,
            rp.replay_embed_url, rp.replay_video_id, rp.replay_start_seconds, rp.replay_end_seconds,
-           s.username_snapshot, s.avatar_snapshot, s.nationality_snapshot
+           s.username_snapshot, s.avatar_snapshot, s.nationality_snapshot,
+           wcp.id AS play_post_id,
+           (
+             SELECT COUNT(*)
+             FROM weekly_challenge_play_comments wcc
+             WHERE wcc.play_post_id = wcp.id
+           ) AS play_post_comment_count
     FROM weekly_challenge_results r
     JOIN weekly_challenge_charts wc ON wc.id = r.weekly_chart_id
     JOIN user_recently_played rp ON rp.id = r.source_play_id
     JOIN weekly_challenge_user_snapshots s ON s.week_id = ? AND s.user_id = r.user_id
+    LEFT JOIN user_weekly_challenge_plays wcp ON wcp.week_id = wc.week_id AND wcp.user_id = r.user_id
     WHERE wc.week_id = ?
       AND r.source_play_id IS NOT NULL
       AND (rp.replay_embed_url != '' OR rp.replay_video_id != '')
@@ -367,6 +374,8 @@ function selectReplayHighlights(db, weekId, awards) {
       replay_start_seconds: r.replay_start_seconds || 0,
       replay_end_seconds: r.replay_end_seconds || 0,
       highlight_reason: r.highlight_reason,
+      play_post_id: r.play_post_id || 0,
+      play_post_comment_count: r.play_post_comment_count || 0,
     });
   }
 
