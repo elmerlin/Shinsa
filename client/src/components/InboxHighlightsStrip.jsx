@@ -8,6 +8,8 @@ import SessionShareCard from './SessionShareCard';
 import LiveSessionCard from './LiveSessionCard';
 import MentionSuggestionsPanel from './MentionSuggestionsPanel';
 import SessionPlanCard from './SessionPlanCard';
+import WeeklyChallengeSummaryPostCard from './WeeklyChallengeSummaryPostCard';
+import WeeklyChallengePersonalCard from './WeeklyChallengePersonalCard';
 import StickerAsset from './StickerAsset';
 import UserPickerDialog from './UserPickerDialog';
 import { HourOfPowerLogo } from './HourOfPowerBrand';
@@ -30,10 +32,8 @@ import {
 } from '../utils/api';
 import { sendDirectPayloadToRecipients } from '../utils/directMessageDelivery';
 import { useMentionComposer } from '../hooks/useMentionComposer';
-import { splitSessionSummaryContent } from '../utils/sessionSummaryMarker';
-import { splitSessionShareContent } from '../utils/sessionShareMarker';
-import { mergeLiveSessionSummary, splitLiveSessionContent } from '../utils/liveSessionMarker';
-import { splitSessionPlanContent } from '../utils/sessionPlanMarker';
+import { mergeLiveSessionSummary } from '../utils/liveSessionMarker';
+import { parseAllMarkers } from '../utils/postMarkers';
 
 function formatRelativeTime(value) {
   const raw = String(value || '').trim();
@@ -240,25 +240,28 @@ function StoryCard({ story }) {
   if (!story) return null;
 
   const rawStoryContent = String(story.post?.content || story.caption || '').trim();
-  const summarySplit = splitSessionSummaryContent(rawStoryContent);
-  const shareSplit = splitSessionShareContent(summarySplit.text || '');
-  const liveSplit = splitLiveSessionContent(shareSplit.text || '');
-  const planSplit = splitSessionPlanContent(liveSplit.text || '');
-  const summary = summarySplit.summary || null;
-  const share = shareSplit.share || null;
-  const live = mergeLiveSessionSummary(liveSplit.live, story.post?.live_summary_metrics || null);
-  const plan = planSplit.plan || null;
-  const visibleCaption = String(planSplit.text || '').trim();
-  const hasEmbeddedCard = !!(summary || share || live || plan);
+  const parsedStoryContent = parseAllMarkers(rawStoryContent);
+  const wcSummary = parsedStoryContent.wcSummary || story.post?.wc_summary_payload || null;
+  const wcPersonal = parsedStoryContent.wcPersonal || story.post?.wc_personal_payload || null;
+  const summary = parsedStoryContent.sessionSummary || null;
+  const share = parsedStoryContent.sessionShare || null;
+  const live = mergeLiveSessionSummary(parsedStoryContent.liveSession, story.post?.live_summary_metrics || null);
+  const plan = parsedStoryContent.sessionPlan || null;
+  const visibleCaption = String(parsedStoryContent.text || '').trim();
+  const hasEmbeddedCard = !!(wcSummary || wcPersonal || summary || share || live || plan);
   const bareLiveRecapPost = story.type === 'post'
     && !story.media_url
     && !!live
+    && !wcSummary
+    && !wcPersonal
     && !summary
     && !share
     && !plan;
   const bareHourOfPowerShare = story.type === 'post'
     && !story.media_url
     && share?.shareType === 'hour_of_power'
+    && !wcSummary
+    && !wcPersonal
     && !summary
     && !live
     && !plan;
@@ -397,6 +400,8 @@ function StoryCard({ story }) {
         <div className="space-y-3 px-4 py-4">
           <div>
             <p className="text-[11px] font-display font-bold uppercase tracking-[0.18em] text-cyan-200/80">{story.title || 'Post'}</p>
+            {wcSummary ? <WeeklyChallengeSummaryPostCard summary={wcSummary} className="mt-3" /> : null}
+            {wcPersonal ? <WeeklyChallengePersonalCard personal={wcPersonal} className="mt-3" /> : null}
             {summary ? <SessionSummaryCard summary={summary} title="Session Summary" className="mt-3" compact /> : null}
             {share ? <SessionShareCard share={share} title={share?.shareType === 'hour_of_power' ? 'Hour of Power Recap' : 'Session Share'} className="mt-3" compact /> : null}
             {live ? <LiveSessionCard summary={live} title="Shinsa Live Recap" className="mt-3" compact /> : null}
