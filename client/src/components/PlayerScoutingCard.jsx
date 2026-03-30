@@ -39,6 +39,12 @@ function getAttributeModeLabel(attributeMode) {
   return '';
 }
 
+function getScoreModeMeta(mode) {
+  if (mode === 'shinsa_relative') return { shortLabel: 'Relative', longLabel: 'Shinsa-relative scores' };
+  if (mode === 'absolute_capability') return { shortLabel: 'Absolute', longLabel: 'Absolute capability scores' };
+  return { shortLabel: 'Scores', longLabel: getAttributeModeLabel(mode) };
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // Sub-components
 // ────────────────────────────────────────────────────────────────────────────
@@ -150,6 +156,32 @@ function SpecialtyChips({ specialties, competitive }) {
       {chips.slice(0, 6).map((chip) => (
         <Badge key={chip.key} variant={chip.variant}>{chip.label}</Badge>
       ))}
+    </div>
+  );
+}
+
+function ScoreModePills({ active, onChange, modes = [] }) {
+  if (!Array.isArray(modes) || modes.length <= 1) return null;
+  return (
+    <div className="flex gap-1 rounded-lg bg-white/[0.04] p-0.5 border border-white/[0.06]">
+      {modes.map((mode) => {
+        const meta = getScoreModeMeta(mode);
+        const isActive = active === mode;
+        return (
+          <button
+            key={mode}
+            onClick={() => onChange(mode)}
+            className={cx(
+              'px-3 py-1 rounded-md font-display text-[11px] font-bold uppercase tracking-[0.14em] transition-all',
+              isActive
+                ? 'bg-white/10 text-white shadow-sm'
+                : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.04]',
+            )}
+          >
+            {meta.shortLabel}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -299,6 +331,7 @@ export default function PlayerScoutingCard({ userId }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [activeScope, setActiveScope] = useState('overall');
+  const [activeScoreMode, setActiveScoreMode] = useState('shinsa_relative');
 
   useEffect(() => {
     if (!userId) return;
@@ -311,6 +344,11 @@ export default function PlayerScoutingCard({ userId }) {
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [userId]);
+
+  useEffect(() => {
+    const defaultMode = data?.scoring?.defaultMode || data?.coverage?.attributeMode || 'shinsa_relative';
+    setActiveScoreMode(defaultMode);
+  }, [data]);
 
   if (loading) return <ScoutingCardSkeleton />;
   if (error) {
@@ -330,11 +368,18 @@ export default function PlayerScoutingCard({ userId }) {
   }
   if (!data || !data.coverage?.hasPiuData) return <EmptyState />;
 
-  const { user, ratings, attributes, cadence, competitive, specialties } = data;
+  const { user, cadence, competitive, specialties } = data;
+  const scoringModes = data.scoring?.modes || {};
+  const availableScoreModes = data.scoring?.availableModes || [data.coverage?.attributeMode].filter(Boolean);
+  const activeScoring = scoringModes[activeScoreMode]
+    || scoringModes[data.scoring?.defaultMode]
+    || { ratings: data.ratings, attributes: data.attributes, label: getAttributeModeLabel(data.coverage?.attributeMode) };
+  const ratings = activeScoring.ratings || data.ratings;
+  const attributes = activeScoring.attributes || data.attributes;
   const tint = SCOPE_TINT[activeScope];
   const scopeAttrs = attributes?.[activeScope] || { speed: 0, stamina: 0, mobility: 0, tech: 0 };
-  const hasDoubles = (ratings?.doubles?.raw || 0) > 0;
-  const attributeModeLabel = getAttributeModeLabel(data.coverage?.attributeMode);
+  const hasDoubles = ((scoringModes?.shinsa_relative?.ratings?.doubles?.raw || data.ratings?.doubles?.raw || 0) > 0);
+  const attributeModeLabel = activeScoring.label || getAttributeModeLabel(activeScoreMode || data.coverage?.attributeMode);
   const nationalityFlag = user.nationality ? getCountryFlag(user.nationality, 'h-[11px] sm:h-[12px]') : null;
 
   // Mode-based border tint
@@ -394,8 +439,10 @@ export default function PlayerScoutingCard({ userId }) {
           {ratings && <RatingCluster ratings={ratings} tint={tint} />}
         </div>
 
-        {/* ── Scope toggle ── */}
-        <ScopePills active={activeScope} onChange={setActiveScope} hasDoubles={hasDoubles} />
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <ScopePills active={activeScope} onChange={setActiveScope} hasDoubles={hasDoubles} />
+          <ScoreModePills active={activeScoreMode} onChange={setActiveScoreMode} modes={availableScoreModes} />
+        </div>
 
         {/* ── Attribute rails ── */}
         <div className="space-y-2">

@@ -22,10 +22,12 @@ for (const [bucket, slugs] of Object.entries(SCOUTING_SKILL_BUCKETS)) {
 }
 
 const BUCKET_KEYS = ['speed', 'stamina', 'mobility', 'tech'];
+const SHINSA_BASELINE_TTL_MS = 2 * 60 * 1000;
 const ABSOLUTE_TARGET_SAMPLE = 5;
 const ABSOLUTE_LEVEL_WEIGHT_EXPONENT = 0.7;
 const MAX_CHART_RATING_MULTIPLIER = 1.5;
 const CADENCE_SESSION_GAP_MS = 90 * 60 * 1000;
+let shinsaBaselineCache = { data: null, expiresAt: 0 };
 
 function clamp(min, max, value) {
   return Math.max(min, Math.min(max, value));
@@ -50,6 +52,120 @@ function emptyScopedBucketScores() {
     overall: emptyBucketScores(),
     singles: emptyBucketScores(),
     doubles: emptyBucketScores(),
+  };
+}
+
+function emptyRatingScores() {
+  return { overall: 0, singles: 0, doubles: 0 };
+}
+
+function cloneScopedBucketScores(scoped) {
+  return {
+    overall: { ...emptyBucketScores(), ...(scoped?.overall || {}) },
+    singles: { ...emptyBucketScores(), ...(scoped?.singles || {}) },
+    doubles: { ...emptyBucketScores(), ...(scoped?.doubles || {}) },
+  };
+}
+
+function cloneRatingScores(ratings) {
+  return { ...emptyRatingScores(), ...(ratings || {}) };
+}
+
+function mergeBucketMaximums(target, source) {
+  for (const bucket of BUCKET_KEYS) {
+    target[bucket] = Math.max(target[bucket] || 0, source?.[bucket] || 0);
+  }
+}
+
+function mergeScopedBucketMaximums(target, source) {
+  for (const scope of ['overall', 'singles', 'doubles']) {
+    mergeBucketMaximums(target[scope], source?.[scope]);
+  }
+}
+
+function mergeRatingMaximums(target, source) {
+  for (const scope of ['overall', 'singles', 'doubles']) {
+    target[scope] = Math.max(target[scope] || 0, source?.[scope] || 0);
+  }
+}
+
+function createEmptyShinsaBaseline() {
+  return {
+    key: 'shinsa',
+    label: 'Shinsa',
+    source: 'shinsa_cohort',
+    cohortSize: 0,
+    ratings: emptyRatingScores(),
+    families: emptyScopedBucketScores(),
+  };
+}
+
+function cloneShinsaBaseline(baseline) {
+  return {
+    key: baseline?.key || 'shinsa',
+    label: baseline?.label || 'Shinsa',
+    source: baseline?.source || 'shinsa_cohort',
+    cohortSize: parseInt(baseline?.cohortSize, 10) || 0,
+    ratings: cloneRatingScores(baseline?.ratings),
+    families: cloneScopedBucketScores(baseline?.families),
+  };
+}
+
+function mergeSnapshotIntoShinsaBaseline(baseline, snapshot, options = {}) {
+  if (!baseline || !snapshot?.hasPiuData) return baseline;
+
+  const shouldCount = options.count !== false;
+  if (shouldCount) baseline.cohortSize += 1;
+
+  mergeRatingMaximums(baseline.ratings, snapshot.relativeRatings);
+  mergeScopedBucketMaximums(baseline.families, snapshot.relativeFamilies);
+  return baseline;
+}
+
+function buildShinsaBaselineFromSnapshots(snapshots = []) {
+  const baseline = createEmptyShinsaBaseline();
+  for (const snapshot of snapshots) {
+    mergeSnapshotIntoShinsaBaseline(baseline, snapshot);
+  }
+  return baseline;
+}
+
+function buildRelativeRating(userVal, baselineVal) {
+  const raw = Math.max(0, userVal || 0);
+  const benchmarkRaw = Math.max(0, baselineVal || 0);
+  if (benchmarkRaw <= 0) {
+    return { score100: 0, raw, benchmarkRaw: 0 };
+  }
+  return {
+    score100: clamp(0, 100, Math.round((raw / benchmarkRaw) * 100)),
+    raw,
+    benchmarkRaw,
+  };
+}
+
+function buildRelativeBucketScores(userFam, baselineFam) {
+  const result = emptyBucketScores();
+  for (const bucket of BUCKET_KEYS) {
+    const userVal = userFam?.[bucket] || 0;
+    const baselineVal = baselineFam?.[bucket] || 0;
+    result[bucket] = baselineVal > 0
+      ? clamp(0, 100, Math.round((userVal / baselineVal) * 100))
+      : 0;
+  }
+  return result;
+}
+
+function buildCompositeScopeRating(bucketScores, options = {}) {
+  const values = BUCKET_KEYS.map((bucket) => clamp(0, 100, Number(bucketScores?.[bucket]) || 0));
+  const raw = Math.max(0, options.raw || 0);
+  const benchmarkRaw = Math.max(0, options.benchmarkRaw || 0);
+  if (values.every((value) => value <= 0)) {
+    return { score100: 0, raw, benchmarkRaw };
+  }
+  return {
+    score100: clamp(0, 100, Math.round(weightedMean(values, [1, 1, 1, 1]))),
+    raw,
+    benchmarkRaw,
   };
 }
 
@@ -134,6 +250,56 @@ function buildCadenceSummary({ activeDays30, plays30, sessions30, frequencyPerce
       ? round1(normalizedPlays / normalizedSessions)
       : 0,
   };
+}
+
+function buildScopedSkillFamilyScores(songCatalog, bestByChart, modeFilter) {
+  const slugStats = new Map();
+
+  for (const chart of (Array.isArray(songCatalog?.charts) ? songCatalog.charts : [])) {
+    if (modeFilter && chart?.mode !== modeFilter) continue;
+    if (!Array.isArray(chart?.skills) || chart.skills.length === 0) continue;
+
+    const best = bestByChart.get(chart.key) || null;
+
+    for (const skill of chart.skills) {
+      const slug = skill.slug || skill.skill_slug;
+      if (!slug || !SLUG_TO_BUCKET[slug]) continue;
+
+      if (!slugStats.has(slug)) {
+        slugStats.set(slug, {
+          slug,
+          bucket: SLUG_TO_BUCKET[slug],
+          totalCharts: 0,
+          ratingSum: 0,
+          ratingCount: 0,
+        });
+      }
+      const entry = slugStats.get(slug);
+      entry.totalCharts += 1;
+
+      const rating = best ? (best.rating || 0) : 0;
+      if (rating > 0) {
+        entry.ratingSum += rating;
+        entry.ratingCount += 1;
+      }
+    }
+  }
+
+  const bucketScores = {};
+  for (const bucket of BUCKET_KEYS) {
+    const values = [];
+    const weights = [];
+    for (const slug of SCOUTING_SKILL_BUCKETS[bucket]) {
+      const entry = slugStats.get(slug);
+      if (!entry || entry.ratingCount <= 0) continue;
+      values.push(entry.ratingSum / entry.ratingCount);
+      weights.push(Math.min(entry.ratingCount, 8));
+    }
+    bucketScores[bucket] = values.length > 0
+      ? Number(weightedMean(values, weights).toFixed(2))
+      : 0;
+  }
+  return bucketScores;
 }
 
 function getChartBucketKeys(chart) {
@@ -260,19 +426,6 @@ function buildScopedCapabilityScores(songCatalog, bestByChart, modeFilter) {
   return scores;
 }
 
-function buildCompositeScopeRating(bucketScores) {
-  const values = BUCKET_KEYS.map((bucket) => clamp(0, 100, Number(bucketScores?.[bucket]) || 0));
-  if (values.every((value) => value <= 0)) {
-    return { score100: 0, raw: 0, benchmarkRaw: 100 };
-  }
-  const score100 = clamp(0, 100, Math.round(weightedMean(values, [1, 1, 1, 1])));
-  return {
-    score100,
-    raw: score100,
-    benchmarkRaw: 100,
-  };
-}
-
 function buildUserScoutingSnapshot(db, userId, helpers, existingProfile = null, existingSyncRow = null) {
   const { aliases, songCatalog } = helpers;
   const profile = existingProfile || db.prepare(
@@ -304,11 +457,16 @@ function buildUserScoutingSnapshot(db, userId, helpers, existingProfile = null, 
       passBestByChart,
       analytics: null,
       hasPiuData: false,
-      families: emptyScopedBucketScores(),
+      relativeRatings: emptyRatingScores(),
+      relativeFamilies: emptyScopedBucketScores(),
+      absoluteFamilies: emptyScopedBucketScores(),
     };
   }
 
   const analytics = helpers.formatAnalytics(userId, profile, syncRow, songCatalog, bestByChart, passBestByChart);
+  const doublesRaw = (analytics.pumbility_breakdown?.doubles_top50 || [])
+    .slice(0, 50)
+    .reduce((sum, row) => sum + (row.rating || 0), 0);
 
   return {
     profile,
@@ -317,12 +475,65 @@ function buildUserScoutingSnapshot(db, userId, helpers, existingProfile = null, 
     passBestByChart,
     analytics,
     hasPiuData: true,
-    families: {
+    relativeRatings: {
+      overall: analytics.pumbility || 0,
+      singles: analytics.singles_pumbility || 0,
+      doubles: doublesRaw,
+    },
+    relativeFamilies: {
+      overall: buildScopedSkillFamilyScores(songCatalog, bestByChart, null),
+      singles: buildScopedSkillFamilyScores(songCatalog, bestByChart, 'Single'),
+      doubles: buildScopedSkillFamilyScores(songCatalog, bestByChart, 'Double'),
+    },
+    absoluteFamilies: {
       overall: buildScopedCapabilityScores(songCatalog, bestByChart, null),
       singles: buildScopedCapabilityScores(songCatalog, bestByChart, 'Single'),
       doubles: buildScopedCapabilityScores(songCatalog, bestByChart, 'Double'),
     },
   };
+}
+
+function readShinsaBaselineCache() {
+  if (!shinsaBaselineCache.data) return null;
+  if (Date.now() >= shinsaBaselineCache.expiresAt) {
+    shinsaBaselineCache = { data: null, expiresAt: 0 };
+    return null;
+  }
+  return shinsaBaselineCache.data;
+}
+
+function writeShinsaBaselineCache(data) {
+  shinsaBaselineCache = {
+    data: cloneShinsaBaseline(data),
+    expiresAt: Date.now() + SHINSA_BASELINE_TTL_MS,
+  };
+}
+
+function buildShinsaBaseline(db, helpers) {
+  const cached = readShinsaBaselineCache();
+  if (cached) return cloneShinsaBaseline(cached);
+
+  const cohortRows = db.prepare(`
+    SELECT DISTINCT scoped.user_id
+    FROM (
+      SELECT user_id FROM user_piugame_sync WHERE best_scores_imported = 1
+      UNION ALL
+      SELECT user_id FROM user_best_scores
+    ) scoped
+    WHERE scoped.user_id IS NOT NULL AND TRIM(scoped.user_id) != ''
+  `).all();
+
+  const snapshots = [];
+  for (const row of cohortRows) {
+    const scopedUserId = String(row.user_id || '').trim();
+    if (!scopedUserId) continue;
+    const snapshot = buildUserScoutingSnapshot(db, scopedUserId, helpers);
+    if (snapshot?.hasPiuData) snapshots.push(snapshot);
+  }
+
+  const baseline = buildShinsaBaselineFromSnapshots(snapshots);
+  writeShinsaBaselineCache(baseline);
+  return cloneShinsaBaseline(baseline);
 }
 
 function buildCadenceStats(db, userId) {
@@ -428,9 +639,67 @@ function buildSpecialtyLabels(modeProfile, activeFamilyScores) {
   return labels.slice(0, 4);
 }
 
-function buildPlayerScoutingCard(db, userId, helpers) {
-  const { songCatalog } = helpers;
+function buildScoringModes(benchmark, snapshot) {
+  const relativeAttributes = {
+    overall: buildRelativeBucketScores(snapshot.relativeFamilies.overall, benchmark.families.overall),
+    singles: buildRelativeBucketScores(snapshot.relativeFamilies.singles, benchmark.families.singles),
+    doubles: buildRelativeBucketScores(snapshot.relativeFamilies.doubles, benchmark.families.doubles),
+  };
 
+  const relativeRatings = {
+    overall: buildCompositeScopeRating(relativeAttributes.overall, {
+      raw: snapshot.relativeRatings.overall,
+      benchmarkRaw: benchmark.ratings.overall,
+    }),
+    singles: buildCompositeScopeRating(relativeAttributes.singles, {
+      raw: snapshot.relativeRatings.singles,
+      benchmarkRaw: benchmark.ratings.singles,
+    }),
+    doubles: {
+      ...buildCompositeScopeRating(relativeAttributes.doubles, {
+        raw: snapshot.relativeRatings.doubles,
+        benchmarkRaw: benchmark.ratings.doubles,
+      }),
+      partial: false,
+    },
+  };
+
+  const absoluteAttributes = {
+    overall: cloneScopedBucketScores({ overall: snapshot.absoluteFamilies.overall }).overall,
+    singles: cloneScopedBucketScores({ overall: snapshot.absoluteFamilies.singles }).overall,
+    doubles: cloneScopedBucketScores({ overall: snapshot.absoluteFamilies.doubles }).overall,
+  };
+
+  const absoluteRatings = {
+    overall: buildCompositeScopeRating(absoluteAttributes.overall, { raw: 100, benchmarkRaw: 100 }),
+    singles: buildCompositeScopeRating(absoluteAttributes.singles, { raw: 100, benchmarkRaw: 100 }),
+    doubles: {
+      ...buildCompositeScopeRating(absoluteAttributes.doubles, { raw: 100, benchmarkRaw: 100 }),
+      partial: false,
+    },
+  };
+
+  return {
+    defaultMode: 'shinsa_relative',
+    availableModes: ['shinsa_relative', 'absolute_capability'],
+    modes: {
+      shinsa_relative: {
+        key: 'shinsa_relative',
+        label: 'Shinsa-relative scores',
+        ratings: relativeRatings,
+        attributes: relativeAttributes,
+      },
+      absolute_capability: {
+        key: 'absolute_capability',
+        label: 'Absolute capability scores',
+        ratings: absoluteRatings,
+        attributes: absoluteAttributes,
+      },
+    },
+  };
+}
+
+function buildPlayerScoutingCard(db, userId, helpers) {
   const profile = db.prepare(
     'SELECT id, username, avatar, pumbility, skill_title, nationality FROM users WHERE id = ?'
   ).get(userId);
@@ -443,7 +712,7 @@ function buildPlayerScoutingCard(db, userId, helpers) {
   const snapshot = buildUserScoutingSnapshot(db, userId, helpers, profile, syncRow);
   if (!snapshot) return null;
 
-  const { analytics, families: rawFamilies, hasPiuData } = snapshot;
+  const { analytics, hasPiuData } = snapshot;
 
   if (!hasPiuData) {
     return {
@@ -457,6 +726,7 @@ function buildPlayerScoutingCard(db, userId, helpers) {
       benchmark: null,
       ratings: null,
       attributes: null,
+      scoring: null,
       cadence: buildCadenceStats(db, userId),
       competitive: null,
       specialties: [],
@@ -465,32 +735,19 @@ function buildPlayerScoutingCard(db, userId, helpers) {
     };
   }
 
-  const attributes = {
-    overall: rawFamilies?.overall || emptyBucketScores(),
-    singles: rawFamilies?.singles || emptyBucketScores(),
-    doubles: rawFamilies?.doubles || emptyBucketScores(),
-  };
-
-  const ratings = {
-    overall: buildCompositeScopeRating(attributes.overall),
-    singles: buildCompositeScopeRating(attributes.singles),
-    doubles: {
-      ...buildCompositeScopeRating(attributes.doubles),
-      partial: false,
-    },
-  };
-
-  const singleLevel = analytics.competitive_levels?.single?.level || null;
-  const doubleLevel = analytics.competitive_levels?.double?.level || null;
+  const benchmark = buildShinsaBaseline(db, helpers);
+  mergeSnapshotIntoShinsaBaseline(benchmark, snapshot, { count: false });
+  const hasBenchmark = benchmark.ratings.overall > 0 || benchmark.ratings.singles > 0 || benchmark.ratings.doubles > 0;
+  const scoring = buildScoringModes(benchmark, snapshot);
+  const defaultScoring = scoring.modes[scoring.defaultMode];
 
   const singleRows = helpers.buildIdentityLevelRows(analytics.levels?.single || [], 'Single');
   const doubleRows = helpers.buildIdentityLevelRows(analytics.levels?.double || [], 'Double');
   const singleStrength = singleRows.reduce((sum, row) => sum + row.weight, 0);
   const doubleStrength = doubleRows.reduce((sum, row) => sum + row.weight, 0);
   const modeProfile = helpers.getIdentityModeProfile(singleStrength, doubleStrength);
-
   const cadence = buildCadenceStats(db, userId);
-  const specialties = buildSpecialtyLabels(modeProfile, attributes.overall);
+  const specialties = buildSpecialtyLabels(modeProfile, snapshot.relativeFamilies.overall);
 
   const homeLabel = analytics.competitive_levels?.single?.level
     ? `S${analytics.competitive_levels.single.level}${analytics.competitive_levels?.double?.level ? ` / D${analytics.competitive_levels.double.level}` : ''}`
@@ -508,13 +765,20 @@ function buildPlayerScoutingCard(db, userId, helpers) {
       nationality: profile.nationality || '',
       skillTitle: profile.skill_title || '',
     },
-    benchmark: null,
-    ratings,
-    attributes,
+    benchmark: {
+      key: benchmark.key,
+      label: benchmark.label,
+      source: benchmark.source,
+      doublesPartial: false,
+      cohortSize: benchmark.cohortSize,
+    },
+    ratings: defaultScoring.ratings,
+    attributes: defaultScoring.attributes,
+    scoring,
     cadence,
     competitive: {
-      singleLevel,
-      doubleLevel,
+      singleLevel: analytics.competitive_levels?.single?.level || null,
+      doubleLevel: analytics.competitive_levels?.double?.level || null,
       dominantMode: modeProfile.dominant_mode,
       dominantLabel: modeProfile.dominant_label,
     },
@@ -525,9 +789,9 @@ function buildPlayerScoutingCard(db, userId, helpers) {
     },
     coverage: {
       hasPiuData: true,
-      hasBenchmark: false,
+      hasBenchmark,
       doublesBenchmarkPartial: false,
-      attributeMode: 'absolute_capability',
+      attributeMode: scoring.defaultMode,
     },
   };
 }
@@ -538,8 +802,13 @@ module.exports = {
     buildCadenceSummary,
     buildCapabilityLevelScore,
     buildCompositeScopeRating,
+    buildRelativeBucketScores,
+    buildRelativeRating,
     buildScopedCapabilityScores,
+    buildShinsaBaselineFromSnapshots,
     countCadenceSessions,
+    createEmptyShinsaBaseline,
     getChartCapabilityRatio,
+    mergeSnapshotIntoShinsaBaseline,
   },
 };
