@@ -2292,8 +2292,8 @@ router.post('/comments/:type/:commentId/pump', requireAuth, (req, res) => {
       ? `/post/${parentItemId}?comment=${commentParam}`
       : type === 'upscore'
         ? `/upscore/${parentItemId}?comment=${commentParam}`
-        : type === 'weekly_challenge'
-          ? `/weekly-challenge/${parentItemId}?comment=${commentParam}`
+        : type === 'play'
+          ? `/play/${parentItemId}?comment=${commentParam}`
           : `/clear/${parentItemId}?comment=${commentParam}`;
     createNotification(db, comment.user_id, 'comment_pump', 'Comment Pumped', `${me.username} pumped your comment`, link);
   }
