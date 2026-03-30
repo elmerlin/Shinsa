@@ -301,7 +301,12 @@ export default function SessionShareCard({
                               type="button"
                               className="inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-md border border-sky-400/35 bg-sky-500/10 transition-colors hover:bg-sky-500/20"
                               title="Open replay clip"
-                              onClick={() => setSelectedReplay({ url: row.replay_embed_url, title: buildReplayModalTitle(row) })}
+                              onClick={() => setSelectedReplay({
+                                url: row.replay_embed_url,
+                                title: buildReplayModalTitle(row),
+                                playId: row.play_id || row.id || '',
+                                ownerId: row.user_id || '',
+                              })}
                             >
                               <YouTubeBadgeIcon className="h-2.5 w-2.5 text-sky-300" />
                             </button>
@@ -384,6 +389,10 @@ export default function SessionShareCard({
           url={selectedReplay.url}
           title={selectedReplay.title}
           onClose={() => setSelectedReplay(null)}
+          commentThread={selectedReplay.playId ? {
+            itemId: selectedReplay.playId,
+            ownerId: selectedReplay.ownerId || '',
+          } : null}
         />
       ) : null}
     </>

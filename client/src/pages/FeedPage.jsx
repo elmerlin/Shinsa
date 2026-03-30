@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getFeed, getJacketMap, getChartKeyMap, pumpUpscore, getUpscoreComments, addUpscoreComment, deleteUpscoreComment, pumpNewClear, getNewClearComments, addNewClearComment, deleteNewClearComment, pumpComment, getUpscorePumpers, getNewClearPumpers, pumpWeeklyChallengePlay, getWeeklyChallengePlayComments, addWeeklyChallengePlayComment, deleteWeeklyChallengePlayComment, getWeeklyChallengePlayPumpers } from '../utils/api';
@@ -44,6 +44,24 @@ function getRank(score) {
   if (s >= 550000) return { label: 'C', color: 'text-gray-500' };
   if (s >= 450000) return { label: 'D', color: 'text-gray-600' };
   return { label: 'F', color: 'text-gray-600' };
+}
+
+function feedNeedsSongMeta(items = []) {
+  return items.some((item) =>
+    item?.type === 'upscore'
+    || item?.type === 'clear'
+    || item?.type === 'weekly_challenge'
+  );
+}
+
+function scheduleLowPriority(callback) {
+  if (typeof window === 'undefined') return () => {};
+  if (typeof window.requestIdleCallback === 'function') {
+    const handle = window.requestIdleCallback(() => callback(), { timeout: 1500 });
+    return () => window.cancelIdleCallback?.(handle);
+  }
+  const handle = window.setTimeout(callback, 120);
+  return () => window.clearTimeout(handle);
 }
 
 function getOverTop100Rank(rawRank) {
@@ -580,7 +598,12 @@ function UpscoreCard({ item, jacketLookup, chartKeyMap, onScoreClick, onReplayCl
                     type="button"
                     className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-sky-400/35 bg-sky-500/10 transition-colors hover:bg-sky-500/20"
                     title="Open session replay clip"
-                    onClick={() => onReplayClick && onReplayClick(u.replay_embed_url, buildReplayModalTitle(u))}
+                    onClick={() => onReplayClick && onReplayClick({
+                      url: u.replay_embed_url,
+                      title: buildReplayModalTitle(u),
+                      playId: u.play_id || '',
+                      ownerId: u.user_id || item.user_id || '',
+                    })}
                   >
                     <YouTubeBadgeIcon className="h-4 w-4 text-sky-300" />
                   </button>
@@ -1036,7 +1059,12 @@ function NewClearCard({ item, jacketLookup, chartKeyMap, onScoreClick, onReplayC
                     type="button"
                     className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-sky-400/35 bg-sky-500/10 transition-colors hover:bg-sky-500/20"
                     title="Open session replay clip"
-                    onClick={() => onReplayClick && onReplayClick(clear.replay_embed_url, buildReplayModalTitle(clear))}
+                    onClick={() => onReplayClick && onReplayClick({
+                      url: clear.replay_embed_url,
+                      title: buildReplayModalTitle(clear),
+                      playId: clear.play_id || '',
+                      ownerId: clear.user_id || item.user_id || '',
+                    })}
                   >
                     <YouTubeBadgeIcon className="h-4 w-4 text-sky-300" />
                   </button>
@@ -1414,7 +1442,12 @@ function WeeklyChallengePlayCard({ item, jacketLookup, chartKeyMap, onScoreClick
                     type="button"
                     className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-sky-400/35 bg-sky-500/10 transition-colors hover:bg-sky-500/20"
                     title="Open replay clip"
-                    onClick={() => onReplayClick && onReplayClick(play.replay_embed_url, buildReplayModalTitle(play))}
+                    onClick={() => onReplayClick && onReplayClick({
+                      url: play.replay_embed_url,
+                      title: buildReplayModalTitle(play),
+                      playId: play.play_id || '',
+                      ownerId: play.user_id || item.user_id || '',
+                    })}
                   >
                     <YouTubeBadgeIcon className="h-4 w-4 text-sky-300" />
                   </button>
@@ -1509,22 +1542,58 @@ export default function FeedPage() {
   const [chartKeyMap, setChartKeyMap] = useState({});
   const [selectedScore, setSelectedScore] = useState(null);
   const [selectedReplay, setSelectedReplay] = useState(null);
+  const mountedRef = useRef(false);
+  const songMapsRequestedRef = useRef(false);
 
   useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  const hydrateSongMaps = () => {
+    if (songMapsRequestedRef.current) return;
+    songMapsRequestedRef.current = true;
+    getJacketMap().then((map) => {
+      if (mountedRef.current) setJacketLookup(map || {});
+    }).catch(() => {
+      songMapsRequestedRef.current = false;
+    });
+    getChartKeyMap().then((map) => {
+      if (mountedRef.current) setChartKeyMap(map || {});
+    }).catch(() => {
+      songMapsRequestedRef.current = false;
+    });
+  };
+
+  useEffect(() => {
+    let active = true;
+    let cancelLowPriority = () => {};
     if (!user) {
       setLoading(false);
-      return;
+      return () => {
+        active = false;
+        cancelLowPriority();
+      };
     }
     setLoading(true);
     getFeed(1).then(data => {
+      if (!active) return;
       setFeed(data);
+      setPage(1);
       setHasMore(data.length >= 20);
-    }).catch(() => {}).finally(() => setLoading(false));
+      if (feedNeedsSongMeta(data)) {
+        cancelLowPriority = scheduleLowPriority(hydrateSongMaps);
+      }
+    }).catch(() => {}).finally(() => {
+      if (active) setLoading(false);
+    });
 
-    // Load jacket map from pump-phoenix.json (server-side, normalized)
-    getJacketMap().then(map => setJacketLookup(map)).catch(() => {});
-    // Load chart key → chart_id mapping for direct chart links
-    getChartKeyMap().then(map => setChartKeyMap(map)).catch(() => {});
+    return () => {
+      active = false;
+      cancelLowPriority();
+    };
   }, [user]);
 
   const loadMore = async () => {
@@ -1533,6 +1602,7 @@ export default function FeedPage() {
     setFeed(prev => [...prev, ...data]);
     setPage(nextPage);
     setHasMore(data.length >= 20);
+    if (feedNeedsSongMeta(data)) hydrateSongMaps();
   };
 
   if (!user) {
@@ -1570,11 +1640,11 @@ export default function FeedPage() {
             if (item.type === 'post') {
               return <PostCard key={`post-${item.id}`} post={item} showAuthor={true} />;
             } else if (item.type === 'upscore') {
-              return <UpscoreCard key={`upscore-${item.id}`} item={item} jacketLookup={jacketLookup} chartKeyMap={chartKeyMap} onScoreClick={setSelectedScore} onReplayClick={(url, title) => setSelectedReplay({ url, title })} />;
+              return <UpscoreCard key={`upscore-${item.id}`} item={item} jacketLookup={jacketLookup} chartKeyMap={chartKeyMap} onScoreClick={setSelectedScore} onReplayClick={setSelectedReplay} />;
             } else if (item.type === 'clear') {
-              return <NewClearCard key={`clear-${item.id}`} item={item} jacketLookup={jacketLookup} chartKeyMap={chartKeyMap} onScoreClick={setSelectedScore} onReplayClick={(url, title) => setSelectedReplay({ url, title })} />;
+              return <NewClearCard key={`clear-${item.id}`} item={item} jacketLookup={jacketLookup} chartKeyMap={chartKeyMap} onScoreClick={setSelectedScore} onReplayClick={setSelectedReplay} />;
             } else if (item.type === 'weekly_challenge') {
-              return <WeeklyChallengePlayCard key={`wc-${item.id}`} item={item} jacketLookup={jacketLookup} chartKeyMap={chartKeyMap} onScoreClick={setSelectedScore} onReplayClick={(url, title) => setSelectedReplay({ url, title })} />;
+              return <WeeklyChallengePlayCard key={`wc-${item.id}`} item={item} jacketLookup={jacketLookup} chartKeyMap={chartKeyMap} onScoreClick={setSelectedScore} onReplayClick={setSelectedReplay} />;
             }
             return null;
           })}
@@ -1601,6 +1671,10 @@ export default function FeedPage() {
           url={selectedReplay.url}
           title={selectedReplay.title}
           onClose={() => setSelectedReplay(null)}
+          commentThread={selectedReplay.playId ? {
+            itemId: selectedReplay.playId,
+            ownerId: selectedReplay.ownerId || '',
+          } : null}
         />
       )}
     </div>

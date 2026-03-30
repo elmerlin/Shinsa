@@ -1,11 +1,10 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { getAvatarUrl } from './AvatarPicker';
 import { getCountryFlag } from '../utils/countryFlags';
 import PiuChartJacket from './PiuChartJacket';
 import YouTubeReplayModal from './YouTubeReplayModal';
 import { getGradeColorClass, getGradeDisplayLabel } from '../utils/grades';
-import { lookupWeeklyChallengePlay } from '../utils/api';
 
 const PODIUM_COLORS = [
   { bg: 'from-amber-500/20 via-yellow-600/10 to-transparent', border: 'border-amber-500/40', icon: 'text-piu-gold', label: '1st', medal: '\uD83E\uDD47' },
@@ -117,19 +116,14 @@ function SuperlativeTile({ rewardKey, entries }) {
   );
 }
 
-function ReplayHighlightRow({ highlight, onPlay, discussionMeta = null }) {
+function ReplayHighlightRow({ highlight, onPlay }) {
   const avatarUrl = highlight.avatar ? getAvatarUrl(highlight.avatar, 'sm') : null;
   const hasReplay = highlight.replay_embed_url || highlight.replay_video_id;
-  const playPostId = Number(highlight.play_post_id) > 0
-    ? Number(highlight.play_post_id)
-    : Number(discussionMeta?.play_post_id || 0);
-  const playPostCommentCount = Number.isFinite(Number(highlight.play_post_comment_count))
-    ? Number(highlight.play_post_comment_count || 0)
+  const sourcePlayId = Number(highlight.source_play_id || 0);
+  const sourcePlayCommentCount = Number.isFinite(Number(highlight.source_play_comment_count))
+    ? Number(highlight.source_play_comment_count || 0)
     : 0;
-  const resolvedCommentCount = playPostCommentCount > 0
-    ? playPostCommentCount
-    : Number(discussionMeta?.comment_count || 0);
-  const hasDiscussion = playPostId > 0;
+  const hasCommentThread = sourcePlayId > 0 && hasReplay;
   const gradeLabel = getGradeDisplayLabel(highlight.grade, highlight.score);
   const gradeColorClass = getGradeColorClass(highlight.grade, highlight.score);
 
@@ -167,18 +161,19 @@ function ReplayHighlightRow({ highlight, onPlay, discussionMeta = null }) {
           <ReplayIcon className="h-4 w-4 text-sky-300" />
         </button>
       )}
-      {hasDiscussion && (
-        <Link
-          to={`/weekly-challenge/${playPostId}`}
+      {hasCommentThread && (
+        <button
+          type="button"
+          onClick={() => onPlay(highlight)}
           className="inline-flex h-8 min-w-[2rem] shrink-0 items-center justify-center gap-1 rounded-lg border border-piu-border/45 bg-piu-dark/65 px-2 text-[10px] font-display font-bold text-gray-300 transition-colors hover:border-piu-border/70 hover:text-white"
-          title="Open replay discussion"
-          aria-label="Open replay discussion"
+          title="Open replay comments"
+          aria-label="Open replay comments"
         >
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9} className="h-3.5 w-3.5">
             <path strokeLinecap="round" strokeLinejoin="round" d="M7 10.5h10M7 14h6m8 4-3.8-1.3a9.2 9.2 0 0 1-3.2.55C7.925 17.25 4 14.22 4 10.5S7.925 3.75 12.75 3.75 21.5 6.78 21.5 10.5c0 1.75-.87 3.34-2.3 4.52L21 18Z" />
           </svg>
-          {resolvedCommentCount > 0 ? <span>{resolvedCommentCount}</span> : null}
-        </Link>
+          {sourcePlayCommentCount > 0 ? <span>{sourcePlayCommentCount}</span> : null}
+        </button>
       )}
     </div>
   );
@@ -275,7 +270,7 @@ function PageRewards({ summary }) {
   );
 }
 
-function PageReplays({ summary, onPlay, discussionLookup }) {
+function PageReplays({ summary, onPlay }) {
   const highlights = summary.replayHighlights || [];
   if (highlights.length === 0) {
     return <p className="text-xs text-gray-500 text-center py-4">No replays this week.</p>;
@@ -290,7 +285,6 @@ function PageReplays({ summary, onPlay, discussionLookup }) {
             key={h.user_id + h.song_title + i}
             highlight={h}
             onPlay={onPlay}
-            discussionMeta={discussionLookup[h.user_id] || null}
           />
         ))}
       </div>
@@ -359,7 +353,6 @@ export default function WeeklyChallengeSummaryPostCard({ summary, className = ''
   const [currentPage, setCurrentPage] = useState(0);
   const [selectedReplay, setSelectedReplay] = useState(null);
   const [touchStart, setTouchStart] = useState(null);
-  const [discussionLookup, setDiscussionLookup] = useState({});
 
   const goTo = useCallback((page) => {
     setCurrentPage(Math.max(0, Math.min(TOTAL_PAGES - 1, page)));
@@ -386,49 +379,13 @@ export default function WeeklyChallengeSummaryPostCard({ summary, className = ''
       setSelectedReplay({
         url,
         title: `${highlight.song_title} ${highlight.mode} Lv.${highlight.level}`,
+        commentThread: Number(highlight.source_play_id) > 0 ? {
+          itemId: Number(highlight.source_play_id),
+          ownerId: highlight.user_id || '',
+        } : null,
       });
     }
   }, []);
-
-  useEffect(() => {
-    if (!summary?.weekId) return;
-
-    const unresolvedUserIds = [...new Set(
-      (summary.replayHighlights || [])
-        .filter((highlight) => !highlight.play_post_id && highlight.user_id)
-        .map((highlight) => highlight.user_id)
-    )];
-
-    if (unresolvedUserIds.length === 0) return;
-
-    let cancelled = false;
-    Promise.all(
-      unresolvedUserIds.map(async (userId) => {
-        try {
-          const result = await lookupWeeklyChallengePlay(summary.weekId, userId);
-          return [userId, result];
-        } catch {
-          return null;
-        }
-      })
-    ).then((results) => {
-      if (cancelled) return;
-      const next = {};
-      for (const entry of results) {
-        if (!entry) continue;
-        const [userId, result] = entry;
-        if (!result?.play_post_id) continue;
-        next[userId] = result;
-      }
-      if (Object.keys(next).length > 0) {
-        setDiscussionLookup((prev) => ({ ...prev, ...next }));
-      }
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [summary]);
 
   if (!summary) return null;
 
@@ -436,7 +393,7 @@ export default function WeeklyChallengeSummaryPostCard({ summary, className = ''
     <PageHero key="hero" summary={summary} />,
     <PagePodiums key="podiums" summary={summary} />,
     <PageRewards key="rewards" summary={summary} />,
-    <PageReplays key="replays" summary={summary} onPlay={handlePlayReplay} discussionLookup={discussionLookup} />,
+    <PageReplays key="replays" summary={summary} onPlay={handlePlayReplay} />,
     <PageNextWeek key="next" summary={summary} />,
   ];
 
@@ -486,6 +443,7 @@ export default function WeeklyChallengeSummaryPostCard({ summary, className = ''
           url={selectedReplay.url}
           title={selectedReplay.title}
           onClose={() => setSelectedReplay(null)}
+          commentThread={selectedReplay.commentThread || null}
         />
       )}
     </>

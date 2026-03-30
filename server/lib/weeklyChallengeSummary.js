@@ -284,6 +284,12 @@ function selectReplayHighlights(db, weekId, awards) {
     SELECT r.*, wc.song_title_snapshot, wc.mode, wc.level, wc.jacket_url_snapshot,
            rp.replay_embed_url, rp.replay_video_id, rp.replay_start_seconds, rp.replay_end_seconds,
            s.username_snapshot, s.avatar_snapshot, s.nationality_snapshot,
+           r.source_play_id,
+           (
+             SELECT COUNT(*)
+             FROM play_comments pc
+             WHERE pc.play_id = r.source_play_id
+           ) AS source_play_comment_count,
            wcp.id AS play_post_id,
            (
              SELECT COUNT(*)
@@ -374,6 +380,8 @@ function selectReplayHighlights(db, weekId, awards) {
       replay_start_seconds: r.replay_start_seconds || 0,
       replay_end_seconds: r.replay_end_seconds || 0,
       highlight_reason: r.highlight_reason,
+      source_play_id: r.source_play_id || 0,
+      source_play_comment_count: r.source_play_comment_count || 0,
       play_post_id: r.play_post_id || 0,
       play_post_comment_count: r.play_post_comment_count || 0,
     });
@@ -511,6 +519,14 @@ function buildWeeklyChallengeSummary(db, weekId, targetWeekId = null) {
     awards, superlatives: Object.fromEntries(
       Object.entries(superlatives).map(([k, v]) => [k, v.map(e => e.user_id + ':' + e.value)])
     ),
+    replayHighlights: replayHighlights.map((entry) => ({
+      user_id: entry.user_id,
+      song_title: entry.song_title,
+      score: entry.score,
+      source_play_id: entry.source_play_id || 0,
+      source_play_comment_count: entry.source_play_comment_count || 0,
+    })),
+    nextWeekId: nextWeek?.weekId || null,
   });
   const contentHash = crypto.createHash('sha256').update(hashInput).digest('hex');
 

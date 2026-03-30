@@ -4,11 +4,9 @@ import { getAvatarUrl } from './AvatarPicker';
 import { resolveChartJacketUrl } from './PiuChartJacket';
 import YouTubeReplayModal from './YouTubeReplayModal';
 import ScoreSnapshotModal from './ScoreSnapshotModal';
-import ItemCommentSection from './ItemCommentSection';
 import { getCountryFlag } from '../utils/countryFlags';
 import { buildScoreSnapshotLinkShare } from '../utils/directMessageShares';
 import { buildReplayModalTitle } from '../utils/replayTitle';
-import { getPlayComments, addPlayComment, deletePlayComment } from '../utils/api';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -429,21 +427,15 @@ export default function DailyHighlights({ data, jacketLookup = {}, chartKeyMap =
       )}
 
       {replayModal && (
-        <YouTubeReplayModal url={replayModal.url} title={replayModal.title} onClose={() => setReplayModal(null)}>
-          {replayModal.playId && (
-            <div className="px-4 py-3 border-t border-piu-border/30">
-              <ItemCommentSection
-                itemId={replayModal.playId}
-                commentType="play"
-                getCommentsFn={getPlayComments}
-                addCommentFn={addPlayComment}
-                deleteCommentFn={deletePlayComment}
-                initialOpen={false}
-                ownerId={replayModal.playUserId}
-              />
-            </div>
-          )}
-        </YouTubeReplayModal>
+        <YouTubeReplayModal
+          url={replayModal.url}
+          title={replayModal.title}
+          onClose={() => setReplayModal(null)}
+          commentThread={replayModal.playId ? {
+            itemId: replayModal.playId,
+            ownerId: replayModal.playUserId,
+          } : null}
+        />
       )}
 
       {selectedScore && (

@@ -1,6 +1,10 @@
 import { triggerPumpReactionHaptic } from './haptics';
 
 const API_BASE = '/api';
+let jacketMapCache = null;
+let jacketMapPromise = null;
+let chartKeyMapCache = null;
+let chartKeyMapPromise = null;
 
 function getAuthHeaders() {
   const token = localStorage.getItem('token');
@@ -137,8 +141,28 @@ export const updateAdminSongDuration = ({ song_group_key, duration_seconds }) =>
   method: 'PUT',
   body: JSON.stringify({ song_group_key, duration_seconds }),
 });
-export const getJacketMap = () => request('/songs/jacket-map');
-export const getChartKeyMap = () => request('/songs/chart-key-map');
+export const getJacketMap = () => {
+  if (jacketMapCache) return Promise.resolve(jacketMapCache);
+  if (jacketMapPromise) return jacketMapPromise;
+  jacketMapPromise = request('/songs/jacket-map').then((map) => {
+    jacketMapCache = map && typeof map === 'object' ? map : {};
+    return jacketMapCache;
+  }).finally(() => {
+    jacketMapPromise = null;
+  });
+  return jacketMapPromise;
+};
+export const getChartKeyMap = () => {
+  if (chartKeyMapCache) return Promise.resolve(chartKeyMapCache);
+  if (chartKeyMapPromise) return chartKeyMapPromise;
+  chartKeyMapPromise = request('/songs/chart-key-map').then((map) => {
+    chartKeyMapCache = map && typeof map === 'object' ? map : {};
+    return chartKeyMapCache;
+  }).finally(() => {
+    chartKeyMapPromise = null;
+  });
+  return chartKeyMapPromise;
+};
 export const getSongLibrary = (params = {}) => {
   const qs = new URLSearchParams(params).toString();
   return request(`/songs/library${qs ? `?${qs}` : ''}`);

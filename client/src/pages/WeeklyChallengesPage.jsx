@@ -321,7 +321,17 @@ export default function WeeklyChallengesPage() {
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         {hasReplay && (
-                          <button type="button" onClick={() => setSelectedReplay({ url: entry.replay_embed_url, title: buildReplayModalTitle(entry) })} className="text-sky-400/70 hover:text-sky-300" title="Watch replay">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedReplay({
+                              url: entry.replay_embed_url,
+                              title: buildReplayModalTitle(entry),
+                              playId: entry.play_id || '',
+                              ownerId: entry.user_id || '',
+                            })}
+                            className="text-sky-400/70 hover:text-sky-300"
+                            title="Watch replay"
+                          >
                             <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" className="w-3.5 h-3.5"><path d="M8 5v14l11-7z" /></svg>
                           </button>
                         )}
@@ -349,7 +359,15 @@ export default function WeeklyChallengesPage() {
       )}
       {selectedReplay && (
         <Suspense fallback={null}>
-          <YouTubeReplayModal url={selectedReplay.url} title={selectedReplay.title} onClose={() => setSelectedReplay(null)} />
+          <YouTubeReplayModal
+            url={selectedReplay.url}
+            title={selectedReplay.title}
+            onClose={() => setSelectedReplay(null)}
+            commentThread={selectedReplay.playId ? {
+              itemId: selectedReplay.playId,
+              ownerId: selectedReplay.ownerId || '',
+            } : null}
+          />
         </Suspense>
       )}
     </div>

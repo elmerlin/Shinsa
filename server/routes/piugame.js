@@ -23,6 +23,7 @@ const { buildPumbilityCandidates, getNextGradeThreshold, isPassingScore, isFailG
 const { checkSssAchievements, checkStreakAchievements } = require('../lib/achievements');
 const { annotateWeeklyChallengePlayRows, ensureCurrentWeeklyChallengeWeek } = require('../lib/weeklyChallenges');
 const { normalizePiugamePlayedAtUtc } = require('../lib/piugameDate');
+const { enrichClearRows, enrichUpscoreRows } = require('../lib/activityPostEnrichment');
 const {
   calculatePlayLoad,
   computeAllProfiles,
@@ -2364,7 +2365,7 @@ function findLeaderboardRankByName(db, name) {
 function insertGroupedNewClearPost(db, userId, clears, options = {}) {
   if (!Array.isArray(clears) || clears.length === 0) return null;
 
-  const normalized = clears.map(c => ({
+  const normalized = enrichClearRows(db, userId, clears.map(c => ({
     entry_type: c.entry_type || 'song_clear',
     song_title: c.song_title,
     mode: c.mode,
@@ -2387,7 +2388,7 @@ function insertGroupedNewClearPost(db, userId, clears, options = {}) {
     replay_video_id: c.replay_video_id || '',
     replay_start_seconds: Math.max(0, parseInt(c.replay_start_seconds, 10) || 0),
     replay_end_seconds: Math.max(0, parseInt(c.replay_end_seconds, 10) || 0),
-  }));
+  })));
   const first = normalized[0];
   const explicitGain = options?.pumbilityGain;
   const postPumbilityGain = Number.isFinite(Number(explicitGain))
@@ -2810,7 +2811,7 @@ async function syncRecentlyPlayedForUser(user, options = {}) {
 
     if (persistActivityPosts && upscoreRowsWithGains.length > 0) {
       // Deduplicate: skip if an identical upscore post was created in the last 60 seconds
-      const upscoreJson = JSON.stringify(upscoreRowsWithGains);
+      const upscoreJson = JSON.stringify(enrichUpscoreRows(db, userId, upscoreRowsWithGains));
       const recentDupe = db.prepare(`
         SELECT id FROM user_upscores
         WHERE user_id = ? AND created_at >= datetime('now', '-60 seconds') AND upscores_json = ?
@@ -3229,7 +3230,7 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
         newClears = pumbilityGains.clears;
 
         if (upscores.length > 0) {
-          const upscoreJson = JSON.stringify(upscores);
+          const upscoreJson = JSON.stringify(enrichUpscoreRows(db, userId, upscores));
           const recentDupe = db.prepare(`
             SELECT id FROM user_upscores
             WHERE user_id = ? AND created_at >= datetime('now', '-60 seconds') AND upscores_json = ?

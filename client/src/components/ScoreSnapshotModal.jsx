@@ -344,6 +344,10 @@ export default function ScoreSnapshotModal({
           url={replayUrl}
           title={replayTitle}
           onClose={() => setReplayOpen(false)}
+          commentThread={playId ? {
+            itemId: playId,
+            ownerId: score?.user_id || '',
+          } : null}
         />
       ) : null}
     </>

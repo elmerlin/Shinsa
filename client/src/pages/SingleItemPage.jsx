@@ -136,6 +136,8 @@ function getClearItems(item) {
     date_played: item.date_played || '',
     played_at_utc: item.played_at_utc || '',
     machine_name: item.machine_name || '',
+    play_id: item.play_id || '',
+    user_id: item.user_id || '',
   }];
 
   try {
@@ -171,6 +173,8 @@ function getClearItems(item) {
       date_played: c.date_played || item.date_played || '',
       played_at_utc: c.played_at_utc || item.played_at_utc || '',
       machine_name: c.machine_name || item.machine_name || '',
+      play_id: c.play_id || item.play_id || '',
+      user_id: c.user_id || item.user_id || '',
     }));
   } catch {
     return fallback;
@@ -186,6 +190,7 @@ function ScoreDetailModal({ score, jacketUrl, chartLink, onClose }) {
       directMessageLinkShare={score?._dmLinkShare || null}
       modalLabel="Score details"
       onClose={onClose}
+      playId={score?.play_id || score?.id}
     />
   );
 }
@@ -611,7 +616,12 @@ export function SingleUpscorePage() {
                       type="button"
                       className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-sky-400/35 bg-sky-500/10 transition-colors hover:bg-sky-500/20"
                       title="Open session replay clip"
-                      onClick={() => setSelectedReplay({ url: u.replay_embed_url, title: buildReplayModalTitle(u) })}
+                      onClick={() => setSelectedReplay({
+                        url: u.replay_embed_url,
+                        title: buildReplayModalTitle(u),
+                        playId: u.play_id || u.id || '',
+                        ownerId: u.user_id || item.user_id || '',
+                      })}
                     >
                       <YouTubeBadgeIcon className="h-4 w-4 text-sky-300" />
                     </button>
@@ -700,6 +710,10 @@ export function SingleUpscorePage() {
           url={selectedReplay.url}
           title={selectedReplay.title}
           onClose={() => setSelectedReplay(null)}
+          commentThread={selectedReplay.playId ? {
+            itemId: selectedReplay.playId,
+            ownerId: selectedReplay.ownerId || '',
+          } : null}
         />
       )}
     </div>
@@ -832,7 +846,12 @@ export function SingleClearPage() {
                       type="button"
                       className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-sky-400/35 bg-sky-500/10 transition-colors hover:bg-sky-500/20"
                       title="Open session replay clip"
-                      onClick={() => setSelectedReplay({ url: clear.replay_embed_url, title: buildReplayModalTitle(clear) })}
+                      onClick={() => setSelectedReplay({
+                        url: clear.replay_embed_url,
+                        title: buildReplayModalTitle(clear),
+                        playId: clear.play_id || '',
+                        ownerId: clear.user_id || item.user_id || '',
+                      })}
                     >
                       <YouTubeBadgeIcon className="h-4 w-4 text-sky-300" />
                     </button>
@@ -912,6 +931,10 @@ export function SingleClearPage() {
           url={selectedReplay.url}
           title={selectedReplay.title}
           onClose={() => setSelectedReplay(null)}
+          commentThread={selectedReplay.playId ? {
+            itemId: selectedReplay.playId,
+            ownerId: selectedReplay.ownerId || '',
+          } : null}
         />
       )}
     </div>
@@ -1024,7 +1047,12 @@ export function SingleWeeklyChallengePlayPage() {
                       type="button"
                       className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-sky-400/35 bg-sky-500/10 transition-colors hover:bg-sky-500/20"
                       title="Open replay clip"
-                      onClick={() => setSelectedReplay({ url: play.replay_embed_url, title: buildReplayModalTitle(play) })}
+                      onClick={() => setSelectedReplay({
+                        url: play.replay_embed_url,
+                        title: buildReplayModalTitle(play),
+                        playId: play.play_id || '',
+                        ownerId: play.user_id || item.user_id || '',
+                      })}
                     >
                       <YouTubeBadgeIcon className="h-4 w-4 text-sky-300" />
                     </button>
@@ -1110,6 +1138,10 @@ export function SingleWeeklyChallengePlayPage() {
           url={selectedReplay.url}
           title={selectedReplay.title}
           onClose={() => setSelectedReplay(null)}
+          commentThread={selectedReplay.playId ? {
+            itemId: selectedReplay.playId,
+            ownerId: selectedReplay.ownerId || '',
+          } : null}
         />
       )}
     </div>
