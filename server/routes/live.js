@@ -1279,6 +1279,7 @@ async function performLiveSessionSyncForActor(db, session, actor) {
     userId: actor.id,
     username: actor.username,
     persistActivityPosts: false,
+    persistWeeklyChallengePosts: true,
   });
   return applyLiveSyncResult(db, session, syncResult, actor);
 }

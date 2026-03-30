@@ -2523,6 +2523,9 @@ async function syncRecentlyPlayedForUser(user, options = {}) {
   if (!userId) throw new Error('User is required');
 
   const persistActivityPosts = options.persistActivityPosts !== false;
+  const persistWeeklyChallengePosts = options.persistWeeklyChallengePosts == null
+    ? persistActivityPosts
+    : options.persistWeeklyChallengePosts !== false;
   const profile = db.prepare('SELECT username FROM users WHERE id = ?').get(userId);
   const actorUsername = String(options.username || user?.username || profile?.username || '').trim() || 'Someone';
   const profileLink = buildProfilePath(actorUsername) || `/profile/${userId}`;
@@ -2836,7 +2839,7 @@ async function syncRecentlyPlayedForUser(user, options = {}) {
   txn();
 
   // Create or update weekly challenge play posts
-  if (persistActivityPosts && wcAllPlays.length > 0) {
+  if (persistWeeklyChallengePosts && wcAllPlays.length > 0) {
     try {
       ensureCurrentWeeklyChallengeWeek(db);
       // Annotate with WC data
