@@ -34,6 +34,7 @@ function barWidth(v) { return `${Math.max(0, Math.min(100, v))}%`; }
 
 function getAttributeModeLabel(attributeMode) {
   if (attributeMode === 'shinsa_relative') return 'Shinsa-relative scores';
+  if (attributeMode === 'absolute_capability') return 'Absolute capability scores';
   if (attributeMode === 'profile_relative') return 'Profile-relative attributes';
   return '';
 }
