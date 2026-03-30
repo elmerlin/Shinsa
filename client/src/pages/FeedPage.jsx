@@ -46,12 +46,36 @@ function getRank(score) {
   return { label: 'F', color: 'text-gray-600' };
 }
 
+function safeParseJsonArray(raw) {
+  try {
+    const parsed = JSON.parse(raw || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function hasFeedChartMeta(entry) {
+  return !!String(entry?.chart_path || '').trim();
+}
+
+function hasFeedJacketMeta(entry) {
+  return !!String(entry?.jacket_url || entry?.background_url || '').trim();
+}
+
 function feedNeedsSongMeta(items = []) {
-  return items.some((item) =>
-    item?.type === 'upscore'
-    || item?.type === 'clear'
-    || item?.type === 'weekly_challenge'
-  );
+  return items.some((item) => {
+    if (item?.type === 'upscore') {
+      return safeParseJsonArray(item.upscores_json).some((entry) => !hasFeedChartMeta(entry) || !hasFeedJacketMeta(entry));
+    }
+    if (item?.type === 'clear') {
+      return getClearItems(item).some((entry) => !hasFeedChartMeta(entry) || !hasFeedJacketMeta(entry));
+    }
+    if (item?.type === 'weekly_challenge') {
+      return safeParseJsonArray(item.plays_json).some((entry) => !hasFeedChartMeta(entry) || !hasFeedJacketMeta(entry));
+    }
+    return false;
+  });
 }
 
 function scheduleLowPriority(callback) {
@@ -129,10 +153,13 @@ function getClearItems(item) {
       machine_name: item.machine_name || '',
       play_id: item.play_id || '',
       user_id: item.user_id || '',
+      jacket_url: item.jacket_url || item.background_url || '',
+      chart_id: item.chart_id || 0,
+      chart_path: item.chart_path || '',
     }];
 
   try {
-    const parsed = JSON.parse(item.clears_json || '[]');
+    const parsed = safeParseJsonArray(item.clears_json);
     if (!Array.isArray(parsed) || parsed.length === 0) return fallback;
 
     return parsed.map(c => ({
@@ -163,10 +190,34 @@ function getClearItems(item) {
       machine_name: c.machine_name || item.machine_name || '',
       play_id: c.play_id || item.play_id || '',
       user_id: c.user_id || item.user_id || '',
+      jacket_url: c.jacket_url || c.background_url || item.jacket_url || item.background_url || '',
+      chart_id: parseInt(c.chart_id, 10) || parseInt(item.chart_id, 10) || 0,
+      chart_path: c.chart_path || item.chart_path || '',
     }));
   } catch {
     return fallback;
   }
+}
+
+function resolveFeedChartPath(entry, chartKeyMap = {}) {
+  const directPath = String(entry?.chart_path || '').trim();
+  if (directPath) return directPath;
+  const norm = (entry?.song_title || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  if (!norm) return '/songs';
+  const exactKey = `${norm}|${entry?.mode || ''}|${entry?.level || ''}`;
+  const chartId = chartKeyMap?.[exactKey] || chartKeyMap?.[norm];
+  return chartId ? `/songs/chart/${chartId}` : `/songs?q=${encodeURIComponent(entry.song_title || '')}`;
+}
+
+function resolveFeedJacketUrl(entry, jacketLookup = {}) {
+  return resolveChartJacketUrl({
+    title: entry?.song_title,
+    mode: entry?.mode,
+    level: entry?.level,
+    jacketLookup,
+    backgroundUrl: entry?.background_url,
+    jacketUrl: entry?.jacket_url,
+  });
 }
 
 function getGradeColor(grade, score = 0) {
@@ -544,16 +595,8 @@ function UpscoreCard({ item, jacketLookup, chartKeyMap, onScoreClick, onReplayCl
           const songPumbilityGain = parsePumbilityGain(u.pumbility_gain);
           const songSinglesPumbilityGain = parsePumbilityGain(u.singles_pumbility_gain);
           const overRank = getOverTop100Rank(u.over_top100_rank);
-          const jacketUrl = resolveChartJacketUrl({
-            title: u.song_title,
-            mode: u.mode,
-            level: u.level,
-            jacketLookup,
-          });
-          const norm = (u.song_title || '').toLowerCase().replace(/\s+/g, ' ').trim();
-          const exactKey = `${norm}|${u.mode}|${u.level}`;
-          const chartId = chartKeyMap?.[exactKey] || chartKeyMap?.[norm];
-          const chartLink = chartId ? `/songs/chart/${chartId}` : `/songs?q=${encodeURIComponent(u.song_title || '')}`;
+          const jacketUrl = resolveFeedJacketUrl(u, jacketLookup);
+          const chartLink = resolveFeedChartPath(u, chartKeyMap);
 
           return (
             <div key={i} className="flex items-center gap-3 py-1.5 border-b border-piu-border/20 last:border-0">
@@ -1002,16 +1045,8 @@ function NewClearCard({ item, jacketLookup, chartKeyMap, onScoreClick, onReplayC
           const rank = getRank(clear.score);
           const parsedGrade = parseGrade(clear.grade, rank.label);
           const overRank = getOverTop100Rank(clear.over_top100_rank);
-          const jacketUrl = resolveChartJacketUrl({
-            title: clear.song_title,
-            mode: clear.mode,
-            level: clear.level,
-            jacketLookup,
-          });
-          const norm = (clear.song_title || '').toLowerCase().replace(/\s+/g, ' ').trim();
-          const exactKey = `${norm}|${clear.mode}|${clear.level}`;
-          const chartId = chartKeyMap?.[exactKey] || chartKeyMap?.[norm];
-          const chartLink = chartId ? `/songs/chart/${chartId}` : `/songs?q=${encodeURIComponent(clear.song_title || '')}`;
+          const jacketUrl = resolveFeedJacketUrl(clear, jacketLookup);
+          const chartLink = resolveFeedChartPath(clear, chartKeyMap);
 
           return (
             <div key={`${clear.song_title}-${clear.mode}-${clear.level}-${i}`} className="flex items-center gap-3 py-1.5 border-b border-piu-border/20 last:border-0">
@@ -1398,16 +1433,8 @@ function WeeklyChallengePlayCard({ item, jacketLookup, chartKeyMap, onScoreClick
         {visiblePlays.map((play, i) => {
           const rank = getRank(play.score);
           const grade = parseGrade(play.grade, rank.label);
-          const jacketUrl = resolveChartJacketUrl({
-            title: play.song_title,
-            mode: play.mode,
-            level: play.level,
-            jacketLookup,
-          });
-          const norm = (play.song_title || '').toLowerCase().replace(/\s+/g, ' ').trim();
-          const exactKey = `${norm}|${play.mode}|${play.level}`;
-          const chartId = chartKeyMap?.[exactKey] || chartKeyMap?.[norm];
-          const chartLink = chartId ? `/songs/chart/${chartId}` : `/songs?q=${encodeURIComponent(play.song_title || '')}`;
+          const jacketUrl = resolveFeedJacketUrl(play, jacketLookup);
+          const chartLink = resolveFeedChartPath(play, chartKeyMap);
 
           return (
             <div key={i} className="flex items-center gap-3 py-1.5 border-b border-piu-border/20 last:border-0">

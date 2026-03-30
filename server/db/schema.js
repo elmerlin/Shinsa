@@ -3827,6 +3827,8 @@ function initializeDb() {
       ON weekly_challenge_play_comments(play_post_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_songs_title_mode_level
       ON songs(title, mode, level);
+    CREATE INDEX IF NOT EXISTS idx_songs_jacket_mode_level
+      ON songs(jacket_url, mode, level);
   `);
 
   // Weekly challenge superlatives table

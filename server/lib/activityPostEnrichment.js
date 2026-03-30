@@ -3,6 +3,8 @@ const recentPlayJudgmentsAnyStmtCache = new WeakMap();
 const recentPlayMetadataBeforeStmtCache = new WeakMap();
 const recentPlayMetadataAnyStmtCache = new WeakMap();
 const sessionReplayLinkStmtCache = new WeakMap();
+const songChartByExactStmtCache = new WeakMap();
+const songChartByJacketStmtCache = new WeakMap();
 
 function getCachedStmt(cache, db, sql) {
   let stmt = cache.get(db);
@@ -144,6 +146,30 @@ function getSessionReplayLinkStmt(db) {
   `);
 }
 
+function getSongChartByExactStmt(db) {
+  return getCachedStmt(songChartByExactStmtCache, db, `
+    SELECT id AS chart_id, jacket_url
+    FROM songs
+    WHERE title = ?
+      AND mode = ?
+      AND level = ?
+    ORDER BY id ASC
+    LIMIT 1
+  `);
+}
+
+function getSongChartByJacketStmt(db) {
+  return getCachedStmt(songChartByJacketStmtCache, db, `
+    SELECT id AS chart_id, jacket_url
+    FROM songs
+    WHERE jacket_url = ?
+      AND mode = ?
+      AND level = ?
+    ORDER BY id ASC
+    LIMIT 1
+  `);
+}
+
 function findRecentPlayJudgments(db, { userId, createdAt, songTitle, mode, level, score }) {
   if (!userId || !songTitle || !mode) return null;
   const numericLevel = toInt(level);
@@ -199,6 +225,52 @@ function findSessionReplayLink(db, { userId, songTitle, mode, level }) {
   };
 }
 
+function findSongChartMetadata(db, { songTitle, mode, level, jacketUrl = '' }) {
+  const normalizedTitle = String(songTitle || '').trim();
+  const normalizedMode = String(mode || '').trim();
+  const numericLevel = toInt(level);
+  if (!normalizedMode || numericLevel <= 0) return null;
+
+  if (normalizedTitle) {
+    const exactMatch = getSongChartByExactStmt(db).get(normalizedTitle, normalizedMode, numericLevel) || null;
+    if (exactMatch) return exactMatch;
+  }
+
+  const normalizedJacketUrl = String(jacketUrl || '').trim();
+  if (!normalizedJacketUrl) return null;
+  return getSongChartByJacketStmt(db).get(normalizedJacketUrl, normalizedMode, numericLevel) || null;
+}
+
+function applyChartMetadata(db, entry) {
+  if (!entry) return entry;
+
+  const songTitle = String(entry.song_title || '').trim();
+  const existingChartId = toInt(entry.chart_id);
+  const existingChartPath = String(entry.chart_path || '').trim();
+  const existingJacketUrl = String(entry.jacket_url || '').trim();
+  if (existingChartId > 0 && existingChartPath && existingJacketUrl) return entry;
+
+  const metadata = findSongChartMetadata(db, {
+    songTitle,
+    mode: entry.mode,
+    level: entry.level,
+    jacketUrl: existingJacketUrl || entry.background_url || '',
+  });
+  const chartId = existingChartId || toInt(metadata?.chart_id);
+  const chartPath = existingChartPath || (
+    chartId > 0
+      ? `/songs/chart/${chartId}`
+      : (songTitle ? `/songs?q=${encodeURIComponent(songTitle)}` : '/songs')
+  );
+
+  return {
+    ...entry,
+    chart_id: chartId || 0,
+    chart_path: chartPath,
+    jacket_url: existingJacketUrl || String(metadata?.jacket_url || '').trim() || String(entry.background_url || '').trim(),
+  };
+}
+
 function enrichEntryWithJudgments(db, userId, createdAt, entry, scoreKey = 'score') {
   if (!entry) return entry;
 
@@ -246,7 +318,7 @@ function enrichEntryWithJudgments(db, userId, createdAt, entry, scoreKey = 'scor
 
 function enrichUpscoreRows(db, userId, rows = [], createdAt = '') {
   return (Array.isArray(rows) ? rows : []).map((item) =>
-    enrichEntryWithJudgments(db, userId, createdAt, item, 'new_score')
+    applyChartMetadata(db, enrichEntryWithJudgments(db, userId, createdAt, item, 'new_score'))
   );
 }
 
@@ -309,15 +381,17 @@ function enrichClearRows(db, userId, rows = [], createdAt = '') {
           level: item?.level,
         });
 
-    if (!replay) return enriched;
+    if (!replay) {
+      return applyChartMetadata(db, enriched);
+    }
 
-    return {
+    return applyChartMetadata(db, {
       ...enriched,
       replay_embed_url: replay.replay_embed_url || '',
       replay_video_id: replay.replay_video_id || '',
       replay_start_seconds: toInt(enriched.replay_start_seconds) || toInt(replay.replay_start_seconds),
       replay_end_seconds: toInt(enriched.replay_end_seconds) || toInt(replay.replay_end_seconds),
-    };
+    });
   });
 }
 
@@ -344,6 +418,7 @@ function enrichClearRecord(db, clear) {
 }
 
 module.exports = {
+  applyChartMetadata,
   buildClearFallbackItem,
   enrichClearRecord,
   enrichClearRows,
@@ -351,6 +426,7 @@ module.exports = {
   enrichUpscoreRows,
   extractYoutubeVideoId,
   findRecentPlayMetadata,
+  findSongChartMetadata,
   findSessionReplayLink,
   hasJudgmentData,
   safeParseJsonArray,

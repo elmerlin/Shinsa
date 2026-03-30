@@ -21,6 +21,7 @@ const {
   parseSqliteDateTime,
 } = require('../lib/liveSessionMetrics');
 const {
+  applyChartMetadata,
   enrichClearRecord,
   enrichUpscoreRecord,
 } = require('../lib/activityPostEnrichment');
@@ -706,9 +707,9 @@ function enrichWeeklyChallengePlayItem(db, userId, createdAt, play) {
             })
       );
 
-  if (!lookup && !replay) return play;
+  if (!lookup && !replay) return applyChartMetadata(db, play);
 
-  return {
+  return applyChartMetadata(db, {
     ...play,
     perfect: toInt(play.perfect) || toInt(lookup?.perfect),
     great: toInt(play.great) || toInt(lookup?.great),
@@ -731,7 +732,7 @@ function enrichWeeklyChallengePlayItem(db, userId, createdAt, play) {
     machine_name: play.machine_name || lookup?.machine_name || '',
     played_at_utc: play.played_at_utc || lookup?.played_at_utc || '',
     play_id: play.play_id || lookup?.play_id || null,
-  };
+  });
 }
 
 function buildWeeklyChallengeTotalsMap(db, wcPlays = []) {
