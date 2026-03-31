@@ -178,6 +178,7 @@ export default function ScoreSnapshotModal({
   modalLabel = 'Run details',
   playId,
   focusCommentId,
+  missingJudgmentHint = '',
 }) {
   const [storyComposerOpen, setStoryComposerOpen] = useState(false);
   const [commentCount, setCommentCount] = useState(0);
@@ -307,6 +308,7 @@ export default function ScoreSnapshotModal({
             onOpenReplay={replayUrl ? () => setReplayOpen(true) : null}
             commentCount={commentCount}
             onCommentClick={() => setCommentSectionOpen(v => !v)}
+            missingJudgmentHint={missingJudgmentHint}
           />
           {playId && (
             <div className="mt-2">

@@ -76,6 +76,16 @@ function parsePumbilityGain(value) {
   return numeric > 0 ? numeric : 0;
 }
 
+function hasScoreJudgments(score) {
+  return (
+    (parseInt(score?.perfect, 10) || 0) > 0 ||
+    (parseInt(score?.great, 10) || 0) > 0 ||
+    (parseInt(score?.good, 10) || 0) > 0 ||
+    (parseInt(score?.bad, 10) || 0) > 0 ||
+    (parseInt(score?.miss, 10) || 0) > 0
+  );
+}
+
 function YouTubeBadgeIcon({ className = '' }) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="currentColor">
@@ -181,7 +191,7 @@ function getClearItems(item) {
   }
 }
 
-function ScoreDetailModal({ score, jacketUrl, chartLink, onClose }) {
+function ScoreDetailModal({ score, jacketUrl, chartLink, onClose, missingJudgmentHint = '' }) {
   return (
     <ScoreSnapshotModal
       score={score}
@@ -191,6 +201,7 @@ function ScoreDetailModal({ score, jacketUrl, chartLink, onClose }) {
       modalLabel="Score details"
       onClose={onClose}
       playId={score?.play_id || score?.id}
+      missingJudgmentHint={missingJudgmentHint}
     />
   );
 }
@@ -757,6 +768,11 @@ export function SingleClearPage() {
   const flag = getCountryFlag(item.nationality);
   const postPumbilityGain = parsePumbilityGain(item.pumbility_gain);
   const postSinglesPumbilityGain = parsePumbilityGain(item.singles_pumbility_gain);
+  const selectedScoreMissingJudgmentHint = !selectedScore
+    ? ''
+    : (!hasScoreJudgments(selectedScore) && !selectedScore.play_id
+      ? 'Judgment breakdown unavailable for this imported PIU Game best-score clear.'
+      : '');
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
@@ -925,6 +941,7 @@ export function SingleClearPage() {
         jacketUrl={selectedScore?._jacketUrl || ''}
         chartLink={selectedScore?._chartLink || ''}
         onClose={() => setSelectedScore(null)}
+        missingJudgmentHint={selectedScoreMissingJudgmentHint}
       />
       {selectedReplay && (
         <YouTubeReplayModal

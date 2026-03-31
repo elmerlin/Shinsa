@@ -171,6 +171,7 @@ export default function ScoreSnapshotCard({
   onOpenReplay = null,
   commentCount = 0,
   onCommentClick = null,
+  missingJudgmentHint = '',
 }) {
   if (!score) return null;
 
@@ -224,6 +225,8 @@ export default function ScoreSnapshotCard({
     labelClass,
     value: parseInt(score?.[field], 10) || 0,
   }));
+  const showJudgments = hasJudgments(score);
+  const showMissingJudgmentHint = !showJudgments && String(missingJudgmentHint || '').trim();
   const resolvedReplayUrl = String(replayUrl || score.replayUrl || score.replay_url || score.replayEmbedUrl || score.replay_embed_url || '').trim();
   const hasReplay = !!resolvedReplayUrl && typeof onOpenReplay === 'function';
   const titleNode = chartLink ? (
@@ -358,7 +361,7 @@ export default function ScoreSnapshotCard({
           </div>
         </div>
 
-        {hasJudgments(score) ? (
+        {showJudgments ? (
           <div className="mt-3 rounded-[1.1rem] border border-white/8 bg-black/48 px-2.5 py-2 backdrop-blur-[2px]">
             <div className="grid grid-cols-5 gap-1 text-center">
               {judgmentItems.map((item) => (
@@ -370,6 +373,11 @@ export default function ScoreSnapshotCard({
                 </div>
               ))}
             </div>
+          </div>
+        ) : null}
+        {showMissingJudgmentHint ? (
+          <div className="mt-3 rounded-[1.1rem] border border-amber-300/18 bg-amber-500/8 px-3 py-2 text-[11px] leading-5 text-amber-100/88 backdrop-blur-[2px]">
+            {missingJudgmentHint}
           </div>
         ) : null}
       </div>
