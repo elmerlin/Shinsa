@@ -537,6 +537,11 @@ export function SingleUpscorePage() {
   const flag = getCountryFlag(item.nationality);
   const postPumbilityGain = parsePumbilityGain(item.pumbility_gain);
   const postSinglesPumbilityGain = parsePumbilityGain(item.singles_pumbility_gain);
+  const selectedScoreMissingJudgmentHint = !selectedScore
+    ? ''
+    : (!hasScoreJudgments(selectedScore) && !selectedScore.play_id
+      ? 'Judgment breakdown unavailable for this imported PIU Game best-score upscore.'
+      : '');
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
@@ -715,6 +720,7 @@ export function SingleUpscorePage() {
         jacketUrl={selectedScore?._jacketUrl || ''}
         chartLink={selectedScore?._chartLink || ''}
         onClose={() => setSelectedScore(null)}
+        missingJudgmentHint={selectedScoreMissingJudgmentHint}
       />
       {selectedReplay && (
         <YouTubeReplayModal
