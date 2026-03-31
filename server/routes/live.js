@@ -31,6 +31,7 @@ const { serializeLiveSessionMarker } = require('../lib/liveSessionMarker');
 const { createUserNotification } = require('../lib/notifications');
 const { normalizePiugamePlayedAtUtc } = require('../lib/piugameDate');
 const { enrichClearRows, enrichUpscoreRows } = require('../lib/activityPostEnrichment');
+const { persistWeeklyChallengePlayPosts } = require('../lib/weeklyChallenges');
 const {
   extractYoutubeVideoId,
   getYoutubeBroadcastById,
@@ -1279,7 +1280,7 @@ async function performLiveSessionSyncForActor(db, session, actor) {
     userId: actor.id,
     username: actor.username,
     persistActivityPosts: false,
-    persistWeeklyChallengePosts: true,
+    persistWeeklyChallengePosts: false,
   });
   return applyLiveSyncResult(db, session, syncResult, actor);
 }
@@ -3654,6 +3655,7 @@ function createParticipantLiveSessionArtifacts(db, session, participant, partici
   let upscorePostId = null;
   let clearPostId = null;
   let summaryPostId = null;
+  let weeklyChallengePostIds = [];
 
   if (filteredUpscores.length > 0) {
     const result = db.prepare(`
@@ -3668,6 +3670,14 @@ function createParticipantLiveSessionArtifacts(db, session, participant, partici
       pumbilityGain: clearGain,
       singlesPumbilityGain: singlesClearGain,
     });
+  }
+
+  if (replayEnhancedPlays.length > 0) {
+    try {
+      weeklyChallengePostIds = persistWeeklyChallengePlayPosts(db, replayEnhancedPlays, participant.user_id);
+    } catch (err) {
+      console.warn(`[WeeklyChallenge] Live session weekly challenge post creation failed for ${participant.user_id}: ${err.message}`);
+    }
   }
 
   if (replayRows.length > 0) {
@@ -3688,6 +3698,7 @@ function createParticipantLiveSessionArtifacts(db, session, participant, partici
     summary,
     hop: participantDisplayState.hop,
     hop_share: hopShare,
+    weekly_challenge_post_ids: weeklyChallengePostIds,
     upscore_post_id: upscorePostId,
     clear_post_id: clearPostId,
     summary_post_id: summaryPostId,
@@ -5480,7 +5491,12 @@ router.post('/sessions/:id/end', requireAuth, async (req, res) => {
     txn();
     clearLiveSessionRuntimeState(db, session.id);
 
-    const anyPostCreated = participantResults.some((result) => result.upscore_post_id || result.clear_post_id || result.summary_post_id);
+    const anyPostCreated = participantResults.some((result) =>
+      result.upscore_post_id
+      || result.clear_post_id
+      || result.summary_post_id
+      || (Array.isArray(result.weekly_challenge_post_ids) && result.weekly_challenge_post_ids.length > 0)
+    );
     if (typeof invalidateRecentActivityCache === 'function' && anyPostCreated) {
       invalidateRecentActivityCache();
     }

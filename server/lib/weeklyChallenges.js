@@ -1063,6 +1063,131 @@ function annotateWeeklyChallengePlayRows(db, plays, userId) {
   return plays;
 }
 
+function buildWeeklyChallengePlayEntry(play) {
+  const level = parseInt(play?.level, 10) || 0;
+  const score = parseInt(play?.score, 10) || 0;
+  const grade = String(play?.grade || '').trim();
+  return {
+    song_title: String(play?.song_title || ''),
+    mode: String(play?.mode || ''),
+    level,
+    score,
+    grade,
+    plate: String(play?.plate || ''),
+    background_url: String(play?.background_url || ''),
+    machine_name: String(play?.machine_name || ''),
+    played_at_utc: String(play?.played_at_utc || ''),
+    date_played: String(play?.date_played || ''),
+    perfect: parseInt(play?.perfect, 10) || 0,
+    great: parseInt(play?.great, 10) || 0,
+    good: parseInt(play?.good, 10) || 0,
+    bad: parseInt(play?.bad, 10) || 0,
+    miss: parseInt(play?.miss, 10) || 0,
+    replay_embed_url: String(play?.replay_embed_url || ''),
+    replay_video_id: String(play?.replay_video_id || ''),
+    replay_start_seconds: parseInt(play?.replay_start_seconds, 10) || 0,
+    replay_end_seconds: parseInt(play?.replay_end_seconds, 10) || 0,
+    weekly_challenge_rank: play?.weekly_challenge_rank || null,
+    weekly_challenge_week_key: String(play?.weekly_challenge_week_key || ''),
+    weekly_challenge_chart_id: parseInt(play?.weekly_challenge_chart_id, 10) || null,
+    rating_points: calculateRatingPoints(level, grade, score),
+  };
+}
+
+function persistWeeklyChallengePlayPosts(db, plays, userId, options = {}) {
+  const normalizedUserId = String(userId || '').trim();
+  if (!db || !normalizedUserId) return [];
+
+  const sourceRows = Array.isArray(plays) ? plays.filter(Boolean) : [];
+  if (sourceRows.length === 0) return [];
+
+  if (options.ensureCurrentWeek !== false) {
+    ensureCurrentWeeklyChallengeWeek(db);
+  }
+
+  const candidates = sourceRows
+    .filter((play) => isPassRecord(play))
+    .map((play) => ({ ...play }));
+  if (candidates.length === 0) return [];
+
+  if (options.annotate !== false) {
+    annotateWeeklyChallengePlayRows(db, candidates, normalizedUserId);
+  }
+
+  const playsByWeek = new Map();
+  for (const play of candidates) {
+    const weekKey = String(play?.weekly_challenge_week_key || '').trim();
+    if (!weekKey) continue;
+    if (!playsByWeek.has(weekKey)) playsByWeek.set(weekKey, []);
+    playsByWeek.get(weekKey).push(play);
+  }
+
+  if (playsByWeek.size === 0) return [];
+
+  const createdPostIds = [];
+  for (const [weekKey, weekPlays] of playsByWeek.entries()) {
+    const weekRow = db.prepare('SELECT id FROM weekly_challenge_weeks WHERE week_key = ?').get(weekKey);
+    if (!weekRow?.id) continue;
+
+    const bestByChart = new Map();
+    for (const play of weekPlays.map(buildWeeklyChallengePlayEntry)) {
+      const chartKey = `${play.song_title}|${play.mode}|${play.level}`;
+      const existing = bestByChart.get(chartKey);
+      if (!existing || play.score > existing.score) {
+        bestByChart.set(chartKey, play);
+      }
+    }
+    if (bestByChart.size === 0) continue;
+
+    const existingPosts = db.prepare(
+      'SELECT id, plays_json FROM user_weekly_challenge_plays WHERE user_id = ? AND week_id = ? ORDER BY id ASC'
+    ).all(normalizedUserId, weekRow.id);
+
+    const previousBests = new Map();
+    for (const post of existingPosts) {
+      let oldPlays = [];
+      try {
+        oldPlays = JSON.parse(post?.plays_json || '[]');
+      } catch {
+        oldPlays = [];
+      }
+      for (const play of Array.isArray(oldPlays) ? oldPlays : []) {
+        const chartKey = `${play?.song_title || ''}|${play?.mode || ''}|${parseInt(play?.level, 10) || 0}`;
+        const existing = previousBests.get(chartKey);
+        if (!existing || (parseInt(play?.score, 10) || 0) > existing.score) {
+          previousBests.set(chartKey, { score: parseInt(play?.score, 10) || 0 });
+        }
+      }
+    }
+
+    const differential = [];
+    for (const [chartKey, play] of bestByChart.entries()) {
+      const previous = previousBests.get(chartKey);
+      if (!previous || play.score > previous.score) {
+        differential.push(play);
+      }
+    }
+    if (differential.length === 0) continue;
+
+    const hashInput = differential
+      .map((play) => `${play.song_title}|${play.mode}|${play.level}|${play.score}`)
+      .sort()
+      .join('\n');
+    const contentHash = crypto.createHash('sha256').update(hashInput).digest('hex').slice(0, 32);
+    const duplicate = db.prepare(
+      'SELECT id FROM user_weekly_challenge_plays WHERE user_id = ? AND week_id = ? AND content_hash = ? LIMIT 1'
+    ).get(normalizedUserId, weekRow.id, contentHash);
+    if (duplicate?.id) continue;
+
+    const result = db.prepare(
+      'INSERT INTO user_weekly_challenge_plays (user_id, week_id, plays_json, content_hash) VALUES (?, ?, ?, ?)'
+    ).run(normalizedUserId, weekRow.id, JSON.stringify(differential), contentHash);
+    createdPostIds.push(result.lastInsertRowid);
+  }
+
+  return createdPostIds;
+}
+
 // ---------------------------------------------------------------------------
 // Weekly challenge summary post publishing
 // ---------------------------------------------------------------------------
@@ -1189,6 +1314,7 @@ module.exports = {
   getWeekBoundary,
   getGlobalChallengeMaxLevel,
   annotateWeeklyChallengePlayRows,
+  persistWeeklyChallengePlayPosts,
   computeIsoWeekKey,
   publishWeeklyChallengeSummary,
   repairMissingSummaryPosts,

@@ -21,7 +21,11 @@ const { notifyActivitySubscribers, buildProfilePath } = require('../lib/activity
 const { getUserTitleProgress, updateUserSkillTitleFromBestScores, LEVEL_BASE_POINTS, GRADE_MULTIPLIER, SCORE_TO_GRADE, calculateRatingPoints, gradeFromScore, normalizeGrade } = require('../lib/titleProgress');
 const { buildPumbilityCandidates, getNextGradeThreshold, isPassingScore, isFailGrade, SCORE_TO_GRADE_ASC } = require('../lib/pumbilityCandidates');
 const { checkSssAchievements, checkStreakAchievements } = require('../lib/achievements');
-const { annotateWeeklyChallengePlayRows, ensureCurrentWeeklyChallengeWeek } = require('../lib/weeklyChallenges');
+const {
+  annotateWeeklyChallengePlayRows,
+  ensureCurrentWeeklyChallengeWeek,
+  persistWeeklyChallengePlayPosts,
+} = require('../lib/weeklyChallenges');
 const { normalizePiugamePlayedAtUtc } = require('../lib/piugameDate');
 const { enrichClearRows, enrichUpscoreRows } = require('../lib/activityPostEnrichment');
 const {
@@ -2841,107 +2845,7 @@ async function syncRecentlyPlayedForUser(user, options = {}) {
   // Create or update weekly challenge play posts
   if (persistWeeklyChallengePosts && wcAllPlays.length > 0) {
     try {
-      ensureCurrentWeeklyChallengeWeek(db);
-      // Annotate with WC data
-      annotateWeeklyChallengePlayRows(db, wcAllPlays, userId);
-      // Filter to only plays that matched a WC chart
-      const wcMatched = wcAllPlays.filter(p => p.weekly_challenge_week_key);
-      if (wcMatched.length > 0) {
-        // Group by week
-        const byWeek = {};
-        for (const p of wcMatched) {
-          const wk = p.weekly_challenge_week_key;
-          if (!byWeek[wk]) byWeek[wk] = [];
-          byWeek[wk].push(p);
-        }
-        for (const [weekKey, newPlays] of Object.entries(byWeek)) {
-          const weekRow = db.prepare('SELECT id FROM weekly_challenge_weeks WHERE week_key = ?').get(weekKey);
-          if (!weekRow) continue;
-
-          // Build play entry for each new play
-          const newEntries = newPlays.map(p => ({
-            song_title: p.song_title,
-            mode: p.mode,
-            level: p.level,
-            score: p.score,
-            grade: p.grade,
-            plate: p.plate || '',
-            background_url: p.background_url || '',
-            machine_name: p.machine_name || '',
-            played_at_utc: p.played_at_utc || '',
-            date_played: p.date_played || '',
-            perfect: p.perfect || 0,
-            great: p.great || 0,
-            good: p.good || 0,
-            bad: p.bad || 0,
-            miss: p.miss || 0,
-            replay_embed_url: p.replay_embed_url || '',
-            replay_video_id: p.replay_video_id || '',
-            replay_start_seconds: p.replay_start_seconds || 0,
-            replay_end_seconds: p.replay_end_seconds || 0,
-            weekly_challenge_rank: p.weekly_challenge_rank || null,
-            weekly_challenge_week_key: p.weekly_challenge_week_key,
-            weekly_challenge_chart_id: p.weekly_challenge_chart_id || null,
-            rating_points: calculateRatingPoints(p.level, p.grade, p.score),
-          }));
-
-          // Dedupe new entries to best per chart
-          const bestByChart = new Map();
-          for (const p of newEntries) {
-            const key = `${p.song_title}|${p.mode}|${p.level}`;
-            const existing = bestByChart.get(key);
-            if (!existing || p.score > existing.score) {
-              bestByChart.set(key, p);
-            }
-          }
-
-          // Check existing posts for this user+week to find previously posted scores
-          const existingPosts = db.prepare(
-            'SELECT id, plays_json FROM user_weekly_challenge_plays WHERE user_id = ? AND week_id = ? ORDER BY id ASC'
-          ).all(userId, weekRow.id);
-
-          // Build map of all previously posted best scores
-          const previousBests = new Map();
-          for (const post of existingPosts) {
-            try {
-              const oldPlays = JSON.parse(post.plays_json || '[]');
-              for (const p of oldPlays) {
-                const key = `${p.song_title}|${p.mode}|${p.level}`;
-                const prev = previousBests.get(key);
-                if (!prev || p.score > prev.score) previousBests.set(key, p);
-              }
-            } catch {}
-          }
-
-          // Filter to only charts that are new or have a higher score than previously posted
-          const differential = [];
-          for (const [key, play] of bestByChart) {
-            const prev = previousBests.get(key);
-            if (!prev || play.score > prev.score) {
-              differential.push(play);
-            }
-          }
-
-          if (differential.length === 0) continue; // nothing new to post
-
-          const playsJson = JSON.stringify(differential);
-          const hashInput = differential
-            .map(p => `${p.song_title}|${p.mode}|${p.level}|${p.score}`)
-            .sort()
-            .join('\n');
-          const contentHash = crypto.createHash('sha256').update(hashInput).digest('hex').slice(0, 32);
-
-          // Check for exact duplicate (same scores already posted)
-          const dupeCheck = db.prepare(
-            'SELECT id FROM user_weekly_challenge_plays WHERE user_id = ? AND week_id = ? AND content_hash = ? LIMIT 1'
-          ).get(userId, weekRow.id, contentHash);
-          if (dupeCheck) continue;
-
-          db.prepare(
-            'INSERT INTO user_weekly_challenge_plays (user_id, week_id, plays_json, content_hash) VALUES (?, ?, ?, ?)'
-          ).run(userId, weekRow.id, playsJson, contentHash);
-        }
-      }
+      persistWeeklyChallengePlayPosts(db, wcAllPlays, userId);
     } catch (wcErr) {
       console.warn(`[WeeklyChallenge] WC play post creation failed for ${userId}: ${wcErr.message}`);
     }
