@@ -2928,21 +2928,21 @@ export default function FunPage() {
         </h1>
       </div>
 
-      <div className="mb-8 overflow-x-auto">
-        <div className="inline-flex min-w-full gap-2 rounded-[24px] border border-piu-border/70 bg-[#0f1528]/85 p-2 sm:min-w-0">
+      <div className="mb-8">
+        <div className="grid grid-cols-3 gap-2 rounded-[24px] border border-piu-border/70 bg-[#0f1528]/85 p-2">
           {funTabs.map((tab) => (
             <button
               key={tab.id}
               type="button"
               onClick={() => handleTabChange(tab.id)}
-              className={`min-w-[150px] flex-1 rounded-[18px] border px-4 py-3 text-left transition-all duration-200 ${
+              className={`min-w-0 rounded-[18px] border px-2 py-2.5 text-left transition-all duration-200 sm:px-4 sm:py-3 ${
                 activeTab === tab.id ? tab.activeClass : tab.inactiveClass
               }`}
             >
-              <p className="font-display text-sm font-bold uppercase tracking-[0.08em]">
+              <p className="font-display text-[11px] font-bold uppercase leading-tight tracking-[0.06em] sm:text-sm sm:tracking-[0.08em]">
                 {tab.label}
               </p>
-              <p className="mt-1 text-[11px] font-medium opacity-70">
+              <p className="mt-1 hidden text-[11px] font-medium opacity-70 sm:block">
                 {tab.detail}
               </p>
             </button>
