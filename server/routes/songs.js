@@ -5131,6 +5131,57 @@ router.post('/recommendations', optionalAuth, (req, res) => {
 });
 
 // GET /api/songs/analytics/fantasy-pool — fetch random scouting cards for fantasy match
+function shuffleInPlace(items) {
+  for (let i = items.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [items[i], items[j]] = [items[j], items[i]];
+  }
+  return items;
+}
+
+function buildFantasySongPool(songCatalog) {
+  const charts = Array.isArray(songCatalog?.charts) ? songCatalog.charts : [];
+  const buckets = new Map();
+
+  for (const chart of charts) {
+    const mode = String(chart?.mode || '').trim();
+    const level = parseInt(chart?.level, 10) || 0;
+    const skills = Array.isArray(chart?.skills) ? chart.skills : [];
+
+    if (!['Single', 'Double'].includes(mode)) continue;
+    if (level < 8 || level > 28) continue;
+    if (skills.length === 0) continue;
+
+    const key = `${mode}:${level}`;
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key).push({
+      chart_id: parseInt(chart?.chart_id ?? chart?.id, 10) || 0,
+      key: chart?.key || '',
+      title: chart?.title || '',
+      artist: chart?.artist || '',
+      mode,
+      level,
+      jacket_url: chart?.jacket_url || '',
+      bpm: String(chart?.bpm || ''),
+      duration_seconds: parseInt(chart?.duration_seconds, 10) || 0,
+      song_key: chart?.song_key || '',
+      flags: chart?.flags || '',
+      skills: skills.map((skill) => ({
+        slug: skill?.slug || skill?.skill_slug || '',
+        name: skill?.name || skill?.skill_name || '',
+      })).filter((skill) => skill.slug),
+    });
+  }
+
+  const pool = [];
+  for (const bucket of buckets.values()) {
+    shuffleInPlace(bucket);
+    pool.push(...bucket.slice(0, 6));
+  }
+
+  return shuffleInPlace(pool);
+}
+
 router.get('/analytics/fantasy-pool', (req, res) => {
   const db = getDb();
   const aliases = loadSongAliases();
@@ -5175,7 +5226,10 @@ router.get('/analytics/fantasy-pool', (req, res) => {
     return res.status(404).json({ error: 'Not enough players with scouting data' });
   }
 
-  res.json({ cards });
+  res.json({
+    cards,
+    songs: buildFantasySongPool(songCatalog),
+  });
 });
 
 module.exports = router;
