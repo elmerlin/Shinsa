@@ -5130,4 +5130,52 @@ router.post('/recommendations', optionalAuth, (req, res) => {
   });
 });
 
+// GET /api/songs/analytics/fantasy-pool — fetch random scouting cards for fantasy match
+router.get('/analytics/fantasy-pool', (req, res) => {
+  const db = getDb();
+  const aliases = loadSongAliases();
+  const songCatalog = getSongCatalog(db, aliases);
+  const count = Math.min(Math.max(parseInt(req.query.count) || 10, 6), 20);
+
+  // Find users who have synced best scores (i.e. have PIU data)
+  const candidates = db.prepare(`
+    SELECT DISTINCT u.id
+    FROM users u
+    INNER JOIN user_best_scores ubs ON ubs.user_id = u.id
+    ORDER BY RANDOM()
+    LIMIT ?
+  `).all(count);
+
+  if (candidates.length < 2) {
+    return res.status(404).json({ error: 'Not enough players with data' });
+  }
+
+  const cards = [];
+  for (const candidate of candidates) {
+    try {
+      const payload = buildPlayerScoutingCard(db, candidate.id, {
+        aliases,
+        songCatalog,
+        queryUserBestScores,
+        queryUserRecentScores,
+        queryUserPumbilityScores,
+        buildUserBestByChartMap,
+        formatAnalytics,
+        getCompetitiveLevel,
+        getIdentityModeProfile,
+        buildIdentityLevelRows,
+      });
+      if (payload && payload.coverage?.hasPiuData && payload.ratings) {
+        cards.push(payload);
+      }
+    } catch (_) { /* skip failed cards */ }
+  }
+
+  if (cards.length < 2) {
+    return res.status(404).json({ error: 'Not enough players with scouting data' });
+  }
+
+  res.json({ cards });
+});
+
 module.exports = router;
