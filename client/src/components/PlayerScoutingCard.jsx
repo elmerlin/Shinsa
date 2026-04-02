@@ -130,10 +130,10 @@ function ScoutingScoreExplainerModal({ open, onClose, activeMode, cohortSize = 0
                 Each visible rail starts from your best chart results, grouped into <span className="font-semibold text-zinc-100">Speed</span>, <span className="font-semibold text-zinc-100">Stamina</span>, <span className="font-semibold text-zinc-100">Mobility</span>, and <span className="font-semibold text-zinc-100">Tech</span>.
               </p>
               <FormulaPill tone="cyan">
-                rail score = your raw bucket value / best current Shinsa bucket value * 100
+                rail score = 40% bucket ceiling match + 60% scope rating ceiling match
               </FormulaPill>
               <p>
-                So a <span className="font-semibold text-zinc-100">100</span> here means “you are currently matching the strongest observed Shinsa value in that area,” not “you hit the game’s theoretical max.”
+                The bucket part keeps the skill shape of the card, while the scope-rating part keeps near-top all-round players from looking artificially low when different specialists own different bucket highs.
               </p>
               <FormulaPill tone="emerald">
                 OVR / S / D = average of the four visible rails in that tab

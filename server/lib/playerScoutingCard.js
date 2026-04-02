@@ -27,6 +27,7 @@ const ABSOLUTE_TARGET_SAMPLE = 5;
 const ABSOLUTE_LEVEL_WEIGHT_EXPONENT = 0.7;
 const MAX_CHART_RATING_MULTIPLIER = 1.5;
 const CADENCE_SESSION_GAP_MS = 90 * 60 * 1000;
+const RELATIVE_SCOPE_RAW_BLEND_WEIGHT = 0.6;
 let shinsaBaselineCache = { data: null, expiresAt: 0 };
 
 function clamp(min, max, value) {
@@ -153,6 +154,26 @@ function buildRelativeBucketScores(userFam, baselineFam) {
       : 0;
   }
   return result;
+}
+
+function buildRelativeScopeAttributes(userFam, baselineFam, userRaw, benchmarkRaw) {
+  const bucketScores = buildRelativeBucketScores(userFam, baselineFam);
+  const rawRatio = buildRelativeRating(userRaw, benchmarkRaw).score100;
+  const bucketWeight = 1 - RELATIVE_SCOPE_RAW_BLEND_WEIGHT;
+  const blended = emptyBucketScores();
+
+  for (const bucket of BUCKET_KEYS) {
+    blended[bucket] = clamp(
+      0,
+      100,
+      Math.round(weightedMean(
+        [bucketScores[bucket], rawRatio],
+        [bucketWeight, RELATIVE_SCOPE_RAW_BLEND_WEIGHT]
+      ))
+    );
+  }
+
+  return blended;
 }
 
 function buildCompositeScopeRating(bucketScores, options = {}) {
@@ -641,9 +662,24 @@ function buildSpecialtyLabels(modeProfile, activeFamilyScores) {
 
 function buildScoringModes(benchmark, snapshot) {
   const relativeAttributes = {
-    overall: buildRelativeBucketScores(snapshot.relativeFamilies.overall, benchmark.families.overall),
-    singles: buildRelativeBucketScores(snapshot.relativeFamilies.singles, benchmark.families.singles),
-    doubles: buildRelativeBucketScores(snapshot.relativeFamilies.doubles, benchmark.families.doubles),
+    overall: buildRelativeScopeAttributes(
+      snapshot.relativeFamilies.overall,
+      benchmark.families.overall,
+      snapshot.relativeRatings.overall,
+      benchmark.ratings.overall
+    ),
+    singles: buildRelativeScopeAttributes(
+      snapshot.relativeFamilies.singles,
+      benchmark.families.singles,
+      snapshot.relativeRatings.singles,
+      benchmark.ratings.singles
+    ),
+    doubles: buildRelativeScopeAttributes(
+      snapshot.relativeFamilies.doubles,
+      benchmark.families.doubles,
+      snapshot.relativeRatings.doubles,
+      benchmark.ratings.doubles
+    ),
   };
 
   const relativeRatings = {
@@ -804,6 +840,7 @@ module.exports = {
     buildCompositeScopeRating,
     buildRelativeBucketScores,
     buildRelativeRating,
+    buildRelativeScopeAttributes,
     buildScopedCapabilityScores,
     buildShinsaBaselineFromSnapshots,
     countCadenceSessions,

@@ -182,6 +182,44 @@ describe('player scouting card shared scope ratings', () => {
 
     assert.equal(rating.score100, 78);
   });
+
+  it('blends bucket rails with raw ceiling proximity in relative mode', () => {
+    const attributes = __test.buildRelativeScopeAttributes(
+      { speed: 82, stamina: 84, mobility: 83, tech: 87 },
+      { speed: 100, stamina: 100, mobility: 100, tech: 100 },
+      74325,
+      74527
+    );
+
+    assert.deepEqual(attributes, {
+      speed: 93,
+      stamina: 94,
+      mobility: 93,
+      tech: 95,
+    });
+  });
+
+  it('keeps stronger ceiling-proximate profiles ahead even when family maxima are split across specialists', () => {
+    const elmerAttributes = __test.buildRelativeScopeAttributes(
+      { speed: 82, stamina: 84, mobility: 83, tech: 87 },
+      { speed: 100, stamina: 100, mobility: 100, tech: 100 },
+      74325,
+      74527
+    );
+    const doudieAttributes = __test.buildRelativeScopeAttributes(
+      { speed: 89, stamina: 91, mobility: 89, tech: 86 },
+      { speed: 100, stamina: 100, mobility: 100, tech: 100 },
+      65776,
+      74527
+    );
+
+    const elmerRating = __test.buildCompositeScopeRating(elmerAttributes).score100;
+    const doudieRating = __test.buildCompositeScopeRating(doudieAttributes).score100;
+
+    assert.equal(elmerRating, 94);
+    assert.equal(doudieRating, 88);
+    assert.ok(elmerRating > doudieRating);
+  });
 });
 
 describe('player scouting card cadence', () => {
