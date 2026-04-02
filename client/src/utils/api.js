@@ -186,6 +186,8 @@ export const getPlayerIdentitySummary = (userId, params = {}) => {
 };
 export const getPlayerScoutingCard = (userId) =>
   request(`/songs/analytics/scouting-card/${encodeURIComponent(userId)}`);
+export const getFantasyPool = (count = 10) =>
+  request(`/songs/analytics/fantasy-pool?count=${count}`, { timeoutMs: 30000 });
 export const getGradeGoals = (userId, params = {}) => {
   const qs = new URLSearchParams(params).toString();
   return request(`/songs/analytics/grade-goals/${userId}${qs ? `?${qs}` : ''}`);
