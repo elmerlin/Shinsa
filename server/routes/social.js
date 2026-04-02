@@ -27,6 +27,7 @@ const {
   enrichClearRecord,
   enrichUpscoreRecord,
 } = require('../lib/activityPostEnrichment');
+const { annotateWeeklyChallengePlayRows } = require('../lib/weeklyChallenges');
 
 const SHARE_MARKER_PREFIX = '[[SHINSA_SHARE_V1:';
 const SHARE_MARKER_SUFFIX = ']]';
@@ -720,28 +721,10 @@ function enrichWeeklyChallengePlayItem(db, userId, createdAt, play) {
       })
     : null;
 
-  const replay = String(play.replay_embed_url || '').trim()
-    ? {
-        replay_embed_url: String(play.replay_embed_url || '').trim(),
-        replay_video_id: String(play.replay_video_id || '').trim() || extractYoutubeVideoId(play.replay_embed_url),
-      }
-    : (
-        String(lookup?.replay_embed_url || '').trim()
-          ? {
-              replay_embed_url: String(lookup.replay_embed_url || '').trim(),
-              replay_video_id: String(lookup.replay_video_id || '').trim() || extractYoutubeVideoId(lookup.replay_embed_url),
-            }
-          : findSessionReplayLink(db, {
-              userId,
-              songTitle: play.song_title,
-              mode: play.mode,
-              level: play.level,
-            })
-      );
-
-  if (!lookup && !replay) return applyChartMetadata(db, play);
-
-  return applyChartMetadata(db, {
+  const replayEmbedUrl = lookup
+    ? String(lookup.replay_embed_url || '').trim()
+    : String(play.replay_embed_url || '').trim();
+  const enriched = applyChartMetadata(db, {
     ...play,
     perfect: toInt(play.perfect) || toInt(lookup?.perfect),
     great: toInt(play.great) || toInt(lookup?.great),
@@ -753,18 +736,107 @@ function enrichWeeklyChallengePlayItem(db, userId, createdAt, play) {
     background_url: play.background_url || lookup?.background_url || '',
     over_top100_rank: toInt(play.over_top100_rank) || toInt(lookup?.over_top100_rank),
     date_played: play.date_played || lookup?.date_played || '',
-    replay_embed_url: String(play.replay_embed_url || '').trim()
-      || replay?.replay_embed_url
-      || '',
-    replay_video_id: String(play.replay_video_id || '').trim()
-      || replay?.replay_video_id
-      || '',
-    replay_start_seconds: toInt(play.replay_start_seconds) || toInt(lookup?.replay_start_seconds),
-    replay_end_seconds: toInt(play.replay_end_seconds) || toInt(lookup?.replay_end_seconds),
+    replay_embed_url: replayEmbedUrl,
+    replay_video_id: replayEmbedUrl
+      ? (
+          (lookup
+            ? String(lookup.replay_video_id || '').trim()
+            : String(play.replay_video_id || '').trim())
+          || extractYoutubeVideoId(replayEmbedUrl)
+        )
+      : '',
+    replay_start_seconds: replayEmbedUrl
+      ? (lookup ? toInt(lookup.replay_start_seconds) : toInt(play.replay_start_seconds))
+      : 0,
+    replay_end_seconds: replayEmbedUrl
+      ? (lookup ? toInt(lookup.replay_end_seconds) : toInt(play.replay_end_seconds))
+      : 0,
     machine_name: play.machine_name || lookup?.machine_name || '',
     played_at_utc: play.played_at_utc || lookup?.played_at_utc || '',
     play_id: play.play_id || lookup?.play_id || null,
   });
+
+  const needsWeeklyChallengeBackfill = !toInt(enriched.weekly_challenge_rank)
+    || !String(enriched.weekly_challenge_week_key || '').trim();
+  if (!needsWeeklyChallengeBackfill) return enriched;
+
+  const annotated = {
+    ...enriched,
+    score: toInt(enriched.score),
+    level: toInt(enriched.level),
+  };
+  annotateWeeklyChallengePlayRows(db, [annotated], userId);
+
+  let fallbackRank = toInt(annotated.weekly_challenge_rank);
+  if (!fallbackRank) {
+    const weekKey = String(annotated.weekly_challenge_week_key || enriched.weekly_challenge_week_key || '').trim();
+    if (weekKey) {
+      const weekRow = db.prepare(
+        'SELECT starts_at_utc, ends_at_utc FROM weekly_challenge_weeks WHERE week_key = ?'
+      ).get(weekKey);
+
+      if (weekRow) {
+        const songTitle = String(enriched.song_title || '').trim();
+        const mode = String(enriched.mode || '').trim();
+        const level = toInt(enriched.level);
+        const backgroundUrl = String(enriched.background_url || '').trim();
+
+        let rows;
+        if (backgroundUrl) {
+          rows = db.prepare(`
+            SELECT user_id, score
+            FROM user_recently_played
+            WHERE mode = ?
+              AND level = ?
+              AND (song_title = ? OR background_url = ?)
+              AND COALESCE(NULLIF(played_at_utc, ''), date_played) >= ?
+              AND COALESCE(NULLIF(played_at_utc, ''), date_played) <= ?
+              AND score > 0
+            ORDER BY score DESC
+          `).all(mode, level, songTitle, backgroundUrl, weekRow.starts_at_utc, weekRow.ends_at_utc);
+        } else {
+          rows = db.prepare(`
+            SELECT user_id, score
+            FROM user_recently_played
+            WHERE mode = ?
+              AND level = ?
+              AND song_title = ?
+              AND COALESCE(NULLIF(played_at_utc, ''), date_played) >= ?
+              AND COALESCE(NULLIF(played_at_utc, ''), date_played) <= ?
+              AND score > 0
+            ORDER BY score DESC
+          `).all(mode, level, songTitle, weekRow.starts_at_utc, weekRow.ends_at_utc);
+        }
+
+        const bestByUser = new Map();
+        for (const row of rows) {
+          const rowUserId = String(row?.user_id || '').trim();
+          const rowScore = toInt(row?.score);
+          if (!rowUserId) continue;
+          if (!bestByUser.has(rowUserId) || rowScore > toInt(bestByUser.get(rowUserId))) {
+            bestByUser.set(rowUserId, rowScore);
+          }
+        }
+
+        const rankedUsers = Array.from(bestByUser.entries())
+          .sort((a, b) => b[1] - a[1])
+          .map(([rowUserId]) => rowUserId);
+        const rankIndex = rankedUsers.findIndex((rowUserId) => rowUserId === String(userId || ''));
+        if (rankIndex >= 0) {
+          fallbackRank = rankIndex + 1;
+        }
+      }
+    }
+  }
+
+  return {
+    ...enriched,
+    weekly_challenge_rank: fallbackRank || null,
+    weekly_challenge_week_key: String(
+      annotated.weekly_challenge_week_key || enriched.weekly_challenge_week_key || ''
+    ),
+    weekly_challenge_chart_id: toInt(annotated.weekly_challenge_chart_id) || toInt(enriched.weekly_challenge_chart_id) || null,
+  };
 }
 
 function buildWeeklyChallengeTotalsMap(db, wcPlays = []) {
@@ -2834,6 +2906,17 @@ router.get('/weekly-challenge-plays/:id', optionalAuth, (req, res) => {
     WHERE wcp.id = ?
   `).get(req.user?.id || '', id);
   if (!row) return res.status(404).json({ error: 'Not found' });
+
+  const parsedPlays = safeParseJsonArray(row.plays_json);
+  const enrichedPlays = parsedPlays.map((play) =>
+    enrichWeeklyChallengePlayItem(db, row.user_id, row.created_at, play)
+  );
+  row.plays_json = JSON.stringify(enrichedPlays);
+
+  const totals = buildWeeklyChallengeTotalsMap(db, [row]).get(`${row.user_id}:${toInt(row.week_id)}`);
+  row.total_rating_points = toInt(totals?.total_rating_points);
+  row.total_charts_played = toInt(totals?.total_charts_played);
+
   row.avatar = normalizeUserAvatarForList(row.avatar, row.user_id, 64);
   res.json(row);
 });

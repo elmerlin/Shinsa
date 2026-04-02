@@ -450,8 +450,7 @@ router.get('/charts/:chartId/scores', (req, res) => {
       WHERE rp.mode = ? AND rp.level = ?
         AND COALESCE(NULLIF(rp.played_at_utc, ''), rp.date_played) >= ?
         AND COALESCE(NULLIF(rp.played_at_utc, ''), rp.date_played) <= ?
-        AND rp.score > 0
-      ORDER BY rp.score DESC, rp.id ASC
+      ORDER BY rp.id ASC
     `).all(chart.mode, chart.level, chart.starts_at_utc, chart.ends_at_utc);
 
     const matchedBgUrls = new Set(
@@ -467,14 +466,31 @@ router.get('/charts/:chartId/scores', (req, res) => {
       return !!row.background_url && matchedBgUrls.has(row.background_url);
     });
 
+    const attemptCounts = new Map();
+    for (const row of rows) {
+      const key = String(row.user_id || '').trim();
+      if (!key) continue;
+      attemptCounts.set(key, (attemptCounts.get(key) || 0) + 1);
+    }
+
+    const scoredRows = rows
+      .filter((row) => (parseInt(row.score, 10) || 0) > 0)
+      .sort((a, b) => {
+        if ((parseInt(b.score, 10) || 0) !== (parseInt(a.score, 10) || 0)) {
+          return (parseInt(b.score, 10) || 0) - (parseInt(a.score, 10) || 0);
+        }
+        return (parseInt(a.play_id, 10) || 0) - (parseInt(b.play_id, 10) || 0);
+      });
+
     // Keep only best per user
     const seen = new Set();
     const scores = [];
-    for (const row of rows) {
+    for (const row of scoredRows) {
       if (seen.has(row.user_id)) continue;
       seen.add(row.user_id);
       scores.push({
         ...row,
+        attempt_count: attemptCounts.get(row.user_id) || 0,
         rank: scores.length + 1,
       });
     }
@@ -489,6 +505,7 @@ router.get('/charts/:chartId/scores', (req, res) => {
         jacket_url: chart.jacket_url_snapshot,
         week_key: chart.week_key,
       },
+      total_attempts: rows.length,
       scores,
     });
   } catch (err) {

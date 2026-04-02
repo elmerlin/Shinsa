@@ -283,6 +283,7 @@ export default function WeeklyChallengesPage() {
                 <p className="text-[10px] text-gray-400">
                   {selectedChart.mode} {selectedChart.level}
                   {chartScores ? ` \u2022 ${chartScores.scores.length} players` : ''}
+                  {chartScores?.total_attempts > 0 ? ` \u2022 ${chartScores.total_attempts} attempts` : ''}
                 </p>
               </div>
               <button type="button" onClick={() => { setSelectedChart(null); setChartScores(null); }} className="text-sm font-display font-bold text-gray-400 hover:text-white transition-colors">Close</button>
@@ -317,7 +318,10 @@ export default function WeeklyChallengesPage() {
                           {flag && <span className="mr-1">{flag}</span>}
                           {entry.username}
                         </Link>
-                        {entry.skill_title && <p className="text-[8px] text-gray-600 truncate">{entry.skill_title}</p>}
+                        <p className="text-[8px] text-gray-600 truncate">
+                          {entry.skill_title ? `${entry.skill_title} \u2022 ` : ''}
+                          {(entry.attempt_count || 0).toLocaleString()} attempt{entry.attempt_count === 1 ? '' : 's'}
+                        </p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         {hasReplay && (

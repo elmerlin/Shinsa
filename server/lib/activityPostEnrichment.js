@@ -61,9 +61,9 @@ function getRecentPlayJudgmentsBeforeStmt(db) {
       AND (
         COALESCE(perfect, 0) + COALESCE(great, 0) + COALESCE(good, 0) + COALESCE(bad, 0) + COALESCE(miss, 0)
       ) > 0
-      AND datetime(COALESCE(date_played, '')) <= datetime(?)
+      AND datetime(COALESCE(NULLIF(played_at_utc, ''), date_played, '')) <= datetime(?)
     ORDER BY
-      datetime(COALESCE(date_played, '1970-01-01')) DESC,
+      datetime(COALESCE(NULLIF(played_at_utc, ''), date_played, '1970-01-01')) DESC,
       (
         COALESCE(perfect, 0) + COALESCE(great, 0) + COALESCE(good, 0) + COALESCE(bad, 0) + COALESCE(miss, 0)
       ) DESC,
@@ -85,7 +85,7 @@ function getRecentPlayJudgmentsAnyStmt(db) {
         COALESCE(perfect, 0) + COALESCE(great, 0) + COALESCE(good, 0) + COALESCE(bad, 0) + COALESCE(miss, 0)
       ) > 0
     ORDER BY
-      datetime(COALESCE(date_played, '1970-01-01')) DESC,
+      datetime(COALESCE(NULLIF(played_at_utc, ''), date_played, '1970-01-01')) DESC,
       (
         COALESCE(perfect, 0) + COALESCE(great, 0) + COALESCE(good, 0) + COALESCE(bad, 0) + COALESCE(miss, 0)
       ) DESC,
@@ -105,9 +105,9 @@ function getRecentPlayMetadataBeforeStmt(db) {
       AND mode = ?
       AND level = ?
       AND score = ?
-      AND datetime(COALESCE(date_played, '')) <= datetime(?)
+      AND datetime(COALESCE(NULLIF(played_at_utc, ''), date_played, '')) <= datetime(?)
     ORDER BY
-      datetime(COALESCE(date_played, '1970-01-01')) DESC,
+      datetime(COALESCE(NULLIF(played_at_utc, ''), date_played, '1970-01-01')) DESC,
       id DESC
     LIMIT 1
   `);
@@ -125,7 +125,7 @@ function getRecentPlayMetadataAnyStmt(db) {
       AND level = ?
       AND score = ?
     ORDER BY
-      datetime(COALESCE(date_played, '1970-01-01')) DESC,
+      datetime(COALESCE(NULLIF(played_at_utc, ''), date_played, '1970-01-01')) DESC,
       id DESC
     LIMIT 1
   `);
@@ -316,10 +316,38 @@ function enrichEntryWithJudgments(db, userId, createdAt, entry, scoreKey = 'scor
   };
 }
 
+function mergeReplayMetadata(entry, lookup) {
+  if (!lookup) return entry;
+
+  const replayEmbedUrl = String(lookup.replay_embed_url || '').trim();
+  return {
+    ...entry,
+    replay_embed_url: replayEmbedUrl,
+    replay_video_id: replayEmbedUrl
+      ? (String(lookup.replay_video_id || '').trim() || extractYoutubeVideoId(replayEmbedUrl))
+      : '',
+    replay_start_seconds: replayEmbedUrl ? toInt(lookup.replay_start_seconds) : 0,
+    replay_end_seconds: replayEmbedUrl ? toInt(lookup.replay_end_seconds) : 0,
+    machine_name: entry.machine_name || lookup.machine_name || '',
+    played_at_utc: entry.played_at_utc || lookup.played_at_utc || '',
+    date_played: entry.date_played || lookup.date_played || '',
+    play_id: entry.play_id || lookup.play_id || null,
+  };
+}
+
 function enrichUpscoreRows(db, userId, rows = [], createdAt = '') {
-  return (Array.isArray(rows) ? rows : []).map((item) =>
-    applyChartMetadata(db, enrichEntryWithJudgments(db, userId, createdAt, item, 'new_score'))
-  );
+  return (Array.isArray(rows) ? rows : []).map((item) => {
+    const enriched = applyChartMetadata(db, enrichEntryWithJudgments(db, userId, createdAt, item, 'new_score'));
+    const lookup = findRecentPlayMetadata(db, {
+      userId,
+      createdAt,
+      songTitle: item?.song_title,
+      mode: item?.mode,
+      level: item?.level,
+      score: item?.new_score,
+    });
+    return mergeReplayMetadata(enriched, lookup);
+  });
 }
 
 function buildClearFallbackItem(clear) {
@@ -357,8 +385,6 @@ function enrichClearRows(db, userId, rows = [], createdAt = '') {
     if (String(item?.entry_type || '') === 'title_unlock') return item;
 
     const enriched = enrichEntryWithJudgments(db, userId, createdAt, item, 'score');
-    if (String(enriched?.replay_embed_url || '').trim()) return enriched;
-
     const lookup = findRecentPlayMetadata(db, {
       userId,
       createdAt,
@@ -367,31 +393,7 @@ function enrichClearRows(db, userId, rows = [], createdAt = '') {
       level: item?.level,
       score: item?.score,
     });
-    const replay = lookup?.replay_embed_url
-      ? {
-          replay_embed_url: String(lookup.replay_embed_url || '').trim(),
-          replay_video_id: String(lookup.replay_video_id || '').trim() || extractYoutubeVideoId(lookup.replay_embed_url),
-          replay_start_seconds: toInt(lookup.replay_start_seconds),
-          replay_end_seconds: toInt(lookup.replay_end_seconds),
-        }
-      : findSessionReplayLink(db, {
-          userId,
-          songTitle: item?.song_title,
-          mode: item?.mode,
-          level: item?.level,
-        });
-
-    if (!replay) {
-      return applyChartMetadata(db, enriched);
-    }
-
-    return applyChartMetadata(db, {
-      ...enriched,
-      replay_embed_url: replay.replay_embed_url || '',
-      replay_video_id: replay.replay_video_id || '',
-      replay_start_seconds: toInt(enriched.replay_start_seconds) || toInt(replay.replay_start_seconds),
-      replay_end_seconds: toInt(enriched.replay_end_seconds) || toInt(replay.replay_end_seconds),
-    });
+    return applyChartMetadata(db, mergeReplayMetadata(enriched, lookup));
   });
 }
 
