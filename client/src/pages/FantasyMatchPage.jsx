@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
 import { getFantasyPool } from '../utils/api';
 
 const PHASES = { START: 'start', LOADING: 'loading', DRAFT: 'draft', MATCH: 'match', BATTLE: 'battle', RESULT: 'result' };
@@ -236,7 +235,7 @@ function BattleView({ userCard, cpuCard, theme, userScore, cpuScore, roundNum, o
 }
 
 // ── Main Component ──
-export default function FantasyMatchPage() {
+export default function FantasyMatchPage({ embedded = false }) {
   const [phase, setPhase] = useState(PHASES.START);
   const [pool, setPool] = useState([]);
   const [draftCards, setDraftCards] = useState([]);
@@ -345,7 +344,7 @@ export default function FantasyMatchPage() {
   const cpuWins = roundResults.filter(r => r.cpuScore > r.userScore).length;
 
   return (
-    <div className="min-h-screen bg-[#0a0a1a] pb-20">
+    <div className={embedded ? 'rounded-[30px] border border-[#2a2a4a] bg-[#0a0a1a] shadow-[0_24px_70px_rgba(0,0,0,0.28)]' : 'min-h-screen bg-[#0a0a1a] pb-20'}>
       {/* Inline animation keyframes */}
       <style>{`
         @keyframes cardFlip { 0% { transform: rotateY(90deg); opacity: 0; } 100% { transform: rotateY(0); opacity: 1; } }
@@ -355,33 +354,61 @@ export default function FantasyMatchPage() {
       `}</style>
 
       {/* Header */}
-      <div className="bg-gradient-to-b from-[#141428] to-transparent border-b border-[#2a2a4a]/50 px-4 py-4 sm:py-6">
-        <div className="max-w-2xl mx-auto flex items-center justify-between">
-          <div>
-            <Link to="/fun" className="text-[10px] font-display font-bold uppercase tracking-widest text-zinc-500 hover:text-zinc-300 transition-colors">
-              &larr; Fun Zone
-            </Link>
-            <h1 className="font-display font-black text-xl sm:text-2xl text-white mt-1 uppercase tracking-wide">
-              Fantasy Match
-            </h1>
-          </div>
-          {phase !== PHASES.START && phase !== PHASES.LOADING && (
-            <div className="flex gap-3 items-center">
-              <div className="text-center">
-                <div className="font-display font-black text-lg text-cyan-300 tabular-nums">{userWins}</div>
-                <div className="text-[8px] font-display font-bold uppercase tracking-widest text-zinc-500">You</div>
-              </div>
-              <div className="w-px h-8 bg-[#2a2a4a]" />
-              <div className="text-center">
-                <div className="font-display font-black text-lg text-rose-300 tabular-nums">{cpuWins}</div>
-                <div className="text-[8px] font-display font-bold uppercase tracking-widest text-zinc-500">CPU</div>
-              </div>
+      {embedded ? (
+        <div className="border-b border-[#2a2a4a]/60 bg-[radial-gradient(circle_at_top_left,rgba(255,102,153,0.18),transparent_36%),linear-gradient(180deg,rgba(20,20,40,0.95),rgba(10,10,26,0.92))] px-4 py-5 sm:px-6">
+          <div className="mx-auto flex max-w-3xl flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-display font-bold uppercase tracking-[0.26em] text-[#ff8db1]/70">
+                Fun Draft
+              </p>
+              <h2 className="mt-2 font-display text-2xl font-black uppercase tracking-[0.08em] text-white sm:text-3xl">
+                Fantasy Match
+              </h2>
+              <p className="mt-2 max-w-xl text-sm leading-relaxed text-zinc-400">
+                Draft three real Shinsa scouting cards and play a short best-of-three against the CPU.
+              </p>
             </div>
-          )}
+            {phase !== PHASES.START && phase !== PHASES.LOADING && (
+              <div className="flex gap-3 rounded-2xl border border-[#2a2a4a] bg-[#101225]/90 px-4 py-3">
+                <div className="text-center">
+                  <div className="font-display text-lg font-black tabular-nums text-cyan-300">{userWins}</div>
+                  <div className="text-[8px] font-display font-bold uppercase tracking-widest text-zinc-500">You</div>
+                </div>
+                <div className="h-8 w-px bg-[#2a2a4a]" />
+                <div className="text-center">
+                  <div className="font-display text-lg font-black tabular-nums text-rose-300">{cpuWins}</div>
+                  <div className="text-[8px] font-display font-bold uppercase tracking-widest text-zinc-500">CPU</div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="bg-gradient-to-b from-[#141428] to-transparent border-b border-[#2a2a4a]/50 px-4 py-4 sm:py-6">
+          <div className="max-w-2xl mx-auto flex items-center justify-between">
+            <div>
+              <h1 className="font-display font-black text-xl sm:text-2xl text-white uppercase tracking-wide">
+                Fantasy Match
+              </h1>
+            </div>
+            {phase !== PHASES.START && phase !== PHASES.LOADING && (
+              <div className="flex gap-3 items-center">
+                <div className="text-center">
+                  <div className="font-display font-black text-lg text-cyan-300 tabular-nums">{userWins}</div>
+                  <div className="text-[8px] font-display font-bold uppercase tracking-widest text-zinc-500">You</div>
+                </div>
+                <div className="w-px h-8 bg-[#2a2a4a]" />
+                <div className="text-center">
+                  <div className="font-display font-black text-lg text-rose-300 tabular-nums">{cpuWins}</div>
+                  <div className="text-[8px] font-display font-bold uppercase tracking-widest text-zinc-500">CPU</div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
-      <div className="max-w-2xl mx-auto px-4 mt-6">
+      <div className={`${embedded ? 'max-w-3xl px-4 py-6 sm:px-6 sm:py-8' : 'max-w-2xl px-4 mt-6'} mx-auto`}>
         {/* ── START Phase ── */}
         {phase === PHASES.START && (
           <div className="animate-[slideUp_0.5s_ease-out] text-center space-y-6 pt-8">
@@ -708,19 +735,13 @@ export default function FantasyMatchPage() {
             </div>
 
             {/* Play Again */}
-            <div className="flex justify-center gap-3 pt-2">
+            <div className="flex justify-center pt-2">
               <button
                 onClick={playAgain}
                 className="px-8 py-3 rounded-xl font-display font-black text-sm uppercase tracking-wider bg-gradient-to-r from-[#ff3366] to-[#ff6699] text-white hover:shadow-[0_0_30px_rgba(255,51,102,0.4)] transition-all hover:scale-105"
               >
                 Play Again
               </button>
-              <Link
-                to="/fun"
-                className="px-6 py-3 rounded-xl font-display font-bold text-sm uppercase tracking-wider border border-[#2a2a4a] text-zinc-400 hover:text-white hover:border-zinc-500 transition-all"
-              >
-                Back
-              </Link>
             </div>
           </div>
         )}
