@@ -14,6 +14,9 @@ struct DashboardView: View {
                     // Quick Action Buttons (4-column row)
                     quickActionsGrid
 
+                    // Weekly Challenges Summary
+                    WCSummaryCardView()
+
                     // Notices
                     if !vm.notices.isEmpty {
                         noticesSection

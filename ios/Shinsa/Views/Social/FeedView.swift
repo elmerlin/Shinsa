@@ -29,6 +29,8 @@ struct FeedView: View {
                                 UpscoreCardView(item: item)
                             case "clear":
                                 NewClearCardView(item: item)
+                            case "weekly_challenge":
+                                WCPlayCardView(item: item)
                             default:
                                 EmptyView()
                             }

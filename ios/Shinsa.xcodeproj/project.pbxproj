@@ -155,6 +155,20 @@
 		LVVOTE000001000100010001 /* LiveVotePanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = LVVOTE000002000200020002 /* LiveVotePanel.swift */; };
 		LVRCAP000001000100010001 /* LiveRecapTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = LVRCAP000002000200020002 /* LiveRecapTab.swift */; };
 		LVPRTS000001000100010001 /* LiveParticipantsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = LVPRTS000002000200020002 /* LiveParticipantsSheet.swift */; };
+		ED6E458D75B37BE61AFF3980 /* WeeklyChallenge.swift in Sources */ = {isa = PBXBuildFile; fileRef = A18C18C2D15B138A264E520B /* WeeklyChallenge.swift */; };
+		0C2BB3AB9CA3140A1321CB15 /* WeeklyChallengesViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9EDABEA246FCB5A5E9D3DD91 /* WeeklyChallengesViewModel.swift */; };
+		3F014080B5E87E22B727629E /* WeeklyChallengesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 810229BA591D55E044DFF0B1 /* WeeklyChallengesView.swift */; };
+		20CB8ABF94EA684F1971AF14 /* WCPodiumStripView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A4549CD673872BBD4F87D42 /* WCPodiumStripView.swift */; };
+		AA01D0BCC294B0FD24536EED /* WCLeaderboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C13A1F0D4D3E34088DAD1A4C /* WCLeaderboardView.swift */; };
+		419C664F2D392C144DE90252 /* WCLevelRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B819287349265EFCFF43B00D /* WCLevelRowView.swift */; };
+		F66DF3B3CD0487F7702218A9 /* WCWeekPickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6B986A323F03CABE8A8FD30 /* WCWeekPickerSheet.swift */; };
+		1766B8F18343C96F16E745D1 /* WCChartScoresSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = E55E4722D40575EEB18128EC /* WCChartScoresSheet.swift */; };
+		40B9E5A552DEA42345836444 /* WCSummaryCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54647EB3385947E55FB7713D /* WCSummaryCardView.swift */; };
+		7814628B9D0F617C06D4B256 /* WCHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 116BC95AB7EB1EEE882DC8CB /* WCHistoryView.swift */; };
+		FA0C45DE874EC16AC93E5025 /* WCPlayCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2BBE91CB29991A09837210E /* WCPlayCardView.swift */; };
+		8786D9A66065A5377C70A249 /* WCSummaryPostCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDEABAD20A1B9CC7CEA0AD48 /* WCSummaryPostCardView.swift */; };
+		D411F01E95AC79CDA5FC9A21 /* WCPersonalPostCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87FAB3CBFB7337648E11A239 /* WCPersonalPostCardView.swift */; };
+		191DD10A72FD5F1D733C1BE1 /* WCMarkerParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 191E6CEA18D0782053D58D07 /* WCMarkerParser.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -307,6 +321,20 @@
 		LVVOTE000002000200020002 /* LiveVotePanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LiveVotePanel.swift"; sourceTree = "<group>"; };
 		LVRCAP000002000200020002 /* LiveRecapTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LiveRecapTab.swift"; sourceTree = "<group>"; };
 		LVPRTS000002000200020002 /* LiveParticipantsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LiveParticipantsSheet.swift"; sourceTree = "<group>"; };
+		A18C18C2D15B138A264E520B /* WeeklyChallenge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WeeklyChallenge.swift"; sourceTree = "<group>"; };
+		9EDABEA246FCB5A5E9D3DD91 /* WeeklyChallengesViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WeeklyChallengesViewModel.swift"; sourceTree = "<group>"; };
+		810229BA591D55E044DFF0B1 /* WeeklyChallengesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WeeklyChallengesView.swift"; sourceTree = "<group>"; };
+		8A4549CD673872BBD4F87D42 /* WCPodiumStripView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WCPodiumStripView.swift"; sourceTree = "<group>"; };
+		C13A1F0D4D3E34088DAD1A4C /* WCLeaderboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WCLeaderboardView.swift"; sourceTree = "<group>"; };
+		B819287349265EFCFF43B00D /* WCLevelRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WCLevelRowView.swift"; sourceTree = "<group>"; };
+		C6B986A323F03CABE8A8FD30 /* WCWeekPickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WCWeekPickerSheet.swift"; sourceTree = "<group>"; };
+		E55E4722D40575EEB18128EC /* WCChartScoresSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WCChartScoresSheet.swift"; sourceTree = "<group>"; };
+		54647EB3385947E55FB7713D /* WCSummaryCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WCSummaryCardView.swift"; sourceTree = "<group>"; };
+		116BC95AB7EB1EEE882DC8CB /* WCHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WCHistoryView.swift"; sourceTree = "<group>"; };
+		B2BBE91CB29991A09837210E /* WCPlayCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WCPlayCardView.swift"; sourceTree = "<group>"; };
+		FDEABAD20A1B9CC7CEA0AD48 /* WCSummaryPostCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WCSummaryPostCardView.swift"; sourceTree = "<group>"; };
+		87FAB3CBFB7337648E11A239 /* WCPersonalPostCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WCPersonalPostCardView.swift"; sourceTree = "<group>"; };
+		191E6CEA18D0782053D58D07 /* WCMarkerParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WCMarkerParser.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -396,7 +424,8 @@
 				AF5FA2307CAD25018FBBC72A /* User.swift */,
 				1913D1D353477C44302B1EA6 /* VenueAccess.swift */,
 				3133259257158639A9CE82A5 /* WorldMax.swift */,
-			);
+			
+				A18C18C2D15B138A264E520B /* WeeklyChallenge.swift */,);
 			path = Models;
 			sourceTree = "<group>";
 		};
@@ -429,7 +458,8 @@
 				A0F00FA78E97CF080D8E7CE7 /* Extensions.swift */,
 				E45CD5E237962459B87BBCA1 /* KeychainHelper.swift */,
 				F40A10101010101010101010 /* TextFormatter.swift */,
-			);
+			
+				191E6CEA18D0782053D58D07 /* WCMarkerParser.swift */,);
 			path = Utilities;
 			sourceTree = "<group>";
 		};
@@ -448,7 +478,8 @@
 				DF917FE88CF5B58AD34B3496 /* SongsViewModel.swift */,
 				D20A02020202020202020202 /* TournamentSetupViewModel.swift */,
 				D20A04040404040404040404 /* TournamentViewModel.swift */,
-			);
+			
+				9EDABEA246FCB5A5E9D3DD91 /* WeeklyChallengesViewModel.swift */,);
 			path = ViewModels;
 			sourceTree = "<group>";
 		};
@@ -482,7 +513,8 @@
 				3B09D12D9AEC3E55CC97B94E /* Tiers */,
 				19A0CFC50979408900EF1B9B /* Tournament */,
 				E1973470BC776B4873687DF2 /* WorldMax */,
-			);
+			
+				17B32F60D478142B74A3A637 /* WeeklyChallenges */,);
 			path = Views;
 			sourceTree = "<group>";
 		};
@@ -762,6 +794,24 @@
 			path = WorldMax;
 			sourceTree = "<group>";
 		};
+		17B32F60D478142B74A3A637 /* WeeklyChallenges */ = {
+			isa = PBXGroup;
+			children = (
+				810229BA591D55E044DFF0B1 /* WeeklyChallengesView.swift */,
+				8A4549CD673872BBD4F87D42 /* WCPodiumStripView.swift */,
+				C13A1F0D4D3E34088DAD1A4C /* WCLeaderboardView.swift */,
+				B819287349265EFCFF43B00D /* WCLevelRowView.swift */,
+				C6B986A323F03CABE8A8FD30 /* WCWeekPickerSheet.swift */,
+				E55E4722D40575EEB18128EC /* WCChartScoresSheet.swift */,
+				54647EB3385947E55FB7713D /* WCSummaryCardView.swift */,
+				116BC95AB7EB1EEE882DC8CB /* WCHistoryView.swift */,
+				B2BBE91CB29991A09837210E /* WCPlayCardView.swift */,
+				FDEABAD20A1B9CC7CEA0AD48 /* WCSummaryPostCardView.swift */,
+				87FAB3CBFB7337648E11A239 /* WCPersonalPostCardView.swift */,
+			);
+			path = WeeklyChallenges;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -976,7 +1026,21 @@
 				LVVOTE000001000100010001 /* LiveVotePanel.swift in Sources */,
 				LVRCAP000001000100010001 /* LiveRecapTab.swift in Sources */,
 				LVPRTS000001000100010001 /* LiveParticipantsSheet.swift in Sources */,
-			);
+							ED6E458D75B37BE61AFF3980 /* WeeklyChallenge.swift in Sources */,
+				0C2BB3AB9CA3140A1321CB15 /* WeeklyChallengesViewModel.swift in Sources */,
+				3F014080B5E87E22B727629E /* WeeklyChallengesView.swift in Sources */,
+				20CB8ABF94EA684F1971AF14 /* WCPodiumStripView.swift in Sources */,
+				AA01D0BCC294B0FD24536EED /* WCLeaderboardView.swift in Sources */,
+				419C664F2D392C144DE90252 /* WCLevelRowView.swift in Sources */,
+				F66DF3B3CD0487F7702218A9 /* WCWeekPickerSheet.swift in Sources */,
+				1766B8F18343C96F16E745D1 /* WCChartScoresSheet.swift in Sources */,
+				40B9E5A552DEA42345836444 /* WCSummaryCardView.swift in Sources */,
+				7814628B9D0F617C06D4B256 /* WCHistoryView.swift in Sources */,
+				FA0C45DE874EC16AC93E5025 /* WCPlayCardView.swift in Sources */,
+				8786D9A66065A5377C70A249 /* WCSummaryPostCardView.swift in Sources */,
+				D411F01E95AC79CDA5FC9A21 /* WCPersonalPostCardView.swift in Sources */,
+				191DD10A72FD5F1D733C1BE1 /* WCMarkerParser.swift in Sources */,
+);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */

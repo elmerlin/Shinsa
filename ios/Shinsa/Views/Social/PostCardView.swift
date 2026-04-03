@@ -41,19 +41,28 @@ struct PostCardView: View {
                 Spacer()
             }
 
-            // Content (parse live session markers)
+            // Content (parse live session + weekly challenge markers)
             if let content = item.content, !content.isEmpty {
-                let parsed = LiveSessionMarker.split(content)
+                // Check WC summary marker
+                if let wcSummary = WCMarkerParser.parseSummary(from: content), let summary = wcSummary.summary {
+                    WCSummaryPostCardView(summary: summary, text: wcSummary.text)
+                } else if let wcPersonal = WCMarkerParser.parsePersonal(from: content), let personal = wcPersonal.personal {
+                    // WC personal recap
+                    WCPersonalPostCardView(personal: personal, text: wcPersonal.text)
+                } else {
+                    // Standard content with live session marker parsing
+                    let parsed = LiveSessionMarker.split(content)
 
-                if let summary = parsed.summary {
-                    LiveSessionCardView(summary: summary, username: item.username)
-                }
+                    if let summary = parsed.summary {
+                        LiveSessionCardView(summary: summary, username: item.username)
+                    }
 
-                if !parsed.text.isEmpty {
-                    Text(parsed.text)
-                        .font(.system(size: 14))
-                        .foregroundColor(.white.opacity(0.9))
-                        .lineSpacing(3)
+                    if !parsed.text.isEmpty {
+                        Text(parsed.text)
+                            .font(.system(size: 14))
+                            .foregroundColor(.white.opacity(0.9))
+                            .lineSpacing(3)
+                    }
                 }
             }
 

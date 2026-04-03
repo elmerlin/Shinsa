@@ -601,6 +601,27 @@ class APIService {
 
     // MARK: - Head to Head
     func getHeadToHead(userId1: String, userId2: String) async throws -> [[String: AnyCodable]] { try await request("/songs/analytics/head-to-head?user1=\(userId1)&user2=\(userId2)") }
+
+    // MARK: - Weekly Challenges
+    func getWeeklyChallengesHome() async throws -> WCHomeResponse { try await request("/weekly-challenges/home") }
+    func getWeeklyChallengeWeeks() async throws -> [WCWeek] { try await request("/weekly-challenges/weeks") }
+    func getWeeklyChallengeWeek(weekKey: String, chartMode: String = "both", leaderboardMode: String = "both", skillFamily: String = "all") async throws -> WCWeekDetailResponse {
+        var path = "/weekly-challenges/week/\(weekKey)?chart_mode=\(chartMode)&leaderboard_mode=\(leaderboardMode)&skill_family=\(skillFamily)"
+        return try await request(path)
+    }
+    func getWeeklyChallengeChartScores(chartId: Int) async throws -> WCChartScoresResponse { try await request("/weekly-challenges/charts/\(chartId)/scores") }
+    func getWeeklyChallengeUserHistory(userId: String) async throws -> [WCUserHistory] { try await request("/weekly-challenges/users/\(userId)/history") }
+
+    // MARK: - Weekly Challenge Play Posts
+    func getWeeklyChallengePlay(id: Int) async throws -> [String: AnyCodable] { try await request("/social/weekly-challenge-plays/\(id)") }
+    func pumpWeeklyChallengePlay(id: Int) async throws -> PumpResponse { try await request("/social/weekly-challenge-plays/\(id)/pump", method: "POST") }
+    func getWeeklyChallengePlayComments(playId: Int) async throws -> [Comment] { try await request("/social/weekly-challenge-plays/\(playId)/comments") }
+    func addWeeklyChallengePlayComment(playId: Int, content: String, parentId: Int? = nil) async throws -> Comment {
+        var body: [String: AnyCodable] = ["content": AnyCodable(content)]
+        if let pid = parentId { body["parent_id"] = AnyCodable(pid) }
+        return try await request("/social/weekly-challenge-plays/\(playId)/comments", method: "POST", body: body)
+    }
+    func deleteWeeklyChallengePlayComment(commentId: Int) async throws { try await requestVoid("/social/weekly-challenge-plays/comments/\(commentId)", method: "DELETE") }
 }
 
 // MARK: - Helper Types

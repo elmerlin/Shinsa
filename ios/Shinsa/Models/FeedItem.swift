@@ -46,6 +46,16 @@ struct FeedItem: Codable, Identifiable {
     var clearsJson: String?
     var backgroundUrl: String?
 
+    // Weekly Challenge play post fields
+    var weekKey: String?
+    var weekId: Int?
+    var playsJson: String?
+    var totalRatingPoints: Double?
+    var totalChartsPlayed: Int?
+
+    // Post kind (for system posts like WC summary/personal)
+    var postKind: String?
+
     var isPumped: Bool { userPumped?.boolValue ?? false }
 
     var imageUrls: [String] {
@@ -124,6 +134,41 @@ struct FeedItem: Codable, Identifiable {
         }
     }
 
+    struct WCPlayItem: Codable, Identifiable {
+        var id: String { "\(songTitle ?? "")_\(mode ?? "")_\(level ?? 0)_\(score ?? 0)" }
+        var songTitle: String?
+        var mode: String?
+        var level: Int?
+        var score: Int?
+        var grade: String?
+        var plate: String?
+        var ratingPoints: Double?
+        var isNew: Bool?
+        var previousScore: Int?
+        var jacketUrl: String?
+        var replayEmbedUrl: String?
+        var replayVideoId: String?
+        var perfect: Int?
+        var great: Int?
+        var good: Int?
+        var bad: Int?
+        var miss: Int?
+        var maxCombo: Int?
+        var playId: Int?
+        enum CodingKeys: String, CodingKey {
+            case mode, level, score, grade, plate, perfect, great, good, bad, miss
+            case songTitle = "song_title"
+            case ratingPoints = "rating_points"
+            case isNew = "is_new"
+            case previousScore = "previous_score"
+            case jacketUrl = "jacket_url"
+            case replayEmbedUrl = "replay_embed_url"
+            case replayVideoId = "replay_video_id"
+            case maxCombo = "max_combo"
+            case playId = "play_id"
+        }
+    }
+
     var upscoreItems: [UpscoreItem] {
         guard let raw = upscoresJson, let data = raw.data(using: .utf8) else { return [] }
         return (try? JSONDecoder().decode([UpscoreItem].self, from: data)) ?? []
@@ -132,6 +177,11 @@ struct FeedItem: Codable, Identifiable {
     var clearItems: [ClearItem] {
         guard let raw = clearsJson, let data = raw.data(using: .utf8) else { return [] }
         return (try? JSONDecoder().decode([ClearItem].self, from: data)) ?? []
+    }
+
+    var wcPlayItems: [WCPlayItem] {
+        guard let raw = playsJson, let data = raw.data(using: .utf8) else { return [] }
+        return (try? JSONDecoder().decode([WCPlayItem].self, from: data)) ?? []
     }
 
     enum CodingKeys: String, CodingKey {
@@ -153,5 +203,11 @@ struct FeedItem: Codable, Identifiable {
         case upscoresJson = "upscores_json"
         case clearsJson = "clears_json"
         case backgroundUrl = "background_url"
+        case weekKey = "week_key"
+        case weekId = "week_id"
+        case playsJson = "plays_json"
+        case totalRatingPoints = "total_rating_points"
+        case totalChartsPlayed = "total_charts_played"
+        case postKind = "post_kind"
     }
 }

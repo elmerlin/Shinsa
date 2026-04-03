@@ -284,6 +284,8 @@ struct ContentView: View {
             FeedItemDetailView(type: "post", itemId: param)
         case "skill-charts":
             SkillChartsView(skillSlug: param)
+        case "weekly-challenges":
+            WeeklyChallengesView()
         case "live-session":
             LiveSessionView(sessionId: param)
         case "world-max":
@@ -388,6 +390,9 @@ struct SideDrawerView: View {
                     }
                     drawerLink(icon: "checklist", title: "Lists") {
                         ListsView()
+                    }
+                    drawerLink(icon: "flame.fill", title: "Weekly Challenges") {
+                        WeeklyChallengesView()
                     }
                     drawerLink(icon: "trophy.fill", title: "Leaderboards") {
                         LeaderboardsView()
