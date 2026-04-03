@@ -59,8 +59,9 @@ const DEFAULT_CONFIGS = {
     grand_final_reset: true,
   },
   gauntlet: {
-    start_single_level: 19,
-    final_single_level: 24,
+    start_level: 19,
+    final_level: 24,
+    best_of: 3,
   },
   hour_of_power: {
     duration_minutes: 60,

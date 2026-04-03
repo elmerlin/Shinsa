@@ -20,6 +20,26 @@ function NumberField({ label, value, onChange, min = 1, max = 99, hint }) {
   );
 }
 
+function SelectField({ label, value, onChange, options = [], hint }) {
+  return (
+    <div>
+      <label className="mb-1 block text-sm text-gray-400">{label}</label>
+      <select
+        className="input-field w-full"
+        value={value}
+        onChange={(e) => onChange(parseInt(e.target.value, 10) || 1)}
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+      {hint ? <p className="mt-1 text-[10px] text-gray-600">{hint}</p> : null}
+    </div>
+  );
+}
+
 function ConfigSection({ eyebrow, title, description, children }) {
   return (
     <Card className="border-white/8 bg-black/18">
@@ -187,6 +207,9 @@ export default function PhaseConfigPanel({ phase, onChange, isLastPhase }) {
   const format = phase.format || 'round_robin';
   const config = phase.config || {};
   const advancement = phase.advancement || {};
+  const gauntletStartLevel = config.start_level ?? config.start_single_level ?? 19;
+  const gauntletFinalLevel = config.final_level ?? config.final_single_level ?? 24;
+  const gauntletBestOf = config.best_of ?? 3;
 
   const updateConfig = (nextConfig) => onChange({ ...phase, config: nextConfig });
   const updateAdvancement = (nextAdvancement) => onChange({ ...phase, advancement: nextAdvancement });
@@ -293,25 +316,33 @@ export default function PhaseConfigPanel({ phase, onChange, isLastPhase }) {
       {format === 'gauntlet' ? (
         <ConfigSection
           eyebrow="Gauntlet"
-          title="Difficulty climb"
-          description="Set the starting and final single-chart levels for the king-of-the-hill run."
+          title="Level climb and draw format"
+          description="Set the opening and final chart levels for the king-of-the-hill run. Each match draws from real songs at that level, and the cards can be singles or doubles."
         >
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <NumberField
-              label="Starting Single Level"
-              value={config.start_single_level ?? 19}
-              onChange={(value) => updateConfig({ ...config, start_single_level: value })}
+              label="Starting Level"
+              value={gauntletStartLevel}
+              onChange={(value) => updateConfig({ ...config, start_level: value, start_single_level: undefined })}
               min={1}
               max={28}
-              hint={`Double: ${(parseInt(config.start_single_level, 10) || 19) + 1}`}
             />
             <NumberField
-              label="Final Single Level"
-              value={config.final_single_level ?? 24}
-              onChange={(value) => updateConfig({ ...config, final_single_level: value })}
+              label="Final Level"
+              value={gauntletFinalLevel}
+              onChange={(value) => updateConfig({ ...config, final_level: value, final_single_level: undefined })}
               min={1}
               max={28}
-              hint={`Double: ${(parseInt(config.final_single_level, 10) || 24) + 1}`}
+            />
+            <SelectField
+              label="Match Format"
+              value={gauntletBestOf}
+              onChange={(value) => updateConfig({ ...config, best_of: value })}
+              options={[
+                { value: 3, label: 'Best of 3 card draw' },
+                { value: 1, label: 'Single-song draw' },
+              ]}
+              hint={gauntletBestOf === 3 ? 'Draw 5 cards at the match level, veto 1 each, then play the final 3.' : 'Draw 1 chart at the match level and play it straight up.'}
             />
           </div>
         </ConfigSection>

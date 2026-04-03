@@ -16,7 +16,9 @@ const STATUS_FLOW = {
 
 const GAUNTLET_STATUS_FLOW = {
   PENDING: { label: 'Ready to Draw', action: 'Draw Cards' },
-  READY: { label: 'Songs Drawn - Play!', action: null },
+  DRAWING: { label: 'Cards Drawn - Veto Phase', action: null },
+  VETOING: { label: 'Veto in Progress', action: null },
+  READY: { label: 'Set List Ready - Play!', action: null },
   COMPLETED: { label: 'Match Complete', action: null },
 };
 
@@ -42,6 +44,28 @@ const getSkillColorFromTitle = (title) => {
   return 'text-gray-500';
 };
 
+const getBestOf = (match) => (parseInt(match?.match_rules?.best_of, 10) === 1 ? 1 : 3);
+
+const usesLegacyGauntletScoring = (match) => (
+  match?.match_type === 'gauntlet'
+  && (match?.played_songs || []).length === 2
+  && match?.scores?.player1_wins == null
+  && match?.scores?.player2_wins == null
+  && match?.scores?.p1_total != null
+  && match?.scores?.p2_total != null
+);
+
+const getPlayableSongs = (match, legacyGauntlet = false) => {
+  const drawn = match?.drawn_songs || [];
+  const existingPlayed = match?.played_songs || [];
+  if (legacyGauntlet && match?.match_type === 'gauntlet') return drawn;
+  if ((match?.status === 'READY' || match?.status === 'COMPLETED') && existingPlayed.length > 0) {
+    return existingPlayed.map((ps) => ps.song || ps);
+  }
+  const vetoedIds = (match?.vetoed_songs || []).map((v) => v.song_id);
+  return drawn.filter((song) => !vetoedIds.includes(song.id));
+};
+
 export default function MatchView() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -65,6 +89,7 @@ export default function MatchView() {
       setMatch(data);
 
       const isGauntlet = data.match_type === 'gauntlet';
+      const legacyGauntlet = usesLegacyGauntletScoring(data);
 
       // If cards have already been drawn, make sure they're visible
       // (handles the case where user navigates away and comes back)
@@ -72,33 +97,20 @@ export default function MatchView() {
         setShowCards(true);
       }
 
-      // Determine veto turn: lower seed (player2) vetos first (round robin only)
-      if (!isGauntlet) {
+      // Determine veto turn: lower seed (player2) vetos first when vetoes are active
+      if (!legacyGauntlet && (data.status === 'DRAWING' || data.status === 'VETOING')) {
         const vetoed = data.vetoed_songs || [];
-        if (data.status === 'DRAWING' || data.status === 'VETOING') {
-          if (vetoed.length === 0) setVetoTurn('player2');
-          else if (vetoed.length === 1) setVetoTurn('player1');
-          else setVetoTurn(null);
-        }
+        if (vetoed.length === 0) setVetoTurn('player2');
+        else if (vetoed.length === 1) setVetoTurn('player1');
+        else setVetoTurn(null);
+      } else {
+        setVetoTurn(null);
       }
 
       // Init scores
       if (data.status === 'READY' || data.status === 'COMPLETED') {
-        const drawn = data.drawn_songs || [];
         const existingPlayed = data.played_songs || [];
-        // For round robin READY state: use selected songs from played_songs if available
-        let playable;
-        if (isGauntlet) {
-          playable = drawn;
-        } else if (data.status === 'READY' && existingPlayed.length > 0 && existingPlayed[0].song) {
-          // Server shuffled remaining songs - use those
-          playable = existingPlayed.map(ps => ps.song || ps);
-        } else if (data.status === 'COMPLETED') {
-          playable = existingPlayed.map(ps => ps.song || ps);
-        } else {
-          const vetodIds = (data.vetoed_songs || []).map(v => v.song_id);
-          playable = drawn.filter(s => !vetodIds.includes(s.id));
-        }
+        const playable = getPlayableSongs(data, legacyGauntlet && isGauntlet);
 
         const s = {};
         playable.forEach((song, i) => {
@@ -170,21 +182,18 @@ export default function MatchView() {
     }));
   };
 
-  // Calculate song winners and match state from scores (Round Robin - Best of 3)
-  const getSongResults = () => {
-    if (!match) return { results: [], p1Wins: 0, p2Wins: 0, matchOver: false, winnerId: null, p1Total: 0, p2Total: 0, songsNeeded: 3 };
+  const getSeriesResults = () => {
+    const bestOf = getBestOf(match);
+    const majority = Math.ceil(bestOf / 2);
+    if (!match) {
+      return { results: [], p1Wins: 0, p2Wins: 0, matchOver: false, winnerId: null, p1Total: 0, p2Total: 0, songsNeeded: bestOf };
+    }
 
-    const played = match.played_songs || [];
-    const songsToScore = played.length > 0 ? played.map(ps => ps.song || ps) : (() => {
-      const drawn = match.drawn_songs || [];
-      const vetodIds = (match.vetoed_songs || []).map(v => v.song_id);
-      return drawn.filter(s => !vetodIds.includes(s.id));
-    })();
+    const songsToScore = getPlayableSongs(match, false);
 
     let p1Wins = 0, p2Wins = 0, p1Total = 0, p2Total = 0;
     const results = [];
 
-    // Best of 3: process songs in order, stop once someone has 2 wins
     for (let i = 0; i < songsToScore.length; i++) {
       const song = songsToScore[i];
       const s = scores[song.id] || {};
@@ -192,8 +201,7 @@ export default function MatchView() {
       const p2Score = parseInt(s.p2) || 0;
       const hasScores = s.p1 !== '' && s.p2 !== '';
 
-      // If match is already decided (someone has 2 wins), mark remaining songs as skipped
-      if (p1Wins >= 2 || p2Wins >= 2) {
+      if (p1Wins >= majority || p2Wins >= majority) {
         results.push({ song, p1Score: 0, p2Score: 0, songWinnerId: null, hasScores: false, skipped: true });
         continue;
       }
@@ -209,14 +217,12 @@ export default function MatchView() {
       results.push({ song, p1Score, p2Score, songWinnerId, hasScores, skipped: false });
     }
 
-    // Best of 3: first to 2 wins
-    const matchOver = p1Wins >= 2 || p2Wins >= 2;
-    const winnerId = matchOver ? (p1Wins >= 2 ? match.player1_id : match.player2_id) : null;
-    // How many songs have scores entered (non-skipped)
-    const scoredCount = results.filter(r => r.hasScores && !r.skipped).length;
-    const allScoredDone = scoredCount > 0 && results.filter(r => !r.skipped).every(r => r.hasScores);
+    const matchOver = p1Wins >= majority || p2Wins >= majority;
+    const winnerId = matchOver ? (p1Wins >= majority ? match.player1_id : match.player2_id) : null;
+    const scoredCount = results.filter((r) => r.hasScores && !r.skipped).length;
+    const allScoredDone = scoredCount > 0 && results.filter((r) => !r.skipped).every((r) => r.hasScores);
 
-    return { results, p1Wins, p2Wins, matchOver, winnerId, p1Total, p2Total, allScoredDone, songsNeeded: matchOver ? scoredCount : 3 };
+    return { results, p1Wins, p2Wins, matchOver, winnerId, p1Total, p2Total, allScoredDone, songsNeeded: matchOver ? scoredCount : bestOf };
   };
 
   // Calculate gauntlet results (combined total score)
@@ -250,9 +256,7 @@ export default function MatchView() {
   };
 
   const handleSubmitResult = async () => {
-    const isGauntlet = match.match_type === 'gauntlet';
-
-    if (isGauntlet) {
+    if (usesLegacyGauntletScoring(match)) {
       const { results, p1Total, p2Total, matchOver, winnerId, allHaveScores } = getGauntletResults();
 
       if (!allHaveScores) {
@@ -289,7 +293,7 @@ export default function MatchView() {
         setSubmitting(false);
       }
     } else {
-      const { results, p1Wins, p2Wins, matchOver, winnerId, p1Total, p2Total } = getSongResults();
+      const { results, p1Wins, p2Wins, matchOver, winnerId, p1Total, p2Total } = getSeriesResults();
 
       if (!matchOver) {
         return addToast('Match is not decided yet.', 'error');
@@ -327,21 +331,15 @@ export default function MatchView() {
 
   const { player1, player2, status } = match;
   const isGauntlet = match.match_type === 'gauntlet';
+  const bestOf = getBestOf(match);
+  const legacyGauntlet = usesLegacyGauntletScoring(match);
   const drawn = match.drawn_songs || [];
   const vetoed = match.vetoed_songs || [];
   const vetoedIds = vetoed.map(v => v.song_id);
-  const existingPlayed = match.played_songs || [];
-  let playable;
-  if (isGauntlet) {
-    playable = drawn;
-  } else if ((status === 'READY' || status === 'COMPLETED') && existingPlayed.length > 0) {
-    playable = existingPlayed.map(ps => ps.song || ps);
-  } else {
-    playable = drawn.filter(s => !vetoedIds.includes(s.id));
-  }
+  const playable = getPlayableSongs(match, legacyGauntlet);
   const statusInfo = (isGauntlet ? GAUNTLET_STATUS_FLOW : STATUS_FLOW)[status] || {};
-  const songResults = isGauntlet ? null : getSongResults();
-  const gauntletResults = isGauntlet ? getGauntletResults() : null;
+  const songResults = legacyGauntlet ? null : getSeriesResults();
+  const gauntletResults = legacyGauntlet ? getGauntletResults() : null;
 
   return (
     <div className="max-w-4xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
@@ -368,7 +366,7 @@ export default function MatchView() {
           </div>
           <div className="text-sm text-gray-500">
             {isGauntlet
-              ? `Match #${match.gauntlet_order} | S${match.difficulty_min} / D${match.difficulty_max}`
+              ? `Match #${match.gauntlet_order} | Lv.${match.difficulty_min} mixed draw | ${bestOf === 1 ? '1 song' : 'Best of 3'}`
               : `Round ${match.round_number} | Lv.${match.difficulty_min}${match.difficulty_max !== match.difficulty_min ? `-${match.difficulty_max}` : ''}`
             }
           </div>
@@ -385,7 +383,7 @@ export default function MatchView() {
 
           <div className="text-center px-3 sm:px-6">
             {status === 'COMPLETED' ? (
-              isGauntlet ? (
+              legacyGauntlet ? (
                 <div className="flex flex-col items-center">
                   <div className="font-display font-bold text-lg sm:text-xl">
                     <span className={match.winner_id === match.player1_id ? 'text-piu-green' : 'text-gray-600'}>
@@ -437,7 +435,9 @@ export default function MatchView() {
           </button>
           <p className="text-sm text-gray-500 mt-2">
             {isGauntlet
-              ? `1 Single (Lv.${match.difficulty_min}) + 1 Double (Lv.${match.difficulty_max})`
+              ? (bestOf === 1
+                ? `Draw 1 singles-or-doubles chart at Lv.${match.difficulty_min}`
+                : `Draw 5 singles-or-doubles charts at Lv.${match.difficulty_min}, veto 1 each, then play the final 3`)
               : '5 drawn, 2 vetoed, best of 3 remaining'
             }
           </p>
@@ -472,7 +472,7 @@ export default function MatchView() {
       )}
 
       {/* Card Draw Display - Round Robin (with veto) */}
-      {!isGauntlet && !shuffling && drawn.length > 0 && status !== 'PENDING' && (
+      {(!isGauntlet || (!legacyGauntlet && bestOf > 1)) && !shuffling && drawn.length > 0 && status !== 'PENDING' && (
         <div className="mb-4 sm:mb-6">
           <h3 className="font-display font-bold text-lg mb-3">
             {status === 'DRAWING' || status === 'VETOING' ? 'Veto Phase' :
@@ -550,10 +550,10 @@ export default function MatchView() {
       )}
 
       {/* Card Draw Display - Gauntlet (no veto) */}
-      {isGauntlet && drawn.length > 0 && status !== 'PENDING' && status !== 'COMPLETED' && (
+      {isGauntlet && (legacyGauntlet || bestOf === 1) && drawn.length > 0 && status !== 'PENDING' && status !== 'COMPLETED' && (
         <div className="mb-4 sm:mb-6">
           <h3 className="font-display font-bold text-lg mb-3">Songs to Play</h3>
-          <div className="grid grid-cols-2 gap-2 sm:gap-4">
+          <div className={`grid gap-2 sm:gap-4 ${drawn.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
             {drawn.map((song, idx) => (
               <SongCard
                 key={song.id}
@@ -569,7 +569,7 @@ export default function MatchView() {
       )}
 
       {/* Scoring Section - Round Robin (Best of 3) */}
-      {!isGauntlet && status === 'READY' && (
+      {songResults && status === 'READY' && (
         <div className="space-y-3 sm:space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="font-display font-bold text-lg">Score Entry</h3>
@@ -581,7 +581,9 @@ export default function MatchView() {
           </div>
 
           <p className="text-sm text-gray-500">
-            Best of 3: first to win 2 songs wins the match. Enter scores (0 - 1,000,000).
+            {bestOf === 1
+              ? 'Single-song draw: higher score wins the match. Enter scores (0 - 1,000,000).'
+              : 'Best of 3: first to win 2 songs wins the match. Enter scores (0 - 1,000,000).'}
           </p>
 
           {playable.map((song, idx) => {
@@ -806,7 +808,7 @@ export default function MatchView() {
       )}
 
       {/* Completed result - Round Robin */}
-      {!isGauntlet && status === 'COMPLETED' && match.played_songs.length > 0 && (
+      {songResults && status === 'COMPLETED' && match.played_songs.length > 0 && (
         <div className="space-y-3">
           <h3 className="font-display font-bold text-lg">Songs Played</h3>
           {match.played_songs.map((ps, idx) => {
@@ -839,7 +841,7 @@ export default function MatchView() {
       )}
 
       {/* Completed result - Gauntlet */}
-      {isGauntlet && status === 'COMPLETED' && match.played_songs.length > 0 && (
+      {legacyGauntlet && status === 'COMPLETED' && match.played_songs.length > 0 && (
         <div className="space-y-3">
           <h3 className="font-display font-bold text-lg">Songs Played</h3>
           {match.played_songs.map((ps, idx) => {

@@ -53,6 +53,12 @@ function formatRoundLevelLabel(roundLevel = {}, index = 0) {
   return `R${roundNumber}`;
 }
 
+function getGauntletLevels(config = {}) {
+  const start = parseInt(config.start_level ?? config.start_single_level, 10) || 19;
+  const final = parseInt(config.final_level ?? config.final_single_level, 10) || 24;
+  return { start, final };
+}
+
 export function formatTournamentDate(value) {
   const raw = String(value || '').trim();
   if (!raw) return '';
@@ -255,14 +261,19 @@ export function TournamentPhaseRuleCard({ phase, className = '' }) {
   const format = phase.format;
   const config = phase.config || {};
   const roundLevels = Array.isArray(config.round_levels) ? config.round_levels : [];
+  const gauntletLevels = getGauntletLevels(config);
+  const gauntletBestOf = parseInt(config.best_of, 10) || 3;
   const rules = [
-    config.cards_per_draw ? `${config.cards_per_draw} cards drawn per match` : '',
-    config.vetoes_per_player !== undefined ? `${config.vetoes_per_player} veto${config.vetoes_per_player !== 1 ? 'es' : ''} per player` : '',
-    config.best_of ? `Best of ${config.best_of}` : '',
+    format !== 'gauntlet' && config.cards_per_draw ? `${config.cards_per_draw} cards drawn per match` : '',
+    format !== 'gauntlet' && config.vetoes_per_player !== undefined ? `${config.vetoes_per_player} veto${config.vetoes_per_player !== 1 ? 'es' : ''} per player` : '',
+    format !== 'gauntlet' && config.best_of ? `Best of ${config.best_of}` : '',
     config.rounds ? `${config.rounds} round${config.rounds > 1 ? 's' : ''}` : '',
     config.pool_count ? `${config.pool_count} pools` : '',
     config.duration_minutes ? `${config.duration_minutes} minute session` : '',
-    format === 'gauntlet' ? `S${config.start_single_level || 19} to S${config.final_single_level || 24}` : '',
+    format === 'gauntlet' ? `Lv ${gauntletLevels.start} to Lv ${gauntletLevels.final}` : '',
+    format === 'gauntlet' ? 'Mixed singles/doubles card draw' : '',
+    format === 'gauntlet' && gauntletBestOf === 3 ? '5 cards drawn, 1 veto each, best of 3' : '',
+    format === 'gauntlet' && gauntletBestOf === 1 ? '1 song drawn per match' : '',
     format === 'b15' ? 'Best 15 rating-point scores' : '',
   ].filter(Boolean);
 

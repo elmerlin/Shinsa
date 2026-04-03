@@ -28,6 +28,12 @@ const PHASE_CARD_PERF_STYLE = {
   containIntrinsicSize: '240px',
 };
 
+function getGauntletLevels(config = {}) {
+  const start = parseInt(config.start_level ?? config.start_single_level, 10) || 19;
+  const final = parseInt(config.final_level ?? config.final_single_level, 10) || 24;
+  return { start, final };
+}
+
 function getConfigSummary(format, config) {
   switch (format) {
     case 'round_robin':
@@ -39,7 +45,7 @@ function getConfigSummary(format, config) {
     case 'double_elim':
       return `Best of ${config.best_of || 3}${config.grand_final_reset ? ', grand final reset' : ''}`;
     case 'gauntlet':
-      return `S${config.start_single_level || 19}→S${config.final_single_level || 24}`;
+      return `Lv ${getGauntletLevels(config).start}→Lv ${getGauntletLevels(config).final}, mixed S/D, ${parseInt(config.best_of, 10) === 1 ? 'single song' : 'best of 3'}`;
     case 'hour_of_power':
       return `${config.duration_minutes || 60} min, cumulative rating`;
     case 'b15':
