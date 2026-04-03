@@ -1,6 +1,14 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { createTournament, createPhase } from '../utils/api';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import {
+  createPhase,
+  createTournament,
+  deletePhase,
+  getPhases,
+  getTournament,
+  updatePhase,
+  updateTournament,
+} from '../utils/api';
 import { FORMAT_DESCRIPTIONS, FORMAT_ICONS, FORMAT_LABELS } from '../utils/tournamentConstants';
 import AvatarPicker from '../components/AvatarPicker';
 import PhaseCard from '../components/tournament/PhaseCard';
@@ -9,6 +17,7 @@ import TournamentPresets from '../components/tournament/TournamentPresets';
 import { TournamentEmptyPanel } from '../components/tournament/TournamentChrome';
 import { Badge } from '../components/ui/badge';
 import { Card, CardContent } from '../components/ui/card';
+import { useAuth } from '../contexts/AuthContext';
 
 const ALL_FORMATS = ['round_robin', 'pools', 'single_elim', 'double_elim', 'gauntlet', 'hour_of_power', 'b15'];
 
@@ -78,22 +87,81 @@ function SetupSectionHeader({ eyebrow, title, description, action = null }) {
   );
 }
 
+function normalizeLoadedPhase(phase, index) {
+  return {
+    ...phase,
+    _key: phase.id || `phase-${index}`,
+    config: phase.config || { ...DEFAULT_CONFIGS[phase.format] },
+    advancement: phase.advancement || { type: 'all' },
+  };
+}
+
 export default function TournamentSetup() {
   const navigate = useNavigate();
+  const { id: tournamentId } = useParams();
+  const { user, loading: authLoading } = useAuth();
+  const isEditMode = Boolean(tournamentId);
+
   const [form, setForm] = useState({
     name: '',
     location: '',
     date: new Date().toISOString().split('T')[0],
     avatar: '',
   });
+  const [originalPhaseIds, setOriginalPhaseIds] = useState([]);
+  const [existingTournament, setExistingTournament] = useState(null);
   const [phases, setPhases] = useState([]);
   const [expandedPhase, setExpandedPhase] = useState(null);
   const [showFormatPicker, setShowFormatPicker] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(isEditMode);
+
+  const canEditExistingTournament = !isEditMode || !!user?.is_admin;
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!isEditMode) {
+      setLoading(false);
+      return undefined;
+    }
+
+    async function loadExistingTournament() {
+      setLoading(true);
+      try {
+        const [tournament, loadedPhases] = await Promise.all([
+          getTournament(tournamentId),
+          getPhases(tournamentId),
+        ]);
+        if (cancelled) return;
+
+        setExistingTournament(tournament);
+        setForm({
+          name: String(tournament?.name || ''),
+          location: String(tournament?.location || ''),
+          date: String(tournament?.date || new Date().toISOString().split('T')[0]),
+          avatar: String(tournament?.avatar || ''),
+        });
+
+        const normalizedPhases = (Array.isArray(loadedPhases) ? loadedPhases : []).map(normalizeLoadedPhase);
+        setPhases(normalizedPhases);
+        setOriginalPhaseIds(normalizedPhases.map((phase) => phase.id).filter(Boolean));
+        setExpandedPhase(normalizedPhases.length > 0 ? 0 : null);
+      } catch (err) {
+        if (!cancelled) alert(err.message || 'Failed to load tournament');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    loadExistingTournament();
+    return () => {
+      cancelled = true;
+    };
+  }, [isEditMode, tournamentId]);
 
   const addPhase = (format) => {
     const newPhase = {
-      _key: Date.now(),
+      _key: `${Date.now()}-${format}`,
       format,
       name: '',
       config: { ...DEFAULT_CONFIGS[format] },
@@ -104,7 +172,7 @@ export default function TournamentSetup() {
     setShowFormatPicker(false);
   };
 
-  const updatePhase = (idx, updated) => {
+  const updateLocalPhase = (idx, updated) => {
     setPhases((prev) => prev.map((phase, index) => (index === idx ? { ...phase, ...updated } : phase)));
   };
 
@@ -135,12 +203,12 @@ export default function TournamentSetup() {
     e.preventDefault();
     if (!form.name.trim()) return;
     if (phases.length === 0) return;
+
     setSaving(true);
     try {
       const firstPhase = phases[0];
       const legacyConfig = firstPhase.config || {};
-
-      const tournament = await createTournament({
+      const tournamentPayload = {
         name: form.name,
         location: form.location,
         date: form.date,
@@ -150,21 +218,61 @@ export default function TournamentSetup() {
           ...legacyConfig,
           phases_enabled: true,
         },
-      });
+      };
 
+      if (!isEditMode) {
+        const tournament = await createTournament(tournamentPayload);
+        for (let index = 0; index < phases.length; index += 1) {
+          const phase = phases[index];
+          await createPhase({
+            tournament_id: tournament.id,
+            phase_order: index + 1,
+            format: phase.format,
+            name: phase.name || '',
+            config: phase.config || {},
+            advancement: phase.advancement || { type: 'all' },
+          });
+        }
+        navigate(`/tournament/${tournament.id}`);
+        return;
+      }
+
+      await updateTournament(tournamentId, tournamentPayload);
+
+      const nextPersistedIds = [];
       for (let index = 0; index < phases.length; index += 1) {
         const phase = phases[index];
-        await createPhase({
-          tournament_id: tournament.id,
+        const payload = {
+          tournament_id: tournamentId,
           phase_order: index + 1,
           format: phase.format,
           name: phase.name || '',
           config: phase.config || {},
           advancement: phase.advancement || { type: 'all' },
-        });
+        };
+
+        if (phase.id) {
+          await updatePhase(phase.id, {
+            phase_order: payload.phase_order,
+            format: payload.format,
+            name: payload.name,
+            config: payload.config,
+            advancement: payload.advancement,
+          });
+          nextPersistedIds.push(phase.id);
+        } else {
+          const createdPhase = await createPhase(payload);
+          if (createdPhase?.id) nextPersistedIds.push(createdPhase.id);
+        }
       }
 
-      navigate(`/tournament/${tournament.id}`);
+      for (const phaseId of originalPhaseIds) {
+        if (!nextPersistedIds.includes(phaseId)) {
+          await deletePhase(phaseId);
+        }
+      }
+
+      navigate(`/tournament/${tournamentId}`);
     } catch (err) {
       alert(err.message);
     } finally {
@@ -172,7 +280,7 @@ export default function TournamentSetup() {
     }
   };
 
-  const getFlowPreview = () => {
+  const flowPreview = useMemo(() => {
     if (phases.length === 0) return null;
     return phases.map((phase, index) => {
       const label = phase.name || FORMAT_LABELS[phase.format] || phase.format;
@@ -185,9 +293,48 @@ export default function TournamentSetup() {
       }
       return { label, arrow, icon: FORMAT_ICONS[phase.format] || '' };
     });
-  };
+  }, [phases]);
 
-  const flowPreview = getFlowPreview();
+  const pageCopy = useMemo(() => ({
+    badge: isEditMode ? 'Edit Tournament' : 'Tournament Setup',
+    phaseBadge: phases.length > 0 ? `${phases.length} phase${phases.length === 1 ? '' : 's'} configured` : 'Add at least one phase',
+    heading: isEditMode ? 'Tune the setup before the bracket goes live' : 'Build the bracket before match one',
+    body: isEditMode
+      ? 'Adjust the name, avatar, phase order, and chart rules while the tournament is still waiting to start.'
+      : 'Set the shell, line up the phases, then add registered players.',
+    submitLabel: isEditMode ? 'Save Changes' : 'Create Tournament',
+    savingLabel: isEditMode ? 'Saving...' : 'Creating...',
+  }), [isEditMode, phases.length]);
+
+  if (loading || (isEditMode && authLoading)) {
+    return <div className="mx-auto max-w-5xl px-4 py-16 text-center text-zinc-400">Loading tournament setup...</div>;
+  }
+
+  if (isEditMode && !existingTournament) {
+    return <div className="mx-auto max-w-5xl px-4 py-16 text-center text-red-400">Tournament not found</div>;
+  }
+
+  if (isEditMode && existingTournament?.phase !== 'SETUP') {
+    return (
+      <div className="mx-auto max-w-5xl px-4 py-16">
+        <TournamentEmptyPanel
+          title="Setup editing is closed"
+          description="Tournament setup can only be edited before the first phase starts."
+        />
+      </div>
+    );
+  }
+
+  if (isEditMode && !canEditExistingTournament) {
+    return (
+      <div className="mx-auto max-w-5xl px-4 py-16">
+        <TournamentEmptyPanel
+          title="Admin access required"
+          description="Only global admins can edit an existing tournament setup right now."
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
@@ -195,17 +342,17 @@ export default function TournamentSetup() {
         <Card className="overflow-hidden border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(255,51,102,0.18),transparent_36%),radial-gradient(circle_at_82%_20%,rgba(255,199,92,0.14),transparent_28%),rgba(8,11,20,0.94)]">
           <CardContent className="space-y-5">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="default" className="border-piu-accent/25 bg-piu-accent/12 text-rose-100">Tournament Setup</Badge>
+              <Badge variant="default" className="border-piu-accent/25 bg-piu-accent/12 text-rose-100">{pageCopy.badge}</Badge>
               <Badge variant={phases.length > 0 ? 'success' : 'warning'}>
-                {phases.length > 0 ? `${phases.length} phase${phases.length === 1 ? '' : 's'} configured` : 'Add at least one phase'}
+                {pageCopy.phaseBadge}
               </Badge>
             </div>
 
             <div className="space-y-4">
               <div>
-                <h1 className="font-display text-3xl font-bold text-white sm:text-4xl">Build the bracket before match one</h1>
+                <h1 className="font-display text-3xl font-bold text-white sm:text-4xl">{pageCopy.heading}</h1>
                 <p className="mt-3 max-w-3xl text-sm text-zinc-300">
-                  Set the shell, line up the phases, then add registered players.
+                  {pageCopy.body}
                 </p>
               </div>
 
@@ -231,6 +378,15 @@ export default function TournamentSetup() {
                 eyebrow="General Info"
                 title="Tournament details"
                 description="Shown on setup, overview, and watch pages."
+                action={isEditMode ? (
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/tournament/${tournamentId}`)}
+                    className="rounded-full border border-white/8 bg-white/5 px-3 py-2 text-xs font-display font-bold uppercase tracking-[0.14em] text-zinc-300 transition-colors hover:border-white/14 hover:text-white"
+                  >
+                    Back to tournament
+                  </button>
+                ) : null}
               />
 
               <div className="grid gap-5 lg:grid-cols-[1.15fr_0.85fr]">
@@ -291,11 +447,11 @@ export default function TournamentSetup() {
           ) : null}
 
           <div className="space-y-4">
-              <SetupSectionHeader
-                eyebrow="Phase Pipeline"
-                title="Design the tournament flow"
-                description="Stack formats in order and define how each stage feeds the next."
-                action={phases.length > 0 ? (
+            <SetupSectionHeader
+              eyebrow="Phase Pipeline"
+              title="Design the tournament flow"
+              description="Stack formats in order and define how each stage feeds the next."
+              action={phases.length > 0 ? (
                 <button
                   type="button"
                   onClick={() => setPhases([])}
@@ -327,7 +483,7 @@ export default function TournamentSetup() {
                   >
                     <PhaseConfigPanel
                       phase={phase}
-                      onChange={(updated) => updatePhase(idx, updated)}
+                      onChange={(updated) => updateLocalPhase(idx, updated)}
                       isLastPhase={idx === phases.length - 1}
                     />
                   </PhaseCard>
@@ -426,9 +582,13 @@ export default function TournamentSetup() {
               className="btn-primary flex-1"
               disabled={saving || phases.length === 0 || !form.name.trim()}
             >
-              {saving ? 'Creating...' : 'Create Tournament'}
+              {saving ? pageCopy.savingLabel : pageCopy.submitLabel}
             </button>
-            <button type="button" onClick={() => navigate('/')} className="btn-secondary">
+            <button
+              type="button"
+              onClick={() => navigate(isEditMode ? `/tournament/${tournamentId}` : '/')}
+              className="btn-secondary"
+            >
               Cancel
             </button>
           </div>

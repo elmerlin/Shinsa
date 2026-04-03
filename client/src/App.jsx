@@ -1451,6 +1451,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/tournament/new" element={<TournamentSetup />} />
+            <Route path="/tournament/:id/edit" element={<TournamentSetup />} />
             <Route path="/tournament/:id/watch" element={<TournamentWatch />} />
             <Route path="/tournament/:id/overlay" element={<TournamentOverlay />} />
             <Route path="/tournament/:id/embed" element={<TournamentEmbed />} />
