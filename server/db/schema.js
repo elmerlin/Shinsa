@@ -928,6 +928,8 @@ function initializeDb() {
       location_lat REAL DEFAULT NULL,
       location_lng REAL DEFAULT NULL,
       timezone TEXT DEFAULT '',
+      failed_login_attempts INT NOT NULL DEFAULT 0,
+      login_locked_until TEXT DEFAULT '',
       created_at TEXT DEFAULT (datetime('now'))
     );
 
@@ -3082,6 +3084,8 @@ function initializeDb() {
     ['playing_status', "TEXT DEFAULT ''"],
     ['updated_at', "TEXT DEFAULT ''"],
     ['timezone', "TEXT DEFAULT ''"],
+    ['failed_login_attempts', 'INT NOT NULL DEFAULT 0'],
+    ['login_locked_until', "TEXT DEFAULT ''"],
   ];
   for (const [col, type] of userMigrations) {
     if (!userCols.includes(col)) {

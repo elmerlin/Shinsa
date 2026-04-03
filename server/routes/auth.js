@@ -11,12 +11,21 @@ const { addNotificationClient } = require('../lib/notificationHub');
 const { getPublicVapidKey, isWebPushConfigured } = require('../lib/webPush');
 const { isInlineDataAvatar, normalizeUserAvatarForList } = require('../lib/avatarProxy');
 const { evaluateAchievementSeries, getSeriesProgressValue } = require('../lib/achievements');
+const {
+  buildFailedLoginState,
+  createLoginRateLimiter,
+  getLoginLockoutStatus,
+} = require('../lib/loginSecurity');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'shinsa-pump-dojo-secret-key';
 const TOKEN_EXPIRY = '30d';
 const QR_LOGIN_CHALLENGE_TTL_MS = 2 * 60 * 1000;
 const QR_LOGIN_POLL_AFTER_MS = 2500;
 const MAX_ACTIVITY_ITEMS = 200;
+const LOGIN_RATE_LIMIT_WINDOW_MS = Math.max(60 * 1000, parseInt(process.env.LOGIN_RATE_LIMIT_WINDOW_MS, 10) || (10 * 60 * 1000));
+const LOGIN_RATE_LIMIT_MAX_ATTEMPTS = Math.max(1, parseInt(process.env.LOGIN_RATE_LIMIT_MAX_ATTEMPTS, 10) || 10);
+const LOGIN_LOCKOUT_THRESHOLD = Math.max(1, parseInt(process.env.LOGIN_LOCKOUT_THRESHOLD, 10) || 5);
+const LOGIN_LOCKOUT_MS = Math.max(60 * 1000, parseInt(process.env.LOGIN_LOCKOUT_MS, 10) || (15 * 60 * 1000));
 const ADMIN_USERNAMES = new Set(
   String(process.env.ADMIN_USERNAMES || 'elmer')
     .split(',')
@@ -31,6 +40,10 @@ const ADMIN_USER_IDS = new Set(
 );
 const FEATURE_KEYS = ['optimise', 'checkin', 'dojo_admin'];
 const FEATURE_KEY_SET = new Set(FEATURE_KEYS);
+const loginRateLimiter = createLoginRateLimiter({
+  windowMs: LOGIN_RATE_LIMIT_WINDOW_MS,
+  maxAttempts: LOGIN_RATE_LIMIT_MAX_ATTEMPTS,
+});
 const GROUP_BADGE_UPLOAD = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 6 * 1024 * 1024 },
@@ -545,18 +558,82 @@ router.post('/register', (req, res) => {
 router.post('/login', (req, res) => {
   const db = getDb();
   const { username, password } = req.body;
+  const rateLimitResult = loginRateLimiter.consume(getRequestIp(req));
+  if (!rateLimitResult.allowed) {
+    return res.status(429).json({
+      error: 'Too many login attempts. Please try again shortly.',
+      retry_after_seconds: Math.ceil(rateLimitResult.retryAfterMs / 1000),
+    });
+  }
 
   if (!username || !password) {
     return res.status(400).json({ error: 'Username and password are required' });
   }
 
-  const user = db.prepare('SELECT * FROM users WHERE LOWER(username) = LOWER(?)').get(username);
+  const normalizedUsername = String(username || '').trim();
+  const user = db.prepare(`
+    SELECT id, username, password_hash, failed_login_attempts, login_locked_until
+    FROM users
+    WHERE LOWER(username) = LOWER(?)
+  `).get(normalizedUsername);
+  const now = new Date();
+  const lockoutStatus = getLoginLockoutStatus(user, now);
+  if (lockoutStatus.locked) {
+    return res.status(423).json({
+      error: 'Account temporarily locked after too many failed login attempts.',
+      retry_after_seconds: Math.ceil(lockoutStatus.retryAfterMs / 1000),
+      locked_until: lockoutStatus.lockedUntil.toISOString(),
+    });
+  }
+  if (user?.id && String(user.login_locked_until || '').trim()) {
+    db.prepare(`
+      UPDATE users
+      SET failed_login_attempts = 0,
+          login_locked_until = '',
+          updated_at = datetime('now')
+      WHERE id = ?
+    `).run(user.id);
+    user.failed_login_attempts = 0;
+    user.login_locked_until = '';
+  }
+
   if (!user || !bcrypt.compareSync(password, user.password_hash)) {
+    if (user?.id) {
+      const failedState = buildFailedLoginState(user, {
+        now,
+        threshold: LOGIN_LOCKOUT_THRESHOLD,
+        lockoutMs: LOGIN_LOCKOUT_MS,
+      });
+      db.prepare(`
+        UPDATE users
+        SET failed_login_attempts = ?,
+            login_locked_until = ?,
+            updated_at = datetime('now')
+        WHERE id = ?
+      `).run(failedState.failedAttempts, failedState.loginLockedUntil, user.id);
+
+      if (failedState.shouldLock) {
+        return res.status(423).json({
+          error: 'Account temporarily locked after too many failed login attempts.',
+          retry_after_seconds: Math.ceil(LOGIN_LOCKOUT_MS / 1000),
+          locked_until: failedState.lockedUntil.toISOString(),
+        });
+      }
+    }
     return res.status(401).json({ error: 'Invalid username or password' });
   }
 
-  const clientUser = toClientAuthUser(db, user, 96);
-  const token = signAuthToken(user, clientUser);
+  db.prepare(`
+    UPDATE users
+    SET failed_login_attempts = 0,
+        login_locked_until = '',
+        updated_at = datetime('now')
+    WHERE id = ?
+  `).run(user.id);
+
+  const authUser = getAuthUserById(db, user.id);
+  const clientUser = toClientAuthUser(db, authUser, 96);
+  const token = signAuthToken(authUser, clientUser);
   res.json({ user: clientUser, token });
 });
 
@@ -2736,3 +2813,4 @@ module.exports.requireAuth = requireAuth;
 module.exports.optionalAuth = optionalAuth;
 module.exports.isAdminUser = isAdminUser;
 module.exports.hasFeatureAccess = hasFeatureAccess;
+module.exports._loginRateLimiter = loginRateLimiter;
