@@ -1,28 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { parseGrade } from '../utils/grades';
-
-const PLATE_NAMES = {
-  PG: 'PERFECT GAME',
-  UG: 'ULTIMATE GAME',
-  EG: 'EXTREME GAME',
-  SG: 'SUPERB GAME',
-  MG: 'MARVELOUS GAME',
-  TG: 'TALENTED GAME',
-  FG: 'FAIR GAME',
-  RG: 'ROUGH GAME',
-};
-
-const PLATE_COLORS = {
-  PG: 'text-piu-gold',
-  UG: 'text-yellow-300',
-  EG: 'text-emerald-300',
-  SG: 'text-sky-300',
-  MG: 'text-cyan-300',
-  TG: 'text-violet-300',
-  FG: 'text-slate-300',
-  RG: 'text-rose-300',
-};
+import { getPlateName, getPlateTextColorClass } from '../utils/plates';
 
 const JUDGMENT_META = [
   { key: 'PERFECT', field: 'perfect', labelClass: 'text-sky-300' },
@@ -198,8 +177,8 @@ export default function ScoreSnapshotCard({
     : (isUpscore ? displayScore - oldScore : 0);
   const deltaClass = deltaValue > 0 ? 'text-piu-green' : deltaValue < 0 ? 'text-rose-300' : 'text-gray-400';
   const overRank = getOverTop100Rank(score.over_top100_rank ?? score.overTop100Rank);
-  const plateName = PLATE_NAMES[String(score.plate || '').trim().toUpperCase()] || String(score.plate || '').trim();
-  const plateColor = PLATE_COLORS[String(score.plate || '').trim().toUpperCase()] || 'text-gray-300';
+  const plateName = getPlateName(score.plate);
+  const plateColor = getPlateTextColorClass(score.plate);
   const isStageBreak = !!score.is_stage_break || !!score.isStageBreak;
   const infoBadges = [
     resolvedRoleLabel ? {

@@ -73,11 +73,12 @@ function normalizePreviewItem(entry, kind = 'clear') {
         : entry.grade,
       20
     ),
+    plate: compactText(entry.plate, 20),
     jacketUrl: String(entry._jacketUrl || entry.jacket_url || entry.background_url || '').trim(),
     scoreDelta,
   };
 
-  return item.songTitle || item.score > 0 || item.grade || item.jacketUrl ? item : null;
+  return item.songTitle || item.score > 0 || item.grade || item.plate || item.jacketUrl ? item : null;
 }
 
 function buildPreviewItems(rows, kind = 'clear') {
