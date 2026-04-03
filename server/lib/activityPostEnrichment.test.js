@@ -2,6 +2,7 @@ const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
 
 const {
+  enrichClearRecord,
   enrichClearRows,
   enrichUpscoreRows,
 } = require('./activityPostEnrichment');
@@ -14,6 +15,16 @@ function createMockDb({ charts = [], recentPlays = [] } = {}) {
           get(title, mode, level) {
             return charts.find((chart) =>
               chart.title === title && chart.mode === mode && chart.level === level
+            ) || null;
+          },
+        };
+      }
+
+      if (sql.includes('FROM songs') && sql.includes('WHERE jacket_url = ?')) {
+        return {
+          get(jacketUrl, mode, level) {
+            return charts.find((chart) =>
+              chart.jacket_url === jacketUrl && chart.mode === mode && chart.level === level
             ) || null;
           },
         };
@@ -134,5 +145,69 @@ describe('activity post enrichment replay handling', () => {
     assert.equal(enriched.replay_video_id, '');
     assert.equal(enriched.play_id, 15189);
     assert.equal(enriched.chart_id, 2);
+  });
+
+  it('backfills blank clear plates from recent-play metadata even when judgments already exist', () => {
+    const db = createMockDb({
+      recentPlays: [
+        {
+          play_id: 15346,
+          user_id: 'ching',
+          song_title: 'Phalanx "RS2018 edit"',
+          mode: 'Double',
+          level: 21,
+          score: 877048,
+          perfect: 773,
+          great: 186,
+          good: 23,
+          bad: 5,
+          miss: 24,
+          max_combo: 0,
+          plate: 'FG',
+          background_url: 'https://www.piugame.com/data/song_img/phalanx.png',
+          date_played: '2026-04-03 20:55:37 (GMT+9)',
+          played_at_utc: '2026-04-03 11:55:37',
+          over_top100_rank: 0,
+          replay_embed_url: 'https://www.youtube.com/embed/dmPhT5OQEco?start=5546&end=5684',
+          replay_video_id: 'dmPhT5OQEco',
+          replay_start_seconds: 5546,
+          replay_end_seconds: 5684,
+          machine_name: 'London Pump Dojo 1',
+        },
+      ],
+    });
+
+    const enriched = enrichClearRecord(db, {
+      id: 228,
+      user_id: 'ching',
+      song_title: 'Phalanx "RS2018 edit"',
+      mode: 'Double',
+      level: 21,
+      score: 877048,
+      grade: 'A+',
+      plate: '',
+      background_url: '',
+      created_at: '2026-04-03 13:03:40',
+      clears_json: JSON.stringify([{
+        entry_type: 'song_clear',
+        song_title: 'Phalanx "RS2018 edit"',
+        mode: 'Double',
+        level: 21,
+        score: 877048,
+        grade: 'A+',
+        plate: '',
+        perfect: 773,
+        great: 186,
+        good: 23,
+        bad: 5,
+        miss: 24,
+      }]),
+    });
+
+    const [item] = JSON.parse(enriched.clears_json);
+    assert.equal(enriched.plate, 'FG');
+    assert.equal(enriched.played_at_utc, '2026-04-03 11:55:37');
+    assert.equal(item.plate, 'FG');
+    assert.equal(item.play_id, 15346);
   });
 });

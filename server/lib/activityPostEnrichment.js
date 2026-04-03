@@ -275,10 +275,12 @@ function enrichEntryWithJudgments(db, userId, createdAt, entry, scoreKey = 'scor
   if (!entry) return entry;
 
   const needsJudgments = !hasJudgmentData(entry);
+  const needsPlate = !String(entry.plate || '').trim();
+  const needsBackground = !String(entry.background_url || '').trim();
   const needsMachine = !String(entry.machine_name || '').trim();
   const needsPlayId = !entry.play_id;
 
-  if (!needsJudgments && !needsMachine && !needsPlayId) return entry;
+  if (!needsJudgments && !needsPlate && !needsBackground && !needsMachine && !needsPlayId) return entry;
 
   const lookup = findRecentPlayJudgments(db, {
     userId,
@@ -310,6 +312,9 @@ function enrichEntryWithJudgments(db, userId, createdAt, entry, scoreKey = 'scor
 
   return {
     ...entry,
+    plate: entry.plate || lookup.plate || '',
+    background_url: entry.background_url || lookup.background_url || '',
+    over_top100_rank: toInt(entry.over_top100_rank) || toInt(lookup.over_top100_rank),
     machine_name: entry.machine_name || lookup.machine_name || '',
     played_at_utc: entry.played_at_utc || lookup.played_at_utc || '',
     play_id: entry.play_id || lookup.play_id || null,
@@ -412,10 +417,17 @@ function enrichClearRecord(db, clear) {
   const parsedItems = safeParseJsonArray(clear?.clears_json);
   const items = parsedItems.length > 0 ? parsedItems : [buildClearFallbackItem(clear)].filter(Boolean);
   if (items.length === 0) return clear;
+  const enrichedItems = enrichClearRows(db, clear.user_id, items, clear.created_at);
+  const primaryItem = enrichedItems.find((item) => String(item?.entry_type || '') !== 'title_unlock') || enrichedItems[0];
 
   return {
     ...clear,
-    clears_json: JSON.stringify(enrichClearRows(db, clear.user_id, items, clear.created_at)),
+    plate: clear.plate || primaryItem?.plate || '',
+    background_url: clear.background_url || primaryItem?.background_url || '',
+    played_at_utc: clear.played_at_utc || primaryItem?.played_at_utc || '',
+    machine_name: clear.machine_name || primaryItem?.machine_name || '',
+    play_id: clear.play_id || primaryItem?.play_id || null,
+    clears_json: JSON.stringify(enrichedItems),
   };
 }
 
