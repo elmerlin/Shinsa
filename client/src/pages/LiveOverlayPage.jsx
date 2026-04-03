@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
-import PiuChartJacket from '../components/PiuChartJacket';
+import PiuChartJacket, { getChartBadgeLabel } from '../components/PiuChartJacket';
 import LiveEmote from '../components/LiveEmote';
 import { openLiveSessionStream } from '../utils/api';
 import { getLiveReactionPayload, tokenizeLiveMessage } from '../utils/liveEmotes';
@@ -32,12 +32,17 @@ const GRADE_SORT = ['F', 'D', 'C', 'B', 'A', 'A+', 'AA', 'AA+', 'AAA', 'AAA+', '
 function modeShort(mode) {
   if (mode === 'Single') return 'S';
   if (mode === 'Double') return 'D';
+  if (mode === 'UCS') return 'UCS';
   return 'X';
+}
+
+function formatChartBadge(mode, level) {
+  return getChartBadgeLabel(mode, level);
 }
 
 function formatPlayLabel(play) {
   if (!play) return 'Waiting for the next chart';
-  return `${play.song_title || 'Unknown chart'} (${modeShort(play.mode)}${parseInt(play.level, 10) || '?'})`;
+  return `${play.song_title || 'Unknown chart'} (${formatChartBadge(play.mode, play.level)})`;
 }
 
 function getPlayGradeRank(grade) {
@@ -358,7 +363,7 @@ function VoteCard({ vote, theme, compact = false }) {
               <PiuChartJacket title={option.song_title} mode={option.mode} level={option.level} jacketUrl={option.jacket_url} size="sm" />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-display font-semibold text-gray-100">{option.song_title}</p>
-                <p className="text-[11px] text-gray-400">{modeShort(option.mode)}{option.level}</p>
+                <p className="text-[11px] text-gray-400">{formatChartBadge(option.mode, option.level)}</p>
               </div>
               <div className="text-right">
                 <p className="text-sm font-display font-semibold text-gray-100">{option.vote_count || 0}</p>
@@ -467,7 +472,7 @@ function getMarqueeItems({ play, latestRequest, latestChat, bestPlay, live, summ
         <PiuChartJacket title={play?.song_title} mode={play?.mode} level={play?.level} jacketUrl={play?.background_url} size="sm" />
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-display font-semibold text-gray-100">{play?.song_title || 'Waiting for the next chart'}</p>
-          <p className={subTextClassName}>{play ? `${modeShort(play.mode)}${play.level}` : 'Sync armed'}</p>
+          <p className={subTextClassName}>{play ? formatChartBadge(play.mode, play.level) : 'Sync armed'}</p>
         </div>
         <span className={metaClassName}>{play?.grade || '-'}</span>
         <span className="shrink-0 text-[11px] font-display font-semibold text-gray-300">{play ? formatNumber(play.score) : '-'}</span>
@@ -481,7 +486,7 @@ function getMarqueeItems({ play, latestRequest, latestChat, bestPlay, live, summ
         <span className={labelClassName}>Request</span>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-display font-semibold text-gray-100">
-            {latestRequest ? `${latestRequest.song_title} (${modeShort(latestRequest.mode)}${latestRequest.level})` : 'No requests yet'}
+            {latestRequest ? `${latestRequest.song_title} (${formatChartBadge(latestRequest.mode, latestRequest.level)})` : 'No requests yet'}
           </p>
           <p className={`truncate ${subTextClassName}`}>
             {latestRequest ? `${latestRequest.username || 'Viewer'} • ${latestRequest.status || 'open'}` : 'Waiting for the first request'}
@@ -516,7 +521,7 @@ function getMarqueeItems({ play, latestRequest, latestChat, bestPlay, live, summ
           <p className="truncate text-sm font-display font-semibold text-gray-100">
             {bestPlay?.song_title || 'No scores yet'}
           </p>
-          <p className={subTextClassName}>{bestPlay ? `${modeShort(bestPlay.mode)}${bestPlay.level}` : 'Play a chart to set the pace'}</p>
+          <p className={subTextClassName}>{bestPlay ? formatChartBadge(bestPlay.mode, bestPlay.level) : 'Play a chart to set the pace'}</p>
         </div>
         <span className={metaClassName}>{bestPlay?.grade || '-'}</span>
         <span className="shrink-0 text-[11px] font-display font-semibold text-gray-300">{bestPlay ? formatNumber(bestPlay.score) : '-'}</span>
@@ -690,7 +695,7 @@ function CompactOverlay({ live, play, vote, summary, requestCounts, theme, widge
                   <span className="inline-flex rounded-md border border-piu-border/60 bg-piu-card/70 px-2 py-1 text-[10px] font-display font-semibold uppercase tracking-[0.18em] text-gray-300">Latest Play</span>
                   <p className="mt-2 truncate text-xl font-display font-semibold text-gray-100">{play?.song_title || 'Waiting for the next chart'}</p>
                   <p className="mt-1 text-sm text-gray-400">
-                    {play ? `${modeShort(play.mode)}${play.level} • ${play.machine_name || 'Live floor'}` : 'Live sync will pin the next result here.'}
+                    {play ? `${formatChartBadge(play.mode, play.level)} • ${play.machine_name || 'Live floor'}` : 'Live sync will pin the next result here.'}
                   </p>
                 </div>
               </div>
@@ -794,7 +799,7 @@ function ChatOverlay({ live, play, vote, messages, theme, widgetSet, panelOpacit
               <PiuChartJacket title={play.song_title} mode={play.mode} level={play.level} jacketUrl={play.background_url} size="sm" />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-display font-semibold text-gray-100">{play.song_title}</p>
-                <p className="text-[11px] text-gray-400">{modeShort(play.mode)}{play.level} • {play.grade || '-'}</p>
+                <p className="text-[11px] text-gray-400">{formatChartBadge(play.mode, play.level)} • {play.grade || '-'}</p>
               </div>
             </div>
           </div>
@@ -837,7 +842,7 @@ function MobileOverlay({ live, play, vote, summary, requestCounts, theme, widget
               <PiuChartJacket title={play?.song_title} mode={play?.mode} level={play?.level} jacketUrl={play?.background_url} size="sm" />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-base font-display font-semibold text-gray-100">{play?.song_title || 'Waiting for the next chart'}</p>
-                <p className="text-[11px] text-gray-400">{play ? `${modeShort(play.mode)}${play.level}` : 'Sync armed'}</p>
+                <p className="text-[11px] text-gray-400">{play ? formatChartBadge(play.mode, play.level) : 'Sync armed'}</p>
               </div>
             </div>
           </div>

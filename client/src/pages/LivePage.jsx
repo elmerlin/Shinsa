@@ -39,7 +39,7 @@ import MentionSuggestionsPanel from '../components/MentionSuggestionsPanel';
 import SendToDirectMessageButton from '../components/SendToDirectMessageButton';
 import ScoreSnapshotModal from '../components/ScoreSnapshotModal';
 import { HourOfPowerLogo, HourOfPowerWordmark } from '../components/HourOfPowerBrand';
-import PiuChartJacket from '../components/PiuChartJacket';
+import PiuChartJacket, { getChartBadgeLabel } from '../components/PiuChartJacket';
 import StickerAsset from '../components/StickerAsset';
 import { parseGrade } from '../utils/grades';
 import {
@@ -240,7 +240,7 @@ function formatYoutubeChapterTitle(chapter) {
   const songTitle = String(chapter?.song_title || '').trim();
   if (!songTitle) return String(chapter?.title || '').trim() || 'Stream start';
   const performer = String(chapter?.username || '').trim();
-  const base = `${songTitle} (${modeShort(chapter?.mode)}${parseInt(chapter?.level, 10) || '?'})`;
+  const base = `${songTitle} (${formatChartBadge(chapter?.mode, chapter?.level)})`;
   return performer ? `${performer} - ${base}` : base;
 }
 
@@ -260,11 +260,16 @@ function getYouTubeId(url) {
 function modeShort(mode) {
   if (mode === 'Single') return 'S';
   if (mode === 'Double') return 'D';
+  if (mode === 'UCS') return 'UCS';
   return 'X';
 }
 
+function formatChartBadge(mode, level) {
+  return getChartBadgeLabel(mode, level);
+}
+
 function formatPlayLabel(play) {
-  return `${String(play?.song_title || 'Unknown chart').trim() || 'Unknown chart'} (${modeShort(play?.mode)}${parseInt(play?.level, 10) || '?'})`;
+  return `${String(play?.song_title || 'Unknown chart').trim() || 'Unknown chart'} (${formatChartBadge(play?.mode, play?.level)})`;
 }
 
 function getRequestStatus(status, fulfilled = false) {
@@ -1026,7 +1031,7 @@ function SongRequestTierShortcutResult({ chart, disabled, onSelectChart, showHos
       onClick={() => onSelectChart(chart)}
       disabled={disabled}
       className="group text-left disabled:opacity-50"
-      title={`Request ${chart.song_title} (${modeShort(chart.mode)}${chart.level})`}
+      title={`Request ${chart.song_title} (${formatChartBadge(chart.mode, chart.level)})`}
     >
       <div className="overflow-hidden rounded-xl border border-piu-border/60 bg-piu-card/95 shadow-[0_2px_8px_rgba(0,0,0,0.18)] transition-colors group-hover:border-piu-accent/50">
         <div className="relative aspect-[16/10] overflow-hidden bg-piu-dark">
@@ -1041,7 +1046,7 @@ function SongRequestTierShortcutResult({ chart, disabled, onSelectChart, showHos
           )}
           <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-2">
             <span className={`rounded-md border px-2 py-1 text-[11px] font-display font-black shadow-[0_2px_8px_rgba(0,0,0,0.3)] ${getRequestChartBadgeTone(chart.mode)}`}>
-              {modeShort(chart.mode)}{chart.level}
+              {formatChartBadge(chart.mode, chart.level)}
             </span>
             {playedCount > 0 ? (
               <span className="rounded-md border border-emerald-400/30 bg-emerald-500/15 px-2 py-1 text-[10px] font-display font-bold text-emerald-100 shadow-[0_2px_8px_rgba(0,0,0,0.28)]">
@@ -1183,12 +1188,12 @@ function SongRequestSearchResult({ song, disabled, onSelectChart, showHostScores
                 onClick={() => onSelectChart(chart)}
                 disabled={disabled}
                 className={`inline-flex h-[42px] min-w-[42px] items-center justify-center rounded-full border px-3 text-sm font-display font-black transition-colors hover:border-piu-accent/50 hover:text-white disabled:opacity-50 ${getRequestChartBadgeTone(chart.mode)}`}
-                title={`Request ${song.title} (${modeShort(chart.mode)}${chart.level})`}
+                title={`Request ${song.title} (${formatChartBadge(chart.mode, chart.level)})`}
               >
                 {chart.level}
               </button>
               <span className="absolute -bottom-1 -right-1 rounded-full border border-piu-border bg-piu-dark px-1 text-[9px] font-mono text-piu-accent">
-                {modeShort(chart.mode)}
+                {formatChartBadge(chart.mode, '').replace(/[0-9?]+$/g, '')}
               </span>
               {showHostScores && displayBestGrade ? (
                 <span
@@ -1479,7 +1484,7 @@ function VotePanel({ vote, canVote, onVote }) {
               <PiuChartJacket title={option.song_title} mode={option.mode} level={option.level} jacketUrl={option.jacket_url} size="sm" />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-display font-bold text-white truncate">{option.song_title}</p>
-                <p className="text-[11px] text-gray-400">{modeShort(option.mode)}{option.level}</p>
+                <p className="text-[11px] text-gray-400">{formatChartBadge(option.mode, option.level)}</p>
               </div>
               <div className="text-right">
                 <p className="text-sm font-display font-bold text-cyan-300">{option.vote_count}</p>
@@ -4549,7 +4554,7 @@ export default function LivePage() {
       }
       const targetParticipant = performerParticipants.find((participant) => participant.user_id === requestTargetUserId) || null;
       setStatusNote(
-        `Requested ${chart.song_title} (${modeShort(chart.mode)}${chart.level})${targetParticipant?.username ? ` for ${targetParticipant.username}` : ''}.`
+        `Requested ${chart.song_title} (${formatChartBadge(chart.mode, chart.level)})${targetParticipant?.username ? ` for ${targetParticipant.username}` : ''}.`
       );
       setSongSearch('');
       setSongResults([]);
@@ -5380,7 +5385,7 @@ export default function LivePage() {
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <p className="text-[11px] font-display font-semibold text-gray-300">
-                  {modeShort(requestShortcutSearch.mode)}{requestShortcutSearch.level} chart search
+                  {formatChartBadge(requestShortcutSearch.mode, requestShortcutSearch.level)} chart search
                 </p>
                 <p className="mt-1 text-[11px] text-gray-400">
                   {shortcutChartSummary.total} chart{shortcutChartSummary.total === 1 ? '' : 's'} matched
@@ -5453,7 +5458,7 @@ export default function LivePage() {
                   />
                   <p className="text-xs font-display font-bold text-white">{request.song_title}</p>
                   <p className="text-[11px] text-gray-400">
-                    {modeShort(request.mode)}{request.level}
+                    {formatChartBadge(request.mode, request.level)}
                     {request.queue_position ? ` • Queue #${request.queue_position}` : ''}
                     {request.target_username ? ` • Target ${request.target_username}` : ''}
                   </p>

@@ -2590,11 +2590,11 @@ async function syncRecentlyPlayedForUser(user, options = {}) {
 
   const insertBest = db.prepare(`
     INSERT INTO user_best_scores (user_id, song_title, mode, level, score, grade, plate, shoe_id, over_top100_rank)
-    VALUES (?, ?, ?, ?, ?, ?, '', ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const replaceBest = db.prepare(`
     UPDATE user_best_scores
-    SET score = ?, grade = ?, plate = '', shoe_id = ?, over_top100_rank = ?
+    SET score = ?, grade = ?, plate = ?, shoe_id = ?, over_top100_rank = ?
     WHERE user_id = ? AND song_title = ? AND mode = ? AND level = ?
   `);
 
@@ -2747,9 +2747,9 @@ async function syncRecentlyPlayedForUser(user, options = {}) {
           }
 
           if (!existing) {
-            insertBest.run(userId, songTitle, mode, level, score, grade, activeShoeId, overTop100Rank);
+            insertBest.run(userId, songTitle, mode, level, score, grade, plate, activeShoeId, overTop100Rank);
           } else {
-            replaceBest.run(score, grade, activeShoeId, overTop100Rank, userId, songTitle, mode, level);
+            replaceBest.run(score, grade, plate, activeShoeId, overTop100Rank, userId, songTitle, mode, level);
           }
           if (level >= 10) {
             touchedPlayDataLevels.add(String(level));
@@ -4188,7 +4188,7 @@ router.get('/pumbility/:userId', async (req, res) => {
     const sync = db.prepare('SELECT pumbility_value, last_pumbility_sync, last_best_scores_sync, best_scores_imported FROM user_piugame_sync WHERE user_id = ?').get(userId);
 
     const bestScores = db.prepare(
-      'SELECT song_title, mode, level, score, grade, background_url, over_top100_rank FROM user_best_scores WHERE user_id = ? AND score > 0'
+      'SELECT song_title, mode, level, score, grade, plate, background_url, over_top100_rank FROM user_best_scores WHERE user_id = ? AND score > 0'
     ).all(userId).filter((row) => isPassingScore(row.score, row.grade));
 
     const allRated = [];
@@ -5023,7 +5023,7 @@ router.get('/leaderboards/pumbility/player-sheet', requireAuth, (req, res) => {
 
   if (resolvedUserId) {
     const localScoreRows = db.prepare(`
-      SELECT bs.song_title, bs.mode, bs.level, bs.score, bs.grade, bs.background_url
+      SELECT bs.song_title, bs.mode, bs.level, bs.score, bs.grade, bs.plate, bs.background_url
       FROM user_best_scores bs
       WHERE bs.user_id = ? AND bs.score > 0
     `).all(resolvedUserId);
@@ -5048,6 +5048,7 @@ router.get('/leaderboards/pumbility/player-sheet', requireAuth, (req, res) => {
         level,
         score,
         grade,
+        plate: String(scoreRow?.plate || '').trim(),
         rating,
         jacket_url: '',
         background_url: String(scoreRow?.background_url || '').trim(),
@@ -5234,6 +5235,7 @@ router.get('/leaderboards/pumbility/player-sheet', requireAuth, (req, res) => {
       level: parseInt(row?.level, 10) || 0,
       score: Math.max(0, parseInt(row?.score, 10) || 0),
       grade: String(row?.grade || ''),
+      plate: String(row?.plate || ''),
       rating: Math.max(0, parseInt(row?.rating, 10) || 0),
       jacket_url: String(row?.jacket_url || ''),
       background_url: String(row?.background_url || ''),
@@ -5419,7 +5421,7 @@ router.get('/leaderboards/my-top100-scores', requireAuth, (req, res) => {
   const totalPages = total > 0 ? Math.ceil(total / limit) : 1;
 
   const scoreRows = db.prepare(`
-    SELECT id, song_title, mode, level, score, grade, background_url, over_top100_rank
+    SELECT id, song_title, mode, level, score, grade, plate, background_url, over_top100_rank
     FROM user_best_scores
     WHERE user_id = ? AND score > 0 AND over_top100_rank BETWEEN 1 AND 100
     ORDER BY over_top100_rank ASC, level DESC, score DESC, song_title COLLATE NOCASE ASC
@@ -5491,6 +5493,7 @@ router.get('/leaderboards/my-top100-scores', requireAuth, (req, res) => {
       level: parseInt(row.level, 10) || 0,
       score,
       grade: String(row.grade || ''),
+      plate: String(row.plate || ''),
       player_name: String(req.user?.username || ''),
       over_top100_rank: Math.max(0, parseInt(row.over_top100_rank, 10) || 0),
       over_top100_prev_rank: Math.max(0, parseInt(overRow?.prev_rank, 10) || 0),
@@ -5517,7 +5520,7 @@ router.get('/pumbility-recommendations/:userId', (req, res) => {
   const { metric, modeFilter } = normalizeRecommendationMetric(req.query.metric, req.query.mode);
 
   const bestScores = db.prepare(
-    'SELECT song_title, mode, level, score, grade, background_url FROM user_best_scores WHERE user_id = ? AND score > 0 ORDER BY level DESC, score DESC'
+    'SELECT song_title, mode, level, score, grade, plate, background_url FROM user_best_scores WHERE user_id = ? AND score > 0 ORDER BY level DESC, score DESC'
   ).all(userId).filter((row) => isPassingScore(row.score, row.grade));
   const payload = buildPumbilityRecommendations(bestScores, { metric, modeFilter });
   res.json(payload);
