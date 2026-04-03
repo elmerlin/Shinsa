@@ -27,6 +27,7 @@ const {
   enrichClearRecord,
   enrichUpscoreRecord,
 } = require('../lib/activityPostEnrichment');
+const { resolveDailyHighlightReplayRows } = require('../lib/dailyHighlights');
 const { annotateWeeklyChallengePlayRows } = require('../lib/weeklyChallenges');
 
 const SHARE_MARKER_PREFIX = '[[SHINSA_SHARE_V1:';
@@ -2617,6 +2618,7 @@ router.get('/daily-highlights', (req, res) => {
            rp.replay_embed_url, rp.replay_video_id, rp.replay_start_seconds, rp.replay_end_seconds,
            rp.background_url, rp.date_played, rp.played_at_utc, rp.machine_name,
            u.username, u.avatar, u.nationality,
+           'direct' AS replay_source_kind,
            (SELECT COUNT(*) FROM play_comments WHERE play_id = rp.id) as comment_count
     FROM user_recently_played rp
     JOIN users u ON rp.user_id = u.id
@@ -2634,6 +2636,7 @@ router.get('/daily-highlights', (req, res) => {
            0 AS replay_start_seconds, 0 AS replay_end_seconds,
            rp.background_url, rp.date_played, rp.played_at_utc, rp.machine_name,
            u.username, u.avatar, u.nationality,
+           'chart_linked' AS replay_source_kind,
            (SELECT COUNT(*) FROM play_comments WHERE play_id = rp.id) as comment_count
     FROM user_recently_played rp
     JOIN users u ON rp.user_id = u.id
@@ -2655,9 +2658,10 @@ router.get('/daily-highlights', (req, res) => {
       mergedReplays.push(r);
     }
   }
-  mergedReplays.sort((a, b) => (toInt(b.level) * toInt(b.score)) - (toInt(a.level) * toInt(a.score)));
+  const resolvedReplays = resolveDailyHighlightReplayRows(db, mergedReplays);
+  resolvedReplays.sort((a, b) => (toInt(b.level) * toInt(b.score)) - (toInt(a.level) * toInt(a.score)));
 
-  const topReplays = pickTopNDiverse(mergedReplays, 5, (r) => r.user_id).map((r) => ({
+  const topReplays = pickTopNDiverse(resolvedReplays, 5, (r) => r.user_id).map((r) => ({
     ...r,
     avatar: normalizeUserAvatarForList(r.avatar, r.user_id, 40),
   }));

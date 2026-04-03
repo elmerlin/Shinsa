@@ -398,7 +398,7 @@ export default function DailyHighlights({ data, jacketLookup = {}, chartKeyMap =
           <SectionLabel icon="🎬" title="Top Replays" accent="from-red-500/30" />
           <ScrollRail>
             {topReplays.map((play, i) => (
-              <ReplayCard key={play.id || i} play={play} rank={i + 1} jacketLookup={jacketLookup} onReplayClick={(url, title) => setReplayModal({ url, title, playId: play.id, playUserId: play.user_id })} visible={replayAnim.visible.includes(i)} />
+              <ReplayCard key={play.id || i} play={play} rank={i + 1} jacketLookup={jacketLookup} onReplayClick={(url, title) => setReplayModal({ url, title, playId: play.play_id || play.id, playUserId: play.user_id })} visible={replayAnim.visible.includes(i)} />
             ))}
           </ScrollRail>
         </div>
