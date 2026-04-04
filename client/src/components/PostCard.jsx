@@ -1115,6 +1115,7 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
                   title={currentShare?.shareType === 'hour_of_power' ? 'Hour of Power Recap' : 'Session Share'}
                   className="mb-3"
                   flush
+                  showImageShareControl={currentShare?.shareType === 'hour_of_power'}
                   actions={user ? (
                     <SendToDirectMessageButton
                       share={currentShare}
