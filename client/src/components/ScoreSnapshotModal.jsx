@@ -24,6 +24,88 @@ function formatChartLine(songTitle, mode, level) {
   return parts.filter(Boolean).join(' • ');
 }
 
+async function sharePath(path, { title = '', text = '' } = {}) {
+  const trimmedPath = String(path || '').trim();
+  if (!trimmedPath || typeof window === 'undefined') return false;
+
+  const url = trimmedPath.startsWith('http')
+    ? trimmedPath
+    : `${window.location.origin}${trimmedPath.startsWith('/') ? trimmedPath : `/${trimmedPath}`}`;
+
+  if (navigator.share) {
+    try {
+      await navigator.share({
+        title: String(title || '').trim() || undefined,
+        text: String(text || '').trim() || undefined,
+        url,
+      });
+      return true;
+    } catch (err) {
+      if (err && (err.name === 'AbortError' || err.name === 'NotAllowedError')) return false;
+    }
+  }
+
+  try {
+    await navigator.clipboard.writeText(url);
+    return true;
+  } catch {
+    const input = document.createElement('input');
+    input.value = url;
+    document.body.appendChild(input);
+    input.select();
+    document.execCommand('copy');
+    document.body.removeChild(input);
+    return true;
+  }
+}
+
+export function ScoreCardShareButton({
+  path = '',
+  title = '',
+  text = '',
+  className = '',
+}) {
+  const [copied, setCopied] = useState(false);
+  const shareSupported = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
+
+  useEffect(() => {
+    if (!copied || typeof window === 'undefined') return undefined;
+    const timeoutId = window.setTimeout(() => setCopied(false), 2000);
+    return () => window.clearTimeout(timeoutId);
+  }, [copied]);
+
+  if (!String(path || '').trim()) return null;
+
+  const handleShare = async () => {
+    const shared = await sharePath(path, { title, text });
+    if (shared) setCopied(true);
+  };
+
+  const label = copied ? 'Link copied' : (shareSupported ? 'Share link' : 'Copy link');
+
+  return (
+    <button
+      type="button"
+      onClick={handleShare}
+      className={className}
+      aria-label={label}
+      title={label}
+    >
+      {copied ? (
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9} className="h-5 w-5">
+          <path strokeLinecap="round" strokeLinejoin="round" d="m5 13 4 4L19 7" />
+        </svg>
+      ) : (
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9} className="h-5 w-5">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M7.217 10.907a2.25 2.25 0 1 0 3.182-3.182L7.5 4.826a2.25 2.25 0 0 0-3.182 3.182l.53.53" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 19.174a2.25 2.25 0 0 0 3.182-3.182l-2.898-2.899a2.25 2.25 0 1 0-3.182 3.182l.53.53" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 15.75 15.75 8.25" />
+        </svg>
+      )}
+    </button>
+  );
+}
+
 function buildStorySnapshot(score, jacketUrl = '', linkShare = null) {
   const displayScore = Number(score?.new_score ?? score?.score) || 0;
   const oldScore = Number(score?.old_score) || 0;
@@ -219,6 +301,11 @@ export default function ScoreSnapshotModal({
     || ''
   ).trim();
   const replayTitle = buildReplayModalTitle(score);
+  const sharePathValue = playId
+    ? `/play/${encodeURIComponent(String(playId))}`
+    : (String(chartLink || directMessageLinkShare?.path || '').trim() || '');
+  const shareTitle = storyDraft?.title || 'Shinsa score';
+  const shareText = storyDraft?.subtitle || formatChartLine(score?.song_title || score?.songTitle, score?.mode, score?.level);
 
   const openStoryComposer = () => {
     setStoryError('');
@@ -285,6 +372,12 @@ export default function ScoreSnapshotModal({
                   className="h-10 w-10 justify-center rounded-2xl border border-white/10 bg-black/25 text-gray-100 hover:border-cyan-300/30 hover:bg-black/40 hover:text-white"
                 />
               ) : null}
+              <ScoreCardShareButton
+                path={sharePathValue}
+                title={shareTitle}
+                text={shareText}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-black/25 text-gray-100 transition-colors hover:border-cyan-300/30 hover:bg-black/40 hover:text-white"
+              />
               <button
                 type="button"
                 onClick={onClose}
