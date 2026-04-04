@@ -600,25 +600,25 @@ export default function SessionShareCard({
             type="button"
             onClick={handleShareImage}
             disabled={sharingImage}
-            className="inline-flex items-center gap-2 rounded-xl border border-cyan-300/28 bg-cyan-500/12 px-3 py-2 text-cyan-100 transition-colors hover:border-cyan-300/40 hover:bg-cyan-500/18 hover:text-white disabled:cursor-wait disabled:opacity-70"
+            className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border border-cyan-300/28 bg-cyan-500/10 px-3 py-1.5 text-[11px] font-display font-bold text-cyan-100 transition-colors hover:border-cyan-300/40 hover:bg-cyan-500/16 hover:text-white disabled:cursor-wait disabled:opacity-70"
             aria-label={shareImageLabel}
             title={shareImageLabel}
           >
             {sharingImage ? (
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9} className="h-4.5 w-4.5 animate-spin">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9} className="h-4 w-4 animate-spin">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v3m0 12v3m9-9h-3M6 12H3m15.364 6.364-2.121-2.121M8.757 8.757 6.636 6.636m11.728 0-2.121 2.121M8.757 15.243l-2.121 2.121" />
               </svg>
             ) : shareImageStatus === 'shared' || shareImageStatus === 'downloaded' ? (
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9} className="h-4.5 w-4.5">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9} className="h-4 w-4">
                 <path strokeLinecap="round" strokeLinejoin="round" d="m5 13 4 4L19 7" />
               </svg>
             ) : (
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9} className="h-4.5 w-4.5">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9} className="h-4 w-4">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v1.125A2.625 2.625 0 0 0 5.625 20.25h12.75A2.625 2.625 0 0 0 21 17.625V16.5" />
                 <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 10.5 12 15m0 0 4.5-4.5M12 15V3.75" />
               </svg>
             )}
-            <span className="text-sm font-display font-bold">{shareImageLabel}</span>
+            <span>{shareImageLabel}</span>
           </button>
         </div>
       ) : null}
