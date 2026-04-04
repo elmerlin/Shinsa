@@ -130,6 +130,28 @@ function drawCoverImage(ctx, img, x, y, w, h, alpha = 1) {
   ctx.globalAlpha = previousAlpha;
 }
 
+function drawContainImage(ctx, img, x, y, w, h, alpha = 1) {
+  const imageAspect = img.width / img.height;
+  const targetAspect = w / h;
+  let drawW = w;
+  let drawH = h;
+  let drawX = x;
+  let drawY = y;
+
+  if (imageAspect > targetAspect) {
+    drawH = w / imageAspect;
+    drawY = y + (h - drawH) / 2;
+  } else {
+    drawW = h * imageAspect;
+    drawX = x + (w - drawW) / 2;
+  }
+
+  const previousAlpha = ctx.globalAlpha;
+  ctx.globalAlpha = alpha;
+  ctx.drawImage(img, drawX, drawY, drawW, drawH);
+  ctx.globalAlpha = previousAlpha;
+}
+
 function drawPill(ctx, text, x, y, options = {}) {
   if (!text) return 0;
 
@@ -158,6 +180,43 @@ function drawPill(ctx, text, x, y, options = {}) {
   ctx.restore();
 
   return width;
+}
+
+function drawLevelBadge(ctx, level, x, y, size, modeColors) {
+  if (!(parseInt(level, 10) > 0)) return;
+
+  const cx = x + size / 2;
+  const cy = y + size / 2;
+  const outerGradient = ctx.createLinearGradient(x, y, x + size, y + size);
+  outerGradient.addColorStop(0, modeColors.from);
+  outerGradient.addColorStop(1, modeColors.to);
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, size / 2, 0, Math.PI * 2);
+  ctx.closePath();
+  ctx.fillStyle = outerGradient;
+  ctx.fill();
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = 'rgba(255,255,255,0.42)';
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.arc(cx, cy, size / 2 - 12, 0, Math.PI * 2);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(7,13,22,0.34)';
+  ctx.fill();
+
+  ctx.fillStyle = 'rgba(222,234,247,0.88)';
+  ctx.font = `700 20px ${DISPLAY_FONT}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('LEVEL', cx, y + 34);
+
+  ctx.fillStyle = '#ffffff';
+  ctx.font = `900 ${size >= 120 ? 54 : 44}px ${DISPLAY_FONT}`;
+  ctx.fillText(String(parseInt(level, 10)), cx, cy + 12);
+  ctx.restore();
 }
 
 function wrapText(ctx, text, maxWidth) {
@@ -271,15 +330,10 @@ export async function renderScoreSnapshotShareBlob(snapshot) {
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-  ctx.fillStyle = 'rgba(192,223,255,0.8)';
-  ctx.font = `700 30px ${DISPLAY_FONT}`;
-  ctx.textBaseline = 'middle';
-  ctx.fillText('Share this score', 88, 98);
-
-  const cardX = 70;
-  const cardY = 154;
-  const cardW = CANVAS_WIDTH - 140;
-  const cardH = CANVAS_HEIGHT - 308;
+  const cardX = 62;
+  const cardY = 72;
+  const cardW = CANVAS_WIDTH - 124;
+  const cardH = CANVAS_HEIGHT - 144;
 
   drawRoundedRect(ctx, cardX, cardY, cardW, cardH, 56);
   ctx.fillStyle = 'rgba(8,14,24,0.82)';
@@ -288,86 +342,86 @@ export async function renderScoreSnapshotShareBlob(snapshot) {
   ctx.lineWidth = 2;
   ctx.stroke();
 
-  const heroX = cardX + 34;
-  const heroY = cardY + 34;
-  const heroW = cardW - 68;
-  const heroH = 396;
-
-  drawRoundedRect(ctx, heroX, heroY, heroW, heroH, 38);
   ctx.save();
+  drawRoundedRect(ctx, cardX, cardY, cardW, cardH, 56);
   ctx.clip();
   if (backgroundImage) {
-    drawCoverImage(ctx, backgroundImage, heroX, heroY, heroW, heroH, 0.95);
-  } else {
-    const heroGradient = ctx.createLinearGradient(heroX, heroY, heroX + heroW, heroY + heroH);
-    heroGradient.addColorStop(0, '#13253f');
-    heroGradient.addColorStop(1, '#0a1222');
-    ctx.fillStyle = heroGradient;
-    ctx.fillRect(heroX, heroY, heroW, heroH);
+    drawCoverImage(ctx, backgroundImage, cardX, cardY, cardW, cardH, 0.18);
   }
-  const heroOverlay = ctx.createLinearGradient(0, heroY, 0, heroY + heroH);
-  heroOverlay.addColorStop(0, 'rgba(6,10,18,0.1)');
-  heroOverlay.addColorStop(0.6, 'rgba(7,12,22,0.3)');
-  heroOverlay.addColorStop(1, 'rgba(5,9,16,0.92)');
-  ctx.fillStyle = heroOverlay;
-  ctx.fillRect(heroX, heroY, heroW, heroH);
+  const cardOverlay = ctx.createLinearGradient(cardX, cardY, cardX, cardY + cardH);
+  cardOverlay.addColorStop(0, 'rgba(7,12,20,0.16)');
+  cardOverlay.addColorStop(0.38, 'rgba(7,12,20,0.36)');
+  cardOverlay.addColorStop(1, 'rgba(7,12,20,0.74)');
+  ctx.fillStyle = cardOverlay;
+  ctx.fillRect(cardX, cardY, cardW, cardH);
   ctx.restore();
 
-  const modePillY = heroY + 28;
-  const modePillWidth = drawPill(ctx, String(snapshot?.mode || 'Score').trim(), heroX + 28, modePillY, {
-    fontSize: 26,
-    fill: 'rgba(4,8,14,0.52)',
-    stroke: 'rgba(255,255,255,0.18)',
-  });
-  if ((parseInt(snapshot?.level, 10) || 0) > 0) {
-    drawPill(ctx, `Lv ${parseInt(snapshot.level, 10)}`, heroX + 28 + modePillWidth + 14, modePillY, {
-      fontSize: 26,
-      fill: 'rgba(11,22,40,0.6)',
-      stroke: modeColors.from,
-      color: '#ffffff',
-    });
-  }
-  if ((parseInt(snapshot?.over_top100_rank, 10) || 0) > 0) {
-    const rankLabel = `TOP #${parseInt(snapshot.over_top100_rank, 10)}`;
-    ctx.font = `700 26px ${DISPLAY_FONT}`;
-    const rankWidth = ctx.measureText(rankLabel).width + 48;
-    drawPill(ctx, rankLabel, heroX + heroW - rankWidth - 28, modePillY, {
-      fontSize: 26,
-      fill: 'rgba(255,215,90,0.15)',
-      stroke: 'rgba(255,226,134,0.58)',
-      color: '#fde68a',
-    });
-  }
+  const heroX = cardX + 38;
+  const heroY = cardY + 38;
+  const heroW = cardW - 76;
+  const topPad = 8;
+  const badgeSize = 132;
+  const badgeX = heroX + heroW - badgeSize;
+  const leftColumnW = heroW - badgeSize - 34;
 
-  ctx.fillStyle = '#ffffff';
+  let contentY = heroY + topPad;
+  const titleLines = [];
   ctx.textBaseline = 'alphabetic';
   ctx.font = `900 66px ${DISPLAY_FONT}`;
-  const titleLines = wrapText(ctx, snapshot?.song_title || 'Score details', heroW - 56);
-  titleLines.slice(0, 3).forEach((line, index) => {
-    ctx.fillText(line, heroX + 28, heroY + heroH - 118 + index * 72);
+  wrapText(ctx, snapshot?.song_title || 'Score details', leftColumnW).slice(0, 3).forEach((line) => {
+    titleLines.push(line);
   });
+  titleLines.forEach((line, index) => {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(line, heroX, contentY + 58 + index * 70);
+  });
+  contentY += 58 + Math.max(titleLines.length - 1, 0) * 70 + 26;
 
   ctx.fillStyle = 'rgba(213,226,245,0.88)';
   ctx.font = `600 28px ${BODY_FONT}`;
-  ctx.fillText(formatChartLine(snapshot?.song_title, snapshot?.mode, snapshot?.level), heroX + 28, heroY + heroH - 26);
+  ctx.fillText(formatChartLine(snapshot?.song_title, snapshot?.mode, snapshot?.level), heroX, contentY + 18);
+  contentY += 44;
 
-  let contentY = heroY + heroH + 42;
+  const modeLabel = String(snapshot?.mode || 'Score').trim();
+  drawPill(ctx, modeLabel, badgeX - 18, heroY, {
+    fontSize: 24,
+    fill: 'rgba(4,8,14,0.44)',
+    stroke: 'rgba(255,255,255,0.16)',
+    color: '#f8fbff',
+    padX: 20,
+    padY: 10,
+  });
+  drawLevelBadge(ctx, snapshot?.level, badgeX, heroY + 48, badgeSize, modeColors);
+
+  if ((parseInt(snapshot?.over_top100_rank, 10) || 0) > 0) {
+    drawPill(ctx, `TOP #${parseInt(snapshot.over_top100_rank, 10)}`, heroX, contentY + 12, {
+      fontSize: 22,
+      fill: 'rgba(255,215,90,0.15)',
+      stroke: 'rgba(255,226,134,0.48)',
+      color: '#fde68a',
+      padX: 18,
+      padY: 9,
+    });
+  }
+
   if (avatarImage || snapshot?.playerName || snapshot?.played_at_utc || snapshot?.machine_name) {
+    const playerY = contentY + 70;
     if (avatarImage) {
       ctx.save();
-      drawRoundedRect(ctx, heroX, contentY, 70, 70, 999);
+      drawRoundedRect(ctx, heroX, playerY, 70, 70, 999);
       ctx.clip();
-      drawCoverImage(ctx, avatarImage, heroX, contentY, 70, 70, 1);
+      drawCoverImage(ctx, avatarImage, heroX, playerY, 70, 70, 1);
       ctx.restore();
       ctx.strokeStyle = 'rgba(255,255,255,0.18)';
       ctx.lineWidth = 2;
-      drawRoundedRect(ctx, heroX, contentY, 70, 70, 999);
+      drawRoundedRect(ctx, heroX, playerY, 70, 70, 999);
       ctx.stroke();
     }
 
+    const playerTextX = heroX + (avatarImage ? 92 : 0);
     ctx.fillStyle = '#ffffff';
     ctx.font = `800 36px ${DISPLAY_FONT}`;
-    ctx.fillText(snapshot?.playerName || 'Player', heroX + (avatarImage ? 92 : 0), contentY + 30);
+    ctx.fillText(snapshot?.playerName || 'Player', playerTextX, playerY + 30);
 
     const metaParts = [
       formatDateLabel(snapshot?.played_at_utc || snapshot?.date_played),
@@ -376,9 +430,9 @@ export async function renderScoreSnapshotShareBlob(snapshot) {
     if (metaParts.length > 0) {
       ctx.fillStyle = 'rgba(204,214,229,0.82)';
       ctx.font = `500 24px ${BODY_FONT}`;
-      ctx.fillText(metaParts.join(' • '), heroX + (avatarImage ? 92 : 0), contentY + 62);
+      ctx.fillText(metaParts.join(' • '), playerTextX, playerY + 62);
     }
-    contentY += 94;
+    contentY = playerY + 94;
   }
 
   const badgeTexts = [
@@ -387,16 +441,16 @@ export async function renderScoreSnapshotShareBlob(snapshot) {
     snapshot?.contextLabel ? { text: snapshot.contextLabel, fill: 'rgba(16,185,129,0.12)', stroke: 'rgba(110,231,183,0.34)', color: '#d1fae5' } : null,
   ].filter(Boolean);
   if (badgeTexts.length > 0) {
-    let badgeX = heroX;
-    let badgeY = contentY;
+    let badgeRowX = heroX;
+    let badgeRowY = contentY + 8;
     badgeTexts.forEach((badge) => {
       ctx.font = `700 24px ${DISPLAY_FONT}`;
       const width = ctx.measureText(badge.text).width + 42;
-      if (badgeX + width > heroX + heroW) {
-        badgeX = heroX;
-        badgeY += 60;
+      if (badgeRowX + width > heroX + heroW) {
+        badgeRowX = heroX;
+        badgeRowY += 60;
       }
-      drawPill(ctx, badge.text, badgeX, badgeY, {
+      drawPill(ctx, badge.text, badgeRowX, badgeRowY, {
         fontSize: 24,
         fill: badge.fill,
         stroke: badge.stroke,
@@ -404,12 +458,40 @@ export async function renderScoreSnapshotShareBlob(snapshot) {
         padX: 20,
         padY: 10,
       });
-      badgeX += width + 12;
+      badgeRowX += width + 12;
     });
-    contentY = badgeY + 82;
+    contentY = badgeRowY + 68;
   }
 
-  const scoreBoxY = contentY + 12;
+  const jacketY = contentY + 26;
+  const jacketH = 572;
+
+  drawRoundedRect(ctx, heroX, jacketY, heroW, jacketH, 40);
+  ctx.save();
+  ctx.clip();
+  if (backgroundImage) {
+    const jacketBackdrop = ctx.createLinearGradient(heroX, jacketY, heroX + heroW, jacketY + jacketH);
+    jacketBackdrop.addColorStop(0, 'rgba(15,26,44,0.96)');
+    jacketBackdrop.addColorStop(1, 'rgba(8,14,24,0.96)');
+    ctx.fillStyle = jacketBackdrop;
+    ctx.fillRect(heroX, jacketY, heroW, jacketH);
+    drawContainImage(ctx, backgroundImage, heroX + 24, jacketY + 24, heroW - 48, jacketH - 48, 0.98);
+  } else {
+    const heroGradient = ctx.createLinearGradient(heroX, jacketY, heroX + heroW, jacketY + jacketH);
+    heroGradient.addColorStop(0, '#13253f');
+    heroGradient.addColorStop(1, '#0a1222');
+    ctx.fillStyle = heroGradient;
+    ctx.fillRect(heroX, jacketY, heroW, jacketH);
+  }
+  const heroOverlay = ctx.createLinearGradient(0, jacketY, 0, jacketY + jacketH);
+  heroOverlay.addColorStop(0, 'rgba(6,10,18,0.02)');
+  heroOverlay.addColorStop(0.7, 'rgba(7,12,22,0.14)');
+  heroOverlay.addColorStop(1, 'rgba(5,9,16,0.28)');
+  ctx.fillStyle = heroOverlay;
+  ctx.fillRect(heroX, jacketY, heroW, jacketH);
+  ctx.restore();
+
+  const scoreBoxY = jacketY + jacketH + 34;
   const scoreBoxH = 248;
   drawRoundedRect(ctx, heroX, scoreBoxY, heroW, scoreBoxH, 34);
   ctx.fillStyle = 'rgba(255,255,255,0.04)';
