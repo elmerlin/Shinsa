@@ -35,7 +35,7 @@ class APIService {
     }
 
     private init() {
-        self.baseURL = UserDefaults.standard.string(forKey: "serverURL") ?? "http://localhost:3001"
+        self.baseURL = UserDefaults.standard.string(forKey: "serverURL") ?? "https://pumpshinsa.com"
     }
 
     func setBaseURL(_ url: String) {
