@@ -5,6 +5,11 @@ import ScoreSnapshotCard from './ScoreSnapshotCard';
 import ItemCommentSection from './ItemCommentSection';
 import YouTubeReplayModal from './YouTubeReplayModal';
 import { buildReplayModalTitle } from '../utils/replayTitle';
+import {
+  buildScoreSnapshotShareData,
+  buildScoreSnapshotShareFileName,
+  renderScoreSnapshotShareBlob,
+} from '../utils/scoreSnapshotShare';
 
 function compactText(value, max = 120) {
   const text = String(value || '').replace(/\s+/g, ' ').trim();
@@ -106,42 +111,104 @@ export function ScoreCardShareButton({
   );
 }
 
-function buildStorySnapshot(score, jacketUrl = '', linkShare = null) {
-  const displayScore = Number(score?.new_score ?? score?.score) || 0;
-  const oldScore = Number(score?.old_score) || 0;
+export function ScoreCardImageShareButton({
+  score = null,
+  jacketUrl = '',
+  linkShare = null,
+  title = '',
+  text = '',
+  className = '',
+}) {
+  const [status, setStatus] = useState('');
+  const [sharing, setSharing] = useState(false);
+  const shareSupported = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
 
-  return {
-    song_title: String(score?.song_title || score?.songTitle || '').trim(),
-    mode: String(score?.mode || '').trim(),
-    level: Number(score?.level) || 0,
-    score: displayScore,
-    new_score: displayScore,
-    old_score: oldScore,
-    grade: String(score?.new_grade || score?.grade || '').trim(),
-    new_grade: String(score?.new_grade || score?.grade || '').trim(),
-    old_grade: String(score?.old_grade || '').trim(),
-    scoreDelta: Number(score?.scoreDelta ?? (displayScore > 0 && oldScore > 0 ? displayScore - oldScore : 0)) || 0,
-    over_top100_rank: Number(score?.over_top100_rank ?? score?.overTop100Rank) || 0,
-    plate: String(score?.plate || '').trim(),
-    perfect: Number(score?.perfect) || 0,
-    great: Number(score?.great) || 0,
-    good: Number(score?.good) || 0,
-    bad: Number(score?.bad) || 0,
-    miss: Number(score?.miss) || 0,
-    is_stage_break: !!score?.is_stage_break || !!score?.isStageBreak,
-    played_at_utc: String(score?.played_at_utc || score?.playedAtUtc || '').trim(),
-    date_played: String(score?.played_at_utc || score?.playedAtUtc || score?.date_played || score?.playedAt || '').trim(),
-    playerName: String(linkShare?.playerName || score?.playerName || score?.username || '').trim(),
-    playerAvatar: String(linkShare?.playerAvatar || score?.playerAvatar || score?.avatar || '').trim(),
-    playerSkillTitle: String(linkShare?.playerSkillTitle || score?.playerSkillTitle || score?.skill_title || score?.skillTitle || '').trim(),
-    playerRoleLabel: String(linkShare?.playerRoleLabel || score?.playerRoleLabel || score?.roleLabel || '').trim(),
-    contextLabel: String(linkShare?.contextLabel || score?.contextLabel || score?.context_label || '').trim(),
-    jacket_url: String(jacketUrl || linkShare?.jacketUrl || score?._jacketUrl || score?.jacket_url || score?.background_url || '').trim(),
+  useEffect(() => {
+    if (!status || typeof window === 'undefined') return undefined;
+    const timeoutId = window.setTimeout(() => setStatus(''), 2200);
+    return () => window.clearTimeout(timeoutId);
+  }, [status]);
+
+  if (!score) return null;
+
+  const handleShare = async () => {
+    if (sharing) return;
+    setSharing(true);
+    try {
+      const snapshot = buildScoreSnapshotShareData(score, jacketUrl, linkShare);
+      const blob = await renderScoreSnapshotShareBlob(snapshot);
+      const fileName = buildScoreSnapshotShareFileName(snapshot);
+      const file = new File([blob], fileName, { type: blob.type || 'image/jpeg' });
+      const canShareFiles = shareSupported
+        && typeof navigator.canShare === 'function'
+        && navigator.canShare({ files: [file] });
+
+      if (canShareFiles) {
+        await navigator.share({
+          files: [file],
+          title: String(title || '').trim() || undefined,
+          text: String(text || '').trim() || undefined,
+        });
+        setStatus('shared');
+        return;
+      }
+
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = downloadUrl;
+      anchor.download = fileName;
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      window.setTimeout(() => window.URL.revokeObjectURL(downloadUrl), 1000);
+      setStatus('downloaded');
+    } catch (err) {
+      if (err && (err.name === 'AbortError' || err.name === 'NotAllowedError')) return;
+      setStatus('error');
+    } finally {
+      setSharing(false);
+    }
   };
+
+  const label = sharing
+    ? 'Preparing image'
+    : status === 'shared'
+      ? 'Image shared'
+      : status === 'downloaded'
+        ? 'Image downloaded'
+        : status === 'error'
+          ? 'Try again'
+          : (shareSupported ? 'Share image' : 'Download image');
+
+  return (
+    <button
+      type="button"
+      onClick={handleShare}
+      className={className}
+      aria-label={label}
+      title={label}
+      disabled={sharing}
+    >
+      {sharing ? (
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9} className="h-5 w-5 animate-spin">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v3m0 12v3m9-9h-3M6 12H3m15.364 6.364-2.121-2.121M8.757 8.757 6.636 6.636m11.728 0-2.121 2.121M8.757 15.243l-2.121 2.121" />
+        </svg>
+      ) : status === 'shared' || status === 'downloaded' ? (
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9} className="h-5 w-5">
+          <path strokeLinecap="round" strokeLinejoin="round" d="m5 13 4 4L19 7" />
+        </svg>
+      ) : (
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9} className="h-5 w-5">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v1.125A2.625 2.625 0 0 0 5.625 20.25h12.75A2.625 2.625 0 0 0 21 17.625V16.5" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 10.5 12 15m0 0 4.5-4.5M12 15V3.75" />
+        </svg>
+      )}
+    </button>
+  );
 }
 
 export function buildStoryDraft(score, jacketUrl = '', chartLink = '', linkShare = null) {
-  const snapshot = buildStorySnapshot(score, jacketUrl, linkShare);
+  const snapshot = buildScoreSnapshotShareData(score, jacketUrl, linkShare);
   const playerName = snapshot.playerName || 'Player';
   const chartLine = formatChartLine(snapshot.song_title, snapshot.mode, snapshot.level);
   const isUpscore = snapshot.old_score > 0;
@@ -372,6 +439,14 @@ export default function ScoreSnapshotModal({
                   className="h-10 w-10 justify-center rounded-2xl border border-white/10 bg-black/25 text-gray-100 hover:border-cyan-300/30 hover:bg-black/40 hover:text-white"
                 />
               ) : null}
+              <ScoreCardImageShareButton
+                score={score}
+                jacketUrl={jacketUrl}
+                linkShare={directMessageLinkShare}
+                title={shareTitle}
+                text={shareText}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-black/25 text-gray-100 transition-colors hover:border-cyan-300/30 hover:bg-black/40 hover:text-white disabled:cursor-wait disabled:opacity-70"
+              />
               <ScoreCardShareButton
                 path={sharePathValue}
                 title={shareTitle}

@@ -36,7 +36,7 @@ import { getProfilePath } from '../utils/profile';
 import { parseGrade } from '../utils/grades';
 import ScoreSnapshotCard from '../components/ScoreSnapshotCard';
 import ItemCommentSection from '../components/ItemCommentSection';
-import { StoryShareModal, buildStoryDraft, ScoreCardShareButton } from '../components/ScoreSnapshotModal';
+import { StoryShareModal, buildStoryDraft, ScoreCardImageShareButton, ScoreCardShareButton } from '../components/ScoreSnapshotModal';
 import SendToDirectMessageButton from '../components/SendToDirectMessageButton';
 import { buildScoreSnapshotLinkShare } from '../utils/directMessageShares';
 
@@ -4441,6 +4441,14 @@ export default function ProfilePage() {
                           />
                         </>
                       ) : null}
+                      <ScoreCardImageShareButton
+                        score={{ ...p, username: profile?.username || '' }}
+                        jacketUrl={modalBg}
+                        linkShare={dmLinkShare}
+                        title={scoreShareTitle}
+                        text={scoreShareText}
+                        className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-black/25 text-gray-100 transition-colors hover:border-cyan-300/30 hover:bg-black/40 hover:text-white disabled:cursor-wait disabled:opacity-70"
+                      />
                       <ScoreCardShareButton
                         path={playSharePath}
                         title={scoreShareTitle}
@@ -4585,6 +4593,14 @@ export default function ProfilePage() {
                         />
                       </>
                     )}
+                    <ScoreCardImageShareButton
+                      score={{ ...p, username: profile?.username || '' }}
+                      jacketUrl={modalBg}
+                      linkShare={dmLinkShare}
+                      title={scoreShareTitle}
+                      text={scoreShareText}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-black/25 text-gray-400 transition-colors hover:border-cyan-300/30 hover:text-white disabled:cursor-wait disabled:opacity-70"
+                    />
                     <ScoreCardShareButton
                       path={playSharePath}
                       title={scoreShareTitle}
