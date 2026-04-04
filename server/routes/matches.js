@@ -546,8 +546,8 @@ router.post('/phase/:phaseId/generate', (req, res) => {
 
   const config = JSON.parse(phase.config || '{}');
   const phasePlayers = db.prepare(
-    'SELECT pp.*, p.name, p.pumbility, p.skill_title, p.skill_level FROM tournament_phase_players pp JOIN players p ON pp.player_id = p.id WHERE pp.phase_id = ? AND pp.status = "active" ORDER BY pp.seed'
-  ).all(phase.id);
+    'SELECT pp.*, p.name, p.pumbility, p.skill_title, p.skill_level FROM tournament_phase_players pp JOIN players p ON pp.player_id = p.id WHERE pp.phase_id = ? AND pp.status = ? ORDER BY pp.seed'
+  ).all(phase.id, 'active');
 
   if (phasePlayers.length < 2 && phase.format !== 'hour_of_power') {
     return res.status(400).json({ error: 'Need at least 2 active players' });
