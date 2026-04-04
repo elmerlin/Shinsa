@@ -382,16 +382,7 @@ export async function renderScoreSnapshotShareBlob(snapshot) {
   ctx.fillText(formatChartLine(snapshot?.song_title, snapshot?.mode, snapshot?.level), heroX, contentY + 18);
   contentY += 44;
 
-  const modeLabel = String(snapshot?.mode || 'Score').trim();
-  drawPill(ctx, modeLabel, badgeX - 18, heroY, {
-    fontSize: 24,
-    fill: 'rgba(4,8,14,0.44)',
-    stroke: 'rgba(255,255,255,0.16)',
-    color: '#f8fbff',
-    padX: 20,
-    padY: 10,
-  });
-  drawLevelBadge(ctx, snapshot?.level, badgeX, heroY + 48, badgeSize, modeColors);
+  drawLevelBadge(ctx, snapshot?.level, badgeX, heroY + 6, badgeSize, modeColors);
 
   if ((parseInt(snapshot?.over_top100_rank, 10) || 0) > 0) {
     drawPill(ctx, `TOP #${parseInt(snapshot.over_top100_rank, 10)}`, heroX, contentY + 12, {
