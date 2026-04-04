@@ -474,6 +474,7 @@ function HourOfPowerDetailModal({ attempt, share, loading, error, onRetry, onClo
               share={share}
               title="Hour of Power Recap"
               actions={cardActions}
+              showImageShareControl
             />
           ) : (
             <div className="rounded-xl border border-piu-border/50 bg-piu-card/60 px-4 py-8 text-center text-sm text-gray-500">

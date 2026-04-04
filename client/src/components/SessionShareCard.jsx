@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import PiuChartJacket from './PiuChartJacket';
 import ScoreSnapshotModal from './ScoreSnapshotModal';
 import YouTubeReplayModal from './YouTubeReplayModal';
@@ -113,6 +113,21 @@ function buildSessionRowChartPath(row) {
   return title ? `/songs?q=${encodeURIComponent(title)}` : '/songs';
 }
 
+function slugify(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 64);
+}
+
+function buildSessionShareFileName(share) {
+  const baseName = share?.shareType === 'hour_of_power' ? 'hour-of-power-recap' : 'session-share';
+  const title = slugify(share?.sessionTitle || '');
+  const date = slugify(share?.sessionDateLabel || '');
+  return [baseName, title, date].filter(Boolean).join('-') + '.png';
+}
+
 export default function SessionShareCard({
   share,
   className = '',
@@ -120,11 +135,15 @@ export default function SessionShareCard({
   actions = null,
   compact = false,
   flush = false,
+  showImageShareControl = false,
 }) {
   const [expanded, setExpanded] = useState(false);
   const [page, setPage] = useState(1);
   const [activeRow, setActiveRow] = useState(null);
   const [selectedReplay, setSelectedReplay] = useState(null);
+  const [shareImageStatus, setShareImageStatus] = useState('');
+  const [sharingImage, setSharingImage] = useState(false);
+  const captureRef = useRef(null);
 
   const rows = Array.isArray(share?.rows) ? share.rows : [];
   const totalPages = Math.max(1, Math.ceil(rows.length / 10));
@@ -149,14 +168,78 @@ export default function SessionShareCard({
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
 
+  useEffect(() => {
+    if (!shareImageStatus || typeof window === 'undefined') return undefined;
+    const timeoutId = window.setTimeout(() => setShareImageStatus(''), 2200);
+    return () => window.clearTimeout(timeoutId);
+  }, [shareImageStatus]);
+
   const startIndex = compact ? 0 : (expanded ? (page - 1) * 10 : 0);
   const visibleRows = useMemo(() => {
     if (compact) return rows.slice(0, 3);
     if (expanded) return rows.slice(startIndex, startIndex + 10);
     return rows.slice(0, 5);
   }, [compact, expanded, rows, startIndex]);
+  const shareSupported = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
+  const imageShareEnabled = !!showImageShareControl && !compact;
 
   if (!share) return null;
+
+  const handleShareImage = async () => {
+    if (!captureRef.current || sharingImage) return;
+    setSharingImage(true);
+    try {
+      await new Promise((resolve) => {
+        window.requestAnimationFrame(() => {
+          window.requestAnimationFrame(resolve);
+        });
+      });
+
+      const { toPng } = await import('html-to-image');
+      const dataUrl = await toPng(captureRef.current, {
+        backgroundColor: isHopShare ? '#0b1324' : '#071326',
+        pixelRatio: 2,
+        cacheBust: true,
+      });
+      const blob = await fetch(dataUrl).then((response) => response.blob());
+      const fileName = buildSessionShareFileName(share);
+      const file = new File([blob], fileName, { type: blob.type || 'image/png' });
+      const canShareFiles = shareSupported
+        && typeof navigator.canShare === 'function'
+        && navigator.canShare({ files: [file] });
+
+      if (canShareFiles) {
+        await navigator.share({
+          files: [file],
+          title: displayTitle,
+          text: isHopShare ? 'Hour of Power recap from Shinsa' : 'Session recap from Shinsa',
+        });
+        setShareImageStatus('shared');
+        return;
+      }
+
+      const link = document.createElement('a');
+      link.download = fileName;
+      link.href = dataUrl;
+      link.click();
+      setShareImageStatus('downloaded');
+    } catch (err) {
+      if (err && (err.name === 'AbortError' || err.name === 'NotAllowedError')) return;
+      setShareImageStatus('error');
+    } finally {
+      setSharingImage(false);
+    }
+  };
+
+  const shareImageLabel = sharingImage
+    ? 'Preparing image'
+    : shareImageStatus === 'shared'
+      ? 'Image shared'
+      : shareImageStatus === 'downloaded'
+        ? 'Image downloaded'
+        : shareImageStatus === 'error'
+          ? 'Try again'
+          : (shareSupported ? 'Share image' : 'Download image');
 
   const rankHeaderClass = 'text-left py-1 pl-1.5 pr-0.5 font-display font-bold w-5 sm:px-2';
   const songHeaderClass = 'text-left py-1 pl-1 pr-0.5 font-display font-bold sm:px-2';
@@ -176,7 +259,7 @@ export default function SessionShareCard({
 
   return (
     <>
-      <div className={`${wrapperClass} ${className}`.trim()}>
+      <div ref={captureRef} className={`${wrapperClass} ${className}`.trim()}>
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="min-w-0">
             <div className="flex items-start gap-3">
@@ -374,6 +457,34 @@ export default function SessionShareCard({
           <p className="mt-2 text-[10px] text-gray-500">{compact ? 'Tap jackets or grades for details.' : 'Tap jackets or grades to view judgments.'}</p>
         )}
       </div>
+      {imageShareEnabled ? (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={handleShareImage}
+            disabled={sharingImage}
+            className="inline-flex items-center gap-2 rounded-xl border border-cyan-300/28 bg-cyan-500/12 px-3 py-2 text-cyan-100 transition-colors hover:border-cyan-300/40 hover:bg-cyan-500/18 hover:text-white disabled:cursor-wait disabled:opacity-70"
+            aria-label={shareImageLabel}
+            title={shareImageLabel}
+          >
+            {sharingImage ? (
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9} className="h-4.5 w-4.5 animate-spin">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v3m0 12v3m9-9h-3M6 12H3m15.364 6.364-2.121-2.121M8.757 8.757 6.636 6.636m11.728 0-2.121 2.121M8.757 15.243l-2.121 2.121" />
+              </svg>
+            ) : shareImageStatus === 'shared' || shareImageStatus === 'downloaded' ? (
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9} className="h-4.5 w-4.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="m5 13 4 4L19 7" />
+              </svg>
+            ) : (
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9} className="h-4.5 w-4.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v1.125A2.625 2.625 0 0 0 5.625 20.25h12.75A2.625 2.625 0 0 0 21 17.625V16.5" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 10.5 12 15m0 0 4.5-4.5M12 15V3.75" />
+              </svg>
+            )}
+            <span className="text-sm font-display font-bold">{shareImageLabel}</span>
+          </button>
+        </div>
+      ) : null}
 
       <ScoreSnapshotModal
         score={activeRow}
