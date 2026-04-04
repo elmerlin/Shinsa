@@ -135,9 +135,9 @@ function SessionShareExportStat({
   className = '',
 }) {
   return (
-    <div className={`rounded-[28px] border border-white/10 px-7 py-6 ${className}`.trim()}>
-      <p className="text-[22px] font-display font-bold uppercase tracking-[0.18em] text-white/58">{label}</p>
-      <p className={`mt-3 font-display text-[54px] font-black leading-none ${accentClassName}`.trim()}>{value}</p>
+    <div className={`flex min-h-[176px] flex-col justify-between rounded-[28px] border border-white/10 px-7 py-6 ${className}`.trim()}>
+      <p className="min-h-[58px] text-[22px] font-display font-bold uppercase tracking-[0.18em] leading-[1.25] text-white/58">{label}</p>
+      <p className={`font-display text-[54px] font-black leading-none ${accentClassName}`.trim()}>{value}</p>
     </div>
   );
 }
@@ -199,7 +199,7 @@ function SessionShareExportCard({ share, title }) {
           <div className="flex items-center justify-between gap-4 border-b border-white/6 bg-black/14 px-7 py-5">
             <div>
               <p className="text-[18px] font-display font-black uppercase tracking-[0.28em] text-cyan-200/80">Results</p>
-              <h3 className="mt-2 text-[34px] font-display font-black leading-none text-white">
+              <h3 className="mt-2 whitespace-nowrap text-[26px] font-display font-black leading-none text-white">
                 {isHopShare ? 'All Counted Clears' : 'Shared Results'}
               </h3>
             </div>
