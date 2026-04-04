@@ -69,6 +69,7 @@ export function ScoreCardShareButton({
   title = '',
   text = '',
   className = '',
+  showLabel = false,
 }) {
   const [copied, setCopied] = useState(false);
   const shareSupported = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
@@ -107,6 +108,7 @@ export function ScoreCardShareButton({
           <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 15.75 15.75 8.25" />
         </svg>
       )}
+      {showLabel ? <span className="text-sm font-display font-bold">{label}</span> : null}
     </button>
   );
 }
@@ -118,6 +120,7 @@ export function ScoreCardImageShareButton({
   title = '',
   text = '',
   className = '',
+  showLabel = false,
 }) {
   const [status, setStatus] = useState('');
   const [sharing, setSharing] = useState(false);
@@ -203,6 +206,7 @@ export function ScoreCardImageShareButton({
           <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 10.5 12 15m0 0 4.5-4.5M12 15V3.75" />
         </svg>
       )}
+      {showLabel ? <span className="text-sm font-display font-bold">{label}</span> : null}
     </button>
   );
 }
@@ -478,6 +482,24 @@ export default function ScoreSnapshotModal({
             onCommentClick={() => setCommentSectionOpen(v => !v)}
             missingJudgmentHint={missingJudgmentHint}
           />
+          <div className="mt-2 flex flex-wrap gap-2 px-1">
+            <ScoreCardImageShareButton
+              score={score}
+              jacketUrl={jacketUrl}
+              linkShare={directMessageLinkShare}
+              title={shareTitle}
+              text={shareText}
+              showLabel
+              className="inline-flex items-center gap-2 rounded-xl border border-cyan-300/20 bg-cyan-500/10 px-3 py-2 text-cyan-100 transition-colors hover:border-cyan-300/40 hover:bg-cyan-500/16 hover:text-white disabled:cursor-wait disabled:opacity-70"
+            />
+            <ScoreCardShareButton
+              path={sharePathValue}
+              title={shareTitle}
+              text={shareText}
+              showLabel
+              className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-gray-100 transition-colors hover:border-cyan-300/30 hover:bg-black/40 hover:text-white"
+            />
+          </div>
           {playId && (
             <div className="mt-2">
               <ItemCommentSection
