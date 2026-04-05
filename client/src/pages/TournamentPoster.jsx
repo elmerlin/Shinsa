@@ -932,6 +932,266 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
+// ── Canvas format diagram drawing ──
+function drawFormatDiagram(ctx, format, allPlayers, config, centerX, startY) {
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  if (format === 'round_robin') {
+    const n = Math.min(Math.max(allPlayers.length || 6, 4), 8);
+    const r = 82, nodeR = 17;
+    const cx = centerX, cy = startY + r + 12;
+    const positions = [];
+    for (let i = 0; i < n; i++) {
+      const angle = (i / n) * Math.PI * 2 - Math.PI / 2;
+      positions.push({ x: cx + Math.cos(angle) * r, y: cy + Math.sin(angle) * r });
+    }
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
+        const hl = (i === 0 && j === 1);
+        ctx.strokeStyle = hl ? 'rgba(56,189,248,0.5)' : 'rgba(56,189,248,0.07)';
+        ctx.lineWidth = hl ? 2.5 : 0.8;
+        ctx.beginPath();
+        ctx.moveTo(positions[i].x, positions[i].y);
+        ctx.lineTo(positions[j].x, positions[j].y);
+        ctx.stroke();
+      }
+    }
+    if (n >= 2) {
+      const mx = (positions[0].x + positions[1].x) / 2;
+      const my = (positions[0].y + positions[1].y) / 2;
+      ctx.fillStyle = 'rgba(56,189,248,0.65)';
+      ctx.font = 'bold 12px Rajdhani, sans-serif';
+      ctx.fillText('VS', mx, my - 12);
+    }
+    for (let i = 0; i < n; i++) {
+      const active = i < 2;
+      const p = positions[i];
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, nodeR, 0, Math.PI * 2);
+      ctx.fillStyle = active ? 'rgba(56,189,248,0.2)' : 'rgba(56,189,248,0.06)';
+      ctx.fill();
+      ctx.strokeStyle = active ? 'rgba(56,189,248,0.55)' : 'rgba(56,189,248,0.15)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      const initial = (allPlayers[i]?.name || `P${i + 1}`).charAt(0).toUpperCase();
+      ctx.fillStyle = active ? 'rgba(200,230,255,0.9)' : 'rgba(255,255,255,0.45)';
+      ctx.font = 'bold 14px Rajdhani, sans-serif';
+      ctx.fillText(initial, p.x, p.y + 1);
+    }
+    ctx.fillStyle = 'rgba(255,255,255,0.16)';
+    ctx.font = 'bold 11px Rajdhani, sans-serif';
+    ctx.fillText('EVERYONE PLAYS EVERYONE', centerX, cy + r + 30);
+    ctx.restore();
+    return (r + 12) * 2 + 40;
+  }
+
+  if (format === 'gauntlet') {
+    const n = Math.min(Math.max(allPlayers.length || 6, 4), 7);
+    const matchCount = Math.min(n - 1, 5);
+    const stepH = 38, nodeR = 14;
+    const totalH = (matchCount - 1) * stepH;
+    const baseY = startY + totalH + 22;
+
+    ctx.strokeStyle = 'rgba(255,51,102,0.1)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(centerX, baseY + 5);
+    ctx.lineTo(centerX, baseY - totalH - 12);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    for (let i = 0; i < matchCount; i++) {
+      const yy = baseY - i * stepH;
+      const isFinal = i === matchCount - 1;
+      const rgb = isFinal ? '255,215,0' : '255,51,102';
+      const p1 = allPlayers[i] || { name: `P${i + 1}` };
+      const p2 = allPlayers[i + 1] || { name: `P${i + 2}` };
+
+      ctx.strokeStyle = `rgba(${rgb},${isFinal ? '0.4' : '0.18'})`;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(centerX - 58, yy);
+      ctx.lineTo(centerX + 58, yy);
+      ctx.stroke();
+
+      // Left node
+      ctx.beginPath();
+      ctx.arc(centerX - 58, yy, nodeR, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(${rgb},0.12)`;
+      ctx.fill();
+      ctx.strokeStyle = `rgba(${rgb},0.4)`;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.fillStyle = `rgba(${rgb},0.8)`;
+      ctx.font = 'bold 12px Rajdhani, sans-serif';
+      ctx.fillText(String(p1.name || '?').charAt(0).toUpperCase(), centerX - 58, yy + 1);
+
+      // VS
+      ctx.fillStyle = `rgba(${rgb},0.3)`;
+      ctx.font = 'bold 9px Rajdhani, sans-serif';
+      ctx.fillText('VS', centerX, yy + 1);
+
+      // Right node
+      ctx.beginPath();
+      ctx.arc(centerX + 58, yy, nodeR, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(${rgb},0.12)`;
+      ctx.fill();
+      ctx.strokeStyle = `rgba(${rgb},0.4)`;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.fillStyle = `rgba(${rgb},0.8)`;
+      ctx.font = 'bold 12px Rajdhani, sans-serif';
+      ctx.fillText(String(p2.name || '?').charAt(0).toUpperCase(), centerX + 58, yy + 1);
+
+      // Match label
+      ctx.textAlign = 'left';
+      ctx.fillStyle = isFinal ? 'rgba(255,215,0,0.5)' : 'rgba(255,255,255,0.2)';
+      ctx.font = 'bold 9px Rajdhani, sans-serif';
+      ctx.fillText(isFinal ? 'FINAL' : `#${i + 1}`, centerX + 82, yy + 1);
+      ctx.textAlign = 'center';
+    }
+
+    ctx.font = '18px serif';
+    ctx.fillText('\u{1F451}', centerX, baseY - totalH - 20);
+    ctx.fillStyle = 'rgba(255,255,255,0.16)';
+    ctx.font = 'bold 11px Rajdhani, sans-serif';
+    ctx.fillText('CLIMB THE LADDER', centerX, baseY + 28);
+    ctx.restore();
+    return totalH + 60;
+  }
+
+  if (format === 'single_elim' || format === 'double_elim') {
+    const n = Math.min(Math.max(allPlayers.length || 8, 4), 8);
+    const rounds = Math.ceil(Math.log2(n));
+    const roundW = 105, totalW = rounds * roundW, totalDH = 180;
+    const sX = centerX - totalW / 2, sY = startY + 12;
+    const col = format === 'single_elim' ? '255,215,0' : '251,191,36';
+
+    for (let round = 0; round < rounds; round++) {
+      const matchesInRound = Math.pow(2, rounds - round - 1);
+      const spacing = totalDH / matchesInRound;
+      const x = sX + round * roundW;
+      const isFinal = round === rounds - 1;
+      for (let mi = 0; mi < matchesInRound; mi++) {
+        const yy = sY + spacing / 2 + mi * spacing;
+        const slotH = Math.min(spacing * 0.5, 32);
+        roundRect(ctx, x, yy - slotH / 2, 80, slotH, 6);
+        ctx.fillStyle = isFinal ? `rgba(${col},0.06)` : 'rgba(255,255,255,0.03)';
+        ctx.fill();
+        ctx.strokeStyle = isFinal ? `rgba(${col},0.3)` : 'rgba(255,255,255,0.08)';
+        ctx.lineWidth = 1;
+        roundRect(ctx, x, yy - slotH / 2, 80, slotH, 6);
+        ctx.stroke();
+        if (round === 0) {
+          const pi = mi * 2;
+          ctx.font = 'bold 9px Rajdhani, sans-serif';
+          ctx.textAlign = 'left';
+          if (allPlayers[pi]) { ctx.fillStyle = `rgba(${col},0.55)`; ctx.fillText(String(allPlayers[pi].name || '').charAt(0).toUpperCase(), x + 10, yy - slotH / 4 + 1); }
+          if (allPlayers[pi + 1]) { ctx.fillStyle = `rgba(${col},0.55)`; ctx.fillText(String(allPlayers[pi + 1].name || '').charAt(0).toUpperCase(), x + 10, yy + slotH / 4 + 1); }
+          ctx.textAlign = 'center';
+        }
+        if (mi === 0) {
+          const label = isFinal ? 'FINAL' : round === rounds - 2 ? 'SEMIS' : `R${round + 1}`;
+          ctx.fillStyle = isFinal ? `rgba(${col},0.5)` : 'rgba(255,255,255,0.2)';
+          ctx.font = 'bold 9px Rajdhani, sans-serif';
+          ctx.fillText(label, x + 40, sY - 6);
+        }
+        if (round < rounds - 1) {
+          const nextSpacing = totalDH / Math.pow(2, rounds - round - 2);
+          const nextMi = Math.floor(mi / 2);
+          const nextY = sY + nextSpacing / 2 + nextMi * nextSpacing;
+          ctx.strokeStyle = `rgba(${col},0.08)`;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(x + 80, yy);
+          ctx.lineTo(x + roundW, nextY);
+          ctx.stroke();
+        }
+      }
+    }
+    ctx.font = '18px serif';
+    ctx.fillText('\u{1F3C6}', sX + totalW + 20, sY + totalDH / 2 + 1);
+    ctx.restore();
+    return totalDH + 30;
+  }
+
+  if (format === 'pools') {
+    const poolCount = Math.min(config?.pool_count || 4, 6);
+    const perPool = Math.min(Math.ceil((allPlayers.length || 16) / poolCount), 4);
+    const poolW = 76, poolH = perPool * 22 + 34, gap = 14;
+    const totalW = poolCount * poolW + (poolCount - 1) * gap;
+    const pX = centerX - totalW / 2, pY = startY + 8;
+
+    for (let pi = 0; pi < poolCount; pi++) {
+      const px = pX + pi * (poolW + gap);
+      roundRect(ctx, px, pY, poolW, poolH, 10);
+      ctx.fillStyle = 'rgba(34,211,238,0.04)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(34,211,238,0.15)';
+      ctx.lineWidth = 1;
+      roundRect(ctx, px, pY, poolW, poolH, 10);
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(34,211,238,0.55)';
+      ctx.font = 'bold 10px Rajdhani, sans-serif';
+      ctx.fillText(`POOL ${String.fromCharCode(65 + pi)}`, px + poolW / 2, pY + 15);
+      for (let i = 0; i < perPool; i++) {
+        const player = allPlayers[pi * perPool + i];
+        const dotY = pY + 32 + i * 22;
+        ctx.beginPath();
+        ctx.arc(px + 16, dotY, 6, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(34,211,238,0.12)';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(34,211,238,0.25)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        const initial = (player?.name || `P${pi * perPool + i + 1}`).charAt(0).toUpperCase();
+        ctx.fillStyle = 'rgba(34,211,238,0.65)';
+        ctx.font = 'bold 7px Rajdhani, sans-serif';
+        ctx.fillText(initial, px + 16, dotY + 1);
+        if (player?.name) {
+          ctx.textAlign = 'left';
+          ctx.fillStyle = 'rgba(255,255,255,0.35)';
+          ctx.font = '600 10px Rajdhani, sans-serif';
+          ctx.fillText(String(player.name).slice(0, 7), px + 27, dotY + 1);
+          ctx.textAlign = 'center';
+        }
+      }
+    }
+    ctx.restore();
+    return poolH + 22;
+  }
+
+  if (format === 'hour_of_power' || format === 'b15') {
+    const cy = startY + 55;
+    const circR = 42;
+    const rgb = format === 'hour_of_power' ? '52,211,153' : '167,139,250';
+    const label = format === 'hour_of_power' ? '60:00' : 'Best 15';
+    ctx.beginPath();
+    ctx.arc(centerX, cy, circR, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(${rgb},0.05)`;
+    ctx.fill();
+    ctx.strokeStyle = `rgba(${rgb},0.15)`;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(centerX, cy, circR, -Math.PI / 2, Math.PI * 1.5 - Math.PI / 2);
+    ctx.strokeStyle = `rgba(${rgb},0.4)`;
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    ctx.fillStyle = `rgba(${rgb},0.6)`;
+    ctx.font = 'bold 16px Rajdhani, sans-serif';
+    ctx.fillText(label, centerX, cy + 1);
+    ctx.restore();
+    return circR * 2 + 26;
+  }
+
+  ctx.restore();
+  return 0;
+}
+
 export default function TournamentPoster() {
   const { id } = useParams();
   const { user } = useAuth();
@@ -1066,7 +1326,11 @@ export default function TournamentPoster() {
     setSharingImage(true);
     try {
       if (document.fonts?.ready) await document.fonts.ready;
-      const W = 1080, H = 1920;
+      const W = 1080;
+      // Dynamic height: base + per-phase (card + diagram) + player roster + footer
+      const imgPhaseCount = (phases.length > 0 ? phases : [{ format: 'round_robin' }]).length;
+      const rosterRows = Math.ceil(Math.min(players.length, 20) / 5);
+      const H = Math.max(1920, 700 + imgPhaseCount * 310 + rosterRows * 100 + 200);
       const canvas = document.createElement('canvas');
       canvas.width = W; canvas.height = H;
       const ctx = canvas.getContext('2d');
@@ -1222,9 +1486,13 @@ export default function TournamentPoster() {
           ctx.fillText(rules.join('  \u00B7  '), PAD + 20, y + 62, W - PAD * 2 - 40);
         }
 
-        y += cardH + 12;
+        y += cardH + 8;
+
+        // Draw format diagram for this phase
+        const diagramH = drawFormatDiagram(ctx, phase.format, players, pCfg, W / 2, y);
+        y += diagramH + 14;
       }
-      y += 16;
+      y += 8;
 
       // ── Divider ──
       ctx.fillStyle = divGrad;
