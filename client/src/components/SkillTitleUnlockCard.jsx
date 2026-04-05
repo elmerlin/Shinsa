@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import {
   buildSkillTitleProgressTriplet,
   formatSkillTitleLabel,
@@ -138,14 +138,6 @@ export default function SkillTitleUnlockCard({ clear, className = '' }) {
     { kind: 'next', node: next, left: '86%', top: '20%' },
   ];
   const [activeKind, setActiveKind] = useState('current');
-  const activeNodeEntry = useMemo(() => {
-    return nodes.find((entry) => entry.kind === activeKind) || nodes[1] || nodes[0];
-  }, [activeKind, nodes]);
-  const activeMeta = getNodeMeta(activeNodeEntry?.kind, activeNodeEntry?.node);
-  const activeMetrics = activeMeta.metrics;
-  const activePassDetail = activeMetrics.passes_required
-    ? `${activeMetrics.passes_have} out of ${activeMetrics.passes_required} minimum AA clears banked for this node.`
-    : 'This checkpoint does not need an AA pass count.';
 
   return (
     <div className={cx('rounded-2xl border p-3 shadow-[0_14px_34px_rgba(0,0,0,0.28)]', theme.shell, className)}>
@@ -217,28 +209,14 @@ export default function SkillTitleUnlockCard({ clear, className = '' }) {
                 <p className="mt-2 text-[10px] font-display font-bold uppercase tracking-[0.12em] text-white/80">
                   {getPassCopy(meta.metrics)}
                 </p>
+                {meta.metrics.passes_required > 0 ? (
+                  <p className="mt-1 text-[10px] leading-snug text-gray-500">
+                    {meta.metrics.passes_have} out of {meta.metrics.passes_required} minimum AA clears banked.
+                  </p>
+                ) : null}
               </button>
             );
           })}
-        </div>
-
-        <div className="mt-3 rounded-xl border border-white/12 bg-white/[0.04] px-3 py-2.5">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-[9px] font-display font-bold uppercase tracking-[0.16em] text-white/60">Highlighted Node</p>
-              <p className="mt-1 text-xs font-display font-bold text-white">{activeMeta.title}</p>
-              <p className="mt-1 text-[10px] leading-snug text-gray-400">{activeMeta.body}</p>
-            </div>
-            <div className="shrink-0 text-right">
-              <p className="text-[10px] font-display font-bold uppercase tracking-[0.14em] text-white/70">
-                {getPassCopy(activeMetrics)}
-              </p>
-              {activeMetrics.aa_points_per_clear > 0 ? (
-                <p className="mt-1 text-[10px] text-gray-500">{activeMetrics.aa_points_per_clear.toLocaleString()} pts per AA clear</p>
-              ) : null}
-            </div>
-          </div>
-          <p className="mt-2 text-[10px] text-gray-400">{activePassDetail}</p>
         </div>
       </div>
     </div>

@@ -179,6 +179,12 @@ export function buildSkillTitleProgressTriplet(clear = {}) {
   if (current && !current.level) {
     current.level = toInt(clear.level) || current.level;
   }
+  if (previous && previous.unlocked && !previous.earned_points && previous.required_points > 0) {
+    previous.earned_points = previous.required_points;
+  }
+  if (next && !next.earned_points && current && next.level > 0 && next.level === current.level) {
+    next.earned_points = current.earned_points;
+  }
 
   return { previous, current, next };
 }
