@@ -31,6 +31,7 @@ import {
   buildWcPlayChallengeOptions,
   buildWcPlayLinkShare,
 } from '../utils/directMessageShares';
+import { getPlateChipClass, normalizePlateCode } from '../utils/plates';
 
 function getRank(score) {
   const s = parseInt(score) || 0;
@@ -69,6 +70,17 @@ function timeAgo(dateStr) {
   const days = Math.floor(hours / 24);
   if (days < 7) return `${days}d ago`;
   return date.toLocaleDateString();
+}
+
+function CompactPlateBadge({ plate = '' }) {
+  const plateCode = normalizePlateCode(plate);
+  if (!plateCode) return null;
+
+  return (
+    <span className={`text-[9px] px-1.5 py-0.5 rounded border font-display font-black tracking-[0.12em] ${getPlateChipClass(plateCode)}`}>
+      {plateCode}
+    </span>
+  );
 }
 
 function parsePumbilityGain(value) {
@@ -609,6 +621,7 @@ export function SingleUpscorePage() {
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-display font-bold truncate">{u.song_title}</p>
                   <div className="flex items-center gap-1 mt-0.5">
+                    <CompactPlateBadge plate={u.plate} />
                     {overRank > 0 && (
                       <span className="text-[11px] leading-none px-1.5 py-0.5 rounded border border-piu-gold/50 bg-piu-gold/15 text-yellow-200 font-display font-black tracking-wide">
                         TOP #{overRank}
