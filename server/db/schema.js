@@ -1882,6 +1882,10 @@ function initializeDb() {
     db.exec("ALTER TABLE tournaments ADD COLUMN current_phase_id TEXT DEFAULT ''");
   }
 
+  if (!tournamentCols2.includes('poster_bg')) {
+    db.exec("ALTER TABLE tournaments ADD COLUMN poster_bg TEXT DEFAULT ''");
+  }
+
   // Migrations for players table - elimination tracking
   const playerCols2 = db.prepare("PRAGMA table_info(players)").all().map(c => c.name);
   if (!playerCols2.includes('eliminated_at_phase')) {

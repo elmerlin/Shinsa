@@ -83,7 +83,7 @@ router.post('/', (req, res) => {
 
 router.put('/:id', (req, res) => {
   const db = getDb();
-  const { name, location, date, phase, current_round, total_rounds, config, avatar } = req.body;
+  const { name, location, date, phase, current_round, total_rounds, config, avatar, poster_bg } = req.body;
   const existing = db.prepare('SELECT * FROM tournaments WHERE id = ?').get(req.params.id);
   if (!existing) { db.close(); return res.status(404).json({ error: 'Not found' }); }
 
@@ -96,10 +96,14 @@ router.put('/:id', (req, res) => {
       current_round = COALESCE(?, current_round),
       total_rounds = COALESCE(?, total_rounds),
       config = COALESCE(?, config),
-      avatar = COALESCE(?, avatar)
+      avatar = COALESCE(?, avatar),
+      poster_bg = COALESCE(?, poster_bg)
     WHERE id = ?
   `).run(name, location, date, phase, current_round, total_rounds,
-    config ? JSON.stringify(config) : null, avatar !== undefined ? avatar : null, req.params.id);
+    config ? JSON.stringify(config) : null,
+    avatar !== undefined ? avatar : null,
+    poster_bg !== undefined ? poster_bg : null,
+    req.params.id);
 
   const updated = db.prepare('SELECT * FROM tournaments WHERE id = ?').get(req.params.id);
   db.close();

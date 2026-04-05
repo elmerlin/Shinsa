@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { getTournament, getPlayers, getPhases, getPlayerScoutingCard } from '../utils/api';
+import { getTournament, updateTournament, getPlayers, getPhases, getPlayerScoutingCard } from '../utils/api';
 import { FORMAT_LABELS, FORMAT_ICONS, FORMAT_DESCRIPTIONS } from '../utils/tournamentConstants';
 import { formatTournamentDate } from '../components/tournament/TournamentChrome';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag } from '../utils/countryFlags';
+import { useAuth } from '../contexts/AuthContext';
 
 // ── Scroll-triggered reveal hook ──
 function useReveal() {
@@ -36,7 +37,6 @@ function useReveal() {
   useEffect(() => {
     if (visibleRef.current) return;
     window.addEventListener('scroll', check, { passive: true });
-    // RAF polling for 3s after mount to catch elements that enter viewport
     let raf;
     const start = Date.now();
     const poll = () => {
@@ -882,14 +882,53 @@ function generateHypeBlurb(tournament, phases, playerCount) {
 //  MAIN POSTER PAGE
 // ══════════════════════════════════════════════════════════════
 
+// ── Share helpers ──
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+}
+
+function drawCover(ctx, img, x, y, w, h) {
+  const scale = Math.max(w / img.width, h / img.height);
+  const sw = w / scale, sh = h / scale;
+  const sx = (img.width - sw) / 2, sy = (img.height - sh) / 2;
+  ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.arcTo(x + w, y, x + w, y + r, r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+  ctx.lineTo(x + r, y + h);
+  ctx.arcTo(x, y + h, x, y + h - r, r);
+  ctx.lineTo(x, y + r);
+  ctx.arcTo(x, y, x + r, y, r);
+  ctx.closePath();
+}
+
 export default function TournamentPoster() {
   const { id } = useParams();
+  const { user } = useAuth();
   const [tournament, setTournament] = useState(null);
   const [players, setPlayers] = useState([]);
   const [phases, setPhases] = useState([]);
   const [loading, setLoading] = useState(true);
   const [scoutCards, setScoutCards] = useState({});
   const [expandedPlayer, setExpandedPlayer] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [sharingImage, setSharingImage] = useState(false);
+  const fileInputRef = useRef(null);
+
+  const isAdmin = !!user?.is_admin;
 
   useEffect(() => {
     (async () => {
@@ -902,7 +941,6 @@ export default function TournamentPoster() {
           setPhases(Array.isArray(ph) ? ph : []);
         } catch { setPhases([]); }
 
-        // Fetch scout cards for players with user_ids (in parallel, max 20)
         const withUserId = p.filter(pl => pl.user_id).slice(0, 20);
         const results = await Promise.allSettled(
           withUserId.map(pl => getPlayerScoutingCard(pl.user_id).then(data => ({ playerId: pl.id, data })))
@@ -921,6 +959,201 @@ export default function TournamentPoster() {
       }
     })();
   }, [id]);
+
+  // ── Poster background upload ──
+  const handleBgUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 8 * 1024 * 1024) { alert('Image must be under 8MB'); return; }
+    setUploading(true);
+    try {
+      const reader = new FileReader();
+      const dataUri = await new Promise((resolve) => {
+        reader.onloadend = () => resolve(reader.result);
+        reader.readAsDataURL(file);
+      });
+      const updated = await updateTournament(id, { poster_bg: dataUri });
+      setTournament(prev => ({ ...prev, poster_bg: updated.poster_bg || dataUri }));
+    } catch (err) {
+      console.error('Upload failed:', err);
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleRemoveBg = async () => {
+    setUploading(true);
+    try {
+      await updateTournament(id, { poster_bg: '' });
+      setTournament(prev => ({ ...prev, poster_bg: '' }));
+    } catch (err) { console.error(err); }
+    finally { setUploading(false); }
+  };
+
+  // ── Share functions ──
+  const permalink = typeof window !== 'undefined' ? `${window.location.origin}/tournament/${id}/poster` : '';
+
+  const handleCopyLink = () => {
+    navigator.clipboard?.writeText(permalink).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  const handleShare = () => {
+    if (navigator.share) {
+      navigator.share({ title: tournament?.name || 'Tournament Poster', url: permalink }).catch(() => {});
+    } else {
+      handleCopyLink();
+    }
+  };
+
+  const handleShareImage = async () => {
+    if (!tournament) return;
+    setSharingImage(true);
+    try {
+      if (document.fonts?.ready) await document.fonts.ready;
+      const W = 1080, H = 1350;
+      const canvas = document.createElement('canvas');
+      canvas.width = W; canvas.height = H;
+      const ctx = canvas.getContext('2d');
+
+      // Background
+      ctx.fillStyle = '#0a0a1a';
+      ctx.fillRect(0, 0, W, H);
+
+      const posterBg = tournament.poster_bg ? await loadImage(tournament.poster_bg).catch(() => null) : null;
+      if (posterBg) {
+        ctx.globalAlpha = 0.35;
+        drawCover(ctx, posterBg, 0, 0, W, H);
+        ctx.globalAlpha = 1;
+      }
+
+      // Dark overlay gradient
+      const grad = ctx.createLinearGradient(0, 0, 0, H);
+      grad.addColorStop(0, 'rgba(10,10,26,0.3)');
+      grad.addColorStop(0.5, 'rgba(10,10,26,0.7)');
+      grad.addColorStop(1, 'rgba(10,10,26,0.95)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, W, H);
+
+      // Accent glow
+      const glow = ctx.createRadialGradient(W * 0.3, H * 0.15, 0, W * 0.3, H * 0.15, W * 0.6);
+      glow.addColorStop(0, 'rgba(255,51,102,0.18)');
+      glow.addColorStop(1, 'rgba(255,51,102,0)');
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, 0, W, H);
+
+      // Tournament avatar
+      const avatarUrl = tournament.avatar ? getAvatarUrl(tournament.avatar) : null;
+      const avatarImg = avatarUrl ? await loadImage(avatarUrl).catch(() => null) : null;
+      let avatarBottom = 160;
+      if (avatarImg) {
+        const aSize = 120, aX = (W - aSize) / 2, aY = 100;
+        ctx.save();
+        roundRect(ctx, aX, aY, aSize, aSize, 28);
+        ctx.clip();
+        drawCover(ctx, avatarImg, aX, aY, aSize, aSize);
+        ctx.restore();
+        ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+        ctx.lineWidth = 2;
+        roundRect(ctx, aX, aY, aSize, aSize, 28);
+        ctx.stroke();
+        avatarBottom = aY + aSize + 32;
+      }
+
+      // Title
+      const title = String(tournament.name || 'Tournament').trim();
+      ctx.fillStyle = '#ffffff';
+      ctx.font = `bold 56px Rajdhani, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.fillText(title, W / 2, avatarBottom + 40, W - 80);
+
+      // Subtitle
+      const displayPhases = phases.length > 0 ? phases : [{ format: 'round_robin' }];
+      const subtitle = `${players.length} players \u00B7 ${displayPhases.map(p => FORMAT_LABELS[p.format] || p.format).join(' \u2192 ')}`;
+      ctx.fillStyle = 'rgba(255,255,255,0.5)';
+      ctx.font = `600 22px Rajdhani, sans-serif`;
+      ctx.fillText(subtitle, W / 2, avatarBottom + 76, W - 80);
+
+      // Date + location
+      const dateLine = [formatTournamentDate(tournament.date), tournament.location].filter(Boolean).join(' \u00B7 ');
+      if (dateLine) {
+        ctx.fillStyle = 'rgba(255,255,255,0.35)';
+        ctx.font = `600 20px Rajdhani, sans-serif`;
+        ctx.fillText(dateLine, W / 2, avatarBottom + 108, W - 80);
+      }
+
+      // Player avatars grid
+      const gridTop = avatarBottom + 150;
+      const avatarSize = 72;
+      const gap = 16;
+      const cols = Math.min(players.length, 6);
+      const rows = Math.ceil(Math.min(players.length, 12) / cols);
+      const gridW = cols * avatarSize + (cols - 1) * gap;
+      const startX = (W - gridW) / 2;
+
+      for (let i = 0; i < Math.min(players.length, 12); i++) {
+        const col = i % cols, row = Math.floor(i / cols);
+        const px = startX + col * (avatarSize + gap);
+        const py = gridTop + row * (avatarSize + gap + 20);
+        const player = players[i];
+        const pAvatarUrl = player.avatar ? getAvatarUrl(player.avatar) : null;
+        const pImg = pAvatarUrl ? await loadImage(pAvatarUrl).catch(() => null) : null;
+
+        if (pImg) {
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(px + avatarSize / 2, py + avatarSize / 2, avatarSize / 2, 0, Math.PI * 2);
+          ctx.clip();
+          drawCover(ctx, pImg, px, py, avatarSize, avatarSize);
+          ctx.restore();
+        } else {
+          ctx.fillStyle = 'rgba(255,51,102,0.3)';
+          ctx.beginPath();
+          ctx.arc(px + avatarSize / 2, py + avatarSize / 2, avatarSize / 2, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#fff';
+          ctx.font = 'bold 24px Rajdhani, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText(String(player.name || '?').charAt(0).toUpperCase(), px + avatarSize / 2, py + avatarSize / 2 + 8);
+        }
+
+        ctx.fillStyle = 'rgba(255,255,255,0.7)';
+        ctx.font = '600 13px Rajdhani, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(String(player.name || '').slice(0, 10), px + avatarSize / 2, py + avatarSize + 16, avatarSize + gap);
+      }
+
+      // Footer
+      ctx.fillStyle = 'rgba(255,255,255,0.25)';
+      ctx.font = '600 16px Rajdhani, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('POWERED BY PUMP SHINSA', W / 2, H - 50);
+
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.92));
+      const fileName = `${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-poster.jpg`;
+
+      if (navigator.share && navigator.canShare?.({ files: [new File([blob], fileName, { type: 'image/jpeg' })] })) {
+        await navigator.share({
+          title: `${title} - Tournament Poster`,
+          files: [new File([blob], fileName, { type: 'image/jpeg' })],
+        });
+      } else {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = fileName;
+        document.body.appendChild(a); a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+      }
+    } catch (err) {
+      console.error('Share image error:', err);
+    } finally {
+      setSharingImage(false);
+    }
+  };
 
   const [heroRef, heroVisible] = useReveal();
   const [hypeRef, hypeVisible] = useReveal();
@@ -973,35 +1206,77 @@ export default function TournamentPoster() {
 
   const hypeBlurb = generateHypeBlurb(tournament, displayPhases, players.length);
 
+  const posterBg = tournament.poster_bg ? tournament.poster_bg : '';
+
   return (
     <div className="min-h-screen bg-piu-bg">
       {/* ═══ HERO ═══ */}
       <div
         ref={heroRef}
         className="relative overflow-hidden border-b border-white/5"
-        style={{
-          background: 'radial-gradient(ellipse at 30% 20%, rgba(255,51,102,0.14), transparent 50%), radial-gradient(ellipse at 70% 80%, rgba(255,199,92,0.08), transparent 40%), radial-gradient(ellipse at 50% 50%, rgba(68,136,255,0.06), transparent 60%), #0a0a1a',
-        }}
       >
+        {/* Background image layer */}
+        {posterBg && (
+          <div
+            className="absolute inset-0 bg-cover bg-center"
+            style={{ backgroundImage: `url(${posterBg})`, opacity: 0.22 }}
+          />
+        )}
+        {/* Gradient overlay (always present) */}
         <div
-          className="pointer-events-none absolute inset-0"
+          className="absolute inset-0"
           style={{
-            backgroundImage: 'linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px)',
-            backgroundSize: '60px 60px',
-            maskImage: 'radial-gradient(ellipse at center, black 30%, transparent 70%)',
-            WebkitMaskImage: 'radial-gradient(ellipse at center, black 30%, transparent 70%)',
+            background: posterBg
+              ? 'linear-gradient(to bottom, rgba(10,10,26,0.4) 0%, rgba(10,10,26,0.75) 60%, rgba(10,10,26,0.98) 100%)'
+              : 'radial-gradient(ellipse at 30% 20%, rgba(255,51,102,0.14), transparent 50%), radial-gradient(ellipse at 70% 80%, rgba(255,199,92,0.08), transparent 40%), radial-gradient(ellipse at 50% 50%, rgba(68,136,255,0.06), transparent 60%)',
           }}
         />
+        {!posterBg && (
+          <div
+            className="pointer-events-none absolute inset-0"
+            style={{
+              backgroundImage: 'linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px)',
+              backgroundSize: '60px 60px',
+              maskImage: 'radial-gradient(ellipse at center, black 30%, transparent 70%)',
+              WebkitMaskImage: 'radial-gradient(ellipse at center, black 30%, transparent 70%)',
+            }}
+          />
+        )}
         <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-piu-accent/40 to-transparent" />
 
         <div className="relative mx-auto max-w-4xl px-4 py-16 sm:py-24 text-center">
-          <div style={{ opacity: heroVisible ? 1 : 0, transform: heroVisible ? 'translateY(0)' : 'translateY(-10px)', transition: 'all 0.4s ease' }}>
+          {/* Top bar: back + share actions */}
+          <div className="flex items-center justify-between mb-8" style={{ opacity: heroVisible ? 1 : 0, transition: 'opacity 0.4s ease' }}>
             <Link
               to={`/tournament/${id}`}
-              className="inline-flex items-center gap-1.5 rounded-full border border-white/8 bg-white/4 px-3 py-1.5 text-[10px] font-display font-bold uppercase tracking-[0.14em] text-zinc-400 transition-colors hover:border-piu-accent/25 hover:text-zinc-200 mb-8"
+              className="inline-flex items-center gap-1.5 rounded-full border border-white/8 bg-black/30 backdrop-blur-sm px-3 py-1.5 text-[10px] font-display font-bold uppercase tracking-[0.14em] text-zinc-400 transition-colors hover:border-piu-accent/25 hover:text-zinc-200"
             >
-              <span>{'\u2190'}</span> Back to tournament
+              <span>{'\u2190'}</span> Back
             </Link>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleCopyLink}
+                className="inline-flex items-center gap-1.5 rounded-full border border-white/8 bg-black/30 backdrop-blur-sm px-3 py-1.5 text-[10px] font-display font-bold uppercase tracking-[0.14em] text-zinc-400 transition-colors hover:border-white/15 hover:text-zinc-200"
+              >
+                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101" /><path strokeLinecap="round" strokeLinejoin="round" d="M10.172 13.828a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.102 1.101" /></svg>
+                {copied ? 'Copied!' : 'Link'}
+              </button>
+              <button
+                onClick={handleShare}
+                className="inline-flex items-center gap-1.5 rounded-full border border-white/8 bg-black/30 backdrop-blur-sm px-3 py-1.5 text-[10px] font-display font-bold uppercase tracking-[0.14em] text-zinc-400 transition-colors hover:border-white/15 hover:text-zinc-200"
+              >
+                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
+                Share
+              </button>
+              <button
+                onClick={handleShareImage}
+                disabled={sharingImage}
+                className="inline-flex items-center gap-1.5 rounded-full border border-piu-accent/20 bg-piu-accent/10 backdrop-blur-sm px-3 py-1.5 text-[10px] font-display font-bold uppercase tracking-[0.14em] text-rose-200 transition-colors hover:border-piu-accent/35 hover:bg-piu-accent/18 disabled:opacity-50"
+              >
+                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                {sharingImage ? 'Creating...' : 'Image'}
+              </button>
+            </div>
           </div>
 
           {tournament.avatar && (
@@ -1012,21 +1287,21 @@ export default function TournamentPoster() {
               <img
                 src={getAvatarUrl(tournament.avatar)}
                 alt={title}
-                className="h-20 w-20 rounded-2xl object-cover ring-2 ring-white/10 shadow-[0_12px_32px_rgba(0,0,0,0.4)]"
+                className="h-28 w-28 rounded-2xl object-cover ring-2 ring-white/15 shadow-[0_16px_40px_rgba(0,0,0,0.5)]"
               />
             </div>
           )}
 
           <div className="flex flex-wrap items-center justify-center gap-2 mb-5" style={{ opacity: heroVisible ? 1 : 0, transition: 'opacity 0.4s ease 200ms' }}>
-            {formattedDate && <span className="inline-flex items-center rounded-full border border-white/10 bg-black/18 px-2.5 py-1 text-[11px] text-zinc-300">{formattedDate}</span>}
-            {tournament.location && <span className="inline-flex items-center rounded-full border border-white/10 bg-black/18 px-2.5 py-1 text-[11px] text-zinc-300">{tournament.location}</span>}
+            {formattedDate && <span className="inline-flex items-center rounded-full border border-white/10 bg-black/30 backdrop-blur-sm px-2.5 py-1 text-[11px] text-zinc-300">{formattedDate}</span>}
+            {tournament.location && <span className="inline-flex items-center rounded-full border border-white/10 bg-black/30 backdrop-blur-sm px-2.5 py-1 text-[11px] text-zinc-300">{tournament.location}</span>}
             <span className="inline-flex items-center rounded-full border border-piu-accent/20 bg-piu-accent/8 px-2.5 py-1 text-[11px] font-display font-bold text-rose-100">
               {players.length} players
             </span>
           </div>
 
           <h1
-            className="font-display text-4xl font-bold tracking-[0.02em] text-white sm:text-5xl lg:text-6xl"
+            className="font-display text-4xl font-bold tracking-[0.02em] text-white sm:text-5xl lg:text-6xl drop-shadow-[0_2px_12px_rgba(0,0,0,0.5)]"
             style={{ opacity: heroVisible ? 1 : 0, transform: heroVisible ? 'translateY(0)' : 'translateY(20px)', transition: 'all 0.6s cubic-bezier(0.16,1,0.3,1) 150ms' }}
           >
             {title}
@@ -1047,7 +1322,7 @@ export default function TournamentPoster() {
               return (
                 <div key={i} className="flex items-center gap-3">
                   {i > 0 && <div className="h-px w-6 bg-white/10" />}
-                  <div className={`flex h-8 w-8 items-center justify-center rounded-full border ${c.border} ${c.bg}`} title={phase.name || FORMAT_LABELS[phase.format]}>
+                  <div className={`flex h-8 w-8 items-center justify-center rounded-full border ${c.border} ${c.bg} backdrop-blur-sm`} title={phase.name || FORMAT_LABELS[phase.format]}>
                     <span className="text-sm">{FORMAT_ICONS[phase.format]}</span>
                   </div>
                 </div>
@@ -1076,6 +1351,30 @@ export default function TournamentPoster() {
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* Admin: upload poster background */}
+          {isAdmin && (
+            <div className="mt-8 flex items-center justify-center gap-2" style={{ opacity: heroVisible ? 1 : 0, transition: 'opacity 0.4s ease 700ms' }}>
+              <input ref={fileInputRef} type="file" accept="image/*" onChange={handleBgUpload} className="hidden" />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/6 px-3 py-1.5 text-[10px] font-display font-bold uppercase tracking-[0.14em] text-zinc-400 transition-colors hover:border-white/20 hover:text-zinc-200 disabled:opacity-50"
+              >
+                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                {uploading ? 'Uploading...' : (posterBg ? 'Change Background' : 'Upload Background')}
+              </button>
+              {posterBg && (
+                <button
+                  onClick={handleRemoveBg}
+                  disabled={uploading}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-red-500/20 bg-red-500/8 px-3 py-1.5 text-[10px] font-display font-bold uppercase tracking-[0.14em] text-red-300/70 transition-colors hover:border-red-500/30 hover:text-red-200 disabled:opacity-50"
+                >
+                  Remove
+                </button>
+              )}
             </div>
           )}
         </div>
