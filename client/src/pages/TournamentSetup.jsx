@@ -108,6 +108,7 @@ export default function TournamentSetup() {
     location: '',
     date: new Date().toISOString().split('T')[0],
     avatar: '',
+    gif_avatar: '',
   });
   const [originalPhaseIds, setOriginalPhaseIds] = useState([]);
   const [existingTournament, setExistingTournament] = useState(null);
@@ -141,6 +142,7 @@ export default function TournamentSetup() {
           location: String(tournament?.location || ''),
           date: String(tournament?.date || new Date().toISOString().split('T')[0]),
           avatar: String(tournament?.avatar || ''),
+          gif_avatar: String(tournament?.gif_avatar || ''),
         });
 
         const normalizedPhases = (Array.isArray(loadedPhases) ? loadedPhases : []).map(normalizeLoadedPhase);
@@ -214,6 +216,7 @@ export default function TournamentSetup() {
         location: form.location,
         date: form.date,
         avatar: form.avatar,
+        gif_avatar: form.gif_avatar,
         total_rounds: legacyConfig.rounds || 1,
         config: {
           ...legacyConfig,
@@ -429,7 +432,7 @@ export default function TournamentSetup() {
 
                 <div className="rounded-[1rem] border border-white/8 bg-black/18 p-4">
                   <p className="font-display text-sm font-bold uppercase tracking-[0.16em] text-zinc-400">Card Avatar</p>
-                  <p className="mt-1 text-sm text-zinc-500">Used on the tournament card and header.</p>
+                  <p className="mt-1 text-sm text-zinc-500">Used on tournament cards, headers, and share images. Use a still image for best compatibility.</p>
                   <div className="mt-4">
                     <AvatarPicker
                       value={form.avatar}
@@ -438,6 +441,30 @@ export default function TournamentSetup() {
                       size="md"
                     />
                   </div>
+                </div>
+
+                <div className="rounded-[1rem] border border-white/8 bg-black/18 p-4">
+                  <p className="font-display text-sm font-bold uppercase tracking-[0.16em] text-zinc-400">
+                    Animated Avatar <span className="ml-1 text-[10px] font-normal normal-case tracking-normal text-zinc-600">(optional)</span>
+                  </p>
+                  <p className="mt-1 text-sm text-zinc-500">Upload a GIF for the poster hero branding. Falls back to the card avatar if not set.</p>
+                  <div className="mt-4">
+                    <AvatarPicker
+                      value={form.gif_avatar}
+                      onChange={(gif_avatar) => setForm((prev) => ({ ...prev, gif_avatar }))}
+                      shape="square"
+                      size="md"
+                    />
+                  </div>
+                  {form.gif_avatar && (
+                    <button
+                      type="button"
+                      onClick={() => setForm((prev) => ({ ...prev, gif_avatar: '' }))}
+                      className="mt-2 text-xs text-red-400/70 hover:text-red-300 transition-colors"
+                    >
+                      Remove animated avatar
+                    </button>
+                  )}
                 </div>
               </div>
             </CardContent>

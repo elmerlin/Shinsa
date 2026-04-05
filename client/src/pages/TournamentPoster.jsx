@@ -944,7 +944,10 @@ export default function TournamentPoster() {
   const [uploading, setUploading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [sharingImage, setSharingImage] = useState(false);
+  const [showAvatarEditor, setShowAvatarEditor] = useState(false);
   const fileInputRef = useRef(null);
+  const avatarInputRef = useRef(null);
+  const gifAvatarInputRef = useRef(null);
 
   const isAdmin = !!user?.is_admin;
 
@@ -1005,6 +1008,37 @@ export default function TournamentPoster() {
     try {
       await updateTournament(id, { poster_bg: '' });
       setTournament(prev => ({ ...prev, poster_bg: '' }));
+    } catch (err) { console.error(err); }
+    finally { setUploading(false); }
+  };
+
+  // ── Avatar upload handlers (admin, works in any phase) ──
+  const handleAvatarUpload = async (e, field) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) { alert('Image must be under 10MB'); return; }
+    setUploading(true);
+    try {
+      const reader = new FileReader();
+      const dataUri = await new Promise((resolve) => {
+        reader.onloadend = () => resolve(reader.result);
+        reader.readAsDataURL(file);
+      });
+      const updated = await updateTournament(id, { [field]: dataUri });
+      setTournament(prev => ({ ...prev, [field]: updated[field] || dataUri }));
+    } catch (err) { console.error('Avatar upload failed:', err); }
+    finally {
+      setUploading(false);
+      if (field === 'avatar' && avatarInputRef.current) avatarInputRef.current.value = '';
+      if (field === 'gif_avatar' && gifAvatarInputRef.current) gifAvatarInputRef.current.value = '';
+    }
+  };
+
+  const handleRemoveAvatar = async (field) => {
+    setUploading(true);
+    try {
+      await updateTournament(id, { [field]: '' });
+      setTournament(prev => ({ ...prev, [field]: '' }));
     } catch (err) { console.error(err); }
     finally { setUploading(false); }
   };
@@ -1424,13 +1458,13 @@ export default function TournamentPoster() {
             </div>
           </div>
 
-          {tournament.avatar && (
+          {(tournament.gif_avatar || tournament.avatar) && (
             <div
               className="mb-6 flex justify-center"
               style={{ opacity: heroVisible ? 1 : 0, transform: heroVisible ? 'scale(1)' : 'scale(0.8)', transition: 'all 0.5s cubic-bezier(0.16,1,0.3,1) 100ms' }}
             >
               <img
-                src={getAvatarUrl(tournament.avatar)}
+                src={getAvatarUrl(tournament.gif_avatar || tournament.avatar)}
                 alt={title}
                 className="h-36 w-36 rounded-2xl object-cover ring-2 ring-white/15 shadow-[0_16px_40px_rgba(0,0,0,0.5)]"
               />
@@ -1501,24 +1535,84 @@ export default function TournamentPoster() {
 
           {/* Admin: upload poster background */}
           {isAdmin && (
-            <div className="mt-8 flex items-center justify-center gap-2" style={{ opacity: heroVisible ? 1 : 0, transition: 'opacity 0.4s ease 700ms' }}>
-              <input ref={fileInputRef} type="file" accept="image/*" onChange={handleBgUpload} className="hidden" />
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploading}
-                className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/6 px-3 py-1.5 text-[10px] font-display font-bold uppercase tracking-[0.14em] text-zinc-400 transition-colors hover:border-white/20 hover:text-zinc-200 disabled:opacity-50"
-              >
-                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
-                {uploading ? 'Uploading...' : (posterBg ? 'Change Background' : 'Upload Background')}
-              </button>
-              {posterBg && (
+            <div className="mt-8 flex flex-col items-center gap-3" style={{ opacity: heroVisible ? 1 : 0, transition: 'opacity 0.4s ease 700ms' }}>
+              <div className="flex items-center gap-2">
+                <input ref={fileInputRef} type="file" accept="image/*" onChange={handleBgUpload} className="hidden" />
                 <button
-                  onClick={handleRemoveBg}
+                  onClick={() => fileInputRef.current?.click()}
                   disabled={uploading}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-red-500/20 bg-red-500/8 px-3 py-1.5 text-[10px] font-display font-bold uppercase tracking-[0.14em] text-red-300/70 transition-colors hover:border-red-500/30 hover:text-red-200 disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/6 px-3 py-1.5 text-[10px] font-display font-bold uppercase tracking-[0.14em] text-zinc-400 transition-colors hover:border-white/20 hover:text-zinc-200 disabled:opacity-50"
                 >
-                  Remove
+                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                  {uploading ? 'Uploading...' : (posterBg ? 'Change Background' : 'Upload Background')}
                 </button>
+                {posterBg && (
+                  <button
+                    onClick={handleRemoveBg}
+                    disabled={uploading}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-red-500/20 bg-red-500/8 px-3 py-1.5 text-[10px] font-display font-bold uppercase tracking-[0.14em] text-red-300/70 transition-colors hover:border-red-500/30 hover:text-red-200 disabled:opacity-50"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+
+              {/* Avatar editing toggle */}
+              <button
+                onClick={() => setShowAvatarEditor(prev => !prev)}
+                className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/6 px-3 py-1.5 text-[10px] font-display font-bold uppercase tracking-[0.14em] text-zinc-400 transition-colors hover:border-white/20 hover:text-zinc-200"
+              >
+                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                {showAvatarEditor ? 'Hide Avatar Editor' : 'Edit Avatars'}
+              </button>
+
+              {/* Inline avatar editor panel */}
+              {showAvatarEditor && (
+                <div className="mt-2 w-full max-w-md rounded-2xl border border-white/10 bg-black/60 backdrop-blur-md p-4 space-y-4">
+                  {/* Still avatar */}
+                  <div>
+                    <p className="font-display text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-400 mb-1">Card Avatar</p>
+                    <p className="text-[10px] text-zinc-600 mb-2">Used on cards, headers, share images</p>
+                    <div className="flex items-center gap-3">
+                      {tournament.avatar && (
+                        <img src={getAvatarUrl(tournament.avatar)} alt="" className="h-14 w-14 rounded-xl object-cover ring-1 ring-white/10" />
+                      )}
+                      <div className="flex gap-2">
+                        <input ref={avatarInputRef} type="file" accept="image/*" onChange={(e) => handleAvatarUpload(e, 'avatar')} className="hidden" />
+                        <button onClick={() => avatarInputRef.current?.click()} disabled={uploading} className="rounded-full border border-white/10 bg-white/6 px-3 py-1.5 text-[10px] font-display font-bold uppercase tracking-[0.12em] text-zinc-400 hover:border-white/20 hover:text-zinc-200 disabled:opacity-50">
+                          {tournament.avatar ? 'Change' : 'Upload'}
+                        </button>
+                        {tournament.avatar && (
+                          <button onClick={() => handleRemoveAvatar('avatar')} disabled={uploading} className="rounded-full border border-red-500/20 bg-red-500/8 px-3 py-1.5 text-[10px] font-display font-bold uppercase tracking-[0.12em] text-red-300/70 hover:text-red-200 disabled:opacity-50">
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* GIF avatar */}
+                  <div>
+                    <p className="font-display text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-400 mb-1">Animated Avatar <span className="text-zinc-600 font-normal normal-case tracking-normal">(GIF)</span></p>
+                    <p className="text-[10px] text-zinc-600 mb-2">Used for poster hero branding. Falls back to card avatar.</p>
+                    <div className="flex items-center gap-3">
+                      {tournament.gif_avatar && (
+                        <img src={getAvatarUrl(tournament.gif_avatar)} alt="" className="h-14 w-14 rounded-xl object-cover ring-1 ring-white/10" />
+                      )}
+                      <div className="flex gap-2">
+                        <input ref={gifAvatarInputRef} type="file" accept="image/gif,image/*" onChange={(e) => handleAvatarUpload(e, 'gif_avatar')} className="hidden" />
+                        <button onClick={() => gifAvatarInputRef.current?.click()} disabled={uploading} className="rounded-full border border-white/10 bg-white/6 px-3 py-1.5 text-[10px] font-display font-bold uppercase tracking-[0.12em] text-zinc-400 hover:border-white/20 hover:text-zinc-200 disabled:opacity-50">
+                          {tournament.gif_avatar ? 'Change' : 'Upload GIF'}
+                        </button>
+                        {tournament.gif_avatar && (
+                          <button onClick={() => handleRemoveAvatar('gif_avatar')} disabled={uploading} className="rounded-full border border-red-500/20 bg-red-500/8 px-3 py-1.5 text-[10px] font-display font-bold uppercase tracking-[0.12em] text-red-300/70 hover:text-red-200 disabled:opacity-50">
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
           )}

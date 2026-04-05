@@ -1886,6 +1886,10 @@ function initializeDb() {
     db.exec("ALTER TABLE tournaments ADD COLUMN poster_bg TEXT DEFAULT ''");
   }
 
+  if (!tournamentCols2.includes('gif_avatar')) {
+    db.exec("ALTER TABLE tournaments ADD COLUMN gif_avatar TEXT DEFAULT ''");
+  }
+
   // Migrations for players table - elimination tracking
   const playerCols2 = db.prepare("PRAGMA table_info(players)").all().map(c => c.name);
   if (!playerCols2.includes('eliminated_at_phase')) {

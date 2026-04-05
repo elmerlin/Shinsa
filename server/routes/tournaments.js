@@ -56,7 +56,7 @@ router.get('/:id', (req, res) => {
 router.post('/', (req, res) => {
   const db = getDb();
   const id = uuidv4();
-  const { name, location, date, total_rounds, config, avatar } = req.body;
+  const { name, location, date, total_rounds, config, avatar, gif_avatar } = req.body;
 
   const defaultConfig = {
     round_levels: [
@@ -70,10 +70,10 @@ router.post('/', (req, res) => {
   };
 
   db.prepare(`
-    INSERT INTO tournaments (id, name, location, date, total_rounds, config, avatar)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO tournaments (id, name, location, date, total_rounds, config, avatar, gif_avatar)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `).run(id, name, location || '', date || new Date().toISOString().split('T')[0],
-    total_rounds || 3, JSON.stringify(config || defaultConfig), avatar || '');
+    total_rounds || 3, JSON.stringify(config || defaultConfig), avatar || '', gif_avatar || '');
 
   const tournament = db.prepare('SELECT * FROM tournaments WHERE id = ?').get(id);
   db.close();
@@ -83,7 +83,7 @@ router.post('/', (req, res) => {
 
 router.put('/:id', (req, res) => {
   const db = getDb();
-  const { name, location, date, phase, current_round, total_rounds, config, avatar, poster_bg } = req.body;
+  const { name, location, date, phase, current_round, total_rounds, config, avatar, gif_avatar, poster_bg } = req.body;
   const existing = db.prepare('SELECT * FROM tournaments WHERE id = ?').get(req.params.id);
   if (!existing) { db.close(); return res.status(404).json({ error: 'Not found' }); }
 
@@ -97,11 +97,13 @@ router.put('/:id', (req, res) => {
       total_rounds = COALESCE(?, total_rounds),
       config = COALESCE(?, config),
       avatar = COALESCE(?, avatar),
+      gif_avatar = COALESCE(?, gif_avatar),
       poster_bg = COALESCE(?, poster_bg)
     WHERE id = ?
   `).run(name, location, date, phase, current_round, total_rounds,
     config ? JSON.stringify(config) : null,
     avatar !== undefined ? avatar : null,
+    gif_avatar !== undefined ? gif_avatar : null,
     poster_bg !== undefined ? poster_bg : null,
     req.params.id);
 
