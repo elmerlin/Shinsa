@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { GRADIENT_PRESETS, THEME_PRESETS, FONT_SIZES } from './StoryComposerConstants';
 
 export default function TextStoryEditor({ text, onTextChange, style, onStyleChange }) {
   const [tab, setTab] = useState('gradient'); // 'gradient' | 'themed'
+  const [canvasLimitReached, setCanvasLimitReached] = useState(false);
+  const textareaRef = useRef(null);
 
   const gradientId = style.gradientId || GRADIENT_PRESETS[0].id;
   const themeId = style.themeId || THEME_PRESETS[0].id;
@@ -17,6 +19,21 @@ export default function TextStoryEditor({ text, onTextChange, style, onStyleChan
   const isThemed = tab === 'themed';
   const backgroundCSS = isThemed ? activeTheme.background : activeGradient.css;
   const resolvedTextColor = isThemed ? activeTheme.textColor : textColor;
+
+  const handleTextChange = (event) => {
+    const nextText = event.target.value;
+    const isGrowing = nextText.length > text.length;
+    const exceedsCanvas = event.target.scrollHeight > event.target.clientHeight + 2;
+
+    if (isGrowing && exceedsCanvas) {
+      event.target.value = text;
+      setCanvasLimitReached(true);
+      return;
+    }
+
+    setCanvasLimitReached(false);
+    onTextChange(nextText);
+  };
 
   return (
     <div className="flex h-full flex-col">
@@ -39,11 +56,11 @@ export default function TextStoryEditor({ text, onTextChange, style, onStyleChan
         ) : null}
 
         <textarea
+          ref={textareaRef}
           value={text}
-          onChange={(e) => onTextChange(e.target.value)}
+          onChange={handleTextChange}
           placeholder="Type your story..."
-          maxLength={420}
-          className="absolute inset-0 z-10 h-full w-full resize-none bg-transparent px-8 py-8 font-display font-black leading-tight placeholder:opacity-40 focus:outline-none"
+          className="absolute inset-0 z-10 h-full w-full resize-none overflow-hidden bg-transparent px-8 py-8 font-display font-black leading-tight placeholder:opacity-40 focus:outline-none"
           style={{
             fontSize: activeFontSize.css,
             color: resolvedTextColor,
@@ -145,7 +162,9 @@ export default function TextStoryEditor({ text, onTextChange, style, onStyleChan
             </svg>
           </button>
 
-          <span className="ml-auto text-xs text-gray-500">{text.trim().length}/420</span>
+          <span className={`ml-auto text-xs ${canvasLimitReached ? 'text-amber-300' : 'text-gray-500'}`}>
+            {canvasLimitReached ? 'Canvas full' : `${text.trim().length} chars`}
+          </span>
         </div>
       </div>
     </div>
