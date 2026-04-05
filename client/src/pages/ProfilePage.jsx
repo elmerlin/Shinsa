@@ -1053,6 +1053,7 @@ export default function ProfilePage() {
   const [selectedGroupBadge, setSelectedGroupBadge] = useState(null);
   const [selectedAchievementBadge, setSelectedAchievementBadge] = useState(null);
   const [selectedOverviewDateKey, setSelectedOverviewDateKey] = useState('');
+  const heatmapScrollRef = useRef(null);
   const [selectedPlay, setSelectedPlay] = useState(null);
   const [scoreCardStyle, setScoreCardStyle] = useState(() => localStorage.getItem(SCORE_CARD_STYLE_KEY) || 'classic');
   const [classicStoryOpen, setClassicStoryOpen] = useState(false);
@@ -1925,6 +1926,14 @@ export default function ProfilePage() {
     }
   }, [overviewPlayHeatmap, selectedOverviewDateKey]);
 
+  // Auto-scroll heatmap to show the latest day (rightmost)
+  useEffect(() => {
+    const el = heatmapScrollRef.current;
+    if (el && overviewPlayHeatmap.weeks.length > 0) {
+      el.scrollLeft = el.scrollWidth;
+    }
+  }, [overviewPlayHeatmap.weeks.length]);
+
   const selectedOverviewDay = selectedOverviewDateKey
     ? overviewPlayHeatmap.daysByKey[selectedOverviewDateKey] || null
     : null;
@@ -2299,7 +2308,7 @@ export default function ProfilePage() {
 
         {overviewPlayHeatmap.weeks.length > 0 ? (
           <>
-            <div className="overflow-x-auto pb-2">
+            <div ref={heatmapScrollRef} className="overflow-x-auto pb-2">
               <div className="inline-block min-w-max">
                 <div className="flex mb-1">
                   <div className="w-8 shrink-0" />
