@@ -11,7 +11,7 @@ const { splitWcPersonalContent } = require('./lib/weeklyChallengePersonalMarker'
 const SHARE_MARKER_REGEX = /\[\[SHINSA_SHARE_V1:([A-Za-z0-9+/=_-]+)\]\]/;
 const SUMMARY_MARKER_REGEX = /\[\[SHINSA_SUMMARY_V1:[A-Za-z0-9+/=_-]+\]\]/g;
 const PLAN_MARKER_REGEX = /\[\[SHINSA_SESSION_PLAN_V1:[A-Za-z0-9+/=_-]+\]\]/g;
-const SHARE_PREVIEW_RENDER_VERSION = '20260318d';
+const SHARE_PREVIEW_RENDER_VERSION = '20260405a';
 const SONG_ALIAS_OVERRIDES = {
   'papasito (feat. kutina)': 'papasito feat. kutina',
   '파파시토 (feat. kutina)': 'papasito feat. kutina',
