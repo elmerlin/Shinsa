@@ -1800,19 +1800,19 @@ async function renderPlayOgJpeg({
         <stop offset="100%" stop-color="rgba(255,87,164,0.12)"/>
       </linearGradient>
       <linearGradient id="cardShade" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="rgba(4,8,16,0.04)"/>
-        <stop offset="0.45" stop-color="rgba(5,9,18,0.08)"/>
-        <stop offset="1" stop-color="rgba(5,9,18,0.46)"/>
+        <stop offset="0%" stop-color="rgba(4,8,16,0.02)"/>
+        <stop offset="0.45" stop-color="rgba(5,9,18,0.05)"/>
+        <stop offset="1" stop-color="rgba(5,9,18,0.28)"/>
       </linearGradient>
       <linearGradient id="leftRailShade" x1="0" y1="0" x2="1" y2="0">
-        <stop offset="0%" stop-color="rgba(4,8,16,0.50)"/>
-        <stop offset="28%" stop-color="rgba(4,8,16,0.28)"/>
+        <stop offset="0%" stop-color="rgba(4,8,16,0.34)"/>
+        <stop offset="28%" stop-color="rgba(4,8,16,0.16)"/>
         <stop offset="55%" stop-color="rgba(4,8,16,0.0)"/>
       </linearGradient>
       <linearGradient id="rightRailShade" x1="0" y1="0" x2="1" y2="0">
         <stop offset="45%" stop-color="rgba(4,8,16,0.0)"/>
-        <stop offset="72%" stop-color="rgba(4,8,16,0.20)"/>
-        <stop offset="100%" stop-color="rgba(4,8,16,0.42)"/>
+        <stop offset="72%" stop-color="rgba(4,8,16,0.12)"/>
+        <stop offset="100%" stop-color="rgba(4,8,16,0.28)"/>
       </linearGradient>
       <linearGradient id="innerGlow" x1="0" y1="0" x2="1" y2="1">
         <stop offset="0%" stop-color="rgba(125,211,252,0.12)"/>
@@ -1821,7 +1821,7 @@ async function renderPlayOgJpeg({
       </linearGradient>
       <linearGradient id="bottomVignette" x1="0" y1="0" x2="0" y2="1">
         <stop offset="0%" stop-color="rgba(7,12,22,0.0)"/>
-        <stop offset="100%" stop-color="rgba(5,9,18,0.32)"/>
+        <stop offset="100%" stop-color="rgba(5,9,18,0.18)"/>
       </linearGradient>
       <radialGradient id="centerReveal" cx="50%" cy="38%" r="55%">
         <stop offset="0%" stop-color="rgba(255,255,255,0.08)"/>
@@ -1843,7 +1843,7 @@ async function renderPlayOgJpeg({
     <text x="66" y="70" fill="rgba(186,230,253,0.86)" font-size="16" font-weight="800" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial" letter-spacing="4">RUN DETAILS</text>
     <text x="${width - 148}" y="60" fill="rgba(255,255,255,0.76)" font-size="22" text-anchor="end" font-weight="700" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(username)}</text>
 
-    <rect x="${cardX}" y="${cardY}" width="${cardW}" height="${cardH}" rx="30" fill="rgba(5,10,20,0.12)" stroke="rgba(172,196,255,0.18)" />
+    <rect x="${cardX}" y="${cardY}" width="${cardW}" height="${cardH}" rx="30" fill="rgba(5,10,20,0.05)" stroke="rgba(172,196,255,0.18)" />
     <rect x="${cardX}" y="${cardY}" width="${cardW}" height="${cardH}" rx="30" fill="url(#cardShade)" />
     <rect x="${cardX}" y="${cardY}" width="${cardW}" height="${cardH}" rx="30" fill="url(#leftRailShade)" />
     <rect x="${cardX}" y="${cardY}" width="${cardW}" height="${cardH}" rx="30" fill="url(#rightRailShade)" />
@@ -2403,8 +2403,8 @@ function registerSharePreviewRoutes(app, { clientBuildDir }) {
     try {
       const origin = getRequestOrigin(req);
       const resolvedJacketUrl = resolveUpscoreItemJacketUrl(db, play);
-      const preferredArtworkUrl = String(play.background_url || '').trim() || resolvedJacketUrl;
-      const fallbackArtworkUrl = resolvedJacketUrl;
+      const preferredArtworkUrl = resolvedJacketUrl || String(play.background_url || '').trim();
+      const fallbackArtworkUrl = String(play.background_url || '').trim();
       const artworkBuffer = await loadPreviewArtworkBuffer({
         clientBuildDir,
         origin,
