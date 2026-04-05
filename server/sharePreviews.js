@@ -1827,7 +1827,7 @@ async function renderPlayOgJpeg({
         <stop offset="0%" stop-color="rgba(255,255,255,0.08)"/>
         <stop offset="60%" stop-color="rgba(255,255,255,0.02)"/>
         <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
-      </linearGradient>
+      </radialGradient>
       <linearGradient id="levelGrad" x1="0" y1="0" x2="1" y2="1">
         <stop offset="0%" stop-color="${escapeXml(modeAccent.from)}"/>
         <stop offset="100%" stop-color="${escapeXml(modeAccent.to)}"/>
