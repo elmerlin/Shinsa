@@ -170,6 +170,8 @@ export default function SkillTitleUnlockCard({ clear, className = '' }) {
     { kind: 'next', node: next, ...getNodePosition('next') },
   ];
   const [activeKind, setActiveKind] = useState('current');
+  const activeNode = nodes.find((entry) => entry.kind === activeKind) || nodes[1];
+  const activeMeta = getNodeMeta(activeNode.kind, activeNode.node);
 
   return (
     <div
@@ -194,14 +196,14 @@ export default function SkillTitleUnlockCard({ clear, className = '' }) {
             {earnedCopy}
           </p>
         </div>
-        <span className={cx('shrink-0 rounded-full border px-2.5 py-1.5 text-[10px] font-display font-bold uppercase tracking-[0.14em] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]', theme.chip)}>
+        <span className={cx('shrink-0 rounded-full border px-2.5 py-1.5 text-[10px] font-display font-bold uppercase tracking-[0.14em] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] max-[380px]:w-full max-[380px]:text-center', theme.chip)}>
           {familyLabel}
         </span>
       </div>
 
       <div className="mt-4 space-y-3">
         <div
-          className="skill-title-saga-stage relative min-h-[11.75rem] overflow-hidden rounded-[1.2rem] border border-piu-border/60 px-4 pb-6 pt-6 sm:min-h-[12.5rem] sm:px-6 sm:pt-7"
+          className="skill-title-saga-stage relative min-h-[9.75rem] overflow-hidden rounded-[1.2rem] border border-piu-border/60 px-3 pb-5 pt-5 sm:min-h-[12.5rem] sm:px-6 sm:pb-6 sm:pt-7"
           style={{
             '--skill-route-color': theme.line,
             '--skill-route-glow': theme.glow,
@@ -239,7 +241,7 @@ export default function SkillTitleUnlockCard({ clear, className = '' }) {
                 type="button"
                 onClick={() => setActiveKind(kind)}
                 className={cx(
-                  'absolute flex min-w-[4rem] flex-col focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a1020]',
+                  'absolute flex min-w-[3.2rem] flex-col focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a1020] sm:min-w-[4rem]',
                   align
                 )}
                 style={{ left, top, transform }}
@@ -248,12 +250,12 @@ export default function SkillTitleUnlockCard({ clear, className = '' }) {
               >
                 <span
                   className={cx(
-                    'skill-title-saga__orb block h-10 w-10 rounded-full border-[3px] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]',
+                    'skill-title-saga__orb block h-8 w-8 rounded-full border-[3px] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] sm:h-10 sm:w-10',
                     dotClass,
                     isSelected && 'is-active scale-[1.08]'
                   )}
                 />
-                <span className={cx('mt-2 block text-[10px] font-display font-bold uppercase tracking-[0.2em] transition-colors duration-300', isSelected ? 'text-white' : 'text-white/72')}>
+                <span className={cx('mt-1.5 block text-[9px] font-display font-bold uppercase tracking-[0.16em] transition-colors duration-300 sm:mt-2 sm:text-[10px] sm:tracking-[0.2em]', isSelected ? 'text-white' : 'text-white/72')}>
                   {label}
                 </span>
               </button>
@@ -261,13 +263,65 @@ export default function SkillTitleUnlockCard({ clear, className = '' }) {
           })}
         </div>
 
-        <div className="grid gap-2.5 md:grid-cols-3">
+        <div className="grid grid-cols-3 gap-2 md:hidden">
           {nodes.map(({ kind, node }) => {
             const meta = getNodeMeta(kind, node);
             const isActive = kind === activeKind;
             return (
               <button
                 key={`${kind}-detail-${node?.id || node?.name || 'node'}`}
+                type="button"
+                onClick={() => setActiveKind(kind)}
+                className={cx(
+                  'skill-title-checkpoint rounded-[0.95rem] border px-2.5 py-2.5 text-left',
+                  theme.detail,
+                  isActive ? theme.detailActive : 'hover:border-white/18 hover:bg-white/[0.03]'
+                )}
+                aria-pressed={isActive}
+              >
+                <p className="text-[8px] font-display font-bold uppercase tracking-[0.16em] text-gray-500">
+                  {meta.label}
+                </p>
+                <p className="mt-1.5 text-[12px] font-display font-bold leading-tight text-white">
+                  {meta.title}
+                </p>
+                <p className="mt-2 text-[9px] font-display font-bold uppercase tracking-[0.12em] text-white/88">
+                  {meta.passCopy}
+                </p>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="border-t border-piu-border/45 pt-3 md:hidden">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <p className="text-[9px] font-display font-bold uppercase tracking-[0.18em] text-gray-500">
+                {activeMeta.label}
+              </p>
+              <p className="mt-1.5 text-[15px] font-display font-bold leading-tight text-white">
+                {activeMeta.title}
+              </p>
+            </div>
+            <p className="text-right text-[9px] font-display font-bold uppercase tracking-[0.14em] text-white/88">
+              {activeMeta.passCopy}
+            </p>
+          </div>
+          <p className="mt-2 text-[10px] font-display font-bold uppercase tracking-[0.14em] text-gray-400">
+            {activeMeta.track}
+          </p>
+          <p className="mt-2 text-[12px] leading-snug text-gray-300">
+            {activeMeta.pointsCopy}
+          </p>
+        </div>
+
+        <div className="hidden gap-2.5 md:grid md:grid-cols-3">
+          {nodes.map(({ kind, node }) => {
+            const meta = getNodeMeta(kind, node);
+            const isActive = kind === activeKind;
+            return (
+              <button
+                key={`${kind}-desktop-detail-${node?.id || node?.name || 'node'}`}
                 type="button"
                 onClick={() => setActiveKind(kind)}
                 className={cx(
