@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   getTournament, getPlayers, getMatches, getPhases,
   generateRoundRobin, generateGauntlet,
@@ -207,15 +207,25 @@ export default function TournamentView() {
 
   const config = tournament.config || {};
   const canEditSetup = tournament.phase === 'SETUP' && !!user?.is_admin;
-  const editSetupAction = canEditSetup ? (
-    <button
-      type="button"
-      onClick={() => navigate(`/tournament/${id}/edit`)}
-      className="rounded-full border border-white/10 bg-white/6 px-4 py-2 text-xs font-display font-bold uppercase tracking-[0.14em] text-zinc-100 transition-colors hover:border-piu-accent/35 hover:bg-piu-accent/12"
-    >
-      Edit Setup
-    </button>
-  ) : null;
+  const editSetupAction = (
+    <div className="flex items-center gap-2">
+      {canEditSetup && (
+        <button
+          type="button"
+          onClick={() => navigate(`/tournament/${id}/edit`)}
+          className="rounded-full border border-white/10 bg-white/6 px-4 py-2 text-xs font-display font-bold uppercase tracking-[0.14em] text-zinc-100 transition-colors hover:border-piu-accent/35 hover:bg-piu-accent/12"
+        >
+          Edit Setup
+        </button>
+      )}
+      <Link
+        to={`/tournament/${id}/poster`}
+        className="rounded-full border border-piu-accent/20 bg-piu-accent/10 px-3 py-2 text-xs font-display font-bold uppercase tracking-[0.14em] text-rose-100 transition-colors hover:border-piu-accent/30 hover:text-white"
+      >
+        Poster
+      </Link>
+    </div>
+  );
 
   // ── Phase-mode rendering ──
   if (isPhaseMode) {

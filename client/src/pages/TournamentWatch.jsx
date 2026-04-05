@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { getTournament, getPlayers, getMatches, getPhases } from '../utils/api';
 import { FORMAT_LABELS, FORMAT_ICONS } from '../utils/tournamentConstants';
 import SwissRound from '../components/SwissRound';
@@ -183,12 +183,20 @@ export default function TournamentWatch() {
               isActive ? 'Live refresh' : 'Viewer mode',
             ]}
             action={(
-              <button
-                onClick={handleShare}
-                className="rounded-full border border-piu-accent/20 bg-piu-accent/10 px-3 py-2 text-xs font-display font-bold uppercase tracking-[0.16em] text-rose-100 transition-colors hover:border-piu-accent/30 hover:text-white"
-              >
-                {copied ? 'Copied!' : 'Share'}
-              </button>
+              <div className="flex items-center gap-2">
+                <Link
+                  to={`/tournament/${id}/poster`}
+                  className="rounded-full border border-white/10 bg-white/6 px-3 py-2 text-xs font-display font-bold uppercase tracking-[0.14em] text-zinc-100 transition-colors hover:border-piu-accent/35 hover:bg-piu-accent/12"
+                >
+                  Poster
+                </Link>
+                <button
+                  onClick={handleShare}
+                  className="rounded-full border border-piu-accent/20 bg-piu-accent/10 px-3 py-2 text-xs font-display font-bold uppercase tracking-[0.16em] text-rose-100 transition-colors hover:border-piu-accent/30 hover:text-white"
+                >
+                  {copied ? 'Copied!' : 'Share'}
+                </button>
+              </div>
             )}
             flow={<TournamentPhaseTimeline phases={phases} />}
           />
@@ -313,12 +321,20 @@ export default function TournamentWatch() {
             tournament.phase === 'COMPLETED' ? 'Finished' : 'Spectator view',
           ]}
           action={(
-            <button
-              onClick={handleShare}
-              className="rounded-full border border-piu-accent/20 bg-piu-accent/10 px-3 py-2 text-xs font-display font-bold uppercase tracking-[0.16em] text-rose-100 transition-colors hover:border-piu-accent/30 hover:text-white"
-            >
-              {copied ? 'Copied!' : 'Share'}
-            </button>
+            <div className="flex items-center gap-2">
+              <Link
+                to={`/tournament/${id}/poster`}
+                className="rounded-full border border-white/10 bg-white/6 px-3 py-2 text-xs font-display font-bold uppercase tracking-[0.14em] text-zinc-100 transition-colors hover:border-piu-accent/35 hover:bg-piu-accent/12"
+              >
+                Poster
+              </Link>
+              <button
+                onClick={handleShare}
+                className="rounded-full border border-piu-accent/20 bg-piu-accent/10 px-3 py-2 text-xs font-display font-bold uppercase tracking-[0.16em] text-rose-100 transition-colors hover:border-piu-accent/30 hover:text-white"
+              >
+                {copied ? 'Copied!' : 'Share'}
+              </button>
+            </div>
           )}
         />
       </div>

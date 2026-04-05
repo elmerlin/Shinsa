@@ -63,6 +63,7 @@ const LiveOverlayPage = lazy(() => import('./pages/LiveOverlayPage'));
 const TournamentWatch = lazy(() => import('./pages/TournamentWatch'));
 const TournamentOverlay = lazy(() => import('./pages/TournamentOverlay'));
 const TournamentEmbed = lazy(() => import('./pages/TournamentEmbed'));
+const TournamentPoster = lazy(() => import('./pages/TournamentPoster'));
 const PrivacyPolicyPage = lazy(() => import('./pages/PrivacyPolicyPage'));
 const StoryArchivePage = lazy(() => import('./pages/StoryArchivePage'));
 const TranslationEditorDrawer = lazy(() => import('./components/TranslationEditorDrawer'));
@@ -1455,6 +1456,7 @@ export default function App() {
             <Route path="/tournament/:id/watch" element={<TournamentWatch />} />
             <Route path="/tournament/:id/overlay" element={<TournamentOverlay />} />
             <Route path="/tournament/:id/embed" element={<TournamentEmbed />} />
+            <Route path="/tournament/:id/poster" element={<TournamentPoster />} />
             <Route path="/tournament/:id/*" element={<TournamentView />} />
             <Route path="/match/:id" element={<MatchView />} />
             <Route path="/duel/new" element={<DuelSetup />} />
