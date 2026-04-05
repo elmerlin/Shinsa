@@ -16,6 +16,16 @@ const SONG_ALIAS_OVERRIDES = {
   'papasito (feat. kutina)': 'papasito feat. kutina',
   '파파시토 (feat. kutina)': 'papasito feat. kutina',
 };
+const PLATE_NAMES = {
+  PG: 'PERFECT GAME',
+  UG: 'ULTIMATE GAME',
+  EG: 'EXTREME GAME',
+  SG: 'SUPERB GAME',
+  MG: 'MARVELOUS GAME',
+  TG: 'TALENTED GAME',
+  FG: 'FAIR GAME',
+  RG: 'ROUGH GAME',
+};
 
 function getRequestOrigin(req) {
   // Respect proxies (Render/Fly/NGINX) while still working locally.
@@ -331,6 +341,39 @@ function formatDisplayGrade(rawGrade) {
   if (!isBroken) return stripped;
 
   return stripped.replace(/(?:[_-]p|\+)$/i, '');
+}
+
+function formatPreviewDateLabel(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  const hasExplicitTimezone = /(?:z|[+-]\d{2}:?\d{2})$/i.test(raw);
+  const normalized = raw.includes('T') ? raw : raw.replace(' ', 'T');
+  const candidate = hasExplicitTimezone || /^\d{4}-\d{2}-\d{2}$/.test(normalized)
+    ? normalized
+    : `${normalized}Z`;
+  const parsed = new Date(candidate);
+  if (Number.isNaN(parsed.getTime())) {
+    if (raw.length >= 16) return raw.slice(0, 16).replace('T', ' ');
+    return raw;
+  }
+  const hasTime = /(?:T|\s)\d{2}:\d{2}/.test(raw);
+  return hasTime
+    ? parsed.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    })
+    : parsed.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+}
+
+function getPlateName(value) {
+  const code = String(value || '').trim().toUpperCase();
+  return PLATE_NAMES[code] || code;
 }
 
 function summarizeUpscore(upscore) {
@@ -1636,65 +1679,172 @@ async function renderPlayOgJpeg({
   height = 630,
 }) {
   const username = brandAssets?.usernameLabel || (play?.username ? `@${play.username}` : '@player');
-  const title = textSnippet(play?.song_title || 'Unknown chart', 34);
+  const songTitle = String(play?.song_title || 'Unknown chart').trim() || 'Unknown chart';
+  const titleLines = wrapTextByChars(songTitle, 24, 2).lines;
+  const title = titleLines.length > 0 ? titleLines : [textSnippet(songTitle, 28)];
   const badgeText = chartBadgeLabel(play?.mode, play?.level);
   const modeAccent = getModeAccent(play?.mode);
   const gradeText = formatDisplayGrade(play?.grade || '') || '--';
   const gradeAccent = getGradeAccent(gradeText);
   const scoreText = formatScore(play?.score);
-  const playedAt = normalizeWhitespace(String(play?.date_played || play?.played_at_utc || ''));
-  const subtitle = playedAt ? textSnippet(playedAt, 40) : 'Recent score on Pump Shinsa';
-  const badgeWidth = textWidthEstimate(badgeText, 14, 28);
-  const artworkLeft = 82;
-  const artworkTop = 164;
-  const artworkWidth = 208;
-  const artworkHeight = 208;
+  const playedAt = formatPreviewDateLabel(play?.played_at_utc || play?.date_played || '');
+  const playedAtLabel = playedAt ? `Played ${playedAt}` : '';
+  const machineName = normalizeWhitespace(String(play?.machine_name || ''));
+  const chartLine = [
+    String(play?.mode || '').trim() && parseInt(play?.level, 10) > 0
+      ? `${String(play.mode).trim()} ${parseInt(play.level, 10)}`
+      : '',
+    machineName,
+  ].filter(Boolean).join(' • ');
+  const skillTitle = normalizeWhitespace(String(play?.skill_title || ''));
+  const plateName = getPlateName(play?.plate || '');
+  const overRank = parseInt(play?.over_top100_rank, 10) || 0;
+  const judgments = [
+    { key: 'PERFECT', value: parseInt(play?.perfect, 10) || 0, color: '#7dd3fc' },
+    { key: 'GREAT', value: parseInt(play?.great, 10) || 0, color: '#86efac' },
+    { key: 'GOOD', value: parseInt(play?.good, 10) || 0, color: '#fde047' },
+    { key: 'BAD', value: parseInt(play?.bad, 10) || 0, color: '#f5a5ff' },
+    { key: 'MISS', value: parseInt(play?.miss, 10) || 0, color: '#fda4af' },
+  ];
+  const showJudgments = judgments.some((item) => item.value > 0);
+  const pillItems = [
+    skillTitle ? { text: skillTitle, fill: 'rgba(34,211,238,0.12)', stroke: 'rgba(103,232,249,0.34)', color: '#d9f9ff' } : null,
+    overRank > 0 ? { text: `TOP #${overRank}`, fill: 'rgba(250,204,21,0.12)', stroke: 'rgba(250,204,21,0.36)', color: '#fef08a' } : null,
+    badgeText ? { text: badgeText, fill: modeAccent.fill, stroke: modeAccent.border, color: '#ffffff' } : null,
+  ].filter(Boolean);
 
-  let artworkOverlay = null;
+  const cardX = 68;
+  const cardY = 102;
+  const cardW = width - 136;
+  const cardH = 468;
+  const levelSize = 112;
+  const levelX = cardX + cardW - levelSize - 36;
+  const levelY = cardY + 42;
+  const playerAvatarSize = 42;
+  const playerAvatarX = cardX + 40;
+  const playerAvatarY = cardY + 132;
+
+  let cardArtworkOverlay = null;
   if (artworkBuffer?.length) {
-    artworkOverlay = {
+    cardArtworkOverlay = {
       input: await sharp(artworkBuffer)
         .rotate()
-        .resize(artworkWidth, artworkHeight, { fit: 'cover' })
+        .resize(cardW, cardH, { fit: 'cover' })
         .composite([{
-          input: Buffer.from(`<svg width="${artworkWidth}" height="${artworkHeight}" xmlns="http://www.w3.org/2000/svg"><rect x="0" y="0" width="${artworkWidth}" height="${artworkHeight}" rx="28" ry="28" fill="#fff"/></svg>`),
+          input: Buffer.from(`<svg width="${cardW}" height="${cardH}" xmlns="http://www.w3.org/2000/svg"><rect x="0" y="0" width="${cardW}" height="${cardH}" rx="30" ry="30" fill="#fff"/></svg>`),
           blend: 'dest-in',
         }])
         .png()
         .toBuffer(),
-      top: artworkTop,
-      left: artworkLeft,
+      top: cardY,
+      left: cardX,
     };
   }
+
+  let playerAvatarOverlay = null;
+  if (brandAssets?.avatarBuffer?.length) {
+    playerAvatarOverlay = {
+      input: await sharp(brandAssets.avatarBuffer)
+        .resize(playerAvatarSize, playerAvatarSize, { fit: 'cover' })
+        .png()
+        .toBuffer(),
+      top: playerAvatarY,
+      left: playerAvatarX,
+    };
+  }
+
+  const titleSvg = title.map((line, index) => {
+    const y = cardY + 74 + (index * 42);
+    return `<text x="${cardX + 40}" y="${y}" fill="#ffffff" font-size="40" font-weight="900" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(line)}</text>`;
+  }).join('\n');
+
+  let pillRowX = cardX + 40;
+  const pillRowY = cardY + 186;
+  const pillsSvg = pillItems.map((pill) => {
+    const pillWidth = textWidthEstimate(pill.text, 9, 28);
+    const svg = `
+      <rect x="${pillRowX}" y="${pillRowY}" width="${pillWidth}" height="28" rx="14" fill="${escapeXml(pill.fill)}" stroke="${escapeXml(pill.stroke)}" />
+      <text x="${pillRowX + Math.round(pillWidth / 2)}" y="${pillRowY + 19}" text-anchor="middle" fill="${escapeXml(pill.color)}" font-size="14" font-weight="800" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(pill.text)}</text>
+    `;
+    pillRowX += pillWidth + 12;
+    return svg;
+  }).join('\n');
+
+  const judgmentPanelY = cardY + cardH - 92;
+  const judgmentItemWidth = Math.floor((cardW - 64) / 5);
+  const judgmentsSvg = showJudgments
+    ? judgments.map((item, index) => {
+      const x = cardX + 28 + (index * judgmentItemWidth);
+      const centerX = x + Math.floor(judgmentItemWidth / 2);
+      return `
+        <text x="${centerX}" y="${judgmentPanelY + 30}" text-anchor="middle" fill="${escapeXml(item.color)}" font-size="14" font-weight="800" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${item.key}</text>
+        <text x="${centerX}" y="${judgmentPanelY + 64}" text-anchor="middle" fill="#ffffff" font-size="28" font-weight="900" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace">${escapeXml(formatScore(item.value))}</text>
+      `;
+    }).join('\n')
+    : `<text x="${cardX + 36}" y="${judgmentPanelY + 49}" fill="rgba(252,211,77,0.92)" font-size="18" font-weight="700" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">Judgment breakdown unavailable for this score.</text>`;
 
   const textSvg = `
   <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
     <defs>
-      <linearGradient id="artShade" x1="0" y1="1" x2="0" y2="0">
-        <stop offset="0%" stop-color="rgba(0,0,0,0.30)"/>
-        <stop offset="100%" stop-color="rgba(255,255,255,0.0)"/>
+      <linearGradient id="pageBg" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#070d18"/>
+        <stop offset="55%" stop-color="#0b1326"/>
+        <stop offset="100%" stop-color="#11152a"/>
       </linearGradient>
+      <linearGradient id="topBar" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0%" stop-color="rgba(53,123,255,0.18)"/>
+        <stop offset="100%" stop-color="rgba(255,87,164,0.12)"/>
+      </linearGradient>
+      <linearGradient id="cardShade" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="rgba(4,8,16,0.12)"/>
+        <stop offset="0.48" stop-color="rgba(5,9,18,0.36)"/>
+        <stop offset="1" stop-color="rgba(5,9,18,0.90)"/>
+      </linearGradient>
+      <linearGradient id="innerGlow" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="rgba(125,211,252,0.20)"/>
+        <stop offset="55%" stop-color="rgba(125,211,252,0.0)"/>
+        <stop offset="100%" stop-color="rgba(236,72,153,0.10)"/>
+      </linearGradient>
+      <linearGradient id="levelGrad" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="${escapeXml(modeAccent.from)}"/>
+        <stop offset="100%" stop-color="${escapeXml(modeAccent.to)}"/>
+      </linearGradient>
+      <radialGradient id="pageGlow" cx="18%" cy="12%" r="80%">
+        <stop offset="0%" stop-color="rgba(56,189,248,0.18)"/>
+        <stop offset="100%" stop-color="rgba(56,189,248,0)"/>
+      </radialGradient>
     </defs>
-    <rect x="0" y="0" width="${width}" height="${height}" fill="#07111c" />
-    <rect x="0" y="0" width="${width}" height="88" fill="rgba(96,165,250,0.16)" />
-    <rect x="40" y="24" width="${width - 80}" height="${height - 48}" rx="28" fill="rgba(255,255,255,0.02)" stroke="rgba(148,163,184,0.10)" />
+    <rect x="0" y="0" width="${width}" height="${height}" fill="url(#pageBg)" />
+    <rect x="0" y="0" width="${width}" height="${height}" fill="url(#pageGlow)" />
+    <rect x="0" y="0" width="${width}" height="88" fill="url(#topBar)" />
+    <text x="66" y="70" fill="rgba(186,230,253,0.86)" font-size="16" font-weight="800" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial" letter-spacing="4">RUN DETAILS</text>
     <text x="${width - 148}" y="60" fill="rgba(255,255,255,0.76)" font-size="22" text-anchor="end" font-weight="700" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(username)}</text>
 
-    <text x="64" y="136" fill="white" font-size="46" font-weight="900" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">Score Card</text>
-    <text x="64" y="160" fill="rgba(255,255,255,0.64)" font-size="20" font-weight="700" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(subtitle)}</text>
+    <rect x="${cardX}" y="${cardY}" width="${cardW}" height="${cardH}" rx="30" fill="rgba(5,10,20,0.48)" stroke="rgba(172,196,255,0.18)" />
+    <rect x="${cardX}" y="${cardY}" width="${cardW}" height="${cardH}" rx="30" fill="url(#cardShade)" />
+    <rect x="${cardX}" y="${cardY}" width="${cardW}" height="${cardH}" rx="30" fill="url(#innerGlow)" />
 
-    <rect x="${artworkLeft}" y="${artworkTop}" width="${artworkWidth}" height="${artworkHeight}" rx="28" fill="rgba(17,24,39,0.95)" stroke="rgba(255,255,255,0.08)" />
-    <rect x="${artworkLeft}" y="${artworkTop}" width="${artworkWidth}" height="${artworkHeight}" rx="28" fill="url(#artShade)" />
+    ${titleSvg}
 
-    <text x="330" y="252" fill="white" font-size="40" font-weight="800" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(title)}</text>
-    <rect x="330" y="274" width="${badgeWidth}" height="28" rx="14" fill="${escapeXml(modeAccent.fill)}" stroke="${escapeXml(modeAccent.border)}" />
-    <text x="${330 + Math.round(badgeWidth / 2)}" y="293" text-anchor="middle" fill="white" font-size="16" font-weight="800" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(badgeText)}</text>
+    <rect x="${levelX}" y="${levelY}" width="${levelSize}" height="${levelSize}" rx="${Math.round(levelSize / 2)}" fill="url(#levelGrad)" stroke="rgba(255,255,255,0.40)" stroke-width="3" />
+    <circle cx="${levelX + Math.round(levelSize / 2)}" cy="${levelY + Math.round(levelSize / 2)}" r="${Math.round(levelSize / 2) - 12}" fill="rgba(8,14,24,0.34)" />
+    <text x="${levelX + Math.round(levelSize / 2)}" y="${levelY + 34}" text-anchor="middle" fill="rgba(222,234,247,0.86)" font-size="16" font-weight="800" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">LEVEL</text>
+    <text x="${levelX + Math.round(levelSize / 2)}" y="${levelY + 76}" text-anchor="middle" fill="#ffffff" font-size="42" font-weight="900" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(String(parseInt(play?.level, 10) || '?'))}</text>
 
-    <text x="330" y="368" fill="rgba(255,255,255,0.58)" font-size="20" font-weight="700" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">Score</text>
-    <text x="330" y="420" fill="white" font-size="56" font-weight="900" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace">${escapeXml(scoreText)}</text>
+    ${playerAvatarOverlay ? `<circle cx="${playerAvatarX + Math.round(playerAvatarSize / 2)}" cy="${playerAvatarY + Math.round(playerAvatarSize / 2)}" r="${Math.round(playerAvatarSize / 2) + 2}" fill="none" stroke="rgba(255,255,255,0.22)" stroke-width="2" />` : ''}
+    <text x="${cardX + 40 + (playerAvatarOverlay ? 58 : 0)}" y="${cardY + 148}" fill="#ffffff" font-size="20" font-weight="800" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(String(play?.username || 'Player'))}</text>
+    <text x="${cardX + 40 + (playerAvatarOverlay ? 58 : 0)}" y="${cardY + 172}" fill="rgba(214,224,240,0.82)" font-size="15" font-weight="600" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml([playedAtLabel, chartLine].filter(Boolean).join(' • ') || 'Recent score on Pump Shinsa')}</text>
 
-    <text x="330" y="492" fill="rgba(255,255,255,0.58)" font-size="20" font-weight="700" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">Grade</text>
-    <text x="330" y="544" fill="${escapeXml(gradeAccent)}" font-size="52" font-weight="900" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(gradeText)}</text>
+    ${pillsSvg}
+
+    <text x="${cardX + 40}" y="${cardY + 326}" fill="${play?.is_stage_break ? '#fda4af' : '#ffffff'}" font-size="${play?.is_stage_break ? 46 : 62}" font-weight="900" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(play?.is_stage_break ? 'STAGE BREAK' : scoreText)}</text>
+    ${plateName ? `<text x="${cardX + 40}" y="${cardY + 358}" fill="rgba(250,226,150,0.92)" font-size="16" font-weight="800" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial" letter-spacing="1.5">${escapeXml(plateName)}</text>` : ''}
+
+    <text x="${cardX + cardW - 40}" y="${cardY + 314}" text-anchor="end" fill="${escapeXml(gradeAccent)}" font-size="70" font-weight="900" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(gradeText)}</text>
+    ${badgeText ? `<text x="${cardX + cardW - 40}" y="${cardY + 344}" text-anchor="end" fill="rgba(214,224,240,0.80)" font-size="18" font-weight="700" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(String(play?.mode || '').trim())} chart</text>` : ''}
+
+    <rect x="${cardX + 20}" y="${judgmentPanelY}" width="${cardW - 40}" height="76" rx="22" fill="rgba(3,7,15,0.52)" stroke="rgba(255,255,255,0.10)" />
+    ${judgmentsSvg}
   </svg>
   `;
 
@@ -1707,9 +1857,10 @@ async function renderPlayOgJpeg({
     },
   })
     .composite([
+      ...(cardArtworkOverlay ? [cardArtworkOverlay] : []),
       { input: Buffer.from(textSvg) },
       ...buildBrandComposites({ width, brandAssets }),
-      ...(artworkOverlay ? [artworkOverlay] : []),
+      ...(playerAvatarOverlay ? [playerAvatarOverlay] : []),
     ])
     .jpeg({ quality: 88, mozjpeg: true })
     .toBuffer();
@@ -2210,7 +2361,7 @@ function registerSharePreviewRoutes(app, { clientBuildDir }) {
 
     const db = getDb();
     const play = db.prepare(`
-      SELECT rp.*, u.id AS user_id, u.username, u.avatar, u.avatar_v
+      SELECT rp.*, u.id AS user_id, u.username, u.avatar, u.avatar_v, u.skill_title
       FROM user_recently_played rp
       JOIN users u ON rp.user_id = u.id
       WHERE rp.id = ?
@@ -2264,7 +2415,7 @@ function registerSharePreviewRoutes(app, { clientBuildDir }) {
 
     const db = getDb();
     const play = db.prepare(`
-      SELECT rp.*, u.id AS user_id, u.username
+      SELECT rp.*, u.id AS user_id, u.username, u.skill_title
       FROM user_recently_played rp
       JOIN users u ON rp.user_id = u.id
       WHERE rp.id = ?
