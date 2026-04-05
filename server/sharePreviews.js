@@ -2948,6 +2948,342 @@ function registerSharePreviewRoutes(app, { clientBuildDir }) {
     res.set('Content-Type', 'text/html');
     return res.send(html);
   });
+
+  // ═══════════════════════════════════════════════════════════
+  //  TOURNAMENT POSTER — OG image + meta injection
+  // ═══════════════════════════════════════════════════════════
+
+  const TOURNAMENT_FORMAT_LABELS = {
+    round_robin: 'Round Robin', pools: 'Pools', single_elim: 'Single Elimination',
+    double_elim: 'Double Elimination', gauntlet: 'Gauntlet', hour_of_power: 'Hour of Power', b15: 'Best 15',
+  };
+  const TOURNAMENT_FORMAT_ICONS = {
+    round_robin: '\uD83D\uDD04', pools: '\uD83C\uDFCA', single_elim: '\uD83C\uDFC6',
+    double_elim: '\uD83E\uDD4A', gauntlet: '\u2694\uFE0F', hour_of_power: '\u23F1\uFE0F', b15: '\uD83C\uDFAF',
+  };
+
+  function formatTournamentDateServer(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+      const [y, m, d] = raw.split('-').map(Number);
+      const date = new Date(Date.UTC(y, m - 1, d));
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+    }
+    return raw;
+  }
+
+  async function renderTournamentOgJpeg({ tournament, players, phases, clientBuildDir, origin }) {
+    const W = 1200, H = 630;
+    const title = escapeXml(String(tournament.name || 'Tournament').trim());
+    const date = escapeXml(formatTournamentDateServer(tournament.date));
+    const location = escapeXml(String(tournament.location || '').trim());
+    const dateLoc = [date, location].filter(Boolean).join('  \u00B7  ');
+
+    // Determine format flow
+    const displayPhases = phases.length > 0 ? phases : [{ format: tournament.config?.gauntlet_enabled ? 'gauntlet' : 'round_robin' }];
+    const phaseFlow = displayPhases.map(p => TOURNAMENT_FORMAT_LABELS[p.format] || p.format).join(' \u2192 ');
+    const phaseIcons = displayPhases.map(p => TOURNAMENT_FORMAT_ICONS[p.format] || '\uD83C\uDFC6').join('  ');
+
+    // Load tournament avatar
+    let avatarComposite = null;
+    const avatarSource = String(tournament.avatar || '').trim();
+    if (avatarSource) {
+      const src = avatarSource.startsWith('http') || avatarSource.startsWith('/') || isInlineDataAvatar(avatarSource) ? avatarSource : `/${avatarSource}`;
+      const buf = await loadImageBuffer({ clientBuildDir, origin, source: src });
+      if (buf?.length) {
+        avatarComposite = await sharp(buf)
+          .rotate()
+          .resize(100, 100, { fit: 'cover' })
+          .composite([{
+            input: Buffer.from('<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" rx="20" fill="#fff"/></svg>'),
+            blend: 'dest-in',
+          }])
+          .png()
+          .toBuffer();
+      }
+    }
+
+    // Load poster background
+    let bgComposite = null;
+    const bgSource = String(tournament.poster_bg || '').trim();
+    if (bgSource) {
+      const buf = await loadImageBuffer({ clientBuildDir, origin, source: bgSource });
+      if (buf?.length) {
+        bgComposite = await sharp(buf)
+          .rotate()
+          .resize(W, H, { fit: 'cover' })
+          .modulate({ brightness: 0.35 })
+          .blur(2)
+          .png()
+          .toBuffer();
+      }
+    }
+
+    // Load player avatars (up to 10)
+    const playerAvatars = [];
+    const maxPlayerAvatars = Math.min(players.length, 10);
+    for (let i = 0; i < maxPlayerAvatars; i++) {
+      const p = players[i];
+      const pSrc = String(p.avatar || '').trim();
+      if (!pSrc) { playerAvatars.push(null); continue; }
+      const src = pSrc.startsWith('http') || pSrc.startsWith('/') || isInlineDataAvatar(pSrc) ? pSrc : `/${pSrc}`;
+      try {
+        const buf = await loadImageBuffer({ clientBuildDir, origin, source: src });
+        if (buf?.length) {
+          playerAvatars.push(await sharp(buf).rotate().resize(44, 44, { fit: 'cover' }).composite([{
+            input: Buffer.from('<svg width="44" height="44" xmlns="http://www.w3.org/2000/svg"><circle cx="22" cy="22" r="22" fill="#fff"/></svg>'),
+            blend: 'dest-in',
+          }]).png().toBuffer());
+        } else { playerAvatars.push(null); }
+      } catch { playerAvatars.push(null); }
+    }
+
+    // Player name list (for text fallbacks)
+    const playerNames = players.slice(0, 10).map(p => escapeXml(String(p.name || '').trim())).filter(Boolean);
+    const moreCount = players.length > 10 ? players.length - 10 : 0;
+
+    // Build SVG
+    const avatarX = 60, avatarY = H / 2 - 50;
+    const textStartX = avatarComposite ? 190 : 60;
+
+    const playerAvatarsSvg = playerAvatars.map((_, i) => {
+      const x = textStartX + i * 48;
+      const y = 440;
+      if (!playerAvatars[i]) {
+        const initial = (players[i]?.name || '?').charAt(0).toUpperCase();
+        return `<circle cx="${x + 22}" cy="${y + 22}" r="22" fill="rgba(255,51,102,0.35)"/>
+                <text x="${x + 22}" y="${y + 28}" fill="#fff" font-size="16" font-weight="700" text-anchor="middle" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif">${escapeXml(initial)}</text>`;
+      }
+      return '';
+    }).join('\n');
+
+    const moreLabel = moreCount > 0 ? `<text x="${textStartX + maxPlayerAvatars * 48 + 16}" y="${462}" fill="rgba(255,255,255,0.4)" font-size="16" font-weight="600" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif">+${moreCount} more</text>` : '';
+
+    const phaseChipsSvg = displayPhases.map((p, i) => {
+      const label = escapeXml(TOURNAMENT_FORMAT_LABELS[p.format] || p.format);
+      const x = textStartX + i * 180;
+      return `<rect x="${x}" y="370" width="160" height="32" rx="16" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+              <text x="${x + 80}" y="391" fill="rgba(255,255,255,0.7)" font-size="14" font-weight="600" text-anchor="middle" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif">${label}</text>`;
+    }).join('\n');
+
+    const svg = `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="bg" x1="0" y1="0" x2="0.6" y2="1">
+          <stop offset="0%" stop-color="#0a0a1a"/>
+          <stop offset="100%" stop-color="#0e1028"/>
+        </linearGradient>
+        <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stop-color="rgba(255,51,102,0.3)"/>
+          <stop offset="50%" stop-color="rgba(255,51,102,0)"/>
+        </linearGradient>
+        <linearGradient id="topLine" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stop-color="transparent"/>
+          <stop offset="50%" stop-color="rgba(255,51,102,0.5)"/>
+          <stop offset="100%" stop-color="transparent"/>
+        </linearGradient>
+      </defs>
+      <rect width="${W}" height="${H}" fill="url(#bg)"/>
+      <rect width="${W}" height="${H}" fill="url(#accent)"/>
+      <rect x="0" y="0" width="${W}" height="2" fill="url(#topLine)"/>
+
+      <!-- Avatar border ring -->
+      ${avatarComposite ? `<rect x="${avatarX - 2}" y="${avatarY - 2}" width="104" height="104" rx="22" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="2"/>` : ''}
+
+      <!-- Date/location -->
+      <text x="${textStartX}" y="100" fill="rgba(255,255,255,0.4)" font-size="17" font-weight="600" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif">${dateLoc}</text>
+
+      <!-- Title -->
+      <text x="${textStartX}" y="165" fill="#ffffff" font-size="52" font-weight="800" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif">${title}</text>
+
+      <!-- Subtitle -->
+      <text x="${textStartX}" y="210" fill="rgba(255,255,255,0.5)" font-size="22" font-weight="600" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif">${players.length} players  \u00B7  ${escapeXml(phaseFlow)}</text>
+
+      <!-- Player count badge -->
+      <rect x="${textStartX}" y="240" width="${String(players.length).length * 12 + 90}" height="32" rx="16" fill="rgba(255,51,102,0.12)" stroke="rgba(255,51,102,0.25)" stroke-width="1"/>
+      <text x="${textStartX + (String(players.length).length * 12 + 90) / 2}" y="261" fill="rgba(255,180,200,0.9)" font-size="14" font-weight="700" text-anchor="middle" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif">\uD83C\uDFAE ${players.length} COMPETITORS</text>
+
+      <!-- Phase chips -->
+      <text x="${textStartX}" y="340" fill="rgba(255,255,255,0.25)" font-size="11" font-weight="700" letter-spacing="2" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif">FORMAT</text>
+      ${phaseChipsSvg}
+
+      <!-- Player avatars row -->
+      <text x="${textStartX}" y="432" fill="rgba(255,255,255,0.25)" font-size="11" font-weight="700" letter-spacing="2" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif">PLAYERS</text>
+      ${playerAvatarsSvg}
+      ${moreLabel}
+
+      <!-- Branding -->
+      <text x="${W - 60}" y="${H - 30}" fill="rgba(255,255,255,0.2)" font-size="14" font-weight="700" text-anchor="end" letter-spacing="1" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif">PUMP SHINSA</text>
+    </svg>`;
+
+    // Compose layers
+    const composites = [];
+
+    if (bgComposite) {
+      composites.push({ input: bgComposite, top: 0, left: 0 });
+      // Dark overlay on top of bg
+      composites.push({
+        input: await sharp({
+          create: { width: W, height: H, channels: 4, background: { r: 10, g: 10, b: 26, alpha: 0.65 } },
+        }).png().toBuffer(),
+        top: 0, left: 0,
+      });
+    }
+
+    // SVG overlay
+    composites.push({ input: Buffer.from(svg), top: 0, left: 0 });
+
+    // Tournament avatar
+    if (avatarComposite) {
+      composites.push({ input: avatarComposite, top: avatarY, left: avatarX });
+    }
+
+    // Player avatar circles
+    for (let i = 0; i < playerAvatars.length; i++) {
+      if (playerAvatars[i]) {
+        composites.push({ input: playerAvatars[i], top: 440, left: textStartX + i * 48 });
+      }
+    }
+
+    // Wordmark
+    const wordmark = await ensureWordmarkBuffer(clientBuildDir);
+    if (wordmark) {
+      composites.push({ input: wordmark, top: H - 58, left: 60 });
+    }
+
+    const base = bgComposite
+      ? sharp({ create: { width: W, height: H, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
+      : sharp(Buffer.from(svg));
+
+    return base
+      .composite(composites)
+      .jpeg({ quality: 88 })
+      .toBuffer();
+  }
+
+  // OG image endpoint for tournament posters
+  app.get('/og/tournament/:id.jpg', async (req, res) => {
+    const id = req.params.id;
+    if (!id) return res.status(400).send('Invalid tournament id');
+
+    const db = getDb();
+    const tournament = db.prepare('SELECT * FROM tournaments WHERE id = ?').get(id);
+    if (!tournament) { db.close(); return res.status(404).send('Not found'); }
+
+    try { tournament.config = JSON.parse(tournament.config || '{}'); } catch { tournament.config = {}; }
+
+    const players = db.prepare('SELECT * FROM players WHERE tournament_id = ? ORDER BY pumbility DESC, seed_rank ASC').all(id);
+    let phases = [];
+    try { phases = db.prepare('SELECT * FROM tournament_phases WHERE tournament_id = ? ORDER BY phase_order ASC').all(id); } catch {}
+    db.close();
+
+    const etag = `W/"tournament-og-${id}-${SHARE_PREVIEW_RENDER_VERSION}"`;
+    if (req.headers['if-none-match'] === etag) return res.status(304).end();
+
+    try {
+      const origin = getRequestOrigin(req);
+      const jpeg = await renderTournamentOgJpeg({ tournament, players, phases, clientBuildDir, origin });
+      res.set('Content-Type', 'image/jpeg');
+      res.set('Cache-Control', 'public, max-age=1800');
+      res.set('ETag', etag);
+      return res.send(jpeg);
+    } catch (err) {
+      console.error('Tournament OG image render failed:', err.message);
+      return res.status(500).send('Error');
+    }
+  });
+
+  // Inject OG meta for tournament poster pages
+  app.get('/tournament/:id/poster', (req, res, next) => {
+    const id = req.params.id;
+    if (!id) return next();
+
+    const indexHtml = getIndexHtml();
+    if (!indexHtml) return next();
+
+    const db = getDb();
+    const tournament = db.prepare('SELECT * FROM tournaments WHERE id = ?').get(id);
+    if (!tournament) { db.close(); res.set('Content-Type', 'text/html'); return res.send(indexHtml); }
+
+    try { tournament.config = JSON.parse(tournament.config || '{}'); } catch { tournament.config = {}; }
+
+    const players = db.prepare('SELECT * FROM players WHERE tournament_id = ? ORDER BY pumbility DESC, seed_rank ASC').all(id);
+    let phases = [];
+    try { phases = db.prepare('SELECT * FROM tournament_phases WHERE tournament_id = ? ORDER BY phase_order ASC').all(id); } catch {}
+    db.close();
+
+    const origin = getRequestOrigin(req);
+    const url = `${origin}/tournament/${id}/poster`;
+    const image = buildPreviewImageUrl(origin, `/og/tournament/${id}.jpg`, SHARE_PREVIEW_RENDER_VERSION);
+    const title = `${String(tournament.name || 'Tournament').trim()} \u2014 Pump Shinsa`;
+    const date = formatTournamentDateServer(tournament.date);
+    const location = String(tournament.location || '').trim();
+    const displayPhases = phases.length > 0 ? phases : [{ format: tournament.config?.gauntlet_enabled ? 'gauntlet' : 'round_robin' }];
+    const phaseFlow = displayPhases.map(p => TOURNAMENT_FORMAT_LABELS[p.format] || p.format).join(' \u2192 ');
+
+    const descParts = [];
+    descParts.push(`${players.length} players`);
+    descParts.push(phaseFlow);
+    if (date) descParts.push(date);
+    if (location) descParts.push(location);
+    const description = descParts.join(' \u00B7 ');
+
+    const html = injectSocialMeta(indexHtml, {
+      type: 'website',
+      siteName: 'Pump Shinsa',
+      title,
+      description,
+      url,
+      image,
+      imageType: 'image/jpeg',
+      imageWidth: 1200,
+      imageHeight: 630,
+      imageAlt: `${tournament.name} tournament poster`,
+      twitterCard: 'summary_large_image',
+    });
+
+    res.set('Content-Type', 'text/html');
+    return res.send(html);
+  });
+
+  // Also inject OG meta for main tournament page
+  app.get('/tournament/:id', (req, res, next) => {
+    const id = req.params.id;
+    if (!id) return next();
+
+    const indexHtml = getIndexHtml();
+    if (!indexHtml) return next();
+
+    const db = getDb();
+    const tournament = db.prepare('SELECT * FROM tournaments WHERE id = ?').get(id);
+    if (!tournament) { db.close(); res.set('Content-Type', 'text/html'); return res.send(indexHtml); }
+
+    const players = db.prepare('SELECT * FROM players WHERE tournament_id = ?').all(id);
+    db.close();
+
+    const origin = getRequestOrigin(req);
+    const url = `${origin}/tournament/${id}`;
+    const image = buildPreviewImageUrl(origin, `/og/tournament/${id}.jpg`, SHARE_PREVIEW_RENDER_VERSION);
+    const title = `${String(tournament.name || 'Tournament').trim()} \u2014 Pump Shinsa`;
+    const description = `${players.length} player tournament on Pump Shinsa`;
+
+    const html = injectSocialMeta(indexHtml, {
+      type: 'website',
+      siteName: 'Pump Shinsa',
+      title,
+      description,
+      url,
+      image,
+      imageType: 'image/jpeg',
+      imageWidth: 1200,
+      imageHeight: 630,
+      imageAlt: `${tournament.name} tournament`,
+      twitterCard: 'summary_large_image',
+    });
+
+    res.set('Content-Type', 'text/html');
+    return res.send(html);
+  });
 }
 
 module.exports = { registerSharePreviewRoutes };
