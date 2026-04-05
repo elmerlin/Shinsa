@@ -110,7 +110,13 @@ function OverlayItem({ item, onPointerDown, onRemove, onUpdate }) {
 
 // ── main editor ────────────────────────────────────────────────────────
 
-export default function ImageCanvasEditor({ imagePreview, overlayState, onOverlayChange }) {
+export default function ImageCanvasEditor({
+  imagePreview,
+  overlayState,
+  onOverlayChange,
+  imageLayout,
+  onImageLayoutChange,
+}) {
   const { items, containerRef, addItem, removeItem, updateItem, handlePointerDown, setItems } = useDragOverlay();
   const [activeTool, setActiveTool] = useState(null); // 'text' | 'sticker' | 'link' | null
   const [textInput, setTextInput] = useState('');
@@ -118,6 +124,9 @@ export default function ImageCanvasEditor({ imagePreview, overlayState, onOverla
   const [textBgOpacity, setTextBgOpacity] = useState(0.5);
   const [linkInput, setLinkInput] = useState('');
   const textInputRef = useRef(null);
+  const fitMode = imageLayout?.fitMode || 'contain';
+  const positionX = imageLayout?.positionX ?? 50;
+  const positionY = imageLayout?.positionY ?? 50;
 
   // sync items up to parent
   useEffect(() => {
@@ -153,6 +162,10 @@ export default function ImageCanvasEditor({ imagePreview, overlayState, onOverla
     addItem({ type: 'sticker', token, imageUrl: sticker.image, size: 16 });
   };
 
+  const updateImageLayout = (updates) => {
+    onImageLayoutChange?.({ ...imageLayout, ...updates });
+  };
+
   return (
     <div className="flex h-full flex-col">
       {/* ── canvas area ── */}
@@ -162,7 +175,23 @@ export default function ImageCanvasEditor({ imagePreview, overlayState, onOverla
         style={{ touchAction: 'none' }}
       >
         {imagePreview ? (
-          <img src={imagePreview} alt="" className="h-full w-full object-cover" />
+          <>
+            <img
+              src={imagePreview}
+              alt=""
+              className="absolute inset-0 h-full w-full scale-110 object-cover opacity-55 blur-2xl"
+              style={{ objectPosition: `${positionX}% ${positionY}%` }}
+            />
+            <div className="absolute inset-0 bg-[#030712]/45" />
+            <img
+              src={imagePreview}
+              alt=""
+              className={`absolute inset-0 h-full w-full transition-[object-position] duration-200 ${
+                fitMode === 'fill' ? 'object-cover' : 'object-contain'
+              }`}
+              style={{ objectPosition: `${positionX}% ${positionY}%` }}
+            />
+          </>
         ) : null}
 
         {items.map((item) => (
@@ -178,6 +207,60 @@ export default function ImageCanvasEditor({ imagePreview, overlayState, onOverla
 
       {/* ── tool bar ── */}
       <div className="mt-3 space-y-2">
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="inline-flex rounded-full border border-white/10 bg-black/20 p-0.5">
+              {[
+                { value: 'contain', label: 'Fit' },
+                { value: 'fill', label: 'Fill' },
+              ].map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => updateImageLayout({ fitMode: option.value })}
+                  className={`rounded-full px-3 py-1.5 text-[11px] font-display font-bold uppercase tracking-[0.18em] transition-colors ${
+                    fitMode === option.value
+                      ? 'bg-cyan-500 text-white'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] text-gray-400">
+              {fitMode === 'fill' ? 'Fill the story and reframe the crop.' : 'Keep the full image visible and nudge it into place.'}
+            </p>
+          </div>
+
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <label className="flex items-center gap-3">
+              <span className="w-14 shrink-0 text-[10px] font-display font-bold uppercase tracking-[0.18em] text-gray-500">X</span>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={1}
+                value={positionX}
+                onChange={(e) => updateImageLayout({ positionX: Number(e.target.value) })}
+                className="h-1 flex-1 cursor-pointer appearance-none rounded-full bg-white/15 accent-cyan-400 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-cyan-400"
+              />
+            </label>
+            <label className="flex items-center gap-3">
+              <span className="w-14 shrink-0 text-[10px] font-display font-bold uppercase tracking-[0.18em] text-gray-500">Y</span>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={1}
+                value={positionY}
+                onChange={(e) => updateImageLayout({ positionY: Number(e.target.value) })}
+                className="h-1 flex-1 cursor-pointer appearance-none rounded-full bg-white/15 accent-cyan-400 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-cyan-400"
+              />
+            </label>
+          </div>
+        </div>
+
         {/* tool buttons */}
         <div className="flex gap-2">
           <button

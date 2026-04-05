@@ -69,6 +69,19 @@ function drawGradient(ctx, css, w, h) {
   ctx.fillRect(0, 0, w, h);
 }
 
+function drawPositionedImage(ctx, img, w, h, fitMode = 'cover', positionX = 50, positionY = 50) {
+  const imageScale = fitMode === 'contain'
+    ? Math.min(w / img.width, h / img.height)
+    : Math.max(w / img.width, h / img.height);
+
+  const drawWidth = img.width * imageScale;
+  const drawHeight = img.height * imageScale;
+  const drawX = (w - drawWidth) * (positionX / 100);
+  const drawY = (h - drawHeight) * (positionY / 100);
+
+  ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
+}
+
 function measureWrappedText(ctx, text, maxWidth, lineHeight) {
   const paragraphs = String(text || '').split('\n');
   const lines = [];
@@ -175,18 +188,20 @@ export async function renderStoryToBlob(scene) {
   // 1. background
   if (scene.backgroundType === 'image' && scene.imageDataUrl) {
     const img = await loadImage(scene.imageDataUrl);
-    // cover-fit the image
-    const imgAspect = img.width / img.height;
-    const canvasAspect = CANVAS_WIDTH / CANVAS_HEIGHT;
-    let sx = 0, sy = 0, sw = img.width, sh = img.height;
-    if (imgAspect > canvasAspect) {
-      sw = img.height * canvasAspect;
-      sx = (img.width - sw) / 2;
-    } else {
-      sh = img.width / canvasAspect;
-      sy = (img.height - sh) / 2;
-    }
-    ctx.drawImage(img, sx + (scene.cropOffsetX || 0), sy + (scene.cropOffsetY || 0), sw, sh, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    const imageFitMode = scene.imageFitMode || 'cover';
+    const positionX = scene.imagePositionX ?? 50;
+    const positionY = scene.imagePositionY ?? 50;
+
+    ctx.save();
+    ctx.filter = 'blur(32px)';
+    ctx.globalAlpha = 0.55;
+    drawPositionedImage(ctx, img, CANVAS_WIDTH, CANVAS_HEIGHT, 'cover', positionX, positionY);
+    ctx.restore();
+
+    ctx.fillStyle = 'rgba(3,7,18,0.45)';
+    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+    drawPositionedImage(ctx, img, CANVAS_WIDTH, CANVAS_HEIGHT, imageFitMode === 'fill' ? 'cover' : 'contain', positionX, positionY);
   } else if (scene.backgroundType === 'themed' && scene.theme) {
     drawThemedBackground(ctx, scene.theme, CANVAS_WIDTH, CANVAS_HEIGHT);
   } else if (scene.backgroundCSS) {

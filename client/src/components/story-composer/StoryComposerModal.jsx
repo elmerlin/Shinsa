@@ -11,6 +11,7 @@ import ScoreSnapshotCard from '../ScoreSnapshotCard';
 import TextStoryEditor from './TextStoryEditor';
 import ImageCanvasEditor from './ImageCanvasEditor';
 import {
+  CANVAS_ASPECT,
   GRADIENT_PRESETS,
   THEME_PRESETS,
   FONT_SIZES,
@@ -90,6 +91,11 @@ export default function StoryComposerModal({
   onClose,
   onSubmit,
 }) {
+  const defaultImageLayout = useMemo(() => ({
+    fitMode: 'contain',
+    positionX: 50,
+    positionY: 50,
+  }), []);
   const [mode, setMode] = useState('text'); // 'text' | 'image' | 'score'
   const [rendering, setRendering] = useState(false);
 
@@ -108,6 +114,7 @@ export default function StoryComposerModal({
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState('');
   const [overlayItems, setOverlayItems] = useState([]);
+  const [imageLayout, setImageLayout] = useState(defaultImageLayout);
 
   // score state
   const [selectedSource, setSelectedSource] = useState('');
@@ -151,11 +158,12 @@ export default function StoryComposerModal({
     setImageFile(null);
     setImagePreview('');
     setOverlayItems([]);
+    setImageLayout(defaultImageLayout);
     setSelectedSource(scoreOptions[0]?.value || '');
     setScoreCaption('');
     setScoreStickerTokens([]);
     setRendering(false);
-  }, [open, scoreOptions]);
+  }, [defaultImageLayout, open, scoreOptions]);
 
   // image preview blob
   useEffect(() => {
@@ -167,6 +175,27 @@ export default function StoryComposerModal({
     setImagePreview(url);
     return () => URL.revokeObjectURL(url);
   }, [imageFile]);
+
+  useEffect(() => {
+    if (!imagePreview) return undefined;
+
+    let cancelled = false;
+    const probe = new Image();
+    probe.onload = () => {
+      if (cancelled) return;
+      const nextFitMode = probe.width / probe.height > CANVAS_ASPECT ? 'contain' : 'fill';
+      setImageLayout({
+        fitMode: nextFitMode,
+        positionX: 50,
+        positionY: 50,
+      });
+    };
+    probe.src = imagePreview;
+
+    return () => {
+      cancelled = true;
+    };
+  }, [imagePreview]);
 
   useEffect(() => {
     if (!open) clearMentions();
@@ -251,6 +280,9 @@ export default function StoryComposerModal({
         scene = {
           backgroundType: 'image',
           imageDataUrl,
+          imageFitMode: imageLayout.fitMode,
+          imagePositionX: imageLayout.positionX,
+          imagePositionY: imageLayout.positionY,
           textLayers,
           stickerLayers,
           linkBadge,
@@ -271,7 +303,7 @@ export default function StoryComposerModal({
     } finally {
       setRendering(false);
     }
-  }, [mode, text, textStyle, imageFile, overlayItems, selectedSource, scoreCaption, scoreStickerTokens, scoreOptions, rendering, submitting, onSubmit]);
+  }, [mode, text, textStyle, imageFile, overlayItems, imageLayout, selectedSource, scoreCaption, scoreStickerTokens, scoreOptions, rendering, submitting, onSubmit]);
 
   // ── can submit? ──────────────────────────────────────────────────────
 
@@ -356,6 +388,8 @@ export default function StoryComposerModal({
                 imagePreview={imagePreview}
                 overlayState={overlayItems}
                 onOverlayChange={setOverlayItems}
+                imageLayout={imageLayout}
+                onImageLayoutChange={setImageLayout}
               />
             )
           ) : null}
@@ -417,7 +451,7 @@ export default function StoryComposerModal({
             {mode === 'image' && imageFile ? (
               <button
                 type="button"
-                onClick={() => { setImageFile(null); setOverlayItems([]); }}
+                onClick={() => { setImageFile(null); setOverlayItems([]); setImageLayout(defaultImageLayout); }}
                 className="text-xs text-gray-400 hover:text-white"
               >
                 Change image
