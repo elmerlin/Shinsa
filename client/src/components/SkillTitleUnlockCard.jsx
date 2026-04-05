@@ -1,5 +1,9 @@
-import React from 'react';
-import { buildSkillTitleProgressTriplet, formatSkillTitleLabel } from '../utils/skillTitles';
+import React, { useMemo, useState } from 'react';
+import {
+  buildSkillTitleProgressTriplet,
+  formatSkillTitleLabel,
+  getSkillTitlePassMetrics,
+} from '../utils/skillTitles';
 
 function cx(...classes) {
   return classes.filter(Boolean).join(' ');
@@ -67,6 +71,11 @@ function getTrackCopy(node) {
   return `Lv.${node.level} track`;
 }
 
+function getPassCopy(metrics) {
+  if (!metrics.passes_required) return 'No AA pass requirement';
+  return `${metrics.passes_have} / ${metrics.passes_required} AA passes`;
+}
+
 function getNodeMeta(kind, node) {
   const label = kind === 'previous' ? 'Previous' : kind === 'current' ? 'Earned' : 'Next';
   if (!node) {
@@ -74,10 +83,12 @@ function getNodeMeta(kind, node) {
       label,
       title: kind === 'next' ? 'Final checkpoint' : 'Unknown',
       body: kind === 'next' ? 'No further unlock requirement.' : 'No checkpoint data.',
+      metrics: getSkillTitlePassMetrics(null),
     };
   }
 
   const title = formatSkillTitleLabel(node);
+  const metrics = getSkillTitlePassMetrics(node);
   if (kind === 'previous') {
     return {
       label,
@@ -85,6 +96,7 @@ function getNodeMeta(kind, node) {
       body: node.required_points > 0
         ? `${getTrackCopy(node)} • ${formatPoints(node.required_points)} pts`
         : 'Starting checkpoint',
+      metrics,
     };
   }
   if (kind === 'current') {
@@ -94,6 +106,7 @@ function getNodeMeta(kind, node) {
       body: node.required_points > 0
         ? `${getTrackCopy(node)} • ${formatPoints(node.earned_points || node.required_points)} / ${formatPoints(node.required_points)} pts`
         : 'Starting checkpoint',
+      metrics,
     };
   }
   return {
@@ -102,6 +115,7 @@ function getNodeMeta(kind, node) {
     body: node.required_points > 0
       ? `Needs ${formatPoints(node.required_points)} pts on ${getTrackCopy(node)}`
       : 'Final skill title reached',
+    metrics,
   };
 }
 
@@ -123,6 +137,15 @@ export default function SkillTitleUnlockCard({ clear, className = '' }) {
     { kind: 'current', node: current, left: '50%', top: '42%' },
     { kind: 'next', node: next, left: '86%', top: '20%' },
   ];
+  const [activeKind, setActiveKind] = useState('current');
+  const activeNodeEntry = useMemo(() => {
+    return nodes.find((entry) => entry.kind === activeKind) || nodes[1] || nodes[0];
+  }, [activeKind, nodes]);
+  const activeMeta = getNodeMeta(activeNodeEntry?.kind, activeNodeEntry?.node);
+  const activeMetrics = activeMeta.metrics;
+  const activePassDetail = activeMetrics.passes_required
+    ? `${activeMetrics.passes_have} out of ${activeMetrics.passes_required} minimum AA clears banked for this node.`
+    : 'This checkpoint does not need an AA pass count.';
 
   return (
     <div className={cx('rounded-2xl border p-3 shadow-[0_14px_34px_rgba(0,0,0,0.28)]', theme.shell, className)}>
@@ -153,16 +176,18 @@ export default function SkillTitleUnlockCard({ clear, className = '' }) {
             />
           </svg>
           {nodes.map(({ kind, node, left, top }) => {
-            const isCurrent = kind === 'current';
-            const dotClass = isCurrent ? theme.current : (kind === 'previous' ? theme.past : theme.future);
+            const isSelected = kind === activeKind;
+            const dotClass = isSelected
+              ? theme.current
+              : (kind === 'previous' ? theme.past : (kind === 'current' ? theme.past : theme.future));
             return (
               <div
                 key={`${kind}-${node?.id || node?.name || 'node'}`}
                 className="absolute -translate-x-1/2 -translate-y-1/2 text-center"
                 style={{ left, top }}
               >
-                <span className={cx('mx-auto block h-4 w-4 rounded-full border-2', dotClass)} />
-                <span className="mt-1 block text-[9px] font-display font-bold uppercase tracking-[0.16em] text-white/80">
+                <span className={cx('mx-auto block h-4 w-4 rounded-full border-2 transition-all', dotClass, isSelected && 'scale-125')} />
+                <span className={cx('mt-1 block text-[9px] font-display font-bold uppercase tracking-[0.16em]', isSelected ? 'text-white' : 'text-white/70')}>
                   {kind === 'previous' ? 'Prev' : kind === 'current' ? 'Earned' : 'Next'}
                 </span>
               </div>
@@ -173,14 +198,47 @@ export default function SkillTitleUnlockCard({ clear, className = '' }) {
         <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
           {nodes.map(({ kind, node }) => {
             const meta = getNodeMeta(kind, node);
+            const isActive = kind === activeKind;
             return (
-              <div key={`${kind}-detail-${node?.id || node?.name || 'node'}`} className={cx('rounded-xl border px-2.5 py-2', theme.detail)}>
+              <button
+                key={`${kind}-detail-${node?.id || node?.name || 'node'}`}
+                type="button"
+                onClick={() => setActiveKind(kind)}
+                className={cx(
+                  'rounded-xl border px-2.5 py-2 text-left transition-all',
+                  theme.detail,
+                  isActive ? 'border-white/55 bg-white/10 shadow-[0_0_0_1px_rgba(255,255,255,0.12)]' : 'hover:border-white/30 hover:bg-white/[0.04]'
+                )}
+                aria-pressed={isActive}
+              >
                 <p className="text-[9px] font-display font-bold uppercase tracking-[0.16em] text-white/60">{meta.label}</p>
                 <p className="mt-1 text-[11px] font-display font-bold leading-tight text-white">{meta.title}</p>
                 <p className="mt-1 text-[10px] leading-snug text-gray-400">{meta.body}</p>
-              </div>
+                <p className="mt-2 text-[10px] font-display font-bold uppercase tracking-[0.12em] text-white/80">
+                  {getPassCopy(meta.metrics)}
+                </p>
+              </button>
             );
           })}
+        </div>
+
+        <div className="mt-3 rounded-xl border border-white/12 bg-white/[0.04] px-3 py-2.5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[9px] font-display font-bold uppercase tracking-[0.16em] text-white/60">Highlighted Node</p>
+              <p className="mt-1 text-xs font-display font-bold text-white">{activeMeta.title}</p>
+              <p className="mt-1 text-[10px] leading-snug text-gray-400">{activeMeta.body}</p>
+            </div>
+            <div className="shrink-0 text-right">
+              <p className="text-[10px] font-display font-bold uppercase tracking-[0.14em] text-white/70">
+                {getPassCopy(activeMetrics)}
+              </p>
+              {activeMetrics.aa_points_per_clear > 0 ? (
+                <p className="mt-1 text-[10px] text-gray-500">{activeMetrics.aa_points_per_clear.toLocaleString()} pts per AA clear</p>
+              ) : null}
+            </div>
+          </div>
+          <p className="mt-2 text-[10px] text-gray-400">{activePassDetail}</p>
         </div>
       </div>
     </div>

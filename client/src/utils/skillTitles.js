@@ -37,6 +37,28 @@ const SKILL_TITLE_REQUIREMENTS = [
   { id: 'master', name: 'The Master', skill_title: 'The Master', skill_family: 'Master', skill_level: 1, level: 28, required_points: 1900, tier: 'blue', index: 31 },
 ];
 
+const AA_POINTS_PER_CLEAR_BY_LEVEL = {
+  10: 100,
+  11: 110,
+  12: 130,
+  13: 160,
+  14: 200,
+  15: 250,
+  16: 310,
+  17: 380,
+  18: 460,
+  19: 550,
+  20: 650,
+  21: 760,
+  22: 880,
+  23: 1010,
+  24: 1150,
+  25: 1300,
+  26: 1460,
+  27: 1630,
+  28: 1810,
+};
+
 function normalizeString(value) {
   return String(value || '').trim();
 }
@@ -161,4 +183,48 @@ export function buildSkillTitleProgressTriplet(clear = {}) {
   return { previous, current, next };
 }
 
-export { SKILL_TITLE_REQUIREMENTS };
+export function getAaPointsPerClear(level) {
+  return AA_POINTS_PER_CLEAR_BY_LEVEL[toInt(level)] || 0;
+}
+
+export function getSkillTitlePassMetrics(node) {
+  const normalized = normalizeSkillTitleNode(node);
+  if (!normalized) {
+    return {
+      aa_points_per_clear: 0,
+      passes_required: 0,
+      passes_have: 0,
+      remaining_passes: 0,
+      passes_progress_percent: 0,
+    };
+  }
+
+  const aaPoints = getAaPointsPerClear(normalized.level);
+  const requiredPoints = toInt(normalized.required_points);
+  const earnedPoints = Math.max(0, toInt(normalized.earned_points));
+  if (aaPoints <= 0 || requiredPoints <= 0) {
+    return {
+      aa_points_per_clear: aaPoints,
+      passes_required: 0,
+      passes_have: 0,
+      remaining_passes: 0,
+      passes_progress_percent: 100,
+    };
+  }
+
+  const passesRequired = Math.ceil(requiredPoints / aaPoints);
+  const passesHave = Math.max(0, Math.floor(earnedPoints / aaPoints));
+  const boundedHave = Math.min(passesHave, passesRequired);
+  const remainingPasses = Math.max(0, passesRequired - boundedHave);
+  const progressPercent = passesRequired > 0 ? Math.min(100, (boundedHave / passesRequired) * 100) : 100;
+
+  return {
+    aa_points_per_clear: aaPoints,
+    passes_required: passesRequired,
+    passes_have: boundedHave,
+    remaining_passes: remainingPasses,
+    passes_progress_percent: progressPercent,
+  };
+}
+
+export { AA_POINTS_PER_CLEAR_BY_LEVEL, SKILL_TITLE_REQUIREMENTS };
