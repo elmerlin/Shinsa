@@ -1925,11 +1925,29 @@ export default function ProfilePage() {
     }
   }, [overviewPlayHeatmap, selectedOverviewDateKey]);
 
-  // Callback ref: scroll heatmap to the right when it mounts / data changes
+  // Callback ref: scroll heatmap so latest active day is visible + 1 week buffer
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const heatmapScrollRef = React.useCallback((el) => {
-    if (el) el.scrollLeft = el.scrollWidth;
-  }, [overviewPlayHeatmap.weeks.length]);
+    if (!el) return;
+    const { weeks, latestDayKey } = overviewPlayHeatmap;
+    if (!weeks.length || !latestDayKey) return;
+
+    // Find which week column contains the latest active day
+    let targetWeek = weeks.length - 1;
+    for (let i = 0; i < weeks.length; i++) {
+      if (weeks[i].some((c) => c.key === latestDayKey)) {
+        targetWeek = i;
+        break;
+      }
+    }
+
+    // w-4 (16px) + gap-1 (4px) = 20px per week column; day labels w-8 (32px) + gap = 36px
+    const colW = 20;
+    const offset = 36;
+    // Show targetWeek + 1 buffer week at the right edge of the viewport
+    const scrollTo = Math.max(0, offset + (targetWeek + 2) * colW - el.clientWidth);
+    el.scrollLeft = scrollTo;
+  }, [overviewPlayHeatmap]);
 
   const selectedOverviewDay = selectedOverviewDateKey
     ? overviewPlayHeatmap.daysByKey[selectedOverviewDateKey] || null
