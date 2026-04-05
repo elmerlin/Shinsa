@@ -76,6 +76,11 @@ function getPassCopy(metrics) {
   return `${metrics.passes_have} / ${metrics.passes_required} AA passes`;
 }
 
+function getBankedCopy(metrics) {
+  if (!metrics.passes_required) return '';
+  return `Banked ${metrics.passes_have} of ${metrics.passes_required} min.`;
+}
+
 function getNodeMeta(kind, node) {
   const label = kind === 'previous' ? 'Previous' : kind === 'current' ? 'Earned' : 'Next';
   if (!node) {
@@ -135,27 +140,27 @@ export default function SkillTitleUnlockCard({ clear, className = '' }) {
   const nodes = [
     { kind: 'previous', node: previous, left: '14%', top: '70%' },
     { kind: 'current', node: current, left: '50%', top: '42%' },
-    { kind: 'next', node: next, left: '86%', top: '20%' },
+    { kind: 'next', node: next, left: '84%', top: '20%' },
   ];
   const [activeKind, setActiveKind] = useState('current');
 
   return (
     <div className={cx('rounded-2xl border p-3 shadow-[0_14px_34px_rgba(0,0,0,0.28)]', theme.shell, className)}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+      <div className="flex flex-wrap items-start justify-between gap-2.5">
+        <div className="min-w-0 flex-1">
           <span className={cx('inline-flex items-center rounded-full border px-2 py-1 text-[10px] font-display font-bold uppercase tracking-[0.16em]', theme.label)}>
             Skill Title
           </span>
-          <p className="mt-2 text-sm font-display font-bold text-white truncate">{currentLabel}</p>
-          <p className="mt-1 text-[11px] text-gray-300">{earnedCopy}</p>
+          <p className="mt-2 text-[clamp(1.45rem,5vw,1.9rem)] font-display font-black leading-none text-white">{currentLabel}</p>
+          <p className="mt-2 max-w-[28rem] text-[13px] leading-relaxed text-gray-300">{earnedCopy}</p>
         </div>
-        <span className={cx('shrink-0 rounded-full border px-2 py-1 text-[10px] font-display font-bold uppercase tracking-[0.14em]', theme.chip)}>
+        <span className={cx('shrink-0 rounded-full border px-2.5 py-1.5 text-[10px] font-display font-bold uppercase tracking-[0.14em]', theme.chip)}>
           {familyLabel}
         </span>
       </div>
 
-      <div className="mt-3 rounded-xl border border-white/10 bg-black/20 px-3 py-3">
-        <div className="relative h-20 overflow-hidden rounded-lg bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.08),transparent_58%),linear-gradient(180deg,rgba(15,23,42,0.68),rgba(2,6,23,0.92))]">
+      <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(18rem,0.95fr)] lg:items-start">
+        <div className="relative min-h-[9rem] overflow-visible rounded-[1.4rem] border border-white/10 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.1),transparent_56%),linear-gradient(180deg,rgba(15,23,42,0.78),rgba(3,7,20,0.95))] px-4 pb-5 pt-6">
           <svg viewBox="0 0 100 40" className="absolute inset-0 h-full w-full" aria-hidden="true">
             <path
               d="M 10 29 C 24 22, 34 18, 50 18 S 72 14, 90 8"
@@ -172,14 +177,22 @@ export default function SkillTitleUnlockCard({ clear, className = '' }) {
             const dotClass = isSelected
               ? theme.current
               : (kind === 'previous' ? theme.past : (kind === 'current' ? theme.past : theme.future));
+            const transform = kind === 'previous'
+              ? 'translate(-22%, -50%)'
+              : kind === 'next'
+                ? 'translate(-78%, -50%)'
+                : 'translate(-50%, -50%)';
             return (
               <div
                 key={`${kind}-${node?.id || node?.name || 'node'}`}
-                className="absolute -translate-x-1/2 -translate-y-1/2 text-center"
-                style={{ left, top }}
+                className={cx(
+                  'absolute flex flex-col',
+                  kind === 'previous' ? 'items-start text-left' : kind === 'next' ? 'items-end text-right' : 'items-center text-center'
+                )}
+                style={{ left, top, transform }}
               >
-                <span className={cx('mx-auto block h-4 w-4 rounded-full border-2 transition-all', dotClass, isSelected && 'scale-125')} />
-                <span className={cx('mt-1 block text-[9px] font-display font-bold uppercase tracking-[0.16em]', isSelected ? 'text-white' : 'text-white/70')}>
+                <span className={cx('block h-4.5 w-4.5 rounded-full border-2 transition-all', dotClass, isSelected && 'scale-125')} />
+                <span className={cx('mt-1 block text-[10px] font-display font-bold uppercase tracking-[0.16em]', isSelected ? 'text-white' : 'text-white/72')}>
                   {kind === 'previous' ? 'Prev' : kind === 'current' ? 'Earned' : 'Next'}
                 </span>
               </div>
@@ -187,7 +200,7 @@ export default function SkillTitleUnlockCard({ clear, className = '' }) {
           })}
         </div>
 
-        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-1">
           {nodes.map(({ kind, node }) => {
             const meta = getNodeMeta(kind, node);
             const isActive = kind === activeKind;
@@ -197,21 +210,22 @@ export default function SkillTitleUnlockCard({ clear, className = '' }) {
                 type="button"
                 onClick={() => setActiveKind(kind)}
                 className={cx(
-                  'rounded-xl border px-2.5 py-2 text-left transition-all',
+                  'rounded-[1.15rem] border px-3 py-3 text-left transition-all',
                   theme.detail,
+                  kind === 'next' && 'col-span-2 sm:col-span-1',
                   isActive ? 'border-white/55 bg-white/10 shadow-[0_0_0_1px_rgba(255,255,255,0.12)]' : 'hover:border-white/30 hover:bg-white/[0.04]'
                 )}
                 aria-pressed={isActive}
               >
                 <p className="text-[9px] font-display font-bold uppercase tracking-[0.16em] text-white/60">{meta.label}</p>
-                <p className="mt-1 text-[11px] font-display font-bold leading-tight text-white">{meta.title}</p>
-                <p className="mt-1 text-[10px] leading-snug text-gray-400">{meta.body}</p>
-                <p className="mt-2 text-[10px] font-display font-bold uppercase tracking-[0.12em] text-white/80">
+                <p className="mt-1 text-[13px] font-display font-bold leading-tight text-white">{meta.title}</p>
+                <p className="mt-1 text-[11px] leading-snug text-gray-400">{meta.body}</p>
+                <p className="mt-3 text-[10px] font-display font-bold uppercase tracking-[0.12em] text-white/80">
                   {getPassCopy(meta.metrics)}
                 </p>
                 {meta.metrics.passes_required > 0 ? (
                   <p className="mt-1 text-[10px] leading-snug text-gray-500">
-                    {meta.metrics.passes_have} out of {meta.metrics.passes_required} minimum AA clears banked.
+                    {getBankedCopy(meta.metrics)}
                   </p>
                 ) : null}
               </button>
