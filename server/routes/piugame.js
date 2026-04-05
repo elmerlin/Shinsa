@@ -3262,7 +3262,7 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
       const progressAfterSync = updateUserSkillTitleFromBestScores(db, userId);
       const newlyUnlockedTitles = getNewlyUnlockedTitles(progressBeforeSync, progressAfterSync);
       const titlePostResult = insertTitleUnlockActivityPosts(db, userId, newlyUnlockedTitles, progressAfterSync, {
-        onlyLatest: activityPostingPolicy.onlyLatestTitle,
+        onlyLatest: true,
       });
       const titleUnlockPostId = titlePostResult?.latest_post_id || null;
       const postedTitleUnlocks = Array.isArray(titlePostResult?.posted_titles) ? titlePostResult.posted_titles : [];

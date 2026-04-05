@@ -65,3 +65,12 @@ test('title posting can collapse to only the latest unlocked title', () => {
     titles
   );
 });
+
+test('full best-score imports can explicitly collapse title posting even outside first sync logic', () => {
+  const titles = [{ name: 'Advanced Lv.8' }, { name: 'Advanced Lv.9' }, { name: 'Advanced Lv.10' }];
+
+  assert.deepEqual(
+    selectTitleUnlocksForPosting(titles, { onlyLatest: true }),
+    [{ name: 'Advanced Lv.10' }]
+  );
+});
