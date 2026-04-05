@@ -2227,7 +2227,7 @@ function registerSharePreviewRoutes(app, { clientBuildDir }) {
       const artworkBuffer = await loadPreviewArtworkBuffer({
         clientBuildDir,
         origin,
-        jacketUrl: resolvePreviewJacketUrl(db, play.song_title, play.mode, play.level),
+        jacketUrl: resolveUpscoreItemJacketUrl(db, play),
         backgroundUrl: play.background_url,
       });
       const brandAssets = await buildBrandAssets({
