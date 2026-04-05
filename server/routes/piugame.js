@@ -3166,6 +3166,26 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
         );
       });
       txn();
+
+      // Recalculate pumbility from the freshly imported best scores
+      const freshScores = db.prepare(
+        'SELECT level, score, grade FROM user_best_scores WHERE user_id = ? AND score > 0'
+      ).all(userId).filter((row) => isPassingScore(row.score, row.grade));
+      const rated = [];
+      for (const s of freshScores) {
+        const level = parseInt(s.level, 10) || 0;
+        const base = LEVEL_BASE_POINTS[level];
+        if (!base) continue;
+        const score = parseInt(s.score, 10) || 0;
+        if (score <= 0) continue;
+        const grade = s.grade || gradeFromScore(score);
+        const rating = calculateRatingPoints(level, grade, score);
+        if (rating > 0) rated.push(rating);
+      }
+      rated.sort((a, b) => b - a);
+      const recalcPumbility = rated.slice(0, 50).reduce((sum, r) => sum + r, 0);
+      db.prepare('UPDATE users SET pumbility = ? WHERE id = ?').run(recalcPumbility, userId);
+
       checkSssAchievements(db, userId);
       const progressAfterSync = updateUserSkillTitleFromBestScores(db, userId);
       const newlyUnlockedTitles = getNewlyUnlockedTitles(progressBeforeSync, progressAfterSync);

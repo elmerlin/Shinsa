@@ -26,9 +26,13 @@ function getRegisteredUserSnapshot(db, userId) {
 
 router.get('/tournament/:tournamentId', (req, res) => {
   const db = getDb();
-  const players = db.prepare(
-    'SELECT * FROM players WHERE tournament_id = ? ORDER BY pumbility DESC, seed_rank ASC'
-  ).all(req.params.tournamentId);
+  const players = db.prepare(`
+    SELECT p.*, COALESCE(u.pumbility, p.pumbility) AS pumbility
+    FROM players p
+    LEFT JOIN users u ON p.user_id = u.id
+    WHERE p.tournament_id = ?
+    ORDER BY COALESCE(u.pumbility, p.pumbility) DESC, p.seed_rank ASC
+  `).all(req.params.tournamentId);
   db.close();
   res.json(players);
 });
