@@ -38,6 +38,7 @@ import ScoreSnapshotCard from '../components/ScoreSnapshotCard';
 import ItemCommentSection from '../components/ItemCommentSection';
 import { StoryShareModal, buildStoryDraft, ScoreCardImageShareButton, ScoreCardShareButton } from '../components/ScoreSnapshotModal';
 import SendToDirectMessageButton from '../components/SendToDirectMessageButton';
+import PlateBadge from '../components/ui/plate-badge';
 import { buildScoreSnapshotLinkShare } from '../utils/directMessageShares';
 
 function getAge(dateStr) {
@@ -4038,9 +4039,7 @@ export default function ProfilePage() {
                               TOP #{overRank}
                             </span>
                           )}
-                          {s.plate && (
-                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-piu-dark text-gray-400 font-mono">{s.plate}</span>
-                          )}
+                          <PlateBadge plate={s.plate} size="xs" />
                           {isUncleared && (
                             <span className="text-[9px] px-1.5 py-0.5 rounded border border-red-500/40 bg-red-600/15 text-red-300 font-display font-bold">
                               UNCLEARED
@@ -4535,10 +4534,7 @@ export default function ProfilePage() {
         const displayGrade = parseGrade(p.grade, rank.label);
         const overRank = getOverTop100Rank(p.over_top100_rank);
         const hasBreakdown = p.perfect > 0 || p.great > 0 || p.good > 0 || p.bad > 0 || p.miss > 0;
-        const PLATE_NAMES = { PG: 'PERFECT GAME', UG: 'ULTIMATE GAME', EG: 'EXTREME GAME', SG: 'SUPERB GAME', MG: 'MARVELOUS GAME', TG: 'TALENTED GAME', FG: 'FAIR GAME', RG: 'ROUGH GAME' };
-        const PLATE_COLORS = { PG: 'text-piu-gold', UG: 'text-yellow-400', EG: 'text-green-400', SG: 'text-blue-400', MG: 'text-sky-400', TG: 'text-purple-400', FG: 'text-gray-400', RG: 'text-red-400' };
-        const plateName = PLATE_NAMES[p.plate] || p.plate || '';
-        const plateColor = PLATE_COLORS[p.plate] || 'text-gray-400';
+        const hasPlate = !!String(p.plate || '').trim();
         const judgments = [
           { label: 'PERFECT', value: p.perfect || 0, textColor: 'text-sky-400' },
           { label: 'GREAT', value: p.great || 0, textColor: 'text-green-400' },
@@ -4644,8 +4640,10 @@ export default function ProfilePage() {
                     </div>
                   </div>
 
-                  {plateName && (
-                    <p className={`text-center font-display font-bold text-sm mt-1 ${plateColor}`}>{plateName}</p>
+                  {hasPlate && (
+                    <div className="mt-1 flex justify-center">
+                      <PlateBadge plate={p.plate} size="lg" showName />
+                    </div>
                   )}
 
                   {p.score > 0 && (

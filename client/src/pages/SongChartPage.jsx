@@ -14,6 +14,7 @@ import { getAvatarUrl } from '../components/AvatarPicker';
 import Over20Top100Modal from '../components/Over20Top100Modal';
 import SendToDirectMessageButton from '../components/SendToDirectMessageButton';
 import YouTubeReplayModal from '../components/YouTubeReplayModal';
+import PlateBadge from '../components/ui/plate-badge';
 import { getSongChartDetail, getUserLists, addListItem, createList, setChartYoutubeLink, removeChartYoutubeLink, getOver20ChartTop100 } from '../utils/api';
 import { buildReplayModalTitle } from '../utils/replayTitle';
 import { buildChartChallengeCard } from '../utils/directMessageShares';
@@ -737,9 +738,7 @@ export default function SongChartPage() {
                   {personalBestGrade}
                 </p>
               )}
-              {personalBest?.plate && (
-                <p className="text-base sm:text-lg font-display font-bold text-gray-100 tracking-wide">{personalBest.plate}</p>
-              )}
+              <PlateBadge plate={personalBest?.plate} size="md" />
             </div>
           </div>
         </div>

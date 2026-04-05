@@ -13,6 +13,7 @@ import WeeklyChallengePersonalCard from './WeeklyChallengePersonalCard';
 import StickerAsset from './StickerAsset';
 import UserPickerDialog from './UserPickerDialog';
 import { HourOfPowerLogo } from './HourOfPowerBrand';
+import PlateBadge from './ui/plate-badge';
 import { useAuth } from '../contexts/AuthContext';
 import { renderFormattedText } from '../utils/formatText';
 import { getStickerEmoji } from '../utils/stickers';
@@ -34,8 +35,6 @@ import { sendDirectPayloadToRecipients } from '../utils/directMessageDelivery';
 import { useMentionComposer } from '../hooks/useMentionComposer';
 import { mergeLiveSessionSummary } from '../utils/liveSessionMarker';
 import { parseAllMarkers } from '../utils/postMarkers';
-import { getPlateChipClass, normalizePlateCode } from '../utils/plates';
-
 function formatRelativeTime(value) {
   const raw = String(value || '').trim();
   if (!raw) return '';
@@ -99,17 +98,6 @@ function getStoryGradeTone(grade = '') {
   if (normalized.includes('A')) return 'text-lime-200';
   if (normalized === 'B' || normalized === 'C') return 'text-gray-300';
   return 'text-gray-400';
-}
-
-function CompactPlateBadge({ plate = '' }) {
-  const plateCode = normalizePlateCode(plate);
-  if (!plateCode) return null;
-
-  return (
-    <span className={`inline-flex rounded-full border px-1.5 py-0.5 text-[9px] font-display font-black tracking-[0.12em] ${getPlateChipClass(plateCode)}`}>
-      {plateCode}
-    </span>
-  );
 }
 
 const MODAL_INPUT_CLASS = 'w-full rounded-[1.4rem] border border-cyan-300/18 bg-[#151b29] px-4 py-3 text-sm text-white placeholder:text-gray-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] focus:border-cyan-300/35 focus:bg-[#182032] focus:outline-none';
@@ -321,7 +309,7 @@ function StoryCard({ story }) {
                   <p className="font-display text-sm font-black text-white">{formatStoryScoreValue(entry.score)}</p>
                   <div className="mt-1 flex items-center justify-end gap-1.5">
                     <p className={`text-xs font-display font-bold ${getStoryGradeTone(entry.grade)}`}>{entry.grade || 'Score'}</p>
-                    <CompactPlateBadge plate={entry.plate} />
+                    <PlateBadge plate={entry.plate} size="xs" />
                   </div>
                 </div>
               </div>

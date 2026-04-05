@@ -66,9 +66,9 @@ import { getTheme } from '../components/ChatThemes';
 import YouTubeReplayModal from '../components/YouTubeReplayModal';
 import UserPickerDialog from '../components/UserPickerDialog';
 import PiuChartJacket, { resolveChartJacketUrl } from '../components/PiuChartJacket';
+import PlateBadge from '../components/ui/plate-badge';
 import { useMentionComposer } from '../hooks/useMentionComposer';
 import { buildReplayModalTitle } from '../utils/replayTitle';
-import { getPlateChipClass, normalizePlateCode } from '../utils/plates';
 
 const LINK_SHARE_BADGES = {
   live_session: 'Live session',
@@ -122,17 +122,6 @@ function formatCompactScore(value) {
 function formatCompactDelta(value) {
   const numeric = Number(value);
   return Number.isFinite(numeric) && numeric > 0 ? `+${numeric.toLocaleString()}` : '';
-}
-
-function CompactPlateBadge({ plate = '' }) {
-  const plateCode = normalizePlateCode(plate);
-  if (!plateCode) return null;
-
-  return (
-    <span className={`inline-flex rounded-full border px-1.5 py-0.5 text-[9px] font-display font-black tracking-[0.12em] ${getPlateChipClass(plateCode)}`}>
-      {plateCode}
-    </span>
-  );
 }
 
 function extractUrlsFromText(value) {
@@ -480,7 +469,7 @@ function MultiScorePreviewCard({ linkShare, badge, buttonClass, onOpenLink }) {
               <p className="text-[12px] font-display font-black text-white">{formatCompactScore(item.score) || '--'}</p>
               <div className="mt-0.5 flex items-center justify-end gap-1.5">
                 <p className="text-[11px] font-display font-black text-cyan-100">{item.grade || '--'}</p>
-                <CompactPlateBadge plate={item.plate} />
+                <PlateBadge plate={item.plate} size="xs" />
               </div>
               {Number(item.scoreDelta) > 0 ? (
                 <p className="mt-0.5 text-[10px] font-display font-bold text-emerald-300">{formatCompactDelta(item.scoreDelta)}</p>
@@ -753,7 +742,7 @@ function StorySharePreviewCard({ linkShare, buttonClass, onOpenLink, conversatio
                   {(item.grade || item.plate) ? (
                     <div className="mt-1 flex items-center justify-end gap-1.5">
                       {item.grade ? <p className="text-[10px] font-display font-bold text-cyan-100/90">{item.grade}</p> : null}
-                      <CompactPlateBadge plate={item.plate} />
+                      <PlateBadge plate={item.plate} size="xs" />
                     </div>
                   ) : null}
                 </div>
@@ -791,7 +780,7 @@ function StorySharePreviewCard({ linkShare, buttonClass, onOpenLink, conversatio
                     {snapshot.grade || snapshot.new_grade}
                   </div>
                 ) : null}
-                <CompactPlateBadge plate={snapshot.plate} />
+                <PlateBadge plate={snapshot.plate} size="xs" />
               </div>
             ) : null}
           </div>

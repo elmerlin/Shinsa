@@ -105,9 +105,6 @@ function SongJacketButton({ row, onClick }) {
   );
 }
 
-const PLATE_NAMES = { PG: 'PERFECT GAME', UG: 'ULTIMATE GAME', EG: 'EXTREME GAME', SG: 'SUPERB GAME', MG: 'MARVELOUS GAME', TG: 'TALENTED GAME', FG: 'FAIR GAME', RG: 'ROUGH GAME' };
-const PLATE_COLORS = { PG: 'text-piu-gold', UG: 'text-yellow-400', EG: 'text-green-400', SG: 'text-blue-400', MG: 'text-sky-400', TG: 'text-purple-400', FG: 'text-gray-400', RG: 'text-red-400' };
-
 function buildSessionRowChartPath(row) {
   const title = String(row?.song_title || '').trim();
   return title ? `/songs?q=${encodeURIComponent(title)}` : '/songs';

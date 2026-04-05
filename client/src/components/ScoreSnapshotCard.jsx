@@ -1,7 +1,8 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { parseGrade } from '../utils/grades';
-import { getPlateName, getPlateTextColorClass } from '../utils/plates';
+import { getPlateName } from '../utils/plates';
+import PlateBadge from './ui/plate-badge';
 
 const JUDGMENT_META = [
   { key: 'PERFECT', field: 'perfect', labelClass: 'text-sky-300' },
@@ -178,7 +179,6 @@ export default function ScoreSnapshotCard({
   const deltaClass = deltaValue > 0 ? 'text-piu-green' : deltaValue < 0 ? 'text-rose-300' : 'text-gray-400';
   const overRank = getOverTop100Rank(score.over_top100_rank ?? score.overTop100Rank);
   const plateName = getPlateName(score.plate);
-  const plateColor = getPlateTextColorClass(score.plate);
   const isStageBreak = !!score.is_stage_break || !!score.isStageBreak;
   const infoBadges = [
     resolvedRoleLabel ? {
@@ -309,9 +309,12 @@ export default function ScoreSnapshotCard({
               {isStageBreak ? 'STAGE BREAK' : formatNumber(displayScore)}
             </p>
             {plateName ? (
-              <p className={`mt-1 text-[11px] font-display font-bold tracking-[0.14em] ${plateColor}`}>
-                {plateName}
-              </p>
+              <div className="mt-1.5 flex items-center gap-2">
+                <PlateBadge plate={score.plate} size="sm" />
+                <p className="text-[10px] font-display font-bold tracking-[0.16em] text-white/72">
+                  {plateName}
+                </p>
+              </div>
             ) : null}
           </div>
           <div className="shrink-0 text-right">

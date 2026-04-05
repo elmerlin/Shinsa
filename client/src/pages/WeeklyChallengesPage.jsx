@@ -11,6 +11,7 @@ import WeeklyChallengeLeaderboard from '../components/weeklyChallenges/WeeklyCha
 import WeeklyChallengeLevelRow from '../components/weeklyChallenges/WeeklyChallengeLevelRow';
 import WeeklyChallengeWeekPicker, { formatWeekRange } from '../components/weeklyChallenges/WeeklyChallengeWeekPicker';
 import { TrophyIcon } from '../components/weeklyChallenges/WeeklyChallengePodiumStrip';
+import PlateBadge from '../components/ui/plate-badge';
 
 const ScoreSnapshotModal = lazy(() => import('../components/ScoreSnapshotModal'));
 const YouTubeReplayModal = lazy(() => import('../components/YouTubeReplayModal'));
@@ -344,7 +345,10 @@ export default function WeeklyChallengesPage() {
                           background_url: entry.background_url || chartScores.chart.jacket_url || '', _jacketUrl: entry.background_url || chartScores.chart.jacket_url || '',
                         })} className="text-right hover:opacity-80 transition-opacity" title="View score details">
                           <span className="text-[11px] font-display font-bold text-white">{(entry.score || 0).toLocaleString()}</span>
-                          <p className="text-[9px] font-display text-gray-500">{entry.grade}{entry.plate ? ` ${entry.plate}` : ''}</p>
+                          <div className="mt-0.5 flex items-center justify-end gap-1">
+                            <p className="text-[9px] font-display text-gray-500">{entry.grade}</p>
+                            <PlateBadge plate={entry.plate} size="xs" />
+                          </div>
                         </button>
                       </div>
                     </div>

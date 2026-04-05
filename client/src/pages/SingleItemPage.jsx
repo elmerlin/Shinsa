@@ -12,6 +12,7 @@ import ScoreSnapshotModal from '../components/ScoreSnapshotModal';
 import YouTubeReplayModal from '../components/YouTubeReplayModal';
 import SendToDirectMessageButton from '../components/SendToDirectMessageButton';
 import ActionIconButton from '../components/ActionIconButton';
+import PlateBadge from '../components/ui/plate-badge';
 import {
   pumpUpscore, getUpscoreComments, addUpscoreComment, deleteUpscoreComment,
   pumpNewClear, getNewClearComments, addNewClearComment, deleteNewClearComment,
@@ -31,7 +32,6 @@ import {
   buildWcPlayChallengeOptions,
   buildWcPlayLinkShare,
 } from '../utils/directMessageShares';
-import { getPlateChipClass, normalizePlateCode } from '../utils/plates';
 
 function getRank(score) {
   const s = parseInt(score) || 0;
@@ -72,17 +72,6 @@ function timeAgo(dateStr) {
   return date.toLocaleDateString();
 }
 
-function CompactPlateBadge({ plate = '' }) {
-  const plateCode = normalizePlateCode(plate);
-  if (!plateCode) return null;
-
-  return (
-    <span className={`text-[9px] px-1.5 py-0.5 rounded border font-display font-black tracking-[0.12em] ${getPlateChipClass(plateCode)}`}>
-      {plateCode}
-    </span>
-  );
-}
-
 function parsePumbilityGain(value) {
   const numeric = parseInt(value, 10) || 0;
   return numeric > 0 ? numeric : 0;
@@ -118,9 +107,6 @@ function getGradeColor(grade, score = 0) {
   }
   return getRank(score).color;
 }
-
-const PLATE_NAMES = { PG: 'PERFECT GAME', UG: 'ULTIMATE GAME', EG: 'EXTREME GAME', SG: 'SUPERB GAME', MG: 'MARVELOUS GAME', TG: 'TALENTED GAME', FG: 'FAIR GAME', RG: 'ROUGH GAME' };
-const PLATE_COLORS = { PG: 'text-piu-gold', UG: 'text-yellow-400', EG: 'text-green-400', SG: 'text-blue-400', MG: 'text-sky-400', TG: 'text-purple-400', FG: 'text-gray-400', RG: 'text-red-400' };
 
 function appendStickerToken(value, token) {
   const current = String(value || '');
@@ -621,7 +607,7 @@ export function SingleUpscorePage() {
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-display font-bold truncate">{u.song_title}</p>
                   <div className="flex items-center gap-1 mt-0.5">
-                    <CompactPlateBadge plate={u.plate} />
+                    <PlateBadge plate={u.plate} size="xs" />
                     {overRank > 0 && (
                       <span className="text-[11px] leading-none px-1.5 py-0.5 rounded border border-piu-gold/50 bg-piu-gold/15 text-yellow-200 font-display font-black tracking-wide">
                         TOP #{overRank}
@@ -862,7 +848,7 @@ export function SingleClearPage() {
                         TOP #{overRank}
                       </span>
                     )}
-                    {clear.plate && <span className="text-[9px] px-1.5 py-0.5 rounded bg-piu-dark text-gray-400 font-mono">{clear.plate}</span>}
+                    <PlateBadge plate={clear.plate} size="xs" />
                     {songPumbilityGain > 0 && (
                       <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-300 font-display font-black">
                         +{songPumbilityGain.toLocaleString()} PB
