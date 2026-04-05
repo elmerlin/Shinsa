@@ -982,7 +982,7 @@ export default function TournamentPoster() {
   const handleBgUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 8 * 1024 * 1024) { alert('Image must be under 8MB'); return; }
+    if (file.size > 10 * 1024 * 1024) { alert('Image must be under 10MB'); return; }
     setUploading(true);
     try {
       const reader = new FileReader();
@@ -1432,7 +1432,7 @@ export default function TournamentPoster() {
               <img
                 src={getAvatarUrl(tournament.avatar)}
                 alt={title}
-                className="h-28 w-28 rounded-2xl object-cover ring-2 ring-white/15 shadow-[0_16px_40px_rgba(0,0,0,0.5)]"
+                className="h-36 w-36 rounded-2xl object-cover ring-2 ring-white/15 shadow-[0_16px_40px_rgba(0,0,0,0.5)]"
               />
             </div>
           )}

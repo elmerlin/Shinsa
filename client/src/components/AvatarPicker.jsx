@@ -192,8 +192,8 @@ export default function AvatarPicker({ value, onChange, shape = 'circle', size =
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    if (file.size > 5 * 1024 * 1024) {
-      alert('Image must be under 5MB');
+    if (file.size > 10 * 1024 * 1024) {
+      alert('Image must be under 10MB');
       return;
     }
     const reader = new FileReader();
