@@ -122,10 +122,7 @@ struct CommentsView: View {
                     }
                 }
 
-                Text(comment.content)
-                    .font(.system(size: 13))
-                    .foregroundColor(.white.opacity(0.9))
-                    .lineSpacing(2)
+                StickerTextView(text: comment.content, font: .system(size: 13), color: .white.opacity(0.9))
 
                 // Actions
                 HStack(spacing: 14) {

@@ -35,7 +35,7 @@ class APIService {
     }
 
     private init() {
-        self.baseURL = UserDefaults.standard.string(forKey: "serverURL") ?? "http://localhost:3001"
+        self.baseURL = UserDefaults.standard.string(forKey: "serverURL") ?? "https://pumpshinsa.com"
     }
 
     func setBaseURL(_ url: String) {
@@ -278,6 +278,7 @@ class APIService {
     }
     func getPiugameSyncStatus(_ userId: String) async throws -> PiugameSyncStatus { try await request("/piugame/sync-status/\(userId)") }
     func getSyncProgress() async throws -> SyncProgressResponse { try await request("/piugame/sync/progress") }
+    func getPiuSyncStatus(_ userId: String) async throws -> PiuSyncStatus { try await request("/piugame/sync-status/\(userId)") }
 
     // MARK: - Notifications
     func getNotifications() async throws -> NotificationsResponse { try await request("/auth/notifications") }
@@ -366,6 +367,7 @@ class APIService {
         return items
     }
     func getRecentActivity() async throws -> [RecentActivity] { try await request("/social/recent-activity") }
+    func getDailyHighlights() async throws -> DailyHighlightsData { try await request("/social/daily-highlights") }
 
     // MARK: - Phases
     func getPhases(_ tournamentId: String) async throws -> [Phase] { try await request("/phases/tournament/\(tournamentId)") }
@@ -395,10 +397,33 @@ class APIService {
     func addCommunityPostComment(_ communityId: String, postId: Int, content: String) async throws -> Comment { try await request("/communities/\(communityId)/posts/\(postId)/comments", method: "POST", body: ["content": content]) }
 
     // MARK: - Messages & Conversations
-    func getHighlights() async throws -> [UserHighlight] { try await request("/messages/highlights") }
-    func getUserStories(_ userId: String) async throws -> [Story] { try await request("/messages/highlights/\(userId)/story") }
+    func getHighlights() async throws -> [HighlightCircle] {
+        let response: HighlightsResponse = try await request("/messages/highlights")
+        // circles already includes self with is_self=true
+        return response.circles ?? []
+    }
+    func getUserStories(_ userId: String) async throws -> UserStoryResponse { try await request("/messages/highlights/\(userId)/story") }
     func viewStory(_ userId: String, storyId: String) async throws -> GenericResponse { try await request("/messages/highlights/\(userId)/story/\(storyId)/view", method: "POST") }
     func pumpStory(_ userId: String, storyId: String) async throws -> GenericResponse { try await request("/messages/highlights/\(userId)/story/\(storyId)/pump", method: "POST") }
+
+    // MARK: - Notes
+    func createNote(content: String) async throws -> GenericResponse { try await request("/messages/highlights/note", method: "POST", body: ["content": content]) }
+    func clearNote() async throws -> GenericResponse { try await request("/messages/highlights/note", method: "DELETE") }
+
+    // MARK: - Story Creation
+    func createStoryText(caption: String) async throws -> GenericResponse { try await request("/messages/highlights/story", method: "POST", body: ["story_type": "link", "caption": caption]) }
+    func createStorySnapshot(caption: String, snapshotJson: String) async throws -> GenericResponse {
+        let body: [String: AnyCodable] = ["story_type": AnyCodable("score_snapshot"), "caption": AnyCodable(caption), "snapshot_json": AnyCodable(snapshotJson)]
+        return try await request("/messages/highlights/story", method: "POST", body: body)
+    }
+
+    // MARK: - Stomp & Nudge
+    func sendStomp(_ conversationId: String) async throws -> GenericResponse { try await request("/messages/conversations/\(conversationId)/stomp", method: "POST", body: [String: String]()) }
+    func sendNudge(_ conversationId: String) async throws -> GenericResponse { try await request("/messages/conversations/\(conversationId)/nudge", method: "POST", body: [String: String]()) }
+
+    // MARK: - Send link_share message
+    func sendLinkShareMessage(_ conversationId: String, linkShare: [String: AnyCodable]) async throws -> DirectMessage { try await request("/messages/conversations/\(conversationId)/messages", method: "POST", body: ["content": AnyCodable(""), "link_share": AnyCodable(linkShare)]) }
+
     func getConversations() async throws -> [Conversation] {
         let response: ConversationsResponse = try await request("/messages/conversations")
         return response.conversations ?? []
@@ -415,12 +440,14 @@ class APIService {
     func pinConversation(_ conversationId: String, pin: Bool) async throws -> GenericResponse { try await request("/messages/conversations/\(conversationId)/pin", method: "PUT", body: ["pinned": AnyCodable(pin)]) }
     func startDirectConversation(_ userId: String) async throws -> Conversation { try await request("/messages/direct/\(userId)", method: "POST") }
     func createSquad(_ data: SquadCreateRequest) async throws -> Conversation { try await request("/messages/squads", method: "POST", body: data) }
+    func getSquadInfo(_ conversationId: String) async throws -> SquadInfo { try await request("/messages/conversations/\(conversationId)/squad") }
 
     // MARK: - Live Sessions
     func getLiveSessions() async throws -> [LiveSession] { try await request("/live/sessions") }
     func getMyActiveSession() async throws -> LiveSession? { try await request("/live/sessions/mine/active") }
     func createLiveSession(_ data: [String: AnyCodable]) async throws -> LiveSession { try await request("/live/sessions", method: "POST", body: data) }
     func getLiveSession(_ id: String) async throws -> LiveSession { try await request("/live/sessions/\(id)") }
+    func getLiveSessionSnapshot(_ id: String) async throws -> LiveSessionSnapshot { try await request("/live/sessions/\(id)") }
     func updateLiveSession(_ id: String, _ data: [String: AnyCodable]) async throws -> LiveSession { try await request("/live/sessions/\(id)", method: "PATCH", body: data) }
     func addCohost(_ sessionId: String, userId: String) async throws -> GenericResponse { try await request("/live/sessions/\(sessionId)/cohosts", method: "POST", body: ["user_id": userId]) }
     func removeCohost(_ sessionId: String, userId: String) async throws { try await requestVoid("/live/sessions/\(sessionId)/cohosts/\(userId)", method: "DELETE") }
@@ -429,9 +456,25 @@ class APIService {
     func sendLiveMessage(_ sessionId: String, content: String) async throws -> LiveMessage { try await request("/live/sessions/\(sessionId)/messages", method: "POST", body: ["content": content]) }
     func createLiveRequest(_ sessionId: String, data: [String: AnyCodable]) async throws -> LiveRequest { try await request("/live/sessions/\(sessionId)/requests", method: "POST", body: data) }
     func voteLiveRequest(_ sessionId: String, requestId: String, vote: Int) async throws -> GenericResponse { try await request("/live/sessions/\(sessionId)/votes", method: "POST", body: ["request_id": AnyCodable(requestId), "vote": AnyCodable(vote)]) }
+    func updateRequestStatus(_ sessionId: String, requestId: String, status: String) async throws -> GenericResponse { try await request("/live/sessions/\(sessionId)/requests/\(requestId)/status", method: "POST", body: ["status": status]) }
+    func createLiveVote(_ sessionId: String, modeFilter: String, minLevel: Int, maxLevel: Int) async throws -> GenericResponse { try await request("/live/sessions/\(sessionId)/votes", method: "POST", body: ["mode_filter": AnyCodable(modeFilter), "min_level": AnyCodable(minLevel), "max_level": AnyCodable(maxLevel)]) }
+    func castLiveVote(_ voteId: String, optionId: String) async throws -> GenericResponse { try await request("/live/votes/\(voteId)/cast", method: "POST", body: ["option_id": optionId]) }
+    func sendLivePresence(_ sessionId: String) async throws -> GenericResponse { try await request("/live/sessions/\(sessionId)/presence", method: "POST", body: [String: String]()) }
+    func pumpLiveMessage(_ sessionId: String, messageId: String) async throws -> GenericResponse { try await request("/live/sessions/\(sessionId)/messages/\(messageId)/pump", method: "POST", body: [String: String]()) }
+    func deleteLiveMessage(_ sessionId: String, messageId: String) async throws -> GenericResponse { try await request("/live/sessions/\(sessionId)/messages/\(messageId)/delete", method: "POST", body: [String: String]()) }
     func getLiveProfile(_ userId: String) async throws -> [String: AnyCodable] { try await request("/live/profile/\(userId)") }
     func getHopLeaderboard() async throws -> [HopLeaderboardEntry] { try await request("/live/hop/leaderboard") }
     func getHopAttempts() async throws -> [HopLeaderboardEntry] { try await request("/live/hop/attempts") }
+
+    // MARK: - Profile Live Sessions
+    func getProfileLiveSessions(_ userId: String) async throws -> ProfileLiveResponse { try await request("/live/profile/\(userId)") }
+
+    // MARK: - User Activity
+    func getUserActivity(_ userId: String) async throws -> [ActivityItem] { try await request("/auth/user/\(userId)/activity") }
+
+    // MARK: - Shoes
+    func getProfileShoes(_ userId: String) async throws -> ShoeCabinet { try await request("/piugame/shoes/\(userId)") }
+    func wearShoe(_ shoeId: String) async throws -> GenericResponse { try await request("/piugame/shoes/\(shoeId)/wear", method: "POST") }
 
     // MARK: - Duels (offline)
     func getDuels() async throws -> [Duel] { try await request("/duels") }
@@ -455,6 +498,19 @@ class APIService {
     // MARK: - Songs (Extended)
     func getSongLibrary() async throws -> SongLibraryResponse { try await request("/songs/library") }
     func getChartDetail(_ chartId: Int) async throws -> ChartDetailResponse { try await request("/songs/chart/\(chartId)") }
+    func resolveChartId(title: String, mode: String, level: Int) async throws -> Int? {
+        let lib: SongLibraryResponse = try await request("/songs/library")
+        for song in lib.songs ?? [] {
+            if song.title?.lowercased() == title.lowercased() {
+                for chart in song.charts ?? [] {
+                    if chart.mode?.lowercased() == mode.lowercased() && chart.level == level {
+                        return chart.chartId
+                    }
+                }
+            }
+        }
+        return nil
+    }
     func getSkillsMeta() async throws -> [ChartSkill] { try await request("/songs/skills/meta") }
     func getSkillCharts(_ skillSlug: String) async throws -> [ChartDetail] { try await request("/songs/skill/\(skillSlug)") }
     func updateChartSkills(_ chartId: Int, skills: [String]) async throws -> GenericResponse { try await request("/songs/chart/\(chartId)/skills", method: "PUT", body: ["skills": AnyCodable(skills)]) }
@@ -545,6 +601,27 @@ class APIService {
 
     // MARK: - Head to Head
     func getHeadToHead(userId1: String, userId2: String) async throws -> [[String: AnyCodable]] { try await request("/songs/analytics/head-to-head?user1=\(userId1)&user2=\(userId2)") }
+
+    // MARK: - Weekly Challenges
+    func getWeeklyChallengesHome() async throws -> WCHomeResponse { try await request("/weekly-challenges/home") }
+    func getWeeklyChallengeWeeks() async throws -> [WCWeek] { try await request("/weekly-challenges/weeks") }
+    func getWeeklyChallengeWeek(weekKey: String, chartMode: String = "both", leaderboardMode: String = "both", skillFamily: String = "all") async throws -> WCWeekDetailResponse {
+        var path = "/weekly-challenges/week/\(weekKey)?chart_mode=\(chartMode)&leaderboard_mode=\(leaderboardMode)&skill_family=\(skillFamily)"
+        return try await request(path)
+    }
+    func getWeeklyChallengeChartScores(chartId: Int) async throws -> WCChartScoresResponse { try await request("/weekly-challenges/charts/\(chartId)/scores") }
+    func getWeeklyChallengeUserHistory(userId: String) async throws -> [WCUserHistory] { try await request("/weekly-challenges/users/\(userId)/history") }
+
+    // MARK: - Weekly Challenge Play Posts
+    func getWeeklyChallengePlay(id: Int) async throws -> [String: AnyCodable] { try await request("/social/weekly-challenge-plays/\(id)") }
+    func pumpWeeklyChallengePlay(id: Int) async throws -> PumpResponse { try await request("/social/weekly-challenge-plays/\(id)/pump", method: "POST") }
+    func getWeeklyChallengePlayComments(playId: Int) async throws -> [Comment] { try await request("/social/weekly-challenge-plays/\(playId)/comments") }
+    func addWeeklyChallengePlayComment(playId: Int, content: String, parentId: Int? = nil) async throws -> Comment {
+        var body: [String: AnyCodable] = ["content": AnyCodable(content)]
+        if let pid = parentId { body["parent_id"] = AnyCodable(pid) }
+        return try await request("/social/weekly-challenge-plays/\(playId)/comments", method: "POST", body: body)
+    }
+    func deleteWeeklyChallengePlayComment(commentId: Int) async throws { try await requestVoid("/social/weekly-challenge-plays/comments/\(commentId)", method: "DELETE") }
 }
 
 // MARK: - Helper Types

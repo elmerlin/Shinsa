@@ -15,6 +15,7 @@ struct TiersView: View {
     @State private var showEmpty: Bool = false
     @State private var hideCoOp: Bool = true
     @State private var songsPerRow: Int = 4
+    @AppStorage("tiers_default_level") private var defaultLevel: Int = 0
     @State private var showSettings = false
 
     private let modeOrder = ["Single", "Double", "CoOp"]
@@ -106,13 +107,6 @@ struct TiersView: View {
         }
         .navigationTitle("Tier List")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button { showSettings = true } label: {
-                    Image(systemName: "gearshape").foregroundColor(DojoTheme.textMuted)
-                }
-            }
-        }
         .sheet(isPresented: $showSettings) { settingsSheet }
         .task { await loadMeta() }
     }
@@ -163,6 +157,55 @@ struct TiersView: View {
                             .tint(DojoTheme.piuAccent).foregroundColor(.white)
                         Toggle("Hide Co-Op", isOn: $hideCoOp)
                             .tint(DojoTheme.piuAccent).foregroundColor(.white)
+
+                        // Default Level
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("DEFAULT LEVEL").font(.system(size: 11, weight: .bold)).foregroundColor(DojoTheme.textMuted)
+                            Text("Level shown when opening Tiers")
+                                .font(.system(size: 11))
+                                .foregroundColor(DojoTheme.textMuted.opacity(0.6))
+
+                            HStack(spacing: 16) {
+                                Button {
+                                    if defaultLevel > 1 { defaultLevel -= 1 }
+                                } label: {
+                                    Image(systemName: "chevron.left")
+                                        .font(.system(size: 14, weight: .bold))
+                                        .foregroundColor(defaultLevel > 1 ? .white : DojoTheme.textMuted.opacity(0.3))
+                                        .frame(width: 36, height: 36)
+                                        .background(DojoTheme.piuDark)
+                                        .cornerRadius(8)
+                                }
+                                .disabled(defaultLevel <= 1)
+
+                                Text(defaultLevel > 0 ? "\(defaultLevel)" : "None")
+                                    .font(.system(size: 20, weight: .black))
+                                    .foregroundColor(defaultLevel > 0 ? DojoTheme.piuAccent : DojoTheme.textMuted)
+                                    .frame(width: 50)
+
+                                Button {
+                                    let maxLevel = selectedMode == "Single" ? 26 : 28
+                                    if defaultLevel < maxLevel { defaultLevel += 1 }
+                                } label: {
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 14, weight: .bold))
+                                        .foregroundColor(.white)
+                                        .frame(width: 36, height: 36)
+                                        .background(DojoTheme.piuDark)
+                                        .cornerRadius(8)
+                                }
+
+                                Spacer()
+
+                                if defaultLevel > 0 {
+                                    Button("Clear") {
+                                        defaultLevel = 0
+                                    }
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundColor(DojoTheme.textMuted)
+                                }
+                            }
+                        }
 
                         // Songs per row
                         VStack(alignment: .leading, spacing: 6) {
@@ -270,6 +313,14 @@ struct TiersView: View {
                     .frame(width: 44, height: 44)
             }
             .disabled(!canNavigateLevel(1))
+
+            // Settings cog
+            Button { showSettings = true } label: {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 15))
+                    .foregroundColor(DojoTheme.textMuted)
+                    .frame(width: 36, height: 36)
+            }
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
@@ -308,13 +359,20 @@ struct TiersView: View {
     private func cycleMode() {
         let modes = availableModes
         guard !modes.isEmpty else { return }
+        let currentLevel = selectedLevel
         if let idx = modes.firstIndex(of: selectedMode) {
             let nextIdx = (idx + 1) % modes.count
             selectedMode = modes[nextIdx]
         } else {
             selectedMode = modes[0]
         }
-        selectedLevel = availableLevels.first?.level
+        // Keep the same level number when switching modes (e.g. S18 → D18)
+        if let lvl = currentLevel, availableLevels.contains(where: { $0.level == lvl }) {
+            selectedLevel = lvl
+        } else {
+            // Fall back to closest available level
+            selectedLevel = availableLevels.first?.level
+        }
         Task { await loadTiers() }
     }
 
@@ -460,7 +518,12 @@ struct TiersView: View {
         let modes = modeOrder.filter { levelsByMode[$0] != nil && !(levelsByMode[$0]?.isEmpty ?? true) }
         if let first = modes.first {
             selectedMode = first
-            selectedLevel = levelsByMode[first]?.first?.level
+            // Apply default level if set, otherwise use first available
+            if defaultLevel > 0, let levels = levelsByMode[first], levels.contains(where: { $0.level == defaultLevel }) {
+                selectedLevel = defaultLevel
+            } else {
+                selectedLevel = levelsByMode[first]?.first?.level
+            }
         }
         await loadTiers()
     }

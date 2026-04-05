@@ -14,9 +14,17 @@ class ProfileViewModel: ObservableObject {
     @Published var achievements: [AchievementBadge] = []
     @Published var posts: [Post] = []
     @Published var heatmapData: [String: HeatmapDay] = [:]
+    @Published var piuStatus: PiuSyncStatus?
+    @Published var songAnalytics: SongAnalytics?
     @Published var postsPage = 1
     @Published var hasMorePosts = true
     @Published var isLoadingPosts = false
+    @Published var followers: [User] = []
+    @Published var following: [User] = []
+    @Published var profileLive: ProfileLiveResponse?
+    @Published var activityItems: [ActivityItem] = []
+    @Published var shoeCabinet: ShoeCabinet?
+    @Published var shoeLoading = false
 
     let userId: String
 
@@ -35,6 +43,14 @@ class ProfileViewModel: ObservableObject {
         stats = try? await s
         followStatus = try? await f
         socialCounts = try? await c
+        piuStatus = try? await APIService.shared.getPiuSyncStatus(userId)
+        songAnalytics = try? await APIService.shared.getSongAnalytics(userId)
+
+        // Load achievements from user profile
+        if let badges = user?.achievementBadges {
+            achievements = badges
+        }
+
         isLoading = false
     }
 
@@ -71,10 +87,9 @@ class ProfileViewModel: ObservableObject {
     }
 
     func loadAchievements() async {
-        do {
-            achievements = try await APIService.shared.getUserAchievements(userId)
-        } catch {
-            // Silently fail
+        // Badges come from user profile response, not a separate endpoint
+        if let badges = user?.achievementBadges {
+            achievements = badges
         }
     }
 
@@ -107,8 +122,18 @@ class ProfileViewModel: ObservableObject {
 
         for play in plays {
             guard let datePlayed = play.effectiveDate else { continue }
-            // Extract just the date portion (YYYY-MM-DD)
-            let dateKey = String(datePlayed.prefix(10))
+            // Extract just the date portion (YYYY-MM-DD), normalizing dots/slashes to dashes
+            let rawKey = String(datePlayed.prefix(10))
+                .replacingOccurrences(of: ".", with: "-")
+                .replacingOccurrences(of: "/", with: "-")
+            // Pad single-digit month/day (e.g. "2026-3-5" → "2026-03-05")
+            let parts = rawKey.split(separator: "-")
+            let dateKey: String
+            if parts.count == 3, let y = parts.first, y.count == 4 {
+                dateKey = "\(y)-\(parts[1].count == 1 ? "0" : "")\(parts[1])-\(parts[2].count == 1 ? "0" : "")\(parts[2])"
+            } else {
+                dateKey = rawKey
+            }
             guard dateKey.count == 10 else { continue }
 
             var entry = map[dateKey] ?? (plays: 0, singlesLevels: [], doublesLevels: [])
@@ -132,5 +157,36 @@ class ProfileViewModel: ObservableObject {
             result[key] = HeatmapDay(key: key, plays: val.plays, singlesAvgLevel: singlesAvg, doublesAvgLevel: doublesAvg, doubleRatio: doubleRatio)
         }
         heatmapData = result
+    }
+
+    func loadProfileLive() async {
+        profileLive = try? await APIService.shared.getProfileLiveSessions(userId)
+    }
+
+    func loadActivity() async {
+        activityItems = (try? await APIService.shared.getUserActivity(userId)) ?? []
+    }
+
+    func loadShoes() async {
+        shoeLoading = true
+        shoeCabinet = try? await APIService.shared.getProfileShoes(userId)
+        shoeLoading = false
+    }
+
+    func wearShoe(_ shoeId: String) async {
+        _ = try? await APIService.shared.wearShoe(shoeId)
+        await loadShoes()
+    }
+
+    func loadFollowers() async {
+        isLoading = true
+        followers = (try? await APIService.shared.getFollowers(userId)) ?? []
+        isLoading = false
+    }
+
+    func loadFollowing() async {
+        isLoading = true
+        following = (try? await APIService.shared.getFollowing(userId)) ?? []
+        isLoading = false
     }
 }

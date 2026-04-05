@@ -5,6 +5,9 @@ struct UpscoreCardView: View {
     @State private var pumped: Bool
     @State private var pumpCount: Int
     @State private var showAll = false
+    @State private var showComments = false
+    @State private var selectedScore: FeedItem.UpscoreItem?
+    @State private var showSendPicker = false
 
     init(item: FeedItem) {
         self.item = item
@@ -90,8 +93,10 @@ struct UpscoreCardView: View {
                     await togglePump()
                 }
 
-                NavigationLink {
-                    CommentsView(itemType: "upscore", itemId: item.itemId)
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showComments.toggle()
+                    }
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "bubble.left")
@@ -99,17 +104,87 @@ struct UpscoreCardView: View {
                         Text("\(item.commentCount ?? 0)")
                             .font(.system(size: 12, weight: .bold))
                     }
-                    .foregroundColor(DojoTheme.textMuted)
+                    .foregroundColor(showComments ? DojoTheme.piuAccent : DojoTheme.textMuted)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                 }
 
+                Button { showSendPicker = true } label: {
+                    Image(systemName: "paperplane")
+                        .font(.system(size: 12))
+                        .foregroundColor(DojoTheme.textMuted)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                }
+
                 Spacer()
+            }
+
+            // Inline comments
+            if showComments {
+                CommentsView(itemType: "upscore", itemId: item.itemId)
+                    .frame(maxHeight: 300)
+                    .clipped()
             }
         }
         .padding(14)
         .background(DojoTheme.piuCard)
         .cornerRadius(12)
+        .sheet(item: $selectedScore) { u in
+            ScoreSnapshotSheet(
+                songTitle: u.songTitle ?? "Unknown",
+                mode: u.mode ?? "S",
+                level: u.level ?? 0,
+                score: u.newScore ?? 0,
+                grade: DojoTheme.gradeLabel(for: u.newScore ?? 0),
+                backgroundUrl: u.backgroundUrl,
+                perfect: u.perfect,
+                great: u.great,
+                good: u.good,
+                bad: u.bad,
+                miss: u.miss,
+                datePlayed: u.datePlayed,
+                replayEmbedUrl: u.replayEmbedUrl,
+                username: item.username
+            )
+        }
+        .sheet(isPresented: $showSendPicker) {
+            UserPickerSheet(
+                title: "Send upscore",
+                onSelectUser: { partner in
+                    Task {
+                        let linkShare: [String: AnyCodable] = [
+                            "kind": AnyCodable("upscore"),
+                            "title": AnyCodable("\(item.username ?? "Player")'s upscore"),
+                            "songTitle": AnyCodable(item.songTitle ?? ""),
+                            "mode": AnyCodable(item.mode ?? ""),
+                            "level": AnyCodable(item.level ?? 0),
+                            "score": AnyCodable(item.newScore ?? 0),
+                        ]
+                        if let userId = partner.id {
+                            let convo = try? await APIService.shared.startDirectConversation(userId)
+                            if let cid = convo?.id {
+                                _ = try? await APIService.shared.sendLinkShareMessage(cid, linkShare: linkShare)
+                            }
+                        }
+                    }
+                },
+                onSelectConversation: { convo in
+                    Task {
+                        let linkShare: [String: AnyCodable] = [
+                            "kind": AnyCodable("upscore"),
+                            "title": AnyCodable("\(item.username ?? "Player")'s upscore"),
+                            "songTitle": AnyCodable(item.songTitle ?? ""),
+                            "mode": AnyCodable(item.mode ?? ""),
+                            "level": AnyCodable(item.level ?? 0),
+                            "score": AnyCodable(item.newScore ?? 0),
+                        ]
+                        _ = try? await APIService.shared.sendLinkShareMessage(convo.id, linkShare: linkShare)
+                    }
+                },
+                onDismiss: { showSendPicker = false }
+            )
+        }
     }
 
     // MARK: - Upscore Row (from upscores_json)
@@ -151,7 +226,18 @@ struct UpscoreCardView: View {
 
             Spacer()
 
-            // Scores with grades
+            // Replay badge (opens score sheet with in-app player)
+            if let replayUrl = u.replayEmbedUrl, !replayUrl.isEmpty {
+                Button {
+                    selectedScore = u
+                } label: {
+                    Image(systemName: "play.circle.fill")
+                        .font(.system(size: 14))
+                        .foregroundColor(.red)
+                }
+            }
+
+            // Scores with grades (tappable)
             if let old = u.oldScore, let new = u.newScore {
                 VStack(alignment: .trailing, spacing: 2) {
                     // Score line
@@ -165,7 +251,7 @@ struct UpscoreCardView: View {
                                 .foregroundColor(DojoTheme.textMuted)
                         }
 
-                        Text("→")
+                        Text("\u{2192}")
                             .font(.system(size: 8))
                             .foregroundColor(DojoTheme.textMuted)
 
@@ -187,6 +273,8 @@ struct UpscoreCardView: View {
                             .foregroundColor(DojoTheme.piuGreen)
                     }
                 }
+                .contentShape(Rectangle())
+                .onTapGesture { selectedScore = u }
             }
         }
         .padding(.horizontal, 10)
@@ -213,7 +301,7 @@ struct UpscoreCardView: View {
                     Text(formatScore(old))
                         .font(.system(size: 10, design: .monospaced))
                         .foregroundColor(DojoTheme.textMuted)
-                    Text("→")
+                    Text("\u{2192}")
                         .font(.system(size: 8))
                         .foregroundColor(DojoTheme.textMuted)
                     Text(formatScore(new))
@@ -278,6 +366,17 @@ struct UpscoreCardView: View {
         .frame(width: 50, height: 28)
         .cornerRadius(6)
         .clipped()
+        .overlay(
+            NavigationLink(value: chartRoute(songTitle: songTitle, mode: mode, level: level)) {
+                Color.clear
+            }
+            .opacity(0)
+        )
+    }
+
+    private func chartRoute(songTitle: String?, mode: String?, level: Int?) -> String {
+        guard let t = songTitle, let m = mode, let l = level else { return "" }
+        return "song-chart-lookup/\(t)|\(m)|\(l)"
     }
 
     private func jacketFallback(songTitle: String?, mode: String?) -> some View {

@@ -1,7 +1,7 @@
 import Foundation
 
 struct PumbilityScore: Codable, Identifiable {
-    let id: Int
+    var id: String { "\(songTitle)|\(mode)|\(level)" }
     var userId: String?
     var songTitle: String
     var mode: String
@@ -11,14 +11,17 @@ struct PumbilityScore: Codable, Identifiable {
     var backgroundUrl: String?
     var datePlayed: String?
     var rankOrder: Int?
+    var rating: Int?
+    var overTop100Rank: Int?
 
     enum CodingKeys: String, CodingKey {
-        case id, mode, level, score, grade
+        case mode, level, score, grade, rating
         case userId = "user_id"
         case songTitle = "song_title"
         case backgroundUrl = "background_url"
         case datePlayed = "date_played"
         case rankOrder = "rank_order"
+        case overTop100Rank = "over_top100_rank"
     }
 }
 
@@ -60,6 +63,8 @@ struct RecentlyPlayed: Codable, Identifiable {
     var maxCombo: Int?
     var kcal: Double?
     var plate: String?
+    var replayEmbedUrl: String?
+    var replayVideoId: String?
 
     /// Best available date string for this play
     var effectiveDate: String? {
@@ -76,6 +81,8 @@ struct RecentlyPlayed: Codable, Identifiable {
         case datePlayed = "date_played"
         case playedAtUtc = "played_at_utc"
         case maxCombo = "max_combo"
+        case replayEmbedUrl = "replay_embed_url"
+        case replayVideoId = "replay_video_id"
     }
 }
 
@@ -107,8 +114,57 @@ struct PiugameSyncStatus: Codable {
 }
 
 struct PumbilityData: Codable {
-    var pumbility: Int?
+    var pumbilityValue: Int?
+    var officialPumbility: Int?
     var scores: [PumbilityScore]?
+    var averageRating: Double?
+    var equivalentLevel: Int?
+    var equivalentGrade: String?
+    var minEntryRating: Int?
+    var minEntryDetails: MinEntryDetails?
+    var ranking: Int?
+    var scoreCount: Int?
+
+    struct MinEntryDetails: Codable {
+        var rating: Int?
+        var songTitle: String?
+        var mode: String?
+        var level: Int?
+        var score: Int?
+        var grade: String?
+        enum CodingKeys: String, CodingKey {
+            case rating, mode, level, score, grade
+            case songTitle = "song_title"
+        }
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case scores, ranking
+        case pumbilityValue = "pumbility_value"
+        case officialPumbility = "official_pumbility"
+        case averageRating = "average_rating"
+        case equivalentLevel = "equivalent_level"
+        case equivalentGrade = "equivalent_grade"
+        case minEntryRating = "min_entry_rating"
+        case minEntryDetails = "min_entry_details"
+        case scoreCount = "score_count"
+    }
+}
+
+struct PiuSyncStatus: Codable {
+    var linked: Bool?
+    var highestSingle: Int?
+    var highestDouble: Int?
+    var pumbilityValue: Int?
+    var bestScoresImported: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case linked
+        case highestSingle = "highest_single"
+        case highestDouble = "highest_double"
+        case pumbilityValue = "pumbility_value"
+        case bestScoresImported = "best_scores_imported"
+    }
 }
 
 struct SyncProgressResponse: Codable {

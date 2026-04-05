@@ -4,6 +4,8 @@ struct PostCardView: View {
     let item: FeedItem
     @State private var pumped: Bool
     @State private var pumpCount: Int
+    @State private var showComments = false
+    @State private var showSendPicker = false
 
     init(item: FeedItem) {
         self.item = item
@@ -39,12 +41,50 @@ struct PostCardView: View {
                 Spacer()
             }
 
-            // Content
+            // Content (parse all marker types)
             if let content = item.content, !content.isEmpty {
-                Text(content)
-                    .font(.system(size: 14))
-                    .foregroundColor(.white.opacity(0.9))
-                    .lineSpacing(3)
+                let markers = PostMarkerParser.parseAll(from: content)
+
+                // WC summary marker
+                if let wcSummary = markers.wcSummary {
+                    WCSummaryPostCardView(summary: wcSummary, text: markers.text)
+                }
+
+                // WC personal recap marker
+                if let wcPersonal = markers.wcPersonal {
+                    WCPersonalPostCardView(personal: wcPersonal, text: markers.text)
+                }
+
+                // Session share / hour of power marker
+                if let sessionShare = markers.sessionShare {
+                    SessionShareCardView(share: sessionShare)
+                }
+
+                // Session summary marker
+                if let sessionSummary = markers.sessionSummary {
+                    SessionSummaryCardView(summary: sessionSummary)
+                }
+
+                // Session plan marker
+                if let sessionPlan = markers.sessionPlan {
+                    SessionPlanCardView(plan: sessionPlan)
+                }
+
+                // Live session (parsed separately since it has its own format)
+                if !markers.hasAnyMarker {
+                    let liveParsed = LiveSessionMarker.split(content)
+                    if let summary = liveParsed.summary {
+                        LiveSessionCardView(summary: summary, username: item.username)
+                    }
+                }
+
+                // Remaining text content
+                if !markers.text.isEmpty {
+                    Text(markers.text)
+                        .font(.system(size: 14))
+                        .foregroundColor(.white.opacity(0.9))
+                        .lineSpacing(3)
+                }
             }
 
             // Images
@@ -74,8 +114,10 @@ struct PostCardView: View {
                     await togglePump()
                 }
 
-                NavigationLink {
-                    CommentsView(itemType: "post", itemId: item.itemId)
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showComments.toggle()
+                    }
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "bubble.left")
@@ -83,17 +125,52 @@ struct PostCardView: View {
                         Text("\(item.commentCount ?? 0)")
                             .font(.system(size: 12, weight: .bold))
                     }
-                    .foregroundColor(DojoTheme.textMuted)
+                    .foregroundColor(showComments ? DojoTheme.piuAccent : DojoTheme.textMuted)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                 }
 
+                Button { showSendPicker = true } label: {
+                    Image(systemName: "paperplane")
+                        .font(.system(size: 12))
+                        .foregroundColor(DojoTheme.textMuted)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                }
+
                 Spacer()
+            }
+
+            // Inline comments
+            if showComments {
+                CommentsView(itemType: "post", itemId: item.itemId)
+                    .frame(maxHeight: 300)
+                    .clipped()
             }
         }
         .padding(14)
         .background(DojoTheme.piuCard)
         .cornerRadius(12)
+        .sheet(isPresented: $showSendPicker) {
+            UserPickerSheet(
+                title: "Send post",
+                onSelectUser: { partner in
+                    Task {
+                        guard let pid = partner.id else { return }
+                        let ls: [String: AnyCodable] = ["kind": AnyCodable("post"), "title": AnyCodable("\(item.username ?? "Player")'s post"), "subtitle": AnyCodable(String((item.content ?? "").prefix(100)))]
+                        let convo = try? await APIService.shared.startDirectConversation(pid)
+                        if let cid = convo?.id { _ = try? await APIService.shared.sendLinkShareMessage(cid, linkShare: ls) }
+                    }
+                },
+                onSelectConversation: { convo in
+                    Task {
+                        let ls: [String: AnyCodable] = ["kind": AnyCodable("post"), "title": AnyCodable("\(item.username ?? "Player")'s post"), "subtitle": AnyCodable(String((item.content ?? "").prefix(100)))]
+                        _ = try? await APIService.shared.sendLinkShareMessage(convo.id, linkShare: ls)
+                    }
+                },
+                onDismiss: { showSendPicker = false }
+            )
+        }
     }
 
     private func togglePump() async {

@@ -4,6 +4,7 @@ import Foundation
 class MessagesViewModel: ObservableObject {
     @Published var conversations: [Conversation] = []
     @Published var messages: [DirectMessage] = []
+    @Published var highlights: [UserHighlight] = []
     @Published var isLoading = false
     @Published var isLoadingMessages = false
     @Published var isSending = false
@@ -19,6 +20,15 @@ class MessagesViewModel: ObservableObject {
             conversations = []
         }
         isLoading = false
+        await loadHighlights()
+    }
+
+    func loadHighlights() async {
+        do {
+            highlights = try await APIService.shared.getHighlights()
+        } catch {
+            highlights = []
+        }
     }
 
     func loadMessages(conversationId: String) async {

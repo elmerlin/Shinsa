@@ -3,6 +3,7 @@ import SwiftUI
 struct DashboardView: View {
     @StateObject private var vm = DashboardViewModel()
     @EnvironmentObject var auth: AuthManager
+    @State private var selectedHighlight: HighlightItem?
 
     var body: some View {
         ZStack {
@@ -10,14 +11,11 @@ struct DashboardView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    // Header
-                    headerSection
-
-                    // Quick Action Buttons (2x2 grid)
+                    // Quick Action Buttons (4-column row)
                     quickActionsGrid
 
-                    // Search
-                    searchSection
+                    // Weekly Challenges Summary
+                    WCSummaryCardView()
 
                     // Notices
                     if !vm.notices.isEmpty {
@@ -27,6 +25,11 @@ struct DashboardView: View {
                     // Recent Activity
                     if !vm.recentActivity.isEmpty && vm.searchResults == nil {
                         recentActivitySection
+                    }
+
+                    // Daily Highlights
+                    if let highlights = vm.dailyHighlights, vm.searchResults == nil {
+                        dailyHighlightsSection(highlights)
                     }
 
                     // Online Duels
@@ -47,144 +50,105 @@ struct DashboardView: View {
             .refreshable { await vm.load() }
         }
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Image("ShinsaLogo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 32, height: 32)
+                    .cornerRadius(6)
+            }
+        }
         .task { await vm.load() }
         .sheet(item: $vm.selectedNotice) { notice in
             NoticeDetailSheet(notice: notice)
         }
-    }
-
-    // MARK: - Header
-
-    private var headerSection: some View {
-        HStack(spacing: 0) {
-            Text("PUMP")
-                .font(.system(size: 36, weight: .black))
-                .foregroundColor(DojoTheme.piuGold)
-            Text(" SHINSA")
-                .font(.system(size: 36, weight: .black))
-                .foregroundColor(.white)
+        .sheet(item: $selectedHighlight) { item in
+            ScoreSnapshotSheet(
+                songTitle: item.songTitle ?? "Unknown",
+                mode: item.mode ?? "S",
+                level: item.level ?? 0,
+                score: item.newScore ?? item.score ?? 0,
+                grade: DojoTheme.gradeLabel(for: item.newScore ?? item.score ?? 0),
+                backgroundUrl: item.backgroundUrl,
+                perfect: item.perfect,
+                great: item.great,
+                good: item.good,
+                bad: item.bad,
+                miss: item.miss,
+                replayEmbedUrl: item.replayEmbedUrl,
+                username: item.username
+            )
         }
     }
+
+    // MARK: - Header (moved to toolbar)
 
     // MARK: - Quick Actions Grid
 
     private var quickActionsGrid: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 10) {
-                NavigationLink {
-                    LiveDirectoryView()
-                } label: {
-                    quickActionButton(
-                        icon: "video.fill",
-                        title: "Live",
-                        gradientColors: [Color(hex: "#06b6d4"), Color(hex: "#3b82f6")]
-                    )
-                }
-
-                NavigationLink {
-                    SongsView()
-                } label: {
-                    quickActionButton(
-                        icon: "music.note",
-                        title: "Songs",
-                        gradientColors: [Color(hex: "#10b981"), Color(hex: "#14b8a6")]
-                    )
-                }
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
+            NavigationLink {
+                LiveDirectoryView()
+            } label: {
+                quickActionButton(
+                    icon: "video.fill",
+                    title: "Live",
+                    gradientColors: [Color(hex: "#06b6d4"), Color(hex: "#3b82f6")]
+                )
             }
 
-            HStack(spacing: 10) {
-                NavigationLink {
-                    ListsView()
-                } label: {
-                    quickActionButton(
-                        icon: "checkmark.circle.fill",
-                        title: "Lists",
-                        gradientColors: [Color(hex: "#8b5cf6"), Color(hex: "#a855f7")]
-                    )
-                }
+            NavigationLink {
+                SongsView()
+            } label: {
+                quickActionButton(
+                    icon: "music.note",
+                    title: "Songs",
+                    gradientColors: [Color(hex: "#10b981"), Color(hex: "#14b8a6")]
+                )
+            }
 
-                NavigationLink {
-                    HeadToHeadView()
-                } label: {
-                    quickActionButton(
-                        icon: "person.2.fill",
-                        title: "Rival",
-                        gradientColors: [Color(hex: "#f59e0b"), Color(hex: "#f97316")]
-                    )
-                }
+            NavigationLink {
+                ListsView()
+            } label: {
+                quickActionButton(
+                    icon: "checkmark.circle.fill",
+                    title: "Lists",
+                    gradientColors: [Color(hex: "#8b5cf6"), Color(hex: "#a855f7")]
+                )
+            }
+
+            NavigationLink {
+                HeadToHeadView()
+            } label: {
+                quickActionButton(
+                    icon: "person.2.fill",
+                    title: "Rival",
+                    gradientColors: [Color(hex: "#f59e0b"), Color(hex: "#f97316")]
+                )
             }
         }
     }
 
     private func quickActionButton(icon: String, title: String, gradientColors: [Color]) -> some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 6) {
             Image(systemName: icon)
-                .font(.system(size: 24, weight: .semibold))
+                .font(.system(size: 20, weight: .semibold))
                 .foregroundColor(.white)
 
             Text(title)
-                .font(.system(size: 14, weight: .bold))
+                .font(.system(size: 11, weight: .bold))
                 .foregroundColor(.white)
         }
         .frame(maxWidth: .infinity)
-        .frame(height: 90)
+        .frame(height: 72)
         .background(
             LinearGradient(colors: gradientColors, startPoint: .topLeading, endPoint: .bottomTrailing)
         )
-        .cornerRadius(14)
-        .shadow(color: gradientColors[0].opacity(0.3), radius: 8, y: 4)
+        .cornerRadius(12)
+        .shadow(color: gradientColors[0].opacity(0.3), radius: 6, y: 3)
     }
 
-    // MARK: - Search
-
-    private var searchSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Image(systemName: "magnifyingglass")
-                    .foregroundColor(DojoTheme.textMuted)
-                TextField("Search tournaments, locations, players...", text: Binding(
-                    get: { vm.searchQuery },
-                    set: { vm.search($0) }
-                ))
-                .foregroundColor(.white)
-                .autocorrectionDisabled()
-
-                if vm.isSearching {
-                    ProgressView()
-                        .scaleEffect(0.7)
-                        .tint(DojoTheme.textMuted)
-                }
-
-                if !vm.searchQuery.isEmpty {
-                    Button { vm.clearSearch() } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(DojoTheme.textMuted)
-                    }
-                }
-            }
-            .padding(12)
-            .background(DojoTheme.piuCard)
-            .cornerRadius(10)
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(DojoTheme.piuBorder, lineWidth: 1)
-            )
-
-            if let results = vm.searchResults {
-                HStack {
-                    Text("\(results.count) result\(results.count != 1 ? "s" : "") for \"\(vm.searchQuery)\"")
-                        .font(.system(size: 11))
-                        .foregroundColor(DojoTheme.textMuted)
-
-                    Spacer()
-
-                    Button("Clear search") { vm.clearSearch() }
-                        .font(.system(size: 11))
-                        .foregroundColor(DojoTheme.piuAccent)
-                }
-            }
-        }
-    }
 
     // MARK: - Notices
 
@@ -420,6 +384,238 @@ struct DashboardView: View {
             }
         }
     }
+
+    // MARK: - Daily Highlights
+
+    private func dailyHighlightsSection(_ data: DailyHighlightsData) -> some View {
+        let replays = data.topReplays ?? []
+        let upscores = data.topUpscores ?? []
+        let clears = data.topClears ?? []
+
+        let hasContent = !replays.isEmpty || !upscores.isEmpty || !clears.isEmpty
+        guard hasContent else { return AnyView(EmptyView()) }
+
+        return AnyView(VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 6) {
+                Text("TODAY'S HIGHLIGHTS")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(DojoTheme.piuAccent)
+                Rectangle()
+                    .fill(DojoTheme.piuAccent.opacity(0.3))
+                    .frame(height: 1)
+            }
+
+            if !replays.isEmpty {
+                highlightRow(title: "🎬 Top Replays", items: replays, isReplay: true, accentColor: .red)
+            }
+
+            if !upscores.isEmpty {
+                highlightRow(title: "📈 Best Upscores", items: upscores, isReplay: false, accentColor: DojoTheme.piuGreen)
+            }
+
+            if !clears.isEmpty {
+                highlightRow(title: "🎯 Best New Clears", items: clears, isReplay: false, accentColor: Color(hex: "#38bdf8"))
+            }
+        })
+    }
+
+    private func highlightRow(title: String, items: [HighlightItem], isReplay: Bool, accentColor: Color) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Text(title)
+                    .font(.system(size: 10, weight: .black))
+                    .foregroundColor(.white.opacity(0.8))
+                    .textCase(.uppercase)
+                    .tracking(1)
+                Rectangle()
+                    .fill(accentColor.opacity(0.3))
+                    .frame(height: 1)
+            }
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                        highlightCard(item: item, rank: index + 1, isReplay: isReplay)
+                    }
+                }
+                .padding(.horizontal, 2)
+            }
+        }
+    }
+
+    private func highlightCard(item: HighlightItem, rank: Int, isReplay: Bool) -> some View {
+        let jacketURL = JacketService.shared.resolveJacketURL(title: item.songTitle, mode: item.mode, level: item.level, backgroundUrl: item.backgroundUrl)
+        let displayScore = item.newScore ?? item.score ?? 0
+        let gradeLabel = DojoTheme.gradeLabel(for: displayScore)
+        let gradeColor = DojoTheme.gradeColor(for: displayScore)
+
+        let rankColors: [Color] = {
+            switch rank {
+            case 1: return [Color(hex: "#ffd700"), Color(hex: "#ffb300")]
+            case 2: return [Color(hex: "#e0e0e0"), Color(hex: "#9e9e9e")]
+            case 3: return [Color(hex: "#cd7f32"), Color(hex: "#8b4513")]
+            default: return [Color(hex: "#38bdf8"), Color(hex: "#0284c7")]
+            }
+        }()
+
+        let isDouble: Bool = {
+            guard let m = item.mode else { return false }
+            return m.lowercased().hasPrefix("d") || m.lowercased() == "double"
+        }()
+
+        let modeBadgeLabel: String? = {
+            guard let _ = item.mode, let lvl = item.level, lvl > 0 else { return nil }
+            let prefix = isDouble ? "D" : "S"
+            return "\(prefix)\(lvl)"
+        }()
+
+        return Button {
+            selectedHighlight = item
+        } label: {
+            ZStack {
+                // Jacket background fills entire card
+                if let url = jacketURL {
+                    GeometryReader { geo in
+                        AsyncImage(url: url) { phase in
+                            switch phase {
+                            case .success(let img):
+                                img.resizable().scaledToFill()
+                                    .frame(width: geo.size.width, height: geo.size.height)
+                                    .clipped()
+                            default:
+                                Rectangle().fill(
+                                    LinearGradient(colors: [Color(hex: "#152238"), Color(hex: "#090d18")], startPoint: .topLeading, endPoint: .bottomTrailing)
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    Rectangle().fill(
+                        LinearGradient(colors: [Color(hex: "#152238"), Color(hex: "#090d18")], startPoint: .topLeading, endPoint: .bottomTrailing)
+                    )
+                }
+
+                // Dark gradient overlay
+                LinearGradient(colors: [.black.opacity(0.2), .black.opacity(0.5), .black.opacity(0.95)], startPoint: .top, endPoint: .bottom)
+
+                // Content overlay
+                VStack(spacing: 0) {
+                    // Top row: rank circle (left) + mode badge (right)
+                    HStack(alignment: .top, spacing: 0) {
+                        // Rank circle
+                        Text("\(rank)")
+                            .font(.system(size: 9, weight: .black))
+                            .foregroundColor(rank <= 3 ? .black : .white)
+                            .frame(width: 18, height: 18)
+                            .background(
+                                Circle().fill(LinearGradient(colors: rankColors, startPoint: .topLeading, endPoint: .bottomTrailing))
+                            )
+
+                        Spacer()
+
+                        // Mode badge + Replay stacked
+                        VStack(alignment: .trailing, spacing: 3) {
+                            if let badge = modeBadgeLabel {
+                                Text(badge)
+                                    .font(.system(size: 8, weight: .black))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 2)
+                                    .background(
+                                        LinearGradient(
+                                            colors: isDouble
+                                                ? [Color(hex: "#4cf4aa"), Color(hex: "#0b5d48")]
+                                                : [Color(hex: "#ff7a7a"), Color(hex: "#7a1730")],
+                                            startPoint: .leading, endPoint: .trailing
+                                        )
+                                    )
+                                    .cornerRadius(4)
+                            }
+
+                            if isReplay {
+                                HStack(spacing: 2) {
+                                    Image(systemName: "play.fill")
+                                        .font(.system(size: 5))
+                                    Text("Replay")
+                                        .font(.system(size: 7, weight: .bold))
+                                }
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 2)
+                                .background(Color.red.opacity(0.9))
+                                .cornerRadius(4)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.top, 7)
+
+                    Spacer()
+
+                    // Bottom content
+                    VStack(alignment: .leading, spacing: 2) {
+                        // Player: avatar + flag + username
+                        HStack(spacing: 3) {
+                            if let avatar = item.avatar, !avatar.isEmpty {
+                                AvatarView(avatar, name: item.username ?? "?", size: 16)
+                            }
+                            if let nat = item.nationality, !nat.isEmpty {
+                                Text(CountryData.flag(for: nat))
+                                    .font(.system(size: 8))
+                            }
+                            Text(item.username ?? "")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundColor(.white)
+                                .lineLimit(1)
+                        }
+
+                        // Song title
+                        Text(item.songTitle ?? "Unknown")
+                            .font(.system(size: 11, weight: .black))
+                            .foregroundColor(.white)
+                            .lineLimit(1)
+
+                        // Score (left) + Grade (right) on same line
+                        HStack(spacing: 0) {
+                            Text(displayScore > 0 ? displayScore.formattedScore : "")
+                                .font(.system(size: 12, weight: .black, design: .monospaced))
+                                .foregroundColor(.white)
+                                .lineLimit(1)
+
+                            Spacer(minLength: 4)
+
+                            Text(gradeLabel)
+                                .font(.system(size: 12, weight: .black))
+                                .foregroundColor(gradeColor)
+                                .lineLimit(1)
+                        }
+
+                        // Delta for upscores
+                        if let old = item.oldScore, let new = item.newScore, new > old {
+                            HStack(spacing: 4) {
+                                Text(old.formattedScore)
+                                    .font(.system(size: 7, design: .monospaced))
+                                    .foregroundColor(.white.opacity(0.6))
+                                    .lineLimit(1)
+                                Text("+\((new - old).formattedScore)")
+                                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                    .foregroundColor(DojoTheme.piuGreen)
+                                    .lineLimit(1)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, 8)
+                }
+            }
+            .frame(width: 170, height: 120)
+            .clipped()
+            .contentShape(Rectangle())
+            .cornerRadius(10)
+        }
+        .buttonStyle(.plain)
+    }
+
 }
 
 // MARK: - Notice Detail Sheet

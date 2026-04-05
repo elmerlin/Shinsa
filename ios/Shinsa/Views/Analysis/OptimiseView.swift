@@ -52,7 +52,7 @@ struct OptimiseView: View {
 
             HStack(spacing: 20) {
                 VStack(spacing: 4) {
-                    Text("\(pumbilityData?.pumbility ?? 0)")
+                    Text("\(pumbilityData?.pumbilityValue ?? 0)")
                         .font(.system(size: 32, weight: .bold))
                         .foregroundColor(DojoTheme.piuGold)
                     Text("Pumbility")
@@ -306,7 +306,7 @@ struct OptimiseView: View {
         analytics = try? await a
         // Pumbility data from profile
         if let user = try? await APIService.shared.getUserProfile(userId) {
-            pumbilityData = PumbilityData(pumbility: user.pumbility, scores: nil)
+            pumbilityData = PumbilityData(pumbilityValue: user.pumbility, scores: nil)
         }
         isLoading = false
     }

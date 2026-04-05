@@ -10,6 +10,7 @@ class DashboardViewModel: ObservableObject {
     @Published var searchQuery = ""
     @Published var isSearching = false
     @Published var selectedNotice: Notice? = nil
+    @Published var dailyHighlights: DailyHighlightsData?
     @Published var isLoading = false
 
     private var searchTask: Task<Void, Never>?
@@ -20,6 +21,7 @@ class DashboardViewModel: ObservableObject {
 
     func load() async {
         isLoading = true
+        await JacketService.shared.loadIfNeeded()
         async let t = APIService.shared.getTournaments()
         async let o = APIService.shared.getOnlineDuels()
         async let n = APIService.shared.getNotices()
@@ -29,6 +31,7 @@ class DashboardViewModel: ObservableObject {
         onlineDuels = (try? await o) ?? []
         notices = (try? await n) ?? []
         recentActivity = (try? await a) ?? []
+        dailyHighlights = try? await APIService.shared.getDailyHighlights()
         isLoading = false
     }
 

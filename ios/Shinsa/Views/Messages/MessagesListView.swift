@@ -5,6 +5,8 @@ struct MessagesListView: View {
     @EnvironmentObject var auth: AuthManager
 
     @State private var showNewMessage = false
+    @State private var showNoteComposer = false
+    @State private var showStoryComposer = false
 
     var body: some View {
         ZStack {
@@ -40,6 +42,16 @@ struct MessagesListView: View {
                 }
             } else {
                 ScrollView {
+                    if !vm.highlights.isEmpty {
+                        HighlightsStripView(
+                            highlights: vm.highlights,
+                            currentUserId: auth.userId,
+                            onTapAddStory: { showStoryComposer = true },
+                            onTapShareNote: { showNoteComposer = true }
+                        )
+                        .padding(.vertical, 8)
+                    }
+
                     LazyVStack(spacing: 0) {
                         ForEach(vm.conversations) { conversation in
                             NavigationLink {
@@ -68,14 +80,41 @@ struct MessagesListView: View {
                 }
             }
         }
-        .sheet(isPresented: $showNewMessage) {
-            NavigationStack {
-                NewMessageView(vm: vm) { conversation in
+        .sheet(isPresented: Binding(
+            get: {
+                showNewMessage || showNoteComposer
+            },
+            set: { newValue in
+                if !newValue {
                     showNewMessage = false
+                    showNoteComposer = false
+                }
+            }
+        )) {
+            if showNoteComposer {
+                let selfNote = vm.highlights.first(where: { $0.isSelf == true })?.note
+                NoteComposerView(
+                    existingNote: selfNote,
+                    onDismiss: {
+                        showNoteComposer = false
+                        Task { await vm.loadConversations() }
+                    }
+                )
+            } else {
+                NavigationStack {
+                    NewMessageView(vm: vm) { conversation in
+                        showNewMessage = false
+                    }
                 }
             }
         }
         .task { await vm.loadConversations() }
+        .fullScreenCover(isPresented: $showStoryComposer) {
+            StoryComposerView(onDismiss: {
+                showStoryComposer = false
+                Task { await vm.loadConversations() }
+            })
+        }
     }
 
     // MARK: - Conversation Row
@@ -84,13 +123,17 @@ struct MessagesListView: View {
         HStack(spacing: 12) {
             // Avatar
             if conversation.isSquad {
-                ZStack {
-                    Circle()
-                        .fill(DojoTheme.piuAccent.opacity(0.2))
-                        .frame(width: 44, height: 44)
-                    Image(systemName: "person.3.fill")
-                        .font(.system(size: 16))
-                        .foregroundColor(DojoTheme.piuAccent)
+                if let avatarPath = conversation.avatar, !avatarPath.isEmpty {
+                    AvatarView(avatarPath, name: conversation.displayName, size: 44)
+                } else {
+                    ZStack {
+                        Circle()
+                            .fill(DojoTheme.piuAccent.opacity(0.2))
+                            .frame(width: 44, height: 44)
+                        Text(String(conversation.displayName.prefix(2)).uppercased())
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundColor(DojoTheme.piuAccent)
+                    }
                 }
             } else {
                 AvatarView(
@@ -134,10 +177,13 @@ struct MessagesListView: View {
                 }
 
                 HStack {
-                    Text(conversation.lastMessagePreview ?? "No messages yet")
-                        .font(.system(size: 13))
-                        .foregroundColor(DojoTheme.textSecondary)
-                        .lineLimit(1)
+                    StickerTextView(
+                        text: conversation.lastMessagePreview ?? "No messages yet",
+                        font: .system(size: 13),
+                        color: DojoTheme.textSecondary,
+                        stickerSize: 18,
+                        lineLimit: 1
+                    )
 
                     Spacer()
 

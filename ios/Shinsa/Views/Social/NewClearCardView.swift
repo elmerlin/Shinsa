@@ -5,6 +5,9 @@ struct NewClearCardView: View {
     @State private var pumped: Bool
     @State private var pumpCount: Int
     @State private var showAll = false
+    @State private var showComments = false
+    @State private var selectedClear: FeedItem.ClearItem?
+    @State private var showSendPicker = false
 
     init(item: FeedItem) {
         self.item = item
@@ -89,8 +92,10 @@ struct NewClearCardView: View {
                     await togglePump()
                 }
 
-                NavigationLink {
-                    CommentsView(itemType: "clear", itemId: item.itemId)
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showComments.toggle()
+                    }
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "bubble.left")
@@ -98,17 +103,76 @@ struct NewClearCardView: View {
                         Text("\(item.commentCount ?? 0)")
                             .font(.system(size: 12, weight: .bold))
                     }
-                    .foregroundColor(DojoTheme.textMuted)
+                    .foregroundColor(showComments ? DojoTheme.piuAccent : DojoTheme.textMuted)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                 }
 
+                Button { showSendPicker = true } label: {
+                    Image(systemName: "paperplane")
+                        .font(.system(size: 12))
+                        .foregroundColor(DojoTheme.textMuted)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                }
+
                 Spacer()
+            }
+
+            // Inline comments
+            if showComments {
+                CommentsView(itemType: "clear", itemId: item.itemId)
+                    .frame(maxHeight: 300)
+                    .clipped()
             }
         }
         .padding(14)
         .background(DojoTheme.piuCard)
         .cornerRadius(12)
+        .sheet(item: $selectedClear) { c in
+            ScoreSnapshotSheet(
+                songTitle: c.songTitle ?? "Unknown",
+                mode: c.mode ?? "S",
+                level: c.level ?? 0,
+                score: c.score ?? 0,
+                grade: DojoTheme.gradeLabel(for: c.score ?? 0),
+                plate: c.plate,
+                backgroundUrl: c.backgroundUrl,
+                perfect: c.perfect,
+                great: c.great,
+                good: c.good,
+                bad: c.bad,
+                miss: c.miss,
+                datePlayed: c.datePlayed,
+                replayEmbedUrl: c.replayEmbedUrl,
+                username: item.username
+            )
+        }
+        .sheet(isPresented: $showSendPicker) {
+            UserPickerSheet(
+                title: "Send clear",
+                onSelectUser: { partner in sendClearTo(partnerId: partner.id) },
+                onSelectConversation: { convo in sendClearToConvo(convo.id) },
+                onDismiss: { showSendPicker = false }
+            )
+        }
+    }
+
+    private func sendClearTo(partnerId: String?) {
+        Task {
+            guard let pid = partnerId else { return }
+            let ls = buildClearLinkShare()
+            let convo = try? await APIService.shared.startDirectConversation(pid)
+            if let cid = convo?.id { _ = try? await APIService.shared.sendLinkShareMessage(cid, linkShare: ls) }
+        }
+    }
+
+    private func sendClearToConvo(_ convoId: String) {
+        Task { _ = try? await APIService.shared.sendLinkShareMessage(convoId, linkShare: buildClearLinkShare()) }
+    }
+
+    private func buildClearLinkShare() -> [String: AnyCodable] {
+        ["kind": AnyCodable("clear"), "title": AnyCodable("\(item.username ?? "Player")'s clear"), "songTitle": AnyCodable(item.songTitle ?? ""), "mode": AnyCodable(item.mode ?? ""), "level": AnyCodable(item.level ?? 0), "score": AnyCodable(item.score ?? 0)]
     }
 
     // MARK: - Clear Row
@@ -140,7 +204,18 @@ struct NewClearCardView: View {
 
             Spacer()
 
-            // Score + Grade + Plate
+            // Replay badge (opens score sheet with in-app player)
+            if let replayUrl = c.replayEmbedUrl, !replayUrl.isEmpty {
+                Button {
+                    selectedClear = c
+                } label: {
+                    Image(systemName: "play.circle.fill")
+                        .font(.system(size: 14))
+                        .foregroundColor(.red)
+                }
+            }
+
+            // Score + Grade + Plate (tappable)
             VStack(alignment: .trailing, spacing: 2) {
                 if let score = c.score, score > 0 {
                     Text(DojoTheme.gradeLabel(for: score))
@@ -162,6 +237,8 @@ struct NewClearCardView: View {
                         .cornerRadius(3)
                 }
             }
+            .contentShape(Rectangle())
+            .onTapGesture { selectedClear = c }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)

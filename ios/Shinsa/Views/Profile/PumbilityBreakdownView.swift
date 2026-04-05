@@ -16,9 +16,8 @@ struct PumbilityBreakdownView: View {
                 ScrollView {
                     VStack(spacing: 16) {
                         totalCard(data)
-                        levelBreakdownSection(data)
-                        gradeDistributionSection(data)
-                        recentScoresSection(data)
+                        summaryStatsGrid(data)
+                        rankedSongsList(data)
                     }
                     .padding()
                 }
@@ -41,14 +40,24 @@ struct PumbilityBreakdownView: View {
                 .font(.system(size: 11, weight: .bold))
                 .foregroundColor(DojoTheme.textMuted)
 
-            Text("\(data.pumbility ?? 0)")
+            Text("\(data.pumbilityValue ?? 0)")
                 .font(.system(size: 36, weight: .bold))
                 .foregroundColor(DojoTheme.piuGold)
 
-            if let scores = data.scores {
+            if let count = data.scoreCount {
+                Text("\(count) qualifying scores")
+                    .font(.system(size: 12))
+                    .foregroundColor(DojoTheme.textMuted)
+            } else if let scores = data.scores {
                 Text("\(scores.count) qualifying scores")
                     .font(.system(size: 12))
                     .foregroundColor(DojoTheme.textMuted)
+            }
+
+            if let ranking = data.ranking, ranking > 0 {
+                Text("Rank #\(ranking)")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(DojoTheme.piuAccent)
             }
         }
         .padding()
@@ -61,155 +70,144 @@ struct PumbilityBreakdownView: View {
         )
     }
 
-    // MARK: - Level Breakdown
+    // MARK: - Summary Stats Grid (2x2)
 
-    private func levelBreakdownSection(_ data: PumbilityData) -> some View {
-        let scores = data.scores ?? []
-        let levelGroups = Dictionary(grouping: scores) { $0.level }
-        let sortedLevels = levelGroups.keys.sorted()
-        let maxCount = levelGroups.values.map(\.count).max() ?? 1
+    private func summaryStatsGrid(_ data: PumbilityData) -> some View {
+        let avgScore: Int? = {
+            guard let scores = data.scores, !scores.isEmpty else { return nil }
+            return scores.reduce(0) { $0 + $1.score } / scores.count
+        }()
+        let avgLevel: Double? = {
+            guard let scores = data.scores, !scores.isEmpty else { return nil }
+            return Double(scores.reduce(0) { $0 + $1.level }) / Double(scores.count)
+        }()
 
-        return VStack(alignment: .leading, spacing: 12) {
-            Text("LEVEL BREAKDOWN")
-                .font(.system(size: 12, weight: .bold))
-                .foregroundColor(DojoTheme.piuAccent)
-
-            if sortedLevels.isEmpty {
-                Text("No scores to show")
-                    .font(.system(size: 13))
-                    .foregroundColor(DojoTheme.textMuted)
-            } else {
-                ForEach(sortedLevels, id: \.self) { level in
-                    let count = levelGroups[level]?.count ?? 0
-                    let totalScore = levelGroups[level]?.reduce(0) { $0 + $1.score } ?? 0
-
-                    HStack(spacing: 10) {
-                        Text("Lv.\(level)")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(.white)
-                            .frame(width: 45, alignment: .leading)
-
-                        GeometryReader { geo in
-                            let width = geo.size.width * CGFloat(count) / CGFloat(max(maxCount, 1))
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(levelBarColor(level))
-                                .frame(width: max(width, 4), height: 20)
-                        }
-                        .frame(height: 20)
-
-                        Text("\(count)")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundColor(DojoTheme.textMuted)
-                            .frame(width: 25, alignment: .trailing)
-
-                        Text(formatScore(totalScore))
-                            .font(.system(size: 10))
-                            .foregroundColor(DojoTheme.piuGold)
-                            .frame(width: 55, alignment: .trailing)
+        return LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+            // Avg Rating
+            summaryCard(
+                title: "AVG RATING",
+                value: data.averageRating != nil ? String(format: "%.1f", data.averageRating!) : "--",
+                subtitle: {
+                    if let lvl = data.equivalentLevel, let grade = data.equivalentGrade {
+                        return "Lv.\(lvl) \(grade)"
                     }
-                }
-            }
+                    return nil
+                }(),
+                accentColor: DojoTheme.piuGold
+            )
+
+            // Min Entry
+            summaryCard(
+                title: "MIN ENTRY",
+                value: data.minEntryRating != nil ? "\(data.minEntryRating!)" : "--",
+                subtitle: {
+                    if let details = data.minEntryDetails {
+                        let song = details.songTitle ?? "?"
+                        return song.count > 18 ? String(song.prefix(18)) + "..." : song
+                    }
+                    return nil
+                }(),
+                accentColor: DojoTheme.piuAccent
+            )
+
+            // Avg Score
+            summaryCard(
+                title: "AVG SCORE",
+                value: avgScore != nil ? formatScore(avgScore!) : "--",
+                subtitle: avgScore != nil ? gradeForScore(avgScore!) : nil,
+                accentColor: DojoTheme.piuBlue
+            )
+
+            // Avg Level
+            summaryCard(
+                title: "AVG LEVEL",
+                value: avgLevel != nil ? String(format: "%.1f", avgLevel!) : "--",
+                subtitle: nil,
+                accentColor: DojoTheme.piuGreen
+            )
         }
-        .padding()
-        .background(DojoTheme.piuCard)
-        .cornerRadius(12)
     }
 
-    // MARK: - Grade Distribution
+    private func summaryCard(title: String, value: String, subtitle: String?, accentColor: Color) -> some View {
+        VStack(spacing: 4) {
+            Text(title)
+                .font(.system(size: 9, weight: .bold))
+                .foregroundColor(DojoTheme.textMuted)
 
-    private func gradeDistributionSection(_ data: PumbilityData) -> some View {
-        let scores = data.scores ?? []
-        let gradeGroups = Dictionary(grouping: scores) { $0.grade ?? "?" }
-        let gradeOrder = ["SSS+", "SSS", "SS+", "SS", "S+", "S", "A+", "A", "B", "C", "D", "F"]
-        let sortedGrades = gradeOrder.filter { gradeGroups[$0] != nil }
+            Text(value)
+                .font(.system(size: 20, weight: .bold))
+                .foregroundColor(accentColor)
 
-        return VStack(alignment: .leading, spacing: 12) {
-            Text("GRADE DISTRIBUTION")
-                .font(.system(size: 12, weight: .bold))
-                .foregroundColor(DojoTheme.piuAccent)
-
-            if sortedGrades.isEmpty {
-                Text("No grades to show")
-                    .font(.system(size: 13))
+            if let sub = subtitle {
+                Text(sub)
+                    .font(.system(size: 10, weight: .medium))
                     .foregroundColor(DojoTheme.textMuted)
-            } else {
-                let maxCount = gradeGroups.values.map(\.count).max() ?? 1
-
-                ForEach(sortedGrades, id: \.self) { grade in
-                    let count = gradeGroups[grade]?.count ?? 0
-
-                    HStack(spacing: 10) {
-                        Text(grade)
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(gradeColor(grade))
-                            .frame(width: 40, alignment: .leading)
-
-                        GeometryReader { geo in
-                            let width = geo.size.width * CGFloat(count) / CGFloat(max(maxCount, 1))
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(gradeColor(grade))
-                                .frame(width: max(width, 4), height: 18)
-                        }
-                        .frame(height: 18)
-
-                        Text("\(count)")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundColor(DojoTheme.textMuted)
-                            .frame(width: 30, alignment: .trailing)
-                    }
-                }
+                    .lineLimit(1)
             }
         }
-        .padding()
+        .padding(10)
+        .frame(maxWidth: .infinity)
         .background(DojoTheme.piuCard)
-        .cornerRadius(12)
+        .cornerRadius(10)
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(accentColor.opacity(0.2), lineWidth: 1)
+        )
     }
 
-    // MARK: - Recent Scores
+    // MARK: - Ranked Songs List
 
-    private func recentScoresSection(_ data: PumbilityData) -> some View {
+    private func rankedSongsList(_ data: PumbilityData) -> some View {
         let scores = data.scores ?? []
 
-        return VStack(alignment: .leading, spacing: 12) {
-            Text("SCORES (\(scores.count))")
+        return VStack(alignment: .leading, spacing: 10) {
+            Text("RANKED SONGS (\(scores.count))")
                 .font(.system(size: 12, weight: .bold))
                 .foregroundColor(DojoTheme.piuAccent)
 
-            ForEach(scores.prefix(50)) { score in
+            ForEach(Array(scores.enumerated()), id: \.element.id) { index, score in
                 HStack(spacing: 8) {
-                    if let order = score.rankOrder {
-                        Text("#\(order)")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundColor(DojoTheme.piuGold)
-                            .frame(width: 30)
-                    }
+                    // Rank number
+                    Text("#\(score.rankOrder ?? (index + 1))")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(DojoTheme.piuGold)
+                        .frame(width: 28, alignment: .center)
 
-                    VStack(alignment: .leading, spacing: 2) {
+                    // Song jacket
+                    jacketImage(score: score)
+                        .frame(width: 36, height: 36)
+                        .cornerRadius(4)
+
+                    // Mode + Level badge and song title
+                    VStack(alignment: .leading, spacing: 3) {
                         Text(score.songTitle)
                             .font(.system(size: 12, weight: .medium))
                             .foregroundColor(.white)
                             .lineLimit(1)
 
                         HStack(spacing: 4) {
-                            Text(score.mode.uppercased())
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundColor(score.mode == "S" ? DojoTheme.piuGold : DojoTheme.piuBlue)
-                            Text("Lv.\(score.level)")
-                                .font(.system(size: 10))
-                                .foregroundColor(DojoTheme.textMuted)
+                            modeLevelBadge(mode: score.mode, level: score.level)
+
+                            if let grade = score.grade {
+                                Text(grade)
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundColor(gradeColor(grade))
+                            }
                         }
                     }
 
                     Spacer()
 
-                    VStack(alignment: .trailing, spacing: 2) {
+                    // Score + Rating
+                    VStack(alignment: .trailing, spacing: 3) {
                         Text(formatScore(score.score))
                             .font(.system(size: 12, weight: .bold))
                             .foregroundColor(.white)
-                        if let grade = score.grade {
-                            Text(grade)
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundColor(gradeColor(grade))
+
+                        if let rating = score.rating {
+                            Text("\(rating) pts")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(DojoTheme.piuGold)
                         }
                     }
                 }
@@ -221,6 +219,60 @@ struct PumbilityBreakdownView: View {
         .padding()
         .background(DojoTheme.piuCard)
         .cornerRadius(12)
+    }
+
+    // MARK: - Jacket Image
+
+    private func jacketImage(score: PumbilityScore) -> some View {
+        Group {
+            if let url = JacketService.shared.resolveJacketURL(title: score.songTitle, mode: score.mode, level: score.level, backgroundUrl: score.backgroundUrl) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let img):
+                        img.resizable().scaledToFill()
+                    default:
+                        Rectangle().fill(DojoTheme.piuBorder)
+                    }
+                }
+            } else {
+                Rectangle().fill(DojoTheme.piuBorder)
+                    .overlay(
+                        Text(String(score.songTitle.prefix(1)))
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(.white)
+                    )
+            }
+        }
+        .clipped()
+    }
+
+    // MARK: - Mode Level Badge
+
+    private func modeLevelBadge(mode: String, level: Int) -> some View {
+        let modeUpper = mode.uppercased()
+        let prefix: String
+        let color: Color
+        if modeUpper.hasPrefix("S") || modeUpper == "SINGLE" {
+            prefix = "S"
+            color = DojoTheme.piuAccent
+        } else if modeUpper.hasPrefix("D") || modeUpper == "DOUBLE" {
+            prefix = "D"
+            color = DojoTheme.piuGreen
+        } else if modeUpper.hasPrefix("CO") || modeUpper == "CO-OP" {
+            prefix = "Co"
+            color = DojoTheme.piuBlue
+        } else {
+            prefix = modeUpper
+            color = DojoTheme.textMuted
+        }
+
+        return Text("\(prefix)\(level)")
+            .font(.system(size: 9, weight: .bold))
+            .foregroundColor(.white)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 2)
+            .background(color.opacity(0.8))
+            .cornerRadius(3)
     }
 
     // MARK: - Helpers
@@ -237,13 +289,20 @@ struct PumbilityBreakdownView: View {
         return formatter.string(from: NSNumber(value: score)) ?? "\(score)"
     }
 
-    private func levelBarColor(_ level: Int) -> Color {
-        switch level {
-        case 1...10: return DojoTheme.piuGreen
-        case 11...15: return DojoTheme.piuBlue
-        case 16...20: return DojoTheme.piuGold
-        case 21...25: return DojoTheme.piuAccent
-        default: return Color.purple
+    private func gradeForScore(_ score: Int) -> String {
+        switch score {
+        case 995000...: return "SSS+"
+        case 990000...: return "SSS"
+        case 980000...: return "SS+"
+        case 960000...: return "SS"
+        case 940000...: return "S+"
+        case 920000...: return "S"
+        case 900000...: return "A+"
+        case 850000...: return "A"
+        case 800000...: return "B"
+        case 700000...: return "C"
+        case 600000...: return "D"
+        default: return "F"
         }
     }
 

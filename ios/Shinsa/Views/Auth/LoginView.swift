@@ -108,18 +108,6 @@ struct LoginView: View {
                         .font(.system(size: 14))
                     }
 
-                    // Server Settings
-                    Button {
-                        showSettings = true
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "gearshape")
-                            Text("Server Settings")
-                        }
-                        .font(.system(size: 13))
-                        .foregroundColor(DojoTheme.textMuted)
-                    }
-
                     Spacer()
                 }
                 .padding(.horizontal, 32)

@@ -4,7 +4,14 @@ struct ContentView: View {
     @EnvironmentObject var auth: AuthManager
     @EnvironmentObject var notificationPoller: NotificationPoller
     @State private var selectedTab = 0
+    @State private var previousTab = 0
     @State private var isDrawerOpen = false
+    @State private var isSearching = false
+    @State private var searchText = ""
+    @State private var homePath = NavigationPath()
+    @State private var feedPath = NavigationPath()
+    @State private var tiersPath = NavigationPath()
+    @State private var profilePath = NavigationPath()
 
     var body: some View {
         Group {
@@ -27,7 +34,7 @@ struct ContentView: View {
             } else if auth.isLoggedIn {
                 ZStack {
                     TabView(selection: $selectedTab) {
-                        NavigationStack {
+                        NavigationStack(path: $homePath) {
                             DashboardView()
                                 .navigationDestination(for: String.self) { route in
                                     routeDestination(route)
@@ -44,7 +51,7 @@ struct ContentView: View {
                         }
                         .tag(0)
 
-                        NavigationStack {
+                        NavigationStack(path: $feedPath) {
                             FeedView()
                                 .navigationDestination(for: String.self) { route in
                                     routeDestination(route)
@@ -75,7 +82,7 @@ struct ContentView: View {
                         }
                         .tag(2)
 
-                        NavigationStack {
+                        NavigationStack(path: $tiersPath) {
                             TiersView()
                                 .navigationDestination(for: String.self) { route in
                                     routeDestination(route)
@@ -92,7 +99,7 @@ struct ContentView: View {
                         }
                         .tag(3)
 
-                        NavigationStack {
+                        NavigationStack(path: $profilePath) {
                             ProfileView(userId: auth.userId)
                                 .navigationDestination(for: String.self) { route in
                                     routeDestination(route)
@@ -110,6 +117,59 @@ struct ContentView: View {
                         .tag(4)
                     }
                     .tint(DojoTheme.piuAccent)
+                    .onChange(of: selectedTab) { newTab in
+                        // Pop to root when re-selecting the same tab
+                        if newTab == previousTab {
+                            switch newTab {
+                            case 0: homePath = NavigationPath()
+                            case 1: feedPath = NavigationPath()
+                            case 3: tiersPath = NavigationPath()
+                            case 4: profilePath = NavigationPath()
+                            default: break
+                            }
+                        }
+                        previousTab = newTab
+                    }
+                    .overlay(alignment: .top) {
+                        if isSearching {
+                            VStack(spacing: 0) {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "magnifyingglass")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(DojoTheme.textMuted)
+
+                                    TextField("Search players, songs, tournaments...", text: $searchText)
+                                        .font(.system(size: 14))
+                                        .foregroundColor(.white)
+                                        .autocorrectionDisabled()
+                                        .textInputAutocapitalization(.never)
+
+                                    Button {
+                                        withAnimation(.easeInOut(duration: 0.2)) {
+                                            isSearching = false
+                                            searchText = ""
+                                        }
+                                    } label: {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .font(.system(size: 16))
+                                            .foregroundColor(DojoTheme.textMuted)
+                                    }
+                                }
+                                .padding(10)
+                                .background(DojoTheme.piuCard)
+                                .cornerRadius(10)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .stroke(DojoTheme.piuBorder, lineWidth: 1)
+                                )
+                                .padding(.horizontal, 16)
+                                .padding(.top, 4)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .background(DojoTheme.piuBg)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                        }
+                    }
 
                     // Side drawer overlay
                     SideDrawerView(isOpen: $isDrawerOpen)
@@ -126,6 +186,17 @@ struct ContentView: View {
 
     @ViewBuilder
     private var toolbarButtons: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                isSearching.toggle()
+                if !isSearching { searchText = "" }
+            }
+        } label: {
+            Image(systemName: isSearching ? "xmark" : "magnifyingglass")
+                .font(.system(size: 15))
+                .foregroundColor(.white)
+        }
+
         NavigationLink {
             MessagesListView()
         } label: {
@@ -171,7 +242,9 @@ struct ContentView: View {
 
     @ViewBuilder
     private func routeDestination(_ route: String) -> some View {
-        let parts = route.split(separator: "/", maxSplits: 1).map(String.init)
+        // Strip leading slash from web app paths like "/upscore/123"
+        let cleaned = route.hasPrefix("/") ? String(route.dropFirst()) : route
+        let parts = cleaned.split(separator: "/", maxSplits: 1).map(String.init)
         let prefix = parts.first ?? ""
         let param = parts.count > 1 ? parts[1] : ""
 
@@ -190,12 +263,29 @@ struct ContentView: View {
             } else {
                 OnlineDuelRoomView(duelId: param)
             }
+        case "duel":
+            MatchDetailView(matchId: param)
         case "profile":
             ProfileView(userId: param)
         case "song-chart":
             SongChartView(chartId: Int(param) ?? 0)
+        case "song-chart-lookup":
+            let lookupParts = param.components(separatedBy: "|")
+            let title = lookupParts.count > 0 ? lookupParts[0] : ""
+            let mode = lookupParts.count > 1 ? lookupParts[1] : "S"
+            let level = lookupParts.count > 2 ? Int(lookupParts[2]) ?? 0 : 0
+            SongChartView(songTitle: title, mode: mode, level: level)
+        case "upscore":
+            // Web path: /upscore/123 — show on feed (upscore detail not implemented, show profile)
+            FeedItemDetailView(type: "upscore", itemId: param)
+        case "clear":
+            FeedItemDetailView(type: "clear", itemId: param)
+        case "post":
+            FeedItemDetailView(type: "post", itemId: param)
         case "skill-charts":
             SkillChartsView(skillSlug: param)
+        case "weekly-challenges":
+            WeeklyChallengesView()
         case "live-session":
             LiveSessionView(sessionId: param)
         case "world-max":
@@ -300,6 +390,9 @@ struct SideDrawerView: View {
                     }
                     drawerLink(icon: "checklist", title: "Lists") {
                         ListsView()
+                    }
+                    drawerLink(icon: "flame.fill", title: "Weekly Challenges") {
+                        WeeklyChallengesView()
                     }
                     drawerLink(icon: "trophy.fill", title: "Leaderboards") {
                         LeaderboardsView()

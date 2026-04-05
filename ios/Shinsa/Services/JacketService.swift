@@ -17,24 +17,34 @@ class JacketService: ObservableObject {
         }
     }
 
+    /// Resolve a jacket to a local bundle URL (instant) or remote URL (fallback).
     func resolveJacketURL(title: String?, mode: String?, level: Int?, backgroundUrl: String? = nil) -> URL? {
         let normalized = (title ?? "").lowercased()
             .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespaces)
         guard !normalized.isEmpty else { return nil }
 
-        let baseURL = APIService.shared.baseURL.replacingOccurrences(of: "/api", with: "")
-
-        // Try exact key with mode|level
+        // Try exact key with mode|level, then title-only
+        var jacketPath: String?
         if let mode = mode, let level = level {
             let exactKey = "\(normalized)|\(mode)|\(level)"
-            if let path = jacketMap[exactKey] {
-                return URL(string: "\(baseURL)\(path)")
-            }
+            jacketPath = jacketMap[exactKey]
+        }
+        if jacketPath == nil {
+            jacketPath = jacketMap[normalized]
         }
 
-        // Try title-only
-        if let path = jacketMap[normalized] {
+        // Resolve from local bundle first
+        if let path = jacketPath {
+            // Path looks like "/jackets/pump/21.jpg" — extract filename
+            let filename = (path as NSString).lastPathComponent
+            let nameOnly = (filename as NSString).deletingPathExtension
+
+            if let bundleURL = Bundle.main.url(forResource: nameOnly, withExtension: "jpg", subdirectory: "jackets") {
+                return bundleURL
+            }
+            // Fallback to remote if not in bundle
+            let baseURL = APIService.shared.baseURL.replacingOccurrences(of: "/api", with: "")
             return URL(string: "\(baseURL)\(path)")
         }
 
@@ -43,6 +53,7 @@ class JacketService: ObservableObject {
             if bg.hasPrefix("http") {
                 return URL(string: bg)
             }
+            let baseURL = APIService.shared.baseURL.replacingOccurrences(of: "/api", with: "")
             return URL(string: "\(baseURL)\(bg)")
         }
 
