@@ -413,6 +413,23 @@ function summarizeClear(clear) {
   };
 }
 
+function summarizePlay(play) {
+  const username = play?.username ? `@${play.username}` : 'A player';
+  const songTitle = String(play?.song_title || '').trim() || 'a chart';
+  const playMode = modeShort(play?.mode);
+  const playLevel = parseInt(play?.level, 10) || 0;
+  const playLabel = `${songTitle}${playMode && playLevel ? ` (${playMode}${playLevel})` : ''}`;
+  const playGrade = String(play?.grade || '').replace(/^x[_-]\s*/i, '').trim();
+  const playScore = parseInt(play?.score, 10) || 0;
+
+  return {
+    title: `${username} played ${playLabel}`,
+    description: `${username} scored ${formatScore(playScore)} on ${playLabel} on Pump Shinsa${playGrade ? ` with ${playGrade}` : ''}.`,
+    headline: playLabel,
+    subline: `${playGrade ? `${playGrade} • ` : ''}${playScore > 0 ? formatScore(playScore) : 'Recent play'}`,
+  };
+}
+
 function formatScore(value) {
   return (parseInt(value, 10) || 0).toLocaleString();
 }
@@ -1611,6 +1628,93 @@ async function renderClearOgJpeg({
     .toBuffer();
 }
 
+async function renderPlayOgJpeg({
+  play,
+  brandAssets = null,
+  artworkBuffer = null,
+  width = 1200,
+  height = 630,
+}) {
+  const username = brandAssets?.usernameLabel || (play?.username ? `@${play.username}` : '@player');
+  const title = textSnippet(play?.song_title || 'Unknown chart', 34);
+  const badgeText = chartBadgeLabel(play?.mode, play?.level);
+  const modeAccent = getModeAccent(play?.mode);
+  const gradeText = formatDisplayGrade(play?.grade || '') || '--';
+  const gradeAccent = getGradeAccent(gradeText);
+  const scoreText = formatScore(play?.score);
+  const playedAt = normalizeWhitespace(String(play?.date_played || play?.played_at_utc || ''));
+  const subtitle = playedAt ? textSnippet(playedAt, 40) : 'Recent score on Pump Shinsa';
+  const badgeWidth = textWidthEstimate(badgeText, 14, 28);
+  const artworkLeft = 82;
+  const artworkTop = 164;
+  const artworkWidth = 208;
+  const artworkHeight = 208;
+
+  let artworkOverlay = null;
+  if (artworkBuffer?.length) {
+    artworkOverlay = {
+      input: await sharp(artworkBuffer)
+        .rotate()
+        .resize(artworkWidth, artworkHeight, { fit: 'cover' })
+        .composite([{
+          input: Buffer.from(`<svg width="${artworkWidth}" height="${artworkHeight}" xmlns="http://www.w3.org/2000/svg"><rect x="0" y="0" width="${artworkWidth}" height="${artworkHeight}" rx="28" ry="28" fill="#fff"/></svg>`),
+          blend: 'dest-in',
+        }])
+        .png()
+        .toBuffer(),
+      top: artworkTop,
+      left: artworkLeft,
+    };
+  }
+
+  const textSvg = `
+  <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="artShade" x1="0" y1="1" x2="0" y2="0">
+        <stop offset="0%" stop-color="rgba(0,0,0,0.30)"/>
+        <stop offset="100%" stop-color="rgba(255,255,255,0.0)"/>
+      </linearGradient>
+    </defs>
+    <rect x="0" y="0" width="${width}" height="${height}" fill="#07111c" />
+    <rect x="0" y="0" width="${width}" height="88" fill="rgba(96,165,250,0.16)" />
+    <rect x="40" y="24" width="${width - 80}" height="${height - 48}" rx="28" fill="rgba(255,255,255,0.02)" stroke="rgba(148,163,184,0.10)" />
+    <text x="${width - 148}" y="60" fill="rgba(255,255,255,0.76)" font-size="22" text-anchor="end" font-weight="700" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(username)}</text>
+
+    <text x="64" y="136" fill="white" font-size="46" font-weight="900" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">Score Card</text>
+    <text x="64" y="160" fill="rgba(255,255,255,0.64)" font-size="20" font-weight="700" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(subtitle)}</text>
+
+    <rect x="${artworkLeft}" y="${artworkTop}" width="${artworkWidth}" height="${artworkHeight}" rx="28" fill="rgba(17,24,39,0.95)" stroke="rgba(255,255,255,0.08)" />
+    <rect x="${artworkLeft}" y="${artworkTop}" width="${artworkWidth}" height="${artworkHeight}" rx="28" fill="url(#artShade)" />
+
+    <text x="330" y="252" fill="white" font-size="40" font-weight="800" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(title)}</text>
+    <rect x="330" y="274" width="${badgeWidth}" height="28" rx="14" fill="${escapeXml(modeAccent.fill)}" stroke="${escapeXml(modeAccent.border)}" />
+    <text x="${330 + Math.round(badgeWidth / 2)}" y="293" text-anchor="middle" fill="white" font-size="16" font-weight="800" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(badgeText)}</text>
+
+    <text x="330" y="368" fill="rgba(255,255,255,0.58)" font-size="20" font-weight="700" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">Score</text>
+    <text x="330" y="420" fill="white" font-size="56" font-weight="900" font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace">${escapeXml(scoreText)}</text>
+
+    <text x="330" y="492" fill="rgba(255,255,255,0.58)" font-size="20" font-weight="700" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">Grade</text>
+    <text x="330" y="544" fill="${escapeXml(gradeAccent)}" font-size="52" font-weight="900" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(gradeText)}</text>
+  </svg>
+  `;
+
+  return sharp({
+    create: {
+      width,
+      height,
+      channels: 4,
+      background: { r: 9, g: 15, b: 31, alpha: 1 },
+    },
+  })
+    .composite([
+      { input: Buffer.from(textSvg) },
+      ...buildBrandComposites({ width, brandAssets }),
+      ...(artworkOverlay ? [artworkOverlay] : []),
+    ])
+    .jpeg({ quality: 88, mozjpeg: true })
+    .toBuffer();
+}
+
 async function renderActivityOgJpeg({
   username = '@player',
   brandAssets = null,
@@ -2094,6 +2198,99 @@ function registerSharePreviewRoutes(app, { clientBuildDir }) {
       imageWidth: 1200,
       imageHeight: 630,
       imageAlt: 'Pump Shinsa clear preview',
+      twitterCard: 'summary_large_image',
+    });
+    res.set('Content-Type', 'text/html');
+    return res.send(html);
+  });
+
+  app.get('/og/play/:id.jpg', async (req, res) => {
+    const playId = parseInt(req.params.id, 10);
+    if (Number.isNaN(playId)) return res.status(400).send('Invalid play id');
+
+    const db = getDb();
+    const play = db.prepare(`
+      SELECT rp.*, u.id AS user_id, u.username, u.avatar, u.avatar_v
+      FROM user_recently_played rp
+      JOIN users u ON rp.user_id = u.id
+      WHERE rp.id = ?
+    `).get(playId);
+    if (!play) return res.status(404).send('Not found');
+
+    const versionRaw = String(play.played_at_utc || play.date_played || play.id || '');
+    const version = versionRaw.replace(/[^A-Za-z0-9_.-]/g, '_');
+    const etag = `W/"play-og-${playId}-${version}"`;
+    if (req.headers['if-none-match'] === etag) return res.status(304).end();
+
+    try {
+      const origin = getRequestOrigin(req);
+      const artworkBuffer = await loadPreviewArtworkBuffer({
+        clientBuildDir,
+        origin,
+        jacketUrl: resolvePreviewJacketUrl(db, play.song_title, play.mode, play.level),
+        backgroundUrl: play.background_url,
+      });
+      const brandAssets = await buildBrandAssets({
+        clientBuildDir,
+        origin,
+        username: play.username,
+        avatar: play.avatar,
+        userId: play.user_id,
+        avatarVersion: play.avatar_v,
+      });
+      const jpeg = await renderPlayOgJpeg({
+        play,
+        brandAssets,
+        artworkBuffer,
+        width: 1200,
+        height: 630,
+      });
+      res.set('Content-Type', 'image/jpeg');
+      res.set('Cache-Control', 'public, max-age=3600');
+      res.set('ETag', etag);
+      return res.send(jpeg);
+    } catch (err) {
+      console.error('Share preview: play og render failed:', err.message);
+      return res.status(500).send('Error');
+    }
+  });
+
+  app.get('/play/:id', (req, res, next) => {
+    const playId = parseInt(req.params.id, 10);
+    if (Number.isNaN(playId)) return next();
+
+    const indexHtml = getIndexHtml();
+    if (!indexHtml) return next();
+
+    const db = getDb();
+    const play = db.prepare(`
+      SELECT rp.*, u.id AS user_id, u.username
+      FROM user_recently_played rp
+      JOIN users u ON rp.user_id = u.id
+      WHERE rp.id = ?
+    `).get(playId);
+    if (!play) {
+      res.set('Content-Type', 'text/html');
+      return res.send(indexHtml);
+    }
+
+    const origin = getRequestOrigin(req);
+    const version = String(play.played_at_utc || play.date_played || play.id || '');
+    const url = `${origin}/play/${playId}`;
+    const image = buildPreviewImageUrl(origin, `/og/play/${playId}.jpg`, version);
+    const summary = summarizePlay(play);
+
+    const html = injectSocialMeta(indexHtml, {
+      type: 'article',
+      siteName: 'Pump Shinsa',
+      title: summary.title,
+      description: summary.description,
+      url,
+      image,
+      imageType: 'image/jpeg',
+      imageWidth: 1200,
+      imageHeight: 630,
+      imageAlt: 'Pump Shinsa play preview',
       twitterCard: 'summary_large_image',
     });
     res.set('Content-Type', 'text/html');
