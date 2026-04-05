@@ -7,9 +7,25 @@ const {
   enrichUpscoreRows,
 } = require('./activityPostEnrichment');
 
-function createMockDb({ charts = [], recentPlays = [] } = {}) {
+function createMockDb({ charts = [], recentPlays = [], syncRow = null, bestScores = [] } = {}) {
   return {
     prepare(sql) {
+      if (sql.includes('FROM user_piugame_sync')) {
+        return {
+          get() {
+            return syncRow;
+          },
+        };
+      }
+
+      if (sql.includes('FROM user_best_scores')) {
+        return {
+          all(userId) {
+            return bestScores.filter((row) => row.user_id === userId);
+          },
+        };
+      }
+
       if (sql.includes('FROM songs') && sql.includes('WHERE title = ?')) {
         return {
           get(title, mode, level) {
@@ -209,5 +225,62 @@ describe('activity post enrichment replay handling', () => {
     assert.equal(enriched.played_at_utc, '2026-04-03 11:55:37');
     assert.equal(item.plate, 'FG');
     assert.equal(item.play_id, 15346);
+  });
+
+  it('backfills legacy title unlock posts with live title progress data', () => {
+    const db = createMockDb({
+      syncRow: {
+        best_scores_imported: 1,
+        last_best_scores_sync: '2026-04-05 10:55:37',
+      },
+      bestScores: [
+        ...Array.from({ length: 80 }, (_, index) => ({
+          user_id: 'aeron',
+          level: 22,
+          score: 905000 + index,
+          grade: 'AA',
+          mode: 'Single',
+        })),
+        ...Array.from({ length: 3 }, (_, index) => ({
+          user_id: 'aeron',
+          level: 23,
+          score: 901000 + index,
+          grade: 'AA',
+          mode: 'Single',
+        })),
+      ],
+    });
+
+    const enriched = enrichClearRecord(db, {
+      id: 238,
+      user_id: 'aeron',
+      song_title: 'Advanced Lv.10',
+      mode: 'Skill Title',
+      level: 22,
+      score: 70000,
+      grade: 'SKILL TITLE',
+      created_at: '2026-04-05 10:55:37',
+      clears_json: JSON.stringify([{
+        entry_type: 'title_unlock',
+        song_title: 'Advanced Lv.10',
+        mode: 'Skill Title',
+        level: 22,
+        score: 70000,
+        grade: 'SKILL TITLE',
+        title_name: 'Advanced Lv.10',
+        title_family: 'Advanced',
+        title_level: 10,
+        title_tier: 'silver',
+      }]),
+    });
+
+    const [item] = JSON.parse(enriched.clears_json);
+    assert.equal(item.title_required_points, 70000);
+    assert.equal(item.title_earned_points, 70400);
+    assert.equal(item.title_previous_node?.name, 'Advanced Lv.9');
+    assert.equal(item.title_current_node?.name, 'Advanced Lv.10');
+    assert.equal(item.title_next_node?.name, 'Expert Lv.1');
+    assert.equal(item.title_next_node?.earned_points, 3030);
+    assert.equal(item.title_next_node?.required_points, 40000);
   });
 });

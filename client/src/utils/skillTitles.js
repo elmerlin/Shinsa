@@ -182,8 +182,17 @@ export function buildSkillTitleProgressTriplet(clear = {}) {
   if (previous && previous.unlocked && !previous.earned_points && previous.required_points > 0) {
     previous.earned_points = previous.required_points;
   }
+  if (previous && !previous.earned_points && previous.progress_percent > 0 && previous.required_points > 0) {
+    previous.earned_points = Math.round((previous.progress_percent / 100) * previous.required_points);
+  }
+  if (current && !current.earned_points && current.progress_percent > 0 && current.required_points > 0) {
+    current.earned_points = Math.round((current.progress_percent / 100) * current.required_points);
+  }
   if (next && !next.earned_points && current && next.level > 0 && next.level === current.level) {
     next.earned_points = current.earned_points;
+  }
+  if (next && !next.earned_points && next.progress_percent > 0 && next.required_points > 0) {
+    next.earned_points = Math.round((next.progress_percent / 100) * next.required_points);
   }
 
   return { previous, current, next };

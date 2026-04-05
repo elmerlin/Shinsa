@@ -15,55 +15,60 @@ const TIER_STYLES = {
     label: 'border-amber-300/30 bg-amber-500/10 text-amber-200',
     chip: 'border-piu-border/60 bg-piu-dark/55 text-amber-100',
     line: '#f59e0b',
-    current: 'border-amber-100 bg-amber-300 shadow-[0_0_22px_rgba(251,191,36,0.48)]',
-    past: 'border-amber-300/70 bg-amber-500/65',
-    future: 'border-piu-border bg-[#0e1320]',
-    detail: 'border-piu-border/50 bg-piu-dark/35',
-    detailActive: 'border-amber-300/40 bg-amber-500/10 shadow-[0_0_0_1px_rgba(251,191,36,0.08)]',
+    glow: 'rgba(251, 191, 36, 0.3)',
+    current: 'border-amber-50 bg-amber-200 shadow-[0_0_26px_rgba(251,191,36,0.46)]',
+    past: 'border-amber-200/70 bg-amber-400/75',
+    future: 'border-amber-300/25 bg-[#12192c]',
+    detail: 'border-piu-border/55 bg-piu-dark/20',
+    detailActive: 'border-amber-200/45 bg-amber-500/[0.08] shadow-[0_14px_24px_rgba(12,15,28,0.28),0_0_0_1px_rgba(251,191,36,0.08)]',
   },
   silver: {
     shell: 'border-piu-border bg-piu-card',
     label: 'border-slate-200/30 bg-slate-200/10 text-slate-100',
     chip: 'border-piu-border/60 bg-piu-dark/55 text-slate-100',
-    line: '#cbd5e1',
-    current: 'border-white bg-slate-100 shadow-[0_0_22px_rgba(226,232,240,0.42)]',
-    past: 'border-slate-300/75 bg-slate-300/65',
-    future: 'border-piu-border bg-[#0e1320]',
-    detail: 'border-piu-border/50 bg-piu-dark/35',
-    detailActive: 'border-slate-200/40 bg-slate-200/10 shadow-[0_0_0_1px_rgba(226,232,240,0.08)]',
+    line: '#d6dfec',
+    glow: 'rgba(226, 232, 240, 0.28)',
+    current: 'border-white bg-slate-100 shadow-[0_0_28px_rgba(226,232,240,0.44)]',
+    past: 'border-slate-200/70 bg-slate-300/75',
+    future: 'border-slate-300/25 bg-[#12192c]',
+    detail: 'border-piu-border/55 bg-piu-dark/20',
+    detailActive: 'border-slate-200/40 bg-white/[0.06] shadow-[0_14px_24px_rgba(12,15,28,0.28),0_0_0_1px_rgba(255,255,255,0.05)]',
   },
   gold: {
     shell: 'border-piu-border bg-piu-card',
     label: 'border-yellow-300/30 bg-yellow-500/10 text-yellow-200',
     chip: 'border-piu-border/60 bg-piu-dark/55 text-yellow-100',
     line: '#facc15',
-    current: 'border-yellow-100 bg-yellow-300 shadow-[0_0_22px_rgba(250,204,21,0.45)]',
-    past: 'border-yellow-300/70 bg-yellow-400/68',
-    future: 'border-piu-border bg-[#0e1320]',
-    detail: 'border-piu-border/50 bg-piu-dark/35',
-    detailActive: 'border-yellow-300/40 bg-yellow-500/10 shadow-[0_0_0_1px_rgba(250,204,21,0.08)]',
+    glow: 'rgba(250, 204, 21, 0.28)',
+    current: 'border-yellow-100 bg-yellow-300 shadow-[0_0_28px_rgba(250,204,21,0.42)]',
+    past: 'border-yellow-200/70 bg-yellow-400/78',
+    future: 'border-yellow-300/25 bg-[#12192c]',
+    detail: 'border-piu-border/55 bg-piu-dark/20',
+    detailActive: 'border-yellow-200/45 bg-yellow-500/[0.08] shadow-[0_14px_24px_rgba(12,15,28,0.28),0_0_0_1px_rgba(250,204,21,0.08)]',
   },
   blue: {
     shell: 'border-piu-border bg-piu-card',
     label: 'border-sky-300/30 bg-sky-500/10 text-sky-200',
     chip: 'border-piu-border/60 bg-piu-dark/55 text-sky-100',
     line: '#60a5fa',
-    current: 'border-sky-100 bg-sky-300 shadow-[0_0_22px_rgba(96,165,250,0.44)]',
-    past: 'border-sky-300/70 bg-sky-400/65',
-    future: 'border-piu-border bg-[#0e1320]',
-    detail: 'border-piu-border/50 bg-piu-dark/35',
-    detailActive: 'border-sky-300/40 bg-sky-500/10 shadow-[0_0_0_1px_rgba(96,165,250,0.08)]',
+    glow: 'rgba(96, 165, 250, 0.28)',
+    current: 'border-sky-100 bg-sky-300 shadow-[0_0_28px_rgba(96,165,250,0.42)]',
+    past: 'border-sky-200/70 bg-sky-400/78',
+    future: 'border-sky-300/25 bg-[#12192c]',
+    detail: 'border-piu-border/55 bg-piu-dark/20',
+    detailActive: 'border-sky-200/45 bg-sky-500/[0.08] shadow-[0_14px_24px_rgba(12,15,28,0.28),0_0_0_1px_rgba(96,165,250,0.08)]',
   },
   default: {
     shell: 'border-piu-border bg-piu-card',
     label: 'border-piu-border/60 bg-piu-dark/55 text-slate-100',
     chip: 'border-piu-border/60 bg-piu-dark/55 text-slate-100',
     line: '#94a3b8',
-    current: 'border-white bg-slate-100 shadow-[0_0_18px_rgba(226,232,240,0.32)]',
-    past: 'border-slate-300/70 bg-slate-400/60',
-    future: 'border-piu-border bg-[#0e1320]',
-    detail: 'border-piu-border/50 bg-piu-dark/35',
-    detailActive: 'border-slate-200/30 bg-white/[0.06] shadow-[0_0_0_1px_rgba(255,255,255,0.05)]',
+    glow: 'rgba(148, 163, 184, 0.22)',
+    current: 'border-white bg-slate-100 shadow-[0_0_24px_rgba(226,232,240,0.34)]',
+    past: 'border-slate-200/70 bg-slate-300/70',
+    future: 'border-slate-300/20 bg-[#12192c]',
+    detail: 'border-piu-border/55 bg-piu-dark/20',
+    detailActive: 'border-slate-200/35 bg-white/[0.05] shadow-[0_14px_24px_rgba(12,15,28,0.28),0_0_0_1px_rgba(255,255,255,0.04)]',
   },
 };
 
@@ -72,7 +77,7 @@ function formatPoints(value) {
 }
 
 function getTrackCopy(node) {
-  if (!node || !node.level) return 'Starting point';
+  if (!node || !node.level) return 'Starting checkpoint';
   return `Lv.${node.level} track`;
 }
 
@@ -87,40 +92,62 @@ function getNodeMeta(kind, node) {
     return {
       label,
       title: kind === 'next' ? 'Final checkpoint' : 'Unknown',
-      body: kind === 'next' ? 'No further unlock requirement.' : 'No checkpoint data.',
+      track: kind === 'next' ? 'No further title requirement' : 'No checkpoint data',
+      pointsCopy: '',
+      passCopy: 'No AA pass requirement',
       metrics: getSkillTitlePassMetrics(null),
     };
   }
 
   const title = formatSkillTitleLabel(node);
   const metrics = getSkillTitlePassMetrics(node);
+  const earnedPoints = parseInt(node.earned_points, 10) || 0;
+  const requiredPoints = parseInt(node.required_points, 10) || 0;
+
+  let pointsCopy = '';
   if (kind === 'previous') {
-    return {
-      label,
-      title,
-      body: node.required_points > 0
-        ? `${getTrackCopy(node)} • ${formatPoints(node.required_points)} pts`
-        : 'Starting checkpoint',
-      metrics,
-    };
+    pointsCopy = requiredPoints > 0 ? `${formatPoints(requiredPoints)} pts requirement` : 'Starting checkpoint';
+  } else if (requiredPoints > 0) {
+    pointsCopy = `${formatPoints(earnedPoints)} / ${formatPoints(requiredPoints)} pts`;
+  } else {
+    pointsCopy = 'Final skill title reached';
   }
-  if (kind === 'current') {
-    return {
-      label,
-      title,
-      body: node.required_points > 0
-        ? `${getTrackCopy(node)} • ${formatPoints(node.earned_points || node.required_points)} / ${formatPoints(node.required_points)} pts`
-        : 'Starting checkpoint',
-      metrics,
-    };
-  }
+
   return {
     label,
     title,
-    body: node.required_points > 0
-      ? `${getTrackCopy(node)} • Needs ${formatPoints(node.required_points)} pts`
-      : 'Final skill title reached',
+    track: getTrackCopy(node),
+    pointsCopy,
+    passCopy: getPassCopy(metrics),
     metrics,
+  };
+}
+
+function getNodePosition(kind) {
+  if (kind === 'previous') {
+    return {
+      left: '12%',
+      top: '72%',
+      transform: 'translate(-6%, -50%)',
+      align: 'items-start text-left',
+      label: 'Prev',
+    };
+  }
+  if (kind === 'next') {
+    return {
+      left: '88%',
+      top: '20%',
+      transform: 'translate(-100%, -50%)',
+      align: 'items-end text-right',
+      label: 'Next',
+    };
+  }
+  return {
+    left: '50%',
+    top: '46%',
+    transform: 'translate(-50%, -50%)',
+    align: 'items-center text-center',
+    label: 'Earned',
   };
 }
 
@@ -138,72 +165,103 @@ export default function SkillTitleUnlockCard({ clear, className = '' }) {
     ? `${formatPoints(earnedPoints)} / ${formatPoints(requiredPoints)} pts banked on ${getTrackCopy(current)}.`
     : 'Starting checkpoint reached.';
   const nodes = [
-    { kind: 'previous', node: previous, left: '14%', top: '72%' },
-    { kind: 'current', node: current, left: '50%', top: '45%' },
-    { kind: 'next', node: next, left: '84%', top: '18%' },
+    { kind: 'previous', node: previous, ...getNodePosition('previous') },
+    { kind: 'current', node: current, ...getNodePosition('current') },
+    { kind: 'next', node: next, ...getNodePosition('next') },
   ];
   const [activeKind, setActiveKind] = useState('current');
 
   return (
-    <div className={cx('rounded-2xl border p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_14px_34px_rgba(0,0,0,0.24)]', theme.shell, className)}>
+    <div
+      className={cx(
+        'rounded-2xl border p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_14px_34px_rgba(0,0,0,0.24)]',
+        theme.shell,
+        className
+      )}
+    >
       <div className="flex flex-wrap items-start justify-between gap-2.5">
         <div className="min-w-0 flex-1">
           <span className={cx('inline-flex items-center rounded-full border px-2 py-1 text-[10px] font-display font-bold uppercase tracking-[0.16em]', theme.label)}>
             Skill Title
           </span>
-          <p className="mt-2 text-[clamp(1.22rem,4.8vw,1.58rem)] font-display font-black leading-[1.05] text-white">{currentLabel}</p>
-          <p className="mt-2 text-[11px] font-display font-bold uppercase tracking-[0.16em] text-gray-500">
-            {current?.level ? `Lv.${current.level} track` : 'Starting checkpoint'}
+          <p className="mt-2 text-[clamp(1.22rem,4.8vw,1.58rem)] font-display font-black leading-[1.05] text-white">
+            {currentLabel}
           </p>
-          <p className="mt-1 max-w-[34rem] text-[13px] leading-relaxed text-gray-300">{earnedCopy}</p>
+          <p className="mt-2 text-[11px] font-display font-bold uppercase tracking-[0.16em] text-gray-500">
+            {getTrackCopy(current)}
+          </p>
+          <p className="mt-1 max-w-[34rem] text-[13px] leading-relaxed text-gray-300">
+            {earnedCopy}
+          </p>
         </div>
         <span className={cx('shrink-0 rounded-full border px-2.5 py-1.5 text-[10px] font-display font-bold uppercase tracking-[0.14em] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]', theme.chip)}>
           {familyLabel}
         </span>
       </div>
 
-      <div className="mt-4 rounded-xl border border-piu-border/50 bg-piu-dark/30 p-3">
-        <div className="relative min-h-[10.75rem] overflow-hidden rounded-xl border border-piu-border/40 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.08),transparent_56%),linear-gradient(180deg,rgba(18,24,39,0.9),rgba(7,12,24,0.98))] px-5 pb-6 pt-7 sm:min-h-[11.5rem]">
-          <svg viewBox="0 0 100 40" className="absolute inset-0 h-full w-full" aria-hidden="true">
+      <div className="mt-4 space-y-3">
+        <div
+          className="skill-title-saga-stage relative min-h-[11.75rem] overflow-hidden rounded-[1.2rem] border border-piu-border/60 px-4 pb-6 pt-6 sm:min-h-[12.5rem] sm:px-6 sm:pt-7"
+          style={{
+            '--skill-route-color': theme.line,
+            '--skill-route-glow': theme.glow,
+          }}
+        >
+          <svg viewBox="0 0 100 44" className="absolute inset-0 h-full w-full" aria-hidden="true">
             <path
-              d="M 10 29 C 24 22, 34 18, 50 18 S 72 14, 90 8"
+              d="M 10 32 C 25 22, 34 18, 50 18 S 72 15, 90 8"
               fill="none"
-              stroke={theme.line}
-              strokeWidth="2.2"
+              stroke="rgba(255,255,255,0.12)"
+              strokeWidth="2.6"
               strokeLinecap="round"
-              strokeDasharray="3.25 3.25"
-              opacity="0.92"
+              strokeDasharray="3.6 4.1"
+            />
+            <path
+              className="skill-title-saga__route"
+              d="M 10 32 C 25 22, 34 18, 50 18 S 72 15, 90 8"
+              fill="none"
+              stroke="var(--skill-route-color)"
+              strokeWidth="2.8"
+              strokeLinecap="round"
+              strokeDasharray="3.6 4.1"
             />
           </svg>
-          {nodes.map(({ kind, node, left, top }) => {
+
+          {nodes.map(({ kind, node, left, top, transform, align, label }) => {
             const isSelected = kind === activeKind;
             const dotClass = isSelected
               ? theme.current
-              : (kind === 'previous' ? theme.past : (kind === 'current' ? theme.past : theme.future));
-            const transform = kind === 'previous'
-              ? 'translate(-10%, -50%)'
-              : kind === 'next'
-                ? 'translate(-90%, -50%)'
-                : 'translate(-50%, -50%)';
+              : (kind === 'next' ? theme.future : theme.past);
+
             return (
-              <div
+              <button
                 key={`${kind}-${node?.id || node?.name || 'node'}`}
+                type="button"
+                onClick={() => setActiveKind(kind)}
                 className={cx(
-                  'absolute flex flex-col',
-                  kind === 'previous' ? 'items-start text-left' : kind === 'next' ? 'items-end text-right' : 'items-center text-center'
+                  'absolute flex min-w-[4rem] flex-col focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a1020]',
+                  align
                 )}
                 style={{ left, top, transform }}
+                aria-pressed={isSelected}
+                aria-label={`${label} node`}
               >
-                <span className={cx('block h-7 w-7 rounded-full border-[3px] transition-all', dotClass, isSelected && 'scale-[1.12]')} />
-                <span className={cx('mt-2 block text-[10px] font-display font-bold uppercase tracking-[0.2em]', isSelected ? 'text-white' : 'text-white/72')}>
-                  {kind === 'previous' ? 'Prev' : kind === 'current' ? 'Earned' : 'Next'}
+                <span
+                  className={cx(
+                    'skill-title-saga__orb block h-10 w-10 rounded-full border-[3px] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]',
+                    dotClass,
+                    isSelected && 'is-active scale-[1.08]'
+                  )}
+                />
+                <span className={cx('mt-2 block text-[10px] font-display font-bold uppercase tracking-[0.2em] transition-colors duration-300', isSelected ? 'text-white' : 'text-white/72')}>
+                  {label}
                 </span>
-              </div>
+              </button>
             );
           })}
         </div>
 
-        <div className="mt-3 grid gap-2 sm:grid-cols-3">
+        <div className="grid gap-2.5 md:grid-cols-3">
           {nodes.map(({ kind, node }) => {
             const meta = getNodeMeta(kind, node);
             const isActive = kind === activeKind;
@@ -213,20 +271,27 @@ export default function SkillTitleUnlockCard({ clear, className = '' }) {
                 type="button"
                 onClick={() => setActiveKind(kind)}
                 className={cx(
-                  'rounded-lg border px-3 py-3 text-left transition-all',
+                  'skill-title-checkpoint rounded-[1.08rem] border px-3.5 py-3.5 text-left',
                   theme.detail,
-                  isActive ? theme.detailActive : 'hover:border-white/25 hover:bg-piu-dark/55'
+                  isActive ? theme.detailActive : 'hover:border-white/18 hover:bg-white/[0.03]'
                 )}
                 aria-pressed={isActive}
               >
-                <div className="flex items-start justify-between gap-3">
-                  <p className="text-[9px] font-display font-bold uppercase tracking-[0.18em] text-gray-500">{meta.label}</p>
-                  <p className="text-[9px] font-display font-bold uppercase tracking-[0.14em] text-gray-300">
-                    {getPassCopy(meta.metrics)}
-                  </p>
-                </div>
-                <p className="mt-2 text-[13px] font-display font-bold leading-tight text-white">{meta.title}</p>
-                <p className="mt-1 text-[11px] leading-snug text-gray-400">{meta.body}</p>
+                <p className="text-[9px] font-display font-bold uppercase tracking-[0.18em] text-gray-500">
+                  {meta.label}
+                </p>
+                <p className="mt-2 text-[15px] font-display font-bold leading-tight text-white">
+                  {meta.title}
+                </p>
+                <p className="mt-1 text-[11px] font-display font-bold uppercase tracking-[0.12em] text-gray-400">
+                  {meta.track}
+                </p>
+                <p className="mt-2 text-[12px] leading-snug text-gray-300">
+                  {meta.pointsCopy}
+                </p>
+                <p className="mt-3 text-[10px] font-display font-bold uppercase tracking-[0.16em] text-white/92">
+                  {meta.passCopy}
+                </p>
               </button>
             );
           })}

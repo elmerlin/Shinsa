@@ -302,6 +302,76 @@
     --plate-glow: rgba(226, 232, 240, 0.24);
   }
 
+  .skill-title-saga-stage {
+    position: relative;
+    isolation: isolate;
+    background:
+      radial-gradient(circle at 50% 16%, color-mix(in srgb, var(--skill-route-glow) 46%, transparent), transparent 34%),
+      linear-gradient(180deg, rgba(18, 24, 39, 0.94), rgba(7, 12, 24, 0.98));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.05),
+      inset 0 -18px 32px rgba(0, 0, 0, 0.22);
+  }
+
+  .skill-title-saga-stage::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(circle at 18% 82%, color-mix(in srgb, var(--skill-route-glow) 26%, transparent), transparent 24%),
+      radial-gradient(circle at 86% 12%, color-mix(in srgb, var(--skill-route-glow) 38%, transparent), transparent 26%);
+    opacity: 0.92;
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  .skill-title-saga__route {
+    filter: drop-shadow(0 0 8px var(--skill-route-glow));
+    animation: skill-title-route-flow 8s linear infinite;
+  }
+
+  .skill-title-saga__orb {
+    position: relative;
+    z-index: 1;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+  }
+
+  .skill-title-saga__orb::after {
+    content: '';
+    position: absolute;
+    inset: -10px;
+    border-radius: inherit;
+    background: radial-gradient(circle, color-mix(in srgb, var(--skill-route-glow) 76%, transparent) 0%, transparent 70%);
+    opacity: 0;
+    transform: scale(0.72);
+    transition:
+      opacity 240ms cubic-bezier(0.22, 1, 0.36, 1),
+      transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+    pointer-events: none;
+  }
+
+  .skill-title-saga__orb.is-active::after {
+    opacity: 1;
+    transform: scale(1);
+    animation: skill-title-node-pulse 2.8s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  }
+
+  .skill-title-checkpoint {
+    transition:
+      transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+      border-color 180ms cubic-bezier(0.22, 1, 0.36, 1),
+      background-color 180ms cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 240ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .skill-title-checkpoint:hover {
+    transform: translateY(-1px);
+  }
+
+  .skill-title-checkpoint[aria-pressed='true'] {
+    transform: translateY(-2px);
+  }
+
   .section-title {
     @apply font-display font-bold text-xl tracking-wider uppercase;
   }
@@ -1823,6 +1893,16 @@
   50% { background-position: 0% 0; }
 }
 
+@keyframes skill-title-route-flow {
+  from { stroke-dashoffset: 0; }
+  to { stroke-dashoffset: -30; }
+}
+
+@keyframes skill-title-node-pulse {
+  0%, 100% { opacity: 0.9; transform: scale(1); }
+  50% { opacity: 0.42; transform: scale(1.14); }
+}
+
 /* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
   [class^="chat-entrance-"],
@@ -1835,11 +1915,17 @@
   .chat-bg-msn-gradient,
   .chat-bg-winamp-eq::after,
   .chat-bg-nxa-particles::before,
-  .chat-header-msn-shine {
+  .chat-header-msn-shine,
+  .skill-title-saga__route,
+  .skill-title-saga__orb.is-active::after {
     animation: none !important;
   }
   [class^="chat-entrance-"],
   [class*=" chat-entrance-"] {
     opacity: 1 !important; transform: none !important;
+  }
+  .skill-title-checkpoint,
+  .skill-title-saga__orb {
+    transition: none !important;
   }
 }

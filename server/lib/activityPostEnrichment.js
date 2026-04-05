@@ -1,3 +1,5 @@
+const { getUserTitleProgress } = require('./titleProgress');
+
 const recentPlayJudgmentsBeforeStmtCache = new WeakMap();
 const recentPlayJudgmentsAnyStmtCache = new WeakMap();
 const recentPlayMetadataBeforeStmtCache = new WeakMap();
@@ -18,6 +20,14 @@ function getCachedStmt(cache, db, sql) {
 function toInt(value) {
   const numeric = parseInt(value, 10);
   return Number.isFinite(numeric) ? numeric : 0;
+}
+
+function normalizeString(value) {
+  return String(value || '').trim();
+}
+
+function normalizeComparable(value) {
+  return normalizeString(value).toLowerCase().replace(/\s+/g, ' ');
 }
 
 function safeParseJsonArray(raw) {
@@ -385,9 +395,130 @@ function buildClearFallbackItem(clear) {
   };
 }
 
+function serializeTitleProgressNode(title) {
+  if (!title) return null;
+  return {
+    id: normalizeString(title.id),
+    index: toInt(title.index),
+    name: normalizeString(title.name || title.skill_title || 'Skill Title'),
+    skill_title: normalizeString(title.skill_title || title.name || 'Skill Title'),
+    skill_family: normalizeString(title.skill_family),
+    skill_level: toInt(title.skill_level),
+    level: toInt(title.level),
+    tier: normalizeString(title.tier),
+    required_points: toInt(title.required_points),
+    earned_points: toInt(title.earned_points),
+    remaining_points: toInt(title.remaining_points),
+    progress_percent: Number(title.progress_percent) || 0,
+    unlocked: !!title.unlocked,
+  };
+}
+
+function mergeTitleProgressNode(existingNode, fallbackTitle) {
+  const fallback = serializeTitleProgressNode(fallbackTitle);
+  if (!existingNode && !fallback) return null;
+
+  return {
+    ...(fallback || {}),
+    ...(existingNode || {}),
+    id: normalizeString(existingNode?.id || fallback?.id),
+    index: toInt(existingNode?.index) || toInt(fallback?.index),
+    name: normalizeString(existingNode?.name || existingNode?.skill_title || fallback?.name || fallback?.skill_title || 'Skill Title'),
+    skill_title: normalizeString(existingNode?.skill_title || existingNode?.name || fallback?.skill_title || fallback?.name || 'Skill Title'),
+    skill_family: normalizeString(existingNode?.skill_family || fallback?.skill_family),
+    skill_level: toInt(existingNode?.skill_level) || toInt(fallback?.skill_level),
+    level: toInt(existingNode?.level) || toInt(fallback?.level),
+    tier: normalizeString(existingNode?.tier || fallback?.tier),
+    required_points: toInt(existingNode?.required_points) || toInt(fallback?.required_points),
+    earned_points: toInt(existingNode?.earned_points) || toInt(fallback?.earned_points),
+    remaining_points: toInt(existingNode?.remaining_points) || toInt(fallback?.remaining_points),
+    progress_percent: Number(existingNode?.progress_percent) || Number(fallback?.progress_percent) || 0,
+    unlocked: existingNode?.unlocked == null ? !!fallback?.unlocked : !!existingNode.unlocked,
+  };
+}
+
+function findProgressTitleMatch(progress, item) {
+  const titles = Array.isArray(progress?.titles) ? progress.titles : [];
+  if (titles.length === 0) return null;
+
+  const explicitId = normalizeString(item?.title_current_node?.id);
+  if (explicitId) {
+    const byId = titles.find((title) => normalizeString(title.id) === explicitId);
+    if (byId) return byId;
+  }
+
+  const family = normalizeComparable(item?.title_family || item?.title_current_node?.skill_family);
+  const skillLevel = toInt(item?.title_level || item?.title_current_node?.skill_level);
+  if (family && skillLevel > 0) {
+    const byFamilyAndLevel = titles.find((title) =>
+      normalizeComparable(title.skill_family) === family && toInt(title.skill_level) === skillLevel
+    );
+    if (byFamilyAndLevel) return byFamilyAndLevel;
+  }
+
+  const nameCandidates = [
+    item?.title_name,
+    item?.song_title,
+    item?.title_current_node?.name,
+    item?.title_current_node?.skill_title,
+  ].map(normalizeComparable).filter(Boolean);
+
+  if (nameCandidates.length === 0) return null;
+  return titles.find((title) => {
+    const names = [title.name, title.skill_title].map(normalizeComparable).filter(Boolean);
+    return nameCandidates.some((candidate) => names.includes(candidate));
+  }) || null;
+}
+
+function enrichTitleUnlockItem(progress, item) {
+  if (String(item?.entry_type || '') !== 'title_unlock') return item;
+  if (!progress?.imported) return item;
+
+  const currentTitle = findProgressTitleMatch(progress, item);
+  if (!currentTitle) return item;
+
+  const titleIndex = toInt(currentTitle.index);
+  const allTitles = Array.isArray(progress?.titles) ? progress.titles : [];
+  const previousTitle = titleIndex > 0 ? allTitles[titleIndex - 1] : null;
+  const nextTitle = titleIndex >= 0 ? (allTitles[titleIndex + 1] || null) : null;
+
+  return {
+    ...item,
+    song_title: normalizeString(item.song_title || currentTitle.name || currentTitle.skill_title || 'Skill Title'),
+    mode: normalizeString(item.mode || 'Skill Title') || 'Skill Title',
+    level: toInt(item.level) || toInt(currentTitle.level),
+    score: toInt(item.score) || toInt(currentTitle.required_points),
+    grade: normalizeString(item.grade || 'SKILL TITLE') || 'SKILL TITLE',
+    title_name: normalizeString(item.title_name || currentTitle.name || currentTitle.skill_title || 'Skill Title'),
+    title_family: normalizeString(item.title_family || currentTitle.skill_family),
+    title_level: toInt(item.title_level) || toInt(currentTitle.skill_level),
+    title_tier: normalizeString(item.title_tier || currentTitle.tier),
+    title_required_points: toInt(item.title_required_points) || toInt(currentTitle.required_points),
+    title_earned_points: toInt(item.title_earned_points) || toInt(currentTitle.earned_points),
+    title_remaining_points: toInt(item.title_remaining_points) || toInt(currentTitle.remaining_points),
+    title_progress_percent: Number(item.title_progress_percent) || Number(currentTitle.progress_percent) || 0,
+    title_previous_node: mergeTitleProgressNode(item.title_previous_node, previousTitle),
+    title_current_node: mergeTitleProgressNode(item.title_current_node, currentTitle),
+    title_next_node: mergeTitleProgressNode(item.title_next_node, nextTitle),
+  };
+}
+
 function enrichClearRows(db, userId, rows = [], createdAt = '') {
-  return (Array.isArray(rows) ? rows : []).map((item) => {
-    if (String(item?.entry_type || '') === 'title_unlock') return item;
+  const normalizedRows = Array.isArray(rows) ? rows : [];
+  const needsTitleBackfill = normalizedRows.some((item) =>
+    String(item?.entry_type || '') === 'title_unlock' && (
+      !item?.title_current_node ||
+      !item?.title_previous_node ||
+      !item?.title_next_node ||
+      !toInt(item?.title_required_points)
+    )
+  );
+  const titleProgress = needsTitleBackfill ? getUserTitleProgress(db, userId) : null;
+
+  return normalizedRows.map((item) => {
+    if (String(item?.entry_type || '') === 'title_unlock') {
+      return enrichTitleUnlockItem(titleProgress, item);
+    }
 
     const enriched = enrichEntryWithJudgments(db, userId, createdAt, item, 'score');
     const lookup = findRecentPlayMetadata(db, {
