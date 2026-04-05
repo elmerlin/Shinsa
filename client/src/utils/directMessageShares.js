@@ -155,7 +155,7 @@ function buildCompareOutcome({ best, targetScore = 0, challengeKind = '' }) {
 function formatLeadClearLabel(clear) {
   if (!clear || typeof clear !== 'object') return 'New clear';
   if (String(clear.entry_type || '').trim().toLowerCase() === 'title_unlock') {
-    return compactText(clear.title_name || clear.song_title || 'New title unlock', 90);
+    return compactText(clear.title_name || clear.song_title || 'New skill title unlock', 90);
   }
   return formatChartLabel(clear.song_title, clear.mode, clear.level);
 }
@@ -494,7 +494,7 @@ export function buildClearLinkShare({
     return {
       kind: 'clear',
       path: `/clear/${id}`,
-      title: allTitleUnlocks ? `${authorName}'s title unlock` : `${authorName}'s new clear`,
+      title: allTitleUnlocks ? `${authorName}'s skill title unlock` : `${authorName}'s new clear`,
       subtitle: [
         formatLeadClearLabel(entry),
         compactText(entry?.grade, 24),
@@ -528,7 +528,7 @@ export function buildClearLinkShare({
   return {
     kind: 'clear',
     path: `/clear/${id}`,
-    title: allTitleUnlocks ? `${authorName}'s ${rows.length} title unlocks` : `${authorName}'s ${rows.length} new clears`,
+    title: allTitleUnlocks ? `${authorName}'s ${rows.length} skill title unlocks` : `${authorName}'s ${rows.length} new clears`,
     subtitle: `${leadLabel} + ${rows.length - 1} more`,
     buttonLabel: 'Open clear',
     songTitle: String(rows[0]?.song_title || ''),

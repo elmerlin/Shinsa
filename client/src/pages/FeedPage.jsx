@@ -12,6 +12,7 @@ import DojoCatStickerPicker from '../components/DojoCatStickerPicker';
 import ScoreSnapshotModal from '../components/ScoreSnapshotModal';
 import YouTubeReplayModal from '../components/YouTubeReplayModal';
 import SendToDirectMessageButton from '../components/SendToDirectMessageButton';
+import SkillTitleUnlockCard from '../components/SkillTitleUnlockCard';
 import PlateBadge from '../components/ui/plate-badge';
 import { renderFormattedText } from '../utils/formatText';
 import { getProfilePath } from '../utils/profile';
@@ -140,24 +141,31 @@ function getClearItems(item) {
     title_name: '',
     title_family: '',
     title_level: 0,
-      title_plate: '',
-      title_tier: '',
-      pumbility_gain: parsePumbilityGain(item.pumbility_gain),
-      singles_pumbility_gain: parsePumbilityGain(item.singles_pumbility_gain),
-      over_top100_rank: parseInt(item.over_top100_rank, 10) || 0,
-      replay_embed_url: item.replay_embed_url || '',
-      replay_video_id: item.replay_video_id || '',
-      replay_start_seconds: parseInt(item.replay_start_seconds, 10) || 0,
-      replay_end_seconds: parseInt(item.replay_end_seconds, 10) || 0,
-      date_played: item.date_played || '',
-      played_at_utc: item.played_at_utc || '',
-      machine_name: item.machine_name || '',
-      play_id: item.play_id || '',
-      user_id: item.user_id || '',
-      jacket_url: item.jacket_url || item.background_url || '',
-      chart_id: item.chart_id || 0,
-      chart_path: item.chart_path || '',
-    }];
+    title_plate: '',
+    title_tier: '',
+    title_required_points: 0,
+    title_earned_points: 0,
+    title_remaining_points: 0,
+    title_progress_percent: 0,
+    title_previous_node: null,
+    title_current_node: null,
+    title_next_node: null,
+    pumbility_gain: parsePumbilityGain(item.pumbility_gain),
+    singles_pumbility_gain: parsePumbilityGain(item.singles_pumbility_gain),
+    over_top100_rank: parseInt(item.over_top100_rank, 10) || 0,
+    replay_embed_url: item.replay_embed_url || '',
+    replay_video_id: item.replay_video_id || '',
+    replay_start_seconds: parseInt(item.replay_start_seconds, 10) || 0,
+    replay_end_seconds: parseInt(item.replay_end_seconds, 10) || 0,
+    date_played: item.date_played || '',
+    played_at_utc: item.played_at_utc || '',
+    machine_name: item.machine_name || '',
+    play_id: item.play_id || '',
+    user_id: item.user_id || '',
+    jacket_url: item.jacket_url || item.background_url || '',
+    chart_id: item.chart_id || 0,
+    chart_path: item.chart_path || '',
+  }];
 
   try {
     const parsed = safeParseJsonArray(item.clears_json);
@@ -179,6 +187,13 @@ function getClearItems(item) {
       title_level: parseInt(c.title_level) || 0,
       title_plate: c.title_plate || '',
       title_tier: c.title_tier || '',
+      title_required_points: parseInt(c.title_required_points, 10) || 0,
+      title_earned_points: parseInt(c.title_earned_points, 10) || 0,
+      title_remaining_points: parseInt(c.title_remaining_points, 10) || 0,
+      title_progress_percent: Number.isFinite(Number(c.title_progress_percent)) ? Number(c.title_progress_percent) : 0,
+      title_previous_node: c.title_previous_node || null,
+      title_current_node: c.title_current_node || null,
+      title_next_node: c.title_next_node || null,
       pumbility_gain: parsePumbilityGain(c.pumbility_gain),
       singles_pumbility_gain: parsePumbilityGain(c.singles_pumbility_gain),
       over_top100_rank: parseInt(c.over_top100_rank, 10) || 0,
@@ -232,38 +247,6 @@ function getGradeColor(grade, score = 0) {
     if (normalized === 'A+' || normalized === 'A') return 'text-amber-700';
   }
   return getRank(score).color;
-}
-
-function getTitlePlateStyles(clear) {
-  const tier = String(clear?.title_tier || clear?.title_family || '').trim().toLowerCase();
-  if (tier === 'bronze' || tier === 'intermediate') {
-    return {
-      chip: 'bg-amber-900/45 border-amber-300/60 text-amber-200',
-      plate: 'from-amber-200 via-amber-300 to-amber-500 border-amber-100/85 text-amber-950',
-    };
-  }
-  if (tier === 'silver' || tier === 'advanced') {
-    return {
-      chip: 'bg-slate-700/45 border-slate-200/60 text-slate-100',
-      plate: 'from-slate-100 via-slate-200 to-slate-400 border-white/85 text-slate-900',
-    };
-  }
-  if (tier === 'gold' || tier === 'expert') {
-    return {
-      chip: 'bg-yellow-900/45 border-yellow-300/65 text-yellow-200',
-      plate: 'from-yellow-200 via-amber-300 to-yellow-500 border-yellow-100/90 text-amber-950',
-    };
-  }
-  if (tier === 'master') {
-    return {
-      chip: 'bg-fuchsia-900/45 border-fuchsia-300/65 text-fuchsia-100',
-      plate: 'from-fuchsia-200 via-violet-300 to-fuchsia-500 border-fuchsia-100/90 text-fuchsia-950',
-    };
-  }
-  return {
-    chip: 'bg-slate-800/45 border-slate-300/55 text-slate-100',
-    plate: 'from-slate-200 via-slate-300 to-slate-500 border-slate-100/90 text-slate-950',
-  };
 }
 
 function ScoreDetailModal({ score, jacketUrl, chartLink, onClose }) {
@@ -995,7 +978,7 @@ function NewClearCard({ item, jacketLookup, chartKeyMap, onScoreClick, onReplayC
             </Link>
             <span className="text-sky-400 font-display font-bold text-xs">
               {isTitleUnlockPost
-                ? (isGrouped ? 'earned new titles!' : 'earned a new title!')
+                ? (isGrouped ? 'earned new skill titles!' : 'earned a new skill title!')
                 : (isGrouped ? 'new clears!' : 'new clear!')}
             </span>
             {postPumbilityGain > 0 && (
@@ -1015,29 +998,11 @@ function NewClearCard({ item, jacketLookup, chartKeyMap, onScoreClick, onReplayC
           const songSinglesPumbilityGain = parsePumbilityGain(clear.singles_pumbility_gain);
 
           if (clear.entry_type === 'title_unlock') {
-            const titleName = clear.title_name || clear.song_title || `Title Lv.${clear.title_level || clear.level || 1}`;
-            const family = clear.title_family || '';
-            const level = clear.title_level || clear.level || 1;
-            const plateLabel = clear.title_plate || clear.plate || 'Title Plate';
-            const plateStyles = getTitlePlateStyles(clear);
-            const chipText = family ? `${family} Lv.${level}` : `Lv.${level}`;
             return (
-              <div key={`title-unlock-${titleName}-${i}`} className="flex items-center gap-3 py-1.5 border-b border-piu-border/20 last:border-0">
-                <div className={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-display font-bold ${plateStyles.chip}`}>
-                  Title
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-display font-bold truncate">{titleName}</p>
-                  <div className="flex items-center gap-1.5 mt-0.5">
-                    <span className={`text-[9px] px-1.5 py-0.5 rounded border font-display font-bold ${plateStyles.chip}`}>
-                      {chipText}
-                    </span>
-                  </div>
-                </div>
-                <div className={`shrink-0 rounded-lg border px-2.5 py-1 bg-gradient-to-b text-[10px] font-display font-black tracking-wide ${plateStyles.plate}`}>
-                  {plateLabel}
-                </div>
-              </div>
+              <SkillTitleUnlockCard
+                key={`title-unlock-${clear.title_name || clear.song_title || i}-${i}`}
+                clear={clear}
+              />
             );
           }
 

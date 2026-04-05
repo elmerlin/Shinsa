@@ -2440,21 +2440,23 @@ function isBeginnerTitleRow(title) {
   return /^beginner$/i.test(family) || /^beginner\b/i.test(name);
 }
 
-function getTitlePlateMeta(title) {
-  const family = String(title?.skill_family || '').trim().toLowerCase();
-  if (family === 'intermediate') {
-    return { plate: 'Bronze Plate', tier: 'bronze' };
-  }
-  if (family === 'advanced') {
-    return { plate: 'Silver Plate', tier: 'silver' };
-  }
-  if (family === 'expert') {
-    return { plate: 'Gold Plate', tier: 'gold' };
-  }
-  if (family === 'master') {
-    return { plate: 'Master Plate', tier: 'master' };
-  }
-  return { plate: 'Title Plate', tier: 'title' };
+function serializeTitleProgressNode(title) {
+  if (!title) return null;
+  return {
+    id: title.id || '',
+    index: parseInt(title.index, 10) || 0,
+    name: title.name || title.skill_title || 'Skill Title',
+    skill_title: title.skill_title || title.name || 'Skill Title',
+    skill_family: title.skill_family || '',
+    skill_level: parseInt(title.skill_level, 10) || 0,
+    level: parseInt(title.level, 10) || 0,
+    tier: title.tier || '',
+    required_points: parseInt(title.required_points, 10) || 0,
+    earned_points: parseInt(title.earned_points, 10) || 0,
+    remaining_points: parseInt(title.remaining_points, 10) || 0,
+    progress_percent: Number(title.progress_percent) || 0,
+    unlocked: !!title.unlocked,
+  };
 }
 
 function getNewlyUnlockedTitles(previousProgress, latestProgress) {
@@ -2468,30 +2470,41 @@ function getNewlyUnlockedTitles(previousProgress, latestProgress) {
     .filter((title) => title?.unlocked && !previouslyUnlocked.has(title.id) && !isBeginnerTitleRow(title));
 }
 
-function buildTitleUnlockClearRows(unlockedTitles) {
+function buildTitleUnlockClearRows(unlockedTitles, latestProgress) {
   if (!Array.isArray(unlockedTitles) || unlockedTitles.length === 0) return [];
+  const allTitles = Array.isArray(latestProgress?.titles) ? latestProgress.titles : [];
   return unlockedTitles.map((title) => {
-    const plateMeta = getTitlePlateMeta(title);
+    const titleIndex = parseInt(title?.index, 10);
+    const currentTitle = Number.isFinite(titleIndex) ? allTitles[titleIndex] : null;
+    const previousTitle = Number.isFinite(titleIndex) && titleIndex > 0 ? allTitles[titleIndex - 1] : null;
+    const nextTitle = Number.isFinite(titleIndex) ? (allTitles[titleIndex + 1] || null) : null;
     return {
       entry_type: 'title_unlock',
-      song_title: title.name || title.skill_title || 'Title Unlock',
-      mode: 'Title',
-      level: parseInt(title.skill_level, 10) || 0,
+      song_title: title.name || title.skill_title || 'Skill Title Unlock',
+      mode: 'Skill Title',
+      level: parseInt(title.level, 10) || 0,
       score: parseInt(title.required_points, 10) || 0,
-      grade: 'TITLE',
-      plate: plateMeta.plate,
-      title_name: title.name || title.skill_title || 'Title Unlock',
+      grade: 'SKILL TITLE',
+      plate: '',
+      title_name: title.name || title.skill_title || 'Skill Title Unlock',
       title_family: title.skill_family || '',
       title_level: parseInt(title.skill_level, 10) || 0,
-      title_plate: plateMeta.plate,
-      title_tier: plateMeta.tier,
+      title_plate: '',
+      title_tier: title.tier || '',
+      title_required_points: parseInt(title.required_points, 10) || 0,
+      title_earned_points: parseInt(title.earned_points, 10) || parseInt(title.required_points, 10) || 0,
+      title_remaining_points: parseInt(title.remaining_points, 10) || 0,
+      title_progress_percent: Number(title.progress_percent) || 0,
+      title_previous_node: serializeTitleProgressNode(previousTitle),
+      title_current_node: serializeTitleProgressNode(currentTitle || title),
+      title_next_node: serializeTitleProgressNode(nextTitle),
       background_url: '',
     };
   });
 }
 
-function insertTitleUnlockActivityPost(db, userId, unlockedTitles) {
-  const payload = buildTitleUnlockClearRows(unlockedTitles);
+function insertTitleUnlockActivityPost(db, userId, unlockedTitles, latestProgress) {
+  const payload = buildTitleUnlockClearRows(unlockedTitles, latestProgress);
   if (payload.length === 0) return null;
 
   // Guard against duplicate title posts from concurrent sync paths
@@ -2516,7 +2529,7 @@ function buildTitleUnlockSummary(unlockedTitles) {
   const titleList = (Array.isArray(unlockedTitles) ? unlockedTitles : [])
     .map((title) => title?.name || title?.skill_title)
     .filter(Boolean);
-  if (titleList.length === 0) return 'a new title';
+  if (titleList.length === 0) return 'a new skill title';
   if (titleList.length === 1) return titleList[0];
   return `${titleList[0]} +${titleList.length - 1}`;
 }
@@ -2868,9 +2881,9 @@ async function syncRecentlyPlayedForUser(user, options = {}) {
   checkSssAchievements(db, userId);
   const progressAfterSync = updateUserSkillTitleFromBestScores(db, userId);
   const newlyUnlockedTitles = getNewlyUnlockedTitles(progressBeforeSync, progressAfterSync);
-  const titleUnlockRows = buildTitleUnlockClearRows(newlyUnlockedTitles);
+  const titleUnlockRows = buildTitleUnlockClearRows(newlyUnlockedTitles, progressAfterSync);
   if (persistActivityPosts) {
-    titleUnlockPostId = insertTitleUnlockActivityPost(db, userId, newlyUnlockedTitles);
+    titleUnlockPostId = insertTitleUnlockActivityPost(db, userId, newlyUnlockedTitles, progressAfterSync);
   }
 
   if (persistActivityPosts && upscoresFromRecent.length > 0) {
@@ -2903,7 +2916,7 @@ async function syncRecentlyPlayedForUser(user, options = {}) {
       actorUsername,
       activityType: 'new_clears',
       notificationType: 'followed_user_new_title',
-      title: 'Title Earned',
+      title: 'Skill Title Earned',
       message: `${actorUsername} earned ${buildTitleUnlockSummary(newlyUnlockedTitles)}`,
       link: titleUnlockPostId ? `/clear/${titleUnlockPostId}` : profileLink,
     });
@@ -3189,7 +3202,7 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
       checkSssAchievements(db, userId);
       const progressAfterSync = updateUserSkillTitleFromBestScores(db, userId);
       const newlyUnlockedTitles = getNewlyUnlockedTitles(progressBeforeSync, progressAfterSync);
-      const titleUnlockPostId = insertTitleUnlockActivityPost(db, userId, newlyUnlockedTitles);
+      const titleUnlockPostId = insertTitleUnlockActivityPost(db, userId, newlyUnlockedTitles, progressAfterSync);
 
       // Create notification
       const profile = db.prepare('SELECT username FROM users WHERE id = ?').get(userId);
@@ -3233,13 +3246,13 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
 
       if (newlyUnlockedTitles.length > 0) {
         const titleList = newlyUnlockedTitles.map((title) => title.name || title.skill_title).filter(Boolean);
-        const titleSummary = titleList.length > 1 ? `${titleList[0]} +${titleList.length - 1}` : (titleList[0] || 'a new title');
+        const titleSummary = titleList.length > 1 ? `${titleList[0]} +${titleList.length - 1}` : (titleList[0] || 'a new skill title');
         notifyActivitySubscribers(db, {
           actorUserId: userId,
           actorUsername,
           activityType: 'new_clears',
           notificationType: 'followed_user_new_title',
-          title: 'Title Earned',
+          title: 'Skill Title Earned',
           message: `${actorUsername} earned ${titleSummary}`,
           link: titleUnlockPostId ? `/clear/${titleUnlockPostId}` : profileLink,
         });

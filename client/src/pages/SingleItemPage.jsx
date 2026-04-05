@@ -12,6 +12,7 @@ import ScoreSnapshotModal from '../components/ScoreSnapshotModal';
 import YouTubeReplayModal from '../components/YouTubeReplayModal';
 import SendToDirectMessageButton from '../components/SendToDirectMessageButton';
 import ActionIconButton from '../components/ActionIconButton';
+import SkillTitleUnlockCard from '../components/SkillTitleUnlockCard';
 import PlateBadge from '../components/ui/plate-badge';
 import {
   pumpUpscore, getUpscoreComments, addUpscoreComment, deleteUpscoreComment,
@@ -134,6 +135,13 @@ function getClearItems(item) {
     title_level: 0,
     title_plate: '',
     title_tier: '',
+    title_required_points: 0,
+    title_earned_points: 0,
+    title_remaining_points: 0,
+    title_progress_percent: 0,
+    title_previous_node: null,
+    title_current_node: null,
+    title_next_node: null,
     pumbility_gain: parsePumbilityGain(item.pumbility_gain),
     singles_pumbility_gain: parsePumbilityGain(item.singles_pumbility_gain),
     over_top100_rank: parseInt(item.over_top100_rank, 10) || 0,
@@ -171,6 +179,13 @@ function getClearItems(item) {
       title_level: parseInt(c.title_level) || 0,
       title_plate: c.title_plate || '',
       title_tier: c.title_tier || '',
+      title_required_points: parseInt(c.title_required_points, 10) || 0,
+      title_earned_points: parseInt(c.title_earned_points, 10) || 0,
+      title_remaining_points: parseInt(c.title_remaining_points, 10) || 0,
+      title_progress_percent: Number.isFinite(Number(c.title_progress_percent)) ? Number(c.title_progress_percent) : 0,
+      title_previous_node: c.title_previous_node || null,
+      title_current_node: c.title_current_node || null,
+      title_next_node: c.title_next_node || null,
       pumbility_gain: parsePumbilityGain(c.pumbility_gain),
       singles_pumbility_gain: parsePumbilityGain(c.singles_pumbility_gain),
       over_top100_rank: parseInt(c.over_top100_rank, 10) || 0,
@@ -799,7 +814,11 @@ export function SingleClearPage() {
                 {flag && <span className="mr-1">{flag}</span>}
                 {item.username}
               </Link>
-              <span className="text-sky-400 font-display font-bold text-xs">{isGrouped ? 'new clears!' : 'new clear!'}</span>
+              <span className="text-sky-400 font-display font-bold text-xs">
+                {isTitleUnlockPost
+                  ? (isGrouped ? 'earned new skill titles!' : 'earned a new skill title!')
+                  : (isGrouped ? 'new clears!' : 'new clear!')}
+              </span>
               {postPumbilityGain > 0 && (
                 <span className="text-cyan-300 font-display font-black text-[10px]">+{postPumbilityGain.toLocaleString()} PB</span>
               )}
@@ -812,6 +831,15 @@ export function SingleClearPage() {
         </div>
         <div className="space-y-2">
           {clears.map((clear, i) => {
+            if (clear.entry_type === 'title_unlock') {
+              return (
+                <SkillTitleUnlockCard
+                  key={`title-unlock-${clear.title_name || clear.song_title || i}-${i}`}
+                  clear={clear}
+                />
+              );
+            }
+
             const rank = getRank(clear.score);
             const parsedGrade = parseGrade(clear.grade, rank.label);
             const overRank = getOverTop100Rank(clear.over_top100_rank);

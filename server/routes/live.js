@@ -3505,7 +3505,7 @@ function applyLiveSyncResult(db, session, syncResult, actor) {
     syncMessageIds.push(addSystemMessage(
       db,
       session.id,
-      `Title earned: ${titleNames.join(', ')}${suffix}.`,
+      `Skill Title earned: ${titleNames.join(', ')}${suffix}.`,
       'title_unlock',
       { titles: titleNames, count: unlockedTitles.length }
     ));
@@ -5535,8 +5535,8 @@ router.post('/sessions/:id/end', requireAuth, async (req, res) => {
           actorUsername,
           activityType: 'new_clears',
           notificationType: 'followed_user_new_title',
-          title: 'Title Earned',
-          message: `${actorUsername} earned ${result.title_count} new title${result.title_count === 1 ? '' : 's'}`,
+          title: 'Skill Title Earned',
+          message: `${actorUsername} earned ${result.title_count} new skill title${result.title_count === 1 ? '' : 's'}`,
           link: result.clear_post_id ? `/clear/${result.clear_post_id}` : profileLink,
         });
       }

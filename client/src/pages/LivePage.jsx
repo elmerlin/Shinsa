@@ -430,7 +430,7 @@ function buildSyncStatusNote(syncResult, fallback = 'Live session is up to date.
 
   if (newPlays > 0) parts.push(`${newPlays} new play${newPlays === 1 ? '' : 's'} added.`);
   if (fulfilledRequests > 0) parts.push(`${fulfilledRequests} request${fulfilledRequests === 1 ? '' : 's'} fulfilled.`);
-  if (titleUnlocks > 0) parts.push(`${titleUnlocks} title unlock${titleUnlocks === 1 ? '' : 's'} picked up.`);
+  if (titleUnlocks > 0) parts.push(`${titleUnlocks} skill title unlock${titleUnlocks === 1 ? '' : 's'} picked up.`);
 
   return parts.length > 0 ? parts.join(' ') : fallback;
 }

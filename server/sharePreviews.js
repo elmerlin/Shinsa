@@ -385,13 +385,13 @@ function summarizeClear(clear) {
     const firstTitle = String(first.title_name || first.song_title || 'a title').trim();
     return {
       title: multi
-        ? `${username} unlocked ${source.length} titles`
+        ? `${username} unlocked ${source.length} skill titles`
         : `${username} unlocked ${firstTitle}`,
       description: multi
-        ? `${username} unlocked ${source.length} new titles on Pump Shinsa.`
+        ? `${username} unlocked ${source.length} new skill titles on Pump Shinsa.`
         : `${username} unlocked ${firstTitle} on Pump Shinsa.`,
-      headline: multi ? `${source.length} New Titles` : firstTitle,
-      subline: 'Title unlock update',
+      headline: multi ? `${source.length} New Skill Titles` : firstTitle,
+      subline: 'Skill title unlock update',
     };
   }
 
