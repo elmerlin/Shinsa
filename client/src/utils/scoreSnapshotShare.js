@@ -331,9 +331,9 @@ export async function renderScoreSnapshotShareBlob(snapshot) {
   ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
   const cardX = 62;
-  const cardY = 72;
+  const cardY = 200;
   const cardW = CANVAS_WIDTH - 124;
-  const cardH = CANVAS_HEIGHT - 144;
+  const cardH = CANVAS_HEIGHT - 272;
 
   drawRoundedRect(ctx, cardX, cardY, cardW, cardH, 56);
   ctx.fillStyle = 'rgba(8,14,24,0.82)';
