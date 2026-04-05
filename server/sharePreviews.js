@@ -11,7 +11,7 @@ const { splitWcPersonalContent } = require('./lib/weeklyChallengePersonalMarker'
 const SHARE_MARKER_REGEX = /\[\[SHINSA_SHARE_V1:([A-Za-z0-9+/=_-]+)\]\]/;
 const SUMMARY_MARKER_REGEX = /\[\[SHINSA_SUMMARY_V1:[A-Za-z0-9+/=_-]+\]\]/g;
 const PLAN_MARKER_REGEX = /\[\[SHINSA_SESSION_PLAN_V1:[A-Za-z0-9+/=_-]+\]\]/g;
-const SHARE_PREVIEW_RENDER_VERSION = '20260405b';
+const SHARE_PREVIEW_RENDER_VERSION = '20260405c';
 const SONG_ALIAS_OVERRIDES = {
   'papasito (feat. kutina)': 'papasito feat. kutina',
   '파파시토 (feat. kutina)': 'papasito feat. kutina',
@@ -1675,6 +1675,7 @@ async function renderPlayOgJpeg({
   play,
   brandAssets = null,
   artworkBuffer = null,
+  jacketBuffer = null,
   width = 1200,
   height = 630,
 }) {
@@ -1723,6 +1724,11 @@ async function renderPlayOgJpeg({
   const playerAvatarSize = 42;
   const playerAvatarX = cardX + 40;
   const playerAvatarY = cardY + 132;
+  const jacketSize = 164;
+  const jacketX = cardX + 40;
+  const jacketY = cardY + 238;
+  const visibleJacketBuffer = jacketBuffer?.length ? jacketBuffer : artworkBuffer;
+  const scoreX = visibleJacketBuffer?.length ? jacketX + jacketSize + 30 : cardX + 40;
 
   let cardArtworkOverlay = null;
   if (artworkBuffer?.length) {
@@ -1739,6 +1745,23 @@ async function renderPlayOgJpeg({
         .toBuffer(),
       top: cardY,
       left: cardX,
+    };
+  }
+
+  let jacketOverlay = null;
+  if (visibleJacketBuffer?.length) {
+    jacketOverlay = {
+      input: await sharp(visibleJacketBuffer)
+        .rotate()
+        .resize(jacketSize, jacketSize, { fit: 'cover' })
+        .composite([{
+          input: Buffer.from(`<svg width="${jacketSize}" height="${jacketSize}" xmlns="http://www.w3.org/2000/svg"><rect x="0" y="0" width="${jacketSize}" height="${jacketSize}" rx="26" ry="26" fill="#fff"/></svg>`),
+          blend: 'dest-in',
+        }])
+        .png()
+        .toBuffer(),
+      top: jacketY,
+      left: jacketX,
     };
   }
 
@@ -1843,8 +1866,11 @@ async function renderPlayOgJpeg({
 
     ${pillsSvg}
 
-    <text x="${cardX + 40}" y="${cardY + 326}" fill="${play?.is_stage_break ? '#fda4af' : '#ffffff'}" font-size="${play?.is_stage_break ? 46 : 62}" font-weight="900" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(play?.is_stage_break ? 'STAGE BREAK' : scoreText)}</text>
-    ${plateName ? `<text x="${cardX + 40}" y="${cardY + 358}" fill="rgba(250,226,150,0.92)" font-size="16" font-weight="800" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial" letter-spacing="1.5">${escapeXml(plateName)}</text>` : ''}
+    ${visibleJacketBuffer?.length ? `<rect x="${jacketX}" y="${jacketY}" width="${jacketSize}" height="${jacketSize}" rx="26" fill="rgba(8,14,24,0.18)" stroke="rgba(255,255,255,0.20)" />` : ''}
+    ${visibleJacketBuffer?.length ? `<rect x="${jacketX + 1}" y="${jacketY + 1}" width="${jacketSize - 2}" height="${jacketSize - 2}" rx="25" fill="none" stroke="rgba(255,255,255,0.10)" />` : ''}
+
+    <text x="${scoreX}" y="${cardY + 326}" fill="${play?.is_stage_break ? '#fda4af' : '#ffffff'}" font-size="${play?.is_stage_break ? 46 : 62}" font-weight="900" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(play?.is_stage_break ? 'STAGE BREAK' : scoreText)}</text>
+    ${plateName ? `<text x="${scoreX}" y="${cardY + 358}" fill="rgba(250,226,150,0.92)" font-size="16" font-weight="800" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial" letter-spacing="1.5">${escapeXml(plateName)}</text>` : ''}
 
     <text x="${cardX + cardW - 40}" y="${cardY + 314}" text-anchor="end" fill="${escapeXml(gradeAccent)}" font-size="70" font-weight="900" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(gradeText)}</text>
     ${badgeText ? `<text x="${cardX + cardW - 40}" y="${cardY + 344}" text-anchor="end" fill="rgba(214,224,240,0.80)" font-size="18" font-weight="700" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(String(play?.mode || '').trim())} chart</text>` : ''}
@@ -1864,6 +1890,7 @@ async function renderPlayOgJpeg({
   })
     .composite([
       ...(cardArtworkOverlay ? [cardArtworkOverlay] : []),
+      ...(jacketOverlay ? [jacketOverlay] : []),
       { input: Buffer.from(textSvg) },
       ...buildBrandComposites({ width, brandAssets }),
       ...(playerAvatarOverlay ? [playerAvatarOverlay] : []),
@@ -2381,14 +2408,22 @@ function registerSharePreviewRoutes(app, { clientBuildDir }) {
 
     try {
       const origin = getRequestOrigin(req);
-      const preferredArtworkUrl = String(play.background_url || '').trim() || resolveUpscoreItemJacketUrl(db, play);
-      const fallbackArtworkUrl = resolveUpscoreItemJacketUrl(db, play);
+      const resolvedJacketUrl = String(play.jacket_url || '').trim() || resolveUpscoreItemJacketUrl(db, play);
+      const preferredArtworkUrl = String(play.background_url || '').trim() || resolvedJacketUrl;
+      const fallbackArtworkUrl = resolvedJacketUrl;
       const artworkBuffer = await loadPreviewArtworkBuffer({
         clientBuildDir,
         origin,
         jacketUrl: preferredArtworkUrl,
         backgroundUrl: fallbackArtworkUrl,
       });
+      const jacketBuffer = resolvedJacketUrl
+        ? await loadImageBuffer({
+          clientBuildDir,
+          origin,
+          source: resolvedJacketUrl,
+        })
+        : null;
       const brandAssets = await buildBrandAssets({
         clientBuildDir,
         origin,
@@ -2401,6 +2436,7 @@ function registerSharePreviewRoutes(app, { clientBuildDir }) {
         play,
         brandAssets,
         artworkBuffer,
+        jacketBuffer,
         width: 1200,
         height: 630,
       });
