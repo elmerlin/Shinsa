@@ -2983,10 +2983,11 @@ function registerSharePreviewRoutes(app, { clientBuildDir }) {
     // Determine format flow
     const displayPhases = phases.length > 0 ? phases : [{ format: tournament.config?.gauntlet_enabled ? 'gauntlet' : 'round_robin' }];
     const phaseFlow = displayPhases.map(p => TOURNAMENT_FORMAT_LABELS[p.format] || p.format).join(' \u2192 ');
-    const phaseIcons = displayPhases.map(p => TOURNAMENT_FORMAT_ICONS[p.format] || '\uD83C\uDFC6').join('  ');
+    const primaryFormat = displayPhases[0]?.format || 'round_robin';
 
-    // Load tournament avatar
+    // Load tournament avatar (still)
     let avatarComposite = null;
+    const avatarSize = 90;
     const avatarSource = String(tournament.avatar || '').trim();
     if (avatarSource) {
       const src = avatarSource.startsWith('http') || avatarSource.startsWith('/') || isInlineDataAvatar(avatarSource) ? avatarSource : `/${avatarSource}`;
@@ -2994,9 +2995,9 @@ function registerSharePreviewRoutes(app, { clientBuildDir }) {
       if (buf?.length) {
         avatarComposite = await sharp(buf)
           .rotate()
-          .resize(100, 100, { fit: 'cover' })
+          .resize(avatarSize, avatarSize, { fit: 'cover' })
           .composite([{
-            input: Buffer.from('<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" rx="20" fill="#fff"/></svg>'),
+            input: Buffer.from(`<svg width="${avatarSize}" height="${avatarSize}" xmlns="http://www.w3.org/2000/svg"><rect width="${avatarSize}" height="${avatarSize}" rx="18" fill="#fff"/></svg>`),
             blend: 'dest-in',
           }])
           .png()
@@ -3004,7 +3005,7 @@ function registerSharePreviewRoutes(app, { clientBuildDir }) {
       }
     }
 
-    // Load poster background
+    // Load poster background — hero style (brighter, no blur, gradient overlay)
     let bgComposite = null;
     const bgSource = String(tournament.poster_bg || '').trim();
     if (bgSource) {
@@ -3013,8 +3014,7 @@ function registerSharePreviewRoutes(app, { clientBuildDir }) {
         bgComposite = await sharp(buf)
           .rotate()
           .resize(W, H, { fit: 'cover' })
-          .modulate({ brightness: 0.35 })
-          .blur(2)
+          .modulate({ brightness: 0.55 })
           .png()
           .toBuffer();
       }
@@ -3031,124 +3031,323 @@ function registerSharePreviewRoutes(app, { clientBuildDir }) {
       try {
         const buf = await loadImageBuffer({ clientBuildDir, origin, source: src });
         if (buf?.length) {
-          playerAvatars.push(await sharp(buf).rotate().resize(44, 44, { fit: 'cover' }).composite([{
-            input: Buffer.from('<svg width="44" height="44" xmlns="http://www.w3.org/2000/svg"><circle cx="22" cy="22" r="22" fill="#fff"/></svg>'),
+          playerAvatars.push(await sharp(buf).rotate().resize(36, 36, { fit: 'cover' }).composite([{
+            input: Buffer.from('<svg width="36" height="36" xmlns="http://www.w3.org/2000/svg"><circle cx="18" cy="18" r="18" fill="#fff"/></svg>'),
             blend: 'dest-in',
           }]).png().toBuffer());
         } else { playerAvatars.push(null); }
       } catch { playerAvatars.push(null); }
     }
 
-    // Player name list (for text fallbacks)
-    const playerNames = players.slice(0, 10).map(p => escapeXml(String(p.name || '').trim())).filter(Boolean);
-    const moreCount = players.length > 10 ? players.length - 10 : 0;
+    // ── Centered hero-style layout measurements ──
+    const CX = W / 2;
+    let y = 28;
+    const avatarTop = y;
+    if (avatarComposite) y += avatarSize + 16;
 
-    // Build SVG
-    const avatarX = 60, avatarY = H / 2 - 50;
-    const textStartX = avatarComposite ? 190 : 60;
+    const dateLocY = dateLoc ? (y + 14) : y;
+    if (dateLoc) y += 28;
 
-    const playerAvatarsSvg = playerAvatars.map((_, i) => {
-      const x = textStartX + i * 48;
-      const y = 440;
-      if (!playerAvatars[i]) {
-        const initial = (players[i]?.name || '?').charAt(0).toUpperCase();
-        return `<circle cx="${x + 22}" cy="${y + 22}" r="22" fill="rgba(255,51,102,0.35)"/>
-                <text x="${x + 22}" y="${y + 28}" fill="#fff" font-size="16" font-weight="700" text-anchor="middle" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif">${escapeXml(initial)}</text>`;
+    const titleY = y + 38;
+    y += 50;
+    const subtitleY = y + 16;
+    y += 28;
+
+    const dotsY = y + 14;
+    y += 36;
+    const divY = y;
+    y += 14;
+
+    const diagramCenterY = Math.min(Math.round((y + 510) / 2), 400);
+    const playerAvatarY = 540;
+    const avatarSpacing = 40;
+    const avatarRowWidth = maxPlayerAvatars * avatarSpacing;
+    const avatarRowStartX = CX - avatarRowWidth / 2;
+
+    // ── Format diagram SVG ──
+    const FORMAT_DOT_COLORS = {
+      round_robin: '255,51,102', pools: '34,211,238', single_elim: '255,215,0',
+      double_elim: '255,215,0', gauntlet: '168,85,247', hour_of_power: '52,211,153', b15: '167,139,250',
+    };
+
+    function renderDiagramSvg() {
+      const dCx = CX, dCy = diagramCenterY;
+
+      if (primaryFormat === 'round_robin') {
+        const n = Math.min(Math.max(players.length || 6, 4), 8);
+        const r = 75, nodeR = 14;
+        const positions = [];
+        for (let i = 0; i < n; i++) {
+          const angle = (i / n) * Math.PI * 2 - Math.PI / 2;
+          positions.push({ x: dCx + Math.cos(angle) * r, y: dCy + Math.sin(angle) * r });
+        }
+        let s = '';
+        // All connecting lines
+        for (let i = 0; i < n; i++) {
+          for (let j = i + 1; j < n; j++) {
+            const hl = (i === 0 && j === 1);
+            s += `<line x1="${positions[i].x.toFixed(1)}" y1="${positions[i].y.toFixed(1)}" x2="${positions[j].x.toFixed(1)}" y2="${positions[j].y.toFixed(1)}" stroke="rgba(255,51,102,${hl ? '0.45' : '0.07'})" stroke-width="${hl ? 2 : 0.8}"/>`;
+          }
+        }
+        // Highlighted VS label
+        if (n >= 2) {
+          const mx = (positions[0].x + positions[1].x) / 2, my = (positions[0].y + positions[1].y) / 2;
+          s += `<text x="${mx.toFixed(1)}" y="${(my - 10).toFixed(1)}" text-anchor="middle" fill="rgba(255,51,102,0.55)" font-size="10" font-weight="700" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif">VS</text>`;
+        }
+        // Player nodes
+        for (let i = 0; i < n; i++) {
+          const initial = escapeXml((players[i]?.name || `P${i + 1}`).charAt(0).toUpperCase());
+          const active = i < 2;
+          s += `<circle cx="${positions[i].x.toFixed(1)}" cy="${positions[i].y.toFixed(1)}" r="${nodeR}" fill="rgba(255,51,102,${active ? '0.18' : '0.05'})" stroke="rgba(255,51,102,${active ? '0.5' : '0.15'})" stroke-width="1.5"/>`;
+          s += `<text x="${positions[i].x.toFixed(1)}" y="${(positions[i].y + 1).toFixed(1)}" text-anchor="middle" dominant-baseline="central" fill="${active ? 'rgba(255,200,220,0.85)' : 'rgba(255,255,255,0.4)'}" font-size="11" font-weight="700" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif">${initial}</text>`;
+        }
+        s += `<text x="${dCx}" y="${dCy + r + 32}" text-anchor="middle" fill="rgba(255,255,255,0.16)" font-size="10" font-weight="700" letter-spacing="2" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif">EVERYONE PLAYS EVERYONE</text>`;
+        return s;
       }
-      return '';
+
+      if (primaryFormat === 'gauntlet') {
+        const n = Math.min(Math.max(players.length || 6, 4), 7);
+        const matchCount = Math.min(n - 1, 5);
+        const stepH = 38, nodeR = 13;
+        const totalH = (matchCount - 1) * stepH;
+        const baseY = dCy + totalH / 2;
+
+        let s = '';
+        s += `<line x1="${dCx}" y1="${baseY + 8}" x2="${dCx}" y2="${baseY - totalH - 12}" stroke="rgba(168,85,247,0.1)" stroke-width="1.5" stroke-dasharray="4 4"/>`;
+        for (let i = 0; i < matchCount; i++) {
+          const yy = baseY - i * stepH;
+          const isFinal = i === matchCount - 1;
+          const col = isFinal ? '255,215,0' : '168,85,247';
+          const p1 = players[i] || { name: `P${i + 1}` };
+          const p2 = players[i + 1] || { name: `P${i + 2}` };
+          const i1 = escapeXml(String(p1.name || '?').charAt(0).toUpperCase());
+          const i2 = escapeXml(String(p2.name || '?').charAt(0).toUpperCase());
+
+          s += `<line x1="${dCx - 50}" y1="${yy}" x2="${dCx + 50}" y2="${yy}" stroke="rgba(${col},${isFinal ? '0.35' : '0.16'})" stroke-width="1.5"/>`;
+          s += `<circle cx="${dCx - 50}" cy="${yy}" r="${nodeR}" fill="rgba(${col},0.1)" stroke="rgba(${col},0.35)" stroke-width="1.5"/>`;
+          s += `<text x="${dCx - 50}" y="${yy + 1}" text-anchor="middle" dominant-baseline="central" fill="rgba(${col},0.75)" font-size="10" font-weight="700" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif">${i1}</text>`;
+          s += `<text x="${dCx}" y="${yy + 1}" text-anchor="middle" dominant-baseline="central" fill="rgba(${col},0.3)" font-size="8" font-weight="700" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif">VS</text>`;
+          s += `<circle cx="${dCx + 50}" cy="${yy}" r="${nodeR}" fill="rgba(${col},0.1)" stroke="rgba(${col},0.35)" stroke-width="1.5"/>`;
+          s += `<text x="${dCx + 50}" y="${yy + 1}" text-anchor="middle" dominant-baseline="central" fill="rgba(${col},0.75)" font-size="10" font-weight="700" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif">${i2}</text>`;
+          s += `<text x="${dCx + 82}" y="${yy + 1}" dominant-baseline="central" fill="rgba(${col},${isFinal ? '0.5' : '0.25'})" font-size="8" font-weight="700" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif">${isFinal ? 'FINAL' : '#' + (i + 1)}</text>`;
+        }
+        s += `<text x="${dCx}" y="${baseY - totalH - 22}" text-anchor="middle" fill="rgba(255,215,0,0.55)" font-size="14" font-weight="700" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif">\u2655</text>`;
+        s += `<text x="${dCx}" y="${baseY + 28}" text-anchor="middle" fill="rgba(255,255,255,0.16)" font-size="10" font-weight="700" letter-spacing="2" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif">CLIMB THE LADDER</text>`;
+        return s;
+      }
+
+      if (primaryFormat === 'single_elim' || primaryFormat === 'double_elim') {
+        const n = Math.min(Math.max(players.length || 8, 4), 8);
+        const rounds = Math.ceil(Math.log2(n));
+        const roundW = 90, totalW = rounds * roundW, totalH = 180;
+        const startX = dCx - totalW / 2, startY = dCy - totalH / 2;
+        const col = '255,215,0';
+        let s = '';
+        for (let round = 0; round < rounds; round++) {
+          const matchesInRound = Math.pow(2, rounds - round - 1);
+          const spacing = totalH / matchesInRound;
+          const x = startX + round * roundW;
+          const isFinal = round === rounds - 1;
+          for (let mi = 0; mi < matchesInRound; mi++) {
+            const yy = startY + spacing / 2 + mi * spacing;
+            const slotH = Math.min(spacing * 0.5, 30);
+            s += `<rect x="${x}" y="${yy - slotH / 2}" width="70" height="${slotH}" rx="6" fill="rgba(${col},${isFinal ? '0.06' : '0.03'})" stroke="rgba(${col},${isFinal ? '0.3' : '0.1'})" stroke-width="1"/>`;
+            if (round === 0) {
+              const pi = mi * 2;
+              if (players[pi]) { const init = escapeXml(String(players[pi].name || '').charAt(0).toUpperCase()); s += `<text x="${x + 12}" y="${yy - slotH / 4 + 1}" dominant-baseline="central" fill="rgba(${col},0.5)" font-size="8" font-weight="700" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif">${init}</text>`; }
+              if (players[pi + 1]) { const init = escapeXml(String(players[pi + 1].name || '').charAt(0).toUpperCase()); s += `<text x="${x + 12}" y="${yy + slotH / 4 + 1}" dominant-baseline="central" fill="rgba(${col},0.5)" font-size="8" font-weight="700" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif">${init}</text>`; }
+            }
+            if (mi === 0) {
+              const label = isFinal ? 'FINAL' : round === rounds - 2 ? 'SEMIS' : `R${round + 1}`;
+              s += `<text x="${x + 35}" y="${startY - 8}" text-anchor="middle" fill="rgba(${col},${isFinal ? '0.5' : '0.2'})" font-size="8" font-weight="700" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif">${label}</text>`;
+            }
+            if (round < rounds - 1) {
+              const nextSpacing = totalH / Math.pow(2, rounds - round - 2);
+              const nextMi = Math.floor(mi / 2);
+              const nextY = startY + nextSpacing / 2 + nextMi * nextSpacing;
+              s += `<line x1="${x + 70}" y1="${yy}" x2="${x + roundW}" y2="${nextY}" stroke="rgba(${col},0.08)" stroke-width="1"/>`;
+            }
+          }
+        }
+        s += `<text x="${startX + totalW + 16}" y="${dCy + 1}" text-anchor="middle" dominant-baseline="central" fill="rgba(${col},0.4)" font-size="14" font-weight="700" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif">\u2655</text>`;
+        return s;
+      }
+
+      if (primaryFormat === 'pools') {
+        const poolCount = Math.min(displayPhases[0]?.config?.pool_count || 4, 6);
+        const perPool = Math.min(Math.ceil((players.length || 16) / poolCount), 4);
+        const poolW = 56, poolH = perPool * 16 + 28, gap = 12;
+        const totalW = poolCount * poolW + (poolCount - 1) * gap;
+        const startX = dCx - totalW / 2, startY = dCy - poolH / 2;
+        let s = '';
+        for (let pi = 0; pi < poolCount; pi++) {
+          const px = startX + pi * (poolW + gap);
+          s += `<rect x="${px}" y="${startY}" width="${poolW}" height="${poolH}" rx="8" fill="rgba(34,211,238,0.04)" stroke="rgba(34,211,238,0.15)" stroke-width="1"/>`;
+          s += `<text x="${px + poolW / 2}" y="${startY + 14}" text-anchor="middle" fill="rgba(34,211,238,0.5)" font-size="8" font-weight="700" letter-spacing="1" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif">POOL ${String.fromCharCode(65 + pi)}</text>`;
+          for (let i = 0; i < perPool; i++) {
+            const player = players[pi * perPool + i];
+            const initial = escapeXml((player?.name || `P${pi * perPool + i + 1}`).charAt(0).toUpperCase());
+            const dotY = startY + 26 + i * 16;
+            s += `<circle cx="${px + 14}" cy="${dotY}" r="5" fill="rgba(34,211,238,0.12)" stroke="rgba(34,211,238,0.25)" stroke-width="1"/>`;
+            s += `<text x="${px + 14}" y="${dotY + 1}" text-anchor="middle" dominant-baseline="central" fill="rgba(34,211,238,0.6)" font-size="6" font-weight="700" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif">${initial}</text>`;
+          }
+        }
+        return s;
+      }
+
+      // Default: format label circle (hour_of_power, b15, etc.)
+      const col = FORMAT_DOT_COLORS[primaryFormat] || '255,255,255';
+      const label = escapeXml(TOURNAMENT_FORMAT_LABELS[primaryFormat] || primaryFormat);
+      let s = `<circle cx="${dCx}" cy="${dCy}" r="40" fill="rgba(${col},0.06)" stroke="rgba(${col},0.15)" stroke-width="1.5"/>`;
+      s += `<text x="${dCx}" y="${dCy + 1}" text-anchor="middle" dominant-baseline="central" fill="rgba(${col},0.5)" font-size="15" font-weight="700" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif">${label.substring(0, 3).toUpperCase()}</text>`;
+      s += `<text x="${dCx}" y="${dCy + 55}" text-anchor="middle" fill="rgba(255,255,255,0.16)" font-size="10" font-weight="700" letter-spacing="2" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif">${label.toUpperCase()}</text>`;
+      return s;
+    }
+
+    // ── Phase dot abbreviations ──
+    const FORMAT_ABBR = {
+      round_robin: 'RR', pools: 'PL', single_elim: 'SE',
+      double_elim: 'DE', gauntlet: 'GA', hour_of_power: 'HP', b15: 'B15',
+    };
+    const dotSpacing = 52;
+    const dotsStartX = CX - ((displayPhases.length - 1) * dotSpacing) / 2;
+    const phaseDotsSvg = displayPhases.map((p, i) => {
+      const x = dotsStartX + i * dotSpacing;
+      const col = FORMAT_DOT_COLORS[p.format] || '255,255,255';
+      const abbr = FORMAT_ABBR[p.format] || '?';
+      let s = '';
+      if (i > 0) {
+        s += `<line x1="${x - dotSpacing + 16}" y1="${dotsY}" x2="${x - 16}" y2="${dotsY}" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>`;
+        s += `<text x="${(x + x - dotSpacing) / 2}" y="${dotsY + 1}" text-anchor="middle" dominant-baseline="central" fill="rgba(255,255,255,0.12)" font-size="9" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif">\u2192</text>`;
+      }
+      s += `<circle cx="${x}" cy="${dotsY}" r="15" fill="rgba(${col},0.06)" stroke="rgba(${col},0.2)" stroke-width="1"/>`;
+      s += `<text x="${x}" y="${dotsY + 1}" text-anchor="middle" dominant-baseline="central" fill="rgba(${col},0.6)" font-size="9" font-weight="700" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif">${abbr}</text>`;
+      return s;
     }).join('\n');
 
-    const moreLabel = moreCount > 0 ? `<text x="${textStartX + maxPlayerAvatars * 48 + 16}" y="${462}" fill="rgba(255,255,255,0.4)" font-size="16" font-weight="600" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif">+${moreCount} more</text>` : '';
-
-    const phaseChipsSvg = displayPhases.map((p, i) => {
-      const label = escapeXml(TOURNAMENT_FORMAT_LABELS[p.format] || p.format);
-      const x = textStartX + i * 180;
-      return `<rect x="${x}" y="370" width="160" height="32" rx="16" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
-              <text x="${x + 80}" y="391" fill="rgba(255,255,255,0.7)" font-size="14" font-weight="600" text-anchor="middle" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif">${label}</text>`;
+    // Player avatar initials (for those without image)
+    const playerAvatarsSvg = playerAvatars.map((_, i) => {
+      const x = avatarRowStartX + i * avatarSpacing;
+      if (!playerAvatars[i]) {
+        const initial = escapeXml((players[i]?.name || '?').charAt(0).toUpperCase());
+        return `<circle cx="${x + 18}" cy="${playerAvatarY + 18}" r="18" fill="rgba(255,51,102,0.2)" stroke="rgba(255,51,102,0.3)" stroke-width="1"/>
+                <text x="${x + 18}" y="${playerAvatarY + 24}" fill="rgba(255,200,220,0.8)" font-size="12" font-weight="700" text-anchor="middle" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif">${initial}</text>`;
+      }
+      return `<circle cx="${x + 18}" cy="${playerAvatarY + 18}" r="19" fill="none" stroke="rgba(10,10,26,0.9)" stroke-width="3"/>`;
     }).join('\n');
 
+    const moreCount = players.length > maxPlayerAvatars ? players.length - maxPlayerAvatars : 0;
+    const moreLabel = moreCount > 0 ? `<text x="${avatarRowStartX + maxPlayerAvatars * avatarSpacing + 10}" y="${playerAvatarY + 24}" fill="rgba(255,255,255,0.3)" font-size="13" font-weight="600" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif">+${moreCount}</text>` : '';
+
+    // ── Build SVG ──
+    const hasBg = !!bgComposite;
     const svg = `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">
       <defs>
+        ${!hasBg ? `
         <linearGradient id="bg" x1="0" y1="0" x2="0.6" y2="1">
           <stop offset="0%" stop-color="#0a0a1a"/>
           <stop offset="100%" stop-color="#0e1028"/>
         </linearGradient>
-        <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stop-color="rgba(255,51,102,0.3)"/>
-          <stop offset="50%" stop-color="rgba(255,51,102,0)"/>
-        </linearGradient>
+        <radialGradient id="glow1" cx="0.3" cy="0.15" r="0.5">
+          <stop offset="0%" stop-color="rgba(255,51,102,0.15)"/>
+          <stop offset="100%" stop-color="rgba(255,51,102,0)"/>
+        </radialGradient>
+        <radialGradient id="glow2" cx="0.7" cy="0.8" r="0.4">
+          <stop offset="0%" stop-color="rgba(255,199,92,0.08)"/>
+          <stop offset="100%" stop-color="rgba(255,199,92,0)"/>
+        </radialGradient>
+        <radialGradient id="glow3" cx="0.5" cy="0.5" r="0.6">
+          <stop offset="0%" stop-color="rgba(68,136,255,0.06)"/>
+          <stop offset="100%" stop-color="rgba(68,136,255,0)"/>
+        </radialGradient>
+        ` : ''}
         <linearGradient id="topLine" x1="0" y1="0" x2="1" y2="0">
           <stop offset="0%" stop-color="transparent"/>
           <stop offset="50%" stop-color="rgba(255,51,102,0.5)"/>
           <stop offset="100%" stop-color="transparent"/>
         </linearGradient>
+        <linearGradient id="divLine" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stop-color="transparent"/>
+          <stop offset="50%" stop-color="rgba(255,51,102,0.25)"/>
+          <stop offset="100%" stop-color="transparent"/>
+        </linearGradient>
       </defs>
+
+      ${!hasBg ? `
       <rect width="${W}" height="${H}" fill="url(#bg)"/>
-      <rect width="${W}" height="${H}" fill="url(#accent)"/>
+      <rect width="${W}" height="${H}" fill="url(#glow1)"/>
+      <rect width="${W}" height="${H}" fill="url(#glow2)"/>
+      <rect width="${W}" height="${H}" fill="url(#glow3)"/>
+      ` : ''}
+
+      <!-- Top accent line -->
       <rect x="0" y="0" width="${W}" height="2" fill="url(#topLine)"/>
 
-      <!-- Avatar border ring -->
-      ${avatarComposite ? `<rect x="${avatarX - 2}" y="${avatarY - 2}" width="104" height="104" rx="22" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="2"/>` : ''}
+      <!-- Avatar border ring (centered) -->
+      ${avatarComposite ? `<rect x="${CX - avatarSize / 2 - 2}" y="${avatarTop - 2}" width="${avatarSize + 4}" height="${avatarSize + 4}" rx="20" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="2"/>` : ''}
 
-      <!-- Date/location -->
-      <text x="${textStartX}" y="100" fill="rgba(255,255,255,0.4)" font-size="17" font-weight="600" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif">${dateLoc}</text>
+      <!-- Date/location (centered) -->
+      ${dateLoc ? `<text x="${CX}" y="${dateLocY}" text-anchor="middle" fill="rgba(255,255,255,0.4)" font-size="15" font-weight="600" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif">${dateLoc}</text>` : ''}
 
-      <!-- Title -->
-      <text x="${textStartX}" y="165" fill="#ffffff" font-size="52" font-weight="800" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif">${title}</text>
+      <!-- Title (centered) -->
+      <text x="${CX}" y="${titleY}" text-anchor="middle" fill="#ffffff" font-size="46" font-weight="800" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif">${title}</text>
 
-      <!-- Subtitle -->
-      <text x="${textStartX}" y="210" fill="rgba(255,255,255,0.5)" font-size="22" font-weight="600" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif">${players.length} players  \u00B7  ${escapeXml(phaseFlow)}</text>
+      <!-- Subtitle (centered) -->
+      <text x="${CX}" y="${subtitleY}" text-anchor="middle" fill="rgba(255,255,255,0.42)" font-size="18" font-weight="600" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif">${players.length} players  \u00B7  ${escapeXml(phaseFlow)}</text>
 
-      <!-- Player count badge -->
-      <rect x="${textStartX}" y="240" width="${String(players.length).length * 12 + 90}" height="32" rx="16" fill="rgba(255,51,102,0.12)" stroke="rgba(255,51,102,0.25)" stroke-width="1"/>
-      <text x="${textStartX + (String(players.length).length * 12 + 90) / 2}" y="261" fill="rgba(255,180,200,0.9)" font-size="14" font-weight="700" text-anchor="middle" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif">\uD83C\uDFAE ${players.length} COMPETITORS</text>
+      <!-- Phase dots (centered) -->
+      ${phaseDotsSvg}
 
-      <!-- Phase chips -->
-      <text x="${textStartX}" y="340" fill="rgba(255,255,255,0.25)" font-size="11" font-weight="700" letter-spacing="2" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif">FORMAT</text>
-      ${phaseChipsSvg}
+      <!-- Divider -->
+      <line x1="${W * 0.3}" y1="${divY}" x2="${W * 0.7}" y2="${divY}" stroke="url(#divLine)" stroke-width="1"/>
 
-      <!-- Player avatars row -->
-      <text x="${textStartX}" y="432" fill="rgba(255,255,255,0.25)" font-size="11" font-weight="700" letter-spacing="2" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif">PLAYERS</text>
+      <!-- Format diagram -->
+      ${renderDiagramSvg()}
+
+      <!-- Player avatars (centered) -->
       ${playerAvatarsSvg}
       ${moreLabel}
 
       <!-- Branding -->
-      <text x="${W - 60}" y="${H - 30}" fill="rgba(255,255,255,0.2)" font-size="14" font-weight="700" text-anchor="end" letter-spacing="1" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif">PUMP SHINSA</text>
+      <text x="${W - 50}" y="${H - 18}" text-anchor="end" fill="rgba(255,255,255,0.16)" font-size="12" font-weight="700" letter-spacing="1.5" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif">PUMP SHINSA</text>
     </svg>`;
 
-    // Compose layers
+    // ── Compose layers ──
     const composites = [];
 
     if (bgComposite) {
       composites.push({ input: bgComposite, top: 0, left: 0 });
-      // Dark overlay on top of bg
-      composites.push({
-        input: await sharp({
-          create: { width: W, height: H, channels: 4, background: { r: 10, g: 10, b: 26, alpha: 0.65 } },
-        }).png().toBuffer(),
-        top: 0, left: 0,
-      });
+      // Hero-style gradient overlay (light at top, dark at bottom — matches poster hero)
+      const gradientOverlay = Buffer.from(`<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="heroGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="rgb(10,10,26)" stop-opacity="0.45"/>
+            <stop offset="55%" stop-color="rgb(10,10,26)" stop-opacity="0.72"/>
+            <stop offset="100%" stop-color="rgb(10,10,26)" stop-opacity="0.95"/>
+          </linearGradient>
+        </defs>
+        <rect width="${W}" height="${H}" fill="url(#heroGrad)"/>
+      </svg>`);
+      composites.push({ input: gradientOverlay, top: 0, left: 0 });
+      composites.push({ input: Buffer.from(svg), top: 0, left: 0 });
     }
 
-    // SVG overlay
-    composites.push({ input: Buffer.from(svg), top: 0, left: 0 });
-
-    // Tournament avatar
+    // Tournament avatar (centered)
     if (avatarComposite) {
-      composites.push({ input: avatarComposite, top: avatarY, left: avatarX });
+      composites.push({ input: avatarComposite, top: avatarTop, left: Math.round(CX - avatarSize / 2) });
     }
 
-    // Player avatar circles
+    // Player avatar circles (centered row)
     for (let i = 0; i < playerAvatars.length; i++) {
       if (playerAvatars[i]) {
-        composites.push({ input: playerAvatars[i], top: 440, left: textStartX + i * 48 });
+        composites.push({ input: playerAvatars[i], top: playerAvatarY, left: Math.round(avatarRowStartX + i * avatarSpacing) });
       }
     }
 
     // Wordmark
     const wordmark = await ensureWordmarkBuffer(clientBuildDir);
     if (wordmark) {
-      composites.push({ input: wordmark, top: H - 58, left: 60 });
+      composites.push({ input: wordmark, top: H - 48, left: 50 });
     }
 
     const base = bgComposite
