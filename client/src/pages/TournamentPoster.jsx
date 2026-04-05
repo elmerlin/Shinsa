@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { getTournament, getPlayers, getPhases, getPlayerScoutingCard } from '../utils/api';
 import { FORMAT_LABELS, FORMAT_ICONS, FORMAT_DESCRIPTIONS } from '../utils/tournamentConstants';
@@ -6,20 +6,47 @@ import { formatTournamentDate } from '../components/tournament/TournamentChrome'
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag } from '../utils/countryFlags';
 
-// ── Intersection Observer hook for scroll-triggered reveals ──
-function useReveal(threshold = 0.15) {
-  const ref = useRef(null);
+// ── Scroll-triggered reveal hook ──
+function useReveal() {
   const [visible, setVisible] = useState(false);
+  const visibleRef = useRef(false);
+  const nodeRef = useRef(null);
+
+  const reveal = useCallback(() => {
+    if (visibleRef.current) return;
+    visibleRef.current = true;
+    setVisible(true);
+  }, []);
+
+  const check = useCallback(() => {
+    const node = nodeRef.current;
+    if (!node || visibleRef.current) return;
+    const rect = node.getBoundingClientRect();
+    if (rect.top < window.innerHeight * 1.15 && rect.bottom > 0) reveal();
+  }, [reveal]);
+
+  const ref = useCallback((node) => {
+    nodeRef.current = node;
+    if (node && !visibleRef.current) {
+      const rect = node.getBoundingClientRect();
+      if (rect.top < window.innerHeight && rect.bottom > 0) reveal();
+    }
+  }, [reveal]);
+
   useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const obs = new IntersectionObserver(
-      ([entry]) => { if (entry.isIntersecting) { setVisible(true); obs.disconnect(); } },
-      { threshold }
-    );
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, [threshold]);
+    if (visibleRef.current) return;
+    window.addEventListener('scroll', check, { passive: true });
+    // RAF polling for 3s after mount to catch elements that enter viewport
+    let raf;
+    const start = Date.now();
+    const poll = () => {
+      check();
+      if (!visibleRef.current && Date.now() - start < 3000) raf = requestAnimationFrame(poll);
+    };
+    raf = requestAnimationFrame(poll);
+    return () => { window.removeEventListener('scroll', check); cancelAnimationFrame(raf); };
+  }, [check]);
+
   return [ref, visible];
 }
 
@@ -734,7 +761,7 @@ function ExpandedScoutCard({ player, scoutData, onClose }) {
 // ══════════════════════════════════════════════════════════════
 
 function PhaseSection({ phase, index, total, players }) {
-  const [ref, visible] = useReveal(0.1);
+  const [ref, visible] = useReveal();
   const color = getFormatColor(phase.format);
   const rules = getPhaseRules(phase);
   const advLabel = getAdvancementLabel(phase);
@@ -895,10 +922,10 @@ export default function TournamentPoster() {
     })();
   }, [id]);
 
-  const [heroRef, heroVisible] = useReveal(0.05);
-  const [hypeRef, hypeVisible] = useReveal(0.15);
-  const [rosterRef, rosterVisible] = useReveal(0.1);
-  const [footerRef, footerVisible] = useReveal(0.1);
+  const [heroRef, heroVisible] = useReveal();
+  const [hypeRef, hypeVisible] = useReveal();
+  const [rosterRef, rosterVisible] = useReveal();
+  const [footerRef, footerVisible] = useReveal();
 
   if (loading) {
     return (
@@ -1074,7 +1101,8 @@ export default function TournamentPoster() {
 
       {/* ═══ HOW IT WORKS ═══ */}
       <div className="mx-auto max-w-4xl px-4 pb-8 text-center">
-        <p className="font-display text-[10px] font-bold uppercase tracking-[0.3em] text-zinc-600">How it works</p>
+        <p className="font-display text-[10px] font-bold uppercase tracking-[0.3em] text-zinc-600 mb-1">{title}</p>
+        <h2 className="font-display text-lg font-bold tracking-wide text-white">How It Works</h2>
         <div className="mx-auto mt-3 h-px w-12 bg-gradient-to-r from-transparent via-piu-accent/40 to-transparent" />
       </div>
 
@@ -1103,9 +1131,15 @@ export default function TournamentPoster() {
                 transition: 'all 0.5s cubic-bezier(0.16,1,0.3,1)',
               }}
             >
-              <p className="font-display text-[10px] font-bold uppercase tracking-[0.3em] text-zinc-600 mb-3">The Competitors</p>
-              <h2 className="font-display text-2xl font-bold tracking-wide text-white mb-2">{players.length} Players</h2>
-              <p className="text-xs text-zinc-500">Tap a player to view their scouting report</p>
+              {/* Tournament branding */}
+              {tournament.avatar && (
+                <div className="mb-4 flex justify-center">
+                  <img src={getAvatarUrl(tournament.avatar)} alt="" className="h-12 w-12 rounded-xl object-cover ring-1 ring-white/10 opacity-60" />
+                </div>
+              )}
+              <p className="font-display text-[10px] font-bold uppercase tracking-[0.3em] text-zinc-600 mb-1">{title}</p>
+              <h2 className="font-display text-2xl font-bold tracking-wide text-white mb-2">Scouting Report</h2>
+              <p className="text-xs text-zinc-500">{players.length} competitors &middot; Tap a player to view their full profile</p>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
@@ -1134,12 +1168,16 @@ export default function TournamentPoster() {
       <div ref={footerRef} className="border-t border-white/5">
         <div className="mx-auto max-w-4xl px-4 py-12 text-center">
           <div style={{ opacity: footerVisible ? 1 : 0, transition: 'opacity 0.5s ease 100ms' }}>
-            <p className="font-display text-xs font-bold uppercase tracking-[0.2em] text-zinc-600 mb-3">Powered by</p>
-            <p className="font-display text-lg font-bold tracking-wider">
-              <span className="text-piu-accent">PUMP</span>{' '}
-              <span className="text-white">SHINSA</span>
+            {tournament.avatar && (
+              <div className="mb-4 flex justify-center">
+                <img src={getAvatarUrl(tournament.avatar)} alt="" className="h-14 w-14 rounded-xl object-cover ring-1 ring-white/10 opacity-50" />
+              </div>
+            )}
+            <p className="font-display text-lg font-bold tracking-wider text-white mb-1">{title}</p>
+            <p className="font-display text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-600 mb-4">
+              Powered by <span className="text-piu-accent">Pump Shinsa</span>
             </p>
-            <div className="mt-6">
+            <div className="mt-4">
               <Link
                 to={`/tournament/${id}`}
                 className="inline-flex items-center gap-2 rounded-full border border-piu-accent/20 bg-piu-accent/8 px-5 py-2.5 font-display text-xs font-bold uppercase tracking-[0.14em] text-rose-100 transition-all hover:border-piu-accent/35 hover:bg-piu-accent/14 hover:shadow-[0_0_20px_rgba(255,51,102,0.15)]"
