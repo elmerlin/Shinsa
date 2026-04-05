@@ -22,6 +22,12 @@ const { getUserTitleProgress, updateUserSkillTitleFromBestScores, LEVEL_BASE_POI
 const { buildPumbilityCandidates, getNextGradeThreshold, isPassingScore, isFailGrade, SCORE_TO_GRADE_ASC } = require('../lib/pumbilityCandidates');
 const { checkSssAchievements, checkStreakAchievements } = require('../lib/achievements');
 const {
+  getPiugameActivityPostingPolicy,
+  isInitialBestScoreImport,
+  isInitialRecentlyPlayedSync,
+  selectTitleUnlocksForPosting,
+} = require('../lib/piugameActivityPolicy');
+const {
   annotateWeeklyChallengePlayRows,
   ensureCurrentWeeklyChallengeWeek,
   persistWeeklyChallengePlayPosts,
@@ -2503,8 +2509,9 @@ function buildTitleUnlockClearRows(unlockedTitles, latestProgress) {
   });
 }
 
-function insertTitleUnlockActivityPost(db, userId, unlockedTitles, latestProgress) {
-  const payload = buildTitleUnlockClearRows(unlockedTitles, latestProgress);
+function insertTitleUnlockActivityPosts(db, userId, unlockedTitles, latestProgress, options = {}) {
+  const selectedTitles = selectTitleUnlocksForPosting(unlockedTitles, { onlyLatest: options.onlyLatest });
+  const payload = buildTitleUnlockClearRows(selectedTitles, latestProgress);
   if (payload.length === 0) return null;
 
   // Guard against duplicate title posts from concurrent sync paths
@@ -2514,20 +2521,48 @@ function insertTitleUnlockActivityPost(db, userId, unlockedTitles, latestProgres
     WHERE user_id = ? AND created_at >= datetime('now', '-5 minutes')
     ORDER BY created_at DESC LIMIT 5
   `).all(userId);
-  const titleNames = new Set(payload.map((r) => r.title_name));
+  const existingPostIdsByTitle = new Map();
   for (const post of recentTitlePost) {
     const items = safeParseJsonArray(post.clears_json);
-    if (items.length > 0 && items.every((i) => i.entry_type === 'title_unlock') && items.some((i) => titleNames.has(i.title_name))) {
-      return post.id; // Already posted — return existing ID
+    if (!items.length || !items.every((item) => item.entry_type === 'title_unlock')) continue;
+    for (const item of items) {
+      const titleName = String(item?.title_name || '').trim();
+      if (titleName && !existingPostIdsByTitle.has(titleName)) {
+        existingPostIdsByTitle.set(titleName, post.id);
+      }
     }
   }
 
-  return insertGroupedNewClearPost(db, userId, payload);
+  const postIds = [];
+  const postedTitles = [];
+  for (const row of payload) {
+    const titleName = String(row?.title_name || '').trim();
+    if (!titleName) continue;
+
+    const existingPostId = existingPostIdsByTitle.get(titleName);
+    if (existingPostId) {
+      postIds.push(existingPostId);
+      postedTitles.push(row);
+      continue;
+    }
+
+    const postId = insertGroupedNewClearPost(db, userId, [row]);
+    if (!postId) continue;
+    postIds.push(postId);
+    postedTitles.push(row);
+    existingPostIdsByTitle.set(titleName, postId);
+  }
+
+  return {
+    post_ids: postIds,
+    latest_post_id: postIds[postIds.length - 1] || null,
+    posted_titles: postedTitles,
+  };
 }
 
 function buildTitleUnlockSummary(unlockedTitles) {
   const titleList = (Array.isArray(unlockedTitles) ? unlockedTitles : [])
-    .map((title) => title?.name || title?.skill_title)
+    .map((title) => title?.title_name || title?.name || title?.skill_title)
     .filter(Boolean);
   if (titleList.length === 0) return 'a new skill title';
   if (titleList.length === 1) return titleList[0];
@@ -2539,10 +2574,24 @@ async function syncRecentlyPlayedForUser(user, options = {}) {
   const userId = String(options.userId || user?.id || '').trim();
   if (!userId) throw new Error('User is required');
 
+  const syncRow = db.prepare(`
+    SELECT best_scores_imported, last_best_scores_sync, last_recently_played_sync
+    FROM user_piugame_sync
+    WHERE user_id = ?
+  `).get(userId);
+  const existingRecentPlayCount = parseInt(db.prepare(`
+    SELECT COUNT(*) AS total
+    FROM user_recently_played
+    WHERE user_id = ?
+  `).get(userId)?.total, 10) || 0;
+  const activityPostingPolicy = getPiugameActivityPostingPolicy({
+    initialRecentlyPlayedSync: isInitialRecentlyPlayedSync(syncRow, existingRecentPlayCount),
+  });
   const persistActivityPosts = options.persistActivityPosts !== false;
-  const persistWeeklyChallengePosts = options.persistWeeklyChallengePosts == null
+  const persistWeeklyChallengePostsRequested = options.persistWeeklyChallengePosts == null
     ? persistActivityPosts
     : options.persistWeeklyChallengePosts !== false;
+  const persistWeeklyChallengePosts = persistWeeklyChallengePostsRequested && activityPostingPolicy.allowWeeklyChallengePosts;
   const profile = db.prepare('SELECT username FROM users WHERE id = ?').get(userId);
   const actorUsername = String(options.username || user?.username || profile?.username || '').trim() || 'Someone';
   const profileLink = buildProfilePath(actorUsername) || `/profile/${userId}`;
@@ -2829,7 +2878,7 @@ async function syncRecentlyPlayedForUser(user, options = {}) {
       }
     }
 
-    if (persistActivityPosts && upscoreRowsWithGains.length > 0) {
+    if (persistActivityPosts && activityPostingPolicy.allowUpscorePosts && upscoreRowsWithGains.length > 0) {
       // Deduplicate: skip if an identical upscore post was created in the last 60 seconds
       const upscoreJson = JSON.stringify(enrichUpscoreRows(db, userId, upscoreRowsWithGains));
       const recentDupe = db.prepare(`
@@ -2846,7 +2895,7 @@ async function syncRecentlyPlayedForUser(user, options = {}) {
       }
     }
 
-    if (persistActivityPosts) {
+    if (persistActivityPosts && activityPostingPolicy.allowNewClearPosts) {
       newClearPostId = insertGroupedNewClearPost(db, userId, clearRowsWithGains, {
         pumbilityGain: pumbilityGains.clear_gain,
         singlesPumbilityGain: pumbilityGains.singles_clear_gain,
@@ -2882,11 +2931,16 @@ async function syncRecentlyPlayedForUser(user, options = {}) {
   const progressAfterSync = updateUserSkillTitleFromBestScores(db, userId);
   const newlyUnlockedTitles = getNewlyUnlockedTitles(progressBeforeSync, progressAfterSync);
   const titleUnlockRows = buildTitleUnlockClearRows(newlyUnlockedTitles, progressAfterSync);
+  let postedTitleUnlocks = [];
   if (persistActivityPosts) {
-    titleUnlockPostId = insertTitleUnlockActivityPost(db, userId, newlyUnlockedTitles, progressAfterSync);
+    const titlePostResult = insertTitleUnlockActivityPosts(db, userId, newlyUnlockedTitles, progressAfterSync, {
+      onlyLatest: activityPostingPolicy.onlyLatestTitle,
+    });
+    titleUnlockPostId = titlePostResult?.latest_post_id || null;
+    postedTitleUnlocks = Array.isArray(titlePostResult?.posted_titles) ? titlePostResult.posted_titles : [];
   }
 
-  if (persistActivityPosts && upscoresFromRecent.length > 0) {
+  if (persistActivityPosts && activityPostingPolicy.allowUpscorePosts && upscoresFromRecent.length > 0) {
     notifyActivitySubscribers(db, {
       actorUserId: userId,
       actorUsername,
@@ -2898,7 +2952,7 @@ async function syncRecentlyPlayedForUser(user, options = {}) {
     });
   }
 
-  if (persistActivityPosts && newClearsFromRecent.length > 0) {
+  if (persistActivityPosts && activityPostingPolicy.allowNewClearPosts && newClearsFromRecent.length > 0) {
     notifyActivitySubscribers(db, {
       actorUserId: userId,
       actorUsername,
@@ -2910,14 +2964,14 @@ async function syncRecentlyPlayedForUser(user, options = {}) {
     });
   }
 
-  if (persistActivityPosts && newlyUnlockedTitles.length > 0) {
+  if (persistActivityPosts && postedTitleUnlocks.length > 0) {
     notifyActivitySubscribers(db, {
       actorUserId: userId,
       actorUsername,
       activityType: 'new_clears',
       notificationType: 'followed_user_new_title',
       title: 'Skill Title Earned',
-      message: `${actorUsername} earned ${buildTitleUnlockSummary(newlyUnlockedTitles)}`,
+      message: `${actorUsername} earned ${buildTitleUnlockSummary(postedTitleUnlocks)}`,
       link: titleUnlockPostId ? `/clear/${titleUnlockPostId}` : profileLink,
     });
   }
@@ -3096,6 +3150,9 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
       const oldScores = {};
       const existingScores = db.prepare('SELECT song_title, mode, level, score, grade, shoe_id FROM user_best_scores WHERE user_id = ?').all(userId);
       const existingSyncRow = db.prepare('SELECT play_data_levels_json FROM user_piugame_sync WHERE user_id = ?').get(userId);
+      const activityPostingPolicy = getPiugameActivityPostingPolicy({
+        initialBestScoreImport: isInitialBestScoreImport(sync, existingScores.length),
+      });
       const baselineBestScores = existingScores.filter((row) => isPassingScore(row.score, row.grade));
       for (const s of existingScores) {
         if (!isPassingScore(s.score, s.grade)) continue;
@@ -3149,7 +3206,7 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
         upscores = pumbilityGains.upscores;
         newClears = pumbilityGains.clears;
 
-        if (upscores.length > 0) {
+        if (activityPostingPolicy.allowUpscorePosts && upscores.length > 0) {
           const upscoreJson = JSON.stringify(enrichUpscoreRows(db, userId, upscores));
           const recentDupe = db.prepare(`
             SELECT id FROM user_upscores
@@ -3164,10 +3221,12 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
             upscorePostId = upscoreInsert.lastInsertRowid;
           }
         }
-        newClearPostId = insertGroupedNewClearPost(db, userId, newClears, {
-          pumbilityGain: pumbilityGains.clear_gain,
-          singlesPumbilityGain: pumbilityGains.singles_clear_gain,
-        });
+        if (activityPostingPolicy.allowNewClearPosts) {
+          newClearPostId = insertGroupedNewClearPost(db, userId, newClears, {
+            pumbilityGain: pumbilityGains.clear_gain,
+            singlesPumbilityGain: pumbilityGains.singles_clear_gain,
+          });
+        }
         db.prepare(`
           UPDATE user_piugame_sync SET last_best_scores_sync = datetime('now'), best_scores_imported = 1,
           play_data_levels_json = ?, sync_in_progress = '', sync_progress = 0, sync_total = 0 WHERE user_id = ?
@@ -3202,7 +3261,11 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
       checkSssAchievements(db, userId);
       const progressAfterSync = updateUserSkillTitleFromBestScores(db, userId);
       const newlyUnlockedTitles = getNewlyUnlockedTitles(progressBeforeSync, progressAfterSync);
-      const titleUnlockPostId = insertTitleUnlockActivityPost(db, userId, newlyUnlockedTitles, progressAfterSync);
+      const titlePostResult = insertTitleUnlockActivityPosts(db, userId, newlyUnlockedTitles, progressAfterSync, {
+        onlyLatest: activityPostingPolicy.onlyLatestTitle,
+      });
+      const titleUnlockPostId = titlePostResult?.latest_post_id || null;
+      const postedTitleUnlocks = Array.isArray(titlePostResult?.posted_titles) ? titlePostResult.posted_titles : [];
 
       // Create notification
       const profile = db.prepare('SELECT username FROM users WHERE id = ?').get(userId);
@@ -3220,7 +3283,7 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
         profileLink
       );
 
-      if (upscores.length > 0) {
+      if (activityPostingPolicy.allowUpscorePosts && upscores.length > 0) {
         notifyActivitySubscribers(db, {
           actorUserId: userId,
           actorUsername,
@@ -3232,7 +3295,7 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
         });
       }
 
-      if (newClears.length > 0) {
+      if (activityPostingPolicy.allowNewClearPosts && newClears.length > 0) {
         notifyActivitySubscribers(db, {
           actorUserId: userId,
           actorUsername,
@@ -3244,9 +3307,8 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
         });
       }
 
-      if (newlyUnlockedTitles.length > 0) {
-        const titleList = newlyUnlockedTitles.map((title) => title.name || title.skill_title).filter(Boolean);
-        const titleSummary = titleList.length > 1 ? `${titleList[0]} +${titleList.length - 1}` : (titleList[0] || 'a new skill title');
+      if (postedTitleUnlocks.length > 0) {
+        const titleSummary = buildTitleUnlockSummary(postedTitleUnlocks);
         notifyActivitySubscribers(db, {
           actorUserId: userId,
           actorUsername,
