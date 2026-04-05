@@ -64,24 +64,15 @@ function getTournamentInitial(name) {
   return String(name || '?').trim().charAt(0).toUpperCase() || '?';
 }
 
-function MetaPill({ children }) {
-  if (!children) return null;
-  return (
-    <span className="inline-flex items-center rounded-full border border-white/8 bg-white/6 px-2.5 py-1 text-[11px] text-zinc-300">
-      {children}
-    </span>
-  );
-}
-
 export default function TournamentShowcaseCard({ tournament, onDelete }) {
   const primaryFormatKey = getPrimaryFormatKey(tournament);
-  const primaryFormatLabel = getPrimaryFormatLabel(tournament);
-  const primaryFormatIcon = FORMAT_ICONS[primaryFormatKey] || '🏆';
+  const primaryFormatIcon = FORMAT_ICONS[primaryFormatKey] || '\u{1F3C6}';
   const formatSummary = getFormatSummary(tournament);
   const formattedDate = formatCalendarDate(tournament?.date);
+  const participantCount = tournament?.participant_count || 0;
 
   return (
-    <Card className="group relative overflow-hidden border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(255,51,102,0.18),transparent_36%),radial-gradient(circle_at_85%_15%,rgba(58,170,255,0.18),transparent_28%),rgba(7,10,18,0.88)] transition-transform duration-200 hover:-translate-y-0.5 hover:border-white/15">
+    <Card className="group relative overflow-hidden border-white/10 bg-[rgba(7,10,18,0.88)] transition-transform duration-200 hover:-translate-y-0.5 hover:border-white/15">
       <div className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
         <div className="absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-white/35 to-transparent" />
       </div>
@@ -104,67 +95,65 @@ export default function TournamentShowcaseCard({ tournament, onDelete }) {
       )}
 
       <Link to={`/tournament/${tournament.id}`} className="block h-full">
-        <CardContent className="relative flex h-full flex-col gap-5">
-          <div className="flex items-start gap-4 pr-12">
+        <CardContent className="relative flex h-full flex-col gap-3 p-4">
+          {/* Row 1: Avatar + title block + arrow */}
+          <div className="flex items-center gap-3 pr-8">
             <div className="relative shrink-0">
               {tournament?.avatar ? (
                 <img
                   src={getAvatarUrl(tournament.avatar)}
                   alt={tournament?.name || 'Tournament'}
-                  className="h-14 w-14 rounded-xl object-cover ring-1 ring-white/10 shadow-[0_14px_30px_rgba(0,0,0,0.35)]"
+                  className="h-11 w-11 rounded-xl object-cover ring-1 ring-white/10"
                   loading="lazy"
                   decoding="async"
                 />
               ) : (
-                <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-gradient-to-br from-piu-accent/85 via-rose-500/70 to-sky-500/70 font-display text-2xl font-bold text-white ring-1 ring-white/10 shadow-[0_14px_30px_rgba(0,0,0,0.35)]">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-piu-accent/85 via-rose-500/70 to-sky-500/70 font-display text-xl font-bold text-white ring-1 ring-white/10">
                   {getTournamentInitial(tournament?.name)}
                 </div>
               )}
             </div>
 
             <div className="min-w-0 flex-1">
-              <div className="mb-3 flex flex-wrap items-center gap-2">
-                <Badge variant="secondary" className="max-w-full">
-                  <span aria-hidden="true">{primaryFormatIcon}</span>
-                  <span className="truncate">{primaryFormatLabel}</span>
-                </Badge>
-                <Badge variant={getStatusVariant(tournament?.phase)}>{getStatusLabel(tournament?.phase)}</Badge>
-              </div>
-
-              <h3 className="text-lg font-display font-bold leading-tight text-white transition-colors group-hover:text-piu-accent">
+              <h3 className="truncate font-display text-base font-bold leading-tight text-white transition-colors group-hover:text-piu-accent">
                 {tournament?.name || 'Untitled Tournament'}
               </h3>
-
-              {formatSummary && (
-                <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-zinc-500">
-                  {formatSummary}
-                </p>
-              )}
+              <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-zinc-500">
+                <span>{primaryFormatIcon}</span>
+                <span className="truncate uppercase tracking-[0.12em]">
+                  {formatSummary || FORMAT_LABELS[primaryFormatKey] || 'Round Robin'}
+                </span>
+                {formattedDate && (
+                  <>
+                    <span className="text-zinc-700">&middot;</span>
+                    <span className="shrink-0">{formattedDate}</span>
+                  </>
+                )}
+              </div>
             </div>
+
+            <Badge variant={getStatusVariant(tournament?.phase)} className="shrink-0">
+              {getStatusLabel(tournament?.phase)}
+            </Badge>
           </div>
 
-          <div className="flex flex-wrap gap-2">
-            <MetaPill>{formattedDate || 'Date TBD'}</MetaPill>
-            {tournament?.location ? <MetaPill>{tournament.location}</MetaPill> : null}
-          </div>
-
-          <div className="flex flex-wrap items-end justify-between gap-4">
+          {/* Row 2: Participants + stages */}
+          <div className="flex items-center justify-between gap-3">
             <AvatarStack
               items={tournament?.participant_preview || []}
-              total={tournament?.participant_count || 0}
-              size="md"
-              emptyLabel="No players registered"
+              total={participantCount}
+              size="sm"
+              emptyLabel="No players"
             />
 
-            <div className="flex items-center gap-3 text-right">
-              <div>
-                <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">Phase Track</div>
-                <div className="font-display text-sm font-bold text-zinc-100">
-                  {tournament?.phase_count > 1 ? `${tournament.phase_count} stages` : 'Single stage'}
-                </div>
-              </div>
-              <div className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/6 text-zinc-300 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-white">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <div className="flex items-center gap-2">
+              {tournament?.phase_count > 1 && (
+                <span className="text-[11px] text-zinc-500">
+                  {tournament.phase_count} stages
+                </span>
+              )}
+              <div className="flex h-7 w-7 items-center justify-center rounded-full border border-white/8 bg-white/4 text-zinc-400 transition-all duration-200 group-hover:translate-x-0.5 group-hover:border-white/12 group-hover:text-white">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                 </svg>
               </div>
