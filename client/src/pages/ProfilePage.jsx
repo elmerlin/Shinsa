@@ -1053,7 +1053,6 @@ export default function ProfilePage() {
   const [selectedGroupBadge, setSelectedGroupBadge] = useState(null);
   const [selectedAchievementBadge, setSelectedAchievementBadge] = useState(null);
   const [selectedOverviewDateKey, setSelectedOverviewDateKey] = useState('');
-  const heatmapScrollRef = useRef(null);
   const [selectedPlay, setSelectedPlay] = useState(null);
   const [scoreCardStyle, setScoreCardStyle] = useState(() => localStorage.getItem(SCORE_CARD_STYLE_KEY) || 'classic');
   const [classicStoryOpen, setClassicStoryOpen] = useState(false);
@@ -1926,12 +1925,10 @@ export default function ProfilePage() {
     }
   }, [overviewPlayHeatmap, selectedOverviewDateKey]);
 
-  // Auto-scroll heatmap to show the latest day (rightmost)
-  useEffect(() => {
-    const el = heatmapScrollRef.current;
-    if (el && overviewPlayHeatmap.weeks.length > 0) {
-      el.scrollLeft = el.scrollWidth;
-    }
+  // Callback ref: scroll heatmap to the right when it mounts / data changes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const heatmapScrollRef = React.useCallback((el) => {
+    if (el) el.scrollLeft = el.scrollWidth;
   }, [overviewPlayHeatmap.weeks.length]);
 
   const selectedOverviewDay = selectedOverviewDateKey
