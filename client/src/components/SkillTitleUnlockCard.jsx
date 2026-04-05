@@ -87,12 +87,25 @@ function getPassCopy(metrics) {
 }
 
 function getCompactNodeLabel(node) {
-  const label = formatSkillTitleLabel(node);
-  return label
-    .replace(/^Intermediate\b/i, 'Int.')
-    .replace(/^Advanced\b/i, 'Adv.')
-    .replace(/^Expert\b/i, 'Exp.')
-    .replace(/^Beginner\b/i, 'Beg.');
+  const family = String(node?.skill_family || '').trim().toLowerCase();
+  const level = parseInt(node?.skill_level, 10) || 0;
+  if (family === 'advanced' && level > 0) return `Adv. ${level}`;
+  if (family === 'expert' && level > 0) return `Exp. ${level}`;
+  if (family === 'intermediate' && level > 0) return `Int. ${level}`;
+  if (family === 'beginner' && level > 0) return `Beg. ${level}`;
+  if (family === 'master') return 'Master';
+  return formatSkillTitleLabel(node).replace(/\bLv\./gi, '').replace(/\s+/g, ' ').trim();
+}
+
+function getCompactCardLabel(node) {
+  const family = String(node?.skill_family || '').trim().toLowerCase();
+  const level = parseInt(node?.skill_level, 10) || 0;
+  if (family === 'advanced' && level > 0) return `Adv. ${level}`;
+  if (family === 'intermediate' && level > 0) return `Int. ${level}`;
+  if (family === 'beginner' && level > 0) return `Beg. ${level}`;
+  if (family === 'expert' && level > 0) return `Expert ${level}`;
+  if (family === 'master') return 'Master';
+  return formatSkillTitleLabel(node).replace(/\bLv\./gi, '').replace(/\s+/g, ' ').trim();
 }
 
 function getNodeMeta(kind, node) {
@@ -136,7 +149,7 @@ function getNodePosition(kind) {
   if (kind === 'previous') {
     return {
       left: '14%',
-      top: '74%',
+      top: '73%',
       transform: 'translate(-6%, -50%)',
       align: 'items-start text-left',
     };
@@ -144,14 +157,14 @@ function getNodePosition(kind) {
   if (kind === 'next') {
     return {
       left: '85%',
-      top: '24%',
+      top: '22%',
       transform: 'translate(-100%, -50%)',
       align: 'items-end text-right',
     };
   }
   return {
       left: '50%',
-    top: '48%',
+    top: '47%',
     transform: 'translate(-50%, -50%)',
     align: 'items-center text-center',
   };
@@ -217,7 +230,7 @@ export default function SkillTitleUnlockCard({ clear, className = '' }) {
         >
           <svg viewBox="0 0 100 44" className="absolute inset-0 h-full w-full" aria-hidden="true">
             <path
-              d="M 17 31 C 24 26, 30 24, 39 22"
+              d="M 20 27 C 25 24, 31 21.5, 38 20"
               fill="none"
               stroke="rgba(255,255,255,0.12)"
               strokeWidth="2.4"
@@ -225,7 +238,7 @@ export default function SkillTitleUnlockCard({ clear, className = '' }) {
               strokeDasharray="3.6 4.1"
             />
             <path
-              d="M 61 22 C 68 20, 75 18, 81 14"
+              d="M 62 21 C 68 18.5, 72 16, 77 12.5"
               fill="none"
               stroke="rgba(255,255,255,0.12)"
               strokeWidth="2.4"
@@ -234,7 +247,7 @@ export default function SkillTitleUnlockCard({ clear, className = '' }) {
             />
             <path
               className="skill-title-saga__route"
-              d="M 17 31 C 24 26, 30 24, 39 22"
+              d="M 20 27 C 25 24, 31 21.5, 38 20"
               fill="none"
               stroke="var(--skill-route-color)"
               strokeWidth="2.6"
@@ -243,7 +256,7 @@ export default function SkillTitleUnlockCard({ clear, className = '' }) {
             />
             <path
               className="skill-title-saga__route"
-              d="M 61 22 C 68 20, 75 18, 81 14"
+              d="M 62 21 C 68 18.5, 72 16, 77 12.5"
               fill="none"
               stroke="var(--skill-route-color)"
               strokeWidth="2.6"
@@ -279,7 +292,7 @@ export default function SkillTitleUnlockCard({ clear, className = '' }) {
                     isSelected && 'is-active scale-[1.08]'
                   )}
                 />
-                <span className={cx('mt-1.5 block text-[8px] font-display font-bold uppercase tracking-[0.08em] transition-colors duration-300 sm:mt-2 sm:text-[10px] sm:tracking-[0.14em]', isSelected ? 'text-white' : 'text-white/72')}>
+                <span className={cx('mt-2 block text-[8px] font-display font-bold uppercase tracking-[0.08em] transition-colors duration-300 sm:mt-2 sm:text-[10px] sm:tracking-[0.14em]', isSelected ? 'text-white' : 'text-white/72')}>
                   {mapLabel}
                 </span>
               </button>
@@ -291,6 +304,7 @@ export default function SkillTitleUnlockCard({ clear, className = '' }) {
           {nodes.map(({ kind, node }) => {
             const meta = getNodeMeta(kind, node);
             const isActive = kind === activeKind;
+            const compactTitle = getCompactCardLabel(node);
             return (
               <button
                 key={`${kind}-detail-${node?.id || node?.name || 'node'}`}
@@ -306,8 +320,8 @@ export default function SkillTitleUnlockCard({ clear, className = '' }) {
                 <p className="text-[8px] font-display font-bold uppercase tracking-[0.16em] text-gray-500">
                   {meta.label}
                 </p>
-                <p className="mt-1.5 text-[12px] font-display font-bold leading-tight text-white">
-                  {meta.title}
+                <p className="mt-1.5 whitespace-nowrap text-[11px] font-display font-bold leading-tight text-white">
+                  {compactTitle}
                 </p>
                 <p className="mt-2 text-[9px] font-display font-bold uppercase tracking-[0.12em] text-white/88">
                   {meta.passCopy}
