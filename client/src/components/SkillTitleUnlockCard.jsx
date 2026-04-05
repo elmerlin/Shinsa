@@ -86,6 +86,15 @@ function getPassCopy(metrics) {
   return `${metrics.passes_have} / ${metrics.passes_required} AA passes`;
 }
 
+function getCompactNodeLabel(node) {
+  const label = formatSkillTitleLabel(node);
+  return label
+    .replace(/^Intermediate\b/i, 'Int.')
+    .replace(/^Advanced\b/i, 'Adv.')
+    .replace(/^Expert\b/i, 'Exp.')
+    .replace(/^Beginner\b/i, 'Beg.');
+}
+
 function getNodeMeta(kind, node) {
   const label = kind === 'previous' ? 'Previous' : kind === 'current' ? 'Earned' : 'Next';
   if (!node) {
@@ -126,28 +135,25 @@ function getNodeMeta(kind, node) {
 function getNodePosition(kind) {
   if (kind === 'previous') {
     return {
-      left: '12%',
-      top: '72%',
+      left: '14%',
+      top: '74%',
       transform: 'translate(-6%, -50%)',
       align: 'items-start text-left',
-      label: 'Prev',
     };
   }
   if (kind === 'next') {
     return {
-      left: '88%',
-      top: '20%',
+      left: '85%',
+      top: '24%',
       transform: 'translate(-100%, -50%)',
       align: 'items-end text-right',
-      label: 'Next',
     };
   }
   return {
-    left: '50%',
-    top: '46%',
+      left: '50%',
+    top: '48%',
     transform: 'translate(-50%, -50%)',
     align: 'items-center text-center',
-    label: 'Earned',
   };
 }
 
@@ -211,29 +217,47 @@ export default function SkillTitleUnlockCard({ clear, className = '' }) {
         >
           <svg viewBox="0 0 100 44" className="absolute inset-0 h-full w-full" aria-hidden="true">
             <path
-              d="M 10 32 C 25 22, 34 18, 50 18 S 72 15, 90 8"
+              d="M 17 31 C 24 26, 30 24, 39 22"
               fill="none"
               stroke="rgba(255,255,255,0.12)"
+              strokeWidth="2.4"
+              strokeLinecap="round"
+              strokeDasharray="3.6 4.1"
+            />
+            <path
+              d="M 61 22 C 68 20, 75 18, 81 14"
+              fill="none"
+              stroke="rgba(255,255,255,0.12)"
+              strokeWidth="2.4"
+              strokeLinecap="round"
+              strokeDasharray="3.6 4.1"
+            />
+            <path
+              className="skill-title-saga__route"
+              d="M 17 31 C 24 26, 30 24, 39 22"
+              fill="none"
+              stroke="var(--skill-route-color)"
               strokeWidth="2.6"
               strokeLinecap="round"
               strokeDasharray="3.6 4.1"
             />
             <path
               className="skill-title-saga__route"
-              d="M 10 32 C 25 22, 34 18, 50 18 S 72 15, 90 8"
+              d="M 61 22 C 68 20, 75 18, 81 14"
               fill="none"
               stroke="var(--skill-route-color)"
-              strokeWidth="2.8"
+              strokeWidth="2.6"
               strokeLinecap="round"
               strokeDasharray="3.6 4.1"
             />
           </svg>
 
-          {nodes.map(({ kind, node, left, top, transform, align, label }) => {
+          {nodes.map(({ kind, node, left, top, transform, align }) => {
             const isSelected = kind === activeKind;
             const dotClass = isSelected
               ? theme.current
               : (kind === 'next' ? theme.future : theme.past);
+            const mapLabel = getCompactNodeLabel(node);
 
             return (
               <button
@@ -246,17 +270,17 @@ export default function SkillTitleUnlockCard({ clear, className = '' }) {
                 )}
                 style={{ left, top, transform }}
                 aria-pressed={isSelected}
-                aria-label={`${label} node`}
+                aria-label={`${mapLabel} node`}
               >
                 <span
                   className={cx(
-                    'skill-title-saga__orb block h-8 w-8 rounded-full border-[3px] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] sm:h-10 sm:w-10',
+                    'skill-title-saga__orb block h-7 w-7 rounded-full border-[3px] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] sm:h-10 sm:w-10',
                     dotClass,
                     isSelected && 'is-active scale-[1.08]'
                   )}
                 />
-                <span className={cx('mt-1.5 block text-[9px] font-display font-bold uppercase tracking-[0.16em] transition-colors duration-300 sm:mt-2 sm:text-[10px] sm:tracking-[0.2em]', isSelected ? 'text-white' : 'text-white/72')}>
-                  {label}
+                <span className={cx('mt-1.5 block text-[8px] font-display font-bold uppercase tracking-[0.08em] transition-colors duration-300 sm:mt-2 sm:text-[10px] sm:tracking-[0.14em]', isSelected ? 'text-white' : 'text-white/72')}>
+                  {mapLabel}
                 </span>
               </button>
             );
