@@ -3,15 +3,15 @@
   "configurations": [
     {
       "name": "shinsa-full",
-      "runtimeExecutable": "npm",
+      "runtimeExecutable": "/usr/local/bin/npm",
       "runtimeArgs": ["run", "dev"],
       "port": 5173
     },
     {
       "name": "shinsa-dev",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
-      "port": 5173,
+      "runtimeExecutable": "/usr/local/bin/node",
+      "runtimeArgs": ["node_modules/.bin/vite", "--port", "5199"],
+      "port": 5199,
       "cwd": "client"
     },
     {

@@ -531,7 +531,7 @@ export default function TournamentView() {
       {activeTab === 'rounds' && (
         <div className="space-y-6">
           {currentRound > 1 && (
-            <div className="flex gap-2 overflow-x-auto pb-1">
+            <div className="flex gap-1.5 overflow-x-auto rounded-xl border border-white/10 bg-black/18 p-1.5">
               {Array.from({ length: currentRound }, (_, i) => i + 1).map(r => {
                 const rMatches = matches.filter(m => m.round_number === r);
                 const rDone = rMatches.every(m => m.status === 'COMPLETED');
@@ -540,15 +540,16 @@ export default function TournamentView() {
                   <button
                     key={r}
                     onClick={() => setSelectedRound(r)}
-                    className={`px-4 py-2 rounded-lg font-display font-bold text-sm transition-all whitespace-nowrap shrink-0 ${
+                    className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 font-display text-[11px] font-bold uppercase tracking-[0.12em] transition-colors whitespace-nowrap ${
                       displayRound === r
-                        ? 'bg-piu-accent text-white'
+                        ? 'border-piu-accent/30 bg-piu-accent/12 text-rose-100'
                         : rDone
-                          ? 'bg-piu-green/10 text-piu-green border border-piu-green/30 hover:bg-piu-green/20'
-                          : 'bg-piu-card text-gray-400 border border-piu-border hover:border-piu-accent/50'
+                          ? 'border-piu-green/20 bg-piu-green/6 text-piu-green hover:bg-piu-green/10'
+                          : 'border-transparent bg-transparent text-zinc-400 hover:border-white/10 hover:bg-white/5 hover:text-zinc-100'
                     }`}
                   >
-                    R{r} {rLevel ? `(Lv.${rLevel.min}-${rLevel.max})` : ''}
+                    R{r} {rLevel ? `(Lv.${rLevel.min}\u2013${rLevel.max})` : ''}
+                    {rDone && displayRound !== r && <span className="text-piu-green">{'\u2713'}</span>}
                   </button>
                 );
               })}

@@ -218,10 +218,10 @@ export function TournamentTabs({ tabs = [], activeTab, onChange, className = '' 
 }
 
 const CALLOUT_TONE_CLASSES = {
-  default: 'border-piu-accent/18 bg-piu-accent/8',
-  success: 'border-emerald-400/18 bg-emerald-400/8',
-  warning: 'border-white/10 bg-white/5',
-  gold: 'border-piu-gold/22 bg-piu-gold/8',
+  default: 'border-piu-accent/18 bg-[radial-gradient(circle_at_0%_50%,rgba(255,51,102,0.08),transparent_50%)]',
+  success: 'border-emerald-400/18 bg-[radial-gradient(circle_at_0%_50%,rgba(52,211,153,0.07),transparent_50%)]',
+  warning: 'border-white/10 bg-white/[0.03]',
+  gold: 'border-piu-gold/22 bg-[radial-gradient(circle_at_0%_50%,rgba(255,215,0,0.07),transparent_50%)]',
 };
 
 export function TournamentCallout({
@@ -278,17 +278,17 @@ export function TournamentPhaseRuleCard({ phase, className = '' }) {
   ].filter(Boolean);
 
   return (
-    <Card className={cx('border-white/8 bg-zinc-950/48', className)}>
-      <CardContent className="flex flex-col gap-3.5 p-4">
+    <Card className={cx('border-white/8 bg-zinc-950/55', className)}>
+      <CardContent className="flex flex-col gap-3 p-4">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="default" className="border-piu-accent/25 bg-piu-accent/12 text-rose-100">
-                <span aria-hidden="true">{FORMAT_ICONS[format] || '•'}</span>
+              <Badge variant="default" className="border-piu-accent/25 bg-piu-accent/10 text-rose-100">
+                <span aria-hidden="true">{FORMAT_ICONS[format] || '\u2022'}</span>
                 <span>{phase.name || FORMAT_LABELS[format] || format}</span>
               </Badge>
             </div>
-            <p className="mt-2 text-sm text-zinc-300">
+            <p className="mt-2 text-sm text-zinc-400">
               {FORMAT_DESCRIPTIONS[format] || 'Tournament format details'}
             </p>
           </div>
@@ -321,13 +321,13 @@ export function TournamentPhaseRuleCard({ phase, className = '' }) {
   );
 }
 
-export function TournamentEmptyPanel({ title, description, icon = '🏁', className = '' }) {
+export function TournamentEmptyPanel({ title, description, icon = '\u{1F3C1}', className = '' }) {
   return (
     <Card className={cx('border-white/8 bg-zinc-950/55', className)}>
-      <CardContent className="py-12 text-center">
-        <span className="mb-3 block text-4xl" aria-hidden="true">{icon}</span>
-        <p className="font-display text-lg font-bold text-white">{title}</p>
-        {description ? <p className="mt-2 text-sm text-zinc-400">{description}</p> : null}
+      <CardContent className="py-14 text-center">
+        <span className="mb-3 block text-4xl opacity-60" aria-hidden="true">{icon}</span>
+        <p className="font-display text-lg font-bold tracking-wide text-white">{title}</p>
+        {description ? <p className="mt-2 text-sm text-zinc-500">{description}</p> : null}
       </CardContent>
     </Card>
   );

@@ -81,16 +81,24 @@ export default function FinalStandings({ players, matches, config }) {
 
   return (
     <div>
-      <h2 className="section-title mb-1">FINAL STANDINGS</h2>
-      <p className="text-sm text-gray-500 mb-6">
-        {hasGauntlet ? 'Rankings determined by Gauntlet results' : 'Rankings based on Round Robin performance'}
-      </p>
+      <div className="mb-5 flex items-center gap-3">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-piu-gold/10 border border-piu-gold/20">
+          <span className="text-sm">{'\uD83C\uDFC6'}</span>
+        </div>
+        <div>
+          <h2 className="font-display text-lg font-bold tracking-wide text-white">Final Standings</h2>
+          <p className="text-xs text-zinc-500">
+            {hasGauntlet ? 'Rankings determined by Gauntlet results' : 'Rankings based on Round Robin performance'}
+          </p>
+        </div>
+      </div>
 
       {/* Champion Banner */}
       {champion && (
-        <div className="card mb-6 border-piu-gold/40 bg-gradient-to-b from-piu-gold/10 to-transparent text-center py-6 sm:py-8">
+        <div className="relative mb-6 overflow-hidden rounded-xl border border-piu-gold/30 bg-[radial-gradient(circle_at_50%_0%,rgba(255,215,0,0.14),transparent_55%),radial-gradient(circle_at_80%_80%,rgba(255,51,102,0.06),transparent_40%)] py-6 sm:py-8 text-center shadow-[0_12px_30px_rgba(0,0,0,0.3)]">
+          <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-piu-gold/50 to-transparent" />
           <div className="text-4xl sm:text-5xl mb-2">{'\uD83C\uDFC6'}</div>
-          <p className="text-xs text-gray-400 font-display uppercase tracking-widest mb-2">
+          <p className="text-[10px] text-zinc-400 font-display uppercase tracking-[0.2em] font-bold mb-2">
             {hasGauntlet ? 'Gauntlet Champion' : 'Tournament Champion'}
           </p>
           <div className="flex items-center justify-center gap-2 mb-1">
@@ -102,7 +110,7 @@ export default function FinalStandings({ players, matches, config }) {
             </p>
           </div>
           {champion.skill_title && (
-            <p className="text-sm text-gray-400 mt-1">{champion.skill_title}</p>
+            <p className="text-sm text-zinc-500 mt-1">{champion.skill_title}</p>
           )}
         </div>
       )}
@@ -137,9 +145,9 @@ export default function FinalStandings({ players, matches, config }) {
       `}</style>
 
       {/* Full Rankings List */}
-      <div className="card overflow-hidden p-0">
-        <div className="px-3 sm:px-4 py-2 bg-piu-dark">
-          <p className="text-xs text-gray-400 font-display uppercase tracking-wider font-bold">All Players</p>
+      <div className="overflow-hidden rounded-xl border border-white/10 bg-zinc-950/78 shadow-[0_12px_30px_rgba(0,0,0,0.22)]">
+        <div className="px-3 sm:px-4 py-2.5 bg-white/[0.03] border-b border-white/6">
+          <p className="text-[10px] text-zinc-500 font-display uppercase tracking-[0.14em] font-bold">All Players</p>
         </div>
         {[...players].sort((a, b) => {
           if (b.wins !== a.wins) return b.wins - a.wins;
@@ -156,7 +164,7 @@ export default function FinalStandings({ players, matches, config }) {
           return (
             <div
               key={player.id}
-              className={`flex items-center gap-3 px-3 sm:px-4 py-3 ${idx > 0 ? 'border-t border-piu-border/50' : ''} ${
+              className={`flex items-center gap-3 px-3 sm:px-4 py-3 transition-colors hover:bg-white/[0.02] ${idx > 0 ? 'border-t border-white/5' : ''} ${
                 displayMedal ? displayMedal.bg.split(' ')[0] : ''
               }`}
             >
@@ -192,13 +200,13 @@ function PodiumCard({ entry, isChampion }) {
 
   return (
     <div
-      className={`card text-center border ${medal.bg} ${isChampion ? 'pt-4 sm:pt-8' : 'mt-4 sm:mt-8'} pb-3 sm:pb-4 ${isChampion ? 'bg-gradient-to-b from-piu-gold/10 to-transparent' : ''}`}
+      className={`rounded-xl border text-center shadow-[0_8px_24px_rgba(0,0,0,0.25)] ${medal.bg} ${isChampion ? 'pt-4 sm:pt-8' : 'mt-4 sm:mt-8'} pb-3 sm:pb-4 ${isChampion ? 'bg-gradient-to-b from-piu-gold/10 to-zinc-950/70' : 'bg-zinc-950/70'}`}
       style={{ animation: `slideUp 0.5s ease-out ${isChampion ? '0.4s' : rank === 2 ? '0.6s' : '0.8s'} both` }}
     >
       <div className={`text-3xl sm:text-4xl mb-1 ${isChampion ? 'sm:text-5xl' : ''}`}>
         {medal.icon}
       </div>
-      <p className={`text-[10px] font-display uppercase tracking-wider font-bold mb-1 ${medal.color}`}>
+      <p className={`text-[10px] font-display uppercase tracking-[0.14em] font-bold mb-1 ${medal.color}`}>
         {medal.label}
       </p>
       {player ? (
@@ -207,12 +215,12 @@ function PodiumCard({ entry, isChampion }) {
           <p className={`font-display font-bold truncate px-1 ${isChampion ? 'text-base sm:text-lg' : 'text-sm sm:text-base'} ${medal.color}`}>
             {player.name}
           </p>
-          <p className="text-[10px] text-gray-500 mt-0.5">
-            {player.wins}W - {player.losses}L
+          <p className="text-[10px] text-zinc-600 mt-0.5">
+            {player.wins}W &ndash; {player.losses}L
           </p>
         </>
       ) : (
-        <p className="text-sm text-gray-600">-</p>
+        <p className="text-sm text-zinc-700">-</p>
       )}
     </div>
   );
