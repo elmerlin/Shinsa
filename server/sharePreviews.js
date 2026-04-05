@@ -11,7 +11,7 @@ const { splitWcPersonalContent } = require('./lib/weeklyChallengePersonalMarker'
 const SHARE_MARKER_REGEX = /\[\[SHINSA_SHARE_V1:([A-Za-z0-9+/=_-]+)\]\]/;
 const SUMMARY_MARKER_REGEX = /\[\[SHINSA_SUMMARY_V1:[A-Za-z0-9+/=_-]+\]\]/g;
 const PLAN_MARKER_REGEX = /\[\[SHINSA_SESSION_PLAN_V1:[A-Za-z0-9+/=_-]+\]\]/g;
-const SHARE_PREVIEW_RENDER_VERSION = '20260405a';
+const SHARE_PREVIEW_RENDER_VERSION = '20260405b';
 const SONG_ALIAS_OVERRIDES = {
   'papasito (feat. kutina)': 'papasito feat. kutina',
   '파파시토 (feat. kutina)': 'papasito feat. kutina',
@@ -1730,6 +1730,7 @@ async function renderPlayOgJpeg({
       input: await sharp(artworkBuffer)
         .rotate()
         .resize(cardW, cardH, { fit: 'cover' })
+        .modulate({ brightness: 1.12, saturation: 1.08 })
         .composite([{
           input: Buffer.from(`<svg width="${cardW}" height="${cardH}" xmlns="http://www.w3.org/2000/svg"><rect x="0" y="0" width="${cardW}" height="${cardH}" rx="30" ry="30" fill="#fff"/></svg>`),
           blend: 'dest-in',
@@ -1796,14 +1797,18 @@ async function renderPlayOgJpeg({
         <stop offset="100%" stop-color="rgba(255,87,164,0.12)"/>
       </linearGradient>
       <linearGradient id="cardShade" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="rgba(4,8,16,0.12)"/>
-        <stop offset="0.48" stop-color="rgba(5,9,18,0.36)"/>
-        <stop offset="1" stop-color="rgba(5,9,18,0.90)"/>
+        <stop offset="0%" stop-color="rgba(4,8,16,0.02)"/>
+        <stop offset="0.42" stop-color="rgba(5,9,18,0.22)"/>
+        <stop offset="1" stop-color="rgba(5,9,18,0.72)"/>
       </linearGradient>
       <linearGradient id="innerGlow" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0%" stop-color="rgba(125,211,252,0.20)"/>
+        <stop offset="0%" stop-color="rgba(125,211,252,0.14)"/>
         <stop offset="55%" stop-color="rgba(125,211,252,0.0)"/>
-        <stop offset="100%" stop-color="rgba(236,72,153,0.10)"/>
+        <stop offset="100%" stop-color="rgba(236,72,153,0.08)"/>
+      </linearGradient>
+      <linearGradient id="bottomVignette" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="rgba(7,12,22,0.0)"/>
+        <stop offset="100%" stop-color="rgba(5,9,18,0.48)"/>
       </linearGradient>
       <linearGradient id="levelGrad" x1="0" y1="0" x2="1" y2="1">
         <stop offset="0%" stop-color="${escapeXml(modeAccent.from)}"/>
@@ -1820,9 +1825,10 @@ async function renderPlayOgJpeg({
     <text x="66" y="70" fill="rgba(186,230,253,0.86)" font-size="16" font-weight="800" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial" letter-spacing="4">RUN DETAILS</text>
     <text x="${width - 148}" y="60" fill="rgba(255,255,255,0.76)" font-size="22" text-anchor="end" font-weight="700" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(username)}</text>
 
-    <rect x="${cardX}" y="${cardY}" width="${cardW}" height="${cardH}" rx="30" fill="rgba(5,10,20,0.48)" stroke="rgba(172,196,255,0.18)" />
+    <rect x="${cardX}" y="${cardY}" width="${cardW}" height="${cardH}" rx="30" fill="rgba(5,10,20,0.12)" stroke="rgba(172,196,255,0.18)" />
     <rect x="${cardX}" y="${cardY}" width="${cardW}" height="${cardH}" rx="30" fill="url(#cardShade)" />
     <rect x="${cardX}" y="${cardY}" width="${cardW}" height="${cardH}" rx="30" fill="url(#innerGlow)" />
+    <rect x="${cardX}" y="${cardY}" width="${cardW}" height="${cardH}" rx="30" fill="url(#bottomVignette)" />
 
     ${titleSvg}
 
@@ -2375,11 +2381,13 @@ function registerSharePreviewRoutes(app, { clientBuildDir }) {
 
     try {
       const origin = getRequestOrigin(req);
+      const preferredArtworkUrl = String(play.background_url || '').trim() || resolveUpscoreItemJacketUrl(db, play);
+      const fallbackArtworkUrl = resolveUpscoreItemJacketUrl(db, play);
       const artworkBuffer = await loadPreviewArtworkBuffer({
         clientBuildDir,
         origin,
-        jacketUrl: resolveUpscoreItemJacketUrl(db, play),
-        backgroundUrl: play.background_url,
+        jacketUrl: preferredArtworkUrl,
+        backgroundUrl: fallbackArtworkUrl,
       });
       const brandAssets = await buildBrandAssets({
         clientBuildDir,
