@@ -250,23 +250,41 @@ function GauntletDiagram({ players: allPlayers, visible }) {
   const n = players.length || 6;
   const matchCount = n - 1;
   const stepH = 52;
-  const totalH = matchCount * stepH + 50;
+  const totalH = matchCount * stepH + 70;
   const w = 300;
   const nodeR = 14;
   const color = FORMAT_COLORS.gauntlet;
 
   const activeRung = visible ? (cycle % matchCount) : -1;
 
+  // Rank labels: bottom rung has last vs 2nd-last, top rung has #2 vs #1
+  const getRankLabel = (i) => {
+    if (i === matchCount - 1) return 'FINAL';
+    if (i === 0) return `#${n} vs #${n - 1}`;
+    return `Winner vs #${n - 1 - i}`;
+  };
+
   return (
     <div className="flex items-center justify-center">
       <svg width={w} height={totalH} viewBox={`0 0 ${w} ${totalH}`} className="overflow-visible">
+        {/* Ladder spine */}
         <line
           x1={w / 2} y1={totalH - 10} x2={w / 2} y2={20}
           stroke={`rgba(${color.rgb},0.12)`} strokeWidth="2" strokeDasharray="4 4"
           style={{ opacity: visible ? 1 : 0, transition: 'opacity 0.6s ease 200ms' }}
         />
+        {/* Bottom label */}
+        <text
+          x={w / 2} y={totalH - 4}
+          textAnchor="middle" dominantBaseline="middle"
+          fill="rgba(255,255,255,0.2)" fontSize="8" fontFamily="Rajdhani, sans-serif" fontWeight="bold"
+          letterSpacing="0.1em"
+          style={{ opacity: visible ? 1 : 0, transition: 'opacity 0.5s ease 250ms' }}
+        >
+          LOWEST RANKED START HERE
+        </text>
         {Array.from({ length: matchCount }, (_, i) => {
-          const y = totalH - 24 - i * stepH;
+          const y = totalH - 44 - i * stepH;
           const isFinal = i === matchCount - 1;
           const isActive = i === activeRung;
           const delay = 300 + i * 150;
@@ -281,7 +299,7 @@ function GauntletDiagram({ players: allPlayers, visible }) {
               />
               <PlayerNode
                 x={w / 2 - 60} y={y} r={nodeR}
-                player={players[i] || { name: `P${i + 1}` }}
+                player={players[n - 1 - i] || { name: `#${n - i}` }}
                 color={isFinal ? '#ffd700' : color.accent}
                 delay={delay + 80}
                 visible={visible}
@@ -298,7 +316,7 @@ function GauntletDiagram({ players: allPlayers, visible }) {
               </text>
               <PlayerNode
                 x={w / 2 + 60} y={y} r={nodeR}
-                player={players[i + 1] || { name: `P${i + 2}` }}
+                player={i === 0 ? (players[n - 2] || { name: `#${n - 1}` }) : { name: '\u2191' }}
                 color={isFinal ? '#ffd700' : color.accent}
                 delay={delay + 80}
                 visible={visible}
@@ -307,11 +325,11 @@ function GauntletDiagram({ players: allPlayers, visible }) {
               <text
                 x={w / 2 + 95} y={y + 1}
                 dominantBaseline="middle"
-                fill={isFinal ? 'rgba(255,215,0,0.5)' : 'rgba(255,255,255,0.2)'}
-                fontSize="9" fontFamily="Rajdhani, sans-serif" fontWeight="bold"
+                fill={isFinal ? 'rgba(255,215,0,0.5)' : 'rgba(255,255,255,0.25)'}
+                fontSize="8" fontFamily="Rajdhani, sans-serif" fontWeight="bold"
                 style={{ opacity: visible ? 1 : 0, transition: `opacity 0.3s ease ${delay + 150}ms` }}
               >
-                {isFinal ? 'FINAL' : `#${i + 1}`}
+                {getRankLabel(i)}
               </text>
               {i < matchCount - 1 && (
                 <path
@@ -760,11 +778,36 @@ function ExpandedScoutCard({ player, scoutData, onClose }) {
 //  PHASE SECTION
 // ══════════════════════════════════════════════════════════════
 
-function PhaseSection({ phase, index, total, players }) {
+function getPhaseContextBlurb(phase, index, total, allPhases) {
+  const f = phase.format;
+  if (f === 'round_robin' && total > 1) {
+    const nextPhase = allPhases[index + 1];
+    if (nextPhase?.format === 'gauntlet') {
+      return 'Results determine seeding for the Gauntlet \u2014 every match matters for your position on the ladder.';
+    }
+    if (nextPhase) {
+      return `Results determine seeding for the next phase: ${FORMAT_LABELS[nextPhase.format]}.`;
+    }
+  }
+  if (f === 'gauntlet' && index > 0) {
+    const prevPhase = allPhases[index - 1];
+    if (prevPhase) {
+      return `Seeded by ${prevPhase.name || FORMAT_LABELS[prevPhase.format]} standings \u2014 last place starts, winner stays on and fights upward to the champion.`;
+    }
+    return 'Last place starts \u2014 winner stays on and fights upward to the champion.';
+  }
+  if (f === 'pools' && total > 1) {
+    return 'Top finishers from each pool advance to the next stage.';
+  }
+  return null;
+}
+
+function PhaseSection({ phase, index, total, players, allPhases }) {
   const [ref, visible] = useReveal();
   const color = getFormatColor(phase.format);
   const rules = getPhaseRules(phase);
   const advLabel = getAdvancementLabel(phase);
+  const contextBlurb = getPhaseContextBlurb(phase, index, total, allPhases);
   const isLast = index === total - 1;
 
   return (
@@ -821,9 +864,18 @@ function PhaseSection({ phase, index, total, players }) {
               </div>
             </div>
 
-            <p className="text-sm text-zinc-400 leading-relaxed mb-4">
+            <p className="text-sm text-zinc-400 leading-relaxed mb-2">
               {FORMAT_DESCRIPTIONS[phase.format]}
             </p>
+
+            {contextBlurb && (
+              <p
+                className="text-xs text-zinc-500 italic leading-relaxed mb-4"
+                style={{ opacity: visible ? 1 : 0, transition: 'opacity 0.5s ease 400ms' }}
+              >
+                {contextBlurb}
+              </p>
+            )}
 
             <Stagger visible={visible} base={300} className="flex flex-wrap gap-1.5 mb-4">
               {rules.map((rule) => (
@@ -1762,15 +1814,18 @@ export default function TournamentPoster() {
             {displayPhases.map(p => FORMAT_LABELS[p.format] || p.format).join(' \u2192 ')}
           </p>
 
-          {/* Phase quick-nav dots */}
-          <div className="mt-8 flex items-center justify-center gap-3" style={{ opacity: heroVisible ? 1 : 0, transition: 'opacity 0.4s ease 500ms' }}>
+          {/* Phase quick-nav dots with labels */}
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-2 sm:gap-3" style={{ opacity: heroVisible ? 1 : 0, transition: 'opacity 0.4s ease 500ms' }}>
             {displayPhases.map((phase, i) => {
               const c = getFormatColor(phase.format);
               return (
-                <div key={i} className="flex items-center gap-3">
-                  {i > 0 && <div className="h-px w-6 bg-white/10" />}
-                  <div className={`flex h-8 w-8 items-center justify-center rounded-full border ${c.border} ${c.bg} backdrop-blur-sm`} title={phase.name || FORMAT_LABELS[phase.format]}>
+                <div key={i} className="flex items-center gap-2 sm:gap-3">
+                  {i > 0 && <div className="text-zinc-600 text-xs">{'\u2192'}</div>}
+                  <div className={`flex items-center gap-1.5 rounded-full border ${c.border} ${c.bg} backdrop-blur-sm px-3 py-1.5`}>
                     <span className="text-sm">{FORMAT_ICONS[phase.format]}</span>
+                    <span className={`font-display text-[10px] font-bold uppercase tracking-[0.1em] ${c.text}`}>
+                      {phase.name || FORMAT_LABELS[phase.format]}
+                    </span>
                   </div>
                 </div>
               );
@@ -1921,6 +1976,7 @@ export default function TournamentPoster() {
             index={i}
             total={displayPhases.length}
             players={players}
+            allPhases={displayPhases}
           />
         ))}
       </div>

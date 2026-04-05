@@ -299,16 +299,21 @@ export default function TournamentSetup() {
     });
   }, [phases]);
 
-  const pageCopy = useMemo(() => ({
-    badge: isEditMode ? 'Edit Tournament' : 'Tournament Setup',
-    phaseBadge: phases.length > 0 ? `${phases.length} phase${phases.length === 1 ? '' : 's'} configured` : 'Add at least one phase',
-    heading: isEditMode ? 'Tune the setup before the bracket goes live' : 'Build the bracket before match one',
-    body: isEditMode
-      ? 'Adjust the name, avatar, phase order, and chart rules while the tournament is still waiting to start.'
-      : 'Set the shell, line up the phases, then add registered players.',
-    submitLabel: isEditMode ? 'Save Changes' : 'Create Tournament',
-    savingLabel: isEditMode ? 'Saving...' : 'Creating...',
-  }), [isEditMode, phases.length]);
+  const pageCopy = useMemo(() => {
+    const live = isEditMode && existingTournament?.phase !== 'SETUP';
+    return {
+      badge: live ? 'Edit Live Tournament' : (isEditMode ? 'Edit Tournament' : 'Tournament Setup'),
+      phaseBadge: phases.length > 0 ? `${phases.length} phase${phases.length === 1 ? '' : 's'} configured` : 'Add at least one phase',
+      heading: live ? 'Edit tournament details' : (isEditMode ? 'Tune the setup before the bracket goes live' : 'Build the bracket before match one'),
+      body: live
+        ? 'Update the name, date, location, and avatars. Phase changes are limited while the tournament is in progress.'
+        : (isEditMode
+          ? 'Adjust the name, avatar, phase order, and chart rules while the tournament is still waiting to start.'
+          : 'Set the shell, line up the phases, then add registered players.'),
+      submitLabel: isEditMode ? 'Save Changes' : 'Create Tournament',
+      savingLabel: isEditMode ? 'Saving...' : 'Creating...',
+    };
+  }, [isEditMode, existingTournament?.phase, phases.length]);
 
   if (loading || (isEditMode && authLoading)) {
     return <div className="mx-auto max-w-5xl px-4 py-16 text-center text-zinc-400">Loading tournament setup...</div>;
@@ -318,16 +323,7 @@ export default function TournamentSetup() {
     return <div className="mx-auto max-w-5xl px-4 py-16 text-center text-red-400">Tournament not found</div>;
   }
 
-  if (isEditMode && existingTournament?.phase !== 'SETUP') {
-    return (
-      <div className="mx-auto max-w-5xl px-4 py-16">
-        <TournamentEmptyPanel
-          title="Setup editing is closed"
-          description="Tournament setup can only be edited before the first phase starts."
-        />
-      </div>
-    );
-  }
+  const isLive = isEditMode && existingTournament?.phase !== 'SETUP';
 
   if (isEditMode && !canEditExistingTournament) {
     return (
@@ -470,16 +466,16 @@ export default function TournamentSetup() {
             </CardContent>
           </Card>
 
-          {phases.length === 0 ? (
+          {!isLive && phases.length === 0 ? (
             <TournamentPresets onSelect={loadPreset} />
           ) : null}
 
           <div className="space-y-4">
             <SetupSectionHeader
               eyebrow="Phase Pipeline"
-              title="Design the tournament flow"
-              description="Stack formats in order and define how each stage feeds the next."
-              action={phases.length > 0 ? (
+              title={isLive ? 'Tournament phases' : 'Design the tournament flow'}
+              description={isLive ? 'Phase structure is locked while the tournament is in progress.' : 'Stack formats in order and define how each stage feeds the next.'}
+              action={!isLive && phases.length > 0 ? (
                 <button
                   type="button"
                   onClick={() => setPhases([])}
@@ -490,13 +486,21 @@ export default function TournamentSetup() {
               ) : null}
             />
 
+            {isLive && (
+              <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3">
+                <p className="text-xs text-amber-200/80">
+                  <span className="font-display font-bold uppercase tracking-wider">Live tournament</span> — You can edit the name, date, location, and avatars. Phase structure cannot be changed while matches are in progress.
+                </p>
+              </div>
+            )}
+
             {phases.length === 0 ? (
               <TournamentEmptyPanel
                 title="No phases added yet"
                 description="Choose a preset above or add formats manually below."
               />
             ) : (
-              <div className="space-y-6">
+              <div className={`space-y-6 ${isLive ? 'opacity-60 pointer-events-none' : ''}`}>
                 {phases.map((phase, idx) => (
                   <PhaseCard
                     key={phase._key}
@@ -519,7 +523,7 @@ export default function TournamentSetup() {
               </div>
             )}
 
-            {showFormatPicker ? (
+            {!isLive && (showFormatPicker ? (
               <Card className="border-piu-accent/25 bg-zinc-950/60">
                 <CardContent className="space-y-4">
                   <SetupSectionHeader
@@ -568,7 +572,7 @@ export default function TournamentSetup() {
               >
                 <span className="font-display text-sm font-bold uppercase tracking-[0.16em] text-zinc-300">+ Add Phase</span>
               </button>
-            )}
+            ))}
           </div>
 
           {flowPreview && flowPreview.length > 0 ? (

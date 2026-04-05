@@ -170,13 +170,13 @@ export function TournamentPhaseTimeline({ phases = [] }) {
   if (!Array.isArray(phases) || phases.length === 0) return null;
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+    <div className="flex flex-wrap items-center gap-1 sm:gap-1.5 text-[11px]">
       {phases.map((phase, index) => (
         <React.Fragment key={phase.id || `${phase.format}-${index}`}>
           {index > 0 ? <span className="px-0.5 text-zinc-600">→</span> : null}
           <span
             className={cx(
-              'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-display text-[10px] font-bold uppercase tracking-[0.12em]',
+              'inline-flex items-center gap-1 sm:gap-1.5 rounded-full border px-2 py-0.5 sm:px-2.5 sm:py-1 font-display text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.1em] sm:tracking-[0.12em]',
               getPhaseTone(phase.status)
             )}
           >
@@ -194,14 +194,14 @@ export function TournamentTabs({ tabs = [], activeTab, onChange, className = '' 
   if (!Array.isArray(tabs) || tabs.length === 0) return null;
 
   return (
-    <div className={cx('flex gap-1.5 overflow-x-auto rounded-xl border border-white/10 bg-black/18 p-1.5', className)}>
+    <div className={cx('flex flex-wrap gap-1 sm:gap-1.5 rounded-xl border border-white/10 bg-black/18 p-1 sm:p-1.5', className)}>
       {tabs.map((tab) => (
         <button
           key={tab.key}
           type="button"
           onClick={() => onChange?.(tab.key)}
           className={cx(
-            'inline-flex shrink-0 items-center gap-2 rounded-full border px-3 py-1.5 font-display text-[11px] font-bold uppercase tracking-[0.14em] transition-colors',
+            'inline-flex items-center gap-1 sm:gap-2 rounded-full border px-2 py-1 sm:px-3 sm:py-1.5 font-display text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.1em] sm:tracking-[0.14em] transition-colors',
             activeTab === tab.key
               ? 'border-piu-accent/30 bg-piu-accent/12 text-rose-100'
               : 'border-transparent bg-transparent text-zinc-400 hover:border-white/10 hover:bg-white/5 hover:text-zinc-100'
@@ -255,7 +255,7 @@ export function TournamentCallout({
   );
 }
 
-export function TournamentPhaseRuleCard({ phase, className = '' }) {
+export function TournamentPhaseRuleCard({ phase, prevPhase, className = '' }) {
   if (!phase) return null;
 
   const format = phase.format;
@@ -277,6 +277,14 @@ export function TournamentPhaseRuleCard({ phase, className = '' }) {
     format === 'b15' ? 'Best 15 rating-point scores' : '',
   ].filter(Boolean);
 
+  // Contextual seeding blurb
+  let seedingBlurb = null;
+  if (format === 'gauntlet' && prevPhase) {
+    seedingBlurb = `Seeded by ${prevPhase.name || FORMAT_LABELS[prevPhase.format]} standings \u2014 last place starts, winner stays on and fights upward.`;
+  } else if (format === 'gauntlet') {
+    seedingBlurb = 'Last place starts \u2014 winner stays on and climbs the ladder to the top.';
+  }
+
   return (
     <Card className={cx('border-white/8 bg-zinc-950/55', className)}>
       <CardContent className="flex flex-col gap-3 p-4">
@@ -291,6 +299,9 @@ export function TournamentPhaseRuleCard({ phase, className = '' }) {
             <p className="mt-2 text-sm text-zinc-400">
               {FORMAT_DESCRIPTIONS[format] || 'Tournament format details'}
             </p>
+            {seedingBlurb && (
+              <p className="mt-1 text-xs text-zinc-500 italic">{seedingBlurb}</p>
+            )}
           </div>
         </div>
 

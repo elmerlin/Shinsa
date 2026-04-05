@@ -33,11 +33,11 @@ export const FORMAT_LABELS = {
 };
 
 export const FORMAT_DESCRIPTIONS = {
-  round_robin: 'Every player plays every other player',
+  round_robin: 'Every player plays every other player to determine rankings',
   pools: 'Players divided into groups, round robin within each',
   single_elim: 'Single elimination bracket knockout',
   double_elim: 'Double elimination with losers bracket',
-  gauntlet: 'King of the Hill \u2014 bottom ranks fight upward through mixed card draws',
+  gauntlet: 'Lowest ranked plays next lowest \u2014 winner stays on and climbs the ladder to the top',
   hour_of_power: '60 min timed session, cumulative rating points',
   b15: 'Best 15 scores in a time window, like Pumbility but compressed',
 };

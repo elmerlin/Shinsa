@@ -206,7 +206,7 @@ export default function TournamentView() {
   if (!tournament) return <div className="text-center py-20 text-red-400">Tournament not found</div>;
 
   const config = tournament.config || {};
-  const canEditSetup = tournament.phase === 'SETUP' && !!user?.is_admin;
+  const canEditSetup = !!user?.is_admin;
   const editSetupAction = (
     <div className="flex items-center gap-2">
       {canEditSetup && (
@@ -370,7 +370,7 @@ export default function TournamentView() {
 
         {currentTabPhase && (
           <div>
-            <TournamentPhaseRuleCard phase={currentTabPhase} className="mb-4" />
+            <TournamentPhaseRuleCard phase={currentTabPhase} prevPhase={phases[phases.indexOf(currentTabPhase) - 1]} className="mb-4" />
 
             {currentTabPhase.format === 'round_robin' && (
               <SwissRound
