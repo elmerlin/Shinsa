@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { getAvatarUrl } from './AvatarPicker';
 import AvatarStack from './AvatarStack';
 import { Badge } from './ui/badge';
@@ -65,6 +65,7 @@ function getTournamentInitial(name) {
 }
 
 export default function TournamentShowcaseCard({ tournament, onDelete }) {
+  const navigate = useNavigate();
   const primaryFormatKey = getPrimaryFormatKey(tournament);
   const primaryFormatIcon = FORMAT_ICONS[primaryFormatKey] || '\u{1F3C6}';
   const formatSummary = getFormatSummary(tournament);
@@ -152,6 +153,17 @@ export default function TournamentShowcaseCard({ tournament, onDelete }) {
                   {tournament.phase_count} stages
                 </span>
               )}
+              <button
+                type="button"
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigate(`/tournament/${tournament.id}/poster`); }}
+                className="flex h-7 items-center gap-1.5 rounded-full border border-piu-accent/15 bg-piu-accent/6 px-2.5 text-[10px] font-display font-bold uppercase tracking-[0.1em] text-rose-200/70 transition-all hover:border-piu-accent/30 hover:bg-piu-accent/12 hover:text-rose-100"
+                title="View poster"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                </svg>
+                Poster
+              </button>
               <div className="flex h-7 w-7 items-center justify-center rounded-full border border-white/8 bg-white/4 text-zinc-400 transition-all duration-200 group-hover:translate-x-0.5 group-hover:border-white/12 group-hover:text-white">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
