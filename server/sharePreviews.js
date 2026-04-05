@@ -11,7 +11,7 @@ const { splitWcPersonalContent } = require('./lib/weeklyChallengePersonalMarker'
 const SHARE_MARKER_REGEX = /\[\[SHINSA_SHARE_V1:([A-Za-z0-9+/=_-]+)\]\]/;
 const SUMMARY_MARKER_REGEX = /\[\[SHINSA_SUMMARY_V1:[A-Za-z0-9+/=_-]+\]\]/g;
 const PLAN_MARKER_REGEX = /\[\[SHINSA_SESSION_PLAN_V1:[A-Za-z0-9+/=_-]+\]\]/g;
-const SHARE_PREVIEW_RENDER_VERSION = '20260405c';
+const SHARE_PREVIEW_RENDER_VERSION = '20260405d';
 const SONG_ALIAS_OVERRIDES = {
   'papasito (feat. kutina)': 'papasito feat. kutina',
   '파파시토 (feat. kutina)': 'papasito feat. kutina',
@@ -1675,7 +1675,6 @@ async function renderPlayOgJpeg({
   play,
   brandAssets = null,
   artworkBuffer = null,
-  jacketBuffer = null,
   width = 1200,
   height = 630,
 }) {
@@ -1724,11 +1723,7 @@ async function renderPlayOgJpeg({
   const playerAvatarSize = 42;
   const playerAvatarX = cardX + 40;
   const playerAvatarY = cardY + 132;
-  const jacketSize = 164;
-  const jacketX = cardX + 40;
-  const jacketY = cardY + 238;
-  const visibleJacketBuffer = jacketBuffer?.length ? jacketBuffer : artworkBuffer;
-  const scoreX = visibleJacketBuffer?.length ? jacketX + jacketSize + 30 : cardX + 40;
+  const scoreX = cardX + 40;
 
   let cardArtworkOverlay = null;
   if (artworkBuffer?.length) {
@@ -1736,7 +1731,9 @@ async function renderPlayOgJpeg({
       input: await sharp(artworkBuffer)
         .rotate()
         .resize(cardW, cardH, { fit: 'cover' })
-        .modulate({ brightness: 1.12, saturation: 1.08 })
+        .gamma(1.08)
+        .modulate({ brightness: 1.3, saturation: 1.16 })
+        .sharpen(1.1)
         .composite([{
           input: Buffer.from(`<svg width="${cardW}" height="${cardH}" xmlns="http://www.w3.org/2000/svg"><rect x="0" y="0" width="${cardW}" height="${cardH}" rx="30" ry="30" fill="#fff"/></svg>`),
           blend: 'dest-in',
@@ -1745,23 +1742,6 @@ async function renderPlayOgJpeg({
         .toBuffer(),
       top: cardY,
       left: cardX,
-    };
-  }
-
-  let jacketOverlay = null;
-  if (visibleJacketBuffer?.length) {
-    jacketOverlay = {
-      input: await sharp(visibleJacketBuffer)
-        .rotate()
-        .resize(jacketSize, jacketSize, { fit: 'cover' })
-        .composite([{
-          input: Buffer.from(`<svg width="${jacketSize}" height="${jacketSize}" xmlns="http://www.w3.org/2000/svg"><rect x="0" y="0" width="${jacketSize}" height="${jacketSize}" rx="26" ry="26" fill="#fff"/></svg>`),
-          blend: 'dest-in',
-        }])
-        .png()
-        .toBuffer(),
-      top: jacketY,
-      left: jacketX,
     };
   }
 
@@ -1820,18 +1800,33 @@ async function renderPlayOgJpeg({
         <stop offset="100%" stop-color="rgba(255,87,164,0.12)"/>
       </linearGradient>
       <linearGradient id="cardShade" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="rgba(4,8,16,0.02)"/>
-        <stop offset="0.42" stop-color="rgba(5,9,18,0.22)"/>
-        <stop offset="1" stop-color="rgba(5,9,18,0.72)"/>
+        <stop offset="0%" stop-color="rgba(4,8,16,0.04)"/>
+        <stop offset="0.45" stop-color="rgba(5,9,18,0.08)"/>
+        <stop offset="1" stop-color="rgba(5,9,18,0.46)"/>
+      </linearGradient>
+      <linearGradient id="leftRailShade" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0%" stop-color="rgba(4,8,16,0.50)"/>
+        <stop offset="28%" stop-color="rgba(4,8,16,0.28)"/>
+        <stop offset="55%" stop-color="rgba(4,8,16,0.0)"/>
+      </linearGradient>
+      <linearGradient id="rightRailShade" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="45%" stop-color="rgba(4,8,16,0.0)"/>
+        <stop offset="72%" stop-color="rgba(4,8,16,0.20)"/>
+        <stop offset="100%" stop-color="rgba(4,8,16,0.42)"/>
       </linearGradient>
       <linearGradient id="innerGlow" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0%" stop-color="rgba(125,211,252,0.14)"/>
+        <stop offset="0%" stop-color="rgba(125,211,252,0.12)"/>
         <stop offset="55%" stop-color="rgba(125,211,252,0.0)"/>
-        <stop offset="100%" stop-color="rgba(236,72,153,0.08)"/>
+        <stop offset="100%" stop-color="rgba(236,72,153,0.06)"/>
       </linearGradient>
       <linearGradient id="bottomVignette" x1="0" y1="0" x2="0" y2="1">
         <stop offset="0%" stop-color="rgba(7,12,22,0.0)"/>
-        <stop offset="100%" stop-color="rgba(5,9,18,0.48)"/>
+        <stop offset="100%" stop-color="rgba(5,9,18,0.32)"/>
+      </linearGradient>
+      <radialGradient id="centerReveal" cx="50%" cy="38%" r="55%">
+        <stop offset="0%" stop-color="rgba(255,255,255,0.08)"/>
+        <stop offset="60%" stop-color="rgba(255,255,255,0.02)"/>
+        <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
       </linearGradient>
       <linearGradient id="levelGrad" x1="0" y1="0" x2="1" y2="1">
         <stop offset="0%" stop-color="${escapeXml(modeAccent.from)}"/>
@@ -1850,7 +1845,10 @@ async function renderPlayOgJpeg({
 
     <rect x="${cardX}" y="${cardY}" width="${cardW}" height="${cardH}" rx="30" fill="rgba(5,10,20,0.12)" stroke="rgba(172,196,255,0.18)" />
     <rect x="${cardX}" y="${cardY}" width="${cardW}" height="${cardH}" rx="30" fill="url(#cardShade)" />
+    <rect x="${cardX}" y="${cardY}" width="${cardW}" height="${cardH}" rx="30" fill="url(#leftRailShade)" />
+    <rect x="${cardX}" y="${cardY}" width="${cardW}" height="${cardH}" rx="30" fill="url(#rightRailShade)" />
     <rect x="${cardX}" y="${cardY}" width="${cardW}" height="${cardH}" rx="30" fill="url(#innerGlow)" />
+    <rect x="${cardX}" y="${cardY}" width="${cardW}" height="${cardH}" rx="30" fill="url(#centerReveal)" />
     <rect x="${cardX}" y="${cardY}" width="${cardW}" height="${cardH}" rx="30" fill="url(#bottomVignette)" />
 
     ${titleSvg}
@@ -1865,9 +1863,6 @@ async function renderPlayOgJpeg({
     <text x="${cardX + 40 + (playerAvatarOverlay ? 58 : 0)}" y="${cardY + 172}" fill="rgba(214,224,240,0.82)" font-size="15" font-weight="600" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml([playedAtLabel, chartLine].filter(Boolean).join(' • ') || 'Recent score on Pump Shinsa')}</text>
 
     ${pillsSvg}
-
-    ${visibleJacketBuffer?.length ? `<rect x="${jacketX}" y="${jacketY}" width="${jacketSize}" height="${jacketSize}" rx="26" fill="rgba(8,14,24,0.18)" stroke="rgba(255,255,255,0.20)" />` : ''}
-    ${visibleJacketBuffer?.length ? `<rect x="${jacketX + 1}" y="${jacketY + 1}" width="${jacketSize - 2}" height="${jacketSize - 2}" rx="25" fill="none" stroke="rgba(255,255,255,0.10)" />` : ''}
 
     <text x="${scoreX}" y="${cardY + 326}" fill="${play?.is_stage_break ? '#fda4af' : '#ffffff'}" font-size="${play?.is_stage_break ? 46 : 62}" font-weight="900" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(play?.is_stage_break ? 'STAGE BREAK' : scoreText)}</text>
     ${plateName ? `<text x="${scoreX}" y="${cardY + 358}" fill="rgba(250,226,150,0.92)" font-size="16" font-weight="800" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial" letter-spacing="1.5">${escapeXml(plateName)}</text>` : ''}
@@ -1890,7 +1885,6 @@ async function renderPlayOgJpeg({
   })
     .composite([
       ...(cardArtworkOverlay ? [cardArtworkOverlay] : []),
-      ...(jacketOverlay ? [jacketOverlay] : []),
       { input: Buffer.from(textSvg) },
       ...buildBrandComposites({ width, brandAssets }),
       ...(playerAvatarOverlay ? [playerAvatarOverlay] : []),
@@ -2408,7 +2402,7 @@ function registerSharePreviewRoutes(app, { clientBuildDir }) {
 
     try {
       const origin = getRequestOrigin(req);
-      const resolvedJacketUrl = String(play.jacket_url || '').trim() || resolveUpscoreItemJacketUrl(db, play);
+      const resolvedJacketUrl = resolveUpscoreItemJacketUrl(db, play);
       const preferredArtworkUrl = String(play.background_url || '').trim() || resolvedJacketUrl;
       const fallbackArtworkUrl = resolvedJacketUrl;
       const artworkBuffer = await loadPreviewArtworkBuffer({
@@ -2417,13 +2411,6 @@ function registerSharePreviewRoutes(app, { clientBuildDir }) {
         jacketUrl: preferredArtworkUrl,
         backgroundUrl: fallbackArtworkUrl,
       });
-      const jacketBuffer = resolvedJacketUrl
-        ? await loadImageBuffer({
-          clientBuildDir,
-          origin,
-          source: resolvedJacketUrl,
-        })
-        : null;
       const brandAssets = await buildBrandAssets({
         clientBuildDir,
         origin,
@@ -2436,7 +2423,6 @@ function registerSharePreviewRoutes(app, { clientBuildDir }) {
         play,
         brandAssets,
         artworkBuffer,
-        jacketBuffer,
         width: 1200,
         height: 630,
       });
