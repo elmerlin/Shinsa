@@ -17,6 +17,7 @@ import {
   TournamentPhaseTimeline,
   TournamentTabs,
 } from '../components/tournament/TournamentChrome';
+import TournamentRoster from '../components/tournament/TournamentRoster';
 
 const LEGACY_PHASE_TABS = {
   SETUP: [],
@@ -101,7 +102,7 @@ export default function TournamentWatch() {
 
     const allPhasesComplete = phases.length > 0 && phases.every((phase) => phase.status === 'COMPLETED');
     const validTabs = phases.map((phase) => `phase-${phase.id}`);
-    validTabs.push('standings');
+    validTabs.push('players', 'standings');
     if (allPhasesComplete) validTabs.push('final');
 
     if (activeTab && validTabs.includes(activeTab)) return;
@@ -158,6 +159,7 @@ export default function TournamentWatch() {
       phase: p,
       status: p.status,
     }));
+    phaseTabs.push({ key: 'players', label: 'Players', icon: '', phase: null, status: null });
     phaseTabs.push({ key: 'standings', label: 'Standings', icon: '', phase: null, status: null });
     if (allPhasesComplete) {
       phaseTabs.push({ key: 'final', label: 'Final', icon: '\u{1F3C6}', phase: null, status: null });
@@ -195,6 +197,10 @@ export default function TournamentWatch() {
         <TournamentTabs tabs={phaseTabs} activeTab={activeTab} onChange={setActiveTab} className="mb-4 sm:mb-6" />
 
         {/* Tab Content */}
+        {activeTab === 'players' && (
+          <TournamentRoster players={players} matches={matches} phases={phases} />
+        )}
+
         {activeTab === 'standings' && (
           <Standings
             players={players}

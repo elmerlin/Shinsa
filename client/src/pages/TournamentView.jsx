@@ -25,6 +25,7 @@ import {
   TournamentPhaseTimeline,
   TournamentTabs,
 } from '../components/tournament/TournamentChrome';
+import TournamentRoster from '../components/tournament/TournamentRoster';
 import { useAuth } from '../contexts/AuthContext';
 
 // Legacy phase tabs for old tournaments without the phase system
@@ -116,7 +117,7 @@ export default function TournamentView() {
     if (allPhasesComplete) validTabs.push('final');
 
     const activePhase = phases.find((phase) => phase.status === 'ACTIVE');
-    if (activePhase && (!activeTab || activeTab === 'players')) {
+    if (activePhase && !activeTab) {
       setActiveTab(`phase-${activePhase.id}`);
       return;
     }
@@ -337,12 +338,16 @@ export default function TournamentView() {
 
         {/* Tab Content */}
         {activeTab === 'players' && (
-          <PlayerRegistration
-            tournamentId={id}
-            players={players}
-            isSetup={tournament.phase === 'SETUP'}
-            onUpdate={loadData}
-          />
+          tournament.phase === 'SETUP' ? (
+            <PlayerRegistration
+              tournamentId={id}
+              players={players}
+              isSetup
+              onUpdate={loadData}
+            />
+          ) : (
+            <TournamentRoster players={players} matches={matches} phases={phases} />
+          )
         )}
 
         {activeTab === 'final' && (
