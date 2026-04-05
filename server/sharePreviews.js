@@ -1837,8 +1837,6 @@ async function renderPlayOgJpeg({
         <stop offset="100%" stop-color="rgba(56,189,248,0)"/>
       </radialGradient>
     </defs>
-    <rect x="0" y="0" width="${width}" height="${height}" fill="url(#pageBg)" />
-    <rect x="0" y="0" width="${width}" height="${height}" fill="url(#pageGlow)" />
     <rect x="0" y="0" width="${width}" height="88" fill="url(#topBar)" />
     <text x="66" y="70" fill="rgba(186,230,253,0.86)" font-size="16" font-weight="800" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial" letter-spacing="4">RUN DETAILS</text>
     <text x="${width - 148}" y="60" fill="rgba(255,255,255,0.76)" font-size="22" text-anchor="end" font-weight="700" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(username)}</text>
