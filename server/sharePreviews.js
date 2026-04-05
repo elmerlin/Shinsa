@@ -505,12 +505,12 @@ function getModeAccent(mode) {
 function getGradeAccent(grade) {
   const normalized = formatDisplayGrade(grade).toUpperCase();
   if (normalized.includes('SSS')) return '#7dd3fc';
-  if (normalized.includes('SS')) return '#c084fc';
-  if (normalized.startsWith('S')) return '#facc15';
-  if (normalized.startsWith('AAA')) return '#f59e0b';
-  if (normalized.startsWith('AA')) return '#fb7185';
-  if (normalized.startsWith('A')) return '#fdba74';
-  return '#e5e7eb';
+  if (normalized.includes('SS')) return '#fde68a';
+  if (normalized.startsWith('S')) return '#fbbf24';
+  if (normalized.startsWith('AAA')) return '#e5e7eb';
+  if (normalized.startsWith('AA')) return '#d6b386';
+  if (normalized.startsWith('A')) return '#f59e0b';
+  return '#d1d5db';
 }
 
 function chartBadgeLabel(mode, level) {
