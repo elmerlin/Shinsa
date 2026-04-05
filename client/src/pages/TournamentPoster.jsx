@@ -878,6 +878,24 @@ function generateHypeBlurb(tournament, phases, playerCount) {
   return `${name} puts ${playerCount} players through the crucible \u2014 ${earlyPhases} into ${lastPhase.toLowerCase()}. Only the strongest survive each phase. This is the proving ground.`;
 }
 
+// ── Canvas text wrapping ──
+function wrapText(ctx, text, maxWidth) {
+  const words = text.split(' ');
+  const lines = [];
+  let line = '';
+  for (const word of words) {
+    const test = line ? `${line} ${word}` : word;
+    if (ctx.measureText(test).width > maxWidth && line) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = test;
+    }
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
 // ══════════════════════════════════════════════════════════════
 //  MAIN POSTER PAGE
 // ══════════════════════════════════════════════════════════════
@@ -1014,123 +1032,250 @@ export default function TournamentPoster() {
     setSharingImage(true);
     try {
       if (document.fonts?.ready) await document.fonts.ready;
-      const W = 1080, H = 1350;
+      const W = 1080, H = 1920;
       const canvas = document.createElement('canvas');
       canvas.width = W; canvas.height = H;
       const ctx = canvas.getContext('2d');
+      const PAD = 60;
 
-      // Background
+      // ── Background ──
       ctx.fillStyle = '#0a0a1a';
       ctx.fillRect(0, 0, W, H);
 
-      const posterBg = tournament.poster_bg ? await loadImage(tournament.poster_bg).catch(() => null) : null;
-      if (posterBg) {
+      const bgImg = tournament.poster_bg ? await loadImage(tournament.poster_bg).catch(() => null) : null;
+      if (bgImg) {
         ctx.globalAlpha = 0.35;
-        drawCover(ctx, posterBg, 0, 0, W, H);
+        drawCover(ctx, bgImg, 0, 0, W, H);
         ctx.globalAlpha = 1;
       }
 
-      // Dark overlay gradient
+      // Dark overlay
       const grad = ctx.createLinearGradient(0, 0, 0, H);
-      grad.addColorStop(0, 'rgba(10,10,26,0.3)');
-      grad.addColorStop(0.5, 'rgba(10,10,26,0.7)');
-      grad.addColorStop(1, 'rgba(10,10,26,0.95)');
+      grad.addColorStop(0, 'rgba(10,10,26,0.25)');
+      grad.addColorStop(0.35, 'rgba(10,10,26,0.7)');
+      grad.addColorStop(1, 'rgba(10,10,26,0.96)');
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, W, H);
 
       // Accent glow
-      const glow = ctx.createRadialGradient(W * 0.3, H * 0.15, 0, W * 0.3, H * 0.15, W * 0.6);
+      const glow = ctx.createRadialGradient(W * 0.3, H * 0.08, 0, W * 0.3, H * 0.08, W * 0.7);
       glow.addColorStop(0, 'rgba(255,51,102,0.18)');
       glow.addColorStop(1, 'rgba(255,51,102,0)');
       ctx.fillStyle = glow;
       ctx.fillRect(0, 0, W, H);
 
-      // Tournament avatar
+      let y = 80;
+
+      // ── Tournament avatar ──
       const avatarUrl = tournament.avatar ? getAvatarUrl(tournament.avatar) : null;
       const avatarImg = avatarUrl ? await loadImage(avatarUrl).catch(() => null) : null;
-      let avatarBottom = 160;
       if (avatarImg) {
-        const aSize = 120, aX = (W - aSize) / 2, aY = 100;
+        const aSize = 140, aX = (W - aSize) / 2;
         ctx.save();
-        roundRect(ctx, aX, aY, aSize, aSize, 28);
+        roundRect(ctx, aX, y, aSize, aSize, 32);
         ctx.clip();
-        drawCover(ctx, avatarImg, aX, aY, aSize, aSize);
+        drawCover(ctx, avatarImg, aX, y, aSize, aSize);
         ctx.restore();
         ctx.strokeStyle = 'rgba(255,255,255,0.12)';
         ctx.lineWidth = 2;
-        roundRect(ctx, aX, aY, aSize, aSize, 28);
+        roundRect(ctx, aX, y, aSize, aSize, 32);
         ctx.stroke();
-        avatarBottom = aY + aSize + 32;
+        y += aSize + 36;
       }
 
-      // Title
+      // ── Date + location pills ──
+      const dateLine = [formatTournamentDate(tournament.date), tournament.location].filter(Boolean).join('  \u00B7  ');
+      if (dateLine) {
+        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        ctx.font = '600 22px Rajdhani, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(dateLine, W / 2, y + 18, W - PAD * 2);
+        y += 44;
+      }
+
+      // ── Title ──
       const title = String(tournament.name || 'Tournament').trim();
       ctx.fillStyle = '#ffffff';
-      ctx.font = `bold 56px Rajdhani, sans-serif`;
+      ctx.font = 'bold 64px Rajdhani, sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText(title, W / 2, avatarBottom + 40, W - 80);
+      ctx.fillText(title, W / 2, y + 52, W - PAD * 2);
+      y += 72;
 
-      // Subtitle
-      const displayPhases = phases.length > 0 ? phases : [{ format: 'round_robin' }];
-      const subtitle = `${players.length} players \u00B7 ${displayPhases.map(p => FORMAT_LABELS[p.format] || p.format).join(' \u2192 ')}`;
+      // ── Subtitle ──
+      const imgPhases = phases.length > 0 ? phases : [{ format: 'round_robin' }];
+      const subtitle = `${players.length} players  \u00B7  ${imgPhases.map(p => FORMAT_LABELS[p.format] || p.format).join(' \u2192 ')}`;
       ctx.fillStyle = 'rgba(255,255,255,0.5)';
-      ctx.font = `600 22px Rajdhani, sans-serif`;
-      ctx.fillText(subtitle, W / 2, avatarBottom + 76, W - 80);
+      ctx.font = '600 24px Rajdhani, sans-serif';
+      ctx.fillText(subtitle, W / 2, y + 20, W - PAD * 2);
+      y += 52;
 
-      // Date + location
-      const dateLine = [formatTournamentDate(tournament.date), tournament.location].filter(Boolean).join(' \u00B7 ');
-      if (dateLine) {
+      // ── Hype blurb ──
+      const hype = generateHypeBlurb(tournament, imgPhases, players.length);
+      if (hype) {
         ctx.fillStyle = 'rgba(255,255,255,0.35)';
-        ctx.font = `600 20px Rajdhani, sans-serif`;
-        ctx.fillText(dateLine, W / 2, avatarBottom + 108, W - 80);
+        ctx.font = 'italic 600 22px Rajdhani, sans-serif';
+        const hypeLines = wrapText(ctx, `\u201C${hype}\u201D`, W - PAD * 2);
+        for (const line of hypeLines) {
+          ctx.fillText(line, W / 2, y + 24, W - PAD * 2);
+          y += 28;
+        }
+        y += 20;
       }
 
-      // Player avatars grid
-      const gridTop = avatarBottom + 150;
-      const avatarSize = 72;
-      const gap = 16;
-      const cols = Math.min(players.length, 6);
-      const rows = Math.ceil(Math.min(players.length, 12) / cols);
-      const gridW = cols * avatarSize + (cols - 1) * gap;
-      const startX = (W - gridW) / 2;
+      // ── Divider ──
+      const divGrad = ctx.createLinearGradient(W * 0.3, 0, W * 0.7, 0);
+      divGrad.addColorStop(0, 'rgba(255,51,102,0)');
+      divGrad.addColorStop(0.5, 'rgba(255,51,102,0.5)');
+      divGrad.addColorStop(1, 'rgba(255,51,102,0)');
+      ctx.fillStyle = divGrad;
+      ctx.fillRect(PAD, y, W - PAD * 2, 1);
+      y += 32;
 
-      for (let i = 0; i < Math.min(players.length, 12); i++) {
-        const col = i % cols, row = Math.floor(i / cols);
-        const px = startX + col * (avatarSize + gap);
-        const py = gridTop + row * (avatarSize + gap + 20);
-        const player = players[i];
-        const pAvatarUrl = player.avatar ? getAvatarUrl(player.avatar) : null;
-        const pImg = pAvatarUrl ? await loadImage(pAvatarUrl).catch(() => null) : null;
+      // ── Phase details ──
+      ctx.fillStyle = 'rgba(255,255,255,0.3)';
+      ctx.font = 'bold 14px Rajdhani, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('HOW IT WORKS', W / 2, y + 10);
+      y += 30;
 
-        if (pImg) {
-          ctx.save();
-          ctx.beginPath();
-          ctx.arc(px + avatarSize / 2, py + avatarSize / 2, avatarSize / 2, 0, Math.PI * 2);
-          ctx.clip();
-          drawCover(ctx, pImg, px, py, avatarSize, avatarSize);
-          ctx.restore();
-        } else {
-          ctx.fillStyle = 'rgba(255,51,102,0.3)';
-          ctx.beginPath();
-          ctx.arc(px + avatarSize / 2, py + avatarSize / 2, avatarSize / 2, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.fillStyle = '#fff';
-          ctx.font = 'bold 24px Rajdhani, sans-serif';
-          ctx.textAlign = 'center';
-          ctx.fillText(String(player.name || '?').charAt(0).toUpperCase(), px + avatarSize / 2, py + avatarSize / 2 + 8);
+      for (let pi = 0; pi < imgPhases.length; pi++) {
+        const phase = imgPhases[pi];
+        const pCfg = phase.config || {};
+        const icon = FORMAT_ICONS[phase.format] || '\uD83C\uDFC6';
+        const label = phase.name || FORMAT_LABELS[phase.format] || phase.format;
+
+        // Phase card background
+        const cardH = 80;
+        ctx.fillStyle = 'rgba(255,255,255,0.04)';
+        roundRect(ctx, PAD, y, W - PAD * 2, cardH, 16);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+        ctx.lineWidth = 1;
+        roundRect(ctx, PAD, y, W - PAD * 2, cardH, 16);
+        ctx.stroke();
+
+        // Phase icon + name
+        ctx.textAlign = 'left';
+        ctx.font = '28px Rajdhani, sans-serif';
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(`${icon}  ${label}`, PAD + 20, y + 34);
+
+        // Phase number
+        ctx.textAlign = 'right';
+        ctx.font = 'bold 14px Rajdhani, sans-serif';
+        ctx.fillStyle = 'rgba(255,255,255,0.3)';
+        ctx.fillText(`PHASE ${pi + 1} OF ${imgPhases.length}`, W - PAD - 20, y + 30);
+
+        // Rules summary
+        const rules = [];
+        if (phase.format === 'round_robin') {
+          if (pCfg.cards_per_draw) rules.push(`${pCfg.cards_per_draw} cards drawn`);
+          if (pCfg.vetoes_per_player) rules.push(`${pCfg.vetoes_per_player} veto`);
+          if (pCfg.best_of) rules.push(`Best of ${pCfg.best_of}`);
+          if (pCfg.rounds) rules.push(`${pCfg.rounds} rounds`);
+        } else if (phase.format === 'gauntlet') {
+          if (pCfg.start_level) rules.push(`S${pCfg.start_level}\u2013S${pCfg.final_level || '??'}`);
+          if (pCfg.best_of) rules.push(`Best of ${pCfg.best_of}`);
+        } else if (phase.format === 'double_elimination') {
+          rules.push('Double Elimination Bracket');
+        } else if (phase.format === 'pools') {
+          if (pCfg.pool_count) rules.push(`${pCfg.pool_count} pools`);
+        }
+        if (rules.length) {
+          ctx.textAlign = 'left';
+          ctx.font = '600 18px Rajdhani, sans-serif';
+          ctx.fillStyle = 'rgba(255,255,255,0.4)';
+          ctx.fillText(rules.join('  \u00B7  '), PAD + 20, y + 62, W - PAD * 2 - 40);
         }
 
-        ctx.fillStyle = 'rgba(255,255,255,0.7)';
-        ctx.font = '600 13px Rajdhani, sans-serif';
+        y += cardH + 12;
+      }
+      y += 16;
+
+      // ── Divider ──
+      ctx.fillStyle = divGrad;
+      ctx.fillRect(PAD, y, W - PAD * 2, 1);
+      y += 32;
+
+      // ── Player roster ──
+      if (players.length > 0) {
+        ctx.fillStyle = 'rgba(255,255,255,0.3)';
+        ctx.font = 'bold 14px Rajdhani, sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText(String(player.name || '').slice(0, 10), px + avatarSize / 2, py + avatarSize + 16, avatarSize + gap);
+        ctx.fillText('COMPETITORS', W / 2, y + 10);
+        y += 36;
+
+        const avatarSize = 56;
+        const gapX = 14;
+        const gapY = 12;
+        const nameH = 22;
+        const cols = Math.min(players.length, 5);
+        const cellW = avatarSize + gapX;
+        const cellH = avatarSize + nameH + gapY;
+        const gridW = cols * cellW - gapX;
+        const startX = (W - gridW) / 2;
+        const maxPlayers = Math.min(players.length, 20);
+
+        for (let i = 0; i < maxPlayers; i++) {
+          const col = i % cols, row = Math.floor(i / cols);
+          const px = startX + col * cellW;
+          const py = y + row * cellH;
+          const player = players[i];
+          const pAvatarUrl = player.avatar ? getAvatarUrl(player.avatar) : null;
+          const pImg = pAvatarUrl ? await loadImage(pAvatarUrl).catch(() => null) : null;
+
+          if (pImg) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(px + avatarSize / 2, py + avatarSize / 2, avatarSize / 2, 0, Math.PI * 2);
+            ctx.clip();
+            drawCover(ctx, pImg, px, py, avatarSize, avatarSize);
+            ctx.restore();
+          } else {
+            ctx.fillStyle = 'rgba(255,51,102,0.25)';
+            ctx.beginPath();
+            ctx.arc(px + avatarSize / 2, py + avatarSize / 2, avatarSize / 2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 20px Rajdhani, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(String(player.name || '?').charAt(0).toUpperCase(), px + avatarSize / 2, py + avatarSize / 2 + 7);
+          }
+
+          // Player name
+          ctx.fillStyle = 'rgba(255,255,255,0.75)';
+          ctx.font = '600 14px Rajdhani, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText(String(player.name || '').slice(0, 10), px + avatarSize / 2, py + avatarSize + 16, cellW);
+
+          // Pumbility
+          if (player.pumbility > 0) {
+            ctx.fillStyle = 'rgba(255,199,92,0.6)';
+            ctx.font = 'bold 12px Rajdhani, sans-serif';
+            ctx.fillText(Number(player.pumbility).toLocaleString(), px + avatarSize / 2, py + avatarSize + 30, cellW);
+          }
+        }
+
+        const totalRows = Math.ceil(maxPlayers / cols);
+        y += totalRows * cellH + 10;
+
+        if (players.length > maxPlayers) {
+          ctx.fillStyle = 'rgba(255,255,255,0.3)';
+          ctx.font = '600 18px Rajdhani, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText(`+ ${players.length - maxPlayers} more players`, W / 2, y + 10);
+          y += 36;
+        }
       }
 
-      // Footer
-      ctx.fillStyle = 'rgba(255,255,255,0.25)';
-      ctx.font = '600 16px Rajdhani, sans-serif';
+      // ── Footer ──
+      ctx.fillStyle = 'rgba(255,255,255,0.2)';
+      ctx.font = 'bold 16px Rajdhani, sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('POWERED BY PUMP SHINSA', W / 2, H - 50);
+      ctx.fillText('POWERED BY PUMP SHINSA', W / 2, H - 60);
+      ctx.fillStyle = 'rgba(255,255,255,0.12)';
+      ctx.font = '600 14px Rajdhani, sans-serif';
+      ctx.fillText(permalink, W / 2, H - 36, W - PAD * 2);
 
       const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.92));
       const fileName = `${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-poster.jpg`;
