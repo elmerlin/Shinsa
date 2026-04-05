@@ -593,25 +593,25 @@ function UpscoreCard({ item, jacketLookup, chartKeyMap, onScoreClick, onReplayCl
               </Link>
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-display font-bold truncate">{u.song_title}</p>
-                <div className="flex items-center gap-1 mt-0.5">
+                <div className="flex items-center gap-1 mt-0.5 flex-wrap">
                   <PlateBadge plate={u.plate} size="xs" />
                   {overRank > 0 && (
-                    <span className="text-[11px] leading-none px-1.5 py-0.5 rounded border border-piu-gold/50 bg-piu-gold/15 text-yellow-200 font-display font-black tracking-wide">
+                    <span className="inline-flex items-center whitespace-nowrap shrink-0 text-[11px] leading-none px-1.5 py-0.5 rounded border border-piu-gold/50 bg-piu-gold/15 text-yellow-200 font-display font-black tracking-wide">
                       TOP #{overRank}
                     </span>
                   )}
                   {songPumbilityGain > 0 && (
-                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-300 font-display font-black">
+                    <span className="inline-flex items-center whitespace-nowrap shrink-0 text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-300 font-display font-black">
                       +{songPumbilityGain.toLocaleString()} PB
                     </span>
                   )}
                   {songSinglesPumbilityGain > 0 && (
-                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-300 font-display font-black">
+                    <span className="inline-flex items-center whitespace-nowrap shrink-0 text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-300 font-display font-black">
                       +{songSinglesPumbilityGain.toLocaleString()} SPB
                     </span>
                   )}
                   {u.weekly_challenge_rank && (
-                    <Link to={`/weekly-challenges?week=${u.weekly_challenge_week_key || ''}`} className="text-[9px] px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-300 border border-purple-500/25 font-display font-black hover:bg-purple-500/25 transition-colors">
+                    <Link to={`/weekly-challenges?week=${u.weekly_challenge_week_key || ''}`} className="inline-flex items-center whitespace-nowrap shrink-0 text-[9px] px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-300 border border-purple-500/25 font-display font-black hover:bg-purple-500/25 transition-colors">
                       WC #{u.weekly_challenge_rank}
                     </Link>
                   )}
