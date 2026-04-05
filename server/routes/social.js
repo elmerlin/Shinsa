@@ -2660,8 +2660,9 @@ router.get('/daily-highlights', (req, res) => {
   }
   const resolvedReplays = resolveDailyHighlightReplayRows(db, mergedReplays);
   resolvedReplays.sort((a, b) => (toInt(b.level) * toInt(b.score)) - (toInt(a.level) * toInt(a.score)));
+  const dedupedReplays = dedupeByUserChart(resolvedReplays);
 
-  const topReplays = pickTopNDiverse(resolvedReplays, 5, (r) => r.user_id).map((r) => ({
+  const topReplays = pickTopNDiverse(dedupedReplays, 5, (r) => r.user_id).map((r) => ({
     ...r,
     avatar: normalizeUserAvatarForList(r.avatar, r.user_id, 40),
   }));
