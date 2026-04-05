@@ -172,6 +172,7 @@
 		07BA119F878646BC975A1079 /* SessionShareCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8569E7F73F9A46339C1757EA /* SessionShareCardView.swift */; };
 		6D2FE5D305884257AB693AF7 /* SessionSummaryCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58CBB6A0A16C4F5E891240A9 /* SessionSummaryCardView.swift */; };
 		EFABB56855BD4CBF8C90B9D7 /* SessionPlanCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33B7779959E547EB8A7686B4 /* SessionPlanCardView.swift */; };
+		0D52E244486A4CF188A7E09D /* ScoreCardImageRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35CB2E5AA4E04C4DAA6E8743 /* ScoreCardImageRenderer.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -341,6 +342,7 @@
 		8569E7F73F9A46339C1757EA /* SessionShareCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionShareCardView.swift; sourceTree = "<group>"; };
 		58CBB6A0A16C4F5E891240A9 /* SessionSummaryCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionSummaryCardView.swift; sourceTree = "<group>"; };
 		33B7779959E547EB8A7686B4 /* SessionPlanCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionPlanCardView.swift; sourceTree = "<group>"; };
+		35CB2E5AA4E04C4DAA6E8743 /* ScoreCardImageRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScoreCardImageRenderer.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -421,7 +423,8 @@
 				F40A10101010101010101010 /* TextFormatter.swift */,
 				191E6CEA18D0782053D58D07 /* WCMarkerParser.swift */,
 			
-				FCCA82B011A94CDCA10CDEEA /* PostMarkerParser.swift */,);
+				FCCA82B011A94CDCA10CDEEA /* PostMarkerParser.swift */,
+				35CB2E5AA4E04C4DAA6E8743 /* ScoreCardImageRenderer.swift */,);
 			path = Utilities;
 			sourceTree = "<group>";
 		};
@@ -1063,7 +1066,8 @@
 				EFABB56855BD4CBF8C90B9D7 /* SessionPlanCardView.swift in Sources */,
 				6D2FE5D305884257AB693AF7 /* SessionSummaryCardView.swift in Sources */,
 				07BA119F878646BC975A1079 /* SessionShareCardView.swift in Sources */,
-				5D069405B8DB46DF87829B18 /* PostMarkerParser.swift in Sources */,);
+				5D069405B8DB46DF87829B18 /* PostMarkerParser.swift in Sources */,
+				0D52E244486A4CF188A7E09D /* ScoreCardImageRenderer.swift in Sources */,);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */

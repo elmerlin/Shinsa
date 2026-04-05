@@ -62,6 +62,8 @@ struct ScoreSnapshotSheet: View {
     @State private var showReplay = false
     @State private var showSendToDM = false
     @State private var showShareToStory = false
+    @State private var isRenderingShareImage = false
+    @State private var shareImage: UIImage? = nil
 
     private var isDouble: Bool {
         mode.lowercased().hasPrefix("d") || mode.lowercased() == "double"
@@ -114,6 +116,34 @@ struct ScoreSnapshotSheet: View {
                                 )
                             }
                         }
+
+                        // Share image button (large, in content)
+                        Button {
+                            Task { await renderAndShareImage() }
+                        } label: {
+                            HStack(spacing: 8) {
+                                if isRenderingShareImage {
+                                    ProgressView()
+                                        .tint(.white)
+                                        .scaleEffect(0.8)
+                                } else {
+                                    Image(systemName: "square.and.arrow.up")
+                                        .font(.system(size: 16))
+                                }
+                                Text(isRenderingShareImage ? "Preparing image..." : "Share Score Card Image")
+                                    .font(.system(size: 14, weight: .bold))
+                            }
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(DojoTheme.piuAccent.opacity(0.15))
+                            .cornerRadius(10)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(DojoTheme.piuAccent.opacity(0.3), lineWidth: 1)
+                            )
+                        }
+                        .disabled(isRenderingShareImage)
 
                         // Meta info
                         if let date = datePlayed, !date.isEmpty {
@@ -195,6 +225,23 @@ struct ScoreSnapshotSheet: View {
 
             // Action buttons
             HStack(spacing: 16) {
+                // Share image to social media
+                Button {
+                    Task { await renderAndShareImage() }
+                } label: {
+                    if isRenderingShareImage {
+                        ProgressView()
+                            .tint(.white)
+                            .scaleEffect(0.7)
+                            .frame(width: 20, height: 20)
+                    } else {
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.system(size: 16))
+                            .foregroundColor(.white)
+                    }
+                }
+                .disabled(isRenderingShareImage)
+
                 Button {
                     showShareToStory = true
                 } label: {
@@ -344,6 +391,53 @@ struct ScoreSnapshotSheet: View {
         .frame(minHeight: 280)
         .cornerRadius(12)
         .clipped()
+    }
+
+    // MARK: - Share Image
+
+    private func renderAndShareImage() async {
+        isRenderingShareImage = true
+        defer { isRenderingShareImage = false }
+
+        let data = ScoreCardImageRenderer.ScoreData(
+            songTitle: songTitle,
+            mode: mode,
+            level: level,
+            score: score,
+            grade: grade,
+            plate: plate,
+            perfect: perfect,
+            great: great,
+            good: good,
+            bad: bad,
+            miss: miss,
+            datePlayed: datePlayed,
+            playerName: username,
+            jacketUrl: backgroundUrl
+        )
+
+        guard let image = await ScoreCardImageRenderer.render(data) else { return }
+
+        // Present share sheet
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let rootVC = windowScene.windows.first?.rootViewController else { return }
+
+        // Find the topmost presented view controller
+        var topVC = rootVC
+        while let presented = topVC.presentedViewController {
+            topVC = presented
+        }
+
+        let activityVC = UIActivityViewController(activityItems: [image], applicationActivities: nil)
+        activityVC.excludedActivityTypes = [.assignToContact, .addToReadingList]
+
+        if let popover = activityVC.popoverPresentationController {
+            popover.sourceView = topVC.view
+            popover.sourceRect = CGRect(x: topVC.view.bounds.midX, y: topVC.view.bounds.midY, width: 0, height: 0)
+            popover.permittedArrowDirections = []
+        }
+
+        topVC.present(activityVC, animated: true)
     }
 
     private var hasJudgments: Bool {
