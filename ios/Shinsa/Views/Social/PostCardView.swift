@@ -41,28 +41,49 @@ struct PostCardView: View {
                 Spacer()
             }
 
-            // Content (parse live session + weekly challenge markers)
+            // Content (parse all marker types)
             if let content = item.content, !content.isEmpty {
-                // Check WC summary marker
-                if let wcSummary = WCMarkerParser.parseSummary(from: content), let summary = wcSummary.summary {
-                    WCSummaryPostCardView(summary: summary, text: wcSummary.text)
-                } else if let wcPersonal = WCMarkerParser.parsePersonal(from: content), let personal = wcPersonal.personal {
-                    // WC personal recap
-                    WCPersonalPostCardView(personal: personal, text: wcPersonal.text)
-                } else {
-                    // Standard content with live session marker parsing
-                    let parsed = LiveSessionMarker.split(content)
+                let markers = PostMarkerParser.parseAll(from: content)
 
-                    if let summary = parsed.summary {
+                // WC summary marker
+                if let wcSummary = markers.wcSummary {
+                    WCSummaryPostCardView(summary: wcSummary, text: markers.text)
+                }
+
+                // WC personal recap marker
+                if let wcPersonal = markers.wcPersonal {
+                    WCPersonalPostCardView(personal: wcPersonal, text: markers.text)
+                }
+
+                // Session share / hour of power marker
+                if let sessionShare = markers.sessionShare {
+                    SessionShareCardView(share: sessionShare)
+                }
+
+                // Session summary marker
+                if let sessionSummary = markers.sessionSummary {
+                    SessionSummaryCardView(summary: sessionSummary)
+                }
+
+                // Session plan marker
+                if let sessionPlan = markers.sessionPlan {
+                    SessionPlanCardView(plan: sessionPlan)
+                }
+
+                // Live session (parsed separately since it has its own format)
+                if !markers.hasAnyMarker {
+                    let liveParsed = LiveSessionMarker.split(content)
+                    if let summary = liveParsed.summary {
                         LiveSessionCardView(summary: summary, username: item.username)
                     }
+                }
 
-                    if !parsed.text.isEmpty {
-                        Text(parsed.text)
-                            .font(.system(size: 14))
-                            .foregroundColor(.white.opacity(0.9))
-                            .lineSpacing(3)
-                    }
+                // Remaining text content
+                if !markers.text.isEmpty {
+                    Text(markers.text)
+                        .font(.system(size: 14))
+                        .foregroundColor(.white.opacity(0.9))
+                        .lineSpacing(3)
                 }
             }
 

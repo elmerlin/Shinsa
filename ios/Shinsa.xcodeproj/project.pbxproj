@@ -168,6 +168,10 @@
 		STKTXT000001000100010001 /* StickerTextView.swift in Sources */ = {isa = PBXBuildFile; fileRef = STKTXT000002000200020002 /* StickerTextView.swift */; };
 		USRPKR000001000100010001 /* UserPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = USRPKR000002000200020002 /* UserPickerView.swift */; };
 		YTEMBV000001000100010001 /* YouTubeEmbedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = YTEMBV000002000200020002 /* YouTubeEmbedView.swift */; };
+		5D069405B8DB46DF87829B18 /* PostMarkerParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCCA82B011A94CDCA10CDEEA /* PostMarkerParser.swift */; };
+		07BA119F878646BC975A1079 /* SessionShareCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8569E7F73F9A46339C1757EA /* SessionShareCardView.swift */; };
+		6D2FE5D305884257AB693AF7 /* SessionSummaryCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58CBB6A0A16C4F5E891240A9 /* SessionSummaryCardView.swift */; };
+		EFABB56855BD4CBF8C90B9D7 /* SessionPlanCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33B7779959E547EB8A7686B4 /* SessionPlanCardView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -333,6 +337,10 @@
 		STKTXT000002000200020002 /* StickerTextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StickerTextView.swift; sourceTree = "<group>"; };
 		USRPKR000002000200020002 /* UserPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserPickerView.swift; sourceTree = "<group>"; };
 		YTEMBV000002000200020002 /* YouTubeEmbedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YouTubeEmbedView.swift; sourceTree = "<group>"; };
+		FCCA82B011A94CDCA10CDEEA /* PostMarkerParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostMarkerParser.swift; sourceTree = "<group>"; };
+		8569E7F73F9A46339C1757EA /* SessionShareCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionShareCardView.swift; sourceTree = "<group>"; };
+		58CBB6A0A16C4F5E891240A9 /* SessionSummaryCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionSummaryCardView.swift; sourceTree = "<group>"; };
+		33B7779959E547EB8A7686B4 /* SessionPlanCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionPlanCardView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -412,7 +420,8 @@
 				E45CD5E237962459B87BBCA1 /* KeychainHelper.swift */,
 				F40A10101010101010101010 /* TextFormatter.swift */,
 				191E6CEA18D0782053D58D07 /* WCMarkerParser.swift */,
-			);
+			
+				FCCA82B011A94CDCA10CDEEA /* PostMarkerParser.swift */,);
 			path = Utilities;
 			sourceTree = "<group>";
 		};
@@ -680,7 +689,10 @@
 				ST0RYC0MP0002000200020002 /* StoryComposerView.swift */,
 				FDTLDV000002000200020002 /* FeedItemDetailView.swift */,
 				LVSCRD000002000200020002 /* LiveSessionCardView.swift */,
-			);
+			
+				8569E7F73F9A46339C1757EA /* SessionShareCardView.swift */,
+				58CBB6A0A16C4F5E891240A9 /* SessionSummaryCardView.swift */,
+				33B7779959E547EB8A7686B4 /* SessionPlanCardView.swift */,);
 			path = Social;
 			sourceTree = "<group>";
 		};
@@ -1047,7 +1059,11 @@
 				8786D9A66065A5377C70A249 /* WCSummaryPostCardView.swift in Sources */,
 				D411F01E95AC79CDA5FC9A21 /* WCPersonalPostCardView.swift in Sources */,
 				191DD10A72FD5F1D733C1BE1 /* WCMarkerParser.swift in Sources */,
-			);
+			
+				EFABB56855BD4CBF8C90B9D7 /* SessionPlanCardView.swift in Sources */,
+				6D2FE5D305884257AB693AF7 /* SessionSummaryCardView.swift in Sources */,
+				07BA119F878646BC975A1079 /* SessionShareCardView.swift in Sources */,
+				5D069405B8DB46DF87829B18 /* PostMarkerParser.swift in Sources */,);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
