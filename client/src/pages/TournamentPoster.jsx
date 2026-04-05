@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { getTournament, getPlayers, getPhases } from '../utils/api';
+import { getTournament, getPlayers, getPhases, getPlayerScoutingCard } from '../utils/api';
 import { FORMAT_LABELS, FORMAT_ICONS, FORMAT_DESCRIPTIONS } from '../utils/tournamentConstants';
 import { formatTournamentDate } from '../components/tournament/TournamentChrome';
 import { getAvatarUrl } from '../components/AvatarPicker';
+import { getCountryFlag } from '../utils/countryFlags';
 
 // ── Intersection Observer hook for scroll-triggered reveals ──
 function useReveal(threshold = 0.15) {
@@ -41,19 +42,68 @@ function Stagger({ children, visible, base = 120, className = '' }) {
   );
 }
 
+// ── Looping animation cycle hook ──
+function useAnimationCycle(duration, pause, visible) {
+  const [cycle, setCycle] = useState(0);
+  useEffect(() => {
+    if (!visible) return;
+    const total = duration + pause;
+    const id = setInterval(() => setCycle(c => c + 1), total);
+    return () => clearInterval(id);
+  }, [visible, duration, pause]);
+  return cycle;
+}
+
 // ── Format color system ──
 const FORMAT_COLORS = {
-  round_robin: { accent: '#38bdf8', glow: 'rgba(56,189,248,0.15)', border: 'border-sky-400/30', bg: 'bg-sky-500/8', text: 'text-sky-300', dot: 'bg-sky-400' },
-  pools: { accent: '#22d3ee', glow: 'rgba(34,211,238,0.15)', border: 'border-cyan-400/30', bg: 'bg-cyan-500/8', text: 'text-cyan-300', dot: 'bg-cyan-400' },
-  single_elim: { accent: '#ffd700', glow: 'rgba(255,215,0,0.15)', border: 'border-piu-gold/30', bg: 'bg-piu-gold/8', text: 'text-piu-gold', dot: 'bg-piu-gold' },
-  double_elim: { accent: '#fbbf24', glow: 'rgba(251,191,36,0.15)', border: 'border-amber-400/30', bg: 'bg-amber-500/8', text: 'text-amber-300', dot: 'bg-amber-400' },
-  gauntlet: { accent: '#ff3366', glow: 'rgba(255,51,102,0.15)', border: 'border-piu-accent/30', bg: 'bg-piu-accent/8', text: 'text-piu-accent', dot: 'bg-piu-accent' },
-  hour_of_power: { accent: '#34d399', glow: 'rgba(52,211,153,0.15)', border: 'border-emerald-400/30', bg: 'bg-emerald-500/8', text: 'text-emerald-300', dot: 'bg-emerald-400' },
-  b15: { accent: '#a78bfa', glow: 'rgba(167,139,250,0.15)', border: 'border-violet-400/30', bg: 'bg-violet-500/8', text: 'text-violet-300', dot: 'bg-violet-400' },
+  round_robin: { accent: '#38bdf8', glow: 'rgba(56,189,248,0.15)', border: 'border-sky-400/30', bg: 'bg-sky-500/8', text: 'text-sky-300', dot: 'bg-sky-400', rgb: '56,189,248' },
+  pools: { accent: '#22d3ee', glow: 'rgba(34,211,238,0.15)', border: 'border-cyan-400/30', bg: 'bg-cyan-500/8', text: 'text-cyan-300', dot: 'bg-cyan-400', rgb: '34,211,238' },
+  single_elim: { accent: '#ffd700', glow: 'rgba(255,215,0,0.15)', border: 'border-piu-gold/30', bg: 'bg-piu-gold/8', text: 'text-piu-gold', dot: 'bg-piu-gold', rgb: '255,215,0' },
+  double_elim: { accent: '#fbbf24', glow: 'rgba(251,191,36,0.15)', border: 'border-amber-400/30', bg: 'bg-amber-500/8', text: 'text-amber-300', dot: 'bg-amber-400', rgb: '251,191,36' },
+  gauntlet: { accent: '#ff3366', glow: 'rgba(255,51,102,0.15)', border: 'border-piu-accent/30', bg: 'bg-piu-accent/8', text: 'text-piu-accent', dot: 'bg-piu-accent', rgb: '255,51,102' },
+  hour_of_power: { accent: '#34d399', glow: 'rgba(52,211,153,0.15)', border: 'border-emerald-400/30', bg: 'bg-emerald-500/8', text: 'text-emerald-300', dot: 'bg-emerald-400', rgb: '52,211,153' },
+  b15: { accent: '#a78bfa', glow: 'rgba(167,139,250,0.15)', border: 'border-violet-400/30', bg: 'bg-violet-500/8', text: 'text-violet-300', dot: 'bg-violet-400', rgb: '167,139,250' },
 };
 
 function getFormatColor(format) {
   return FORMAT_COLORS[format] || FORMAT_COLORS.round_robin;
+}
+
+// ── Player avatar helper for SVG ──
+function PlayerNode({ x, y, r, player, color, delay, visible, glow }) {
+  const avatarUrl = player?.avatar ? getAvatarUrl(player.avatar) : null;
+  const initial = String(player?.name || '?').charAt(0).toUpperCase();
+  const clipId = `clip-${player?.id || Math.random()}-${x}-${y}`;
+  return (
+    <g
+      style={{
+        opacity: visible ? 1 : 0,
+        transform: visible ? 'scale(1)' : 'scale(0)',
+        transformOrigin: `${x}px ${y}px`,
+        transition: `opacity 0.4s cubic-bezier(0.16,1,0.3,1) ${delay}ms, transform 0.4s cubic-bezier(0.16,1,0.3,1) ${delay}ms`,
+      }}
+    >
+      {glow && (
+        <circle cx={x} cy={y} r={r + 4} fill="none" stroke={color} strokeWidth="1" opacity="0.3">
+          <animate attributeName="r" values={`${r + 2};${r + 6};${r + 2}`} dur="2s" repeatCount="indefinite" />
+          <animate attributeName="opacity" values="0.3;0.1;0.3" dur="2s" repeatCount="indefinite" />
+        </circle>
+      )}
+      <defs>
+        <clipPath id={clipId}>
+          <circle cx={x} cy={y} r={r} />
+        </clipPath>
+      </defs>
+      <circle cx={x} cy={y} r={r} fill={`rgba(${color.replace(/[^0-9,]/g, '')},0.15)`} stroke={color} strokeWidth="1.5" opacity="0.6" />
+      {avatarUrl ? (
+        <image href={avatarUrl} x={x - r} y={y - r} width={r * 2} height={r * 2} clipPath={`url(#${clipId})`} preserveAspectRatio="xMidYMid slice" />
+      ) : (
+        <text x={x} y={y + 1} textAnchor="middle" dominantBaseline="middle" fill={color} fontSize={r * 0.9} fontFamily="Rajdhani, sans-serif" fontWeight="bold">
+          {initial}
+        </text>
+      )}
+    </g>
+  );
 }
 
 // ── Phase rules extraction ──
@@ -90,170 +140,145 @@ function getAdvancementLabel(phase) {
 }
 
 // ══════════════════════════════════════════════════════════════
-//  ANIMATED DIAGRAMS
+//  ANIMATED DIAGRAMS (looping, with real player avatars)
 // ══════════════════════════════════════════════════════════════
 
-// ── Round Robin Diagram: animated circle of players with match lines ──
-function RoundRobinDiagram({ playerCount, visible }) {
-  const n = Math.min(playerCount || 6, 8);
-  const size = 220;
+function RoundRobinDiagram({ players: allPlayers, visible }) {
+  const cycle = useAnimationCycle(4000, 1500, visible);
+  const players = allPlayers.slice(0, 8);
+  const n = players.length || 6;
+  const size = 280;
   const cx = size / 2;
   const cy = size / 2;
-  const r = 80;
-  const players = Array.from({ length: n }, (_, i) => {
+  const r = 100;
+  const nodeR = 18;
+  const positions = Array.from({ length: n }, (_, i) => {
     const angle = (i / n) * Math.PI * 2 - Math.PI / 2;
     return { x: cx + Math.cos(angle) * r, y: cy + Math.sin(angle) * r };
   });
 
-  // Generate all match pairs
   const lines = [];
   for (let i = 0; i < n; i++) {
     for (let j = i + 1; j < n; j++) {
-      lines.push({ from: players[i], to: players[j], idx: lines.length });
+      lines.push({ from: positions[i], to: positions[j], idx: lines.length });
     }
   }
+
+  // Highlight one match at a time in a loop
+  const activeLineIdx = visible ? (cycle % lines.length) : -1;
+  const color = FORMAT_COLORS.round_robin;
 
   return (
     <div className="flex items-center justify-center">
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="overflow-visible">
-        {/* Match connection lines - animate in sequence */}
         {lines.map((line, i) => (
           <line
             key={`line-${i}`}
             x1={line.from.x} y1={line.from.y}
             x2={line.to.x} y2={line.to.y}
-            stroke="rgba(56,189,248,0.2)"
-            strokeWidth="1"
+            stroke={i === activeLineIdx ? color.accent : `rgba(${color.rgb},0.12)`}
+            strokeWidth={i === activeLineIdx ? 2 : 1}
             style={{
               opacity: visible ? 1 : 0,
-              transition: `opacity 0.3s ease ${300 + i * 60}ms`,
+              transition: 'opacity 0.3s, stroke 0.4s, stroke-width 0.4s',
             }}
           />
         ))}
-
-        {/* Player nodes */}
-        {players.map((p, i) => (
-          <g key={`player-${i}`}>
-            <circle
-              cx={p.x} cy={p.y} r="14"
-              fill="rgba(56,189,248,0.12)"
-              stroke="rgba(56,189,248,0.5)"
-              strokeWidth="1.5"
-              style={{
-                opacity: visible ? 1 : 0,
-                transform: visible ? 'scale(1)' : 'scale(0)',
-                transformOrigin: `${p.x}px ${p.y}px`,
-                transition: `opacity 0.4s cubic-bezier(0.16,1,0.3,1) ${i * 60}ms, transform 0.4s cubic-bezier(0.16,1,0.3,1) ${i * 60}ms`,
-              }}
+        {positions.map((p, i) => {
+          const isInMatch = visible && lines[activeLineIdx] && (
+            (positions.indexOf(lines[activeLineIdx]?.from) === i || positions.indexOf(lines[activeLineIdx]?.to) === i)
+          );
+          return (
+            <PlayerNode
+              key={players[i]?.id || i}
+              x={p.x} y={p.y} r={nodeR}
+              player={players[i] || { name: `P${i + 1}` }}
+              color={color.accent}
+              delay={i * 60}
+              visible={visible}
+              glow={isInMatch}
             />
-            <text
-              x={p.x} y={p.y + 1}
-              textAnchor="middle" dominantBaseline="middle"
-              fill="rgba(56,189,248,0.9)"
-              fontSize="10" fontFamily="Rajdhani, sans-serif" fontWeight="bold"
-              style={{
-                opacity: visible ? 1 : 0,
-                transition: `opacity 0.3s ease ${100 + i * 60}ms`,
-              }}
-            >
-              P{i + 1}
-            </text>
-          </g>
-        ))}
-
-        {/* Center label */}
-        <text
-          x={cx} y={cy}
-          textAnchor="middle" dominantBaseline="middle"
-          fill="rgba(255,255,255,0.08)"
-          fontSize="28" fontFamily="Rajdhani, sans-serif" fontWeight="bold"
-          style={{ opacity: visible ? 1 : 0, transition: 'opacity 0.6s ease 800ms' }}
-        >
-          {'\u{1F504}'}
-        </text>
+          );
+        })}
+        {/* VS label on active match */}
+        {visible && lines[activeLineIdx] && (
+          <text
+            x={(lines[activeLineIdx].from.x + lines[activeLineIdx].to.x) / 2}
+            y={(lines[activeLineIdx].from.y + lines[activeLineIdx].to.y) / 2 - 8}
+            textAnchor="middle" dominantBaseline="middle"
+            fill={color.accent} fontSize="10" fontFamily="Rajdhani, sans-serif" fontWeight="bold"
+            style={{ transition: 'opacity 0.3s' }}
+          >
+            VS
+          </text>
+        )}
       </svg>
     </div>
   );
 }
 
-// ── Gauntlet Ladder Diagram ──
-function GauntletDiagram({ playerCount, visible }) {
-  const n = Math.min(playerCount || 6, 7);
+function GauntletDiagram({ players: allPlayers, visible }) {
+  const cycle = useAnimationCycle(3000, 1200, visible);
+  const players = allPlayers.slice(0, 7);
+  const n = players.length || 6;
   const matchCount = n - 1;
-  const stepH = 44;
-  const totalH = matchCount * stepH + 40;
-  const w = 240;
+  const stepH = 52;
+  const totalH = matchCount * stepH + 50;
+  const w = 300;
+  const nodeR = 14;
+  const color = FORMAT_COLORS.gauntlet;
+
+  const activeRung = visible ? (cycle % matchCount) : -1;
 
   return (
     <div className="flex items-center justify-center">
       <svg width={w} height={totalH} viewBox={`0 0 ${w} ${totalH}`} className="overflow-visible">
-        {/* Vertical ladder spine */}
         <line
           x1={w / 2} y1={totalH - 10} x2={w / 2} y2={20}
-          stroke="rgba(255,51,102,0.15)" strokeWidth="2" strokeDasharray="4 4"
+          stroke={`rgba(${color.rgb},0.12)`} strokeWidth="2" strokeDasharray="4 4"
           style={{ opacity: visible ? 1 : 0, transition: 'opacity 0.6s ease 200ms' }}
         />
-
-        {/* Match rungs */}
         {Array.from({ length: matchCount }, (_, i) => {
-          const y = totalH - 20 - i * stepH;
+          const y = totalH - 24 - i * stepH;
           const isFinal = i === matchCount - 1;
+          const isActive = i === activeRung;
           const delay = 300 + i * 150;
+          const matchColor = isFinal ? 'rgba(255,215,0,0.5)' : color.accent;
           return (
             <g key={`rung-${i}`}>
-              {/* Rung line */}
               <line
-                x1={w / 2 - 50} y1={y} x2={w / 2 + 50} y2={y}
-                stroke={isFinal ? 'rgba(255,215,0,0.4)' : 'rgba(255,51,102,0.25)'}
-                strokeWidth={isFinal ? 2 : 1.5}
-                style={{
-                  opacity: visible ? 1 : 0,
-                  transition: `opacity 0.4s ease ${delay}ms`,
-                }}
+                x1={w / 2 - 60} y1={y} x2={w / 2 + 60} y2={y}
+                stroke={isActive ? matchColor : (isFinal ? 'rgba(255,215,0,0.2)' : `rgba(${color.rgb},0.15)`)}
+                strokeWidth={isActive ? 2.5 : 1.5}
+                style={{ opacity: visible ? 1 : 0, transition: `all 0.4s ease ${delay}ms` }}
               />
-
-              {/* Left player (challenger) */}
-              <circle
-                cx={w / 2 - 50} cy={y} r="8"
-                fill={isFinal ? 'rgba(255,215,0,0.15)' : 'rgba(255,51,102,0.12)'}
-                stroke={isFinal ? 'rgba(255,215,0,0.5)' : 'rgba(255,51,102,0.4)'}
-                strokeWidth="1.5"
-                style={{
-                  opacity: visible ? 1 : 0,
-                  transform: visible ? 'scale(1)' : 'scale(0)',
-                  transformOrigin: `${w / 2 - 50}px ${y}px`,
-                  transition: `all 0.4s cubic-bezier(0.16,1,0.3,1) ${delay + 80}ms`,
-                }}
+              <PlayerNode
+                x={w / 2 - 60} y={y} r={nodeR}
+                player={players[i] || { name: `P${i + 1}` }}
+                color={isFinal ? '#ffd700' : color.accent}
+                delay={delay + 80}
+                visible={visible}
+                glow={isActive}
               />
-
-              {/* VS */}
               <text
                 x={w / 2} y={y + 1}
                 textAnchor="middle" dominantBaseline="middle"
-                fill={isFinal ? 'rgba(255,215,0,0.6)' : 'rgba(255,51,102,0.4)'}
-                fontSize="8" fontFamily="Rajdhani, sans-serif" fontWeight="bold"
-                style={{ opacity: visible ? 1 : 0, transition: `opacity 0.3s ease ${delay + 100}ms` }}
+                fill={isActive ? matchColor : `rgba(${color.rgb},0.3)`}
+                fontSize="9" fontFamily="Rajdhani, sans-serif" fontWeight="bold"
+                style={{ opacity: visible ? 1 : 0, transition: `all 0.3s ease ${delay + 100}ms` }}
               >
                 VS
               </text>
-
-              {/* Right player (defender/winner from below) */}
-              <circle
-                cx={w / 2 + 50} cy={y} r="8"
-                fill={isFinal ? 'rgba(255,215,0,0.15)' : 'rgba(255,51,102,0.12)'}
-                stroke={isFinal ? 'rgba(255,215,0,0.5)' : 'rgba(255,51,102,0.4)'}
-                strokeWidth="1.5"
-                style={{
-                  opacity: visible ? 1 : 0,
-                  transform: visible ? 'scale(1)' : 'scale(0)',
-                  transformOrigin: `${w / 2 + 50}px ${y}px`,
-                  transition: `all 0.4s cubic-bezier(0.16,1,0.3,1) ${delay + 80}ms`,
-                }}
+              <PlayerNode
+                x={w / 2 + 60} y={y} r={nodeR}
+                player={players[i + 1] || { name: `P${i + 2}` }}
+                color={isFinal ? '#ffd700' : color.accent}
+                delay={delay + 80}
+                visible={visible}
+                glow={isActive}
               />
-
-              {/* Match label */}
               <text
-                x={w / 2 + 75} y={y + 1}
+                x={w / 2 + 95} y={y + 1}
                 dominantBaseline="middle"
                 fill={isFinal ? 'rgba(255,215,0,0.5)' : 'rgba(255,255,255,0.2)'}
                 fontSize="9" fontFamily="Rajdhani, sans-serif" fontWeight="bold"
@@ -261,22 +286,17 @@ function GauntletDiagram({ playerCount, visible }) {
               >
                 {isFinal ? 'FINAL' : `#${i + 1}`}
               </text>
-
-              {/* Winner arrow going up */}
               {i < matchCount - 1 && (
                 <path
-                  d={`M${w / 2},${y - 4} L${w / 2},${y - stepH + 12}`}
-                  stroke="rgba(255,51,102,0.2)"
+                  d={`M${w / 2},${y - 4} L${w / 2},${y - stepH + 16}`}
+                  stroke={`rgba(${color.rgb},0.15)`}
                   strokeWidth="1" fill="none"
-                  markerEnd="none"
                   style={{ opacity: visible ? 1 : 0, transition: `opacity 0.3s ease ${delay + 200}ms` }}
                 />
               )}
             </g>
           );
         })}
-
-        {/* Crown at top */}
         <text
           x={w / 2} y={10}
           textAnchor="middle" dominantBaseline="middle"
@@ -290,54 +310,71 @@ function GauntletDiagram({ playerCount, visible }) {
   );
 }
 
-// ── Bracket Diagram ──
-function BracketDiagram({ playerCount, visible }) {
-  const n = Math.min(playerCount || 8, 8);
+function BracketDiagram({ players: allPlayers, visible }) {
+  const cycle = useAnimationCycle(3500, 1000, visible);
+  const n = Math.min(allPlayers.length || 8, 8);
   const rounds = Math.ceil(Math.log2(n));
-  const w = rounds * 100 + 40;
-  const h = 200;
+  const w = rounds * 110 + 40;
+  const h = 220;
+  const color = FORMAT_COLORS.single_elim;
+
+  const activeRound = visible ? (cycle % rounds) : -1;
 
   return (
-    <div className="flex items-center justify-center">
+    <div className="flex items-center justify-center overflow-x-auto">
       <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="overflow-visible">
         {Array.from({ length: rounds }, (_, round) => {
           const matchesInRound = Math.pow(2, rounds - round - 1);
           const spacing = h / matchesInRound;
-          const x = 20 + round * 100;
+          const x = 20 + round * 110;
           const isFinal = round === rounds - 1;
           const delay = 200 + round * 250;
+          const isActiveRound = round === activeRound;
 
           return Array.from({ length: matchesInRound }, (_, mi) => {
             const y = spacing / 2 + mi * spacing;
-            const slotH = Math.min(spacing * 0.6, 36);
+            const slotH = Math.min(spacing * 0.6, 40);
+            const playerIdx = round === 0 ? mi * 2 : null;
 
             return (
               <g key={`r${round}-m${mi}`}>
-                {/* Match bracket */}
                 <rect
                   x={x} y={y - slotH / 2}
-                  width="72" height={slotH}
-                  rx="6" ry="6"
-                  fill={isFinal ? 'rgba(255,215,0,0.08)' : 'rgba(255,255,255,0.03)'}
-                  stroke={isFinal ? 'rgba(255,215,0,0.35)' : 'rgba(255,255,255,0.1)'}
-                  strokeWidth="1"
+                  width="80" height={slotH}
+                  rx="8" ry="8"
+                  fill={isFinal ? 'rgba(255,215,0,0.06)' : 'rgba(255,255,255,0.02)'}
+                  stroke={isActiveRound ? color.accent : (isFinal ? 'rgba(255,215,0,0.25)' : 'rgba(255,255,255,0.08)')}
+                  strokeWidth={isActiveRound ? 1.5 : 1}
                   style={{
                     opacity: visible ? 1 : 0,
                     transform: visible ? 'scale(1)' : 'scale(0.8)',
-                    transformOrigin: `${x + 36}px ${y}px`,
+                    transformOrigin: `${x + 40}px ${y}px`,
                     transition: `all 0.4s cubic-bezier(0.16,1,0.3,1) ${delay + mi * 60}ms`,
                   }}
                 />
-                {/* Divider line */}
+                {/* Show player avatars in first round */}
+                {round === 0 && playerIdx !== null && allPlayers[playerIdx] && (
+                  <PlayerNode
+                    x={x + 16} y={y - slotH / 4}
+                    r={7} player={allPlayers[playerIdx]}
+                    color={color.accent} delay={delay + mi * 60 + 100} visible={visible}
+                  />
+                )}
+                {round === 0 && playerIdx !== null && allPlayers[playerIdx + 1] && (
+                  <PlayerNode
+                    x={x + 16} y={y + slotH / 4}
+                    r={7} player={allPlayers[playerIdx + 1]}
+                    color={color.accent} delay={delay + mi * 60 + 140} visible={visible}
+                  />
+                )}
                 <line
-                  x1={x + 4} y1={y} x2={x + 68} y2={y}
-                  stroke="rgba(255,255,255,0.06)" strokeWidth="1"
+                  x1={x + 4} y1={y} x2={x + 76} y2={y}
+                  stroke="rgba(255,255,255,0.05)" strokeWidth="1"
                   style={{ opacity: visible ? 1 : 0, transition: `opacity 0.3s ease ${delay + 100 + mi * 60}ms` }}
                 />
-                {/* Round label on first match only */}
                 {mi === 0 && (
                   <text
-                    x={x + 36} y={-6}
+                    x={x + 40} y={-6}
                     textAnchor="middle"
                     fill={isFinal ? 'rgba(255,215,0,0.6)' : 'rgba(255,255,255,0.25)'}
                     fontSize="8" fontFamily="Rajdhani, sans-serif" fontWeight="bold"
@@ -346,12 +383,11 @@ function BracketDiagram({ playerCount, visible }) {
                     {isFinal ? 'FINAL' : round === rounds - 2 ? 'SEMIS' : `R${round + 1}`}
                   </text>
                 )}
-                {/* Connector to next round */}
                 {round < rounds - 1 && (
                   <line
-                    x1={x + 72} y1={y}
-                    x2={x + 100} y2={y + (mi % 2 === 0 ? spacing / 4 : -spacing / 4)}
-                    stroke="rgba(255,215,0,0.12)" strokeWidth="1"
+                    x1={x + 80} y1={y}
+                    x2={x + 110} y2={y + (mi % 2 === 0 ? spacing / 4 : -spacing / 4)}
+                    stroke="rgba(255,215,0,0.1)" strokeWidth="1"
                     style={{ opacity: visible ? 1 : 0, transition: `opacity 0.3s ease ${delay + 200}ms` }}
                   />
                 )}
@@ -359,8 +395,6 @@ function BracketDiagram({ playerCount, visible }) {
             );
           });
         })}
-
-        {/* Trophy */}
         <text
           x={w - 10} y={h / 2}
           textAnchor="middle" dominantBaseline="middle"
@@ -374,10 +408,9 @@ function BracketDiagram({ playerCount, visible }) {
   );
 }
 
-// ── Pools Diagram ──
-function PoolsDiagram({ poolCount, visible }) {
+function PoolsDiagram({ players: allPlayers, poolCount, visible }) {
   const pools = Math.min(poolCount || 4, 6);
-  const perPool = 4;
+  const perPool = Math.min(Math.ceil(allPlayers.length / pools) || 4, 5);
 
   return (
     <div className="flex flex-wrap items-center justify-center gap-3">
@@ -394,13 +427,22 @@ function PoolsDiagram({ poolCount, visible }) {
           <div className="mb-1.5 text-center font-display text-[9px] font-bold uppercase tracking-[0.14em] text-cyan-400/60">
             Pool {String.fromCharCode(65 + pi)}
           </div>
-          <div className="flex flex-col gap-1">
-            {Array.from({ length: perPool }, (_, i) => (
-              <div key={i} className="flex items-center gap-1.5">
-                <div className="h-3 w-3 rounded-full bg-cyan-400/20 border border-cyan-400/30" />
-                <div className="h-1.5 rounded-full bg-white/6" style={{ width: `${28 + Math.random() * 20}px` }} />
-              </div>
-            ))}
+          <div className="flex flex-col gap-1.5">
+            {Array.from({ length: perPool }, (_, i) => {
+              const player = allPlayers[pi * perPool + i];
+              return (
+                <div key={i} className="flex items-center gap-1.5">
+                  {player?.avatar ? (
+                    <img src={getAvatarUrl(player.avatar)} alt="" className="h-4 w-4 rounded-full ring-1 ring-cyan-400/20" />
+                  ) : (
+                    <div className="h-4 w-4 rounded-full bg-cyan-400/15 border border-cyan-400/25 flex items-center justify-center">
+                      <span className="text-[6px] font-bold text-cyan-400/70">{String(player?.name || '?').charAt(0).toUpperCase()}</span>
+                    </div>
+                  )}
+                  <span className="text-[10px] text-zinc-400 font-display truncate max-w-[60px]">{player?.name || `P${pi * perPool + i + 1}`}</span>
+                </div>
+              );
+            })}
           </div>
         </div>
       ))}
@@ -408,7 +450,6 @@ function PoolsDiagram({ poolCount, visible }) {
   );
 }
 
-// ── Generic format diagram (Hour of Power, B15) ──
 function TimedSessionDiagram({ format, visible }) {
   const isHop = format === 'hour_of_power';
   const color = isHop ? 'emerald' : 'violet';
@@ -429,23 +470,14 @@ function TimedSessionDiagram({ format, visible }) {
             {isHop ? '60:00' : 'Best 15'}
           </div>
         </div>
-        {/* Animated timer arc */}
         <svg className="absolute inset-0" width="100%" height="100%" viewBox="0 0 224 112">
+          <circle cx="112" cy="56" r="48" fill="none" stroke={`rgba(${isHop ? '52,211,153' : '167,139,250'},0.1)`} strokeWidth="2" />
           <circle
-            cx="112" cy="56" r="48"
-            fill="none"
-            stroke={`rgba(${isHop ? '52,211,153' : '167,139,250'},0.1)`}
-            strokeWidth="2"
-          />
-          <circle
-            cx="112" cy="56" r="48"
-            fill="none"
+            cx="112" cy="56" r="48" fill="none"
             stroke={`rgba(${isHop ? '52,211,153' : '167,139,250'},0.35)`}
-            strokeWidth="2"
-            strokeDasharray="301.6"
+            strokeWidth="2" strokeDasharray="301.6"
             strokeDashoffset={visible ? '75.4' : '301.6'}
-            strokeLinecap="round"
-            transform="rotate(-90 112 56)"
+            strokeLinecap="round" transform="rotate(-90 112 56)"
             style={{ transition: 'stroke-dashoffset 2s cubic-bezier(0.16,1,0.3,1) 500ms' }}
           />
         </svg>
@@ -454,22 +486,254 @@ function TimedSessionDiagram({ format, visible }) {
   );
 }
 
-// ── Format diagram router ──
-function FormatDiagram({ format, playerCount, config, visible }) {
-  if (format === 'round_robin') return <RoundRobinDiagram playerCount={playerCount} visible={visible} />;
-  if (format === 'gauntlet') return <GauntletDiagram playerCount={playerCount} visible={visible} />;
-  if (format === 'single_elim') return <BracketDiagram playerCount={playerCount} visible={visible} />;
-  if (format === 'double_elim') return <BracketDiagram playerCount={playerCount} visible={visible} />;
-  if (format === 'pools') return <PoolsDiagram poolCount={config?.pool_count} visible={visible} />;
+function FormatDiagram({ format, players, config, visible }) {
+  if (format === 'round_robin') return <RoundRobinDiagram players={players} visible={visible} />;
+  if (format === 'gauntlet') return <GauntletDiagram players={players} visible={visible} />;
+  if (format === 'single_elim') return <BracketDiagram players={players} visible={visible} />;
+  if (format === 'double_elim') return <BracketDiagram players={players} visible={visible} />;
+  if (format === 'pools') return <PoolsDiagram players={players} poolCount={config?.pool_count} visible={visible} />;
   if (format === 'hour_of_power' || format === 'b15') return <TimedSessionDiagram format={format} visible={visible} />;
   return null;
+}
+
+// ══════════════════════════════════════════════════════════════
+//  SCOUT CARD (mini version for poster)
+// ══════════════════════════════════════════════════════════════
+
+const BUCKET_META = {
+  speed: { label: 'Speed', icon: '\u26A1' },
+  stamina: { label: 'Stamina', icon: '\uD83D\uDD25' },
+  mobility: { label: 'Mobility', icon: '\uD83C\uDF00' },
+  tech: { label: 'Tech', icon: '\u2699\uFE0F' },
+};
+
+function MiniScoutCard({ player, scoutData, onClick }) {
+  const flag = getCountryFlag(player.nationality);
+  const attrs = scoutData?.attributes?.overall || {};
+  const competitive = scoutData?.competitive || {};
+  const specialties = scoutData?.specialties || [];
+  const rating = scoutData?.ratings?.overall?.score100;
+  const hasData = scoutData && scoutData.coverage?.hasPiuData;
+
+  return (
+    <button
+      onClick={onClick}
+      className="group relative w-full overflow-hidden rounded-xl border border-white/8 bg-white/[0.02] p-3 text-left transition-all hover:border-piu-accent/25 hover:bg-white/[0.04] hover:shadow-[0_0_24px_rgba(255,51,102,0.06)]"
+    >
+      {/* Foil shine on hover */}
+      <div className="pointer-events-none absolute inset-0 opacity-0 transition-opacity group-hover:opacity-100"
+        style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.03) 0%, transparent 50%)' }}
+      />
+
+      <div className="flex items-center gap-2.5 mb-2.5">
+        {player.avatar ? (
+          <img src={getAvatarUrl(player.avatar)} alt="" className="h-10 w-10 rounded-lg object-cover ring-1 ring-white/10 shrink-0" />
+        ) : (
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-piu-accent to-purple-700 font-display text-sm font-bold text-white ring-1 ring-white/10 shrink-0">
+            {String(player.name || '?').charAt(0).toUpperCase()}
+          </div>
+        )}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            {flag && <span className="text-xs shrink-0">{flag}</span>}
+            <span className="truncate font-display text-sm font-bold text-white">{player.name}</span>
+          </div>
+          <div className="flex items-center gap-1.5 mt-0.5">
+            {competitive.singleLevel && (
+              <span className="text-[9px] font-display font-bold text-rose-400/70">S{competitive.singleLevel}</span>
+            )}
+            {competitive.doubleLevel && (
+              <span className="text-[9px] font-display font-bold text-emerald-400/70">D{competitive.doubleLevel}</span>
+            )}
+            {rating !== undefined && rating > 0 && (
+              <span className="text-[9px] font-mono text-zinc-500">{Math.round(rating)}</span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Attribute bars */}
+      {hasData ? (
+        <div className="space-y-1">
+          {['speed', 'stamina', 'mobility', 'tech'].map(bucket => {
+            const val = Math.max(0, Math.min(100, attrs[bucket] || 0));
+            return (
+              <div key={bucket} className="flex items-center gap-1.5">
+                <span className="w-3 text-center text-[8px]">{BUCKET_META[bucket].icon}</span>
+                <div className="flex-1 h-1.5 rounded-full bg-white/6 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-cyan-400/60 to-blue-500/60"
+                    style={{ width: `${val}%`, transition: 'width 0.8s cubic-bezier(0.16,1,0.3,1)' }}
+                  />
+                </div>
+                <span className="w-5 text-right font-mono text-[8px] text-zinc-500">{Math.round(val)}</span>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="flex items-center justify-center py-2">
+          <span className="text-[10px] text-zinc-600 italic">No scouting data</span>
+        </div>
+      )}
+
+      {/* Specialties */}
+      {specialties.length > 0 && (
+        <div className="flex flex-wrap gap-1 mt-2">
+          {specialties.slice(0, 3).map((s, i) => (
+            <span key={i} className="rounded-full border border-white/6 bg-white/[0.03] px-1.5 py-0.5 text-[8px] font-display font-bold text-zinc-400">
+              {s.label}
+            </span>
+          ))}
+        </div>
+      )}
+    </button>
+  );
+}
+
+function ExpandedScoutCard({ player, scoutData, onClose }) {
+  const flag = getCountryFlag(player.nationality);
+  const competitive = scoutData?.competitive || {};
+  const specialties = scoutData?.specialties || [];
+  const cadence = scoutData?.cadence || {};
+  const signature = scoutData?.signature || {};
+  const hasData = scoutData?.coverage?.hasPiuData;
+
+  const attrs = scoutData?.attributes?.overall || {};
+  const ratings = scoutData?.ratings || {};
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+      <div
+        className="relative max-w-sm w-full overflow-hidden rounded-2xl border border-white/10 bg-zinc-950/95 shadow-[0_24px_64px_rgba(0,0,0,0.5)]"
+        onClick={e => e.stopPropagation()}
+        style={{ animation: 'fadeIn 0.25s ease' }}
+      >
+        {/* Top accent */}
+        <div className="absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-piu-accent/40 to-transparent" />
+
+        <div className="p-5">
+          {/* Header */}
+          <div className="flex items-start gap-3 mb-4">
+            {player.avatar ? (
+              <img src={getAvatarUrl(player.avatar)} alt="" className="h-16 w-16 rounded-xl object-cover ring-2 ring-white/10 shrink-0" />
+            ) : (
+              <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-gradient-to-br from-piu-accent to-purple-700 font-display text-2xl font-bold text-white ring-2 ring-white/10 shrink-0">
+                {String(player.name || '?').charAt(0).toUpperCase()}
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                {flag && <span className="text-base">{flag}</span>}
+                <h3 className="font-display text-lg font-bold text-white truncate">{player.name}</h3>
+              </div>
+              {player.skill_title && (
+                <span className="inline-flex mt-1 rounded-full border border-white/10 bg-white/4 px-2 py-0.5 text-[10px] font-display font-bold text-zinc-300">
+                  {player.skill_title}
+                </span>
+              )}
+              <div className="flex items-center gap-2 mt-1.5">
+                {competitive.singleLevel && (
+                  <span className="text-[10px] font-display font-bold text-rose-400">S{competitive.singleLevel}</span>
+                )}
+                {competitive.doubleLevel && (
+                  <span className="text-[10px] font-display font-bold text-emerald-400">D{competitive.doubleLevel}</span>
+                )}
+                {competitive.dominantLabel && (
+                  <span className="text-[10px] text-zinc-500">{competitive.dominantLabel}</span>
+                )}
+              </div>
+            </div>
+            <button onClick={onClose} className="shrink-0 rounded-lg border border-white/8 bg-white/4 p-1.5 text-zinc-400 hover:text-white transition-colors">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
+            </button>
+          </div>
+
+          {/* Signature */}
+          {signature.summaryLabel && (
+            <p className="text-xs text-zinc-400 italic mb-4 leading-relaxed">{signature.summaryLabel}</p>
+          )}
+
+          {/* Attribute bars - full size */}
+          {hasData && (
+            <div className="space-y-2 mb-4">
+              {['speed', 'stamina', 'mobility', 'tech'].map(bucket => {
+                const val = Math.max(0, Math.min(100, attrs[bucket] || 0));
+                const isTop = val >= 70;
+                return (
+                  <div key={bucket} className="flex items-center gap-2">
+                    <span className="w-4 text-center text-xs">{BUCKET_META[bucket].icon}</span>
+                    <span className="w-14 text-[10px] font-display font-bold text-zinc-400">{BUCKET_META[bucket].label}</span>
+                    <div className="flex-1 h-2 rounded-full bg-white/6 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full ${isTop ? 'bg-gradient-to-r from-amber-400/70 to-amber-300/70' : 'bg-gradient-to-r from-cyan-400/50 to-blue-500/50'}`}
+                        style={{ width: `${val}%`, transition: 'width 1s cubic-bezier(0.16,1,0.3,1)' }}
+                      />
+                    </div>
+                    <span className={`w-6 text-right font-mono text-[10px] ${isTop ? 'text-amber-300' : 'text-zinc-400'}`}>{Math.round(val)}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Ratings row */}
+          {hasData && (
+            <div className="grid grid-cols-3 gap-2 mb-4">
+              {[
+                { label: 'Overall', val: ratings.overall?.score100 },
+                { label: 'Singles', val: ratings.singles?.score100 },
+                { label: 'Doubles', val: ratings.doubles?.score100 },
+              ].map(r => (
+                <div key={r.label} className="rounded-lg border border-white/6 bg-white/[0.02] p-2 text-center">
+                  <div className="text-[9px] font-display font-bold uppercase tracking-wider text-zinc-600">{r.label}</div>
+                  <div className="font-mono text-sm font-bold text-white mt-0.5">{r.val > 0 ? Math.round(r.val) : '-'}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Specialties */}
+          {specialties.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              {specialties.map((s, i) => (
+                <span key={i} className="rounded-full border border-white/8 bg-white/[0.03] px-2 py-0.5 text-[10px] font-display font-bold text-zinc-300">
+                  {s.label}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Cadence */}
+          {cadence.label && (
+            <div className="flex items-center gap-2 rounded-lg border border-white/6 bg-white/[0.02] px-3 py-2">
+              <span className="text-[10px] font-display font-bold uppercase tracking-wider text-zinc-600">Activity</span>
+              <span className="text-[11px] font-display font-bold text-zinc-300">{cadence.label}</span>
+              {cadence.activeDaysPerWeek > 0 && (
+                <span className="text-[10px] text-zinc-500">{cadence.activeDaysPerWeek.toFixed(1)} days/wk</span>
+              )}
+            </div>
+          )}
+
+          {/* Pumbility */}
+          {player.pumbility > 0 && (
+            <div className="mt-3 text-center">
+              <span className="text-[9px] font-display font-bold uppercase tracking-wider text-zinc-600">Pumbility</span>
+              <div className="font-mono text-lg font-bold text-piu-gold">{Number(player.pumbility).toLocaleString()}</div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ══════════════════════════════════════════════════════════════
 //  PHASE SECTION
 // ══════════════════════════════════════════════════════════════
 
-function PhaseSection({ phase, index, total, playerCount }) {
+function PhaseSection({ phase, index, total, players }) {
   const [ref, visible] = useReveal(0.1);
   const color = getFormatColor(phase.format);
   const rules = getPhaseRules(phase);
@@ -478,7 +742,6 @@ function PhaseSection({ phase, index, total, playerCount }) {
 
   return (
     <div ref={ref} className="relative">
-      {/* Connecting line to next phase */}
       {!isLast && (
         <div
           className="absolute left-1/2 -translate-x-px bottom-0 translate-y-full h-16 w-0.5"
@@ -499,7 +762,6 @@ function PhaseSection({ phase, index, total, playerCount }) {
           transition: 'opacity 0.6s cubic-bezier(0.16,1,0.3,1), transform 0.6s cubic-bezier(0.16,1,0.3,1)',
         }}
       >
-        {/* Top accent line */}
         <div
           className="absolute inset-x-8 top-0 h-px"
           style={{
@@ -510,9 +772,7 @@ function PhaseSection({ phase, index, total, playerCount }) {
         />
 
         <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8">
-          {/* Left: Info */}
           <div className="flex-1 min-w-0">
-            {/* Phase number + title */}
             <div className="flex items-center gap-3 mb-4">
               <div
                 className={`flex h-10 w-10 items-center justify-center rounded-xl ${color.bg} border ${color.border}`}
@@ -525,23 +785,19 @@ function PhaseSection({ phase, index, total, playerCount }) {
                 <span className="text-lg">{FORMAT_ICONS[phase.format]}</span>
               </div>
               <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-display text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-600">
-                    Phase {index + 1} of {total}
-                  </span>
-                </div>
+                <span className="font-display text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-600">
+                  Phase {index + 1} of {total}
+                </span>
                 <h3 className={`font-display text-xl font-bold tracking-wide ${color.text}`}>
                   {phase.name || FORMAT_LABELS[phase.format]}
                 </h3>
               </div>
             </div>
 
-            {/* Description */}
             <p className="text-sm text-zinc-400 leading-relaxed mb-4">
               {FORMAT_DESCRIPTIONS[phase.format]}
             </p>
 
-            {/* Rules pills */}
             <Stagger visible={visible} base={300} className="flex flex-wrap gap-1.5 mb-4">
               {rules.map((rule) => (
                 <span
@@ -553,14 +809,10 @@ function PhaseSection({ phase, index, total, playerCount }) {
               ))}
             </Stagger>
 
-            {/* Advancement */}
             {advLabel && (
               <div
                 className="inline-flex items-center gap-1.5 rounded-full border border-piu-green/20 bg-piu-green/8 px-3 py-1.5 text-[10px] font-display font-bold uppercase tracking-[0.14em] text-piu-green"
-                style={{
-                  opacity: visible ? 1 : 0,
-                  transition: 'opacity 0.4s ease 600ms',
-                }}
+                style={{ opacity: visible ? 1 : 0, transition: 'opacity 0.4s ease 600ms' }}
               >
                 <span>{'\u2192'}</span>
                 <span>{advLabel}</span>
@@ -568,11 +820,10 @@ function PhaseSection({ phase, index, total, playerCount }) {
             )}
           </div>
 
-          {/* Right: Animated diagram */}
-          <div className="flex shrink-0 items-center justify-center lg:w-64">
+          <div className="flex shrink-0 items-center justify-center lg:w-72">
             <FormatDiagram
               format={phase.format}
-              playerCount={playerCount}
+              players={players}
               config={phase.config}
               visible={visible}
             />
@@ -581,6 +832,23 @@ function PhaseSection({ phase, index, total, playerCount }) {
       </div>
     </div>
   );
+}
+
+// ══════════════════════════════════════════════════════════════
+//  HYPE BLURB GENERATOR
+// ══════════════════════════════════════════════════════════════
+
+function generateHypeBlurb(tournament, phases, playerCount) {
+  const name = tournament.name || 'This tournament';
+  const phaseNames = phases.map(p => FORMAT_LABELS[p.format] || p.format);
+
+  if (phases.length === 1) {
+    return `${name} brings ${playerCount} competitors together for a ${phaseNames[0].toLowerCase()} showdown. Every match matters. Every score counts. Who walks away on top?`;
+  }
+
+  const lastPhase = phaseNames[phaseNames.length - 1];
+  const earlyPhases = phaseNames.slice(0, -1).map(n => n.toLowerCase()).join(', ');
+  return `${name} puts ${playerCount} players through the crucible \u2014 ${earlyPhases} into ${lastPhase.toLowerCase()}. Only the strongest survive each phase. This is the proving ground.`;
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -593,6 +861,8 @@ export default function TournamentPoster() {
   const [players, setPlayers] = useState([]);
   const [phases, setPhases] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [scoutCards, setScoutCards] = useState({});
+  const [expandedPlayer, setExpandedPlayer] = useState(null);
 
   useEffect(() => {
     (async () => {
@@ -604,6 +874,19 @@ export default function TournamentPoster() {
           const ph = await getPhases(id);
           setPhases(Array.isArray(ph) ? ph : []);
         } catch { setPhases([]); }
+
+        // Fetch scout cards for players with user_ids (in parallel, max 20)
+        const withUserId = p.filter(pl => pl.user_id).slice(0, 20);
+        const results = await Promise.allSettled(
+          withUserId.map(pl => getPlayerScoutingCard(pl.user_id).then(data => ({ playerId: pl.id, data })))
+        );
+        const cards = {};
+        results.forEach(r => {
+          if (r.status === 'fulfilled' && r.value.data) {
+            cards[r.value.playerId] = r.value.data;
+          }
+        });
+        setScoutCards(cards);
       } catch (err) {
         console.error(err);
       } finally {
@@ -613,7 +896,8 @@ export default function TournamentPoster() {
   }, [id]);
 
   const [heroRef, heroVisible] = useReveal(0.05);
-  const [playersRef, playersVisible] = useReveal(0.1);
+  const [hypeRef, hypeVisible] = useReveal(0.15);
+  const [rosterRef, rosterVisible] = useReveal(0.1);
   const [footerRef, footerVisible] = useReveal(0.1);
 
   if (loading) {
@@ -637,7 +921,6 @@ export default function TournamentPoster() {
   const config = tournament.config || {};
   const hasPhases = phases.length > 0;
 
-  // For legacy tournaments without phases, construct a virtual phase list
   const displayPhases = hasPhases ? phases : (() => {
     const virtual = [];
     if (config.gauntlet_enabled) {
@@ -661,6 +944,8 @@ export default function TournamentPoster() {
     return virtual;
   })();
 
+  const hypeBlurb = generateHypeBlurb(tournament, displayPhases, players.length);
+
   return (
     <div className="min-h-screen bg-piu-bg">
       {/* ═══ HERO ═══ */}
@@ -671,7 +956,6 @@ export default function TournamentPoster() {
           background: 'radial-gradient(ellipse at 30% 20%, rgba(255,51,102,0.14), transparent 50%), radial-gradient(ellipse at 70% 80%, rgba(255,199,92,0.08), transparent 40%), radial-gradient(ellipse at 50% 50%, rgba(68,136,255,0.06), transparent 60%), #0a0a1a',
         }}
       >
-        {/* Grid overlay */}
         <div
           className="pointer-events-none absolute inset-0"
           style={{
@@ -681,19 +965,10 @@ export default function TournamentPoster() {
             WebkitMaskImage: 'radial-gradient(ellipse at center, black 30%, transparent 70%)',
           }}
         />
-
-        {/* Top line accent */}
         <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-piu-accent/40 to-transparent" />
 
         <div className="relative mx-auto max-w-4xl px-4 py-16 sm:py-24 text-center">
-          {/* Back link */}
-          <div
-            style={{
-              opacity: heroVisible ? 1 : 0,
-              transform: heroVisible ? 'translateY(0)' : 'translateY(-10px)',
-              transition: 'all 0.4s ease',
-            }}
-          >
+          <div style={{ opacity: heroVisible ? 1 : 0, transform: heroVisible ? 'translateY(0)' : 'translateY(-10px)', transition: 'all 0.4s ease' }}>
             <Link
               to={`/tournament/${id}`}
               className="inline-flex items-center gap-1.5 rounded-full border border-white/8 bg-white/4 px-3 py-1.5 text-[10px] font-display font-bold uppercase tracking-[0.14em] text-zinc-400 transition-colors hover:border-piu-accent/25 hover:text-zinc-200 mb-8"
@@ -702,15 +977,10 @@ export default function TournamentPoster() {
             </Link>
           </div>
 
-          {/* Avatar */}
           {tournament.avatar && (
             <div
               className="mb-6 flex justify-center"
-              style={{
-                opacity: heroVisible ? 1 : 0,
-                transform: heroVisible ? 'scale(1)' : 'scale(0.8)',
-                transition: 'all 0.5s cubic-bezier(0.16,1,0.3,1) 100ms',
-              }}
+              style={{ opacity: heroVisible ? 1 : 0, transform: heroVisible ? 'scale(1)' : 'scale(0.8)', transition: 'all 0.5s cubic-bezier(0.16,1,0.3,1) 100ms' }}
             >
               <img
                 src={getAvatarUrl(tournament.avatar)}
@@ -720,82 +990,90 @@ export default function TournamentPoster() {
             </div>
           )}
 
-          {/* Metadata pills */}
-          <div
-            className="flex flex-wrap items-center justify-center gap-2 mb-5"
-            style={{
-              opacity: heroVisible ? 1 : 0,
-              transition: 'opacity 0.4s ease 200ms',
-            }}
-          >
-            {formattedDate && (
-              <span className="inline-flex items-center rounded-full border border-white/10 bg-black/18 px-2.5 py-1 text-[11px] text-zinc-300">
-                {formattedDate}
-              </span>
-            )}
-            {tournament.location && (
-              <span className="inline-flex items-center rounded-full border border-white/10 bg-black/18 px-2.5 py-1 text-[11px] text-zinc-300">
-                {tournament.location}
-              </span>
-            )}
+          <div className="flex flex-wrap items-center justify-center gap-2 mb-5" style={{ opacity: heroVisible ? 1 : 0, transition: 'opacity 0.4s ease 200ms' }}>
+            {formattedDate && <span className="inline-flex items-center rounded-full border border-white/10 bg-black/18 px-2.5 py-1 text-[11px] text-zinc-300">{formattedDate}</span>}
+            {tournament.location && <span className="inline-flex items-center rounded-full border border-white/10 bg-black/18 px-2.5 py-1 text-[11px] text-zinc-300">{tournament.location}</span>}
             <span className="inline-flex items-center rounded-full border border-piu-accent/20 bg-piu-accent/8 px-2.5 py-1 text-[11px] font-display font-bold text-rose-100">
               {players.length} players
             </span>
           </div>
 
-          {/* Title */}
           <h1
             className="font-display text-4xl font-bold tracking-[0.02em] text-white sm:text-5xl lg:text-6xl"
-            style={{
-              opacity: heroVisible ? 1 : 0,
-              transform: heroVisible ? 'translateY(0)' : 'translateY(20px)',
-              transition: 'all 0.6s cubic-bezier(0.16,1,0.3,1) 150ms',
-            }}
+            style={{ opacity: heroVisible ? 1 : 0, transform: heroVisible ? 'translateY(0)' : 'translateY(20px)', transition: 'all 0.6s cubic-bezier(0.16,1,0.3,1) 150ms' }}
           >
             {title}
           </h1>
 
-          {/* Subtitle */}
           <p
             className="mx-auto mt-4 max-w-xl text-base text-zinc-400"
-            style={{
-              opacity: heroVisible ? 1 : 0,
-              transform: heroVisible ? 'translateY(0)' : 'translateY(14px)',
-              transition: 'all 0.5s cubic-bezier(0.16,1,0.3,1) 300ms',
-            }}
+            style={{ opacity: heroVisible ? 1 : 0, transform: heroVisible ? 'translateY(0)' : 'translateY(14px)', transition: 'all 0.5s cubic-bezier(0.16,1,0.3,1) 300ms' }}
           >
             {displayPhases.length} phase{displayPhases.length !== 1 ? 's' : ''} &middot; {players.length} players &middot;{' '}
             {displayPhases.map(p => FORMAT_LABELS[p.format] || p.format).join(' \u2192 ')}
           </p>
 
           {/* Phase quick-nav dots */}
-          <div
-            className="mt-8 flex items-center justify-center gap-3"
-            style={{
-              opacity: heroVisible ? 1 : 0,
-              transition: 'opacity 0.4s ease 500ms',
-            }}
-          >
+          <div className="mt-8 flex items-center justify-center gap-3" style={{ opacity: heroVisible ? 1 : 0, transition: 'opacity 0.4s ease 500ms' }}>
             {displayPhases.map((phase, i) => {
               const c = getFormatColor(phase.format);
               return (
                 <div key={i} className="flex items-center gap-3">
                   {i > 0 && <div className="h-px w-6 bg-white/10" />}
-                  <div
-                    className={`flex h-8 w-8 items-center justify-center rounded-full border ${c.border} ${c.bg}`}
-                    title={phase.name || FORMAT_LABELS[phase.format]}
-                  >
+                  <div className={`flex h-8 w-8 items-center justify-center rounded-full border ${c.border} ${c.bg}`} title={phase.name || FORMAT_LABELS[phase.format]}>
                     <span className="text-sm">{FORMAT_ICONS[phase.format]}</span>
                   </div>
                 </div>
               );
             })}
           </div>
+
+          {/* Floating player avatars ring */}
+          {players.length > 0 && (
+            <div className="mt-10 flex items-center justify-center" style={{ opacity: heroVisible ? 1 : 0, transition: 'opacity 0.5s ease 600ms' }}>
+              <div className="flex -space-x-2">
+                {players.slice(0, 12).map((player, i) => (
+                  <div key={player.id} style={{ animationDelay: `${i * 50}ms` }}>
+                    {player.avatar ? (
+                      <img src={getAvatarUrl(player.avatar)} alt="" className="h-8 w-8 rounded-full ring-2 ring-zinc-950 object-cover" />
+                    ) : (
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-piu-accent to-purple-700 ring-2 ring-zinc-950 text-[10px] font-bold text-white">
+                        {String(player.name || '?').charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {players.length > 12 && (
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-800 ring-2 ring-zinc-950 text-[9px] font-display font-bold text-zinc-400">
+                    +{players.length - 12}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* ═══ HOW IT WORKS LABEL ═══ */}
-      <div className="mx-auto max-w-4xl px-4 pt-16 pb-8 text-center">
+      {/* ═══ HYPE BLURB ═══ */}
+      <div ref={hypeRef} className="mx-auto max-w-3xl px-4 py-16 text-center">
+        <p
+          className="font-display text-xl sm:text-2xl font-bold leading-relaxed tracking-wide text-zinc-200"
+          style={{
+            opacity: hypeVisible ? 1 : 0,
+            transform: hypeVisible ? 'translateY(0)' : 'translateY(20px)',
+            transition: 'all 0.7s cubic-bezier(0.16,1,0.3,1)',
+          }}
+        >
+          {hypeBlurb}
+        </p>
+        <div
+          className="mx-auto mt-6 h-px w-16 bg-gradient-to-r from-transparent via-piu-accent/40 to-transparent"
+          style={{ opacity: hypeVisible ? 1 : 0, transition: 'opacity 0.5s ease 400ms' }}
+        />
+      </div>
+
+      {/* ═══ HOW IT WORKS ═══ */}
+      <div className="mx-auto max-w-4xl px-4 pb-8 text-center">
         <p className="font-display text-[10px] font-bold uppercase tracking-[0.3em] text-zinc-600">How it works</p>
         <div className="mx-auto mt-3 h-px w-12 bg-gradient-to-r from-transparent via-piu-accent/40 to-transparent" />
       </div>
@@ -808,46 +1086,43 @@ export default function TournamentPoster() {
             phase={phase}
             index={i}
             total={displayPhases.length}
-            playerCount={players.length}
+            players={players}
           />
         ))}
       </div>
 
-      {/* ═══ PLAYERS GRID ═══ */}
+      {/* ═══ PLAYERS / SCOUT CARDS ═══ */}
       {players.length > 0 && (
-        <div ref={playersRef} className="border-t border-white/5 bg-zinc-950/40">
-          <div className="mx-auto max-w-4xl px-4 py-16">
+        <div ref={rosterRef} className="border-t border-white/5 bg-zinc-950/40">
+          <div className="mx-auto max-w-5xl px-4 py-16">
             <div
-              className="text-center mb-8"
+              className="text-center mb-10"
               style={{
-                opacity: playersVisible ? 1 : 0,
-                transform: playersVisible ? 'translateY(0)' : 'translateY(16px)',
+                opacity: rosterVisible ? 1 : 0,
+                transform: rosterVisible ? 'translateY(0)' : 'translateY(16px)',
                 transition: 'all 0.5s cubic-bezier(0.16,1,0.3,1)',
               }}
             >
-              <p className="font-display text-[10px] font-bold uppercase tracking-[0.3em] text-zinc-600 mb-3">Competing</p>
-              <h2 className="font-display text-2xl font-bold tracking-wide text-white">{players.length} Players</h2>
+              <p className="font-display text-[10px] font-bold uppercase tracking-[0.3em] text-zinc-600 mb-3">The Competitors</p>
+              <h2 className="font-display text-2xl font-bold tracking-wide text-white mb-2">{players.length} Players</h2>
+              <p className="text-xs text-zinc-500">Tap a player to view their scouting report</p>
             </div>
 
-            <div className="flex flex-wrap items-center justify-center gap-2.5">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
               {players.map((player, i) => (
                 <div
                   key={player.id}
-                  className="flex items-center gap-2 rounded-full border border-white/8 bg-white/[0.03] px-3 py-1.5 transition-colors hover:border-piu-accent/20 hover:bg-white/[0.05]"
                   style={{
-                    opacity: playersVisible ? 1 : 0,
-                    transform: playersVisible ? 'scale(1)' : 'scale(0.85)',
-                    transition: `all 0.35s cubic-bezier(0.16,1,0.3,1) ${Math.min(i * 30, 600)}ms`,
+                    opacity: rosterVisible ? 1 : 0,
+                    transform: rosterVisible ? 'translateY(0)' : 'translateY(20px)',
+                    transition: `all 0.4s cubic-bezier(0.16,1,0.3,1) ${Math.min(i * 40, 800)}ms`,
                   }}
                 >
-                  {player.avatar ? (
-                    <img src={getAvatarUrl(player.avatar)} alt="" className="h-5 w-5 rounded-full ring-1 ring-white/10" />
-                  ) : (
-                    <div className="flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-piu-accent to-purple-700 text-[8px] font-bold text-white ring-1 ring-white/10">
-                      {String(player.name || '?').charAt(0).toUpperCase()}
-                    </div>
-                  )}
-                  <span className="font-display text-xs font-bold text-zinc-200">{player.name}</span>
+                  <MiniScoutCard
+                    player={player}
+                    scoutData={scoutCards[player.id]}
+                    onClick={() => setExpandedPlayer(player)}
+                  />
                 </div>
               ))}
             </div>
@@ -858,15 +1133,8 @@ export default function TournamentPoster() {
       {/* ═══ FOOTER ═══ */}
       <div ref={footerRef} className="border-t border-white/5">
         <div className="mx-auto max-w-4xl px-4 py-12 text-center">
-          <div
-            style={{
-              opacity: footerVisible ? 1 : 0,
-              transition: 'opacity 0.5s ease 100ms',
-            }}
-          >
-            <p className="font-display text-xs font-bold uppercase tracking-[0.2em] text-zinc-600 mb-3">
-              Powered by
-            </p>
+          <div style={{ opacity: footerVisible ? 1 : 0, transition: 'opacity 0.5s ease 100ms' }}>
+            <p className="font-display text-xs font-bold uppercase tracking-[0.2em] text-zinc-600 mb-3">Powered by</p>
             <p className="font-display text-lg font-bold tracking-wider">
               <span className="text-piu-accent">PUMP</span>{' '}
               <span className="text-white">SHINSA</span>
@@ -882,6 +1150,15 @@ export default function TournamentPoster() {
           </div>
         </div>
       </div>
+
+      {/* ═══ EXPANDED SCOUT CARD MODAL ═══ */}
+      {expandedPlayer && (
+        <ExpandedScoutCard
+          player={expandedPlayer}
+          scoutData={scoutCards[expandedPlayer.id]}
+          onClose={() => setExpandedPlayer(null)}
+        />
+      )}
     </div>
   );
 }
