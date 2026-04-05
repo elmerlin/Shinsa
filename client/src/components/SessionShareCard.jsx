@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import PiuChartJacket from './PiuChartJacket';
 import ScoreSnapshotModal from './ScoreSnapshotModal';
 import YouTubeReplayModal from './YouTubeReplayModal';
@@ -113,6 +113,156 @@ function buildSessionRowChartPath(row) {
   return title ? `/songs?q=${encodeURIComponent(title)}` : '/songs';
 }
 
+function slugify(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 64);
+}
+
+function buildSessionShareFileName(share) {
+  const baseName = share?.shareType === 'hour_of_power' ? 'hour-of-power-recap' : 'session-share';
+  const title = slugify(share?.sessionTitle || '');
+  const date = slugify(share?.sessionDateLabel || '');
+  return [baseName, title, date].filter(Boolean).join('-') + '.png';
+}
+
+function SessionShareExportStat({
+  label,
+  value,
+  accentClassName = 'text-white',
+  className = '',
+}) {
+  return (
+    <div className={`flex min-h-[176px] flex-col justify-between rounded-[28px] border border-white/10 px-7 py-6 ${className}`.trim()}>
+      <p className="min-h-[58px] text-[22px] font-display font-bold uppercase tracking-[0.18em] leading-[1.25] text-white/58">{label}</p>
+      <p className={`font-display text-[54px] font-black leading-none ${accentClassName}`.trim()}>{value}</p>
+    </div>
+  );
+}
+
+function SessionShareExportCard({ share, title }) {
+  if (!share) return null;
+
+  const isHopShare = share?.shareType === 'hour_of_power';
+  const rows = Array.isArray(share?.rows) ? share.rows : [];
+  const displayTitle = title === 'Session Share' && isHopShare ? 'Hour of Power Recap' : title;
+  const summaryLabel = [share.sessionDateLabel, share.sessionTimeRange, share.sessionDurationLabel].filter(Boolean).join(' • ');
+
+  return (
+    <div className="w-[1080px] overflow-hidden rounded-[42px] border border-yellow-200/18 bg-[radial-gradient(circle_at_top,rgba(255,211,107,0.14),transparent_24%),linear-gradient(155deg,#0c1631_0%,#102845_38%,#13273a_68%,#161426_100%)] p-10 text-white shadow-[0_26px_80px_rgba(0,0,0,0.48)]">
+      <div className="rounded-[34px] border border-white/8 bg-black/12 p-8 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+        <div className="flex items-start gap-6">
+          {isHopShare ? (
+            <HourOfPowerLogo className="h-32 w-24 shrink-0 rounded-[28px]" imageClassName="p-2" />
+          ) : null}
+          <div className="min-w-0 flex-1">
+            <p className={`text-[21px] font-display font-black uppercase tracking-[0.24em] ${isHopShare ? 'text-yellow-200' : 'text-cyan-200'}`}>{displayTitle}</p>
+            <h2 className="mt-2 text-[44px] font-display font-black leading-[1.02] text-white">
+              {share.sessionTitle || (isHopShare ? 'One Hour. Every Clear Counts.' : 'Shared Session')}
+            </h2>
+            {summaryLabel ? (
+              <p className="mt-4 text-[26px] text-white/82">{summaryLabel}</p>
+            ) : null}
+            {share.sessionMachineName ? (
+              <p className="mt-2 text-[28px] text-cyan-100/92">Machine: {share.sessionMachineName}</p>
+            ) : null}
+            {isHopShare && share.completed === false ? (
+              <p className="mt-4 inline-flex rounded-full border border-amber-300/28 bg-amber-500/12 px-4 py-2 text-[19px] font-display font-bold text-amber-100">
+                Attempt ended early and is not leaderboard eligible.
+              </p>
+            ) : null}
+          </div>
+          <div className="rounded-[24px] border border-white/10 bg-white/6 px-5 py-4 text-right">
+            <p className="text-[18px] font-display font-bold uppercase tracking-[0.2em] text-white/55">Included</p>
+            <p className="mt-2 font-display text-[42px] font-black leading-none text-white">{rows.length}</p>
+            <p className="mt-1 text-[20px] text-white/65">{isHopShare ? 'clears on one image' : 'results on one image'}</p>
+          </div>
+        </div>
+
+        {isHopShare ? (
+          <div className="mt-8 grid grid-cols-4 gap-4">
+            <SessionShareExportStat
+              label="Total Points"
+              value={formatNumber(share.totalRatingPoints)}
+              accentClassName="text-yellow-50"
+              className="border-yellow-200/22 bg-[linear-gradient(135deg,rgba(255,223,131,0.16),rgba(145,98,24,0.18))]"
+            />
+            <SessionShareExportStat label="Clears" value={formatNumber(share.countedClearCount || rows.length)} className="bg-[#111c34]/76" />
+            <SessionShareExportStat label="Avg Pts/Clear" value={formatDecimal(share.averageRatingPoints)} accentClassName="text-emerald-100" className="bg-[#0f2433]/76" />
+            <SessionShareExportStat label="Avg Level" value={formatDecimal(share.averageLevel)} accentClassName="text-cyan-100" className="bg-[#11324a]/76" />
+          </div>
+        ) : null}
+
+        <div className="mt-8 overflow-hidden rounded-[30px] border border-white/10 bg-[#0c1327]/80">
+          <div className="flex items-center justify-between gap-4 border-b border-white/6 bg-black/14 px-7 py-5">
+            <div>
+              <p className="text-[18px] font-display font-black uppercase tracking-[0.28em] text-cyan-200/80">Results</p>
+              <h3 className="mt-2 whitespace-nowrap text-[26px] font-display font-black leading-none text-white">
+                {isHopShare ? 'All Counted Clears' : 'Shared Results'}
+              </h3>
+            </div>
+            <p className="text-[24px] text-white/52">{rows.length} songs</p>
+          </div>
+
+          <div className="border-b border-white/6 bg-white/[0.02] px-7 py-3">
+            <div className="grid grid-cols-[56px_minmax(0,1.9fr)_190px_112px_118px] items-center gap-4 text-[18px] font-display font-bold uppercase tracking-[0.16em] text-white/42">
+              <span>#</span>
+              <span>Song</span>
+              <span className="text-right">Score</span>
+              <span className="text-right">Pts</span>
+              <span className="text-right">Grade</span>
+            </div>
+          </div>
+
+          <div className="px-5 py-3">
+            {rows.map((row, index) => (
+              <div
+                key={`${row.song_title}-${row.mode}-${row.level}-${row.score}-${index}`}
+                className="grid grid-cols-[56px_minmax(0,1.9fr)_190px_112px_118px] items-center gap-4 border-b border-white/[0.04] px-2 py-3 last:border-b-0"
+              >
+                <div className="text-[28px] font-display font-bold text-white/62">{index + 1}</div>
+                <div className="min-w-0 flex items-center gap-4">
+                  <PiuChartJacket
+                    title={row?.song_title}
+                    mode={row?.mode}
+                    level={row?.level}
+                    jacketUrl={row?.jacket_url}
+                    size="wide"
+                    withBadge
+                  />
+                  <div className="min-w-0">
+                    <p className="truncate font-display text-[30px] font-black leading-tight text-white" title={row.song_title}>
+                      {row.song_title}
+                    </p>
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-[18px] text-white/52">
+                      <span>{row.mode} {row.level}</span>
+                      {getOverTop100Rank(row.over_top100_rank) > 0 ? (
+                        <span className="rounded-full border border-yellow-300/30 bg-yellow-500/10 px-2.5 py-1 text-[16px] font-display font-black text-yellow-100">
+                          TOP #{getOverTop100Rank(row.over_top100_rank)}
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+                <div className="text-right font-mono text-[30px] tracking-[-0.03em] text-white/92">{formatNumber(row.score)}</div>
+                <div className="text-right font-display text-[32px] font-black text-emerald-200">{formatNumber(row.rating_points)}</div>
+                <div className={`text-right font-display text-[32px] font-black ${getGradeColorClass(row.grade)}`}>{row.grade || '-'}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-6 flex items-center justify-between gap-4 text-[20px] text-white/46">
+          <p>Shared from Shinsa</p>
+          <p>Hour of Power recap image</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function SessionShareCard({
   share,
   className = '',
@@ -120,11 +270,16 @@ export default function SessionShareCard({
   actions = null,
   compact = false,
   flush = false,
+  showImageShareControl = false,
 }) {
   const [expanded, setExpanded] = useState(false);
   const [page, setPage] = useState(1);
   const [activeRow, setActiveRow] = useState(null);
   const [selectedReplay, setSelectedReplay] = useState(null);
+  const [shareImageStatus, setShareImageStatus] = useState('');
+  const [sharingImage, setSharingImage] = useState(false);
+  const captureRef = useRef(null);
+  const exportRef = useRef(null);
 
   const rows = Array.isArray(share?.rows) ? share.rows : [];
   const totalPages = Math.max(1, Math.ceil(rows.length / 10));
@@ -149,14 +304,79 @@ export default function SessionShareCard({
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
 
+  useEffect(() => {
+    if (!shareImageStatus || typeof window === 'undefined') return undefined;
+    const timeoutId = window.setTimeout(() => setShareImageStatus(''), 2200);
+    return () => window.clearTimeout(timeoutId);
+  }, [shareImageStatus]);
+
   const startIndex = compact ? 0 : (expanded ? (page - 1) * 10 : 0);
   const visibleRows = useMemo(() => {
     if (compact) return rows.slice(0, 3);
     if (expanded) return rows.slice(startIndex, startIndex + 10);
     return rows.slice(0, 5);
   }, [compact, expanded, rows, startIndex]);
+  const shareSupported = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
+  const imageShareEnabled = !!showImageShareControl && !compact;
 
   if (!share) return null;
+
+  const handleShareImage = async () => {
+    const targetNode = exportRef.current || captureRef.current;
+    if (!targetNode || sharingImage) return;
+    setSharingImage(true);
+    try {
+      await new Promise((resolve) => {
+        window.requestAnimationFrame(() => {
+          window.requestAnimationFrame(resolve);
+        });
+      });
+
+      const { toPng } = await import('html-to-image');
+      const dataUrl = await toPng(targetNode, {
+        backgroundColor: isHopShare ? '#0b1324' : '#071326',
+        pixelRatio: 2,
+        cacheBust: true,
+      });
+      const blob = await fetch(dataUrl).then((response) => response.blob());
+      const fileName = buildSessionShareFileName(share);
+      const file = new File([blob], fileName, { type: blob.type || 'image/png' });
+      const canShareFiles = shareSupported
+        && typeof navigator.canShare === 'function'
+        && navigator.canShare({ files: [file] });
+
+      if (canShareFiles) {
+        await navigator.share({
+          files: [file],
+          title: displayTitle,
+          text: isHopShare ? 'Hour of Power recap from Shinsa' : 'Session recap from Shinsa',
+        });
+        setShareImageStatus('shared');
+        return;
+      }
+
+      const link = document.createElement('a');
+      link.download = fileName;
+      link.href = dataUrl;
+      link.click();
+      setShareImageStatus('downloaded');
+    } catch (err) {
+      if (err && (err.name === 'AbortError' || err.name === 'NotAllowedError')) return;
+      setShareImageStatus('error');
+    } finally {
+      setSharingImage(false);
+    }
+  };
+
+  const shareImageLabel = sharingImage
+    ? 'Preparing image'
+    : shareImageStatus === 'shared'
+      ? 'Image shared'
+      : shareImageStatus === 'downloaded'
+        ? 'Image downloaded'
+        : shareImageStatus === 'error'
+          ? 'Try again'
+          : (shareSupported ? 'Share image' : 'Download image');
 
   const rankHeaderClass = 'text-left py-1 pl-1.5 pr-0.5 font-display font-bold w-5 sm:px-2';
   const songHeaderClass = 'text-left py-1 pl-1 pr-0.5 font-display font-bold sm:px-2';
@@ -176,7 +396,7 @@ export default function SessionShareCard({
 
   return (
     <>
-      <div className={`${wrapperClass} ${className}`.trim()}>
+      <div ref={captureRef} className={`${wrapperClass} ${className}`.trim()}>
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="min-w-0">
             <div className="flex items-start gap-3">
@@ -301,7 +521,12 @@ export default function SessionShareCard({
                               type="button"
                               className="inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-md border border-sky-400/35 bg-sky-500/10 transition-colors hover:bg-sky-500/20"
                               title="Open replay clip"
-                              onClick={() => setSelectedReplay({ url: row.replay_embed_url, title: buildReplayModalTitle(row) })}
+                              onClick={() => setSelectedReplay({
+                                url: row.replay_embed_url,
+                                title: buildReplayModalTitle(row),
+                                playId: row.play_id || row.id || '',
+                                ownerId: row.user_id || '',
+                              })}
                             >
                               <YouTubeBadgeIcon className="h-2.5 w-2.5 text-sky-300" />
                             </button>
@@ -369,6 +594,41 @@ export default function SessionShareCard({
           <p className="mt-2 text-[10px] text-gray-500">{compact ? 'Tap jackets or grades for details.' : 'Tap jackets or grades to view judgments.'}</p>
         )}
       </div>
+      {imageShareEnabled ? (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={handleShareImage}
+            disabled={sharingImage}
+            className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border border-cyan-300/28 bg-cyan-500/10 px-3 py-1.5 text-[11px] font-display font-bold text-cyan-100 transition-colors hover:border-cyan-300/40 hover:bg-cyan-500/16 hover:text-white disabled:cursor-wait disabled:opacity-70"
+            aria-label={shareImageLabel}
+            title={shareImageLabel}
+          >
+            {sharingImage ? (
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9} className="h-4 w-4 animate-spin">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v3m0 12v3m9-9h-3M6 12H3m15.364 6.364-2.121-2.121M8.757 8.757 6.636 6.636m11.728 0-2.121 2.121M8.757 15.243l-2.121 2.121" />
+              </svg>
+            ) : shareImageStatus === 'shared' || shareImageStatus === 'downloaded' ? (
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9} className="h-4 w-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="m5 13 4 4L19 7" />
+              </svg>
+            ) : (
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.9} className="h-4 w-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v1.125A2.625 2.625 0 0 0 5.625 20.25h12.75A2.625 2.625 0 0 0 21 17.625V16.5" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 10.5 12 15m0 0 4.5-4.5M12 15V3.75" />
+              </svg>
+            )}
+            <span>{shareImageLabel}</span>
+          </button>
+        </div>
+      ) : null}
+      {imageShareEnabled ? (
+        <div className="pointer-events-none fixed left-[-20000px] top-0 z-[-1] opacity-100">
+          <div ref={exportRef}>
+            <SessionShareExportCard share={share} title={title} />
+          </div>
+        </div>
+      ) : null}
 
       <ScoreSnapshotModal
         score={activeRow}
@@ -384,6 +644,10 @@ export default function SessionShareCard({
           url={selectedReplay.url}
           title={selectedReplay.title}
           onClose={() => setSelectedReplay(null)}
+          commentThread={selectedReplay.playId ? {
+            itemId: selectedReplay.playId,
+            ownerId: selectedReplay.ownerId || '',
+          } : null}
         />
       ) : null}
     </>

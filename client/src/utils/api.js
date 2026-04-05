@@ -1,6 +1,10 @@
 import { triggerPumpReactionHaptic } from './haptics';
 
 const API_BASE = '/api';
+let jacketMapCache = null;
+let jacketMapPromise = null;
+let chartKeyMapCache = null;
+let chartKeyMapPromise = null;
 
 function getAuthHeaders() {
   const token = localStorage.getItem('token');
@@ -137,8 +141,28 @@ export const updateAdminSongDuration = ({ song_group_key, duration_seconds }) =>
   method: 'PUT',
   body: JSON.stringify({ song_group_key, duration_seconds }),
 });
-export const getJacketMap = () => request('/songs/jacket-map');
-export const getChartKeyMap = () => request('/songs/chart-key-map');
+export const getJacketMap = () => {
+  if (jacketMapCache) return Promise.resolve(jacketMapCache);
+  if (jacketMapPromise) return jacketMapPromise;
+  jacketMapPromise = request('/songs/jacket-map').then((map) => {
+    jacketMapCache = map && typeof map === 'object' ? map : {};
+    return jacketMapCache;
+  }).finally(() => {
+    jacketMapPromise = null;
+  });
+  return jacketMapPromise;
+};
+export const getChartKeyMap = () => {
+  if (chartKeyMapCache) return Promise.resolve(chartKeyMapCache);
+  if (chartKeyMapPromise) return chartKeyMapPromise;
+  chartKeyMapPromise = request('/songs/chart-key-map').then((map) => {
+    chartKeyMapCache = map && typeof map === 'object' ? map : {};
+    return chartKeyMapCache;
+  }).finally(() => {
+    chartKeyMapPromise = null;
+  });
+  return chartKeyMapPromise;
+};
 export const getSongLibrary = (params = {}) => {
   const qs = new URLSearchParams(params).toString();
   return request(`/songs/library${qs ? `?${qs}` : ''}`);
@@ -160,6 +184,10 @@ export const getPlayerIdentitySummary = (userId, params = {}) => {
   const qs = new URLSearchParams(params).toString();
   return request(`/songs/analytics/identity/${userId}${qs ? `?${qs}` : ''}`);
 };
+export const getPlayerScoutingCard = (userId) =>
+  request(`/songs/analytics/scouting-card/${encodeURIComponent(userId)}`);
+export const getFantasyPool = (count = 10) =>
+  request(`/songs/analytics/fantasy-pool?count=${count}`, { timeoutMs: 30000 });
 export const getGradeGoals = (userId, params = {}) => {
   const qs = new URLSearchParams(params).toString();
   return request(`/songs/analytics/grade-goals/${userId}${qs ? `?${qs}` : ''}`);
@@ -924,6 +952,7 @@ export const getWeeklyChallengeChartScores = (chartId) =>
 
 // ─── Weekly Challenge Play Posts ─────────────────────
 export const getWeeklyChallengePlay = (id) => request(`/social/weekly-challenge-plays/${id}`);
+export const lookupWeeklyChallengePlay = (weekId, userId) => request(`/social/weekly-challenge-plays/lookup?weekId=${encodeURIComponent(weekId)}&userId=${encodeURIComponent(userId)}`);
 export const getWeeklyChallengePlayComments = (playId) => request(`/social/weekly-challenge-plays/${playId}/comments`);
 export const addWeeklyChallengePlayComment = (playId, content, parentId) => request(`/social/weekly-challenge-plays/${playId}/comments`, { method: 'POST', body: JSON.stringify({ content, parent_id: parentId || null }) });
 export const deleteWeeklyChallengePlayComment = (id) => request(`/social/weekly-challenge-plays/comments/${id}`, { method: 'DELETE' });

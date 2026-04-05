@@ -1,6 +1,6 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
 import PiuChartJacket from './PiuChartJacket';
+import { getGradeColorClass, getGradeDisplayLabel } from '../utils/grades';
 
 const MEDAL_EMOJI = { 1: '\uD83E\uDD47', 2: '\uD83E\uDD48', 3: '\uD83E\uDD49' };
 const MEDAL_COLORS = {
@@ -45,7 +45,12 @@ export default function WeeklyChallengePersonalCard({ personal, className = '', 
   } = personal;
 
   const hasPodiums = Array.isArray(podiums) && podiums.length > 0;
-  const modeLabel = highestRatedPlay?.mode === 'Double' ? 'D' : 'S';
+  const highestRatedPlayGrade = highestRatedPlay
+    ? getGradeDisplayLabel(highestRatedPlay.grade, highestRatedPlay.score)
+    : '';
+  const highestRatedPlayGradeClass = highestRatedPlay
+    ? getGradeColorClass(highestRatedPlay.grade, highestRatedPlay.score)
+    : '';
 
   return (
     <div className={`overflow-hidden ${flush ? 'bg-piu-dark/50' : 'rounded-xl border border-piu-border/50 bg-piu-dark'} ${className}`}>
@@ -106,27 +111,19 @@ export default function WeeklyChallengePersonalCard({ personal, className = '', 
               Highest Rated Play
             </p>
             <div className="flex items-center gap-3">
-              <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-white/[0.08] bg-piu-card">
-                {highestRatedPlay.jacketUrl ? (
-                  <PiuChartJacket
-                    jacketUrl={highestRatedPlay.jacketUrl}
-                    songTitle={highestRatedPlay.songTitle}
-                    size={48}
-                  />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center font-display text-base font-black text-white/40">
-                    {(highestRatedPlay.songTitle || '?').charAt(0).toUpperCase()}
-                  </div>
-                )}
-              </div>
+              <PiuChartJacket
+                title={highestRatedPlay.songTitle}
+                mode={highestRatedPlay.mode}
+                level={highestRatedPlay.level}
+                jacketUrl={highestRatedPlay.jacketUrl}
+                size="wide"
+                className="shrink-0"
+              />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-display font-black text-white">{highestRatedPlay.songTitle}</p>
                 <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px]">
-                  <span className={highestRatedPlay.mode === 'Double' ? 'text-emerald-200' : 'text-rose-200'}>
-                    {modeLabel}{highestRatedPlay.level}
-                  </span>
-                  <span className="text-white/60">{(highestRatedPlay.score || 0).toLocaleString()}</span>
-                  <span className="font-display font-bold text-piu-gold">{highestRatedPlay.grade}</span>
+                  <span className="text-white/60 tabular-nums">{(highestRatedPlay.score || 0).toLocaleString()}</span>
+                  <span className={`font-display font-bold ${highestRatedPlayGradeClass}`}>{highestRatedPlayGrade}</span>
                   <span className="text-white/40">{(highestRatedPlay.ratingPoints || 0).toLocaleString()} RP</span>
                 </div>
               </div>

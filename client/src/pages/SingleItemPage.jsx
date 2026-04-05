@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getPost, getUpscore, getNewClear, getWeeklyChallengePlay, getJacketMap, getChartKeyMap, getUpscorePumpers, getNewClearPumpers } from '../utils/api';
+import { getPost, getUpscore, getNewClear, getWeeklyChallengePlay, getJacketMap, getChartKeyMap, getUpscorePumpers, getNewClearPumpers, getWeeklyChallengePlayPumpers } from '../utils/api';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag } from '../components/PlayerRegistration';
 import PostCard, { ShareButton } from '../components/PostCard';
@@ -15,6 +15,7 @@ import ActionIconButton from '../components/ActionIconButton';
 import {
   pumpUpscore, getUpscoreComments, addUpscoreComment, deleteUpscoreComment,
   pumpNewClear, getNewClearComments, addNewClearComment, deleteNewClearComment,
+  pumpWeeklyChallengePlay, getWeeklyChallengePlayComments, addWeeklyChallengePlayComment, deleteWeeklyChallengePlayComment,
   pumpComment,
 } from '../utils/api';
 import { renderFormattedText } from '../utils/formatText';
@@ -27,6 +28,8 @@ import {
   buildScoreSnapshotLinkShare,
   buildUpscoreChallengeOptions,
   buildUpscoreLinkShare,
+  buildWcPlayChallengeOptions,
+  buildWcPlayLinkShare,
 } from '../utils/directMessageShares';
 
 function getRank(score) {
@@ -71,6 +74,16 @@ function timeAgo(dateStr) {
 function parsePumbilityGain(value) {
   const numeric = parseInt(value, 10) || 0;
   return numeric > 0 ? numeric : 0;
+}
+
+function hasScoreJudgments(score) {
+  return (
+    (parseInt(score?.perfect, 10) || 0) > 0 ||
+    (parseInt(score?.great, 10) || 0) > 0 ||
+    (parseInt(score?.good, 10) || 0) > 0 ||
+    (parseInt(score?.bad, 10) || 0) > 0 ||
+    (parseInt(score?.miss, 10) || 0) > 0
+  );
 }
 
 function YouTubeBadgeIcon({ className = '' }) {
@@ -133,6 +146,8 @@ function getClearItems(item) {
     date_played: item.date_played || '',
     played_at_utc: item.played_at_utc || '',
     machine_name: item.machine_name || '',
+    play_id: item.play_id || '',
+    user_id: item.user_id || '',
   }];
 
   try {
@@ -168,13 +183,15 @@ function getClearItems(item) {
       date_played: c.date_played || item.date_played || '',
       played_at_utc: c.played_at_utc || item.played_at_utc || '',
       machine_name: c.machine_name || item.machine_name || '',
+      play_id: c.play_id || item.play_id || '',
+      user_id: c.user_id || item.user_id || '',
     }));
   } catch {
     return fallback;
   }
 }
 
-function ScoreDetailModal({ score, jacketUrl, chartLink, onClose }) {
+function ScoreDetailModal({ score, jacketUrl, chartLink, onClose, missingJudgmentHint = '' }) {
   return (
     <ScoreSnapshotModal
       score={score}
@@ -183,6 +200,8 @@ function ScoreDetailModal({ score, jacketUrl, chartLink, onClose }) {
       directMessageLinkShare={score?._dmLinkShare || null}
       modalLabel="Score details"
       onClose={onClose}
+      playId={score?.play_id || score?.id}
+      missingJudgmentHint={missingJudgmentHint}
     />
   );
 }
@@ -518,6 +537,11 @@ export function SingleUpscorePage() {
   const flag = getCountryFlag(item.nationality);
   const postPumbilityGain = parsePumbilityGain(item.pumbility_gain);
   const postSinglesPumbilityGain = parsePumbilityGain(item.singles_pumbility_gain);
+  const selectedScoreMissingJudgmentHint = !selectedScore
+    ? ''
+    : (!hasScoreJudgments(selectedScore) && !selectedScore.play_id
+      ? 'Judgment breakdown unavailable for this imported PIU Game best-score upscore.'
+      : '');
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
@@ -608,7 +632,12 @@ export function SingleUpscorePage() {
                       type="button"
                       className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-sky-400/35 bg-sky-500/10 transition-colors hover:bg-sky-500/20"
                       title="Open session replay clip"
-                      onClick={() => setSelectedReplay({ url: u.replay_embed_url, title: buildReplayModalTitle(u) })}
+                      onClick={() => setSelectedReplay({
+                        url: u.replay_embed_url,
+                        title: buildReplayModalTitle(u),
+                        playId: u.play_id || u.id || '',
+                        ownerId: u.user_id || item.user_id || '',
+                      })}
                     >
                       <YouTubeBadgeIcon className="h-4 w-4 text-sky-300" />
                     </button>
@@ -691,12 +720,17 @@ export function SingleUpscorePage() {
         jacketUrl={selectedScore?._jacketUrl || ''}
         chartLink={selectedScore?._chartLink || ''}
         onClose={() => setSelectedScore(null)}
+        missingJudgmentHint={selectedScoreMissingJudgmentHint}
       />
       {selectedReplay && (
         <YouTubeReplayModal
           url={selectedReplay.url}
           title={selectedReplay.title}
           onClose={() => setSelectedReplay(null)}
+          commentThread={selectedReplay.playId ? {
+            itemId: selectedReplay.playId,
+            ownerId: selectedReplay.ownerId || '',
+          } : null}
         />
       )}
     </div>
@@ -740,6 +774,11 @@ export function SingleClearPage() {
   const flag = getCountryFlag(item.nationality);
   const postPumbilityGain = parsePumbilityGain(item.pumbility_gain);
   const postSinglesPumbilityGain = parsePumbilityGain(item.singles_pumbility_gain);
+  const selectedScoreMissingJudgmentHint = !selectedScore
+    ? ''
+    : (!hasScoreJudgments(selectedScore) && !selectedScore.play_id
+      ? 'Judgment breakdown unavailable for this imported PIU Game best-score clear.'
+      : '');
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
@@ -829,7 +868,12 @@ export function SingleClearPage() {
                       type="button"
                       className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-sky-400/35 bg-sky-500/10 transition-colors hover:bg-sky-500/20"
                       title="Open session replay clip"
-                      onClick={() => setSelectedReplay({ url: clear.replay_embed_url, title: buildReplayModalTitle(clear) })}
+                      onClick={() => setSelectedReplay({
+                        url: clear.replay_embed_url,
+                        title: buildReplayModalTitle(clear),
+                        playId: clear.play_id || '',
+                        ownerId: clear.user_id || item.user_id || '',
+                      })}
                     >
                       <YouTubeBadgeIcon className="h-4 w-4 text-sky-300" />
                     </button>
@@ -903,12 +947,17 @@ export function SingleClearPage() {
         jacketUrl={selectedScore?._jacketUrl || ''}
         chartLink={selectedScore?._chartLink || ''}
         onClose={() => setSelectedScore(null)}
+        missingJudgmentHint={selectedScoreMissingJudgmentHint}
       />
       {selectedReplay && (
         <YouTubeReplayModal
           url={selectedReplay.url}
           title={selectedReplay.title}
           onClose={() => setSelectedReplay(null)}
+          commentThread={selectedReplay.playId ? {
+            itemId: selectedReplay.playId,
+            ownerId: selectedReplay.ownerId || '',
+          } : null}
         />
       )}
     </div>
@@ -919,9 +968,16 @@ export function SingleWeeklyChallengePlayPage() {
   const { id } = useParams();
   const [item, setItem] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [jacketLookup, setJacketLookup] = useState({});
+  const [chartKeyMap, setChartKeyMap] = useState({});
+  const [selectedScore, setSelectedScore] = useState(null);
+  const [selectedReplay, setSelectedReplay] = useState(null);
+  const focusCommentId = new URLSearchParams(useLocation().search).get('comment');
 
   useEffect(() => {
     getWeeklyChallengePlay(id).then(setItem).catch(() => {}).finally(() => setLoading(false));
+    getJacketMap().then(setJacketLookup).catch(() => {});
+    getChartKeyMap().then(setChartKeyMap).catch(() => {});
   }, [id]);
 
   if (loading) return <div className="max-w-2xl mx-auto px-4 py-12 text-center text-gray-500">Loading...</div>;
@@ -932,6 +988,18 @@ export function SingleWeeklyChallengePlayPage() {
   const weekKey = item.week_key || '';
   const avatarUrl = item.avatar ? getAvatarUrl(item.avatar) : '';
   const flag = getCountryFlag(item.nationality);
+  const wcLinkShare = buildWcPlayLinkShare({
+    playPostId: item.id,
+    username: item.username,
+    avatar: avatarUrl,
+    weekKey,
+    plays,
+  });
+  const wcChallengeOptions = buildWcPlayChallengeOptions({
+    playPostId: item.id,
+    username: item.username,
+    plays,
+  });
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
@@ -956,25 +1024,102 @@ export function SingleWeeklyChallengePlayPage() {
 
         <div className="space-y-2">
           {plays.map((play, i) => {
-            const isSingle = play.mode === 'Single';
+            const rank = getRank(play.score);
+            const grade = parseGrade(play.grade, rank.label);
+            const jacketUrl = resolveChartJacketUrl({
+              title: play.song_title,
+              mode: play.mode,
+              level: play.level,
+              jacketLookup,
+            });
+            const normalizedTitle = (play.song_title || '').toLowerCase().replace(/\s+/g, ' ').trim();
+            const exactKey = `${normalizedTitle}|${play.mode}|${play.level}`;
+            const chartId = chartKeyMap?.[exactKey] || chartKeyMap?.[normalizedTitle];
+            const chartLink = chartId ? `/songs/chart/${chartId}` : `/songs?q=${encodeURIComponent(play.song_title || '')}`;
+
             return (
-              <div key={i} className="flex items-center gap-3 py-1.5">
+              <div key={i} className="flex items-center gap-3 py-1.5 border-b border-piu-border/20 last:border-0">
+                <Link to={chartLink} className="group shrink-0">
+                  <PiuChartJacket
+                    title={play.song_title}
+                    mode={play.mode}
+                    level={play.level}
+                    jacketUrl={jacketUrl}
+                    size="md"
+                    imageClassName="group-hover:scale-[1.04]"
+                  />
+                </Link>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-display font-bold truncate text-white">{play.song_title}</p>
                   <div className="flex items-center gap-1.5 mt-0.5">
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-display font-bold ${isSingle ? 'bg-red-600/20 text-red-400' : 'bg-green-600/20 text-green-400'}`}>
-                      {isSingle ? 'S' : 'D'}{play.level}
-                    </span>
                     {play.weekly_challenge_rank && (
-                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-300 border border-purple-500/25 font-display font-black">
+                      <Link to={`/weekly-challenges?week=${play.weekly_challenge_week_key || weekKey}`} className="text-[9px] px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-300 border border-purple-500/25 font-display font-black hover:bg-purple-500/25 transition-colors">
                         WC #{play.weekly_challenge_rank}
+                      </Link>
+                    )}
+                    {play.rating_points > 0 && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-300 font-display font-black">
+                        {play.rating_points} pts
                       </span>
                     )}
                   </div>
                 </div>
-                <div className="text-right shrink-0">
-                  <span className="font-display font-bold text-xs text-gray-300">{play.grade}</span>
-                  <p className="font-mono text-xs font-bold text-gray-300">{(parseInt(play.score, 10) || 0).toLocaleString()}</p>
+                <div className="flex items-center gap-2 shrink-0">
+                  {play.replay_embed_url && (
+                    <button
+                      type="button"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-sky-400/35 bg-sky-500/10 transition-colors hover:bg-sky-500/20"
+                      title="Open replay clip"
+                      onClick={() => setSelectedReplay({
+                        url: play.replay_embed_url,
+                        title: buildReplayModalTitle(play),
+                        playId: play.play_id || '',
+                        ownerId: play.user_id || item.user_id || '',
+                      })}
+                    >
+                      <YouTubeBadgeIcon className="h-4 w-4 text-sky-300" />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="text-right shrink-0 hover:opacity-80 transition-opacity cursor-pointer"
+                    onClick={() => setSelectedScore({
+                      song_title: play.song_title,
+                      mode: play.mode,
+                      level: play.level,
+                      score: play.score,
+                      new_score: play.score,
+                      grade: play.grade,
+                      new_grade: play.grade,
+                      plate: play.plate || '',
+                      background_url: play.background_url || '',
+                      perfect: play.perfect || 0,
+                      great: play.great || 0,
+                      good: play.good || 0,
+                      bad: play.bad || 0,
+                      miss: play.miss || 0,
+                      max_combo: play.max_combo || 0,
+                      replay_embed_url: play.replay_embed_url || '',
+                      replay_video_id: play.replay_video_id || '',
+                      replay_start_seconds: play.replay_start_seconds || 0,
+                      replay_end_seconds: play.replay_end_seconds || 0,
+                      date_played: play.date_played || play.played_at_utc || '',
+                      play_id: play.play_id || '',
+                      user_id: item.user_id,
+                      username: item.username,
+                      _jacketUrl: jacketUrl,
+                      _chartLink: chartLink,
+                    })}
+                    title="View score details"
+                  >
+                    <span
+                      className={`text-xs font-display font-bold ${getGradeColor(grade.display, play.score)} ${grade.isBroken ? 'grade-broken' : ''}`}
+                      data-grade={grade.display}
+                    >
+                      {grade.display}
+                    </span>
+                    <p className="font-mono text-xs font-bold text-gray-300">{(parseInt(play.score, 10) || 0).toLocaleString()}</p>
+                  </button>
                 </div>
               </div>
             );
@@ -982,7 +1127,46 @@ export function SingleWeeklyChallengePlayPage() {
         </div>
 
         <p className="text-[10px] text-gray-500 mt-3">{timeAgo(item.created_at)}</p>
+
+        <div className="border-t border-piu-border/20 pt-2 mt-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <ItemPumpButton itemId={item.id} initialCount={item.pump_count || 0} initialPumped={item.user_pumped} pumpFn={pumpWeeklyChallengePlay} getPumpersFn={getWeeklyChallengePlayPumpers} />
+            <ItemCommentSection
+              itemId={item.id}
+              commentCount={item.comment_count || 0}
+              commentType="weekly_challenge"
+              getCommentsFn={getWeeklyChallengePlayComments}
+              addCommentFn={addWeeklyChallengePlayComment}
+              deleteCommentFn={deleteWeeklyChallengePlayComment}
+              focusCommentId={focusCommentId}
+            />
+            <ShareButton path={`/weekly-challenge/${item.id}`} />
+            <SendToDirectMessageButton
+              linkShare={wcLinkShare}
+              challengeOptions={wcChallengeOptions}
+              variant="icon"
+            />
+          </div>
+        </div>
       </div>
+
+      <ScoreDetailModal
+        score={selectedScore}
+        jacketUrl={selectedScore?._jacketUrl || ''}
+        chartLink={selectedScore?._chartLink || ''}
+        onClose={() => setSelectedScore(null)}
+      />
+      {selectedReplay && (
+        <YouTubeReplayModal
+          url={selectedReplay.url}
+          title={selectedReplay.title}
+          onClose={() => setSelectedReplay(null)}
+          commentThread={selectedReplay.playId ? {
+            itemId: selectedReplay.playId,
+            ownerId: selectedReplay.ownerId || '',
+          } : null}
+        />
+      )}
     </div>
   );
 }

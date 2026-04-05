@@ -67,6 +67,8 @@ function sanitizeReplayHighlight(entry) {
     replay_start_seconds: toInt(src.replay_start_seconds),
     replay_end_seconds: toInt(src.replay_end_seconds),
     highlight_reason: String(src.highlight_reason || ''),
+    play_post_id: toInt(src.play_post_id),
+    play_post_comment_count: toInt(src.play_post_comment_count),
   };
 }
 

@@ -1451,6 +1451,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/tournament/new" element={<TournamentSetup />} />
+            <Route path="/tournament/:id/edit" element={<TournamentSetup />} />
             <Route path="/tournament/:id/watch" element={<TournamentWatch />} />
             <Route path="/tournament/:id/overlay" element={<TournamentOverlay />} />
             <Route path="/tournament/:id/embed" element={<TournamentEmbed />} />
@@ -1497,6 +1498,7 @@ export default function App() {
             <Route path="/training" element={<TrainingPage />} />
             <Route path="/head-to-head" element={<HeadToHeadPage />} />
             <Route path="/fun" element={<FunPage />} />
+            <Route path="/fantasy-match" element={<Navigate to="/fun?tab=fantasy" replace />} />
             <Route path="/motion" element={<Navigate to="/fun?tab=motion" replace />} />
             <Route path="/chat" element={<ChatPage />} />
             <Route path="/stories/archive" element={<StoryArchivePage />} />

@@ -928,6 +928,8 @@ function initializeDb() {
       location_lat REAL DEFAULT NULL,
       location_lng REAL DEFAULT NULL,
       timezone TEXT DEFAULT '',
+      failed_login_attempts INT NOT NULL DEFAULT 0,
+      login_locked_until TEXT DEFAULT '',
       created_at TEXT DEFAULT (datetime('now'))
     );
 
@@ -1924,6 +1926,9 @@ function initializeDb() {
   }
   if (!recentIndexes.includes('idx_recently_played_played_at_utc')) {
     db.exec('CREATE INDEX IF NOT EXISTS idx_recently_played_played_at_utc ON user_recently_played(user_id, played_at_utc DESC, id DESC)');
+  }
+  if (!recentIndexes.includes('idx_recently_played_feed_lookup')) {
+    db.exec('CREATE INDEX IF NOT EXISTS idx_recently_played_feed_lookup ON user_recently_played(user_id, song_title, mode, level, score, date_played DESC, id DESC)');
   }
   if (!recentIndexes.includes('idx_recently_played_shoe')) {
     db.exec('CREATE INDEX IF NOT EXISTS idx_recently_played_shoe ON user_recently_played(shoe_id)');
@@ -3079,6 +3084,8 @@ function initializeDb() {
     ['playing_status', "TEXT DEFAULT ''"],
     ['updated_at', "TEXT DEFAULT ''"],
     ['timezone', "TEXT DEFAULT ''"],
+    ['failed_login_attempts', 'INT NOT NULL DEFAULT 0'],
+    ['login_locked_until', "TEXT DEFAULT ''"],
   ];
   for (const [col, type] of userMigrations) {
     if (!userCols.includes(col)) {
@@ -3816,6 +3823,16 @@ function initializeDb() {
       parent_id INTEGER DEFAULT NULL,
       created_at TEXT DEFAULT (datetime('now'))
     );
+  `);
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_weekly_challenge_plays_user_week_created
+      ON user_weekly_challenge_plays(user_id, week_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_weekly_challenge_play_comments_post
+      ON weekly_challenge_play_comments(play_post_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_songs_title_mode_level
+      ON songs(title, mode, level);
+    CREATE INDEX IF NOT EXISTS idx_songs_jacket_mode_level
+      ON songs(jacket_url, mode, level);
   `);
 
   // Weekly challenge superlatives table

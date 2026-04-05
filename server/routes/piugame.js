@@ -21,8 +21,13 @@ const { notifyActivitySubscribers, buildProfilePath } = require('../lib/activity
 const { getUserTitleProgress, updateUserSkillTitleFromBestScores, LEVEL_BASE_POINTS, GRADE_MULTIPLIER, SCORE_TO_GRADE, calculateRatingPoints, gradeFromScore, normalizeGrade } = require('../lib/titleProgress');
 const { buildPumbilityCandidates, getNextGradeThreshold, isPassingScore, isFailGrade, SCORE_TO_GRADE_ASC } = require('../lib/pumbilityCandidates');
 const { checkSssAchievements, checkStreakAchievements } = require('../lib/achievements');
-const { annotateWeeklyChallengePlayRows, ensureCurrentWeeklyChallengeWeek } = require('../lib/weeklyChallenges');
+const {
+  annotateWeeklyChallengePlayRows,
+  ensureCurrentWeeklyChallengeWeek,
+  persistWeeklyChallengePlayPosts,
+} = require('../lib/weeklyChallenges');
 const { normalizePiugamePlayedAtUtc } = require('../lib/piugameDate');
+const { enrichClearRows, enrichUpscoreRows } = require('../lib/activityPostEnrichment');
 const {
   calculatePlayLoad,
   computeAllProfiles,
@@ -2364,7 +2369,7 @@ function findLeaderboardRankByName(db, name) {
 function insertGroupedNewClearPost(db, userId, clears, options = {}) {
   if (!Array.isArray(clears) || clears.length === 0) return null;
 
-  const normalized = clears.map(c => ({
+  const normalized = enrichClearRows(db, userId, clears.map(c => ({
     entry_type: c.entry_type || 'song_clear',
     song_title: c.song_title,
     mode: c.mode,
@@ -2387,7 +2392,7 @@ function insertGroupedNewClearPost(db, userId, clears, options = {}) {
     replay_video_id: c.replay_video_id || '',
     replay_start_seconds: Math.max(0, parseInt(c.replay_start_seconds, 10) || 0),
     replay_end_seconds: Math.max(0, parseInt(c.replay_end_seconds, 10) || 0),
-  }));
+  })));
   const first = normalized[0];
   const explicitGain = options?.pumbilityGain;
   const postPumbilityGain = Number.isFinite(Number(explicitGain))
@@ -2522,6 +2527,9 @@ async function syncRecentlyPlayedForUser(user, options = {}) {
   if (!userId) throw new Error('User is required');
 
   const persistActivityPosts = options.persistActivityPosts !== false;
+  const persistWeeklyChallengePosts = options.persistWeeklyChallengePosts == null
+    ? persistActivityPosts
+    : options.persistWeeklyChallengePosts !== false;
   const profile = db.prepare('SELECT username FROM users WHERE id = ?').get(userId);
   const actorUsername = String(options.username || user?.username || profile?.username || '').trim() || 'Someone';
   const profileLink = buildProfilePath(actorUsername) || `/profile/${userId}`;
@@ -2582,11 +2590,11 @@ async function syncRecentlyPlayedForUser(user, options = {}) {
 
   const insertBest = db.prepare(`
     INSERT INTO user_best_scores (user_id, song_title, mode, level, score, grade, plate, shoe_id, over_top100_rank)
-    VALUES (?, ?, ?, ?, ?, ?, '', ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const replaceBest = db.prepare(`
     UPDATE user_best_scores
-    SET score = ?, grade = ?, plate = '', shoe_id = ?, over_top100_rank = ?
+    SET score = ?, grade = ?, plate = ?, shoe_id = ?, over_top100_rank = ?
     WHERE user_id = ? AND song_title = ? AND mode = ? AND level = ?
   `);
 
@@ -2739,9 +2747,9 @@ async function syncRecentlyPlayedForUser(user, options = {}) {
           }
 
           if (!existing) {
-            insertBest.run(userId, songTitle, mode, level, score, grade, activeShoeId, overTop100Rank);
+            insertBest.run(userId, songTitle, mode, level, score, grade, plate, activeShoeId, overTop100Rank);
           } else {
-            replaceBest.run(score, grade, activeShoeId, overTop100Rank, userId, songTitle, mode, level);
+            replaceBest.run(score, grade, plate, activeShoeId, overTop100Rank, userId, songTitle, mode, level);
           }
           if (level >= 10) {
             touchedPlayDataLevels.add(String(level));
@@ -2810,7 +2818,7 @@ async function syncRecentlyPlayedForUser(user, options = {}) {
 
     if (persistActivityPosts && upscoreRowsWithGains.length > 0) {
       // Deduplicate: skip if an identical upscore post was created in the last 60 seconds
-      const upscoreJson = JSON.stringify(upscoreRowsWithGains);
+      const upscoreJson = JSON.stringify(enrichUpscoreRows(db, userId, upscoreRowsWithGains));
       const recentDupe = db.prepare(`
         SELECT id FROM user_upscores
         WHERE user_id = ? AND created_at >= datetime('now', '-60 seconds') AND upscores_json = ?
@@ -2835,109 +2843,9 @@ async function syncRecentlyPlayedForUser(user, options = {}) {
   txn();
 
   // Create or update weekly challenge play posts
-  if (persistActivityPosts && wcAllPlays.length > 0) {
+  if (persistWeeklyChallengePosts && wcAllPlays.length > 0) {
     try {
-      ensureCurrentWeeklyChallengeWeek(db);
-      // Annotate with WC data
-      annotateWeeklyChallengePlayRows(db, wcAllPlays, userId);
-      // Filter to only plays that matched a WC chart
-      const wcMatched = wcAllPlays.filter(p => p.weekly_challenge_week_key);
-      if (wcMatched.length > 0) {
-        // Group by week
-        const byWeek = {};
-        for (const p of wcMatched) {
-          const wk = p.weekly_challenge_week_key;
-          if (!byWeek[wk]) byWeek[wk] = [];
-          byWeek[wk].push(p);
-        }
-        for (const [weekKey, newPlays] of Object.entries(byWeek)) {
-          const weekRow = db.prepare('SELECT id FROM weekly_challenge_weeks WHERE week_key = ?').get(weekKey);
-          if (!weekRow) continue;
-
-          // Build play entry for each new play
-          const newEntries = newPlays.map(p => ({
-            song_title: p.song_title,
-            mode: p.mode,
-            level: p.level,
-            score: p.score,
-            grade: p.grade,
-            plate: p.plate || '',
-            background_url: p.background_url || '',
-            machine_name: p.machine_name || '',
-            played_at_utc: p.played_at_utc || '',
-            date_played: p.date_played || '',
-            perfect: p.perfect || 0,
-            great: p.great || 0,
-            good: p.good || 0,
-            bad: p.bad || 0,
-            miss: p.miss || 0,
-            replay_embed_url: p.replay_embed_url || '',
-            replay_video_id: p.replay_video_id || '',
-            replay_start_seconds: p.replay_start_seconds || 0,
-            replay_end_seconds: p.replay_end_seconds || 0,
-            weekly_challenge_rank: p.weekly_challenge_rank || null,
-            weekly_challenge_week_key: p.weekly_challenge_week_key,
-            weekly_challenge_chart_id: p.weekly_challenge_chart_id || null,
-            rating_points: calculateRatingPoints(p.level, p.grade, p.score),
-          }));
-
-          // Dedupe new entries to best per chart
-          const bestByChart = new Map();
-          for (const p of newEntries) {
-            const key = `${p.song_title}|${p.mode}|${p.level}`;
-            const existing = bestByChart.get(key);
-            if (!existing || p.score > existing.score) {
-              bestByChart.set(key, p);
-            }
-          }
-
-          // Check existing posts for this user+week to find previously posted scores
-          const existingPosts = db.prepare(
-            'SELECT id, plays_json FROM user_weekly_challenge_plays WHERE user_id = ? AND week_id = ? ORDER BY id ASC'
-          ).all(userId, weekRow.id);
-
-          // Build map of all previously posted best scores
-          const previousBests = new Map();
-          for (const post of existingPosts) {
-            try {
-              const oldPlays = JSON.parse(post.plays_json || '[]');
-              for (const p of oldPlays) {
-                const key = `${p.song_title}|${p.mode}|${p.level}`;
-                const prev = previousBests.get(key);
-                if (!prev || p.score > prev.score) previousBests.set(key, p);
-              }
-            } catch {}
-          }
-
-          // Filter to only charts that are new or have a higher score than previously posted
-          const differential = [];
-          for (const [key, play] of bestByChart) {
-            const prev = previousBests.get(key);
-            if (!prev || play.score > prev.score) {
-              differential.push(play);
-            }
-          }
-
-          if (differential.length === 0) continue; // nothing new to post
-
-          const playsJson = JSON.stringify(differential);
-          const hashInput = differential
-            .map(p => `${p.song_title}|${p.mode}|${p.level}|${p.score}`)
-            .sort()
-            .join('\n');
-          const contentHash = crypto.createHash('sha256').update(hashInput).digest('hex').slice(0, 32);
-
-          // Check for exact duplicate (same scores already posted)
-          const dupeCheck = db.prepare(
-            'SELECT id FROM user_weekly_challenge_plays WHERE user_id = ? AND week_id = ? AND content_hash = ? LIMIT 1'
-          ).get(userId, weekRow.id, contentHash);
-          if (dupeCheck) continue;
-
-          db.prepare(
-            'INSERT INTO user_weekly_challenge_plays (user_id, week_id, plays_json, content_hash) VALUES (?, ?, ?, ?)'
-          ).run(userId, weekRow.id, playsJson, contentHash);
-        }
-      }
+      persistWeeklyChallengePlayPosts(db, wcAllPlays, userId);
     } catch (wcErr) {
       console.warn(`[WeeklyChallenge] WC play post creation failed for ${userId}: ${wcErr.message}`);
     }
@@ -3229,7 +3137,7 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
         newClears = pumbilityGains.clears;
 
         if (upscores.length > 0) {
-          const upscoreJson = JSON.stringify(upscores);
+          const upscoreJson = JSON.stringify(enrichUpscoreRows(db, userId, upscores));
           const recentDupe = db.prepare(`
             SELECT id FROM user_upscores
             WHERE user_id = ? AND created_at >= datetime('now', '-60 seconds') AND upscores_json = ?
@@ -4280,7 +4188,7 @@ router.get('/pumbility/:userId', async (req, res) => {
     const sync = db.prepare('SELECT pumbility_value, last_pumbility_sync, last_best_scores_sync, best_scores_imported FROM user_piugame_sync WHERE user_id = ?').get(userId);
 
     const bestScores = db.prepare(
-      'SELECT song_title, mode, level, score, grade, background_url, over_top100_rank FROM user_best_scores WHERE user_id = ? AND score > 0'
+      'SELECT song_title, mode, level, score, grade, plate, background_url, over_top100_rank FROM user_best_scores WHERE user_id = ? AND score > 0'
     ).all(userId).filter((row) => isPassingScore(row.score, row.grade));
 
     const allRated = [];
@@ -5057,7 +4965,7 @@ router.get('/leaderboards/pumbility', requireAuth, (req, res) => {
 router.get('/leaderboards/pumbility/player-sheet', requireAuth, (req, res) => {
   const db = getDb();
   const metricRaw = String(req.query?.metric || 'overall').trim().toLowerCase();
-  const metric = metricRaw === 'singles' ? 'singles' : 'overall';
+  const metric = metricRaw === 'singles' ? 'singles' : metricRaw === 'doubles' ? 'doubles' : 'overall';
   const requestedName = String(req.query?.player_name || '').replace(/\s+/g, ' ').trim();
   const requestedUserId = String(req.query?.user_id || '').trim();
   if (!requestedName && !requestedUserId) {
@@ -5115,7 +5023,7 @@ router.get('/leaderboards/pumbility/player-sheet', requireAuth, (req, res) => {
 
   if (resolvedUserId) {
     const localScoreRows = db.prepare(`
-      SELECT bs.song_title, bs.mode, bs.level, bs.score, bs.grade, bs.background_url
+      SELECT bs.song_title, bs.mode, bs.level, bs.score, bs.grade, bs.plate, bs.background_url
       FROM user_best_scores bs
       WHERE bs.user_id = ? AND bs.score > 0
     `).all(resolvedUserId);
@@ -5127,6 +5035,7 @@ router.get('/leaderboards/pumbility/player-sheet', requireAuth, (req, res) => {
       const mode = String(scoreRow?.mode || '').trim();
       if (mode !== 'Single' && mode !== 'Double') continue;
       if (metric === 'singles' && mode !== 'Single') continue;
+      if (metric === 'doubles' && mode !== 'Double') continue;
       if (!isPassingScore(score, scoreRow?.grade)) continue;
       const grade = normalizeGrade(scoreRow?.grade || gradeFromScore(score));
       const rating = getChartRatingPoints(score, grade, level);
@@ -5139,6 +5048,7 @@ router.get('/leaderboards/pumbility/player-sheet', requireAuth, (req, res) => {
         level,
         score,
         grade,
+        plate: String(scoreRow?.plate || '').trim(),
         rating,
         jacket_url: '',
         background_url: String(scoreRow?.background_url || '').trim(),
@@ -5158,7 +5068,9 @@ router.get('/leaderboards/pumbility/player-sheet', requireAuth, (req, res) => {
   if (!rows.length) {
     const modeSqlFilter = metric === 'singles'
       ? `AND c.mode = 'Single'`
-      : `AND c.mode IN ('Single', 'Double')`;
+      : metric === 'doubles'
+        ? `AND c.mode = 'Double'`
+        : `AND c.mode IN ('Single', 'Double')`;
     let overRows = db.prepare(`
       SELECT r.chart_key, r.rank, r.score, r.grade, r.played_at, r.player_name, r.player_avatar_url,
              c.song_title, c.mode, c.level, c.jacket_url,
@@ -5218,6 +5130,7 @@ router.get('/leaderboards/pumbility/player-sheet', requireAuth, (req, res) => {
       const mode = String(row?.mode || '').trim();
       if (mode !== 'Single' && mode !== 'Double') continue;
       if (metric === 'singles' && mode !== 'Single') continue;
+      if (metric === 'doubles' && mode !== 'Double') continue;
       if (!isPassingScore(score, row?.grade)) continue;
       const grade = normalizeGrade(row?.grade || gradeFromScore(score));
       const rating = getChartRatingPoints(score, grade, level);
@@ -5322,6 +5235,7 @@ router.get('/leaderboards/pumbility/player-sheet', requireAuth, (req, res) => {
       level: parseInt(row?.level, 10) || 0,
       score: Math.max(0, parseInt(row?.score, 10) || 0),
       grade: String(row?.grade || ''),
+      plate: String(row?.plate || ''),
       rating: Math.max(0, parseInt(row?.rating, 10) || 0),
       jacket_url: String(row?.jacket_url || ''),
       background_url: String(row?.background_url || ''),
@@ -5507,7 +5421,7 @@ router.get('/leaderboards/my-top100-scores', requireAuth, (req, res) => {
   const totalPages = total > 0 ? Math.ceil(total / limit) : 1;
 
   const scoreRows = db.prepare(`
-    SELECT id, song_title, mode, level, score, grade, background_url, over_top100_rank
+    SELECT id, song_title, mode, level, score, grade, plate, background_url, over_top100_rank
     FROM user_best_scores
     WHERE user_id = ? AND score > 0 AND over_top100_rank BETWEEN 1 AND 100
     ORDER BY over_top100_rank ASC, level DESC, score DESC, song_title COLLATE NOCASE ASC
@@ -5579,6 +5493,7 @@ router.get('/leaderboards/my-top100-scores', requireAuth, (req, res) => {
       level: parseInt(row.level, 10) || 0,
       score,
       grade: String(row.grade || ''),
+      plate: String(row.plate || ''),
       player_name: String(req.user?.username || ''),
       over_top100_rank: Math.max(0, parseInt(row.over_top100_rank, 10) || 0),
       over_top100_prev_rank: Math.max(0, parseInt(overRow?.prev_rank, 10) || 0),
@@ -5605,7 +5520,7 @@ router.get('/pumbility-recommendations/:userId', (req, res) => {
   const { metric, modeFilter } = normalizeRecommendationMetric(req.query.metric, req.query.mode);
 
   const bestScores = db.prepare(
-    'SELECT song_title, mode, level, score, grade, background_url FROM user_best_scores WHERE user_id = ? AND score > 0 ORDER BY level DESC, score DESC'
+    'SELECT song_title, mode, level, score, grade, plate, background_url FROM user_best_scores WHERE user_id = ? AND score > 0 ORDER BY level DESC, score DESC'
   ).all(userId).filter((row) => isPassingScore(row.score, row.grade));
   const payload = buildPumbilityRecommendations(bestScores, { metric, modeFilter });
   res.json(payload);

@@ -22,8 +22,14 @@ const GRADE_MAP = {
 
 // Plate mapping
 const PLATE_MAP = {
-  pg: 'PG', ug: 'UG', eg: 'EG', sg: 'SG',
-  mg: 'MG', tg: 'TG', fg: 'FG', rg: 'RG',
+  pg: 'PG', perfectgame: 'PG',
+  ug: 'UG', ultimategame: 'UG',
+  eg: 'EG', extremegame: 'EG',
+  sg: 'SG', superbgame: 'SG',
+  mg: 'MG', marvelousgame: 'MG',
+  tg: 'TG', talentedgame: 'TG',
+  fg: 'FG', fairgame: 'FG',
+  rg: 'RG', roughgame: 'RG',
 };
 
 // Mode letter mapping from image URLs
@@ -260,9 +266,65 @@ function parseGradeFromUrl(src) {
 /**
  * Parse plate from plate image URL
  */
+function normalizePlateToken(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\.[a-z0-9]+$/i, '')
+    .replace(/[^a-z]/g, '');
+}
+
+function parsePlateToken(value) {
+  const token = normalizePlateToken(value);
+  return token ? (PLATE_MAP[token] || '') : '';
+}
+
+function parsePlateFromText(text) {
+  const normalized = String(text || '').toLowerCase();
+  if (!normalized) return '';
+  const match = normalized.match(
+    /\b(perfect|ultimate|extreme|superb|marvelous|talented|fair|rough)[\s_-]*game\b/
+  );
+  return match ? parsePlateToken(`${match[1]}game`) : '';
+}
+
 function parsePlateFromUrl(src) {
-  const match = src.match(/\/l_img\/plate\/(\w+)\.png/);
-  return match ? (PLATE_MAP[match[1]] || match[1]) : '';
+  const raw = String(src || '').trim();
+  if (!raw) return '';
+
+  const normalized = raw.toLowerCase();
+  const platePathMatch = normalized.match(/\/plate\/([^/?#]+?)(?:\.[a-z0-9]+)?(?:[?#]|$)/i);
+  if (platePathMatch?.[1]) {
+    const parsed = parsePlateToken(platePathMatch[1]);
+    if (parsed) return parsed;
+  }
+
+  const filenameMatch = normalized.match(
+    /(?:^|\/)(pg|ug|eg|sg|mg|tg|fg|rg|perfect[_-]?game|ultimate[_-]?game|extreme[_-]?game|superb[_-]?game|marvelous[_-]?game|talented[_-]?game|fair[_-]?game|rough[_-]?game)(?:\.[a-z0-9]+)?(?:[?#]|$)/i
+  );
+  return filenameMatch?.[1] ? parsePlateToken(filenameMatch[1]) : '';
+}
+
+function extractPlateFromContainer($, container) {
+  let plate = '';
+
+  container.find('img').each((_, img) => {
+    if (plate) return;
+    const $img = $(img);
+    const candidates = [
+      $img.attr('src'),
+      $img.attr('data-src'),
+      $img.attr('alt'),
+      $img.attr('title'),
+    ];
+    for (const candidate of candidates) {
+      plate = parsePlateFromUrl(candidate) || parsePlateFromText(candidate);
+      if (plate) break;
+    }
+  });
+
+  if (plate) return plate;
+  return parsePlateFromText(container.text());
 }
 
 /**
@@ -642,8 +704,9 @@ async function scrapeBestScores(client, onProgress) {
       const grade = parseGradeFromUrl(gradeImg);
 
       // Plate
-      const plateImg = $li.find('.etc_con .st1 img').first().attr('src') || '';
-      const plate = parsePlateFromUrl(plateImg);
+      const plate = extractPlateFromContainer($, $li.find('.etc_con, div.plate, div.li_in, div.wrap_in').first().length
+        ? $li.find('.etc_con, div.plate, div.li_in, div.wrap_in').first()
+        : $li);
 
       // Background image (song jacket)
       let bgUrl = '';
@@ -1122,8 +1185,7 @@ async function scrapeRecentlyPlayed(client) {
     const judgments = parseJudgmentsFromRecentlyPlayedItem($, $li);
 
     // Plate (e.g. MARVELOUS GAME, PERFECT GAME, etc.)
-    const plateImg = $li.find('.etc_con .st1 img, div.plate img').first().attr('src') || '';
-    const plate = parsePlateFromUrl(plateImg);
+    const plate = extractPlateFromContainer($, $li);
 
     // Judgment breakdown (PERFECT, GREAT, GOOD, BAD, MISS)
     const breakdown = extractJudgmentBreakdown($, $li);

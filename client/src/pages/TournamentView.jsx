@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
   getTournament, getPlayers, getMatches, getPhases,
   generateRoundRobin, generateGauntlet,
@@ -25,6 +25,7 @@ import {
   TournamentPhaseTimeline,
   TournamentTabs,
 } from '../components/tournament/TournamentChrome';
+import { useAuth } from '../contexts/AuthContext';
 
 // Legacy phase tabs for old tournaments without the phase system
 const LEGACY_PHASE_TABS = {
@@ -36,6 +37,8 @@ const LEGACY_PHASE_TABS = {
 
 export default function TournamentView() {
   const { id } = useParams();
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const { addToast } = useToast();
   const [tournament, setTournament] = useState(null);
   const [players, setPlayers] = useState([]);
@@ -202,6 +205,16 @@ export default function TournamentView() {
   if (!tournament) return <div className="text-center py-20 text-red-400">Tournament not found</div>;
 
   const config = tournament.config || {};
+  const canEditSetup = tournament.phase === 'SETUP' && !!user?.is_admin;
+  const editSetupAction = canEditSetup ? (
+    <button
+      type="button"
+      onClick={() => navigate(`/tournament/${id}/edit`)}
+      className="rounded-full border border-white/10 bg-white/6 px-4 py-2 text-xs font-display font-bold uppercase tracking-[0.14em] text-zinc-100 transition-colors hover:border-piu-accent/35 hover:bg-piu-accent/12"
+    >
+      Edit Setup
+    </button>
+  ) : null;
 
   // ── Phase-mode rendering ──
   if (isPhaseMode) {
@@ -251,6 +264,7 @@ export default function TournamentView() {
               `${completedPhases.length}/${phases.length} done`,
               activePhase ? `${activePhase.name || FORMAT_LABELS[activePhase.format]} live` : 'Waiting to start',
             ]}
+            action={editSetupAction}
             flow={<TournamentPhaseTimeline phases={phases} />}
           />
         </div>
@@ -436,6 +450,7 @@ export default function TournamentView() {
             currentRound > 0 ? `Round ${currentRound}/${totalRounds}` : 'Setup mode',
             matchesPerRound > 0 ? `${matchesPerRound} matches per round` : 'Add players to begin',
           ]}
+          action={editSetupAction}
         />
       </div>
 

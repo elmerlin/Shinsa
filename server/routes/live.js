@@ -30,6 +30,8 @@ const {
 const { serializeLiveSessionMarker } = require('../lib/liveSessionMarker');
 const { createUserNotification } = require('../lib/notifications');
 const { normalizePiugamePlayedAtUtc } = require('../lib/piugameDate');
+const { enrichClearRows, enrichUpscoreRows } = require('../lib/activityPostEnrichment');
+const { persistWeeklyChallengePlayPosts } = require('../lib/weeklyChallenges');
 const {
   extractYoutubeVideoId,
   getYoutubeBroadcastById,
@@ -1278,6 +1280,7 @@ async function performLiveSessionSyncForActor(db, session, actor) {
     userId: actor.id,
     username: actor.username,
     persistActivityPosts: false,
+    persistWeeklyChallengePosts: false,
   });
   return applyLiveSyncResult(db, session, syncResult, actor);
 }
@@ -1969,6 +1972,12 @@ function updateGeneratedReplayPosts(db, session, userId, upscoreRows, clearRows)
   const normalizedUserId = String(userId || '').trim();
 
   if (normalizedUserId && Array.isArray(upscoreRows) && upscoreRows.length > 0) {
+    const sanitizedUpscores = enrichUpscoreRows(
+      db,
+      normalizedUserId,
+      upscoreRows.map(stripBufferedRowMetadata),
+      endedAt
+    );
     const upscorePostId = findGeneratedReplayPostId(
       db,
       'user_upscores',
@@ -1979,7 +1988,7 @@ function updateGeneratedReplayPosts(db, session, userId, upscoreRows, clearRows)
     );
     if (upscorePostId) {
       db.prepare('UPDATE user_upscores SET upscores_json = ? WHERE id = ?')
-        .run(JSON.stringify(upscoreRows.map(stripBufferedRowMetadata)), upscorePostId);
+        .run(JSON.stringify(sanitizedUpscores), upscorePostId);
       result.upscore_post_id = upscorePostId;
     }
   }
@@ -1987,6 +1996,12 @@ function updateGeneratedReplayPosts(db, session, userId, upscoreRows, clearRows)
   const clearEntries = (Array.isArray(clearRows) ? clearRows : [])
     .filter((row) => String(row?.entry_type || 'song_clear') !== 'title_unlock');
   if (normalizedUserId && clearEntries.length > 0) {
+    const sanitizedClears = enrichClearRows(
+      db,
+      normalizedUserId,
+      clearRows.map(stripBufferedRowMetadata),
+      endedAt
+    );
     const clearPostId = findGeneratedReplayPostId(
       db,
       'user_new_clears',
@@ -1997,7 +2012,7 @@ function updateGeneratedReplayPosts(db, session, userId, upscoreRows, clearRows)
     );
     if (clearPostId) {
       db.prepare('UPDATE user_new_clears SET clears_json = ? WHERE id = ?')
-        .run(JSON.stringify(clearRows.map(stripBufferedRowMetadata)), clearPostId);
+        .run(JSON.stringify(sanitizedClears), clearPostId);
       result.clear_post_id = clearPostId;
     }
   }
@@ -3616,8 +3631,16 @@ function createParticipantLiveSessionArtifacts(db, session, participant, partici
   const hopShare = isHourOfPowerSession(session)
     ? buildHourOfPowerShare(session, participantDisplayState.hop)
     : null;
-  const filteredUpscores = (Array.isArray(upscoreRows) ? upscoreRows : []).map(stripBufferedRowMetadata);
-  const filteredClears = (Array.isArray(clearRows) ? clearRows : []).map(stripBufferedRowMetadata);
+  const filteredUpscores = enrichUpscoreRows(
+    db,
+    participant.user_id,
+    (Array.isArray(upscoreRows) ? upscoreRows : []).map(stripBufferedRowMetadata)
+  );
+  const filteredClears = enrichClearRows(
+    db,
+    participant.user_id,
+    (Array.isArray(clearRows) ? clearRows : []).map(stripBufferedRowMetadata)
+  );
   const replayRows = [
     ...filteredUpscores,
     ...filteredClears.filter((row) => String(row?.entry_type || 'song_clear') !== 'title_unlock'),
@@ -3632,6 +3655,7 @@ function createParticipantLiveSessionArtifacts(db, session, participant, partici
   let upscorePostId = null;
   let clearPostId = null;
   let summaryPostId = null;
+  let weeklyChallengePostIds = [];
 
   if (filteredUpscores.length > 0) {
     const result = db.prepare(`
@@ -3646,6 +3670,14 @@ function createParticipantLiveSessionArtifacts(db, session, participant, partici
       pumbilityGain: clearGain,
       singlesPumbilityGain: singlesClearGain,
     });
+  }
+
+  if (replayEnhancedPlays.length > 0) {
+    try {
+      weeklyChallengePostIds = persistWeeklyChallengePlayPosts(db, replayEnhancedPlays, participant.user_id);
+    } catch (err) {
+      console.warn(`[WeeklyChallenge] Live session weekly challenge post creation failed for ${participant.user_id}: ${err.message}`);
+    }
   }
 
   if (replayRows.length > 0) {
@@ -3666,6 +3698,7 @@ function createParticipantLiveSessionArtifacts(db, session, participant, partici
     summary,
     hop: participantDisplayState.hop,
     hop_share: hopShare,
+    weekly_challenge_post_ids: weeklyChallengePostIds,
     upscore_post_id: upscorePostId,
     clear_post_id: clearPostId,
     summary_post_id: summaryPostId,
@@ -5458,7 +5491,12 @@ router.post('/sessions/:id/end', requireAuth, async (req, res) => {
     txn();
     clearLiveSessionRuntimeState(db, session.id);
 
-    const anyPostCreated = participantResults.some((result) => result.upscore_post_id || result.clear_post_id || result.summary_post_id);
+    const anyPostCreated = participantResults.some((result) =>
+      result.upscore_post_id
+      || result.clear_post_id
+      || result.summary_post_id
+      || (Array.isArray(result.weekly_challenge_post_ids) && result.weekly_challenge_post_ids.length > 0)
+    );
     if (typeof invalidateRecentActivityCache === 'function' && anyPostCreated) {
       invalidateRecentActivityCache();
     }

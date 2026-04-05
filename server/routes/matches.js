@@ -20,6 +20,97 @@ function parseMatchJSON(m) {
   };
 }
 
+function parseConfig(rawConfig) {
+  if (rawConfig && typeof rawConfig === 'object') return rawConfig;
+  try {
+    return JSON.parse(rawConfig || '{}');
+  } catch {
+    return {};
+  }
+}
+
+function getGauntletLevelBounds(config = {}) {
+  const startLevel = parseInt(
+    config.start_level
+      ?? config.start_single_level
+      ?? config.gauntlet_start_level
+      ?? config.gauntlet_start_single_level,
+    10
+  ) || 19;
+  const finalLevel = parseInt(
+    config.final_level
+      ?? config.final_single_level
+      ?? config.gauntlet_final_level
+      ?? config.gauntlet_final_single_level,
+    10
+  ) || 24;
+  return { startLevel, finalLevel };
+}
+
+function getGauntletMatchRules(config = {}) {
+  const bestOf = parseInt(config.best_of ?? config.gauntlet_best_of, 10) === 1 ? 1 : 3;
+  return {
+    best_of: bestOf,
+    cards_per_draw: bestOf === 1 ? 1 : 5,
+    vetoes_per_player: bestOf === 1 ? 0 : 1,
+    level_mode: 'mixed',
+  };
+}
+
+function getMatchRules(db, match) {
+  let config = {};
+  let format = match.match_type || '';
+
+  if (match.phase_id) {
+    const phase = db.prepare('SELECT format, config FROM tournament_phases WHERE id = ?').get(match.phase_id);
+    if (phase) {
+      format = phase.format || format;
+      config = parseConfig(phase.config);
+    }
+  } else if (match.tournament_id) {
+    const tournament = db.prepare('SELECT config FROM tournaments WHERE id = ?').get(match.tournament_id);
+    if (tournament) config = parseConfig(tournament.config);
+  }
+
+  if (match.match_type === 'gauntlet' || format === 'gauntlet') {
+    return getGauntletMatchRules(config);
+  }
+
+  return {
+    best_of: parseInt(config.best_of, 10) || 3,
+    cards_per_draw: parseInt(config.cards_per_draw, 10) || 5,
+    vetoes_per_player: Number.isFinite(parseInt(config.vetoes_per_player, 10))
+      ? parseInt(config.vetoes_per_player, 10)
+      : 1,
+    level_mode: 'range',
+  };
+}
+
+function getPreferredSongsForLevel(db, level) {
+  let songs = db.prepare('SELECT * FROM songs WHERE level = ? AND flags LIKE ?').all(level, '%cut:2%');
+  if (songs.length === 0) songs = db.prepare('SELECT * FROM songs WHERE level = ?').all(level);
+  return songs;
+}
+
+function mapSelectedSongs(selectedSongs = []) {
+  return selectedSongs.map((song) => ({
+    song_id: song.id,
+    song,
+    title: song.title,
+    mode: song.mode,
+    level: song.level,
+  }));
+}
+
+function shuffle(arr) {
+  const copy = [...arr];
+  for (let i = copy.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
 // GET matches for a tournament (optionally filter by round)
 router.get('/tournament/:tournamentId', (req, res) => {
   const db = getDb();
@@ -43,9 +134,10 @@ router.get('/:id', (req, res) => {
 
   const player1 = match.player1_id ? db.prepare('SELECT * FROM players WHERE id = ?').get(match.player1_id) : null;
   const player2 = match.player2_id ? db.prepare('SELECT * FROM players WHERE id = ?').get(match.player2_id) : null;
+  const matchRules = getMatchRules(db, match);
   db.close();
 
-  res.json({ ...parseMatchJSON(match), player1, player2 });
+  res.json({ ...parseMatchJSON(match), player1, player2, match_rules: matchRules });
 });
 
 // POST generate round robin matches for next round
@@ -138,8 +230,7 @@ router.post('/tournament/:tournamentId/gauntlet', (req, res) => {
     return res.status(400).json({ error: 'Need at least 2 players for gauntlet' });
   }
 
-  const startSingle = config.gauntlet_start_single_level || 19;
-  const finalSingle = config.gauntlet_final_single_level || 24;
+  const { startLevel, finalLevel } = getGauntletLevelBounds(config);
   const totalMatches = players.length - 1;
 
   // Rankings: index 0 = 1st place, index N-1 = last place
@@ -157,16 +248,12 @@ router.post('/tournament/:tournamentId/gauntlet', (req, res) => {
   const createGauntlet = db.transaction(() => {
     for (let i = 0; i < totalMatches; i++) {
       const matchOrder = i + 1;
-      let singleLevel, doubleLevel;
+      let matchLevel;
 
       if (matchOrder === totalMatches) {
-        // Final match uses specified final levels
-        singleLevel = finalSingle;
-        doubleLevel = finalSingle + 1;
+        matchLevel = finalLevel;
       } else {
-        // Increment from start, cap at S23/D24
-        singleLevel = Math.min(startSingle + i, 23);
-        doubleLevel = singleLevel + 1;
+        matchLevel = Math.min(startLevel + i, finalLevel);
       }
 
       // Challenger from standings (going from bottom up)
@@ -187,7 +274,7 @@ router.post('/tournament/:tournamentId/gauntlet', (req, res) => {
       insertMatch.run(
         uuidv4(), tournamentId, 0,
         challengerId, opponentId,
-        singleLevel, doubleLevel,
+        matchLevel, matchLevel,
         i === 0 ? 'PENDING' : 'WAITING',
         matchOrder
       );
@@ -225,34 +312,32 @@ router.post('/:id/draw', (req, res) => {
   const isGauntlet = match.match_type === 'gauntlet';
 
   if (isGauntlet) {
-    // Gauntlet: draw exactly 1 Single at difficulty_min, 1 Double at difficulty_max
-    const singleLevel = match.difficulty_min;
-    const doubleLevel = match.difficulty_max;
+    const matchRules = getMatchRules(db, match);
+    const matchLevel = parseInt(match.difficulty_min, 10) || parseInt(match.difficulty_max, 10) || 19;
+    const songPool = getPreferredSongsForLevel(db, matchLevel);
+    const minimumSongs = matchRules.best_of === 1 ? 1 : 3;
 
-    let singles = db.prepare('SELECT * FROM songs WHERE mode = ? AND level = ? AND flags LIKE ?').all('Single', singleLevel, '%cut:2%');
-    if (singles.length === 0) singles = db.prepare('SELECT * FROM songs WHERE mode = ? AND level = ?').all('Single', singleLevel);
-    let doubles = db.prepare('SELECT * FROM songs WHERE mode = ? AND level = ? AND flags LIKE ?').all('Double', doubleLevel, '%cut:2%');
-    if (doubles.length === 0) doubles = db.prepare('SELECT * FROM songs WHERE mode = ? AND level = ?').all('Double', doubleLevel);
-
-    if (singles.length < 1) {
+    if (songPool.length < minimumSongs) {
       db.close();
-      return res.status(400).json({ error: `No Single charts at level ${singleLevel}` });
-    }
-    if (doubles.length < 1) {
-      db.close();
-      return res.status(400).json({ error: `No Double charts at level ${doubleLevel}` });
+      return res.status(400).json({ error: `Not enough charts at level ${matchLevel} for this gauntlet draw` });
     }
 
-    const singlePick = shuffle(singles)[0];
-    const doublePick = shuffle(doubles)[0];
-    const finalDraw = [singlePick, doublePick];
+    const drawCount = Math.min(songPool.length, matchRules.cards_per_draw || minimumSongs);
+    const finalDraw = shuffle(songPool).slice(0, drawCount);
 
-    // Gauntlet skips veto phase, go straight to READY
+    if (matchRules.best_of === 1) {
+      const selectedSongs = finalDraw.slice(0, 1);
+      db.prepare('UPDATE matches SET drawn_songs = ?, played_songs = ?, status = ? WHERE id = ?')
+        .run(JSON.stringify(finalDraw), JSON.stringify(mapSelectedSongs(selectedSongs)), 'READY', req.params.id);
+      db.close();
+      return res.json({ drawn_songs: finalDraw, played_songs: selectedSongs, status: 'READY' });
+    }
+
     db.prepare('UPDATE matches SET drawn_songs = ?, status = ? WHERE id = ?')
-      .run(JSON.stringify(finalDraw), 'READY', req.params.id);
+      .run(JSON.stringify(finalDraw), 'DRAWING', req.params.id);
     db.close();
 
-    return res.json({ drawn_songs: finalDraw });
+    return res.json({ drawn_songs: finalDraw, status: 'DRAWING' });
   }
 
   // Standard round robin draw - prefer songs with cut:2 flag, fall back to all
@@ -315,8 +400,12 @@ router.post('/:id/veto', (req, res) => {
   const { song_id, player_id } = req.body;
   const drawnSongs = JSON.parse(match.drawn_songs || '[]');
   const vetoedSongs = JSON.parse(match.vetoed_songs || '[]');
+  const isGauntlet = match.match_type === 'gauntlet';
+  const matchRules = isGauntlet ? getMatchRules(db, match) : null;
+  const totalVetoesAllowed = isGauntlet ? Math.max(0, drawnSongs.length - (matchRules?.best_of || 3)) : 2;
+  const selectedSongCount = isGauntlet ? Math.max(1, matchRules?.best_of || 1) : 3;
 
-  if (vetoedSongs.length >= 2) {
+  if (vetoedSongs.length >= totalVetoesAllowed) {
     db.close();
     return res.status(400).json({ error: 'All vetoes have been used' });
   }
@@ -330,13 +419,13 @@ router.post('/:id/veto', (req, res) => {
   }
 
   vetoedSongs.push({ song_id, player_id, song: songToVeto });
-  const newStatus = vetoedSongs.length >= 2 ? 'READY' : 'VETOING';
+  const newStatus = vetoedSongs.length >= totalVetoesAllowed ? 'READY' : 'VETOING';
 
   let selectedSongs = null;
   if (newStatus === 'READY') {
-    // Both vetoes done - shuffle all 3 remaining songs for best-of-3
+    // Vetoes done - shuffle the remaining songs into the final set list
     const remaining = drawnSongs.filter(s => !vetoedSongs.find(v => v.song_id === s.id));
-    selectedSongs = [...remaining].sort(() => Math.random() - 0.5);
+    selectedSongs = shuffle(remaining).slice(0, selectedSongCount);
   }
 
   const updateFields = selectedSongs
@@ -457,8 +546,8 @@ router.post('/phase/:phaseId/generate', (req, res) => {
 
   const config = JSON.parse(phase.config || '{}');
   const phasePlayers = db.prepare(
-    'SELECT pp.*, p.name, p.pumbility, p.skill_title, p.skill_level FROM tournament_phase_players pp JOIN players p ON pp.player_id = p.id WHERE pp.phase_id = ? AND pp.status = "active" ORDER BY pp.seed'
-  ).all(phase.id);
+    'SELECT pp.*, p.name, p.pumbility, p.skill_title, p.skill_level FROM tournament_phase_players pp JOIN players p ON pp.player_id = p.id WHERE pp.phase_id = ? AND pp.status = ? ORDER BY pp.seed'
+  ).all(phase.id, 'active');
 
   if (phasePlayers.length < 2 && phase.format !== 'hour_of_power') {
     return res.status(400).json({ error: 'Need at least 2 active players' });
@@ -654,8 +743,7 @@ function generatePhaseDoubleElim(db, phase, players, config, res) {
 }
 
 function generatePhaseGauntlet(db, phase, players, config, res) {
-  const startSingle = config.gauntlet_start_single_level || 19;
-  const finalSingle = config.gauntlet_final_single_level || 24;
+  const { startLevel, finalLevel } = getGauntletLevelBounds(config);
   const totalMatches = players.length - 1;
 
   const insertMatch = db.prepare(`
@@ -666,14 +754,12 @@ function generatePhaseGauntlet(db, phase, players, config, res) {
   const createGauntlet = db.transaction(() => {
     for (let i = 0; i < totalMatches; i++) {
       const matchOrder = i + 1;
-      let singleLevel, doubleLevel;
+      let matchLevel;
 
       if (matchOrder === totalMatches) {
-        singleLevel = finalSingle;
-        doubleLevel = finalSingle + 1;
+        matchLevel = finalLevel;
       } else {
-        singleLevel = Math.min(startSingle + i, 23);
-        doubleLevel = singleLevel + 1;
+        matchLevel = Math.min(startLevel + i, finalLevel);
       }
 
       const challengerIdx = players.length - 1 - i - 1;
@@ -687,7 +773,7 @@ function generatePhaseGauntlet(db, phase, players, config, res) {
       insertMatch.run(
         uuidv4(), phase.tournament_id,
         challengerId, opponentId,
-        singleLevel, doubleLevel,
+        matchLevel, matchLevel,
         i === 0 ? 'PENDING' : 'WAITING',
         matchOrder, phase.id
       );

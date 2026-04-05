@@ -69,29 +69,50 @@ function drawGradient(ctx, css, w, h) {
   ctx.fillRect(0, 0, w, h);
 }
 
-function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
-  const words = text.split(' ');
-  let line = '';
-  let currentY = y;
+function measureWrappedText(ctx, text, maxWidth, lineHeight) {
+  const paragraphs = String(text || '').split('\n');
   const lines = [];
 
-  for (let i = 0; i < words.length; i++) {
-    const testLine = line ? `${line} ${words[i]}` : words[i];
-    const metrics = ctx.measureText(testLine);
-    if (metrics.width > maxWidth && line) {
-      lines.push({ text: line, y: currentY });
-      line = words[i];
-      currentY += lineHeight;
-    } else {
-      line = testLine;
+  for (const paragraph of paragraphs) {
+    const words = paragraph.split(/\s+/).filter(Boolean);
+    if (!words.length) {
+      lines.push('');
+      continue;
     }
-  }
-  if (line) lines.push({ text: line, y: currentY });
 
-  for (const l of lines) {
-    ctx.fillText(l.text, x, l.y);
+    let line = '';
+    for (let i = 0; i < words.length; i++) {
+      const testLine = line ? `${line} ${words[i]}` : words[i];
+      const metrics = ctx.measureText(testLine);
+      if (metrics.width > maxWidth && line) {
+        lines.push(line);
+        line = words[i];
+      } else {
+        line = testLine;
+      }
+    }
+    if (line) lines.push(line);
   }
-  return lines.length;
+
+  const width = lines.reduce((max, line) => Math.max(max, ctx.measureText(line || ' ').width), 0);
+
+  return {
+    lines,
+    width,
+    height: lines.length * lineHeight,
+  };
+}
+
+function drawWrappedText(ctx, text, x, y, maxWidth, lineHeight) {
+  const measured = measureWrappedText(ctx, text, maxWidth, lineHeight);
+  let currentY = y;
+
+  for (const line of measured.lines) {
+    ctx.fillText(line, x, currentY);
+    currentY += lineHeight;
+  }
+
+  return measured;
 }
 
 // ── themed background ──────────────────────────────────────────────────
@@ -191,20 +212,9 @@ export async function renderStoryToBlob(scene) {
     ctx.textBaseline = 'middle';
 
     // measure to center vertically
-    const words = t.text.split(' ');
-    let lineCount = 1;
-    let testLine = '';
-    for (const word of words) {
-      const test = testLine ? `${testLine} ${word}` : word;
-      if (ctx.measureText(test).width > maxWidth && testLine) {
-        lineCount++;
-        testLine = word;
-      } else {
-        testLine = test;
-      }
-    }
     const lineHeight = fontSize * 1.3;
-    const totalHeight = lineCount * lineHeight;
+    const measured = measureWrappedText(ctx, t.text, maxWidth, lineHeight);
+    const totalHeight = measured.height;
     const startY = (CANVAS_HEIGHT - totalHeight) / 2 + fontSize * 0.5;
     const textX = align === 'center' ? CANVAS_WIDTH / 2 : align === 'right' ? CANVAS_WIDTH * 0.9 : CANVAS_WIDTH * 0.1;
 
@@ -213,7 +223,7 @@ export async function renderStoryToBlob(scene) {
     ctx.shadowBlur = 12;
     ctx.shadowOffsetY = 4;
 
-    wrapText(ctx, t.text, textX, startY, maxWidth, lineHeight);
+    drawWrappedText(ctx, t.text, textX, startY, maxWidth, lineHeight);
 
     ctx.shadowColor = 'transparent';
     ctx.shadowBlur = 0;
@@ -230,40 +240,36 @@ export async function renderStoryToBlob(scene) {
 
       const fontSize = layer.fontSize || 64;
       const maxWidth = CANVAS_WIDTH * 0.8;
+      const lineHeight = fontSize * 1.3;
+
+      ctx.font = `800 ${fontSize}px ${DISPLAY_FONT}`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      const measured = measureWrappedText(ctx, layer.text, maxWidth, lineHeight);
+      const textBlockWidth = Math.min(measured.width, maxWidth);
+      const textBlockHeight = measured.height;
 
       // draw background behind text if bgOpacity > 0
       if (layer.bgOpacity > 0) {
-        ctx.font = `800 ${fontSize}px ${DISPLAY_FONT}`;
-        ctx.textAlign = 'center';
-        // measure text height
-        const words = layer.text.split(' ');
-        let lineCount = 1, testLine = '';
-        for (const word of words) {
-          const test = testLine ? `${testLine} ${word}` : word;
-          if (ctx.measureText(test).width > maxWidth && testLine) { lineCount++; testLine = word; }
-          else { testLine = test; }
-        }
-        const textH = lineCount * fontSize * 1.3;
         const padX = 24, padY = 16, radius = 20;
-        const bgW = Math.min(maxWidth + padX * 2, CANVAS_WIDTH * 0.85);
-        const bgH = textH + padY * 2;
+        const bgW = Math.min(textBlockWidth + padX * 2, CANVAS_WIDTH * 0.85);
+        const bgH = textBlockHeight + padY * 2;
         ctx.fillStyle = `rgba(0,0,0,${layer.bgOpacity})`;
         ctx.beginPath();
         ctx.roundRect(-bgW / 2, -bgH / 2, bgW, bgH, radius);
         ctx.fill();
       }
 
-      ctx.font = `800 ${fontSize}px ${DISPLAY_FONT}`;
       ctx.fillStyle = layer.color || '#ffffff';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
 
       // shadow for readability on photos
       ctx.shadowColor = 'rgba(0,0,0,0.5)';
       ctx.shadowBlur = 6;
       ctx.shadowOffsetY = 2;
 
-      wrapText(ctx, layer.text, 0, 0, maxWidth, fontSize * 1.3);
+      const startY = -((measured.lines.length - 1) * lineHeight) / 2;
+      drawWrappedText(ctx, layer.text, 0, startY, maxWidth, lineHeight);
       ctx.restore();
     }
   }

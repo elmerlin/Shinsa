@@ -1,4 +1,6 @@
 const { normalizeUserAvatarForList } = require('./avatarProxy');
+const { splitWcSummaryContent } = require('./weeklyChallengeSummaryMarker');
+const { splitWcPersonalContent } = require('./weeklyChallengePersonalMarker');
 
 const NOTE_TTL_HOURS = 24;
 const STORY_TTL_HOURS = 24;
@@ -601,21 +603,27 @@ function buildClearStoryItem(db, row, user) {
 function buildPostStoryItem(row, user) {
   if (!row || !user) return null;
   const images = parseJsonArray(row.images, []).filter(Boolean);
+  const rawContent = String(row.content || '');
+  const summarySplit = splitWcSummaryContent(rawContent);
+  const personalSplit = splitWcPersonalContent(summarySplit.text || '');
+  const cleanedCaption = normalizeText(personalSplit.text || '', 420);
   return {
     id: `post:${row.id}`,
     type: 'post',
     created_at: row.created_at || '',
     expires_at: getStoryExpiry(row.created_at),
-    caption: normalizeText(row.content, 420),
+    caption: cleanedCaption,
     title: 'New post',
     subtitle: row.youtube_url ? 'Video post' : (images.length > 0 ? `${images.length} photo${images.length === 1 ? '' : 's'}` : ''),
     sticker_tokens: [],
     media_url: images[0] || '',
     post: {
       id: row.id,
-      content: row.content || '',
+      content: rawContent,
       images,
       youtube_url: row.youtube_url || '',
+      wc_summary_payload: summarySplit.summary || null,
+      wc_personal_payload: personalSplit.personal || null,
     },
     link: buildStoryLink({
       path: `/post/${row.id}`,

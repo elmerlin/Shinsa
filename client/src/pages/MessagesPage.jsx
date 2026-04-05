@@ -68,6 +68,7 @@ import UserPickerDialog from '../components/UserPickerDialog';
 import PiuChartJacket, { resolveChartJacketUrl } from '../components/PiuChartJacket';
 import { useMentionComposer } from '../hooks/useMentionComposer';
 import { buildReplayModalTitle } from '../utils/replayTitle';
+import { getPlateChipClass, normalizePlateCode } from '../utils/plates';
 
 const LINK_SHARE_BADGES = {
   live_session: 'Live session',
@@ -121,6 +122,17 @@ function formatCompactScore(value) {
 function formatCompactDelta(value) {
   const numeric = Number(value);
   return Number.isFinite(numeric) && numeric > 0 ? `+${numeric.toLocaleString()}` : '';
+}
+
+function CompactPlateBadge({ plate = '' }) {
+  const plateCode = normalizePlateCode(plate);
+  if (!plateCode) return null;
+
+  return (
+    <span className={`inline-flex rounded-full border px-1.5 py-0.5 text-[9px] font-display font-black tracking-[0.12em] ${getPlateChipClass(plateCode)}`}>
+      {plateCode}
+    </span>
+  );
 }
 
 function extractUrlsFromText(value) {
@@ -466,7 +478,10 @@ function MultiScorePreviewCard({ linkShare, badge, buttonClass, onOpenLink }) {
             </div>
             <div className="shrink-0 text-right">
               <p className="text-[12px] font-display font-black text-white">{formatCompactScore(item.score) || '--'}</p>
-              <p className="mt-0.5 text-[11px] font-display font-black text-cyan-100">{item.grade || '--'}</p>
+              <div className="mt-0.5 flex items-center justify-end gap-1.5">
+                <p className="text-[11px] font-display font-black text-cyan-100">{item.grade || '--'}</p>
+                <CompactPlateBadge plate={item.plate} />
+              </div>
               {Number(item.scoreDelta) > 0 ? (
                 <p className="mt-0.5 text-[10px] font-display font-bold text-emerald-300">{formatCompactDelta(item.scoreDelta)}</p>
               ) : null}
@@ -564,6 +579,7 @@ function buildStoryFromLinkShare(linkShare) {
         level: parseInt(item.level, 10) || 0,
         score: parseInt(item.score, 10) || 0,
         grade: item.grade || '',
+        plate: item.plate || '',
         jacket_url: item.jacketUrl || '',
       })),
       total_count: Math.max(parseInt(linkShare?.totalItemCount, 10) || 0, previewItems.length),
@@ -582,6 +598,7 @@ function buildStoryFromLinkShare(linkShare) {
         new_score: parseInt(linkShare.score, 10) || 0,
         grade: linkShare.grade || '',
         new_grade: linkShare.grade || '',
+        plate: linkShare.plate || '',
         jacket_url: linkShare.jacketUrl || '',
         playerName: ownerUsername,
         playerAvatar: ownerAvatar,
@@ -733,7 +750,12 @@ function StorySharePreviewCard({ linkShare, buttonClass, onOpenLink, conversatio
                 </div>
                 <div className="shrink-0 text-right">
                   <p className="text-[13px] font-display font-black text-white">{formatCompactScore(item.score) || 'Shared'}</p>
-                  {item.grade ? <p className="mt-1 text-[10px] font-display font-bold text-cyan-100/90">{item.grade}</p> : null}
+                  {(item.grade || item.plate) ? (
+                    <div className="mt-1 flex items-center justify-end gap-1.5">
+                      {item.grade ? <p className="text-[10px] font-display font-bold text-cyan-100/90">{item.grade}</p> : null}
+                      <CompactPlateBadge plate={item.plate} />
+                    </div>
+                  ) : null}
                 </div>
               </div>
             ))}
@@ -762,9 +784,14 @@ function StorySharePreviewCard({ linkShare, buttonClass, onOpenLink, conversatio
               </p>
               <p className="mt-2 text-[15px] font-display font-black text-white">{formatCompactScore(snapshot.score || snapshot.new_score) || 'Shared score'}</p>
             </div>
-            {snapshot.grade || snapshot.new_grade ? (
-              <div className="shrink-0 rounded-full border border-cyan-300/20 bg-cyan-500/10 px-2.5 py-1.5 text-[11px] font-display font-black text-cyan-100">
-                {snapshot.grade || snapshot.new_grade}
+            {(snapshot.grade || snapshot.new_grade || snapshot.plate) ? (
+              <div className="shrink-0 flex items-center gap-1.5">
+                {snapshot.grade || snapshot.new_grade ? (
+                  <div className="rounded-full border border-cyan-300/20 bg-cyan-500/10 px-2.5 py-1.5 text-[11px] font-display font-black text-cyan-100">
+                    {snapshot.grade || snapshot.new_grade}
+                  </div>
+                ) : null}
+                <CompactPlateBadge plate={snapshot.plate} />
               </div>
             ) : null}
           </div>

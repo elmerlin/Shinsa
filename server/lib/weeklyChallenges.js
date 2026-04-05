@@ -9,6 +9,7 @@ const { makeChartKey, toCanonicalTitle, normalizeMode } = require('./chartKeys')
 const { buildWeeklyChallengeSummary, buildPersonalSummaries } = require('./weeklyChallengeSummary');
 const { serializeWcSummaryMarker } = require('./weeklyChallengeSummaryMarker');
 const { serializeWcPersonalMarker } = require('./weeklyChallengePersonalMarker');
+const { normalizeUserAvatarForList } = require('./avatarProxy');
 const { SYSTEM_USER_ID } = require('../db/schema');
 
 // Build a lookup from skill_title → skill_family
@@ -61,47 +62,44 @@ function resolveGrade(rawGrade, score) {
 // Week boundary helpers (Europe/London)
 // ---------------------------------------------------------------------------
 
+function getLondonDateParts(date) {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/London',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.filter((part) => part.type !== 'literal').map((part) => [part.type, part.value]));
+  return {
+    day: parseInt(values.day, 10),
+    month: parseInt(values.month, 10),
+    year: parseInt(values.year, 10),
+  };
+}
+
+function normalizeUtcDateParts(y, m, d) {
+  const normalized = new Date(Date.UTC(y, m - 1, d));
+  return {
+    year: normalized.getUTCFullYear(),
+    month: normalized.getUTCMonth() + 1,
+    day: normalized.getUTCDate(),
+  };
+}
+
 function getWeekBoundary(now) {
   // Compute Monday 00:00 to Sunday 23:59:59.999 in Europe/London
-  const londonStr = now.toLocaleString('en-GB', { timeZone: 'Europe/London' });
-  // Parse "DD/MM/YYYY, HH:MM:SS"
-  const parts = londonStr.match(/(\d+)\/(\d+)\/(\d+),\s*(\d+):(\d+):(\d+)/);
-  if (!parts) throw new Error('Failed to parse London date');
-  const [, day, month, year] = parts.map(Number);
-
-  // Reconstruct as a Date in London time
-  const londonDate = new Date(`${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T00:00:00`);
-  const dow = londonDate.getDay(); // 0=Sun, 1=Mon...
+  const { day, month, year } = getLondonDateParts(now);
+  const londonCalendarDate = new Date(Date.UTC(year, month - 1, day));
+  const dow = londonCalendarDate.getUTCDay(); // 0=Sun, 1=Mon...
   const diffToMonday = dow === 0 ? -6 : 1 - dow;
+  const monday = normalizeUtcDateParts(year, month, day + diffToMonday);
+  const sunday = normalizeUtcDateParts(monday.year, monday.month, monday.day + 6);
 
-  // Monday 00:00 London
-  const monday = new Date(londonDate);
-  monday.setDate(monday.getDate() + diffToMonday);
-  const mondayLondon = new Date(
-    monday.toLocaleString('en-US', { timeZone: 'Europe/London' })
-  );
+  const startsAt = computeUtcFromLondon(monday.year, monday.month, monday.day, 0, 0, 0);
+  const endsAt = computeUtcFromLondon(sunday.year, sunday.month, sunday.day, 23, 59, 59);
 
-  // Sunday 23:59:59 London
-  const sunday = new Date(mondayLondon);
-  sunday.setDate(sunday.getDate() + 6);
-  sunday.setHours(23, 59, 59, 999);
-
-  // Convert to UTC ISO strings for DB storage
-  // We need the actual UTC instant for Monday 00:00 London
-  const startFormatter = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit',
-  });
-  const startParts = startFormatter.formatToParts(now);
-  const yearNow = parseInt(startParts.find(p => p.type === 'year').value, 10);
-
-  // Use a simpler approach: build the London dates and convert
-  const mondayStr = `${year}-${String(month).padStart(2, '0')}-${String(day + diffToMonday).padStart(2, '0')}`;
-  // Actually, let's use a more robust approach
-  const startsAt = computeUtcFromLondon(year, month, day + diffToMonday, 0, 0, 0);
-  const endsAt = computeUtcFromLondon(year, month, day + diffToMonday + 6, 23, 59, 59);
-
-  // ISO week key
-  const weekKey = computeIsoWeekKey(startsAt);
+  // ISO week key must follow the London calendar date, not the UTC instant.
+  const weekKey = computeIsoWeekKey(new Date(Date.UTC(monday.year, monday.month - 1, monday.day)));
 
   return { weekKey, startsAtUtc: startsAt.toISOString(), endsAtUtc: endsAt.toISOString() };
 }
@@ -441,10 +439,11 @@ function aggregateWeeklyResults(db, weekId) {
 
   const snapshots = {};
   for (const [, profile] of userProfiles) {
+    const avatarSnapshot = normalizeUserAvatarForList(profile.avatar, profile.user_id, 64);
     snapshots[profile.user_id] = {
       user_id: profile.user_id,
       username_snapshot: profile.username || '',
-      avatar_snapshot: profile.avatar || '',
+      avatar_snapshot: avatarSnapshot,
       nationality_snapshot: profile.nationality || '',
       skill_title_snapshot: profile.skill_title || '',
       skill_level_snapshot: profile.skill_level || 1,
@@ -452,7 +451,7 @@ function aggregateWeeklyResults(db, weekId) {
     };
     upsertSnapshot.run(
       weekId, profile.user_id,
-      profile.username || '', profile.avatar || '', profile.nationality || '',
+      profile.username || '', avatarSnapshot, profile.nationality || '',
       profile.skill_title || '', profile.skill_level || 1, profile.skill_family || ''
     );
   }
@@ -1064,6 +1063,131 @@ function annotateWeeklyChallengePlayRows(db, plays, userId) {
   return plays;
 }
 
+function buildWeeklyChallengePlayEntry(play) {
+  const level = parseInt(play?.level, 10) || 0;
+  const score = parseInt(play?.score, 10) || 0;
+  const grade = String(play?.grade || '').trim();
+  return {
+    song_title: String(play?.song_title || ''),
+    mode: String(play?.mode || ''),
+    level,
+    score,
+    grade,
+    plate: String(play?.plate || ''),
+    background_url: String(play?.background_url || ''),
+    machine_name: String(play?.machine_name || ''),
+    played_at_utc: String(play?.played_at_utc || ''),
+    date_played: String(play?.date_played || ''),
+    perfect: parseInt(play?.perfect, 10) || 0,
+    great: parseInt(play?.great, 10) || 0,
+    good: parseInt(play?.good, 10) || 0,
+    bad: parseInt(play?.bad, 10) || 0,
+    miss: parseInt(play?.miss, 10) || 0,
+    replay_embed_url: String(play?.replay_embed_url || ''),
+    replay_video_id: String(play?.replay_video_id || ''),
+    replay_start_seconds: parseInt(play?.replay_start_seconds, 10) || 0,
+    replay_end_seconds: parseInt(play?.replay_end_seconds, 10) || 0,
+    weekly_challenge_rank: play?.weekly_challenge_rank || null,
+    weekly_challenge_week_key: String(play?.weekly_challenge_week_key || ''),
+    weekly_challenge_chart_id: parseInt(play?.weekly_challenge_chart_id, 10) || null,
+    rating_points: calculateRatingPoints(level, grade, score),
+  };
+}
+
+function persistWeeklyChallengePlayPosts(db, plays, userId, options = {}) {
+  const normalizedUserId = String(userId || '').trim();
+  if (!db || !normalizedUserId) return [];
+
+  const sourceRows = Array.isArray(plays) ? plays.filter(Boolean) : [];
+  if (sourceRows.length === 0) return [];
+
+  if (options.ensureCurrentWeek !== false) {
+    ensureCurrentWeeklyChallengeWeek(db);
+  }
+
+  const candidates = sourceRows
+    .filter((play) => isPassRecord(play))
+    .map((play) => ({ ...play }));
+  if (candidates.length === 0) return [];
+
+  if (options.annotate !== false) {
+    annotateWeeklyChallengePlayRows(db, candidates, normalizedUserId);
+  }
+
+  const playsByWeek = new Map();
+  for (const play of candidates) {
+    const weekKey = String(play?.weekly_challenge_week_key || '').trim();
+    if (!weekKey) continue;
+    if (!playsByWeek.has(weekKey)) playsByWeek.set(weekKey, []);
+    playsByWeek.get(weekKey).push(play);
+  }
+
+  if (playsByWeek.size === 0) return [];
+
+  const createdPostIds = [];
+  for (const [weekKey, weekPlays] of playsByWeek.entries()) {
+    const weekRow = db.prepare('SELECT id FROM weekly_challenge_weeks WHERE week_key = ?').get(weekKey);
+    if (!weekRow?.id) continue;
+
+    const bestByChart = new Map();
+    for (const play of weekPlays.map(buildWeeklyChallengePlayEntry)) {
+      const chartKey = `${play.song_title}|${play.mode}|${play.level}`;
+      const existing = bestByChart.get(chartKey);
+      if (!existing || play.score > existing.score) {
+        bestByChart.set(chartKey, play);
+      }
+    }
+    if (bestByChart.size === 0) continue;
+
+    const existingPosts = db.prepare(
+      'SELECT id, plays_json FROM user_weekly_challenge_plays WHERE user_id = ? AND week_id = ? ORDER BY id ASC'
+    ).all(normalizedUserId, weekRow.id);
+
+    const previousBests = new Map();
+    for (const post of existingPosts) {
+      let oldPlays = [];
+      try {
+        oldPlays = JSON.parse(post?.plays_json || '[]');
+      } catch {
+        oldPlays = [];
+      }
+      for (const play of Array.isArray(oldPlays) ? oldPlays : []) {
+        const chartKey = `${play?.song_title || ''}|${play?.mode || ''}|${parseInt(play?.level, 10) || 0}`;
+        const existing = previousBests.get(chartKey);
+        if (!existing || (parseInt(play?.score, 10) || 0) > existing.score) {
+          previousBests.set(chartKey, { score: parseInt(play?.score, 10) || 0 });
+        }
+      }
+    }
+
+    const differential = [];
+    for (const [chartKey, play] of bestByChart.entries()) {
+      const previous = previousBests.get(chartKey);
+      if (!previous || play.score > previous.score) {
+        differential.push(play);
+      }
+    }
+    if (differential.length === 0) continue;
+
+    const hashInput = differential
+      .map((play) => `${play.song_title}|${play.mode}|${play.level}|${play.score}`)
+      .sort()
+      .join('\n');
+    const contentHash = crypto.createHash('sha256').update(hashInput).digest('hex').slice(0, 32);
+    const duplicate = db.prepare(
+      'SELECT id FROM user_weekly_challenge_plays WHERE user_id = ? AND week_id = ? AND content_hash = ? LIMIT 1'
+    ).get(normalizedUserId, weekRow.id, contentHash);
+    if (duplicate?.id) continue;
+
+    const result = db.prepare(
+      'INSERT INTO user_weekly_challenge_plays (user_id, week_id, plays_json, content_hash) VALUES (?, ?, ?, ?)'
+    ).run(normalizedUserId, weekRow.id, JSON.stringify(differential), contentHash);
+    createdPostIds.push(result.lastInsertRowid);
+  }
+
+  return createdPostIds;
+}
+
 // ---------------------------------------------------------------------------
 // Weekly challenge summary post publishing
 // ---------------------------------------------------------------------------
@@ -1190,6 +1314,7 @@ module.exports = {
   getWeekBoundary,
   getGlobalChallengeMaxLevel,
   annotateWeeklyChallengePlayRows,
+  persistWeeklyChallengePlayPosts,
   computeIsoWeekKey,
   publishWeeklyChallengeSummary,
   repairMissingSummaryPosts,

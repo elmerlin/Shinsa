@@ -83,7 +83,7 @@ export default function Gauntlet({ matches, players, onUpdate }) {
                   {isFinal ? 'FINAL' : `#${match.gauntlet_order}`}
                 </div>
                 <div className="text-[10px] text-gray-600 font-mono">
-                  S{match.difficulty_min}/D{match.difficulty_max}
+                  Lv{match.difficulty_min}
                 </div>
               </div>
 

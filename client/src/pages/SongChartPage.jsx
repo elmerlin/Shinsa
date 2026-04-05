@@ -786,6 +786,8 @@ export default function SongChartPage() {
                         grade: personalBestGrade,
                         score: personalBest?.score || 0,
                       }),
+                      playId: personalBest?.play_id || personalBest?.id || '',
+                      ownerId: user?.id || personalBest?.user_id || '',
                     })}
                     className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-sky-400/40 bg-sky-500/15 hover:bg-sky-500/30 transition-colors"
                     title="Open session replay clip"
@@ -986,6 +988,8 @@ export default function SongChartPage() {
                             grade,
                             score: entry.best.score,
                           }),
+                          playId: entry.best?.play_id || entry.best?.id || '',
+                          ownerId: entry.user?.id || '',
                         })}
                         className="inline-flex items-center justify-center w-7 h-7 rounded-md border border-sky-400/30 bg-sky-500/10 hover:bg-sky-500/25 transition-colors"
                         title="Open session replay clip"
@@ -1014,6 +1018,10 @@ export default function SongChartPage() {
           url={activeReplay.url}
           title={activeReplay.title}
           onClose={() => setActiveReplay(null)}
+          commentThread={activeReplay.playId ? {
+            itemId: activeReplay.playId,
+            ownerId: activeReplay.ownerId || '',
+          } : null}
         />
       )}
       <Over20Top100Modal

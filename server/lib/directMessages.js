@@ -160,10 +160,11 @@ function sanitizeLinkShareItems(items) {
       level: toInt(item?.level),
       score: toInt(item?.score),
       grade: String(item?.grade || '').trim().slice(0, 24),
+      plate: String(item?.plate || '').trim().slice(0, 24),
       jacketUrl: sanitizeLinkShareAsset(item?.jacketUrl || item?.jacket_url || ''),
       scoreDelta: toInt(item?.scoreDelta || item?.score_delta),
     }))
-    .filter((item) => item.songTitle || item.score > 0 || item.grade || item.jacketUrl);
+    .filter((item) => item.songTitle || item.score > 0 || item.grade || item.plate || item.jacketUrl);
 }
 
 function sanitizeLinkSharePayload(linkShare) {

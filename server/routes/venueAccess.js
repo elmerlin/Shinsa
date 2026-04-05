@@ -5,6 +5,10 @@ const { getDb } = require('../db/schema');
 const { requireAuth, isAdminUser, hasFeatureAccess } = require('./auth');
 const { createUserNotification } = require('../lib/notifications');
 const {
+  getVisibleVenuePaymentPredicate,
+  purgeStalePendingDayPassPayments,
+} = require('../lib/dayPassPayments');
+const {
   isSquareConfigured,
   createDayPassPaymentLink,
   createSubscriptionPaymentLink,
@@ -498,6 +502,8 @@ function finalizeVenuePaymentSuccess(db, paymentRow, options = {}) {
 async function reconcilePendingVenuePaymentsForUser(db, userId) {
   if (!isSquareConfigured() || !userId) return { reconciled: 0 };
 
+  purgeStalePendingDayPassPayments(db, { userId });
+
   const pendingRows = db.prepare(`
     SELECT *
     FROM venue_payments
@@ -807,6 +813,7 @@ router.put('/notifications/:venueSlug', requireAuth, requireDojoAdmin, (req, res
 
 // POST /api/venue-access/purchase/day-pass — create Square payment link for a day pass
 router.post('/purchase/day-pass', requireAuth, async (req, res) => {
+  let paymentId = '';
   try {
     if (!isSquareConfigured()) {
       return res.status(503).json({ error: 'Payment processing is not configured' });
@@ -880,7 +887,7 @@ router.post('/purchase/day-pass', requireAuth, async (req, res) => {
     const discountNote = discount ? ` (${discount.discount_percent}% discount applied)` : '';
 
     // Create payment record
-    const paymentId = uuidv4();
+    paymentId = uuidv4();
     db.prepare(`
       INSERT INTO venue_payments (id, user_id, venue_id, plan_id, payment_type, amount, currency, status, description)
       VALUES (?, ?, ?, ?, 'day_pass', ?, ?, 'pending', ?)
@@ -906,6 +913,18 @@ router.post('/purchase/day-pass', requireAuth, async (req, res) => {
 
     res.json({ checkout_url: link.url, link_id: link.id });
   } catch (err) {
+    if (paymentId) {
+      try {
+        getDb().prepare(`
+          DELETE FROM venue_payments
+          WHERE id = ?
+            AND payment_type = 'day_pass'
+            AND status = 'pending'
+        `).run(paymentId);
+      } catch (cleanupErr) {
+        console.error('[VenueAccess] Failed to clean up pending day pass payment:', cleanupErr.message);
+      }
+    }
     console.error('[VenueAccess] Day pass checkout error:', err.message);
     res.status(500).json({ error: 'Failed to create checkout session' });
   }
@@ -1053,6 +1072,7 @@ router.post('/cancel-subscription', requireAuth, async (req, res) => {
 router.get('/my-payments', requireAuth, async (req, res) => {
   const db = getDb();
   await reconcilePendingVenuePaymentsForUser(db, req.user.id);
+  purgeStalePendingDayPassPayments(db, { userId: req.user.id });
   const payments = db.prepare(`
     SELECT vp.id, vp.payment_type, vp.amount, vp.currency, vp.status, vp.description, vp.created_at,
            v.name AS venue_name, v.slug AS venue_slug,
@@ -1061,6 +1081,7 @@ router.get('/my-payments', requireAuth, async (req, res) => {
     JOIN venues v ON v.id = vp.venue_id
     LEFT JOIN venue_access_plans vap ON vap.id = vp.plan_id
     WHERE vp.user_id = ?
+      AND ${getVisibleVenuePaymentPredicate('vp')}
     ORDER BY vp.created_at DESC
     LIMIT 50
   `).all(req.user.id);
@@ -1076,6 +1097,7 @@ router.get('/my-membership/:venueSlug', requireAuth, async (req, res) => {
 
   const userId = req.user.id;
   await reconcilePendingVenuePaymentsForUser(db, userId);
+  purgeStalePendingDayPassPayments(db, { userId, venueId: venue.id });
   const access = checkUserVenueAccess(db, userId, venue.id);
   const approved = isUserApproved(db, userId, venue.id);
   const dojoMember = isDojoMember(db, userId);
@@ -1123,6 +1145,7 @@ router.get('/my-membership/:venueSlug', requireAuth, async (req, res) => {
     FROM venue_payments vp
     LEFT JOIN venue_access_plans vap ON vap.id = vp.plan_id
     WHERE vp.user_id = ? AND vp.venue_id = ?
+      AND ${getVisibleVenuePaymentPredicate('vp')}
     ORDER BY vp.created_at DESC
     LIMIT 50
   `).all(userId, venue.id);
@@ -1585,6 +1608,7 @@ router.get('/admin/overview/:venueSlug', requireAuth, requireDojoAdmin, (req, re
   const db = getDb();
   const venue = db.prepare('SELECT id, name, slug FROM venues WHERE slug = ?').get(req.params.venueSlug);
   if (!venue) return res.status(404).json({ error: 'Venue not found' });
+  purgeStalePendingDayPassPayments(db, { venueId: venue.id });
   const selectedMonth = isValidMonthKey(req.query.month) ? String(req.query.month) : currentMonthKey();
   const currentMonth = currentMonthKey();
   const selectedYear = parseInt(selectedMonth.slice(0, 4), 10) || parseInt(currentMonth.slice(0, 4), 10);
@@ -1634,6 +1658,7 @@ router.get('/admin/overview/:venueSlug', requireAuth, requireDojoAdmin, (req, re
     JOIN users u ON u.id = vp.user_id
     LEFT JOIN venue_access_plans vap ON vap.id = vp.plan_id
     WHERE vp.venue_id = ? AND substr(vp.created_at, 1, 7) = ?
+      AND ${getVisibleVenuePaymentPredicate('vp')}
     ORDER BY vp.created_at DESC
     LIMIT 100
   `).all(venue.id, selectedMonth);
@@ -1792,6 +1817,7 @@ router.get('/admin/member-details/:venueSlug/:userId', requireAuth, requireDojoA
   const db = getDb();
   const venue = db.prepare('SELECT id, name, slug FROM venues WHERE slug = ?').get(req.params.venueSlug);
   if (!venue) return res.status(404).json({ error: 'Venue not found' });
+  purgeStalePendingDayPassPayments(db, { venueId: venue.id, userId: req.params.userId });
 
   const member = db.prepare(`
     SELECT id, username, avatar, avatar_v
@@ -1824,6 +1850,7 @@ router.get('/admin/member-details/:venueSlug/:userId', requireAuth, requireDojoA
     SELECT id, payment_type, amount, currency, status, description, created_at
     FROM venue_payments
     WHERE user_id = ? AND venue_id = ? AND status = 'succeeded'
+      AND ${getVisibleVenuePaymentPredicate()}
     ORDER BY created_at DESC
     LIMIT 50
   `).all(member.id, venue.id);
@@ -1877,6 +1904,7 @@ router.get('/admin/payments/:venueSlug', requireAuth, requireDojoAdmin, (req, re
   const db = getDb();
   const venue = db.prepare('SELECT id, name, slug FROM venues WHERE slug = ?').get(req.params.venueSlug);
   if (!venue) return res.status(404).json({ error: 'Venue not found' });
+  purgeStalePendingDayPassPayments(db, { venueId: venue.id });
 
   const page = Math.max(1, parseInt(req.query.page, 10) || 1);
   const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 25));
@@ -1886,6 +1914,7 @@ router.get('/admin/payments/:venueSlug', requireAuth, requireDojoAdmin, (req, re
 
   let where = 'vp.venue_id = ?';
   const params = [venue.id];
+  where += ` AND ${getVisibleVenuePaymentPredicate('vp')}`;
   if (statusFilter) { where += ' AND vp.status = ?'; params.push(statusFilter); }
   if (typeFilter) { where += ' AND vp.payment_type = ?'; params.push(typeFilter); }
 

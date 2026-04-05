@@ -128,8 +128,8 @@ router.post('/:id/activate', (req, res) => {
     if (prevPhase) {
       const advancement = JSON.parse(prevPhase.advancement || '{}');
       const prevPlayers = db.prepare(
-        'SELECT pp.*, p.name, p.pumbility, p.skill_title, p.skill_level FROM tournament_phase_players pp JOIN players p ON pp.player_id = p.id WHERE pp.phase_id = ? AND pp.status = "active" ORDER BY pp.wins DESC, pp.buchholz DESC, p.pumbility DESC'
-      ).all(prevPhase.id);
+        'SELECT pp.*, p.name, p.pumbility, p.skill_title, p.skill_level FROM tournament_phase_players pp JOIN players p ON pp.player_id = p.id WHERE pp.phase_id = ? AND pp.status = ? ORDER BY pp.wins DESC, pp.buchholz DESC, p.pumbility DESC'
+      ).all(prevPhase.id, 'active');
 
       if (advancement.type === 'top_n') {
         advancingPlayers = prevPlayers.slice(0, advancement.count || prevPlayers.length);

@@ -96,8 +96,9 @@ const PRESETS = [
         format: 'gauntlet',
         name: 'Gauntlet',
         config: {
-          start_single_level: 19,
-          final_single_level: 24,
+          start_level: 19,
+          final_level: 24,
+          best_of: 3,
         },
         advancement: { type: 'all' },
       },

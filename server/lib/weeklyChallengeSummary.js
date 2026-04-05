@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const path = require('path');
 const { makeChartKey, toCanonicalTitle } = require('./chartKeys');
 const { calculateRatingPoints, normalizeGrade, gradeFromScore } = require('./titleProgress');
+const { normalizeUserAvatarForList } = require('./avatarProxy');
 
 // ---------------------------------------------------------------------------
 // Alias loading (mirrors weeklyChallenges.js)
@@ -35,6 +36,10 @@ function getAliases() {
 
 function resolveGrade(rawGrade, score) {
   return normalizeGrade(rawGrade) || gradeFromScore(parseInt(score, 10) || 0);
+}
+
+function toSummaryAvatar(avatar, userId) {
+  return normalizeUserAvatarForList(avatar || '', userId, 64);
 }
 
 // ---------------------------------------------------------------------------
@@ -86,7 +91,7 @@ function computeSuperlatives(db, weekId, week, snapshots) {
     const snap = snapshots[r.user_id] || {};
     return {
       rank: i + 1, user_id: r.user_id, value: r.cnt,
-      username: snap.username_snapshot || '', avatar: snap.avatar_snapshot || '',
+      username: snap.username_snapshot || '', avatar: toSummaryAvatar(snap.avatar_snapshot, r.user_id),
       nationality: snap.nationality_snapshot || '',
       detail_json: { sss_count: r.cnt },
     };
@@ -106,7 +111,7 @@ function computeSuperlatives(db, weekId, week, snapshots) {
     const snap = snapshots[r.user_id] || {};
     return {
       rank: i + 1, user_id: r.user_id, value: Math.round(r.pct * 10) / 10,
-      username: snap.username_snapshot || '', avatar: snap.avatar_snapshot || '',
+      username: snap.username_snapshot || '', avatar: toSummaryAvatar(snap.avatar_snapshot, r.user_id),
       nationality: snap.nationality_snapshot || '',
       detail_json: { clears: r.clears, chart_count: chartCount },
     };
@@ -129,7 +134,7 @@ function computeSuperlatives(db, weekId, week, snapshots) {
     const snap = snapshots[r.user_id] || {};
     return {
       rank: i + 1, user_id: r.user_id, value: Math.round(r.avg_rating),
-      username: snap.username_snapshot || '', avatar: snap.avatar_snapshot || '',
+      username: snap.username_snapshot || '', avatar: toSummaryAvatar(snap.avatar_snapshot, r.user_id),
       nationality: snap.nationality_snapshot || '',
       detail_json: { avg_rating: Math.round(r.avg_rating), clear_count: r.clear_count },
     };
@@ -267,7 +272,7 @@ function computeBiggestImprovements(db, weekId, week, snapshots) {
     const snap = snapshots[userId] || {};
     return {
       rank: i + 1, user_id: userId, value: data.totalDelta,
-      username: snap.username_snapshot || '', avatar: snap.avatar_snapshot || '',
+      username: snap.username_snapshot || '', avatar: toSummaryAvatar(snap.avatar_snapshot, userId),
       nationality: snap.nationality_snapshot || '',
       detail_json: { total_delta: data.totalDelta, charts_improved: data.chartsImproved },
     };
@@ -283,11 +288,24 @@ function selectReplayHighlights(db, weekId, awards) {
   const rows = db.prepare(`
     SELECT r.*, wc.song_title_snapshot, wc.mode, wc.level, wc.jacket_url_snapshot,
            rp.replay_embed_url, rp.replay_video_id, rp.replay_start_seconds, rp.replay_end_seconds,
-           s.username_snapshot, s.avatar_snapshot, s.nationality_snapshot
+           s.username_snapshot, s.avatar_snapshot, s.nationality_snapshot,
+           r.source_play_id,
+           (
+             SELECT COUNT(*)
+             FROM play_comments pc
+             WHERE pc.play_id = r.source_play_id
+           ) AS source_play_comment_count,
+           wcp.id AS play_post_id,
+           (
+             SELECT COUNT(*)
+             FROM weekly_challenge_play_comments wcc
+             WHERE wcc.play_post_id = wcp.id
+           ) AS play_post_comment_count
     FROM weekly_challenge_results r
     JOIN weekly_challenge_charts wc ON wc.id = r.weekly_chart_id
     JOIN user_recently_played rp ON rp.id = r.source_play_id
     JOIN weekly_challenge_user_snapshots s ON s.week_id = ? AND s.user_id = r.user_id
+    LEFT JOIN user_weekly_challenge_plays wcp ON wcp.week_id = wc.week_id AND wcp.user_id = r.user_id
     WHERE wc.week_id = ?
       AND r.source_play_id IS NOT NULL
       AND (rp.replay_embed_url != '' OR rp.replay_video_id != '')
@@ -353,7 +371,7 @@ function selectReplayHighlights(db, weekId, awards) {
     selected.push({
       user_id: r.user_id,
       username: r.username_snapshot || '',
-      avatar: r.avatar_snapshot || '',
+      avatar: toSummaryAvatar(r.avatar_snapshot, r.user_id),
       nationality: r.nationality_snapshot || '',
       song_title: r.song_title_snapshot || '',
       mode: r.mode || '',
@@ -367,6 +385,10 @@ function selectReplayHighlights(db, weekId, awards) {
       replay_start_seconds: r.replay_start_seconds || 0,
       replay_end_seconds: r.replay_end_seconds || 0,
       highlight_reason: r.highlight_reason,
+      source_play_id: r.source_play_id || 0,
+      source_play_comment_count: r.source_play_comment_count || 0,
+      play_post_id: r.play_post_id || 0,
+      play_post_comment_count: r.play_post_comment_count || 0,
     });
   }
 
@@ -407,7 +429,7 @@ function buildWeeklyChallengeSummary(db, weekId, targetWeekId = null) {
       rank: a.rank,
       user_id: a.user_id,
       username: a.username_snapshot || '',
-      avatar: a.avatar_snapshot || '',
+      avatar: toSummaryAvatar(a.avatar_snapshot, a.user_id),
       nationality: a.nationality_snapshot || '',
       skill_title: a.skill_title_snapshot || '',
       points: a.points,
@@ -502,6 +524,14 @@ function buildWeeklyChallengeSummary(db, weekId, targetWeekId = null) {
     awards, superlatives: Object.fromEntries(
       Object.entries(superlatives).map(([k, v]) => [k, v.map(e => e.user_id + ':' + e.value)])
     ),
+    replayHighlights: replayHighlights.map((entry) => ({
+      user_id: entry.user_id,
+      song_title: entry.song_title,
+      score: entry.score,
+      source_play_id: entry.source_play_id || 0,
+      source_play_comment_count: entry.source_play_comment_count || 0,
+    })),
+    nextWeekId: nextWeek?.weekId || null,
   });
   const contentHash = crypto.createHash('sha256').update(hashInput).digest('hex');
 
@@ -662,7 +692,7 @@ function buildPersonalSummaries(db, weekId) {
       weekLabel,
       userId,
       username: snap.username_snapshot || '',
-      avatar: snap.avatar_snapshot || '',
+      avatar: toSummaryAvatar(snap.avatar_snapshot, userId),
       nationality: snap.nationality_snapshot || '',
       skillFamily: snap.skill_family_snapshot || '',
       skillTitle: snap.skill_title_snapshot || '',

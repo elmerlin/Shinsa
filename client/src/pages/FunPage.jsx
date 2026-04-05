@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getFunLeaderboard, getFunSettings, submitFunScore } from '../utils/api';
 import ShinsaInMotionSection from '../components/ShinsaInMotionSection';
+import FantasyMatchPage from './FantasyMatchPage';
 
 const GAME_WIDTH = 420;
 const GAME_HEIGHT = 700;
@@ -13,6 +14,7 @@ const BEST_SCORE_KEY = 'fun_city_jump_best_score_v1';
 const GAME_TITLE = 'TOP CITY JUMP';
 const FUN_TAB_JUMP = 'jump';
 const FUN_TAB_MOTION = 'motion';
+const FUN_TAB_FANTASY = 'fantasy';
 const SCORE_DIFFICULTY_CAP = 100000;
 const DEVIT_TOUCH_PADDING = 8;
 const DEVIT_START_PLATFORM_LAG_DEFAULT = 3;
@@ -534,7 +536,9 @@ const PLAYABLE_CHARACTERS = [
 const DEFAULT_CHARACTER_ID = PLAYABLE_CHARACTERS[0].id;
 
 function normalizeFunTab(value) {
-  return value === FUN_TAB_MOTION ? FUN_TAB_MOTION : FUN_TAB_JUMP;
+  if (value === FUN_TAB_MOTION) return FUN_TAB_MOTION;
+  if (value === FUN_TAB_FANTASY) return FUN_TAB_FANTASY;
+  return FUN_TAB_JUMP;
 }
 
 function getPlayableCharacter(characterId) {
@@ -2892,60 +2896,62 @@ export default function FunPage() {
 
   const selectedCharacter = getPlayableCharacter(selectedCharacterId);
   const shouldShowLeaderboard = gameStatus !== 'playing' && showLeaderboardAtStart;
+  const funTabs = [
+    {
+      id: FUN_TAB_JUMP,
+      label: GAME_TITLE,
+      detail: 'Arcade run',
+      activeClass: 'border-piu-accent bg-piu-accent/18 text-white shadow-[0_12px_30px_rgba(255,105,70,0.18)]',
+      inactiveClass: 'border-transparent bg-transparent text-zinc-400 hover:text-white hover:border-piu-accent/35',
+    },
+    {
+      id: FUN_TAB_FANTASY,
+      label: 'Fantasy Match',
+      detail: 'Draft battle',
+      activeClass: 'border-[#ff6699]/55 bg-[#ff3366]/12 text-white shadow-[0_12px_30px_rgba(255,51,102,0.16)]',
+      inactiveClass: 'border-transparent bg-transparent text-zinc-400 hover:text-white hover:border-[#ff6699]/35',
+    },
+    {
+      id: FUN_TAB_MOTION,
+      label: 'Shinsa In Motion',
+      detail: 'Timeline replay',
+      activeClass: 'border-cyan-300/50 bg-cyan-300/10 text-white shadow-[0_12px_30px_rgba(34,211,238,0.14)]',
+      inactiveClass: 'border-transparent bg-transparent text-zinc-400 hover:text-white hover:border-cyan-300/35',
+    },
+  ];
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-        <div>
-          <h1 className="text-3xl sm:text-4xl font-display font-bold tracking-wider">
-            <span className="text-piu-accent">FUN</span> SECTION
-          </h1>
-          <p className="text-sm text-gray-400 mt-1">
-            Choose between Top City Jump and Shinsa in Motion.
-          </p>
-        </div>
-        <Link
-          to="/"
-          className="px-3 py-2 rounded-lg border border-piu-border bg-piu-card hover:border-piu-accent/40 text-sm font-display transition-colors"
-        >
-          Back to Dashboard
-        </Link>
+      <div className="mb-6">
+        <h1 className="text-3xl sm:text-4xl font-display font-bold tracking-wider">
+          <span className="text-piu-accent">FUN</span> SECTION
+        </h1>
       </div>
 
-      <div className="mb-6 rounded-2xl border border-piu-border bg-piu-card/70 p-2">
-        <div className="grid gap-2 sm:grid-cols-2">
-          <button
-            type="button"
-            onClick={() => handleTabChange(FUN_TAB_JUMP)}
-            className={`rounded-xl border px-4 py-3 text-left transition-all ${
-              activeTab === FUN_TAB_JUMP
-                ? 'border-piu-accent bg-piu-accent/15 shadow-lg shadow-piu-accent/10'
-                : 'border-piu-border bg-piu-dark/45 hover:border-piu-accent/40'
-            }`}
-          >
-            <p className="font-display text-sm font-bold tracking-wide text-white">{GAME_TITLE}</p>
-            <p className="mt-1 text-xs text-gray-400">
-              Arcade platform jumper. This stays the default tab.
-            </p>
-          </button>
-          <button
-            type="button"
-            onClick={() => handleTabChange(FUN_TAB_MOTION)}
-            className={`rounded-xl border px-4 py-3 text-left transition-all ${
-              activeTab === FUN_TAB_MOTION
-                ? 'border-cyan-300/50 bg-cyan-300/10 shadow-lg shadow-cyan-500/10'
-                : 'border-piu-border bg-piu-dark/45 hover:border-cyan-300/30'
-            }`}
-          >
-            <p className="font-display text-sm font-bold tracking-wide text-white">SHINSA IN MOTION</p>
-            <p className="mt-1 text-xs text-gray-400">
-              Community-wide cinematic timeline replay.
-            </p>
-          </button>
+      <div className="mb-8">
+        <div className="grid grid-cols-3 gap-2 rounded-[24px] border border-piu-border/70 bg-[#0f1528]/85 p-2">
+          {funTabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => handleTabChange(tab.id)}
+              className={`min-w-0 rounded-[18px] border px-2 py-2.5 text-left transition-all duration-200 sm:px-4 sm:py-3 ${
+                activeTab === tab.id ? tab.activeClass : tab.inactiveClass
+              }`}
+            >
+              <p className="font-display text-[11px] font-bold uppercase leading-tight tracking-[0.06em] sm:text-sm sm:tracking-[0.08em]">
+                {tab.label}
+              </p>
+              <p className="mt-1 hidden text-[11px] font-medium opacity-70 sm:block">
+                {tab.detail}
+              </p>
+            </button>
+          ))}
         </div>
       </div>
 
       {activeTab === FUN_TAB_MOTION && <ShinsaInMotionSection />}
+      {activeTab === FUN_TAB_FANTASY && <FantasyMatchPage embedded />}
 
       <section className={`card ${activeTab === FUN_TAB_JUMP ? '' : 'hidden'}`}>
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">

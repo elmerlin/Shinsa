@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 function normalizeCountryCode(code) {
   const normalized = String(code || '').trim().toUpperCase();
@@ -27,27 +27,51 @@ function getFlagEmoji(code) {
   );
 }
 
-export function getCountryFlag(code, className) {
+function CountryFlag({ code, className }) {
   const normalized = normalizeCountryCode(code);
   if (!normalized) return null;
 
+  const [imageFailed, setImageFailed] = useState(false);
   const sizeClass = className
     ? className.replace(/\binline-block\b\s*/g, '').trim()
-    : 'h-[1.1em] align-middle';
+    : 'h-[1.1em]';
   const countryName = getCountryName(normalized);
   const emojiFlag = getFlagEmoji(normalized);
+  const imageClassName = [
+    'inline-block w-auto max-w-none shrink-0 rounded-[0.18em] align-[-0.12em] object-cover shadow-[0_0_0_1px_rgba(255,255,255,0.14)]',
+    sizeClass,
+  ].filter(Boolean).join(' ');
+
+  if (imageFailed) {
+    return (
+      <span
+        role="img"
+        aria-label={countryName}
+        title={countryName}
+        className="inline-block align-[-0.12em]"
+      >
+        {emojiFlag}
+      </span>
+    );
+  }
 
   return (
-    <>
-      <span className="sm:hidden">{emojiFlag}</span>
-      <img
-        src={`https://flagcdn.com/w40/${normalized.toLowerCase()}.png`}
-        alt={countryName}
-        className={`hidden sm:inline-block ${sizeClass}`}
-        draggable={false}
-        loading="lazy"
-        decoding="async"
-      />
-    </>
+    <img
+      src={`https://flagcdn.com/${normalized.toLowerCase()}.svg`}
+      alt={countryName}
+      title={countryName}
+      className={imageClassName}
+      draggable={false}
+      loading="lazy"
+      decoding="async"
+      referrerPolicy="no-referrer"
+      onError={() => setImageFailed(true)}
+    />
   );
+}
+
+export function getCountryFlag(code, className) {
+  const normalized = normalizeCountryCode(code);
+  if (!normalized) return null;
+  return <CountryFlag code={normalized} className={className} />;
 }

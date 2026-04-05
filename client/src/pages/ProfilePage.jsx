@@ -27,6 +27,7 @@ import PlayerIdentityMapPanel from '../components/PlayerIdentityMapPanel';
 import SkillBreakdownPanel from '../components/SkillBreakdownPanel';
 import RankingsPanel from '../components/RankingsPanel';
 import GradeGoalTracker from '../components/GradeGoalTracker';
+import PlayerScoutingCard from '../components/PlayerScoutingCard';
 import TitleProgressTab from '../components/TitleProgressTab';
 import PumbilityBreakdownModal from '../components/PumbilityBreakdownModal';
 import PiuChartJacket, { resolveChartJacketUrl } from '../components/PiuChartJacket';
@@ -35,7 +36,7 @@ import { getProfilePath } from '../utils/profile';
 import { parseGrade } from '../utils/grades';
 import ScoreSnapshotCard from '../components/ScoreSnapshotCard';
 import ItemCommentSection from '../components/ItemCommentSection';
-import { StoryShareModal, buildStoryDraft } from '../components/ScoreSnapshotModal';
+import { StoryShareModal, buildStoryDraft, ScoreCardImageShareButton, ScoreCardShareButton } from '../components/ScoreSnapshotModal';
 import SendToDirectMessageButton from '../components/SendToDirectMessageButton';
 import { buildScoreSnapshotLinkShare } from '../utils/directMessageShares';
 
@@ -1047,6 +1048,7 @@ export default function ProfilePage() {
   const [recentlyPlayedSyncFeedback, setRecentlyPlayedSyncFeedback] = useState('');
   const [piuDataLoaded, setPiuDataLoaded] = useState(false);
   const [showPumbilityThresholdModal, setShowPumbilityThresholdModal] = useState(false);
+  const [showScoutingCardModal, setShowScoutingCardModal] = useState(false);
   const [selectedGroupBadge, setSelectedGroupBadge] = useState(null);
   const [selectedAchievementBadge, setSelectedAchievementBadge] = useState(null);
   const [selectedOverviewDateKey, setSelectedOverviewDateKey] = useState('');
@@ -2581,7 +2583,13 @@ export default function ProfilePage() {
             <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
               {flag && <span className="shrink-0">{flag}</span>}
               <div className="flex items-center gap-1 min-w-0">
-                <h1 className="text-lg sm:text-2xl font-display font-bold truncate">{profile.username}</h1>
+                <button
+                  type="button"
+                  onClick={() => setShowScoutingCardModal(true)}
+                  className="text-lg sm:text-2xl font-display font-bold truncate text-left hover:text-piu-accent transition-colors cursor-pointer"
+                >
+                  {profile.username}
+                </button>
                 {genderSymbol && (
                   <span className={`shrink-0 text-base sm:text-lg ${profile.gender === 'male' ? 'text-blue-400' : 'text-pink-400'}`}>
                     {genderSymbol}
@@ -4347,6 +4355,7 @@ export default function ProfilePage() {
         const playChartKey = `${modalNorm}|${p.mode}|${p.level}`;
         const playChartId = chartKeyMap?.[playChartKey] || chartKeyMap?.[modalNorm];
         const playChartLink = playChartId ? `/songs/chart/${playChartId}` : `/songs?q=${encodeURIComponent(p.song_title || '')}`;
+        const playSharePath = p.id ? `/play/${encodeURIComponent(String(p.id))}` : playChartLink;
 
         const dmLinkShare = buildScoreSnapshotLinkShare({
           kind: 'score_snapshot',
@@ -4358,6 +4367,8 @@ export default function ProfilePage() {
           chartPath: playChartLink,
           jacketUrl: modalBg,
         });
+        const scoreShareTitle = dmLinkShare?.title || `${profile?.username || 'Player'}'s score`;
+        const scoreShareText = dmLinkShare?.subtitle || [p.song_title, p.mode, p.level ? `Lv ${p.level}` : ''].filter(Boolean).join(' • ');
 
         const toggleStyle = () => {
           const next = scoreCardStyle === 'classic' ? 'snapshot' : 'classic';
@@ -4430,6 +4441,20 @@ export default function ProfilePage() {
                           />
                         </>
                       ) : null}
+                      <ScoreCardImageShareButton
+                        score={{ ...p, username: profile?.username || '' }}
+                        jacketUrl={modalBg}
+                        linkShare={dmLinkShare}
+                        title={scoreShareTitle}
+                        text={scoreShareText}
+                        className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-black/25 text-gray-100 transition-colors hover:border-cyan-300/30 hover:bg-black/40 hover:text-white disabled:cursor-wait disabled:opacity-70"
+                      />
+                      <ScoreCardShareButton
+                        path={playSharePath}
+                        title={scoreShareTitle}
+                        text={scoreShareText}
+                        className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-black/25 text-gray-100 transition-colors hover:border-cyan-300/30 hover:bg-black/40 hover:text-white"
+                      />
                       <button
                         type="button"
                         onClick={() => setSelectedPlay(null)}
@@ -4568,6 +4593,20 @@ export default function ProfilePage() {
                         />
                       </>
                     )}
+                    <ScoreCardImageShareButton
+                      score={{ ...p, username: profile?.username || '' }}
+                      jacketUrl={modalBg}
+                      linkShare={dmLinkShare}
+                      title={scoreShareTitle}
+                      text={scoreShareText}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-black/25 text-gray-400 transition-colors hover:border-cyan-300/30 hover:text-white disabled:cursor-wait disabled:opacity-70"
+                    />
+                    <ScoreCardShareButton
+                      path={playSharePath}
+                      title={scoreShareTitle}
+                      text={scoreShareText}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-black/25 text-gray-400 transition-colors hover:border-cyan-300/30 hover:text-white"
+                    />
                     {styleToggleButton}
                     <button
                       className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 hover:text-white text-xl leading-none"
@@ -4677,6 +4716,18 @@ export default function ProfilePage() {
           </>
         );
       })()}
+
+      {/* Scouting Card Modal */}
+      {showScoutingCardModal && (
+        <div
+          className="fixed inset-0 z-[150] flex items-center justify-center bg-black/85 p-3 backdrop-blur-sm"
+          onClick={() => setShowScoutingCardModal(false)}
+        >
+          <div className="w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
+            <PlayerScoutingCard userId={profileId} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -31,8 +31,21 @@ export function getChartModeShort(mode) {
   if (mode === 'Single') return 'S';
   if (mode === 'Double') return 'D';
   if (mode === 'CoOp') return 'C';
+  if (mode === 'UCS') return 'UCS';
   const normalized = String(mode || '').trim().toUpperCase();
+  if (normalized === 'UCS' || normalized === 'USERCUSTOMSTEP' || normalized === 'USER CUSTOM STEP') return 'UCS';
   return normalized ? normalized[0] : 'X';
+}
+
+export function getChartBadgeLabel(mode, level) {
+  const modeShort = getChartModeShort(mode);
+  if (modeShort === 'UCS') return 'UCS';
+
+  const parsedLevel = parseInt(level, 10);
+  const displayLevel = Number.isFinite(parsedLevel) && parsedLevel > 0
+    ? String(parsedLevel)
+    : (String(level || '').trim() || '?');
+  return `${modeShort}${displayLevel}`;
 }
 
 export function resolveChartJacketUrl({
@@ -75,11 +88,7 @@ export default function PiuChartJacket({
   withBadge = true,
 }) {
   const styles = SIZE_STYLES[size] || SIZE_STYLES.md;
-  const parsedLevel = parseInt(level, 10);
-  const displayLevel = Number.isFinite(parsedLevel) && parsedLevel > 0
-    ? String(parsedLevel)
-    : (String(level || '').trim() || '?');
-  const badgeLabel = `${getChartModeShort(mode)}${displayLevel}`;
+  const badgeLabel = getChartBadgeLabel(mode, level);
   const fallbackChar = String(title || '?').trim().charAt(0).toUpperCase() || '?';
 
   return (

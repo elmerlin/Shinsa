@@ -1,28 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { parseGrade } from '../utils/grades';
-
-const PLATE_NAMES = {
-  PG: 'PERFECT GAME',
-  UG: 'ULTIMATE GAME',
-  EG: 'EXTREME GAME',
-  SG: 'SUPERB GAME',
-  MG: 'MARVELOUS GAME',
-  TG: 'TALENTED GAME',
-  FG: 'FAIR GAME',
-  RG: 'ROUGH GAME',
-};
-
-const PLATE_COLORS = {
-  PG: 'text-piu-gold',
-  UG: 'text-yellow-300',
-  EG: 'text-emerald-300',
-  SG: 'text-sky-300',
-  MG: 'text-cyan-300',
-  TG: 'text-violet-300',
-  FG: 'text-slate-300',
-  RG: 'text-rose-300',
-};
+import { getPlateName, getPlateTextColorClass } from '../utils/plates';
 
 const JUDGMENT_META = [
   { key: 'PERFECT', field: 'perfect', labelClass: 'text-sky-300' },
@@ -171,6 +150,7 @@ export default function ScoreSnapshotCard({
   onOpenReplay = null,
   commentCount = 0,
   onCommentClick = null,
+  missingJudgmentHint = '',
 }) {
   if (!score) return null;
 
@@ -197,8 +177,8 @@ export default function ScoreSnapshotCard({
     : (isUpscore ? displayScore - oldScore : 0);
   const deltaClass = deltaValue > 0 ? 'text-piu-green' : deltaValue < 0 ? 'text-rose-300' : 'text-gray-400';
   const overRank = getOverTop100Rank(score.over_top100_rank ?? score.overTop100Rank);
-  const plateName = PLATE_NAMES[String(score.plate || '').trim().toUpperCase()] || String(score.plate || '').trim();
-  const plateColor = PLATE_COLORS[String(score.plate || '').trim().toUpperCase()] || 'text-gray-300';
+  const plateName = getPlateName(score.plate);
+  const plateColor = getPlateTextColorClass(score.plate);
   const isStageBreak = !!score.is_stage_break || !!score.isStageBreak;
   const infoBadges = [
     resolvedRoleLabel ? {
@@ -224,6 +204,8 @@ export default function ScoreSnapshotCard({
     labelClass,
     value: parseInt(score?.[field], 10) || 0,
   }));
+  const showJudgments = hasJudgments(score);
+  const showMissingJudgmentHint = !showJudgments && String(missingJudgmentHint || '').trim();
   const resolvedReplayUrl = String(replayUrl || score.replayUrl || score.replay_url || score.replayEmbedUrl || score.replay_embed_url || '').trim();
   const hasReplay = !!resolvedReplayUrl && typeof onOpenReplay === 'function';
   const titleNode = chartLink ? (
@@ -358,7 +340,7 @@ export default function ScoreSnapshotCard({
           </div>
         </div>
 
-        {hasJudgments(score) ? (
+        {showJudgments ? (
           <div className="mt-3 rounded-[1.1rem] border border-white/8 bg-black/48 px-2.5 py-2 backdrop-blur-[2px]">
             <div className="grid grid-cols-5 gap-1 text-center">
               {judgmentItems.map((item) => (
@@ -370,6 +352,11 @@ export default function ScoreSnapshotCard({
                 </div>
               ))}
             </div>
+          </div>
+        ) : null}
+        {showMissingJudgmentHint ? (
+          <div className="mt-3 rounded-[1.1rem] border border-amber-300/18 bg-amber-500/8 px-3 py-2 text-[11px] leading-5 text-amber-100/88 backdrop-blur-[2px]">
+            {missingJudgmentHint}
           </div>
         ) : null}
       </div>

@@ -5,6 +5,7 @@ const path = require('path');
 const { getDb } = require('../db/schema');
 const { optionalAuth, requireAuth, isAdminUser } = require('./auth');
 const { normalizeUserAvatarForList } = require('../lib/avatarProxy');
+const { buildPlayerScoutingCard } = require('../lib/playerScoutingCard');
 const {
   normalizeSongName, parseSongFlags, resolveKnownSongVariantTitle,
   hasShortCutSuffix, normalizeShortCutSuffix, normalizeMode,
@@ -3471,6 +3472,34 @@ router.get('/analytics/skill-breakdown/:userId', (req, res) => {
   });
 });
 
+// GET /api/songs/analytics/scouting-card/:userId — player scouting card payload
+router.get('/analytics/scouting-card/:userId', (req, res) => {
+  const db = getDb();
+  const aliases = loadSongAliases();
+  const songCatalog = getSongCatalog(db, aliases);
+  const userId = String(req.params.userId || '').trim();
+  if (!userId) return res.status(400).json({ error: 'User ID is required' });
+
+  const user = db.prepare('SELECT id FROM users WHERE id = ?').get(userId);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+
+  const payload = buildPlayerScoutingCard(db, userId, {
+    aliases,
+    songCatalog,
+    queryUserBestScores,
+    queryUserRecentScores,
+    queryUserPumbilityScores,
+    buildUserBestByChartMap,
+    formatAnalytics,
+    getCompetitiveLevel,
+    getIdentityModeProfile,
+    buildIdentityLevelRows,
+  });
+
+  if (!payload) return res.status(404).json({ error: 'User not found' });
+  res.json(payload);
+});
+
 // GET /api/songs/analytics/rankings/:userId — percentile rankings among synced users
 router.get('/analytics/rankings/:userId', (req, res) => {
   const db = getDb();
@@ -5098,6 +5127,108 @@ router.post('/recommendations', optionalAuth, (req, res) => {
     activation,
     scoring_songs: scoringSongs,
     passing_songs: passingSongs,
+  });
+});
+
+// GET /api/songs/analytics/fantasy-pool — fetch random scouting cards for fantasy match
+function shuffleInPlace(items) {
+  for (let i = items.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [items[i], items[j]] = [items[j], items[i]];
+  }
+  return items;
+}
+
+function buildFantasySongPool(songCatalog) {
+  const charts = Array.isArray(songCatalog?.charts) ? songCatalog.charts : [];
+  const buckets = new Map();
+
+  for (const chart of charts) {
+    const mode = String(chart?.mode || '').trim();
+    const level = parseInt(chart?.level, 10) || 0;
+    const skills = Array.isArray(chart?.skills) ? chart.skills : [];
+
+    if (!['Single', 'Double'].includes(mode)) continue;
+    if (level < 8 || level > 28) continue;
+    if (skills.length === 0) continue;
+
+    const key = `${mode}:${level}`;
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key).push({
+      chart_id: parseInt(chart?.chart_id ?? chart?.id, 10) || 0,
+      key: chart?.key || '',
+      title: chart?.title || '',
+      artist: chart?.artist || '',
+      mode,
+      level,
+      jacket_url: chart?.jacket_url || '',
+      bpm: String(chart?.bpm || ''),
+      duration_seconds: parseInt(chart?.duration_seconds, 10) || 0,
+      song_key: chart?.song_key || '',
+      flags: chart?.flags || '',
+      skills: skills.map((skill) => ({
+        slug: skill?.slug || skill?.skill_slug || '',
+        name: skill?.name || skill?.skill_name || '',
+      })).filter((skill) => skill.slug),
+    });
+  }
+
+  const pool = [];
+  for (const bucket of buckets.values()) {
+    shuffleInPlace(bucket);
+    pool.push(...bucket.slice(0, 6));
+  }
+
+  return shuffleInPlace(pool);
+}
+
+router.get('/analytics/fantasy-pool', (req, res) => {
+  const db = getDb();
+  const aliases = loadSongAliases();
+  const songCatalog = getSongCatalog(db, aliases);
+  const count = Math.min(Math.max(parseInt(req.query.count) || 10, 6), 20);
+
+  // Find users who have synced best scores (i.e. have PIU data)
+  const candidates = db.prepare(`
+    SELECT DISTINCT u.id
+    FROM users u
+    INNER JOIN user_best_scores ubs ON ubs.user_id = u.id
+    ORDER BY RANDOM()
+    LIMIT ?
+  `).all(count);
+
+  if (candidates.length < 2) {
+    return res.status(404).json({ error: 'Not enough players with data' });
+  }
+
+  const cards = [];
+  for (const candidate of candidates) {
+    try {
+      const payload = buildPlayerScoutingCard(db, candidate.id, {
+        aliases,
+        songCatalog,
+        queryUserBestScores,
+        queryUserRecentScores,
+        queryUserPumbilityScores,
+        buildUserBestByChartMap,
+        formatAnalytics,
+        getCompetitiveLevel,
+        getIdentityModeProfile,
+        buildIdentityLevelRows,
+      });
+      if (payload && payload.coverage?.hasPiuData && payload.ratings) {
+        cards.push(payload);
+      }
+    } catch (_) { /* skip failed cards */ }
+  }
+
+  if (cards.length < 2) {
+    return res.status(404).json({ error: 'Not enough players with scouting data' });
+  }
+
+  res.json({
+    cards,
+    songs: buildFantasySongPool(songCatalog),
   });
 });
 

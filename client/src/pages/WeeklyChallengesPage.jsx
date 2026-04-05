@@ -283,6 +283,7 @@ export default function WeeklyChallengesPage() {
                 <p className="text-[10px] text-gray-400">
                   {selectedChart.mode} {selectedChart.level}
                   {chartScores ? ` \u2022 ${chartScores.scores.length} players` : ''}
+                  {chartScores?.total_attempts > 0 ? ` \u2022 ${chartScores.total_attempts} attempts` : ''}
                 </p>
               </div>
               <button type="button" onClick={() => { setSelectedChart(null); setChartScores(null); }} className="text-sm font-display font-bold text-gray-400 hover:text-white transition-colors">Close</button>
@@ -317,11 +318,24 @@ export default function WeeklyChallengesPage() {
                           {flag && <span className="mr-1">{flag}</span>}
                           {entry.username}
                         </Link>
-                        {entry.skill_title && <p className="text-[8px] text-gray-600 truncate">{entry.skill_title}</p>}
+                        <p className="text-[8px] text-gray-600 truncate">
+                          {entry.skill_title ? `${entry.skill_title} \u2022 ` : ''}
+                          {(entry.attempt_count || 0).toLocaleString()} attempt{entry.attempt_count === 1 ? '' : 's'}
+                        </p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         {hasReplay && (
-                          <button type="button" onClick={() => setSelectedReplay({ url: entry.replay_embed_url, title: buildReplayModalTitle(entry) })} className="text-sky-400/70 hover:text-sky-300" title="Watch replay">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedReplay({
+                              url: entry.replay_embed_url,
+                              title: buildReplayModalTitle(entry),
+                              playId: entry.play_id || '',
+                              ownerId: entry.user_id || '',
+                            })}
+                            className="text-sky-400/70 hover:text-sky-300"
+                            title="Watch replay"
+                          >
                             <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" className="w-3.5 h-3.5"><path d="M8 5v14l11-7z" /></svg>
                           </button>
                         )}
@@ -349,7 +363,15 @@ export default function WeeklyChallengesPage() {
       )}
       {selectedReplay && (
         <Suspense fallback={null}>
-          <YouTubeReplayModal url={selectedReplay.url} title={selectedReplay.title} onClose={() => setSelectedReplay(null)} />
+          <YouTubeReplayModal
+            url={selectedReplay.url}
+            title={selectedReplay.title}
+            onClose={() => setSelectedReplay(null)}
+            commentThread={selectedReplay.playId ? {
+              itemId: selectedReplay.playId,
+              ownerId: selectedReplay.ownerId || '',
+            } : null}
+          />
         </Suspense>
       )}
     </div>
