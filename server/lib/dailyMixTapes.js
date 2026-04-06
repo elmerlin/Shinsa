@@ -22,6 +22,10 @@ function normalizeStatus(value, fallback = 'pending') {
   return MIX_TAPE_STATUSES.has(status) ? status : fallback;
 }
 
+function getYtDlpCommand() {
+  return String(process.env.DAILY_MIX_TAPE_YTDLP_BIN || process.env.YTDLP_BIN || 'yt-dlp').trim() || 'yt-dlp';
+}
+
 function getSharp() {
   if (sharpModule) return sharpModule;
   // Lazy-load sharp so helper-only code paths and tests can run without the native module present.
@@ -89,6 +93,39 @@ function getYtDlpAuthArgs() {
   }
   if (extractorArgs) {
     args.push('--extractor-args', extractorArgs);
+  }
+
+  return args;
+}
+
+function getYtDlpNetworkArgs() {
+  const args = [];
+  const proxy = String(process.env.DAILY_MIX_TAPE_YTDLP_PROXY || '').trim();
+  const impersonate = String(process.env.DAILY_MIX_TAPE_YTDLP_IMPERSONATE || '').trim();
+  const sleepRequests = String(process.env.DAILY_MIX_TAPE_YTDLP_SLEEP_REQUESTS || '').trim();
+  const sleepInterval = String(process.env.DAILY_MIX_TAPE_YTDLP_SLEEP_INTERVAL || '').trim();
+  const maxSleepInterval = String(process.env.DAILY_MIX_TAPE_YTDLP_MAX_SLEEP_INTERVAL || '').trim();
+  const retrySleepRaw = String(process.env.DAILY_MIX_TAPE_YTDLP_RETRY_SLEEP || '').trim();
+
+  if (proxy) {
+    args.push('--proxy', proxy);
+  }
+  if (impersonate) {
+    args.push('--impersonate', impersonate);
+  }
+  if (sleepRequests) {
+    args.push('--sleep-requests', sleepRequests);
+  }
+  if (sleepInterval) {
+    args.push('--sleep-interval', sleepInterval);
+  }
+  if (maxSleepInterval) {
+    args.push('--max-sleep-interval', maxSleepInterval);
+  }
+  if (retrySleepRaw) {
+    for (const entry of retrySleepRaw.split('|').map((value) => value.trim()).filter(Boolean)) {
+      args.push('--retry-sleep', entry);
+    }
   }
 
   return args;
@@ -310,7 +347,7 @@ function runCommand(command, args, { cwd, logger = console } = {}) {
 
 async function commandExists(command) {
   try {
-    await runCommand(command, ['-version']);
+    await runCommand(command, command === 'ffmpeg' ? ['-version'] : ['--version']);
     return true;
   } catch (err) {
     if (err?.code === 'ENOENT') return false;
@@ -319,13 +356,15 @@ async function commandExists(command) {
 }
 
 async function getDailyMixTapeBinaryAvailability() {
+  const ytDlpCommand = getYtDlpCommand();
   const [ffmpegAvailable, ytDlpAvailable] = await Promise.all([
     commandExists('ffmpeg'),
-    commandExists('yt-dlp'),
+    commandExists(ytDlpCommand),
   ]);
   return {
     ffmpegAvailable,
     ytDlpAvailable,
+    ytDlpCommand,
   };
 }
 
@@ -458,8 +497,9 @@ async function createStillVideo(inputImagePath, outputVideoPath, durationSeconds
 
 async function downloadClipWindow(clip, outputPath) {
   const watchUrl = `https://www.youtube.com/watch?v=${clip.replay_video_id}`;
-  await runCommand('yt-dlp', [
+  await runCommand(getYtDlpCommand(), [
     ...getYtDlpAuthArgs(),
+    ...getYtDlpNetworkArgs(),
     '--force-overwrites',
     '--no-playlist',
     '--merge-output-format', 'mp4',
