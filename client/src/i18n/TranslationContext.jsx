@@ -12,11 +12,15 @@ import { getLocaleTranslations, saveLocaleTranslation } from '../utils/api';
 
 const TranslationContext = createContext(null);
 
+const NON_ENGLISH_LOCALES = new Set(['ko', 'es']);
+
 function normalizeLocale(value) {
   const locale = String(value || '').trim().toLowerCase();
   if (locale === 'kr') return 'ko';
-  return locale === 'ko' ? 'ko' : 'en';
+  return NON_ENGLISH_LOCALES.has(locale) ? locale : 'en';
 }
+
+const LOCALE_CATALOG_FIELD = { ko: 'korean', es: 'spanish' };
 
 function interpolate(template, vars = {}) {
   return String(template || '').replace(/\{(\w+)\}/g, (_, key) => {
@@ -46,8 +50,9 @@ export function TranslationProvider({ locale: localeProp, children }) {
   const locale = normalizeLocale(localeProp);
   const currentPageTag = useMemo(() => inferPageTag(location.pathname), [location.pathname]);
   const catalogMap = useMemo(() => buildCatalogMap(), []);
+  const isNonEnglish = locale !== 'en';
   const [translationState, setTranslationState] = useState({
-    loading: locale === 'ko',
+    loading: isNonEnglish,
     permissions: { canEdit: false, canAccept: false },
     items: [],
     error: '',
@@ -57,7 +62,7 @@ export function TranslationProvider({ locale: localeProp, children }) {
   useEffect(() => {
     let cancelled = false;
 
-    if (locale !== 'ko') {
+    if (!NON_ENGLISH_LOCALES.has(locale)) {
       setTranslationState({
         loading: false,
         permissions: { canEdit: false, canAccept: false },
@@ -69,7 +74,7 @@ export function TranslationProvider({ locale: localeProp, children }) {
 
     setTranslationState((current) => ({ ...current, loading: true, error: '' }));
 
-    getLocaleTranslations('ko')
+    getLocaleTranslations(locale)
       .then((payload) => {
         if (cancelled) return;
         setTranslationState({
@@ -103,17 +108,18 @@ export function TranslationProvider({ locale: localeProp, children }) {
   const t = useCallback((key, vars = {}) => {
     const catalogItem = catalogMap.get(String(key || ''));
     if (!catalogItem) return interpolate(key, vars);
-    if (locale === 'ko') {
+    if (NON_ENGLISH_LOCALES.has(locale)) {
       const runtimeItem = itemMap.get(String(key || ''));
-      const koreanValue = runtimeItem?.current || catalogItem.korean || catalogItem.english || key;
-      return interpolate(koreanValue, vars);
+      const catalogField = LOCALE_CATALOG_FIELD[locale] || 'english';
+      const localizedValue = runtimeItem?.current || catalogItem[catalogField] || catalogItem.english || key;
+      return interpolate(localizedValue, vars);
     }
     return interpolate(catalogItem.english || key, vars);
   }, [catalogMap, itemMap, locale]);
 
   const saveTranslation = useCallback(async (key, value, status = 'draft') => {
     const payload = await saveLocaleTranslation({
-      locale: 'ko',
+      locale,
       key,
       value,
       status,
@@ -135,15 +141,17 @@ export function TranslationProvider({ locale: localeProp, children }) {
     }));
 
     return payload;
-  }, []);
+  }, [locale]);
 
   const getLocaleHref = useCallback((targetLocale) => {
     const normalizedTarget = normalizeLocale(targetLocale);
     const path = location.pathname || '/';
     const search = location.search || '';
     const hash = location.hash || '';
-    if (normalizedTarget === 'ko') {
-      return `/kr${path === '/' ? '' : path}${search}${hash}`;
+    const LOCALE_PREFIX = { ko: '/kr', es: '/es' };
+    const prefix = LOCALE_PREFIX[normalizedTarget];
+    if (prefix) {
+      return `${prefix}${path === '/' ? '' : path}${search}${hash}`;
     }
     return `${path}${search}${hash}`;
   }, [location.hash, location.pathname, location.search]);
@@ -151,6 +159,8 @@ export function TranslationProvider({ locale: localeProp, children }) {
   const value = useMemo(() => ({
     locale,
     isKorean: locale === 'ko',
+    isSpanish: locale === 'es',
+    isTranslated: NON_ENGLISH_LOCALES.has(locale),
     currentPageTag,
     editorOpen,
     setEditorOpen,

@@ -6,13 +6,14 @@ const { optionalAuth, requireAuth, isAdminUser } = require('./auth');
 
 const router = express.Router();
 const CATALOG_PATH = path.join(__dirname, '..', '..', 'client', 'src', 'i18n', 'translationCatalog.json');
-const SUPPORTED_LOCALES = new Set(['ko']);
+const SUPPORTED_LOCALES = new Set(['ko', 'es']);
 const SUPPORTED_STATUSES = new Set(['draft', 'accepted']);
+const LOCALE_CATALOG_FIELD = { ko: 'korean', es: 'spanish' };
 
 function normalizeLocale(value) {
   const locale = String(value || '').trim().toLowerCase();
   if (locale === 'kr') return 'ko';
-  return locale || 'ko';
+  return SUPPORTED_LOCALES.has(locale) ? locale : 'ko';
 }
 
 function loadCatalog() {
@@ -57,15 +58,18 @@ router.get('/translations', optionalAuth, (req, res) => {
   const canAccept = isAdminUser(db, req.user);
   const canEdit = !!req.user?.id;
 
+  const catalogField = LOCALE_CATALOG_FIELD[locale] || 'korean';
+
   const items = catalog.map((item) => {
     const override = overrides.get(String(item.key || ''));
+    const catalogValue = String(item[catalogField] || item.english || '');
     return {
       key: item.key,
       category: item.category || '',
       pages: Array.isArray(item.pages) ? item.pages : [],
       english: String(item.english || ''),
-      proposed: String(item.korean || item.english || ''),
-      current: override ? String(override.value || '') : String(item.korean || item.english || ''),
+      proposed: catalogValue,
+      current: override ? String(override.value || '') : catalogValue,
       keepEnglish: !!item.keepEnglish,
       status: override ? String(override.status || 'draft') : 'seeded',
       source: override ? 'override' : 'seeded',

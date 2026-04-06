@@ -9,6 +9,7 @@ import App from './App';
 import './index.css';
 
 const KOREAN_LOCALE_ENABLED = import.meta.env.VITE_ENABLE_KR_LOCALE === 'true';
+const SPANISH_LOCALE_ENABLED = import.meta.env.VITE_ENABLE_ES_LOCALE === 'true';
 
 function enableAppleMobileInputZoomGuard() {
   if (typeof window === 'undefined' || typeof document === 'undefined') return;
@@ -61,21 +62,32 @@ function detectLocaleFromPathname(pathname) {
   if (KOREAN_LOCALE_ENABLED && (path === '/kr' || path.startsWith('/kr/'))) {
     return 'ko';
   }
+  if (SPANISH_LOCALE_ENABLED && (path === '/es' || path.startsWith('/es/'))) {
+    return 'es';
+  }
   return 'en';
 }
 
-if (typeof window !== 'undefined' && !KOREAN_LOCALE_ENABLED) {
+if (typeof window !== 'undefined') {
   const path = String(window.location.pathname || '/');
-  if (path === '/kr' || path.startsWith('/kr/')) {
+  const suffix = window.location.search || '' + (window.location.hash || '');
+
+  if (!KOREAN_LOCALE_ENABLED && (path === '/kr' || path.startsWith('/kr/'))) {
     const nextPath = path === '/kr' ? '/' : path.slice(3);
-    window.location.replace(`${nextPath}${window.location.search || ''}${window.location.hash || ''}`);
+    window.location.replace(`${nextPath}${suffix}`);
+  }
+
+  if (!SPANISH_LOCALE_ENABLED && (path === '/es' || path.startsWith('/es/'))) {
+    const nextPath = path === '/es' ? '/' : path.slice(3);
+    window.location.replace(`${nextPath}${suffix}`);
   }
 }
 
 const initialLocale = typeof window !== 'undefined'
   ? detectLocaleFromPathname(window.location.pathname)
   : 'en';
-const routerBasename = initialLocale === 'ko' ? '/kr' : undefined;
+const LOCALE_BASENAMES = { ko: '/kr', es: '/es' };
+const routerBasename = LOCALE_BASENAMES[initialLocale] || undefined;
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

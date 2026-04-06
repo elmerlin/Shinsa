@@ -103,7 +103,7 @@ function TranslationRow({ item, canEdit, canAccept, t }) {
 
 export default function TranslationEditorDrawer() {
   const {
-    isKorean,
+    isTranslated,
     editorOpen,
     setEditorOpen,
     currentPageTag,
@@ -142,7 +142,7 @@ export default function TranslationEditorDrawer() {
     });
   }, [currentPageTag, filterMode, items, query]);
 
-  if (!isKorean) return null;
+  if (!isTranslated) return null;
 
   return (
     <>

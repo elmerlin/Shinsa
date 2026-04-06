@@ -69,6 +69,8 @@ const StoryArchivePage = lazy(() => import('./pages/StoryArchivePage'));
 const TranslationEditorDrawer = lazy(() => import('./components/TranslationEditorDrawer'));
 
 const KOREAN_LOCALE_ENABLED = import.meta.env.VITE_ENABLE_KR_LOCALE === 'true';
+const SPANISH_LOCALE_ENABLED = import.meta.env.VITE_ENABLE_ES_LOCALE === 'true';
+const ANY_LOCALE_ENABLED = KOREAN_LOCALE_ENABLED || SPANISH_LOCALE_ENABLED;
 const DOJO_TARGET_GROUP = 'pump dojo';
 const DOJO_VENUE_SLUG = 'london-pump-dojo';
 const DOJO_POPUP_STORAGE_PREFIX = 'dojo-proximity-popup-last-shown';
@@ -941,19 +943,28 @@ function MessageInboxButton() {
 }
 
 function LocaleSwitchButton() {
-  if (!KOREAN_LOCALE_ENABLED) return null;
-  const { isKorean, getLocaleHref, t } = useI18n();
-  const nextLocale = isKorean ? 'en' : 'ko';
-  const label = isKorean ? t('app.language.switch_to_english') : t('app.language.switch_to_korean');
+  if (!ANY_LOCALE_ENABLED) return null;
+  const { locale, getLocaleHref, t } = useI18n();
+
+  const options = [{ code: 'en', label: t('app.language.switch_to_english') }];
+  if (KOREAN_LOCALE_ENABLED) options.push({ code: 'ko', label: t('app.language.switch_to_korean') });
+  if (SPANISH_LOCALE_ENABLED) options.push({ code: 'es', label: t('app.language.switch_to_spanish') });
+
+  const available = options.filter((o) => o.code !== locale);
 
   return (
-    <button
-      type="button"
-      onClick={() => window.location.assign(getLocaleHref(nextLocale))}
-      className="rounded-full border border-piu-border/60 px-2.5 py-1 text-[11px] font-display text-gray-300 hover:text-white transition-colors"
-    >
-      {label}
-    </button>
+    <span className="flex items-center gap-1">
+      {available.map((opt) => (
+        <button
+          key={opt.code}
+          type="button"
+          onClick={() => window.location.assign(getLocaleHref(opt.code))}
+          className="rounded-full border border-piu-border/60 px-2.5 py-1 text-[11px] font-display text-gray-300 hover:text-white transition-colors"
+        >
+          {opt.label}
+        </button>
+      ))}
+    </span>
   );
 }
 

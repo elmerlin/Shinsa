@@ -33,6 +33,7 @@ const weeklyChallengeRoutes = require('./routes/weeklyChallenges');
 const app = express();
 const PORT = process.env.PORT || 3001;
 const KOREAN_LOCALE_ENABLED = String(process.env.ENABLE_KR_LOCALE || '').trim().toLowerCase() === 'true';
+const SPANISH_LOCALE_ENABLED = String(process.env.ENABLE_ES_LOCALE || '').trim().toLowerCase() === 'true';
 
 // Initialize database
 initializeDb();
@@ -145,15 +146,24 @@ app.use('/api', (req, res) => {
 // Serve uploaded files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-if (!KOREAN_LOCALE_ENABLED) {
-  const redirectHiddenKoreanLocale = (req, res) => {
-    const nextPath = req.path === '/kr' ? '/' : req.path.slice(3);
+function createLocaleRedirect(prefix) {
+  return (req, res) => {
+    const nextPath = req.path === prefix ? '/' : req.path.slice(prefix.length);
     const query = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
     return res.redirect(302, `${nextPath}${query}`);
   };
+}
 
-  app.get(/^\/kr(?:\/.*)?$/, redirectHiddenKoreanLocale);
-  app.head(/^\/kr(?:\/.*)?$/, redirectHiddenKoreanLocale);
+if (!KOREAN_LOCALE_ENABLED) {
+  const handler = createLocaleRedirect('/kr');
+  app.get(/^\/kr(?:\/.*)?$/, handler);
+  app.head(/^\/kr(?:\/.*)?$/, handler);
+}
+
+if (!SPANISH_LOCALE_ENABLED) {
+  const handler = createLocaleRedirect('/es');
+  app.get(/^\/es(?:\/.*)?$/, handler);
+  app.head(/^\/es(?:\/.*)?$/, handler);
 }
 
 // Serve chart editor at /charting/
