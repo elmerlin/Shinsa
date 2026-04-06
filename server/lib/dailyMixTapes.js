@@ -102,8 +102,8 @@ function getYtDlpNetworkArgs() {
   const args = [];
   const proxy = String(process.env.DAILY_MIX_TAPE_YTDLP_PROXY || '').trim();
   const impersonate = String(process.env.DAILY_MIX_TAPE_YTDLP_IMPERSONATE || '').trim();
-  const jsRuntimes = String(process.env.DAILY_MIX_TAPE_YTDLP_JS_RUNTIMES || '').trim();
-  const remoteComponents = String(process.env.DAILY_MIX_TAPE_YTDLP_REMOTE_COMPONENTS || '').trim();
+  const jsRuntimes = String(process.env.DAILY_MIX_TAPE_YTDLP_JS_RUNTIMES || 'node').trim();
+  const remoteComponents = String(process.env.DAILY_MIX_TAPE_YTDLP_REMOTE_COMPONENTS || 'ejs:github').trim();
   const sleepRequests = String(process.env.DAILY_MIX_TAPE_YTDLP_SLEEP_REQUESTS || '').trim();
   const sleepInterval = String(process.env.DAILY_MIX_TAPE_YTDLP_SLEEP_INTERVAL || '').trim();
   const maxSleepInterval = String(process.env.DAILY_MIX_TAPE_YTDLP_MAX_SLEEP_INTERVAL || '').trim();
@@ -137,6 +137,13 @@ function getYtDlpNetworkArgs() {
   }
 
   return args;
+}
+
+function getYtDlpFormatSelector() {
+  return String(
+    process.env.DAILY_MIX_TAPE_YTDLP_FORMAT
+    || '300/94/93/92/91/best[height<=720][ext=mp4]/best[height<=720]/best'
+  ).trim();
 }
 
 function normalizeMixTapeSelection(selection = [], { maxClips = DEFAULT_MAX_CLIPS, maxClipSeconds = DEFAULT_MAX_CLIP_SECONDS } = {}) {
@@ -508,6 +515,7 @@ async function downloadClipWindow(clip, outputPath) {
   await runCommand(getYtDlpCommand(), [
     ...getYtDlpAuthArgs(),
     ...getYtDlpNetworkArgs(),
+    '-f', getYtDlpFormatSelector(),
     '--force-overwrites',
     '--no-playlist',
     '--merge-output-format', 'mp4',
