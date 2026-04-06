@@ -13,6 +13,7 @@ import ScoreSnapshotModal from '../components/ScoreSnapshotModal';
 import YouTubeReplayModal from '../components/YouTubeReplayModal';
 import SendToDirectMessageButton from '../components/SendToDirectMessageButton';
 import SkillTitleUnlockCard from '../components/SkillTitleUnlockCard';
+import ExplorePlayGrid from '../components/feed/ExplorePlayGrid';
 import PlateBadge from '../components/ui/plate-badge';
 import { renderFormattedText } from '../utils/formatText';
 import { getProfilePath } from '../utils/profile';
@@ -1531,6 +1532,7 @@ export default function FeedPage() {
   const [chartKeyMap, setChartKeyMap] = useState({});
   const [selectedScore, setSelectedScore] = useState(null);
   const [selectedReplay, setSelectedReplay] = useState(null);
+  const [feedMode, setFeedMode] = useState('feed');
   const mountedRef = useRef(false);
   const songMapsRequestedRef = useRef(false);
 
@@ -1605,18 +1607,41 @@ export default function FeedPage() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-8">
+    <div className={`mx-auto px-4 py-8 transition-all duration-300 ${feedMode === 'explore' ? 'max-w-4xl' : 'max-w-2xl'}`}>
       <div className="flex items-center justify-between mb-6">
         <h2 className="font-display font-bold text-xl">Activity Feed</h2>
-        <Link
-          to="/posts"
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-piu-accent/30 bg-piu-accent/10 text-xs font-display font-bold text-piu-accent hover:bg-piu-accent hover:text-white transition-colors"
-        >
-          My Posts
-        </Link>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setFeedMode(feedMode === 'explore' ? 'feed' : 'explore')}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-display font-bold transition-all duration-200 ${
+              feedMode === 'explore'
+                ? 'border-piu-blue/40 bg-piu-blue/15 text-piu-blue shadow-[0_0_10px_rgba(68,136,255,0.08)]'
+                : 'border-piu-border/50 bg-piu-dark/30 text-gray-400 hover:text-piu-blue hover:border-piu-blue/30'
+            }`}
+          >
+            <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" />
+            </svg>
+            Explore
+          </button>
+          <Link
+            to="/posts"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-piu-accent/30 bg-piu-accent/10 text-xs font-display font-bold text-piu-accent hover:bg-piu-accent hover:text-white transition-colors"
+          >
+            My Posts
+          </Link>
+        </div>
       </div>
 
-      {loading ? (
+      {feedMode === 'explore' ? (
+        <ExplorePlayGrid
+          jacketLookup={jacketLookup}
+          chartKeyMap={chartKeyMap}
+          onScoreClick={setSelectedScore}
+          onReplayClick={setSelectedReplay}
+        />
+      ) : loading ? (
         <div className="text-center py-12 text-gray-500">Loading feed...</div>
       ) : feed.length === 0 ? (
         <div className="text-center py-12">

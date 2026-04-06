@@ -1804,6 +1804,129 @@ router.get('/feed', requireAuth, (req, res) => {
   res.json(feed);
 });
 
+// GET /api/social/feed/explore — tessellated explore grid of recent plays
+router.get('/feed/explore', requireAuth, (req, res) => {
+  const db = getDb();
+  const scope = req.query.scope === 'global' ? 'global' : 'following';
+  const cursorRaw = req.query.cursor || null;
+  const limit = 40;
+
+  let cursorUtc = null;
+  let cursorId = null;
+  if (cursorRaw) {
+    try {
+      const decoded = Buffer.from(cursorRaw, 'base64').toString('utf8');
+      const sep = decoded.lastIndexOf('|');
+      if (sep > 0) {
+        cursorUtc = decoded.slice(0, sep);
+        cursorId = parseInt(decoded.slice(sep + 1), 10);
+      }
+    } catch {}
+  }
+
+  const conditions = ["rp.played_at_utc >= datetime('now', '-7 days')", "rp.played_at_utc != ''"];
+  const params = [];
+
+  if (scope === 'following') {
+    conditions.push('(rp.user_id IN (SELECT following_id FROM user_follows WHERE follower_id = ?) OR rp.user_id = ?)');
+    params.push(req.user.id, req.user.id);
+  }
+
+  if (cursorUtc && cursorId) {
+    conditions.push('(rp.played_at_utc < ? OR (rp.played_at_utc = ? AND rp.id < ?))');
+    params.push(cursorUtc, cursorUtc, cursorId);
+  }
+
+  const whereClause = conditions.join(' AND ');
+
+  const rows = db.prepare(`
+    SELECT rp.id, rp.user_id, rp.song_title, rp.mode, rp.level, rp.score, rp.grade,
+           rp.plate, rp.perfect, rp.great, rp.good, rp.bad, rp.miss, rp.max_combo,
+           rp.background_url, rp.replay_embed_url, rp.replay_video_id,
+           rp.replay_start_seconds, rp.replay_end_seconds,
+           rp.played_at_utc, rp.over_top100_rank,
+           u.username, u.avatar, u.avatar_v, u.nationality,
+           s.jacket_url AS song_jacket_url,
+           (SELECT COUNT(*) FROM play_comments pc WHERE pc.play_id = rp.id) as comment_count
+    FROM user_recently_played rp
+    JOIN users u ON rp.user_id = u.id
+    LEFT JOIN songs s ON s.title = rp.song_title AND s.mode = rp.mode AND s.level = rp.level
+    WHERE ${whereClause}
+    ORDER BY rp.played_at_utc DESC, rp.id DESC
+    LIMIT ?
+  `).all(...params, limit + 1);
+
+  const hasMore = rows.length > limit;
+  const items = rows.slice(0, limit);
+
+  // compute highlight tiers
+  const gradeBonus = { 'SSS+': 5000, SSS: 4500, 'SS+': 4000, SS: 3500, 'S+': 3000, S: 2500, 'AAA+': 2000, AAA: 1800, 'AA+': 1500, AA: 1200, 'A+': 800, A: 500 };
+  const plateBonus = { PG: 3000, UG: 2500, EG: 2000, SG: 1500, MG: 1000, TG: 500 };
+
+  const weights = items.map((row) => {
+    let w = 0;
+    w += (parseInt(row.level, 10) || 0) * 1000;
+    w += Math.floor((parseInt(row.score, 10) || 0) / 100);
+    w += gradeBonus[row.grade] || 0;
+    w += plateBonus[row.plate] || 0;
+    if (row.replay_embed_url || row.replay_video_id) w += 1500;
+    const rank = parseInt(row.over_top100_rank, 10) || 0;
+    if (rank >= 1 && rank <= 100) w += 2000 + (101 - rank) * 20;
+    return w;
+  });
+
+  const sorted = weights.map((w, i) => ({ w, i })).sort((a, b) => b.w - a.w);
+  const heroThreshold = Math.max(1, Math.floor(items.length * 0.05));
+  const featureThreshold = Math.max(heroThreshold + 1, Math.floor(items.length * 0.20));
+
+  const tiers = new Array(items.length).fill('standard');
+  for (let rank = 0; rank < sorted.length; rank++) {
+    if (rank < heroThreshold) tiers[sorted[rank].i] = 'hero';
+    else if (rank < featureThreshold) tiers[sorted[rank].i] = 'feature';
+  }
+
+  const result = items.map((row, i) => {
+    const jacketUrl = row.song_jacket_url || row.background_url || '';
+    return {
+      play_id: row.id,
+      user_id: row.user_id,
+      username: row.username,
+      avatar: normalizeUserAvatarForList(row.avatar, row.user_id, 64, row.avatar_v),
+      nationality: row.nationality || '',
+      song_title: row.song_title,
+      mode: row.mode,
+      level: row.level,
+      score: row.score,
+      grade: row.grade || '',
+      plate: row.plate || '',
+      perfect: row.perfect,
+      great: row.great,
+      good: row.good,
+      bad: row.bad,
+      miss: row.miss,
+      max_combo: row.max_combo || 0,
+      background_url: row.background_url || '',
+      jacket_url: jacketUrl,
+      replay_video_id: row.replay_video_id || '',
+      replay_embed_url: row.replay_embed_url || '',
+      replay_start_seconds: row.replay_start_seconds || 0,
+      replay_end_seconds: row.replay_end_seconds || 0,
+      played_at_utc: row.played_at_utc,
+      over_top100_rank: row.over_top100_rank || 0,
+      highlight_tier: tiers[i],
+      comment_count: row.comment_count || 0,
+    };
+  });
+
+  let nextCursor = null;
+  if (hasMore && items.length > 0) {
+    const last = items[items.length - 1];
+    nextCursor = Buffer.from(`${last.played_at_utc}|${last.id}`).toString('base64');
+  }
+
+  res.json({ items: result, nextCursor, hasMore });
+});
+
 // ─── Upscore Pumps ──────────────────────────────────────
 
 // POST /api/social/upscores/:id/pump — toggle pump on an upscore

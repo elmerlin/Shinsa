@@ -1957,6 +1957,9 @@ function initializeDb() {
   if (!recentIndexes.includes('idx_recently_played_shoe')) {
     db.exec('CREATE INDEX IF NOT EXISTS idx_recently_played_shoe ON user_recently_played(shoe_id)');
   }
+  if (!recentIndexes.includes('idx_recently_played_global_explore')) {
+    db.exec('CREATE INDEX IF NOT EXISTS idx_recently_played_global_explore ON user_recently_played(played_at_utc DESC, id DESC)');
+  }
 
   // Migrations for user_shoes - add colorway and lookup index
   const userShoeCols = db.prepare("PRAGMA table_info(user_shoes)").all().map(c => c.name);

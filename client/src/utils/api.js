@@ -935,6 +935,11 @@ export const getNewClear = (id) => request(`/social/clears/${id}`);
 
 // Social — Feed
 export const getFeed = (page) => request(`/social/feed?page=${page || 1}`);
+export const getExploreFeed = ({ scope = 'following', cursor } = {}) => {
+  const params = new URLSearchParams({ scope });
+  if (cursor) params.set('cursor', cursor);
+  return request(`/social/feed/explore?${params}`);
+};
 export const getRecentActivity = () => request('/social/recent-activity');
 export const getDailyHighlights = () => request('/social/daily-highlights');
 
