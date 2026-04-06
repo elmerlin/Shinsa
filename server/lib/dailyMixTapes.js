@@ -139,11 +139,25 @@ function getYtDlpNetworkArgs() {
   return args;
 }
 
-function getYtDlpFormatSelector() {
-  return String(
-    process.env.DAILY_MIX_TAPE_YTDLP_FORMAT
-    || '300/94/93/92/91/best[height<=720][ext=mp4]/best[height<=720]/best'
-  ).trim();
+function getYtDlpFormatSelectors() {
+  const configured = String(process.env.DAILY_MIX_TAPE_YTDLP_FORMAT || '').trim();
+  if (configured) {
+    return configured
+      .split('|')
+      .map((value) => value.trim())
+      .filter(Boolean);
+  }
+
+  return [
+    '300',
+    '94',
+    '93',
+    '92',
+    '91',
+    'best[height<=720][ext=mp4]',
+    'best[height<=720]',
+    'best',
+  ];
 }
 
 function normalizeMixTapeSelection(selection = [], { maxClips = DEFAULT_MAX_CLIPS, maxClipSeconds = DEFAULT_MAX_CLIP_SECONDS } = {}) {
@@ -512,18 +526,30 @@ async function createStillVideo(inputImagePath, outputVideoPath, durationSeconds
 
 async function downloadClipWindow(clip, outputPath) {
   const watchUrl = `https://www.youtube.com/watch?v=${clip.replay_video_id}`;
-  await runCommand(getYtDlpCommand(), [
-    ...getYtDlpAuthArgs(),
-    ...getYtDlpNetworkArgs(),
-    '-f', getYtDlpFormatSelector(),
-    '--force-overwrites',
-    '--no-playlist',
-    '--merge-output-format', 'mp4',
-    '--force-keyframes-at-cuts',
-    '--download-sections', `*${formatTimestamp(clip.replay_start_seconds)}-${formatTimestamp(clip.replay_start_seconds + clip.clip_duration_seconds)}`,
-    '-o', outputPath,
-    watchUrl,
-  ]);
+  const formatSelectors = getYtDlpFormatSelectors();
+  let lastError = null;
+
+  for (const formatSelector of formatSelectors) {
+    try {
+      await runCommand(getYtDlpCommand(), [
+        ...getYtDlpAuthArgs(),
+        ...getYtDlpNetworkArgs(),
+        '-f', formatSelector,
+        '--force-overwrites',
+        '--no-playlist',
+        '--merge-output-format', 'mp4',
+        '--force-keyframes-at-cuts',
+        '--download-sections', `*${formatTimestamp(clip.replay_start_seconds)}-${formatTimestamp(clip.replay_start_seconds + clip.clip_duration_seconds)}`,
+        '-o', outputPath,
+        watchUrl,
+      ]);
+      return;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError || new Error('Unable to download replay clip window.');
 }
 
 async function renderPortraitClip(inputPath, overlayPath, outputPath) {
