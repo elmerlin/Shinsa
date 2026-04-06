@@ -190,7 +190,9 @@ export default function ExplorePlayGrid({ jacketLookup, chartKeyMap, onScoreClic
         <div className="text-center py-12">
           <p className="text-gray-400 mb-2">Nothing to explore yet</p>
           <p className="text-gray-500 text-sm">
-            {scope === 'following'
+            {scope === 'me'
+              ? 'You have no plays in the last 7 days.'
+              : scope === 'following'
               ? 'Follow more players or switch to Global to discover plays.'
               : 'No plays recorded in the last 7 days.'}
           </p>

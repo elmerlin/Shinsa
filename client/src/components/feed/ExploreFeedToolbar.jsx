@@ -25,6 +25,17 @@ export default function ExploreFeedToolbar({ scope, onScopeChange }) {
       >
         Global
       </button>
+      <button
+        type="button"
+        onClick={() => onScopeChange('me')}
+        className={`px-3.5 py-1.5 rounded-md text-xs font-display font-bold tracking-wide transition-all duration-200 ${
+          scope === 'me'
+            ? 'bg-piu-green/15 text-piu-green border border-piu-green/25 shadow-[0_0_8px_rgba(51,255,102,0.1)]'
+            : 'text-zinc-500 hover:text-zinc-300 border border-transparent'
+        }`}
+      >
+        Me
+      </button>
     </div>
   );
 }

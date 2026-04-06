@@ -1807,7 +1807,8 @@ router.get('/feed', requireAuth, (req, res) => {
 // GET /api/social/feed/explore — tessellated explore grid of recent plays
 router.get('/feed/explore', requireAuth, (req, res) => {
   const db = getDb();
-  const scope = req.query.scope === 'global' ? 'global' : 'following';
+  const rawScope = req.query.scope;
+  const scope = rawScope === 'global' ? 'global' : rawScope === 'me' ? 'me' : 'following';
   const cursorRaw = req.query.cursor || null;
   const limit = 40;
 
@@ -1836,7 +1837,10 @@ router.get('/feed/explore', requireAuth, (req, res) => {
   ];
   const params = [];
 
-  if (scope === 'following') {
+  if (scope === 'me') {
+    conditions.push('rp.user_id = ?');
+    params.push(req.user.id);
+  } else if (scope === 'following') {
     conditions.push('(rp.user_id IN (SELECT following_id FROM user_follows WHERE follower_id = ?) OR rp.user_id = ?)');
     params.push(req.user.id, req.user.id);
   }
