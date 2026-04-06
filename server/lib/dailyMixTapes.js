@@ -71,6 +71,29 @@ function buildChartLabel(item) {
   return `${shortMode}${level}`;
 }
 
+function getYtDlpAuthArgs() {
+  const args = [];
+  const cookieFile = String(
+    process.env.DAILY_MIX_TAPE_YTDLP_COOKIE_FILE
+    || process.env.YTDLP_COOKIE_FILE
+    || ''
+  ).trim();
+  const cookiesFromBrowser = String(process.env.DAILY_MIX_TAPE_YTDLP_COOKIES_FROM_BROWSER || '').trim();
+  const extractorArgs = String(process.env.DAILY_MIX_TAPE_YTDLP_EXTRACTOR_ARGS || '').trim();
+
+  if (cookieFile) {
+    args.push('--cookies', cookieFile);
+  }
+  if (cookiesFromBrowser) {
+    args.push('--cookies-from-browser', cookiesFromBrowser);
+  }
+  if (extractorArgs) {
+    args.push('--extractor-args', extractorArgs);
+  }
+
+  return args;
+}
+
 function normalizeMixTapeSelection(selection = [], { maxClips = DEFAULT_MAX_CLIPS, maxClipSeconds = DEFAULT_MAX_CLIP_SECONDS } = {}) {
   const list = Array.isArray(selection) ? selection : [];
   return list.slice(0, maxClips).map((item, index) => {
@@ -436,6 +459,7 @@ async function createStillVideo(inputImagePath, outputVideoPath, durationSeconds
 async function downloadClipWindow(clip, outputPath) {
   const watchUrl = `https://www.youtube.com/watch?v=${clip.replay_video_id}`;
   await runCommand('yt-dlp', [
+    ...getYtDlpAuthArgs(),
     '--force-overwrites',
     '--no-playlist',
     '--merge-output-format', 'mp4',
