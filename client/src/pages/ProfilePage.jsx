@@ -3327,11 +3327,12 @@ export default function ProfilePage() {
                   const trophyAwards = (w.awards || []).filter(a => a.rank <= 3);
                   const weekNum = (w.week_key || '').match(/W(\d+)$/)?.[1];
                   const handleClick = () => {
+                    if (!profileId) return;
                     setWcPersonalLoading(true);
-                    setWcPersonalModal({ weekKey: w.week_key, data: null });
-                    getUserWeeklyChallengePersonal(uid, w.week_key)
-                      .then(data => setWcPersonalModal({ weekKey: w.week_key, data }))
-                      .catch(() => setWcPersonalModal(null))
+                    setWcPersonalModal({ weekKey: w.week_key, data: null, error: null });
+                    getUserWeeklyChallengePersonal(profileId, w.week_key)
+                      .then(data => setWcPersonalModal({ weekKey: w.week_key, data, error: null }))
+                      .catch((err) => setWcPersonalModal(prev => prev ? { ...prev, error: err.message || 'Could not load recap' } : null))
                       .finally(() => setWcPersonalLoading(false));
                   };
                   return (
@@ -3390,9 +3391,31 @@ export default function ProfilePage() {
               {wcPersonalModal && (
                 <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm" onClick={() => setWcPersonalModal(null)}>
                   <div className="w-full max-w-lg max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-                    {wcPersonalLoading && !wcPersonalModal.data && (
+                    {wcPersonalLoading && !wcPersonalModal.data && !wcPersonalModal.error && (
                       <div className="rounded-xl border border-piu-border bg-piu-dark py-12 text-center text-zinc-500 text-sm font-display">
                         Loading recap...
+                      </div>
+                    )}
+                    {wcPersonalModal.error && !wcPersonalModal.data && (
+                      <div className="rounded-xl border border-piu-border bg-piu-dark py-10 px-6 text-center">
+                        <p className="text-sm font-display text-zinc-400 mb-4">Recap not available for this week</p>
+                        <div className="flex items-center justify-center gap-3">
+                          <Link
+                            to={`/weekly-challenges?week=${wcPersonalModal.weekKey}`}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.05] px-4 py-2.5 text-sm font-display font-bold text-white/70 hover:text-white hover:border-white/20 transition-colors"
+                            onClick={() => setWcPersonalModal(null)}
+                          >
+                            View Week
+                            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                          </Link>
+                          <button
+                            type="button"
+                            onClick={() => setWcPersonalModal(null)}
+                            className="rounded-lg border border-white/10 bg-white/[0.05] px-4 py-2.5 text-sm font-display font-bold text-white/40 hover:text-white/70 transition-colors"
+                          >
+                            Close
+                          </button>
+                        </div>
                       </div>
                     )}
                     {wcPersonalModal.data && (
