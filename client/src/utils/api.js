@@ -1427,3 +1427,9 @@ export const adminRevokeDiscount = (discountId) => request(`/venue-access/admin/
 export const getAdminApprovedUsers = (venueSlug) => request(`/venue-access/admin/approved-users/${encodeURIComponent(venueSlug)}`);
 export const adminApproveUser = (data) => request('/venue-access/admin/approved-users', { method: 'POST', body: JSON.stringify(data) });
 export const adminRemoveApprovedUser = (venueId, userId) => request(`/venue-access/admin/approved-users/${venueId}/${userId}`, { method: 'DELETE' });
+
+// Pets (Tamagotchi)
+export const getMyPet = () => request('/pets/me');
+export const adoptPet = (character) => request('/pets/adopt', { method: 'POST', body: JSON.stringify({ character }) });
+export const feedPet = (songs = 1) => request('/pets/feed', { method: 'POST', body: JSON.stringify({ songs }) });
+export const getPetCharacters = () => request('/pets/characters');

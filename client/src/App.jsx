@@ -66,6 +66,7 @@ const TournamentEmbed = lazy(() => import('./pages/TournamentEmbed'));
 const TournamentPoster = lazy(() => import('./pages/TournamentPoster'));
 const PrivacyPolicyPage = lazy(() => import('./pages/PrivacyPolicyPage'));
 const StoryArchivePage = lazy(() => import('./pages/StoryArchivePage'));
+const PetPage = lazy(() => import('./pages/PetPage'));
 const TranslationEditorDrawer = lazy(() => import('./components/TranslationEditorDrawer'));
 
 const KOREAN_LOCALE_ENABLED = import.meta.env.VITE_ENABLE_KR_LOCALE === 'true';
@@ -639,6 +640,18 @@ function UserMenu() {
             </svg>
             {t('app.nav.fun')}
           </Link>
+          {user && (
+            <Link
+              to="/pet"
+              onClick={closeMenu}
+              className={menuLinkClass}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+              </svg>
+              Pet
+            </Link>
+          )}
           {canAccessCheckin && (
             <Link
               to="/checkin"
@@ -1499,6 +1512,7 @@ export default function App() {
             <Route path="/tiers" element={<TiersPage />} />
             <Route path="/training" element={<TrainingPage />} />
             <Route path="/head-to-head" element={<HeadToHeadPage />} />
+            <Route path="/pet" element={<PetPage />} />
             <Route path="/fun" element={<FunPage />} />
             <Route path="/fantasy-match" element={<Navigate to="/fun?tab=fantasy" replace />} />
             <Route path="/motion" element={<Navigate to="/fun?tab=motion" replace />} />

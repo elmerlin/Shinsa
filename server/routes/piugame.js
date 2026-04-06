@@ -18,6 +18,7 @@ const {
 } = require('../lib/piugameScraper');
 const { createUserNotification } = require('../lib/notifications');
 const { notifyActivitySubscribers, buildProfilePath } = require('../lib/activitySubscriptions');
+const { feedPetForUser } = require('./pets');
 const { getUserTitleProgress, updateUserSkillTitleFromBestScores, LEVEL_BASE_POINTS, GRADE_MULTIPLIER, SCORE_TO_GRADE, calculateRatingPoints, gradeFromScore, normalizeGrade } = require('../lib/titleProgress');
 const { buildPumbilityCandidates, getNextGradeThreshold, isPassingScore, isFailGrade, SCORE_TO_GRADE_ASC } = require('../lib/pumbilityCandidates');
 const { checkSssAchievements, checkStreakAchievements } = require('../lib/achievements');
@@ -2903,6 +2904,15 @@ async function syncRecentlyPlayedForUser(user, options = {}) {
     }
   });
   txn();
+
+  // Feed the user's emoji pet based on songs played
+  if (plays.length > 0) {
+    try {
+      feedPetForUser(userId, plays.length);
+    } catch (petErr) {
+      // Non-critical — don't fail the sync
+    }
+  }
 
   // Create or update weekly challenge play posts
   if (persistWeeklyChallengePosts && wcAllPlays.length > 0) {

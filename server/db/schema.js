@@ -3895,6 +3895,19 @@ function initializeDb() {
     )
   `);
 
+  // Emoji pet (Tamagotchi) table
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS user_pets (
+      user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      character TEXT NOT NULL DEFAULT 'dojocat',
+      fullness INTEGER NOT NULL DEFAULT 50,
+      total_songs_fed INTEGER NOT NULL DEFAULT 0,
+      last_fed_at TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
   // System user for official posts (weekly challenge summaries, etc.)
   const PREFERRED_SYSTEM_USERNAME = '__shinsa__';
   const existingSystemUser = db.prepare('SELECT id, username FROM users WHERE id = ?').get(SYSTEM_USER_ID);
