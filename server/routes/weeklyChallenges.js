@@ -424,6 +424,29 @@ router.get('/users/:userId/history', (req, res) => {
   }
 });
 
+// GET /users/:userId/week/:weekKey/personal — Personal summary for modal
+// ---------------------------------------------------------------------------
+
+router.get('/users/:userId/week/:weekKey/personal', (req, res) => {
+  try {
+    const db = getDb();
+    const { userId, weekKey } = req.params;
+    const week = db.prepare('SELECT * FROM weekly_challenge_weeks WHERE week_key = ?').get(weekKey);
+    if (!week) return res.status(404).json({ error: 'Week not found' });
+    if (week.status !== 'finalized') return res.status(400).json({ error: 'Week not yet finalized' });
+
+    const { buildPersonalSummaries, formatWeekLabel } = require('../lib/weeklyChallengeSummary');
+    const summaries = buildPersonalSummaries(db, week.id);
+    const personal = summaries.find(s => String(s.userId) === String(userId));
+    if (!personal) return res.status(404).json({ error: 'No data for this user/week' });
+
+    res.json(personal.payload);
+  } catch (err) {
+    console.error('[WeeklyChallenges] personal summary error:', err.message);
+    res.status(500).json({ error: 'Failed to load personal summary' });
+  }
+});
+
 // GET /api/weekly-challenges/charts/:chartId/scores — full chart leaderboard
 router.get('/charts/:chartId/scores', (req, res) => {
   try {

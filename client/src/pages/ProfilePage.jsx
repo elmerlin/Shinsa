@@ -17,6 +17,7 @@ import {
   getOrCreateDirectConversation,
   createMessageStoryItem,
   getUserWeeklyChallengeHistory,
+  getUserWeeklyChallengePersonal,
   getPlayComments, addPlayComment, deletePlayComment,
 } from '../utils/api';
 import { getAvatarUrl } from '../components/AvatarPicker';
@@ -38,6 +39,7 @@ import ScoreSnapshotCard from '../components/ScoreSnapshotCard';
 import ItemCommentSection from '../components/ItemCommentSection';
 import { StoryShareModal, buildStoryDraft, ScoreCardImageShareButton, ScoreCardShareButton } from '../components/ScoreSnapshotModal';
 import SendToDirectMessageButton from '../components/SendToDirectMessageButton';
+import WeeklyChallengePersonalCard from '../components/WeeklyChallengePersonalCard';
 import PlateBadge from '../components/ui/plate-badge';
 import { buildScoreSnapshotLinkShare } from '../utils/directMessageShares';
 
@@ -1108,6 +1110,8 @@ export default function ProfilePage() {
   const [followBackLoading, setFollowBackLoading] = useState({});
   const [competitionsSub, setCompetitionsSub] = useState('tournaments');
   const [weeklyChallengeHistory, setWeeklyChallengeHistory] = useState([]);
+  const [wcPersonalModal, setWcPersonalModal] = useState(null);
+  const [wcPersonalLoading, setWcPersonalLoading] = useState(false);
   const [songAnalytics, setSongAnalytics] = useState(null);
   const [profileLive, setProfileLive] = useState({ active_session: null, ended_sessions: [] });
   const [liveVisibilityBusyId, setLiveVisibilityBusyId] = useState('');
@@ -3317,51 +3321,104 @@ export default function ProfilePage() {
           {competitionsSub === 'weekly' && (
             <div className="space-y-2">
               {weeklyChallengeHistory.length === 0 ? (
-                <p className="text-center text-gray-500 py-8">No weekly challenge participation yet</p>
+                <p className="text-center text-gray-500 py-8 text-sm">No weekly challenge participation yet</p>
               ) : (
                 weeklyChallengeHistory.map(w => {
                   const trophyAwards = (w.awards || []).filter(a => a.rank <= 3);
+                  const weekNum = (w.week_key || '').match(/W(\d+)$/)?.[1];
+                  const handleClick = () => {
+                    setWcPersonalLoading(true);
+                    setWcPersonalModal({ weekKey: w.week_key, data: null });
+                    getUserWeeklyChallengePersonal(uid, w.week_key)
+                      .then(data => setWcPersonalModal({ weekKey: w.week_key, data }))
+                      .catch(() => setWcPersonalModal(null))
+                      .finally(() => setWcPersonalLoading(false));
+                  };
                   return (
-                    <Link
+                    <button
                       key={w.week_key}
-                      to={`/weekly-challenges?week=${w.week_key}`}
-                      className="card-hover flex items-center justify-between group py-2.5 px-3"
+                      type="button"
+                      onClick={handleClick}
+                      className="card-hover flex items-center justify-between group py-3 px-4 w-full text-left"
                     >
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[11px] font-display font-bold text-white">{w.week_key}</span>
-                          {trophyAwards.map(a => (
-                            <span key={`${a.award_key}-${a.rank}`} className="text-[10px]">
-                              {a.rank === 1 ? '🥇' : a.rank === 2 ? '🥈' : '🥉'}
-                            </span>
-                          ))}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-display font-bold text-white">{w.week_key}</span>
+                          <div className="flex items-center gap-1">
+                            {trophyAwards.map(a => (
+                              <span key={`${a.award_key}-${a.rank}`} className="text-base">
+                                {a.rank === 1 ? '\u{1F947}' : a.rank === 2 ? '\u{1F948}' : '\u{1F949}'}
+                              </span>
+                            ))}
+                          </div>
                         </div>
-                        <div className="flex items-center gap-3 mt-0.5">
+                        <div className="flex items-center gap-3 mt-1">
                           {w.overall && (
-                            <span className="text-[9px] text-white/40">
-                              Overall #{w.overall.rank}
-                              <span className="text-white/20 ml-1">{(w.overall.points || 0).toLocaleString()}pts</span>
+                            <span className="text-xs text-white/50">
+                              Overall <span className="font-display font-bold text-white/70">#{w.overall.rank}</span>
                             </span>
                           )}
                           {w.singles && (
-                            <span className="text-[9px] text-rose-400/50">S #{w.singles.rank}</span>
+                            <span className="inline-flex items-center gap-1 text-xs">
+                              <span className="font-display font-bold text-rose-400/80">Singles</span>
+                              <span className="text-white/50">#{w.singles.rank}</span>
+                            </span>
                           )}
                           {w.doubles && (
-                            <span className="text-[9px] text-emerald-400/50">D #{w.doubles.rank}</span>
+                            <span className="inline-flex items-center gap-1 text-xs">
+                              <span className="font-display font-bold text-emerald-400/80">Doubles</span>
+                              <span className="text-white/50">#{w.doubles.rank}</span>
+                            </span>
                           )}
                         </div>
                       </div>
-                      <div className="text-right shrink-0">
-                        <span className="text-[10px] font-display font-bold text-white/60">
-                          {(w.overall?.points || 0).toLocaleString()}<span className="text-white/25 ml-0.5">pts</span>
+                      <div className="text-right shrink-0 ml-3">
+                        <span className="text-sm font-display font-bold text-white/70 tabular-nums">
+                          {(w.overall?.points || 0).toLocaleString()}
+                          <span className="text-white/25 ml-0.5 text-[10px]">pts</span>
                         </span>
-                        <span className="block text-[9px] text-white/30">
+                        <span className="block text-xs text-white/30 mt-0.5">
                           {w.overall?.clears || 0} clears
                         </span>
                       </div>
-                    </Link>
+                    </button>
                   );
                 })
+              )}
+
+              {/* Personal summary modal */}
+              {wcPersonalModal && (
+                <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm" onClick={() => setWcPersonalModal(null)}>
+                  <div className="w-full max-w-lg max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                    {wcPersonalLoading && !wcPersonalModal.data && (
+                      <div className="rounded-xl border border-piu-border bg-piu-dark py-12 text-center text-zinc-500 text-sm font-display">
+                        Loading recap...
+                      </div>
+                    )}
+                    {wcPersonalModal.data && (
+                      <div>
+                        <WeeklyChallengePersonalCard personal={wcPersonalModal.data} />
+                        <div className="mt-3 flex items-center justify-center gap-3">
+                          <Link
+                            to={`/weekly-challenges?week=${wcPersonalModal.weekKey}`}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.05] px-4 py-2.5 text-sm font-display font-bold text-white/70 hover:text-white hover:border-white/20 transition-colors"
+                            onClick={() => setWcPersonalModal(null)}
+                          >
+                            View Full Week
+                            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                          </Link>
+                          <button
+                            type="button"
+                            onClick={() => setWcPersonalModal(null)}
+                            className="rounded-lg border border-white/10 bg-white/[0.05] px-4 py-2.5 text-sm font-display font-bold text-white/40 hover:text-white/70 transition-colors"
+                          >
+                            Close
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
               )}
             </div>
           )}
