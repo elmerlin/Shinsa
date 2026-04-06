@@ -1824,7 +1824,7 @@ router.get('/feed/explore', requireAuth, (req, res) => {
     } catch {}
   }
 
-  const conditions = ["rp.played_at_utc >= datetime('now', '-7 days')", "rp.played_at_utc != ''"];
+  const conditions = ["rp.played_at_utc >= datetime('now', '-7 days')", "rp.played_at_utc != ''", "rp.score > 0"];
   const params = [];
 
   if (scope === 'following') {
