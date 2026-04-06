@@ -214,23 +214,42 @@ export default function ExplorePlayTile({ play, jacketUrl, onClick, onReplayClic
 
         {/* --- STANDARD content --- */}
         {tier === 'standard' && (
-          <div className="flex items-baseline justify-between gap-1">
-            <span className="font-mono text-xs font-bold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] truncate">
-              {formatScore(play.score)}
-            </span>
-            <span
-              className={`font-display text-xs font-black shrink-0 ${gradeColor} ${isBroken ? 'grade-broken' : ''}`}
-              data-grade={gradeDisplay}
-              style={{ textShadow: '0 1px 3px rgba(0,0,0,0.8)' }}
-            >
-              {gradeDisplay}
-            </span>
-          </div>
+          <>
+            <div className="flex items-center gap-1 mb-0.5">
+              <img
+                src={getAvatarUrl(play.avatar)}
+                alt=""
+                className="h-3.5 w-3.5 rounded-full border border-white/20 object-cover"
+                loading="lazy"
+              />
+              <span className="text-[9px] font-display font-bold text-white/70 truncate drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+                {play.username}
+              </span>
+            </div>
+            <p className="font-display text-[10px] font-bold text-white/90 drop-shadow line-clamp-1 mb-0.5">
+              {play.song_title}
+            </p>
+            <div className="flex items-baseline justify-between gap-1">
+              <span className="font-mono text-xs font-bold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] truncate">
+                {formatScore(play.score)}
+              </span>
+              <div className="flex items-center gap-1 shrink-0">
+                {play.plate && <PlateBadge plate={play.plate} size="xs" />}
+                <span
+                  className={`font-display text-xs font-black ${gradeColor} ${isBroken ? 'grade-broken' : ''}`}
+                  data-grade={gradeDisplay}
+                  style={{ textShadow: '0 1px 3px rgba(0,0,0,0.8)' }}
+                >
+                  {gradeDisplay}
+                </span>
+              </div>
+            </div>
+          </>
         )}
       </div>
 
       {/* Comment count badge */}
-      {play.comment_count > 0 && tier !== 'standard' && (
+      {play.comment_count > 0 && (
         <div className="absolute bottom-2 right-2 z-10 flex items-center gap-0.5 text-[9px] font-mono text-white/50">
           <svg className="h-2.5 w-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />

@@ -1824,7 +1824,16 @@ router.get('/feed/explore', requireAuth, (req, res) => {
     } catch {}
   }
 
-  const conditions = ["rp.played_at_utc >= datetime('now', '-7 days')", "rp.played_at_utc != ''", "rp.score > 0"];
+  const conditions = [
+    "rp.played_at_utc >= datetime('now', '-7 days')",
+    "rp.played_at_utc != ''",
+    "rp.score > 0",
+    "rp.grade != ''",
+    "rp.grade != 'F'",
+    "rp.grade NOT LIKE 'x_%' ESCAPE '\\'",
+    "LOWER(rp.grade) != 'stagebreak'",
+    "LOWER(rp.grade) != 'stage_break'",
+  ];
   const params = [];
 
   if (scope === 'following') {
