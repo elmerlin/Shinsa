@@ -1575,6 +1575,21 @@ function initializeDb() {
       created_at TEXT DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS daily_mix_tapes (
+      date_key TEXT PRIMARY KEY,
+      status TEXT NOT NULL DEFAULT 'pending',
+      selection_json TEXT NOT NULL DEFAULT '[]',
+      success_count INTEGER NOT NULL DEFAULT 0,
+      failure_count INTEGER NOT NULL DEFAULT 0,
+      video_url TEXT DEFAULT '',
+      thumbnail_url TEXT DEFAULT '',
+      duration_seconds INTEGER NOT NULL DEFAULT 0,
+      published_at TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      error_summary TEXT DEFAULT ''
+    );
+
     CREATE TABLE IF NOT EXISTS auth_qr_login_challenges (
       id TEXT PRIMARY KEY,
       claim_token TEXT NOT NULL UNIQUE,
@@ -1702,6 +1717,7 @@ function initializeDb() {
     CREATE INDEX IF NOT EXISTS idx_user_story_archives_owner ON user_story_archives(owner_user_id, archived_at DESC);
     CREATE INDEX IF NOT EXISTS idx_user_story_archives_owner_created ON user_story_archives(owner_user_id, original_created_at DESC, story_id DESC);
     CREATE INDEX IF NOT EXISTS idx_user_story_hidden_items_owner ON user_story_hidden_items(owner_user_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_daily_mix_tapes_published ON daily_mix_tapes(status, published_at DESC, date_key DESC);
     CREATE INDEX IF NOT EXISTS idx_auth_qr_login_challenges_status ON auth_qr_login_challenges(status, expires_at);
     CREATE INDEX IF NOT EXISTS idx_auth_qr_login_challenges_approved_user ON auth_qr_login_challenges(approved_user_id, created_at);
 

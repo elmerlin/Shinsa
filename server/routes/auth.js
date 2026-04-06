@@ -2811,6 +2811,7 @@ router.delete('/notifications/:id', requireAuth, (req, res) => {
 module.exports = router;
 module.exports.requireAuth = requireAuth;
 module.exports.optionalAuth = optionalAuth;
+module.exports.requireAdmin = requireAdmin;
 module.exports.isAdminUser = isAdminUser;
 module.exports.hasFeatureAccess = hasFeatureAccess;
 module.exports._loginRateLimiter = loginRateLimiter;

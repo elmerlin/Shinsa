@@ -366,16 +366,175 @@ function ClearCard({ item, rank, jacketLookup, chartKeyMap, visible, onScoreClic
   );
 }
 
+function formatMixTapeDate(dateKey) {
+  const parsed = new Date(`${String(dateKey || '').trim()}T00:00:00.000Z`);
+  if (Number.isNaN(parsed.getTime())) return 'Daily mix tape';
+  return new Intl.DateTimeFormat('en-GB', {
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  }).format(parsed);
+}
+
+function MixTapeHeroCard({ mixTape, onPlay }) {
+  const items = Array.isArray(mixTape?.items) ? mixTape.items.slice(0, 3) : [];
+  const hasPoster = !!mixTape?.thumbnailUrl;
+
+  return (
+    <button
+      type="button"
+      onClick={onPlay}
+      className="group relative mb-3 w-full overflow-hidden rounded-[22px] border border-piu-border/70 bg-[#0a1120] text-left shadow-[0_18px_48px_rgba(0,0,0,0.28)] transition duration-300 hover:border-cyan-300/35 hover:shadow-[0_22px_60px_rgba(20,184,166,0.14)]"
+    >
+      {hasPoster ? (
+        <div
+          className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-[1.03]"
+          style={{ backgroundImage: `url(${mixTape.thumbnailUrl})` }}
+        />
+      ) : null}
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(34,211,238,0.22),transparent_40%),linear-gradient(135deg,rgba(7,12,24,0.92),rgba(9,16,33,0.84),rgba(4,7,16,0.96))]" />
+      <div className="absolute inset-0 bg-gradient-to-r from-[#07101c]/94 via-[#091325]/72 to-[#050915]/92" />
+
+      <div className="relative z-10 flex flex-col gap-4 p-4 sm:p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-400/10 px-3 py-1 text-[10px] font-display font-black uppercase tracking-[0.22em] text-cyan-100">
+              <span className="inline-flex h-2 w-2 rounded-full bg-cyan-300 shadow-[0_0_10px_rgba(103,232,249,0.8)]" />
+              Daily Mix Tape
+            </div>
+            <h3 className="font-display text-[20px] font-black tracking-[-0.03em] text-white sm:text-[24px]">
+              Best Plays of {formatMixTapeDate(mixTape?.dateKey)}
+            </h3>
+            <p className="mt-1 max-w-2xl text-sm text-slate-200/82 sm:text-[15px]">
+              A stitched replay reel from today&apos;s top highlights, ready to watch in one pass.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-2 sm:max-w-[320px] sm:justify-end">
+            <span className="inline-flex items-center rounded-full border border-white/12 bg-white/8 px-3 py-1 text-[11px] font-display font-bold uppercase tracking-[0.16em] text-white/84">
+              {mixTape?.clipCount || 0} clips
+            </span>
+            <span className="inline-flex items-center rounded-full border border-white/12 bg-white/8 px-3 py-1 text-[11px] font-display font-bold uppercase tracking-[0.16em] text-white/84">
+              {mixTape?.durationLabel || '0:00'}
+            </span>
+            <span className="inline-flex items-center rounded-full border border-emerald-300/20 bg-emerald-400/10 px-3 py-1 text-[11px] font-display font-bold uppercase tracking-[0.16em] text-emerald-100">
+              {mixTape?.status || 'completed'}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex flex-wrap gap-2">
+            {items.map((item, index) => (
+              <span
+                key={`${item.play_id || item.song_title || index}`}
+                className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-black/26 px-3 py-1.5 text-[11px] text-white/88 backdrop-blur-sm"
+              >
+                <span className="font-display font-black text-cyan-200/90">{index + 1}</span>
+                <span className="font-semibold">{item.song_title}</span>
+                <span className="font-display font-black uppercase tracking-[0.12em] text-white/58">
+                  {getModeShort(item.mode)}{item.level}
+                </span>
+              </span>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="text-right">
+              <div className="text-[11px] font-display font-bold uppercase tracking-[0.18em] text-white/54">Watch reel</div>
+              <div className="text-sm text-white/82">Portrait MP4 highlight mix</div>
+            </div>
+            <span className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-cyan-300 via-sky-400 to-blue-500 text-slate-950 shadow-[0_0_24px_rgba(34,211,238,0.4)] transition-transform duration-300 group-hover:scale-105">
+              <svg className="ml-0.5 h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M8 5v14l11-7z" />
+              </svg>
+            </span>
+          </div>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+function MixTapeVideoModal({ mixTape, onClose }) {
+  useEffect(() => {
+    const onKey = (event) => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  if (!mixTape) return null;
+
+  return (
+    <div className="fixed inset-0 z-[140] flex items-center justify-center bg-black/84 p-3 backdrop-blur-sm sm:p-5" onClick={onClose}>
+      <div className="w-full max-w-[460px] overflow-hidden rounded-[24px] border border-piu-border bg-[#08101d] shadow-[0_24px_80px_rgba(0,0,0,0.45)]" onClick={(event) => event.stopPropagation()}>
+        <div className="flex items-center justify-between border-b border-white/8 px-4 py-3">
+          <div>
+            <div className="text-[11px] font-display font-black uppercase tracking-[0.2em] text-cyan-200/78">Daily Mix Tape</div>
+            <h3 className="font-display text-lg font-black text-white">{mixTape.title}</h3>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/72 transition hover:bg-white/10 hover:text-white"
+            aria-label="Close mix tape"
+          >
+            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="bg-black">
+          <video
+            className="aspect-[9/16] w-full bg-black"
+            controls
+            autoPlay
+            playsInline
+            poster={mixTape.thumbnailUrl || ''}
+            preload="metadata"
+            src={mixTape.videoUrl}
+          />
+        </div>
+
+        <div className="flex items-center justify-between gap-3 px-4 py-3 text-sm text-white/76">
+          <div className="flex flex-wrap gap-2">
+            <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-display font-bold uppercase tracking-[0.14em] text-white/78">
+              {mixTape.durationLabel}
+            </span>
+            <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] font-display font-bold uppercase tracking-[0.14em] text-white/78">
+              {mixTape.clipCount || 0} clips
+            </span>
+          </div>
+          <a
+            href={mixTape.videoUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="text-cyan-300 transition hover:text-cyan-200"
+          >
+            Open direct video
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main component ──────────────────────────────────────────────────────────
 
 export default function DailyHighlights({ data, jacketLookup = {}, chartKeyMap = {} }) {
   const [replayModal, setReplayModal] = useState(null);
+  const [mixTapeModal, setMixTapeModal] = useState(null);
   const [selectedScore, setSelectedScore] = useState(null);
 
+  const mixTape = data?.mixTape || null;
   const topReplays = data?.topReplays || [];
   const topUpscores = data?.topUpscores || [];
   const topClears = data?.topClears || [];
 
+  const hasMixTape = !!(mixTape?.videoUrl && mixTape?.thumbnailUrl);
   const hasReplays = topReplays.length > 0;
   const hasUpscores = topUpscores.length > 0;
   const hasClears = topClears.length > 0;
@@ -384,7 +543,7 @@ export default function DailyHighlights({ data, jacketLookup = {}, chartKeyMap =
   const upscoreAnim = useStaggeredEntrance(topUpscores.length);
   const clearAnim = useStaggeredEntrance(topClears.length);
 
-  if (!hasReplays && !hasUpscores && !hasClears) return null;
+  if (!hasMixTape && !hasReplays && !hasUpscores && !hasClears) return null;
 
   return (
     <div className="mb-6">
@@ -392,6 +551,8 @@ export default function DailyHighlights({ data, jacketLookup = {}, chartKeyMap =
         <h2 className="font-display text-sm font-bold tracking-wider text-piu-accent">TODAY&apos;S HIGHLIGHTS</h2>
         <div className="h-px flex-1 bg-gradient-to-r from-piu-accent/30 to-transparent" />
       </div>
+
+      {hasMixTape && <MixTapeHeroCard mixTape={mixTape} onPlay={() => setMixTapeModal(mixTape)} />}
 
       {hasReplays && (
         <div ref={replayAnim.ref} className="mb-3">
@@ -437,6 +598,8 @@ export default function DailyHighlights({ data, jacketLookup = {}, chartKeyMap =
           } : null}
         />
       )}
+
+      {mixTapeModal && <MixTapeVideoModal mixTape={mixTapeModal} onClose={() => setMixTapeModal(null)} />}
 
       {selectedScore && (
         <ScoreSnapshotModal

@@ -3,7 +3,7 @@ const router = express.Router();
 const multer = require('multer');
 const sharp = require('sharp');
 const { getDb, SYSTEM_USER_ID } = require('../db/schema');
-const { requireAuth, optionalAuth } = require('./auth');
+const { requireAuth, optionalAuth, requireAdmin } = require('./auth');
 const { findMentionedUsers, notifyMentionedUsers } = require('../lib/mentions');
 const { createUserNotification } = require('../lib/notifications');
 const {
@@ -27,7 +27,17 @@ const {
   enrichClearRecord,
   enrichUpscoreRecord,
 } = require('../lib/activityPostEnrichment');
-const { resolveDailyHighlightReplayRows } = require('../lib/dailyHighlights');
+const {
+  normalizeUtcDateKey,
+  selectTopReplayHighlights,
+} = require('../lib/dailyReplaySelection');
+const {
+  buildMixTapePayload,
+  getDailyMixTapeBinaryAvailability,
+  getLatestPublishedDailyMixTape,
+  listDailyMixTapeRuns,
+  runDailyMixTapeJob,
+} = require('../lib/dailyMixTapes');
 const { annotateWeeklyChallengePlayRows } = require('../lib/weeklyChallenges');
 
 const SHARE_MARKER_PREFIX = '[[SHINSA_SHARE_V1:';
@@ -2566,6 +2576,10 @@ function writeDailyHighlightsCache(data) {
   dailyHighlightsCache = { data, expiresAt: Date.now() + DAILY_HIGHLIGHTS_TTL_MS };
 }
 
+function invalidateDailyHighlightsCache() {
+  dailyHighlightsCache = { data: null, expiresAt: 0 };
+}
+
 function dedupeByUserChart(items) {
   const seen = new Set();
   return items.filter(item => {
@@ -2596,76 +2610,176 @@ function pickTopNDiverse(items, n, getUserId) {
   return items.slice(0, n);
 }
 
+function getPreviousUtcDateKey(value = new Date()) {
+  const parsed = value instanceof Date ? new Date(value.getTime()) : new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return getPreviousUtcDateKey(new Date());
+  }
+  parsed.setUTCDate(parsed.getUTCDate() - 1);
+  return parsed.toISOString().slice(0, 10);
+}
+
+function getDailyMixTapeNightlyConfig() {
+  const enabledRaw = String(process.env.DAILY_MIX_TAPE_NIGHTLY_ENABLED || 'true').trim().toLowerCase();
+  const hourRaw = parseInt(process.env.DAILY_MIX_TAPE_NIGHTLY_HOUR_UTC, 10);
+  const minuteRaw = parseInt(process.env.DAILY_MIX_TAPE_NIGHTLY_MINUTE_UTC, 10);
+  return {
+    enabled: enabledRaw !== 'false' && enabledRaw !== '0' && enabledRaw !== 'off',
+    hour: Number.isFinite(hourRaw) ? Math.min(Math.max(hourRaw, 0), 23) : 0,
+    minute: Number.isFinite(minuteRaw) ? Math.min(Math.max(minuteRaw, 0), 59) : 10,
+  };
+}
+
+function getNextDailyMixTapeNightlyRun(now = new Date(), hour = 0, minute = 10) {
+  const next = new Date(Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate(),
+    hour,
+    minute,
+    0,
+    0,
+  ));
+  if (next.getTime() <= now.getTime()) {
+    next.setUTCDate(next.getUTCDate() + 1);
+  }
+  return next;
+}
+
+let dailyMixTapeNightlyTimer = null;
+let dailyMixTapeNightlyStarted = false;
+let dailyMixTapeNightlyRunning = false;
+let dailyMixTapeNightlyNextRunAt = null;
+
+async function runDailyMixTapeForDateKey(dateKey, { reason = 'manual', logger = console } = {}) {
+  if (dailyMixTapeNightlyRunning) {
+    const error = new Error('A daily mix tape job is already running.');
+    error.statusCode = 409;
+    throw error;
+  }
+
+  dailyMixTapeNightlyRunning = true;
+  try {
+    const normalizedDateKey = normalizeUtcDateKey(dateKey);
+    const db = getDb();
+    const selection = selectTopReplayHighlights(db, normalizedDateKey, { limit: 5, candidateLimit: 20 });
+    const row = await runDailyMixTapeJob(db, {
+      dateKey: normalizedDateKey,
+      selection,
+      logger,
+    });
+    invalidateDailyHighlightsCache();
+    return {
+      reason,
+      dateKey: normalizedDateKey,
+      selection,
+      row,
+      mixTape: buildMixTapePayload(row),
+    };
+  } finally {
+    dailyMixTapeNightlyRunning = false;
+  }
+}
+
+async function getDailyMixTapeSchedulerStatusPayload() {
+  const config = getDailyMixTapeNightlyConfig();
+  const binaries = await getDailyMixTapeBinaryAvailability();
+  return {
+    enabled: !!config.enabled,
+    hour: config.hour,
+    minute: config.minute,
+    timezone: 'UTC',
+    next_run_at: dailyMixTapeNightlyNextRunAt || null,
+    running: dailyMixTapeNightlyRunning,
+    binaries,
+  };
+}
+
+function scheduleNextDailyMixTapeNightlyRun() {
+  const config = getDailyMixTapeNightlyConfig();
+  if (!config.enabled) {
+    dailyMixTapeNightlyNextRunAt = null;
+    if (dailyMixTapeNightlyTimer) {
+      clearTimeout(dailyMixTapeNightlyTimer);
+      dailyMixTapeNightlyTimer = null;
+    }
+    return {
+      enabled: false,
+      hour: config.hour,
+      minute: config.minute,
+      timezone: 'UTC',
+      next_run_at: null,
+      running: dailyMixTapeNightlyRunning,
+    };
+  }
+
+  const now = new Date();
+  const nextRun = getNextDailyMixTapeNightlyRun(now, config.hour, config.minute);
+  dailyMixTapeNightlyNextRunAt = nextRun.toISOString();
+  const delayMs = Math.max(1000, nextRun.getTime() - now.getTime());
+
+  if (dailyMixTapeNightlyTimer) {
+    clearTimeout(dailyMixTapeNightlyTimer);
+  }
+
+  dailyMixTapeNightlyTimer = setTimeout(async () => {
+    if (dailyMixTapeNightlyRunning) {
+      console.warn('[DailyMixTape] Nightly job skipped because another daily mix tape run is already in progress.');
+      scheduleNextDailyMixTapeNightlyRun();
+      return;
+    }
+
+    const targetDateKey = getPreviousUtcDateKey(new Date());
+    const startedAt = Date.now();
+    try {
+      const result = await runDailyMixTapeForDateKey(targetDateKey, {
+        reason: 'nightly',
+        logger: console,
+      });
+      const seconds = Math.round((Date.now() - startedAt) / 1000);
+      console.log(
+        `[DailyMixTape] Nightly mix tape completed for ${targetDateKey} with status ${result.row?.status || 'unknown'} in ${seconds}s.`,
+      );
+    } catch (error) {
+      console.error(
+        `[DailyMixTape] Nightly mix tape failed for ${targetDateKey}: ${error?.message || error}`,
+      );
+    } finally {
+      scheduleNextDailyMixTapeNightlyRun();
+    }
+  }, delayMs);
+
+  return {
+    enabled: true,
+    hour: config.hour,
+    minute: config.minute,
+    timezone: 'UTC',
+    next_run_at: dailyMixTapeNightlyNextRunAt,
+    running: dailyMixTapeNightlyRunning,
+  };
+}
+
+function startDailyMixTapeNightlyScheduler() {
+  if (dailyMixTapeNightlyStarted) {
+    return {
+      started: false,
+      ...scheduleNextDailyMixTapeNightlyRun(),
+    };
+  }
+  dailyMixTapeNightlyStarted = true;
+  return {
+    started: true,
+    ...scheduleNextDailyMixTapeNightlyRun(),
+  };
+}
+
 router.get('/daily-highlights', (req, res) => {
   res.set('Cache-Control', `public, max-age=${Math.floor(DAILY_HIGHLIGHTS_TTL_MS / 1000)}`);
   const cached = readDailyHighlightsCache();
   if (cached) return res.json(cached);
 
   const db = getDb();
-
-  // --- Top 5 replay plays today (highest rating = level * score) ---
-  // Use played_at_utc >= date('now') for accurate "today" filter,
-  // with date_played >= date('now') as fallback for rows missing played_at_utc.
-  const todayFilter = `(
-    (rp.played_at_utc IS NOT NULL AND rp.played_at_utc != '' AND rp.played_at_utc >= date('now'))
-    OR rp.date_played >= date('now')
-  )`;
-
-  // Source 1: plays with replay_embed_url set directly on user_recently_played
-  const directReplays = db.prepare(`
-    SELECT rp.id, rp.user_id, rp.song_title, rp.mode, rp.level, rp.score, rp.grade, rp.plate,
-           rp.perfect, rp.great, rp.good, rp.bad, rp.miss, rp.max_combo,
-           rp.replay_embed_url, rp.replay_video_id, rp.replay_start_seconds, rp.replay_end_seconds,
-           rp.background_url, rp.date_played, rp.played_at_utc, rp.machine_name,
-           u.username, u.avatar, u.nationality,
-           'direct' AS replay_source_kind,
-           (SELECT COUNT(*) FROM play_comments WHERE play_id = rp.id) as comment_count
-    FROM user_recently_played rp
-    JOIN users u ON rp.user_id = u.id
-    WHERE rp.replay_embed_url IS NOT NULL AND rp.replay_embed_url != ''
-      AND ${todayFilter}
-    ORDER BY (CAST(rp.level AS INTEGER) * CAST(rp.score AS INTEGER)) DESC
-    LIMIT 20
-  `).all();
-
-  // Source 2: today's plays matched via songs → chart youtube links
-  const chartLinkedReplays = db.prepare(`
-    SELECT rp.id, rp.user_id, rp.song_title, rp.mode, rp.level, rp.score, rp.grade, rp.plate,
-           rp.perfect, rp.great, rp.good, rp.bad, rp.miss, rp.max_combo,
-           yt.session_youtube_url AS replay_embed_url, '' AS replay_video_id,
-           0 AS replay_start_seconds, 0 AS replay_end_seconds,
-           rp.background_url, rp.date_played, rp.played_at_utc, rp.machine_name,
-           u.username, u.avatar, u.nationality,
-           'chart_linked' AS replay_source_kind,
-           (SELECT COUNT(*) FROM play_comments WHERE play_id = rp.id) as comment_count
-    FROM user_recently_played rp
-    JOIN users u ON rp.user_id = u.id
-    JOIN songs s ON s.title = rp.song_title AND s.mode = rp.mode AND s.level = rp.level
-    JOIN user_chart_youtube_links yt ON yt.user_id = rp.user_id AND yt.chart_id = s.id
-    WHERE yt.session_youtube_url IS NOT NULL AND yt.session_youtube_url != ''
-      AND (rp.replay_embed_url IS NULL OR rp.replay_embed_url = '')
-      AND ${todayFilter}
-    ORDER BY (CAST(rp.level AS INTEGER) * CAST(rp.score AS INTEGER)) DESC
-    LIMIT 20
-  `).all();
-
-  // Merge both sources, de-dupe by rp.id, sort by rating (level × score)
-  const replayIdSet = new Set(directReplays.map((r) => r.id));
-  const mergedReplays = [...directReplays];
-  for (const r of chartLinkedReplays) {
-    if (!replayIdSet.has(r.id)) {
-      replayIdSet.add(r.id);
-      mergedReplays.push(r);
-    }
-  }
-  const resolvedReplays = resolveDailyHighlightReplayRows(db, mergedReplays);
-  resolvedReplays.sort((a, b) => (toInt(b.level) * toInt(b.score)) - (toInt(a.level) * toInt(a.score)));
-  const dedupedReplays = dedupeByUserChart(resolvedReplays);
-
-  const topReplays = pickTopNDiverse(dedupedReplays, 5, (r) => r.user_id).map((r) => ({
-    ...r,
-    avatar: normalizeUserAvatarForList(r.avatar, r.user_id, 40),
-  }));
+  const topReplays = selectTopReplayHighlights(db, normalizeUtcDateKey(new Date()), { limit: 5, candidateLimit: 20 });
 
   // --- Top 5 upscores today (by pumbility_gain, player-diverse) ---
   const upscoreRows = db.prepare(`
@@ -2852,6 +2966,7 @@ router.get('/daily-highlights', (req, res) => {
   }
 
   const result = {
+    mixTape: buildMixTapePayload(getLatestPublishedDailyMixTape(db)),
     topReplays,
     topUpscores,
     topUpscoresIsFallback,
@@ -2861,6 +2976,46 @@ router.get('/daily-highlights', (req, res) => {
 
   writeDailyHighlightsCache(result);
   res.json(result);
+});
+
+router.post('/admin/daily-mix-tapes/run', requireAuth, requireAdmin, async (req, res) => {
+  const requestedDateKey = String(req.body?.date || req.query?.date || '').trim();
+  const dateKey = requestedDateKey ? normalizeUtcDateKey(requestedDateKey) : getPreviousUtcDateKey(new Date());
+
+  try {
+    const [result, binaries] = await Promise.all([
+      runDailyMixTapeForDateKey(dateKey, { reason: 'manual', logger: console }),
+      getDailyMixTapeBinaryAvailability(),
+    ]);
+    res.json({
+      ok: true,
+      dateKey: result.dateKey,
+      status: result.row?.status || 'failed',
+      selectionCount: Array.isArray(result.selection) ? result.selection.length : 0,
+      run: result.row,
+      mixTape: result.mixTape,
+      binaries,
+    });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode) || 500;
+    res.status(statusCode).json({ error: error?.message || 'Failed to run daily mix tape job.' });
+  }
+});
+
+router.get('/admin/daily-mix-tapes/runs', requireAuth, requireAdmin, (req, res) => {
+  const db = getDb();
+  const rawLimit = parseInt(req.query?.limit, 10);
+  const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 100) : 20;
+  const runs = listDailyMixTapeRuns(db, { limit }).map((row) => ({
+    ...row,
+    mixTape: buildMixTapePayload(row),
+  }));
+  res.json({ runs });
+});
+
+router.get('/admin/daily-mix-tapes/scheduler', requireAuth, requireAdmin, async (req, res) => {
+  const status = await getDailyMixTapeSchedulerStatusPayload();
+  res.json(status);
 });
 
 // ─── Weekly Challenge Play Posts ───────────────────────────
@@ -3022,3 +3177,6 @@ router.delete('/weekly-challenge-plays/comments/:id', requireAuth, (req, res) =>
 
 module.exports = router;
 module.exports.invalidateRecentActivityCache = invalidateRecentActivityCache;
+module.exports.invalidateDailyHighlightsCache = invalidateDailyHighlightsCache;
+module.exports.startDailyMixTapeNightlyScheduler = startDailyMixTapeNightlyScheduler;
+module.exports.runDailyMixTapeForDateKey = runDailyMixTapeForDateKey;
