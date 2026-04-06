@@ -1433,3 +1433,5 @@ export const getMyPet = () => request('/pets/me');
 export const adoptPet = (character) => request('/pets/adopt', { method: 'POST', body: JSON.stringify({ character }) });
 export const feedPet = (songs = 1) => request('/pets/feed', { method: 'POST', body: JSON.stringify({ songs }) });
 export const getPetCharacters = () => request('/pets/characters');
+export const demandTrick = (trickId) => request(`/pets/tricks/${trickId}/demand`, { method: 'POST' });
+export const performTrick = (trickId) => request(`/pets/tricks/${trickId}/perform`, { method: 'POST' });

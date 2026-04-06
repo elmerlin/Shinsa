@@ -2905,10 +2905,15 @@ async function syncRecentlyPlayedForUser(user, options = {}) {
   });
   txn();
 
-  // Feed the user's emoji pet based on songs played
+  // Feed the user's emoji pet based on songs played (with score data for quality-based feeding)
   if (plays.length > 0) {
     try {
-      feedPetForUser(userId, plays.length);
+      const petPlays = plays.map(p => ({
+        score: parseInt(p.score, 10) || 0,
+        grade: p.grade || '',
+        level: parseInt(p.level, 10) || 0,
+      }));
+      feedPetForUser(userId, petPlays);
     } catch (petErr) {
       // Non-critical — don't fail the sync
     }
