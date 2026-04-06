@@ -376,6 +376,16 @@ function formatMixTapeDate(dateKey) {
   }).format(parsed);
 }
 
+function formatHighlightDate(dateKey) {
+  const parsed = new Date(`${String(dateKey || '').trim()}T00:00:00.000Z`);
+  if (Number.isNaN(parsed.getTime())) return '';
+  return new Intl.DateTimeFormat('en-GB', {
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  }).format(parsed);
+}
+
 function MixTapeHeroCard({ mixTape, onPlay }) {
   const items = Array.isArray(mixTape?.items) ? mixTape.items.slice(0, 3) : [];
   const hasPoster = !!mixTape?.thumbnailUrl;
@@ -531,6 +541,8 @@ export default function DailyHighlights({ data, jacketLookup = {}, chartKeyMap =
 
   const mixTape = data?.mixTape || null;
   const topReplays = data?.topReplays || [];
+  const topReplaysIsFallback = !!data?.topReplaysIsFallback;
+  const topReplaysDateLabel = formatHighlightDate(data?.topReplaysDateKey);
   const topUpscores = data?.topUpscores || [];
   const topClears = data?.topClears || [];
 
@@ -554,10 +566,19 @@ export default function DailyHighlights({ data, jacketLookup = {}, chartKeyMap =
 
       {hasMixTape && <MixTapeHeroCard mixTape={mixTape} onPlay={() => setMixTapeModal(mixTape)} />}
 
-      {hasReplays && (
-        <div ref={replayAnim.ref} className="mb-3">
-          <SectionLabel icon="🎬" title="Top Replays" accent="from-red-500/30" />
-          <ScrollRail>
+        {hasReplays && (
+          <div ref={replayAnim.ref} className="mb-3">
+            <SectionLabel
+              icon="🎬"
+              title={topReplaysIsFallback ? 'Recent Top Replays' : 'Top Replays'}
+              accent="from-red-500/30"
+            />
+            {topReplaysIsFallback && topReplaysDateLabel ? (
+              <div className="mb-2 -mt-1 px-1 text-[11px] font-display uppercase tracking-[0.14em] text-white/42">
+                From {topReplaysDateLabel}
+              </div>
+            ) : null}
+            <ScrollRail>
             {topReplays.map((play, i) => (
               <ReplayCard key={play.id || i} play={play} rank={i + 1} jacketLookup={jacketLookup} onReplayClick={(url, title) => setReplayModal({ url, title, playId: play.play_id || play.id, playUserId: play.user_id })} visible={replayAnim.visible.includes(i)} />
             ))}

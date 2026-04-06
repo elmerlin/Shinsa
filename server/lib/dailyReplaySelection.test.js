@@ -4,15 +4,23 @@ const assert = require('node:assert/strict');
 const {
   normalizeUtcDateKey,
   selectTopReplayHighlights,
+  selectTopReplayHighlightsWithFallback,
 } = require('./dailyReplaySelection');
 
 function createMockDb({ directReplays = [], chartLinkedReplays = [] } = {}) {
+  const resolveRows = (source, sql, limit) => {
+    if (Array.isArray(source)) return source.slice(0, limit);
+    const match = sql.match(/played_at_utc >= '(\d{4}-\d{2}-\d{2})'/);
+    const dateKey = match?.[1] || '';
+    return Array.isArray(source?.[dateKey]) ? source[dateKey].slice(0, limit) : [];
+  };
+
   return {
     prepare(sql) {
       if (sql.includes("FROM user_recently_played rp") && sql.includes("'direct' AS replay_source_kind")) {
         return {
           all(limit) {
-            return directReplays.slice(0, limit);
+            return resolveRows(directReplays, sql, limit);
           },
         };
       }
@@ -20,7 +28,7 @@ function createMockDb({ directReplays = [], chartLinkedReplays = [] } = {}) {
       if (sql.includes("FROM user_recently_played rp") && sql.includes("'chart_linked' AS replay_source_kind")) {
         return {
           all(limit) {
-            return chartLinkedReplays.slice(0, limit);
+            return resolveRows(chartLinkedReplays, sql, limit);
           },
         };
       }
@@ -152,5 +160,42 @@ describe('daily replay selection', () => {
     const aeronReplay = result.find((item) => item.user_id === 'aeron');
     assert.equal(aeronReplay?.song_title, 'Emperor');
     assert.equal(aeronReplay?.replay_video_id, 'aaaaaaaaaaa');
+  });
+
+  it('falls back to the most recent replay day when today is empty', () => {
+    const replayRow = {
+      id: 301,
+      user_id: 'aeron',
+      username: 'Aeron',
+      avatar: '',
+      nationality: 'NL',
+      song_title: '4NT',
+      mode: 'Double',
+      level: 24,
+      score: 977469,
+      grade: 'S+',
+      replay_embed_url: 'https://www.youtube.com/embed/eeeeeeeeeee?start=1&end=20',
+      replay_video_id: 'eeeeeeeeeee',
+      replay_start_seconds: 1,
+      replay_end_seconds: 20,
+      replay_source_kind: 'direct',
+    };
+
+    const db = createMockDb({
+      directReplays: {
+        '2026-04-05': [replayRow],
+      },
+    });
+
+    const result = selectTopReplayHighlightsWithFallback(db, '2026-04-06', {
+      limit: 5,
+      candidateLimit: 20,
+      maxLookbackDays: 7,
+    });
+
+    assert.equal(result.isFallback, true);
+    assert.equal(result.dateKey, '2026-04-05');
+    assert.equal(result.items.length, 1);
+    assert.equal(result.items[0]?.song_title, '4NT');
   });
 });

@@ -30,6 +30,7 @@ const {
 const {
   normalizeUtcDateKey,
   selectTopReplayHighlights,
+  selectTopReplayHighlightsWithFallback,
 } = require('../lib/dailyReplaySelection');
 const {
   buildMixTapePayload,
@@ -2779,7 +2780,12 @@ router.get('/daily-highlights', (req, res) => {
   if (cached) return res.json(cached);
 
   const db = getDb();
-  const topReplays = selectTopReplayHighlights(db, normalizeUtcDateKey(new Date()), { limit: 5, candidateLimit: 20 });
+  const replayHighlights = selectTopReplayHighlightsWithFallback(db, new Date(), {
+    limit: 5,
+    candidateLimit: 20,
+    maxLookbackDays: 7,
+  });
+  const topReplays = replayHighlights.items;
 
   // --- Top 5 upscores today (by pumbility_gain, player-diverse) ---
   const upscoreRows = db.prepare(`
@@ -2965,12 +2971,14 @@ router.get('/daily-highlights', (req, res) => {
     if (topClears.length > 0) topClearsIsFallback = true;
   }
 
-  const result = {
-    mixTape: buildMixTapePayload(getLatestPublishedDailyMixTape(db)),
-    topReplays,
-    topUpscores,
-    topUpscoresIsFallback,
-    topClears,
+    const result = {
+      mixTape: buildMixTapePayload(getLatestPublishedDailyMixTape(db)),
+      topReplays,
+      topReplaysDateKey: replayHighlights.dateKey,
+      topReplaysIsFallback: replayHighlights.isFallback,
+      topUpscores,
+      topUpscoresIsFallback,
+      topClears,
     topClearsIsFallback,
   };
 

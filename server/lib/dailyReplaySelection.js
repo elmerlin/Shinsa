@@ -23,6 +23,12 @@ function getNextUtcDateKey(dateKey) {
   return parsed.toISOString().slice(0, 10);
 }
 
+function shiftUtcDateKey(dateKey, dayOffset = 0) {
+  const parsed = new Date(`${normalizeUtcDateKey(dateKey)}T00:00:00.000Z`);
+  parsed.setUTCDate(parsed.getUTCDate() + dayOffset);
+  return parsed.toISOString().slice(0, 10);
+}
+
 function dedupeByUserChart(items = []) {
   const seen = new Set();
   return items.filter((item) => {
@@ -127,6 +133,33 @@ function selectTopReplayHighlights(db, dateKey, { limit = 5, candidateLimit = 20
   }));
 }
 
+function selectTopReplayHighlightsWithFallback(db, dateKey = new Date(), {
+  limit = 5,
+  candidateLimit = 20,
+  maxLookbackDays = 7,
+} = {}) {
+  const normalizedDateKey = normalizeUtcDateKey(dateKey);
+  const safeLookbackDays = Math.max(0, Number(maxLookbackDays) || 0);
+
+  for (let offset = 0; offset <= safeLookbackDays; offset += 1) {
+    const candidateDateKey = shiftUtcDateKey(normalizedDateKey, -offset);
+    const items = selectTopReplayHighlights(db, candidateDateKey, { limit, candidateLimit });
+    if (items.length > 0) {
+      return {
+        items,
+        dateKey: candidateDateKey,
+        isFallback: offset > 0,
+      };
+    }
+  }
+
+  return {
+    items: [],
+    dateKey: normalizedDateKey,
+    isFallback: false,
+  };
+}
+
 module.exports = {
   dedupeByUserChart,
   getNextUtcDateKey,
@@ -134,4 +167,6 @@ module.exports = {
   pickTopNDiverse,
   queryReplayCandidates,
   selectTopReplayHighlights,
+  selectTopReplayHighlightsWithFallback,
+  shiftUtcDateKey,
 };
