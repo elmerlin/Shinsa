@@ -23,8 +23,10 @@ function FilterChip({ label, active, onClick }) {
     <button
       type="button"
       onClick={onClick}
-      className={`px-2.5 py-1 rounded text-[10px] font-display font-bold transition-colors ${
-        active ? 'bg-piu-dark text-white' : 'text-gray-500 hover:text-gray-300'
+      className={`px-3 py-1.5 rounded-lg text-xs font-display font-bold transition-colors ${
+        active
+          ? 'bg-piu-dark text-white shadow-sm'
+          : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.04]'
       }`}
     >
       {label}
@@ -38,30 +40,31 @@ function ViewerSummaryCard({ viewer, awards = [] }) {
   if (!viewer) return null;
   const myAwards = (awards || []).filter(a => a.user_id === viewer.userId);
   return (
-    <div className="rounded-lg border border-piu-gold/20 bg-gradient-to-r from-piu-gold/[0.06] to-transparent px-3 py-2.5 mb-3">
+    <div className="rounded-xl border border-piu-gold/20 bg-gradient-to-r from-piu-gold/[0.06] to-transparent px-4 py-3 mb-4">
       <div className="flex items-center justify-between">
-        <div>
-          <span className="text-[9px] font-display font-bold text-piu-gold/60 uppercase tracking-wider">Your Week</span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-display font-bold text-piu-gold/60 uppercase tracking-wider">Your Week</span>
           {viewer.rank && (
-            <span className="ml-2 text-[10px] font-display font-bold text-white/50">
-              Rank #{viewer.rank}
+            <span className="text-xs font-display font-bold text-white/40">
+              #{viewer.rank}
             </span>
           )}
         </div>
-        <div className="flex items-center gap-3">
-          <span className="text-[12px] font-display font-bold text-white">
-            {(viewer.totalPoints || 0).toLocaleString()}<span className="text-white/30 text-[9px] ml-0.5">pts</span>
+        <div className="flex items-center gap-4">
+          <span className="text-sm font-display font-bold text-white tabular-nums">
+            {(viewer.totalPoints || 0).toLocaleString()}
+            <span className="text-white/30 text-[10px] ml-0.5">pts</span>
           </span>
-          <span className="text-[10px] font-display text-white/50">
-            {viewer.totalClears || 0}<span className="ml-0.5">clears</span>
+          <span className="text-xs font-display text-white/50 tabular-nums">
+            {viewer.totalClears || 0} clears
           </span>
         </div>
       </div>
       {myAwards.length > 0 && (
-        <div className="flex gap-1.5 mt-1.5">
+        <div className="flex gap-2 mt-2">
           {myAwards.map(a => (
-            <span key={`${a.award_key}-${a.rank}`} className="flex items-center gap-0.5 text-[8px] font-display font-bold text-white/50">
-              <TrophyIcon rank={a.rank} className="text-[10px]" />
+            <span key={`${a.award_key}-${a.rank}`} className="flex items-center gap-1 text-[10px] font-display font-bold text-white/50">
+              <TrophyIcon rank={a.rank} className="text-xs" />
               {a.award_label || a.award_key}
             </span>
           ))}
@@ -159,18 +162,18 @@ export default function WeeklyChallengesPage() {
   const viewerBests = weekData?.viewerSummary?.bests || {};
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-4">
+    <div className="mx-auto max-w-5xl px-4 py-4 sm:py-6">
       {/* Header */}
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-5">
         <div>
-          <h1 className="font-display text-lg font-black text-white uppercase tracking-wide">
+          <h1 className="font-display text-xl sm:text-2xl font-black text-white uppercase tracking-wide">
             Weekly Challenges
           </h1>
           {week && (
-            <p className="text-[10px] text-white/40 mt-0.5">
+            <p className="text-xs sm:text-sm text-white/40 mt-1">
               {formatWeekRange(week.starts_at_utc, week.ends_at_utc)}
               {week.status === 'active' && (
-                <span className="ml-1.5 text-emerald-400 font-bold">LIVE</span>
+                <span className="ml-2 text-emerald-400 font-bold text-[10px] uppercase">Live</span>
               )}
             </p>
           )}
@@ -186,7 +189,7 @@ export default function WeeklyChallengesPage() {
       </div>
 
       {loading && !weekData && (
-        <div className="text-center py-12 text-gray-500 text-[11px]">Loading challenges...</div>
+        <div className="text-center py-16 text-zinc-500 text-sm">Loading challenges...</div>
       )}
 
       {weekData && (
@@ -201,8 +204,8 @@ export default function WeeklyChallengesPage() {
 
           {/* Podium strip */}
           {weekData.awards?.length > 0 && (
-            <div className="mb-4">
-              <h3 className="font-display text-[9px] font-black tracking-[0.14em] uppercase text-white/40 mb-2">
+            <div className="mb-5">
+              <h3 className="font-display text-[10px] sm:text-xs font-black tracking-[0.14em] uppercase text-white/40 mb-2.5">
                 Weekly Podiums
               </h3>
               <WeeklyChallengePodiumStrip awards={weekData.awards} />
@@ -210,63 +213,68 @@ export default function WeeklyChallengesPage() {
           )}
 
           {/* Sticky filters — leaderboard mode scope */}
-          <div className="sticky top-0 z-30 bg-[#0a0a10]/95 backdrop-blur-sm -mx-4 px-4 py-2 mb-3 border-b border-white/[0.04]">
+          <div className="sticky top-0 z-30 bg-[#0a0a10]/95 backdrop-blur-sm -mx-4 px-4 py-2.5 mb-4 border-b border-white/[0.04]">
             <div className="flex flex-wrap gap-1 items-center">
-              <span className="text-[8px] font-display font-bold text-white/25 uppercase mr-1">Board</span>
+              <span className="text-[10px] font-display font-bold text-white/25 uppercase mr-1.5 tracking-wider">Board</span>
               <FilterChip label="Both" active={leaderboardMode === 'both'} onClick={() => setLeaderboardMode('both')} />
               <FilterChip label="Singles" active={leaderboardMode === 'single'} onClick={() => setLeaderboardMode('single')} />
               <FilterChip label="Doubles" active={leaderboardMode === 'double'} onClick={() => setLeaderboardMode('double')} />
             </div>
           </div>
 
-          {/* Leaderboard */}
-          <div className="mb-5">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="font-display text-[9px] font-black tracking-[0.14em] uppercase text-white/40">
-                Leaderboard
-                {weekData.participantCount > 0 && (
-                  <span className="ml-1.5 text-white/20">({weekData.participantCount})</span>
-                )}
-              </h3>
-              <div className="flex gap-1 items-center">
+          {/* Desktop: side-by-side layout */}
+          <div className="lg:grid lg:grid-cols-[minmax(280px,360px)_1fr] lg:gap-8 lg:items-start">
+            {/* Leaderboard column */}
+            <div className="mb-6 lg:mb-0 lg:sticky lg:top-14">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-display text-xs font-black tracking-[0.14em] uppercase text-white/40">
+                  Leaderboard
+                  {weekData.participantCount > 0 && (
+                    <span className="ml-1.5 text-white/20 normal-case tracking-normal font-bold">
+                      {weekData.participantCount} players
+                    </span>
+                  )}
+                </h3>
+              </div>
+              <div className="flex flex-wrap gap-1 mb-3">
                 <FilterChip label="Everyone" active={skillFamily === 'all'} onClick={() => setSkillFamily('all')} />
                 <FilterChip label="Intermediate" active={skillFamily === 'intermediate'} onClick={() => setSkillFamily('intermediate')} />
                 <FilterChip label="Advanced" active={skillFamily === 'advanced'} onClick={() => setSkillFamily('advanced')} />
               </div>
+              <WeeklyChallengeLeaderboard leaderboard={weekData.leaderboard} />
             </div>
-            <WeeklyChallengeLeaderboard leaderboard={weekData.leaderboard} />
-          </div>
 
-          {/* Challenge list by level */}
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-display text-[9px] font-black tracking-[0.14em] uppercase text-white/40">
-                Challenges
-                {week && (
-                  <span className="ml-1.5 text-white/20">
-                    Lv.{week.challenge_min_level || 10}–{week.challenge_max_level}
-                  </span>
-                )}
-              </h3>
-              <div className="flex gap-1 items-center">
-                <span className="text-[8px] font-display font-bold text-white/25 uppercase mr-1">Charts</span>
-                <FilterChip label="Both" active={chartMode === 'both'} onClick={() => setChartMode('both')} />
-                <FilterChip label="Singles" active={chartMode === 'single'} onClick={() => setChartMode('single')} />
-                <FilterChip label="Doubles" active={chartMode === 'double'} onClick={() => setChartMode('double')} />
+            {/* Challenge list column */}
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-display text-xs font-black tracking-[0.14em] uppercase text-white/40">
+                  Challenges
+                  {week && (
+                    <span className="ml-1.5 text-white/20 normal-case tracking-normal font-bold">
+                      Lv.{week.challenge_min_level || 10}–{week.challenge_max_level}
+                    </span>
+                  )}
+                </h3>
+                <div className="flex gap-1 items-center">
+                  <span className="text-[10px] font-display font-bold text-white/25 uppercase mr-1 tracking-wider">Charts</span>
+                  <FilterChip label="Both" active={chartMode === 'both'} onClick={() => setChartMode('both')} />
+                  <FilterChip label="S" active={chartMode === 'single'} onClick={() => setChartMode('single')} />
+                  <FilterChip label="D" active={chartMode === 'double'} onClick={() => setChartMode('double')} />
+                </div>
               </div>
+              {levels.length === 0 && (
+                <p className="text-center text-zinc-500 text-sm py-8">No challenges for this filter</p>
+              )}
+              {levels.map(level => (
+                <WeeklyChallengeLevelRow
+                  key={level}
+                  level={level}
+                  charts={groupedByLevel[level]}
+                  viewerBests={viewerBests}
+                  onChartClick={handleChartClick}
+                />
+              ))}
             </div>
-            {levels.length === 0 && (
-              <p className="text-center text-gray-500 text-[11px] py-6">No challenges for this filter</p>
-            )}
-            {levels.map(level => (
-              <WeeklyChallengeLevelRow
-                key={level}
-                level={level}
-                charts={groupedByLevel[level]}
-                viewerBests={viewerBests}
-                onChartClick={handleChartClick}
-              />
-            ))}
           </div>
         </>
       )}
@@ -277,24 +285,24 @@ export default function WeeklyChallengesPage() {
           <div className="w-full max-w-md max-h-[80vh] overflow-y-auto rounded-2xl border border-piu-border bg-[#0a1929] shadow-2xl" onClick={e => e.stopPropagation()}>
             <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-piu-border/40 bg-[#0a1929]/95 backdrop-blur-sm px-4 py-3">
               {selectedChart.jacket_url_snapshot && (
-                <img src={selectedChart.jacket_url_snapshot} alt="" className="h-10 w-10 rounded-lg object-cover" loading="lazy" decoding="async" />
+                <img src={selectedChart.jacket_url_snapshot} alt="" className="h-12 w-12 rounded-lg object-cover" loading="lazy" decoding="async" />
               )}
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-display font-bold text-white truncate">{selectedChart.song_title_snapshot}</p>
-                <p className="text-[10px] text-gray-400">
+                <p className="text-xs text-zinc-400 mt-0.5">
                   {selectedChart.mode} {selectedChart.level}
                   {chartScores ? ` \u2022 ${chartScores.scores.length} players` : ''}
                   {chartScores?.total_attempts > 0 ? ` \u2022 ${chartScores.total_attempts} attempts` : ''}
                 </p>
               </div>
-              <button type="button" onClick={() => { setSelectedChart(null); setChartScores(null); }} className="text-sm font-display font-bold text-gray-400 hover:text-white transition-colors">Close</button>
+              <button type="button" onClick={() => { setSelectedChart(null); setChartScores(null); }} className="text-sm font-display font-bold text-zinc-400 hover:text-white transition-colors px-2 py-1">Close</button>
             </div>
 
             {chartScoresLoading && (
-              <div className="py-8 text-center text-gray-500 text-xs font-display">Loading...</div>
+              <div className="py-10 text-center text-zinc-500 text-sm font-display">Loading...</div>
             )}
             {!chartScoresLoading && chartScores?.scores?.length === 0 && (
-              <div className="py-8 text-center text-gray-500 text-xs font-display">No scores yet</div>
+              <div className="py-10 text-center text-zinc-500 text-sm font-display">No scores yet</div>
             )}
             {!chartScoresLoading && chartScores?.scores?.length > 0 && (
               <div className="divide-y divide-piu-border/20">
@@ -303,28 +311,28 @@ export default function WeeklyChallengesPage() {
                   const flag = entry.nationality ? getCountryFlag(entry.nationality) : '';
                   const hasReplay = !!entry.replay_embed_url;
                   return (
-                    <div key={entry.user_id} className="flex items-center gap-2.5 px-4 py-2.5 hover:bg-white/[0.02]">
-                      <span className={`w-5 shrink-0 text-center text-[10px] font-display font-black ${
-                        i === 0 ? 'text-piu-gold' : i === 1 ? 'text-piu-silver' : i === 2 ? 'text-piu-bronze' : 'text-gray-600'
+                    <div key={entry.user_id} className="flex items-center gap-3 px-4 py-3 hover:bg-white/[0.02]">
+                      <span className={`w-6 shrink-0 text-center text-xs font-display font-black ${
+                        i === 0 ? 'text-piu-gold' : i === 1 ? 'text-piu-silver' : i === 2 ? 'text-piu-bronze' : 'text-zinc-600'
                       }`}>{entry.rank}</span>
                       <Link to={getProfilePath(entry.user_id, entry.username)} className="shrink-0">
                         {avatarUrl ? (
-                          <img src={avatarUrl} alt="" className="h-7 w-7 rounded-full border border-white/10 object-cover" loading="lazy" decoding="async" />
+                          <img src={avatarUrl} alt="" className="h-8 w-8 rounded-full border border-white/10 object-cover" loading="lazy" decoding="async" />
                         ) : (
-                          <div className="h-7 w-7 rounded-full bg-piu-dark flex items-center justify-center text-[10px] font-bold">{(entry.username || '?')[0]}</div>
+                          <div className="h-8 w-8 rounded-full bg-piu-dark flex items-center justify-center text-xs font-bold">{(entry.username || '?')[0]}</div>
                         )}
                       </Link>
                       <div className="flex-1 min-w-0">
-                        <Link to={getProfilePath(entry.user_id, entry.username)} className="text-[11px] font-display font-bold text-white hover:text-piu-accent truncate block">
+                        <Link to={getProfilePath(entry.user_id, entry.username)} className="text-sm font-display font-bold text-white hover:text-piu-accent truncate block">
                           {flag && <span className="mr-1">{flag}</span>}
                           {entry.username}
                         </Link>
-                        <p className="text-[8px] text-gray-600 truncate">
+                        <p className="text-[10px] text-zinc-500 truncate">
                           {entry.skill_title ? `${entry.skill_title} \u2022 ` : ''}
                           {(entry.attempt_count || 0).toLocaleString()} attempt{entry.attempt_count === 1 ? '' : 's'}
                         </p>
                       </div>
-                      <div className="flex items-center gap-2 shrink-0">
+                      <div className="flex items-center gap-2.5 shrink-0">
                         {hasReplay && (
                           <button
                             type="button"
@@ -337,16 +345,16 @@ export default function WeeklyChallengesPage() {
                             className="text-sky-400/70 hover:text-sky-300"
                             title="Watch replay"
                           >
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" className="w-3.5 h-3.5"><path d="M8 5v14l11-7z" /></svg>
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" className="w-4 h-4"><path d="M8 5v14l11-7z" /></svg>
                           </button>
                         )}
                         <button type="button" onClick={() => setSelectedScore({
                           ...entry, song_title: chartScores.chart.song_title, mode: chartScores.chart.mode, level: chartScores.chart.level,
                           background_url: entry.background_url || chartScores.chart.jacket_url || '', _jacketUrl: entry.background_url || chartScores.chart.jacket_url || '',
                         })} className="text-right hover:opacity-80 transition-opacity" title="View score details">
-                          <span className="text-[11px] font-display font-bold text-white">{(entry.score || 0).toLocaleString()}</span>
+                          <span className="text-sm font-display font-bold text-white tabular-nums">{(entry.score || 0).toLocaleString()}</span>
                           <div className="mt-0.5 flex items-center justify-end gap-1">
-                            <p className="text-[9px] font-display text-gray-500">{entry.grade}</p>
+                            <p className="text-[10px] font-display text-zinc-500">{entry.grade}</p>
                             <PlateBadge plate={entry.plate} size="xs" />
                           </div>
                         </button>

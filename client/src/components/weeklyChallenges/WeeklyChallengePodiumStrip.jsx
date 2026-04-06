@@ -21,7 +21,7 @@ function TrophyIcon({ rank, className = '' }) {
   const color = rank === 1 ? 'text-piu-gold' : rank === 2 ? 'text-piu-silver' : 'text-piu-bronze';
   return (
     <span className={`${color} ${className}`}>
-      {rank === 1 ? '🥇' : rank === 2 ? '🥈' : '🥉'}
+      {rank === 1 ? '\u{1F947}' : rank === 2 ? '\u{1F948}' : '\u{1F949}'}
     </span>
   );
 }
@@ -31,23 +31,23 @@ function PodiumCard({ award }) {
   const avatarUrl = getAvatarUrl(award.avatar_snapshot, 'sm');
 
   return (
-    <div className={`flex items-center gap-2 rounded-lg border ${style.border} bg-gradient-to-r ${style.bg} px-2.5 py-1.5 min-w-0`}>
-      <TrophyIcon rank={award.rank} className="text-sm shrink-0" />
+    <div className={`flex items-center gap-2.5 rounded-lg border ${style.border} bg-gradient-to-r ${style.bg} px-3 py-2 min-w-0`}>
+      <TrophyIcon rank={award.rank} className="text-base shrink-0" />
       {avatarUrl && (
-        <img src={avatarUrl} alt="" className="h-5 w-5 shrink-0 rounded-full border border-white/20 object-cover" loading="lazy" decoding="async" />
+        <img src={avatarUrl} alt="" className="h-6 w-6 shrink-0 rounded-full border border-white/20 object-cover" loading="lazy" decoding="async" />
       )}
       <div className="min-w-0 flex-1">
         <Link
           to="/weekly-challenges"
-          className="block truncate text-[11px] font-display font-bold text-white hover:text-piu-gold transition-colors"
+          className="block truncate text-xs font-display font-bold text-white hover:text-piu-gold transition-colors"
         >
           {award.nationality_snapshot && (
-            <>{getCountryFlag(award.nationality_snapshot, 'h-[11px] inline-block mr-0.5')} </>
+            <>{getCountryFlag(award.nationality_snapshot, 'h-[12px] inline-block mr-0.5')} </>
           )}
           {award.username_snapshot}
         </Link>
       </div>
-      <span className="shrink-0 text-[10px] font-display font-bold text-white/60">
+      <span className="shrink-0 text-xs font-display font-bold text-white/60 tabular-nums">
         {(award.points || 0).toLocaleString()}
       </span>
     </div>
@@ -69,8 +69,8 @@ export default function WeeklyChallengePodiumStrip({ awards = [], compact = fals
     const overall = grouped.overall || [];
     if (overall.length === 0) return null;
     return (
-      <div className="flex flex-col gap-1">
-        {overall.map((a, i) => (
+      <div className="flex flex-col gap-1.5">
+        {overall.map((a) => (
           <PodiumCard key={`${a.award_key}-${a.rank}`} award={a} />
         ))}
       </div>
@@ -80,16 +80,16 @@ export default function WeeklyChallengePodiumStrip({ awards = [], compact = fals
   // Full mode: show all award categories
   const order = ['overall', 'singles', 'doubles', 'advanced', 'intermediate'];
   return (
-    <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none" style={{ scrollbarWidth: 'none' }}>
+    <div className="flex gap-4 overflow-x-auto pb-1 scrollbar-none" style={{ scrollbarWidth: 'none' }}>
       {order.map(key => {
         const entries = grouped[key];
         if (!entries || entries.length === 0) return null;
         return (
-          <div key={key} className="min-w-[200px] shrink-0">
-            <h4 className="font-display text-[9px] font-black tracking-[0.12em] uppercase text-white/50 mb-1.5">
+          <div key={key} className="min-w-[220px] shrink-0">
+            <h4 className="font-display text-[10px] font-black tracking-[0.12em] uppercase text-white/50 mb-2">
               {AWARD_LABELS[key] || key}
             </h4>
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1.5">
               {entries.sort((a, b) => a.rank - b.rank).map(a => (
                 <PodiumCard key={`${a.award_key}-${a.rank}`} award={a} />
               ))}
