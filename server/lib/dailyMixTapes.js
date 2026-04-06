@@ -102,6 +102,8 @@ function getYtDlpNetworkArgs() {
   const args = [];
   const proxy = String(process.env.DAILY_MIX_TAPE_YTDLP_PROXY || '').trim();
   const impersonate = String(process.env.DAILY_MIX_TAPE_YTDLP_IMPERSONATE || '').trim();
+  const jsRuntimes = String(process.env.DAILY_MIX_TAPE_YTDLP_JS_RUNTIMES || '').trim();
+  const remoteComponents = String(process.env.DAILY_MIX_TAPE_YTDLP_REMOTE_COMPONENTS || '').trim();
   const sleepRequests = String(process.env.DAILY_MIX_TAPE_YTDLP_SLEEP_REQUESTS || '').trim();
   const sleepInterval = String(process.env.DAILY_MIX_TAPE_YTDLP_SLEEP_INTERVAL || '').trim();
   const maxSleepInterval = String(process.env.DAILY_MIX_TAPE_YTDLP_MAX_SLEEP_INTERVAL || '').trim();
@@ -112,6 +114,12 @@ function getYtDlpNetworkArgs() {
   }
   if (impersonate) {
     args.push('--impersonate', impersonate);
+  }
+  if (jsRuntimes) {
+    args.push('--js-runtimes', jsRuntimes);
+  }
+  if (remoteComponents) {
+    args.push('--remote-components', remoteComponents);
   }
   if (sleepRequests) {
     args.push('--sleep-requests', sleepRequests);
