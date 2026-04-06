@@ -514,4 +514,4 @@ function PixelPet({ character = 'dojocat', weightState = 'normal', size = PIXEL_
 }
 
 export default PixelPet;
-export { SPRITES, PALETTES, VALID_CHARACTERS };
+export { SPRITES, PALETTES };
