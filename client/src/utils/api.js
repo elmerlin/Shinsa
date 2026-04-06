@@ -1430,8 +1430,16 @@ export const adminRemoveApprovedUser = (venueId, userId) => request(`/venue-acce
 
 // Pets (Tamagotchi)
 export const getMyPet = () => request('/pets/me');
+export const getPublicPet = (userId) => request(`/pets/user/${userId}`);
 export const adoptPet = (character) => request('/pets/adopt', { method: 'POST', body: JSON.stringify({ character }) });
 export const feedPet = (songs = 1) => request('/pets/feed', { method: 'POST', body: JSON.stringify({ songs }) });
 export const getPetCharacters = () => request('/pets/characters');
+export const getPetShop = () => request('/pets/shop');
+export const buyPetFood = (foodId) => request('/pets/buy-food', { method: 'POST', body: JSON.stringify({ foodId }) });
+export const buyPetItem = (itemId) => request('/pets/buy-item', { method: 'POST', body: JSON.stringify({ itemId }) });
+export const equipPetItem = (itemId) => request('/pets/equip', { method: 'POST', body: JSON.stringify({ itemId }) });
+export const unequipPetSlot = (slot) => request('/pets/equip', { method: 'POST', body: JSON.stringify({ itemId: '', slot }) });
+export const setPetColor = (slot, color) => request('/pets/set-color', { method: 'POST', body: JSON.stringify({ slot, color }) });
+export const togglePetAvatar = () => request('/pets/toggle-avatar', { method: 'POST' });
 export const demandTrick = (trickId) => request(`/pets/tricks/${trickId}/demand`, { method: 'POST' });
 export const performTrick = (trickId) => request(`/pets/tricks/${trickId}/perform`, { method: 'POST' });
