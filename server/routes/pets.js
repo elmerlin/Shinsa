@@ -13,11 +13,15 @@ const TARGET_WEEKLY_HUNGER_UPKEEP = 76;
 const TARGET_WEEKLY_HAPPINESS_UPKEEP = 48;
 const HUNGER_DECAY_PER_HOUR = TARGET_WEEKLY_HUNGER_UPKEEP / (7 * 24);
 const HAPPINESS_DECAY_PER_HOUR = TARGET_WEEKLY_HAPPINESS_UPKEEP / (7 * 24);
+const ENERGY_DECAY_PER_HOUR = 22 / (7 * 24);
+const HYPE_DECAY_PER_HOUR = 90 / (7 * 24);
 const PET_ECONOMY = {
   target_songs_per_week: TARGET_WEEKLY_SONGS,
   weekly_hunger_upkeep: TARGET_WEEKLY_HUNGER_UPKEEP,
   weekly_happiness_upkeep: TARGET_WEEKLY_HAPPINESS_UPKEEP,
 };
+const GRADE_ORDER = ['F', 'D', 'C', 'B', 'A', 'A+', 'AA', 'AA+', 'AAA', 'AAA+', 'S', 'S+', 'SS', 'SS+', 'SSS', 'SSS+'];
+const GRADE_INDEX = Object.fromEntries(GRADE_ORDER.map((grade, index) => [grade, index]));
 
 // Combo earned per grade when syncing plays
 const GRADE_COMBO = {
@@ -78,6 +82,169 @@ const PET_FOODS = [
   { id: 'banya-biscuits', name: 'Banya Biscuits', cost: 94, hunger: 24, happiness: 16, emoji: '🏆', desc: 'Legendary treats for pampered champions' },
 ];
 const PET_FOODS_MAP = Object.fromEntries(PET_FOODS.map(f => [f.id, f]));
+
+const CHARACTER_PROFILES = {
+  dojocat: {
+    title: 'Proud training companion',
+    personality: 'Disciplined, proud, and quietly affectionate once trust is earned.',
+    favorite_foods: ['pump-chow', 'step-fuel', 'banya-biscuits'],
+    disliked_foods: ['dance-dust'],
+    interaction_lines: {
+      praise: ['Acceptable form.', 'That was disciplined.', 'You noticed. Good.'],
+      cuddle: ['A brief headbutt.', 'Only for a moment.', '*tiny purr*'],
+      tease: ['Watch it.', 'Do not test the dojo mascot.', 'Hmph.'],
+      mission: ['Train with intent today.', 'Bring me a clean clear.', 'We should sharpen our form.'],
+      tap: ['Eyes up, stance strong.', 'Ready when you are.', '*whiskers twitch*'],
+    },
+  },
+  buu: {
+    title: 'Indulgent rhythm goblin',
+    personality: 'Smug, food-motivated, and happiest when showing off.',
+    favorite_foods: ['beat-bites', 'dance-dust', 'doof-bites'],
+    disliked_foods: ['pump-chow'],
+    interaction_lines: {
+      praise: ['Of course I was amazing.', 'Tell me more.', 'Hehe, keep going.'],
+      cuddle: ['Mmm, cozy.', 'I will allow this.', 'Soft pats accepted.'],
+      tease: ['Rude. Funny, but rude.', 'You wish you looked this good.', 'Hehehe.'],
+      mission: ['Let us make today delicious.', 'Bring me something flashy.', 'A replay would look good on us.'],
+      tap: ['Hehehe.', 'Admiring me again?', 'I am listening.'],
+    },
+  },
+  devit: {
+    title: 'Chaotic step gremlin',
+    personality: 'Playful, restless, and always trying to turn training into mischief.',
+    favorite_foods: ['doof-bites', 'adrenaline-chow', 'slam-grub'],
+    disliked_foods: ['rhythm-rations'],
+    interaction_lines: {
+      praise: ['Again, again!', 'That ruled.', 'Did you see me hop?'],
+      cuddle: ['Only if we wrestle after.', 'Quick hug, then zoomies.', 'Fine, but make it fast.'],
+      tease: ['Catch me first.', 'Heh. Try harder.', 'That just made me stronger.'],
+      mission: ['Let us cause a little trouble.', 'I want doubles chaos.', 'Bring me something hard.'],
+      tap: ['Heh.', 'Ready to dash.', 'Do it again.'],
+    },
+  },
+  pixiu: {
+    title: 'Ceremonial luck guardian',
+    personality: 'Warm, auspicious, and protective, with a taste for elegant rituals.',
+    favorite_foods: ['rhythm-rations', 'banya-biscuits', 'pad-power'],
+    disliked_foods: ['doof-bites'],
+    interaction_lines: {
+      praise: ['Fortune smiles on discipline.', 'A graceful effort.', 'I am pleased.'],
+      cuddle: ['A warm blessing for you.', 'Stay a while.', 'Such a gentle moment.'],
+      tease: ['I choose mercy.', 'Mischief clouds the spirit.', '*tiny amused snort*'],
+      mission: ['Let us seek a worthy clear.', 'A ceremonial challenge awaits.', 'We should honour today with good play.'],
+      tap: ['Auspicious timing.', 'I am here.', 'Let us see what today brings.'],
+    },
+  },
+};
+
+const PET_INTERACTIONS = {
+  praise: { label: 'Praise', bond: 4, trust: 4, happiness: 4, hype: 3, energy: 0, expression: 'proud', reaction: 'proud' },
+  cuddle: { label: 'Cuddle', bond: 5, trust: 3, happiness: 5, hype: 0, energy: 1, expression: 'soft', reaction: 'sway' },
+  tease: { label: 'Tease', bond: 1, trust: -2, happiness: -1, hype: 6, energy: 0, expression: 'smirk', reaction: 'mischief' },
+  mission: { label: 'Ask Mission', bond: 2, trust: 2, happiness: 1, hype: 2, energy: 0, expression: 'sparkle', reaction: 'nod' },
+  tap: { label: 'Tap', bond: 1, trust: 1, happiness: 2, hype: 1, energy: 0, expression: '', reaction: '' },
+};
+
+const PET_ACTIVITIES = {
+  train: {
+    id: 'train', label: 'Train', desc: 'Sharpens discipline and trust.',
+    energy: -16, happiness: 3, trust: 5, hype: 5, bond: 5, combo: 6, bond_tokens: 1, expression: 'proud', reaction: 'kata',
+  },
+  play: {
+    id: 'play', label: 'Play', desc: 'Pure bonding and playful chaos.',
+    energy: -10, happiness: 7, trust: 2, hype: 8, bond: 4, combo: 4, bond_tokens: 0, expression: 'grin', reaction: 'hop',
+  },
+  groom: {
+    id: 'groom', label: 'Groom', desc: 'Raises trust and keeps them feeling special.',
+    energy: -4, happiness: 8, trust: 6, hype: 1, bond: 3, combo: 0, bond_tokens: 1, expression: 'soft', reaction: 'bless',
+  },
+  rest: {
+    id: 'rest', label: 'Rest', desc: 'Recovers energy and settles their mood.',
+    energy: 22, happiness: 2, trust: 1, hype: -4, bond: 2, combo: 0, bond_tokens: 0, expression: 'soft', reaction: 'sway',
+  },
+  spar: {
+    id: 'spar', label: 'Spar', desc: 'Higher-risk bonding for confident pairs.',
+    energy: -18, happiness: 4, trust: 7, hype: 10, bond: 6, combo: 10, bond_tokens: 1, expression: 'excited', reaction: 'dart',
+    minTrust: 35,
+  },
+  explore: {
+    id: 'explore', label: 'Explore', desc: 'Search for stories, keepsakes, and scene energy.',
+    energy: -14, happiness: 5, trust: 3, hype: 7, bond: 4, combo: 8, bond_tokens: 2, rare_shards: 1, expression: 'sparkle', reaction: 'swish',
+    minEnergy: 18,
+  },
+};
+
+const PET_TOYS = [
+  {
+    id: 'mini-pad',
+    name: 'Mini Pad',
+    cost: 64,
+    desc: 'A tiny practice stage for proud little performances.',
+    bond: 5,
+    trust: 2,
+    happiness: 6,
+    energy: -8,
+    hype: 7,
+    bond_tokens: 1,
+    expression: 'excited',
+    reaction: 'hop',
+    favored: ['dojocat', 'devit'],
+  },
+  {
+    id: 'laser-pointer',
+    name: 'Laser Pointer',
+    cost: 56,
+    desc: 'Turns idle paws into full chibi chase mode.',
+    bond: 4,
+    trust: 1,
+    happiness: 8,
+    energy: -6,
+    hype: 9,
+    expression: 'grin',
+    reaction: 'dart',
+    favored: ['dojocat', 'buu', 'devit'],
+  },
+  {
+    id: 'lucky-lantern',
+    name: 'Lucky Lantern',
+    cost: 72,
+    desc: 'A ceremonial toy that fills the habitat with soft glow.',
+    bond: 6,
+    trust: 4,
+    happiness: 5,
+    energy: -4,
+    hype: 5,
+    bond_tokens: 1,
+    expression: 'sparkle',
+    reaction: 'bless',
+    favored: ['pixiu', 'dojocat'],
+  },
+  {
+    id: 'punch-mitts',
+    name: 'Punch Mitts',
+    cost: 78,
+    desc: 'Training mitts for fierce little sparring drills.',
+    bond: 6,
+    trust: 5,
+    happiness: 4,
+    energy: -10,
+    hype: 8,
+    combo_balance: 8,
+    expression: 'proud',
+    reaction: 'kata',
+    favored: ['dojocat', 'devit'],
+  },
+];
+const PET_TOY_MAP = Object.fromEntries(PET_TOYS.map((toy) => [toy.id, toy]));
+
+const BOND_RANKS = [
+  { threshold: 0, key: 'training-partner', label: 'Training Partner' },
+  { threshold: 40, key: 'pad-gremlin', label: 'Pad Gremlin' },
+  { threshold: 90, key: 'dojo-mascot', label: 'Dojo Mascot' },
+  { threshold: 160, key: 'arena-spirit', label: 'Arena Spirit' },
+  { threshold: 260, key: 'blessed-beast', label: 'Blessed Beast' },
+];
 
 // ─── Clothing ─────────────────────────────────────────────────────
 const CLOTHING = {
@@ -198,16 +365,55 @@ function ensurePetTable(db) {
   addCol('shoes_color', "TEXT NOT NULL DEFAULT ''");
   addCol('top_color', "TEXT NOT NULL DEFAULT ''");
   addCol('is_pet_avatar', "INTEGER NOT NULL DEFAULT 0");
+  addCol('bond', "INTEGER NOT NULL DEFAULT 0");
+  addCol('energy', "INTEGER NOT NULL DEFAULT 65");
+  addCol('trust', "INTEGER NOT NULL DEFAULT 35");
+  addCol('hype', "INTEGER NOT NULL DEFAULT 25");
+  addCol('bond_tokens', "INTEGER NOT NULL DEFAULT 0");
+  addCol('rare_shards', "INTEGER NOT NULL DEFAULT 0");
+  addCol('interaction_count', "INTEGER NOT NULL DEFAULT 0");
+  addCol('daily_interaction_count', "INTEGER NOT NULL DEFAULT 0");
+  addCol('daily_interaction_key', "TEXT NOT NULL DEFAULT ''");
+  addCol('claimed_missions', "TEXT NOT NULL DEFAULT '[]'");
+  addCol('last_food_id', "TEXT NOT NULL DEFAULT ''");
+  addCol('last_food_at', "TEXT NOT NULL DEFAULT ''");
+  addCol('owned_toys', "TEXT NOT NULL DEFAULT '[]'");
+  addCol('last_toy_id', "TEXT NOT NULL DEFAULT ''");
+  addCol('last_toy_at', "TEXT NOT NULL DEFAULT ''");
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+function toSqliteDateTime(date = new Date()) {
+  return date.toISOString().slice(0, 19).replace('T', ' ');
+}
+
+function startOfUtcDay(date = new Date()) {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+}
+
+function getUtcDayKey(date = new Date()) {
+  return startOfUtcDay(date).toISOString().slice(0, 10);
+}
+
+function getUtcWeekKey(date = new Date()) {
+  const copy = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const day = copy.getUTCDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  copy.setUTCDate(copy.getUTCDate() + diff);
+  return copy.toISOString().slice(0, 10);
+}
 
 function computeDecayed(storedValue, lastFedAt, decayPerHour) {
   if (!lastFedAt) return storedValue;
   const lastFed = new Date(lastFedAt + 'Z').getTime();
   const hoursSince = Math.max(0, (Date.now() - lastFed) / (1000 * 60 * 60));
   return clamp(Math.round(storedValue - hoursSince * decayPerHour), 0, MAX_STAT);
+}
+
+function getStateValue(storedValue, lastAt, decayPerHour) {
+  return computeDecayed(storedValue, lastAt, decayPerHour);
 }
 
 function getWeightState(hunger) {
@@ -227,6 +433,47 @@ function getMood(hunger, happiness) {
   return 'stuffed';
 }
 
+function getBondRank(bond = 0) {
+  let current = BOND_RANKS[0];
+  let next = null;
+  for (let i = 0; i < BOND_RANKS.length; i++) {
+    const rank = BOND_RANKS[i];
+    if (bond >= rank.threshold) {
+      current = rank;
+      next = BOND_RANKS[i + 1] || null;
+    }
+  }
+  return {
+    ...current,
+    progress: next
+      ? clamp((bond - current.threshold) / Math.max(1, next.threshold - current.threshold), 0, 1)
+      : 1,
+    next_label: next?.label || '',
+    next_threshold: next?.threshold || current.threshold,
+  };
+}
+
+function getCharacterProfile(character = 'dojocat') {
+  return CHARACTER_PROFILES[character] || CHARACTER_PROFILES.dojocat;
+}
+
+function getFoodPreference(character, foodId) {
+  const profile = getCharacterProfile(character);
+  if (profile.favorite_foods.includes(foodId)) return 'favorite';
+  if (profile.disliked_foods.includes(foodId)) return 'disliked';
+  return 'neutral';
+}
+
+function pickRandom(list, fallback = '') {
+  if (!Array.isArray(list) || !list.length) return fallback;
+  return list[Math.floor(Math.random() * list.length)] || fallback;
+}
+
+function getToyPreference(character, toy) {
+  if (!toy) return 'neutral';
+  return Array.isArray(toy.favored) && toy.favored.includes(character) ? 'favorite' : 'neutral';
+}
+
 function getUnlockedTricks(character, xp) {
   return (TRICKS[character] || []).filter(t => xp >= t.xp).map(t => t.id);
 }
@@ -239,14 +486,323 @@ function safeJsonParse(str, fallback) {
   try { return JSON.parse(str || '[]'); } catch { return fallback || []; }
 }
 
+function queryPlayActivitySummary(db, userId) {
+  const base = db.prepare(`
+    SELECT
+      COUNT(*) AS plays_all,
+      MAX(level) AS max_level_all,
+      SUM(CASE WHEN mode LIKE 'Double%' THEN 1 ELSE 0 END) AS doubles_all,
+      SUM(CASE WHEN (replay_embed_url != '' OR replay_video_id != '') THEN 1 ELSE 0 END) AS replays_all
+    FROM user_recently_played
+    WHERE user_id = ?
+  `).get(userId) || {};
+
+  const recent7d = db.prepare(`
+    SELECT
+      COUNT(*) AS plays_7d,
+      COUNT(DISTINCT song_title || '|' || mode || '|' || level) AS unique_7d,
+      SUM(CASE WHEN mode LIKE 'Double%' THEN 1 ELSE 0 END) AS doubles_7d,
+      SUM(CASE WHEN level >= 18 THEN 1 ELSE 0 END) AS hard_7d,
+      SUM(CASE WHEN (replay_embed_url != '' OR replay_video_id != '') THEN 1 ELSE 0 END) AS replays_7d,
+      SUM(CASE WHEN COALESCE(NULLIF(grade, ''), CASE WHEN score >= 995000 THEN 'SSS' WHEN score >= 980000 THEN 'SS' WHEN score >= 960000 THEN 'S' WHEN score >= 930000 THEN 'AAA' WHEN score >= 900000 THEN 'AA' WHEN score >= 850000 THEN 'A' WHEN score > 0 THEN 'B' ELSE 'F' END) IN ('AAA+', 'AAA', 'S', 'S+', 'SS', 'SS+', 'SSS', 'SSS+') THEN 1 ELSE 0 END) AS high_grades_7d
+    FROM user_recently_played
+    WHERE user_id = ?
+      AND COALESCE(NULLIF(played_at_utc, ''), date_played) >= datetime('now', '-7 days')
+  `).get(userId) || {};
+
+  const today = db.prepare(`
+    SELECT
+      COUNT(*) AS plays_today,
+      COUNT(DISTINCT song_title || '|' || mode || '|' || level) AS unique_today,
+      SUM(CASE WHEN mode LIKE 'Double%' THEN 1 ELSE 0 END) AS doubles_today,
+      SUM(CASE WHEN (replay_embed_url != '' OR replay_video_id != '') THEN 1 ELSE 0 END) AS replays_today,
+      SUM(CASE WHEN COALESCE(NULLIF(grade, ''), CASE WHEN score >= 995000 THEN 'SSS' WHEN score >= 980000 THEN 'SS' WHEN score >= 960000 THEN 'S' WHEN score >= 930000 THEN 'AAA' WHEN score >= 900000 THEN 'AA' WHEN score >= 850000 THEN 'A' WHEN score > 0 THEN 'B' ELSE 'F' END) IN ('AAA+', 'AAA', 'S', 'S+', 'SS', 'SS+', 'SSS', 'SSS+') THEN 1 ELSE 0 END) AS high_grades_today
+    FROM user_recently_played
+    WHERE user_id = ?
+      AND COALESCE(NULLIF(played_at_utc, ''), date_played) >= datetime('now', 'start of day')
+  `).get(userId) || {};
+
+  const newChartsToday = db.prepare(`
+    SELECT COUNT(*) AS new_charts_today
+    FROM (
+      SELECT rp.song_title, rp.mode, rp.level
+      FROM user_recently_played rp
+      WHERE rp.user_id = ?
+        AND COALESCE(NULLIF(rp.played_at_utc, ''), rp.date_played) >= datetime('now', 'start of day')
+      GROUP BY rp.song_title, rp.mode, rp.level
+      HAVING NOT EXISTS (
+        SELECT 1
+        FROM user_recently_played older
+        WHERE older.user_id = rp.user_id
+          AND older.song_title = rp.song_title
+          AND older.mode = rp.mode
+          AND older.level = rp.level
+          AND COALESCE(NULLIF(older.played_at_utc, ''), older.date_played) < datetime('now', 'start of day')
+      )
+    )
+  `).get(userId) || {};
+
+  const hop = db.prepare(`
+    SELECT COUNT(DISTINCT lsp.live_session_id) AS hop_sessions_7d
+    FROM live_session_plays lsp
+    JOIN live_sessions ls ON ls.id = lsp.live_session_id
+    WHERE lsp.user_id = ?
+      AND ls.session_type = 'hop'
+      AND COALESCE(NULLIF(lsp.played_at_utc, ''), lsp.date_played, lsp.created_at) >= datetime('now', '-7 days')
+  `).get(userId) || {};
+
+  const weeklyChallenge = db.prepare(`
+    SELECT COUNT(*) AS weekly_challenge_entries
+    FROM weekly_challenge_results r
+    JOIN weekly_challenge_charts wc ON wc.id = r.weekly_chart_id
+    JOIN weekly_challenge_weeks ww ON ww.id = wc.week_id
+    WHERE r.user_id = ?
+      AND ww.status = 'active'
+      AND datetime('now') >= ww.starts_at_utc
+      AND datetime('now') <= ww.ends_at_utc
+  `).get(userId) || {};
+
+  return {
+    plays_all: base.plays_all || 0,
+    max_level_all: base.max_level_all || 0,
+    doubles_all: base.doubles_all || 0,
+    replays_all: base.replays_all || 0,
+    plays_7d: recent7d.plays_7d || 0,
+    unique_7d: recent7d.unique_7d || 0,
+    doubles_7d: recent7d.doubles_7d || 0,
+    hard_7d: recent7d.hard_7d || 0,
+    replays_7d: recent7d.replays_7d || 0,
+    high_grades_7d: recent7d.high_grades_7d || 0,
+    plays_today: today.plays_today || 0,
+    unique_today: today.unique_today || 0,
+    new_charts_today: newChartsToday.new_charts_today || 0,
+    doubles_today: today.doubles_today || 0,
+    replays_today: today.replays_today || 0,
+    high_grades_today: today.high_grades_today || 0,
+    hop_sessions_7d: hop.hop_sessions_7d || 0,
+    weekly_challenge_entries: weeklyChallenge.weekly_challenge_entries || 0,
+  };
+}
+
+function derivePetSpecialty(summary = {}) {
+  if ((summary.doubles_7d || 0) >= 5 && (summary.doubles_7d || 0) >= ((summary.plays_7d || 0) * 0.4)) {
+    return { key: 'double-grinder', label: 'Double grinder', desc: 'Your pet is leaning into doubles stamina and footwork.' };
+  }
+  if ((summary.high_grades_7d || 0) >= 6) {
+    return { key: 'accuracy-fiend', label: 'Accuracy fiend', desc: 'Clean timing and tidy clears are shaping this pet.' };
+  }
+  if ((summary.hard_7d || 0) >= 5) {
+    return { key: 'stamina-hound', label: 'Stamina hound', desc: 'Big clears are making your pet tougher and prouder.' };
+  }
+  if ((summary.replays_7d || 0) >= 2) {
+    return { key: 'scene-showoff', label: 'Scene showoff', desc: 'Replay-ready moments are feeding this pet’s confidence.' };
+  }
+  if ((summary.hop_sessions_7d || 0) >= 1) {
+    return { key: 'hop-regular', label: 'HoP regular', desc: 'Hour of Power energy is making this pet thrive.' };
+  }
+  return { key: 'all-rounder', label: 'All-rounder', desc: 'A balanced companion still figuring out its calling.' };
+}
+
+function buildPetMemories(pet, summary = {}) {
+  const memories = [];
+  if (pet.created_at) {
+    memories.push({
+      id: 'adopted',
+      title: 'Bond began',
+      detail: `Adopted on ${String(pet.created_at).slice(0, 10)}`,
+      tone: 'bond',
+    });
+  }
+  if ((summary.max_level_all || 0) > 0) {
+    memories.push({
+      id: 'max-level',
+      title: 'Biggest clear watched',
+      detail: `Level ${summary.max_level_all} is the highest chart your pet has seen you conquer.`,
+      tone: 'level',
+    });
+  }
+  if ((summary.replays_all || 0) > 0) {
+    memories.push({
+      id: 'replays',
+      title: 'Replay memory',
+      detail: `${summary.replays_all} replay-ready ${summary.replays_all === 1 ? 'moment' : 'moments'} recorded together.`,
+      tone: 'replay',
+    });
+  }
+  if ((summary.hop_sessions_7d || 0) > 0) {
+    memories.push({
+      id: 'hop',
+      title: 'Hour of Power spark',
+      detail: `Shared ${summary.hop_sessions_7d} HoP ${summary.hop_sessions_7d === 1 ? 'session' : 'sessions'} in the last week.`,
+      tone: 'hop',
+    });
+  }
+  if ((summary.weekly_challenge_entries || 0) > 0) {
+    memories.push({
+      id: 'weekly',
+      title: 'Weekly challenger',
+      detail: `Active in this week’s weekly challenge board.`,
+      tone: 'challenge',
+    });
+  }
+  const specialty = derivePetSpecialty(summary);
+  memories.push({
+    id: 'specialty',
+    title: specialty.label,
+    detail: specialty.desc,
+    tone: 'specialty',
+  });
+  return memories.slice(0, 5);
+}
+
+const PET_MISSIONS = {
+  feed_today: {
+    cadence: 'daily',
+    label: 'Care routine',
+    desc: 'Feed your pet at least once today.',
+    target: 1,
+    progress: ({ fed_today }) => fed_today ? 1 : 0,
+    reward: { bond: 6, bond_tokens: 1, happiness: 4 },
+  },
+  interact_three: {
+    cadence: 'daily',
+    label: 'Quality time',
+    desc: 'Interact with your pet three times today.',
+    target: 3,
+    progress: ({ interactions_today }) => interactions_today || 0,
+    reward: { bond: 8, trust: 4, bond_tokens: 1 },
+  },
+  aaa_pair: {
+    cadence: 'daily',
+    label: 'Clean timing',
+    desc: 'Hit two AAA-or-better plays today.',
+    target: 2,
+    progress: ({ high_grades_today }) => high_grades_today || 0,
+    reward: { bond: 10, combo_balance: 16, hype: 8 },
+  },
+  replay_today: {
+    cadence: 'daily',
+    label: 'Capture the moment',
+    desc: 'Record one replay-enabled score today.',
+    target: 1,
+    progress: ({ replays_today }) => replays_today || 0,
+    reward: { bond: 8, combo_balance: 14, hype: 10 },
+  },
+  new_chart_today: {
+    cadence: 'daily',
+    label: 'Fresh chart',
+    desc: 'Play a new chart today.',
+    target: 1,
+    progress: ({ new_charts_today }) => new_charts_today || 0,
+    reward: { bond: 7, trust: 2, hype: 5 },
+  },
+  double_today: {
+    cadence: 'daily',
+    label: 'Double trouble',
+    desc: 'Play one doubles chart today.',
+    target: 1,
+    progress: ({ doubles_today }) => doubles_today || 0,
+    reward: { bond: 7, hype: 7, combo_balance: 12 },
+  },
+  hard_clear_week: {
+    cadence: 'weekly',
+    label: 'Heavy set',
+    desc: 'Clear three level 18+ charts this week.',
+    target: 3,
+    progress: ({ hard_7d }) => hard_7d || 0,
+    reward: { bond: 14, trust: 8, combo_balance: 24, bond_tokens: 2 },
+  },
+  double_week: {
+    cadence: 'weekly',
+    label: 'Doubles grind',
+    desc: 'Play five doubles charts this week.',
+    target: 5,
+    progress: ({ doubles_7d }) => doubles_7d || 0,
+    reward: { bond: 14, hype: 10, combo_balance: 24, bond_tokens: 2 },
+  },
+  replay_week: {
+    cadence: 'weekly',
+    label: 'Scene presence',
+    desc: 'Land three replay-enabled plays this week.',
+    target: 3,
+    progress: ({ replays_7d }) => replays_7d || 0,
+    reward: { bond: 16, hype: 12, combo_balance: 28, bond_tokens: 2 },
+  },
+  hop_run: {
+    cadence: 'weekly',
+    label: 'Hour of Power',
+    desc: 'Join one Hour of Power session this week.',
+    target: 1,
+    progress: ({ hop_sessions_7d }) => hop_sessions_7d || 0,
+    reward: { bond: 16, trust: 6, combo_balance: 24, rare_shards: 1 },
+  },
+  weekly_challenge_entry: {
+    cadence: 'weekly',
+    label: 'Weekly challenger',
+    desc: 'Log at least one current weekly challenge result.',
+    target: 1,
+    progress: ({ weekly_challenge_entries }) => weekly_challenge_entries || 0,
+    reward: { bond: 12, trust: 5, combo_balance: 20, bond_tokens: 2 },
+  },
+};
+
+const PET_MISSIONS_BY_CHARACTER = {
+  dojocat: ['feed_today', 'aaa_pair', 'hard_clear_week', 'weekly_challenge_entry'],
+  buu: ['feed_today', 'replay_today', 'replay_week', 'hop_run'],
+  devit: ['interact_three', 'double_today', 'double_week', 'hard_clear_week'],
+  pixiu: ['feed_today', 'new_chart_today', 'hop_run', 'weekly_challenge_entry'],
+};
+
+function buildPetMissions(pet, summary = {}) {
+  const claimed = new Set(safeJsonParse(pet.claimed_missions));
+  const missionIds = PET_MISSIONS_BY_CHARACTER[pet.character] || PET_MISSIONS_BY_CHARACTER.dojocat;
+  return missionIds.map((id) => {
+    const mission = PET_MISSIONS[id];
+    const windowKey = mission.cadence === 'daily' ? getUtcDayKey() : getUtcWeekKey();
+    const claimKey = `${id}:${windowKey}`;
+    const progress = mission.progress(summary, pet);
+    const complete = progress >= mission.target;
+    return {
+      id,
+      cadence: mission.cadence,
+      label: mission.label,
+      desc: mission.desc,
+      target: mission.target,
+      progress: Math.min(mission.target, progress),
+      complete,
+      claimed: claimed.has(claimKey),
+      claim_key: claimKey,
+      reward: mission.reward,
+      reward_summary: Object.entries(mission.reward)
+        .map(([key, value]) => `${value} ${key.replace('_', ' ')}`)
+        .join(' • '),
+    };
+  });
+}
+
 // ─── Format pet for API response ──────────────────────────────────
-function formatPet(pet, isPublic = false) {
+function formatPet(pet, isPublic = false, db = null) {
   const hunger = computeDecayed(pet.fullness, pet.last_fed_at, HUNGER_DECAY_PER_HOUR);
   const happiness = computeDecayed(pet.happiness || 50, pet.last_fed_at, HAPPINESS_DECAY_PER_HOUR);
+  const energy = getStateValue(pet.energy || 65, pet.updated_at || pet.last_fed_at, ENERGY_DECAY_PER_HOUR);
+  const hype = getStateValue(pet.hype || 25, pet.updated_at || pet.last_fed_at, HYPE_DECAY_PER_HOUR);
   const xp = pet.experience || 0;
   const character = pet.character || 'dojocat';
   const charTricks = TRICKS[character] || [];
   const nextTrick = getNextTrick(character, xp);
+  const profile = getCharacterProfile(character);
+  const bond = pet.bond || 0;
+  const trust = clamp(pet.trust || 35, 0, MAX_STAT);
+  const bondRank = getBondRank(bond);
+  const interactionsToday = pet.daily_interaction_key === getUtcDayKey() ? (pet.daily_interaction_count || 0) : 0;
+  const activitySummary = db ? queryPlayActivitySummary(db, pet.user_id) : {};
+  const specialty = derivePetSpecialty(activitySummary);
+  const missions = buildPetMissions({ ...pet, character }, {
+    ...activitySummary,
+    fed_today: !!pet.last_food_at && String(pet.last_food_at).startsWith(getUtcDayKey()),
+    interactions_today: interactionsToday,
+  });
+  const memories = buildPetMemories(pet, activitySummary);
 
   let pendingTrick = pet.pending_trick || '';
   let trickDemandLevel = pet.trick_demand_level || 0;
@@ -265,6 +821,11 @@ function formatPet(pet, isPublic = false) {
     happiness,
     weight_state: getWeightState(hunger),
     mood: getMood(hunger, happiness),
+    bond,
+    bond_rank: bondRank,
+    energy,
+    trust,
+    hype,
     total_songs_fed: pet.total_songs_fed,
     experience: xp,
     highest_level: pet.highest_level || 0,
@@ -280,14 +841,35 @@ function formatPet(pet, isPublic = false) {
     last_trick_performed: pet.last_trick_performed || '',
     last_trick_at: pet.last_trick_at || '',
     created_at: pet.created_at || '',
+    specialty,
+    personality: {
+      title: profile.title,
+      desc: profile.personality,
+    },
+    food_preferences: {
+      favorites: profile.favorite_foods,
+      dislikes: profile.disliked_foods,
+      last_food_id: pet.last_food_id || '',
+      last_food_at: pet.last_food_at || '',
+    },
+    last_toy_id: pet.last_toy_id || '',
+    last_toy_at: pet.last_toy_at || '',
   };
 
-  if (isPublic) return base; // Visitors see stats but not wallet/inventory
+  if (isPublic) {
+    return {
+      ...base,
+      memories: memories.slice(0, 2),
+    };
+  }
 
   return {
     ...base,
     combo_balance: pet.combo_balance || 0,
+    bond_tokens: pet.bond_tokens || 0,
+    rare_shards: pet.rare_shards || 0,
     owned_items: safeJsonParse(pet.owned_items),
+    owned_toys: safeJsonParse(pet.owned_toys),
     tricks_unlocked: getUnlockedTricks(character, xp),
     tricks: charTricks.map(t => ({
       ...t,
@@ -303,6 +885,17 @@ function formatPet(pet, isPublic = false) {
     trick_demand_level: trickDemandLevel,
     trick_demand_grade: trickDemandGrade,
     last_fed_at: pet.last_fed_at || '',
+    interactions_today: interactionsToday,
+    interaction_count: pet.interaction_count || 0,
+    activity_summary: activitySummary,
+    activities: Object.values(PET_ACTIVITIES),
+    toys: PET_TOYS.map((toy) => ({
+      ...toy,
+      owned: safeJsonParse(pet.owned_toys).includes(toy.id),
+      preference: getToyPreference(character, toy),
+    })),
+    missions,
+    memories,
   };
 }
 
@@ -314,7 +907,7 @@ router.get('/me', requireAuth, (req, res) => {
   ensurePetTable(db);
   const pet = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
   if (!pet) return res.json({ pet: null, economy: PET_ECONOMY });
-  res.json({ pet: formatPet(pet), economy: PET_ECONOMY });
+  res.json({ pet: formatPet(pet, false, db), economy: PET_ECONOMY });
 });
 
 // GET /api/pets/user/:userId — public pet view (for avatar modals)
@@ -324,7 +917,7 @@ router.get('/user/:userId', (req, res) => {
   const pet = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.params.userId);
   if (!pet) return res.json({ pet: null });
   const user = db.prepare('SELECT username FROM users WHERE id = ?').get(req.params.userId);
-  res.json({ pet: formatPet(pet, true), username: user?.username || '' });
+  res.json({ pet: formatPet(pet, true, db), username: user?.username || '' });
 });
 
 // POST /api/pets/adopt
@@ -339,6 +932,9 @@ router.post('/adopt', requireAuth, (req, res) => {
   if (existing) {
     db.prepare(`
       UPDATE user_pets SET character = ?, fullness = 50, happiness = 50, total_songs_fed = 0, experience = 0,
+      bond = 0, energy = 65, trust = 35, hype = 25, bond_tokens = 0, rare_shards = 0,
+      interaction_count = 0, daily_interaction_count = 0, daily_interaction_key = '',
+      claimed_missions = '[]', last_food_id = '', last_food_at = '', owned_toys = '[]', last_toy_id = '', last_toy_at = '',
       tricks_unlocked = '[]', pending_trick = '', trick_demand_level = 0, trick_demand_grade = '',
       trick_demand_expires = '', last_trick_performed = '', last_trick_at = '',
       equipped_hat = '', equipped_belt = '', equipped_shoes = '', equipped_top = '',
@@ -348,30 +944,44 @@ router.post('/adopt', requireAuth, (req, res) => {
     `).run(character, req.user.id);
   } else {
     db.prepare(`
-      INSERT INTO user_pets (user_id, character, fullness, happiness, total_songs_fed, experience, last_fed_at)
-      VALUES (?, ?, 50, 50, 0, 0, datetime('now'))
+      INSERT INTO user_pets (
+        user_id, character, fullness, happiness, total_songs_fed, experience,
+        bond, energy, trust, hype, bond_tokens, rare_shards,
+        daily_interaction_count, daily_interaction_key, claimed_missions, last_food_id, last_food_at, owned_toys, last_toy_id, last_toy_at,
+        last_fed_at
+      )
+      VALUES (?, ?, 50, 50, 0, 0, 0, 65, 35, 25, 0, 0, 0, '', '[]', '', '', '[]', '', '', datetime('now'))
     `).run(req.user.id, character);
   }
   const pet = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
-  res.json({ pet: formatPet(pet) });
+  res.json({ pet: formatPet(pet, false, db) });
 });
 
 // GET /api/pets/shop — food + clothing catalog
 router.get('/shop', requireAuth, (req, res) => {
   const db = getDb();
   ensurePetTable(db);
-  const pet = db.prepare('SELECT combo_balance, owned_items FROM user_pets WHERE user_id = ?').get(req.user.id);
+  const pet = db.prepare('SELECT combo_balance, owned_items, owned_toys, character FROM user_pets WHERE user_id = ?').get(req.user.id);
   const owned = safeJsonParse(pet?.owned_items);
+  const ownedToys = safeJsonParse(pet?.owned_toys);
   res.json({
     combo_balance: pet?.combo_balance || 0,
     economy: PET_ECONOMY,
-    foods: PET_FOODS,
+    foods: PET_FOODS.map((food) => ({
+      ...food,
+      preference: pet?.character ? getFoodPreference(pet.character, food.id) : 'neutral',
+    })),
     clothing: {
       hats: CLOTHING.hats.map(c => ({ ...c, owned: owned.includes(c.id) })),
       tops: (CLOTHING.tops || []).map(c => ({ ...c, owned: owned.includes(c.id) })),
       belts: CLOTHING.belts.map(c => ({ ...c, owned: owned.includes(c.id) })),
       shoes: CLOTHING.shoes.map(c => ({ ...c, owned: owned.includes(c.id) })),
     },
+    toys: PET_TOYS.map((toy) => ({
+      ...toy,
+      owned: ownedToys.includes(toy.id),
+      preference: pet?.character ? getToyPreference(pet.character, toy) : 'neutral',
+    })),
   });
 });
 
@@ -390,18 +1000,40 @@ router.post('/buy-food', requireAuth, (req, res) => {
 
   const hunger = computeDecayed(pet.fullness, pet.last_fed_at, HUNGER_DECAY_PER_HOUR);
   const happiness = computeDecayed(pet.happiness || 50, pet.last_fed_at, HAPPINESS_DECAY_PER_HOUR);
+  const energy = getStateValue(pet.energy || 65, pet.updated_at || pet.last_fed_at, ENERGY_DECAY_PER_HOUR);
+  const hype = getStateValue(pet.hype || 25, pet.updated_at || pet.last_fed_at, HYPE_DECAY_PER_HOUR);
+  const preference = getFoodPreference(pet.character, food.id);
+  const favoriteBonus = preference === 'favorite' ? { happiness: 4, bond: 5, trust: 2, energy: 5, hype: 4 } : null;
+  const dislikedPenalty = preference === 'disliked' ? { happiness: -3, trust: -1, hype: -2 } : null;
   const newHunger = clamp(hunger + food.hunger, 0, MAX_STAT);
-  const newHappiness = clamp(happiness + food.happiness, 0, MAX_STAT);
+  const newHappiness = clamp(happiness + food.happiness + (favoriteBonus?.happiness || 0) + (dislikedPenalty?.happiness || 0), 0, MAX_STAT);
+  const newEnergy = clamp(energy + Math.max(2, Math.floor(food.hunger / 2)) + (favoriteBonus?.energy || 0), 0, MAX_STAT);
+  const newHype = clamp(hype + Math.max(0, Math.floor(food.happiness / 2)) + (favoriteBonus?.hype || 0) + (dislikedPenalty?.hype || 0), 0, MAX_STAT);
+  const newBond = Math.max(0, (pet.bond || 0) + (favoriteBonus?.bond || 1));
+  const newTrust = clamp((pet.trust || 35) + (favoriteBonus?.trust || 0) + (dislikedPenalty?.trust || 0), 0, MAX_STAT);
+  const profile = getCharacterProfile(pet.character);
+  const response = preference === 'favorite'
+    ? `${food.name}! ${pickRandom(profile.interaction_lines.praise, 'That was perfect.')}`
+    : preference === 'disliked'
+      ? `${pickRandom(profile.interaction_lines.tease, 'Hmm.')} Maybe a different snack next time.`
+      : `${pickRandom(profile.interaction_lines.cuddle, 'Mmm.')} ${food.name} hit the spot.`;
 
   db.prepare(`
     UPDATE user_pets
-    SET fullness = ?, happiness = ?, combo_balance = combo_balance - ?,
-        total_songs_fed = total_songs_fed + 1, last_fed_at = datetime('now'), updated_at = datetime('now')
+    SET fullness = ?, happiness = ?, energy = ?, hype = ?, bond = ?, trust = ?,
+        combo_balance = combo_balance - ?, total_songs_fed = total_songs_fed + 1,
+        last_food_id = ?, last_food_at = datetime('now'),
+        last_fed_at = datetime('now'), updated_at = datetime('now')
     WHERE user_id = ?
-  `).run(newHunger, newHappiness, food.cost, req.user.id);
+  `).run(newHunger, newHappiness, newEnergy, newHype, newBond, newTrust, food.cost, food.id, req.user.id);
 
   const updated = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
-  res.json({ pet: formatPet(updated), food: food.name });
+  res.json({
+    pet: formatPet(updated, false, db),
+    food: food.name,
+    food_preference: preference,
+    pet_response: response,
+  });
 });
 
 // POST /api/pets/buy-item — buy a clothing item
@@ -427,7 +1059,33 @@ router.post('/buy-item', requireAuth, (req, res) => {
   `).run(item.cost, JSON.stringify(owned), req.user.id);
 
   const updated = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
-  res.json({ pet: formatPet(updated), item: item.name });
+  res.json({ pet: formatPet(updated, false, db), item: item.name });
+});
+
+// POST /api/pets/buy-toy — buy a toy
+router.post('/buy-toy', requireAuth, (req, res) => {
+  const db = getDb();
+  ensurePetTable(db);
+  const pet = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
+  if (!pet) return res.status(404).json({ error: 'No pet adopted yet' });
+
+  const toy = PET_TOY_MAP[req.body.toyId];
+  if (!toy) return res.status(400).json({ error: 'Unknown toy' });
+
+  const ownedToys = safeJsonParse(pet.owned_toys);
+  if (ownedToys.includes(toy.id)) return res.status(400).json({ error: 'Already owned' });
+
+  const balance = pet.combo_balance || 0;
+  if (balance < toy.cost) return res.status(400).json({ error: 'Not enough Combo', need: toy.cost, have: balance });
+
+  ownedToys.push(toy.id);
+  db.prepare(`
+    UPDATE user_pets SET combo_balance = combo_balance - ?, owned_toys = ?, updated_at = datetime('now')
+    WHERE user_id = ?
+  `).run(toy.cost, JSON.stringify(ownedToys), req.user.id);
+
+  const updated = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
+  res.json({ pet: formatPet(updated, false, db), toy: toy.name });
 });
 
 // POST /api/pets/equip — equip or unequip clothing
@@ -457,7 +1115,7 @@ router.post('/equip', requireAuth, (req, res) => {
   }
 
   const updated = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
-  res.json({ pet: formatPet(updated) });
+  res.json({ pet: formatPet(updated, false, db) });
 });
 
 // POST /api/pets/set-color — change clothing color
@@ -470,7 +1128,7 @@ router.post('/set-color', requireAuth, (req, res) => {
   const colMap = { hat: 'hat_color', belt: 'belt_color', shoes: 'shoes_color', top: 'top_color' };
   db.prepare(`UPDATE user_pets SET ${colMap[slot]} = ?, updated_at = datetime('now') WHERE user_id = ?`).run(color, req.user.id);
   const updated = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
-  res.json({ pet: formatPet(updated) });
+  res.json({ pet: formatPet(updated, false, db) });
 });
 
 // POST /api/pets/toggle-avatar — toggle pet as profile avatar
@@ -482,7 +1140,7 @@ router.post('/toggle-avatar', requireAuth, (req, res) => {
   const newVal = pet.is_pet_avatar ? 0 : 1;
   db.prepare('UPDATE user_pets SET is_pet_avatar = ?, updated_at = datetime(\'now\') WHERE user_id = ?').run(newVal, req.user.id);
   const updated = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
-  res.json({ pet: formatPet(updated) });
+  res.json({ pet: formatPet(updated, false, db) });
 });
 
 // POST /api/pets/feed — legacy manual feed (small amount)
@@ -498,7 +1156,233 @@ router.post('/feed', requireAuth, (req, res) => {
     last_fed_at = datetime('now'), updated_at = datetime('now') WHERE user_id = ?
   `).run(newHunger, req.user.id);
   const updated = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
-  res.json({ pet: formatPet(updated), fed: 1 });
+  res.json({ pet: formatPet(updated, false, db), fed: 1 });
+});
+
+// POST /api/pets/interact
+router.post('/interact', requireAuth, (req, res) => {
+  const db = getDb();
+  ensurePetTable(db);
+  const pet = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
+  if (!pet) return res.status(404).json({ error: 'No pet adopted yet' });
+
+  const actionId = String(req.body?.actionId || 'tap').trim();
+  const interaction = PET_INTERACTIONS[actionId] || PET_INTERACTIONS.tap;
+  const todayKey = getUtcDayKey();
+  const currentDailyInteractions = pet.daily_interaction_key === todayKey ? (pet.daily_interaction_count || 0) : 0;
+  const currentEnergy = getStateValue(pet.energy || 65, pet.updated_at || pet.last_fed_at, ENERGY_DECAY_PER_HOUR);
+  const currentHype = getStateValue(pet.hype || 25, pet.updated_at || pet.last_fed_at, HYPE_DECAY_PER_HOUR);
+  const currentHappiness = computeDecayed(pet.happiness || 50, pet.last_fed_at, HAPPINESS_DECAY_PER_HOUR);
+  const profile = getCharacterProfile(pet.character);
+
+  const newEnergy = clamp(currentEnergy + (interaction.energy || 0), 0, MAX_STAT);
+  const newHype = clamp(currentHype + (interaction.hype || 0), 0, MAX_STAT);
+  const newHappiness = clamp(currentHappiness + (interaction.happiness || 0), 0, MAX_STAT);
+  const newTrust = clamp((pet.trust || 35) + (interaction.trust || 0), 0, MAX_STAT);
+  const newBond = Math.max(0, (pet.bond || 0) + (interaction.bond || 0));
+  const lines = profile.interaction_lines[actionId] || profile.interaction_lines.tap || [];
+  const speech = pickRandom(lines, 'A tiny moment passes between you.');
+
+  db.prepare(`
+    UPDATE user_pets
+    SET happiness = ?, energy = ?, hype = ?, trust = ?, bond = ?,
+        interaction_count = interaction_count + 1,
+        daily_interaction_count = ?,
+        daily_interaction_key = ?,
+        updated_at = datetime('now')
+    WHERE user_id = ?
+  `).run(newHappiness, newEnergy, newHype, newTrust, newBond, currentDailyInteractions + 1, todayKey, req.user.id);
+
+  const updated = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
+  res.json({
+    pet: formatPet(updated, false, db),
+    speech,
+    reaction: interaction.reaction,
+    expression: interaction.expression,
+    action: actionId,
+  });
+});
+
+// POST /api/pets/activities/:activityId
+router.post('/activities/:activityId', requireAuth, (req, res) => {
+  const db = getDb();
+  ensurePetTable(db);
+  const pet = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
+  if (!pet) return res.status(404).json({ error: 'No pet adopted yet' });
+
+  const activity = PET_ACTIVITIES[req.params.activityId];
+  if (!activity) return res.status(404).json({ error: 'Unknown activity' });
+
+  const currentEnergy = getStateValue(pet.energy || 65, pet.updated_at || pet.last_fed_at, ENERGY_DECAY_PER_HOUR);
+  const currentHype = getStateValue(pet.hype || 25, pet.updated_at || pet.last_fed_at, HYPE_DECAY_PER_HOUR);
+  const currentHappiness = computeDecayed(pet.happiness || 50, pet.last_fed_at, HAPPINESS_DECAY_PER_HOUR);
+  if (activity.minEnergy && currentEnergy < activity.minEnergy) {
+    return res.status(400).json({ error: `Needs at least ${activity.minEnergy} energy for ${activity.label}` });
+  }
+  if (activity.minTrust && (pet.trust || 35) < activity.minTrust) {
+    return res.status(400).json({ error: `${activity.label} unlocks once trust reaches ${activity.minTrust}` });
+  }
+
+  const newEnergy = clamp(currentEnergy + activity.energy, 0, MAX_STAT);
+  const newHappiness = clamp(currentHappiness + activity.happiness, 0, MAX_STAT);
+  const newTrust = clamp((pet.trust || 35) + activity.trust, 0, MAX_STAT);
+  const newHype = clamp(currentHype + activity.hype, 0, MAX_STAT);
+  const newBond = Math.max(0, (pet.bond || 0) + activity.bond);
+  const newCombo = Math.max(0, (pet.combo_balance || 0) + (activity.combo || 0));
+  const newBondTokens = Math.max(0, (pet.bond_tokens || 0) + (activity.bond_tokens || 0));
+  const newRareShards = Math.max(0, (pet.rare_shards || 0) + (activity.rare_shards || 0));
+  const profile = getCharacterProfile(pet.character);
+  const speech = pickRandom(profile.interaction_lines.mission, `${activity.label} complete.`);
+
+  db.prepare(`
+    UPDATE user_pets
+    SET happiness = ?, energy = ?, trust = ?, hype = ?, bond = ?,
+        combo_balance = ?, bond_tokens = ?, rare_shards = ?,
+        updated_at = datetime('now')
+    WHERE user_id = ?
+  `).run(newHappiness, newEnergy, newTrust, newHype, newBond, newCombo, newBondTokens, newRareShards, req.user.id);
+
+  const updated = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
+  res.json({
+    pet: formatPet(updated, false, db),
+    speech,
+    reaction: activity.reaction,
+    expression: activity.expression,
+    activity: activity.id,
+  });
+});
+
+// POST /api/pets/toys/:toyId/use
+router.post('/toys/:toyId/use', requireAuth, (req, res) => {
+  const db = getDb();
+  ensurePetTable(db);
+  const pet = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
+  if (!pet) return res.status(404).json({ error: 'No pet adopted yet' });
+
+  const toy = PET_TOY_MAP[req.params.toyId];
+  if (!toy) return res.status(404).json({ error: 'Unknown toy' });
+
+  const ownedToys = safeJsonParse(pet.owned_toys);
+  if (!ownedToys.includes(toy.id)) return res.status(400).json({ error: 'Toy not owned yet' });
+
+  const currentEnergy = getStateValue(pet.energy || 65, pet.updated_at || pet.last_fed_at, ENERGY_DECAY_PER_HOUR);
+  const currentHype = getStateValue(pet.hype || 25, pet.updated_at || pet.last_fed_at, HYPE_DECAY_PER_HOUR);
+  const currentHappiness = computeDecayed(pet.happiness || 50, pet.last_fed_at, HAPPINESS_DECAY_PER_HOUR);
+  const todayKey = getUtcDayKey();
+  const currentDailyInteractions = pet.daily_interaction_key === todayKey ? (pet.daily_interaction_count || 0) : 0;
+  const preference = getToyPreference(pet.character, toy);
+  const favoredBonus = preference === 'favorite'
+    ? { bond: 2, trust: 2, happiness: 2, hype: 3 }
+    : { bond: 0, trust: 0, happiness: 0, hype: 0 };
+
+  if (currentEnergy < Math.max(8, Math.abs(toy.energy || 0))) {
+    return res.status(400).json({ error: `${toy.name} works best once your pet has a little more energy.` });
+  }
+
+  const newEnergy = clamp(currentEnergy + (toy.energy || 0), 0, MAX_STAT);
+  const newHappiness = clamp(currentHappiness + (toy.happiness || 0) + favoredBonus.happiness, 0, MAX_STAT);
+  const newTrust = clamp((pet.trust || 35) + (toy.trust || 0) + favoredBonus.trust, 0, MAX_STAT);
+  const newHype = clamp(currentHype + (toy.hype || 0) + favoredBonus.hype, 0, MAX_STAT);
+  const newBond = Math.max(0, (pet.bond || 0) + (toy.bond || 0) + favoredBonus.bond);
+  const newBondTokens = Math.max(0, (pet.bond_tokens || 0) + (toy.bond_tokens || 0));
+  const newCombo = Math.max(0, (pet.combo_balance || 0) + (toy.combo_balance || 0));
+  const profile = getCharacterProfile(pet.character);
+  const speech = preference === 'favorite'
+    ? `${pickRandom(profile.interaction_lines.praise, 'That was delightful.')} ${toy.name} is a favourite.`
+    : `${pickRandom(profile.interaction_lines.tap, 'Another little moment together.')} ${toy.name} time.`;
+
+  db.prepare(`
+    UPDATE user_pets
+    SET happiness = ?, energy = ?, trust = ?, hype = ?, bond = ?,
+        bond_tokens = ?, combo_balance = ?,
+        interaction_count = interaction_count + 1,
+        daily_interaction_count = ?,
+        daily_interaction_key = ?,
+        last_toy_id = ?, last_toy_at = datetime('now'),
+        updated_at = datetime('now')
+    WHERE user_id = ?
+  `).run(
+    newHappiness,
+    newEnergy,
+    newTrust,
+    newHype,
+    newBond,
+    newBondTokens,
+    newCombo,
+    currentDailyInteractions + 1,
+    todayKey,
+    toy.id,
+    req.user.id,
+  );
+
+  const updated = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
+  res.json({
+    pet: formatPet(updated, false, db),
+    toy: toy.id,
+    speech,
+    reaction: toy.reaction,
+    expression: toy.expression,
+    preference,
+  });
+});
+
+// POST /api/pets/missions/:missionId/claim
+router.post('/missions/:missionId/claim', requireAuth, (req, res) => {
+  const db = getDb();
+  ensurePetTable(db);
+  const pet = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
+  if (!pet) return res.status(404).json({ error: 'No pet adopted yet' });
+
+  const summary = queryPlayActivitySummary(db, req.user.id);
+  const missions = buildPetMissions(pet, {
+    ...summary,
+    fed_today: !!pet.last_food_at && String(pet.last_food_at).startsWith(getUtcDayKey()),
+    interactions_today: pet.daily_interaction_key === getUtcDayKey() ? (pet.daily_interaction_count || 0) : 0,
+  });
+  const mission = missions.find((entry) => entry.id === req.params.missionId);
+  if (!mission) return res.status(404).json({ error: 'Mission not found' });
+  if (mission.claimed) return res.status(400).json({ error: 'Mission already claimed' });
+  if (!mission.complete) return res.status(400).json({ error: 'Mission not complete yet' });
+
+  const claimed = safeJsonParse(pet.claimed_missions);
+  claimed.push(mission.claim_key);
+  const reward = mission.reward || {};
+  const currentEnergy = getStateValue(pet.energy || 65, pet.updated_at || pet.last_fed_at, ENERGY_DECAY_PER_HOUR);
+  const currentHype = getStateValue(pet.hype || 25, pet.updated_at || pet.last_fed_at, HYPE_DECAY_PER_HOUR);
+  const currentHappiness = computeDecayed(pet.happiness || 50, pet.last_fed_at, HAPPINESS_DECAY_PER_HOUR);
+
+  db.prepare(`
+    UPDATE user_pets
+    SET claimed_missions = ?,
+        bond = ?,
+        trust = ?,
+        energy = ?,
+        hype = ?,
+        happiness = ?,
+        combo_balance = ?,
+        bond_tokens = ?,
+        rare_shards = ?,
+        updated_at = datetime('now')
+    WHERE user_id = ?
+  `).run(
+    JSON.stringify(claimed),
+    Math.max(0, (pet.bond || 0) + (reward.bond || 0)),
+    clamp((pet.trust || 35) + (reward.trust || 0), 0, MAX_STAT),
+    clamp(currentEnergy + (reward.energy || 0), 0, MAX_STAT),
+    clamp(currentHype + (reward.hype || 0), 0, MAX_STAT),
+    clamp(currentHappiness + (reward.happiness || 0), 0, MAX_STAT),
+    Math.max(0, (pet.combo_balance || 0) + (reward.combo_balance || 0)),
+    Math.max(0, (pet.bond_tokens || 0) + (reward.bond_tokens || 0)),
+    Math.max(0, (pet.rare_shards || 0) + (reward.rare_shards || 0)),
+    req.user.id,
+  );
+
+  const updated = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
+  res.json({
+    pet: formatPet(updated, false, db),
+    mission: mission.id,
+    reward: mission.reward,
+  });
 });
 
 // ─── Trick demand/perform ─────────────────────────────────────────
@@ -525,7 +1409,7 @@ router.post('/tricks/:trickId/demand', requireAuth, (req, res) => {
   `).run(trickId, demandLevel, demandGrade, expires, req.user.id);
 
   const updated = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
-  res.json({ pet: formatPet(updated) });
+  res.json({ pet: formatPet(updated, false, db) });
 });
 
 router.post('/tricks/:trickId/perform', requireAuth, (req, res) => {
@@ -574,7 +1458,7 @@ router.post('/tricks/:trickId/perform', requireAuth, (req, res) => {
   `).run(req.params.trickId, bonusXp, comboReward, newHappiness, req.user.id);
 
   const updated = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
-  res.json({ success: true, pet: formatPet(updated), trick: req.params.trickId, bonus_xp: bonusXp, combo_earned: comboReward });
+  res.json({ success: true, pet: formatPet(updated, false, db), trick: req.params.trickId, bonus_xp: bonusXp, combo_earned: comboReward });
 });
 
 // GET /api/pets/characters
@@ -602,26 +1486,35 @@ module.exports.feedPetForUser = function feedPetForUser(userId, playsOrCount) {
   let totalHappiness = 0;
   let totalXp = 0;
   let totalCombo = 0;
+  let totalBond = 0;
+  let totalTrust = 0;
+  let totalHype = 0;
+  let totalEnergy = 0;
   let highestLevel = pet.highest_level || 0;
   let songCount = 0;
   let trickDemandMet = false;
 
   if (Array.isArray(playsOrCount)) {
-    const gradeOrder = ['F', 'D', 'C', 'B', 'A', 'A+', 'AA', 'AA+', 'AAA', 'AAA+', 'S', 'S+', 'SS', 'SS+', 'SSS', 'SSS+'];
     for (const play of playsOrCount) {
       const score = parseInt(play.score, 10) || 0;
       const rawGrade = normalizeGrade(play.grade) || (score > 0 ? gradeFromScore(score) : 'F');
       const level = parseInt(play.level, 10) || 0;
+      const isReplay = String(play.replay_embed_url || '').trim() || String(play.replay_video_id || '').trim();
+      const isDouble = String(play.mode || '').startsWith('Double');
       if (level > highestLevel) highestLevel = level;
       const feed = GRADE_FEED_TABLE[rawGrade] || GRADE_FEED_TABLE['F'];
       totalHunger += feed.hunger;
       totalHappiness += feed.happiness;
       totalXp += feed.xp + levelXpBonus(level);
       totalCombo += (GRADE_COMBO[rawGrade] || 0) + levelComboBonus(level);
+      totalBond += 1 + (level >= 18 ? 1 : 0) + (GRADE_INDEX[rawGrade] >= GRADE_INDEX.AAA ? 1 : 0);
+      totalTrust += (GRADE_INDEX[rawGrade] >= GRADE_INDEX.AAA ? 1 : 0) + (isDouble ? 1 : 0);
+      totalHype += 2 + (isReplay ? 2 : 0) + (level >= 20 ? 1 : 0);
+      totalEnergy += Math.max(0, Math.floor(level / 8));
       songCount++;
       if (pet.pending_trick && !trickDemandMet) {
-        const minIdx = gradeOrder.indexOf(pet.trick_demand_grade || 'A');
-        if (level >= (pet.trick_demand_level || 0) && gradeOrder.indexOf(rawGrade) >= minIdx) {
+        const minIdx = GRADE_ORDER.indexOf(pet.trick_demand_grade || 'A');
+        if (level >= (pet.trick_demand_level || 0) && GRADE_ORDER.indexOf(rawGrade) >= minIdx) {
           trickDemandMet = true;
         }
       }
@@ -632,12 +1525,22 @@ module.exports.feedPetForUser = function feedPetForUser(userId, playsOrCount) {
     totalHappiness = songCount * 1;
     totalXp = songCount * 5;
     totalCombo = songCount * 2;
+    totalBond = songCount;
+    totalTrust = Math.max(0, Math.floor(songCount / 2));
+    totalHype = songCount * 2;
+    totalEnergy = songCount;
   }
 
   const curHunger = computeDecayed(pet.fullness, pet.last_fed_at, HUNGER_DECAY_PER_HOUR);
   const curHappiness = computeDecayed(pet.happiness || 50, pet.last_fed_at, HAPPINESS_DECAY_PER_HOUR);
+  const curEnergy = getStateValue(pet.energy || 65, pet.updated_at || pet.last_fed_at, ENERGY_DECAY_PER_HOUR);
+  const curHype = getStateValue(pet.hype || 25, pet.updated_at || pet.last_fed_at, HYPE_DECAY_PER_HOUR);
   const newHunger = clamp(curHunger + totalHunger, 0, MAX_STAT);
   let newHappiness = clamp(curHappiness + totalHappiness, 0, MAX_STAT);
+  const newEnergy = clamp(curEnergy + totalEnergy, 0, MAX_STAT);
+  let newHype = clamp(curHype + totalHype, 0, MAX_STAT);
+  let newBond = Math.max(0, (pet.bond || 0) + totalBond);
+  let newTrust = clamp((pet.trust || 35) + totalTrust, 0, MAX_STAT);
 
   if (trickDemandMet) {
     const charTricks = TRICKS[pet.character] || [];
@@ -645,26 +1548,41 @@ module.exports.feedPetForUser = function feedPetForUser(userId, playsOrCount) {
     const bonusCombo = trick?.comboReward || 10;
     const bonusHappy = trick?.happinessReward || 5;
     newHappiness = clamp(newHappiness + bonusHappy, 0, MAX_STAT);
+    newBond += 6;
+    newTrust = clamp(newTrust + 4, 0, MAX_STAT);
+    newHype = clamp(newHype + 8, 0, MAX_STAT);
     db.prepare(`
       UPDATE user_pets
       SET fullness = ?, happiness = ?, total_songs_fed = total_songs_fed + ?,
+          energy = ?, hype = ?, bond = ?, trust = ?,
           experience = experience + ?, combo_balance = combo_balance + ?,
           highest_level = MAX(highest_level, ?),
           last_fed_at = datetime('now'), updated_at = datetime('now'),
           last_trick_performed = pending_trick, last_trick_at = datetime('now'),
           pending_trick = '', trick_demand_level = 0, trick_demand_grade = '', trick_demand_expires = ''
       WHERE user_id = ?
-    `).run(newHunger, newHappiness, songCount, totalXp + 25, totalCombo + bonusCombo, highestLevel, userId);
+    `).run(newHunger, newHappiness, songCount, newEnergy, newHype, newBond, newTrust, totalXp + 25, totalCombo + bonusCombo, highestLevel, userId);
   } else {
     db.prepare(`
       UPDATE user_pets
       SET fullness = ?, happiness = ?, total_songs_fed = total_songs_fed + ?,
+          energy = ?, hype = ?, bond = ?, trust = ?,
           experience = experience + ?, combo_balance = combo_balance + ?,
           highest_level = MAX(highest_level, ?),
           last_fed_at = datetime('now'), updated_at = datetime('now')
       WHERE user_id = ?
-    `).run(newHunger, newHappiness, songCount, totalXp, totalCombo, highestLevel, userId);
+    `).run(newHunger, newHappiness, songCount, newEnergy, newHype, newBond, newTrust, totalXp, totalCombo, highestLevel, userId);
   }
 
-  return { fed: songCount, hunger: totalHunger, happiness: totalHappiness, xp: totalXp, combo: totalCombo, trickDemandMet };
+  return {
+    fed: songCount,
+    hunger: totalHunger,
+    happiness: totalHappiness,
+    xp: totalXp,
+    combo: totalCombo,
+    bond: totalBond,
+    trust: totalTrust,
+    hype: totalHype,
+    trickDemandMet,
+  };
 };

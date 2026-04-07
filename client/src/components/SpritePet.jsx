@@ -181,11 +181,11 @@ const PALETTES = {
 // ═══════════════════════════════════════════════════════════════
 
 const WEIGHT_DIMS = {
-  starving: { bodyRx: 5, bodyRy: 4, limbW: 1, armLen: 3 },
-  thin:     { bodyRx: 6, bodyRy: 4, limbW: 1, armLen: 3 },
-  normal:   { bodyRx: 7, bodyRy: 5, limbW: 2, armLen: 4 },
-  chubby:   { bodyRx: 8, bodyRy: 6, limbW: 2, armLen: 4 },
-  fat:      { bodyRx: 9, bodyRy: 7, limbW: 2, armLen: 5 },
+  starving: { bodyRx: 10, bodyRy: 8, limbW: 2, armLen: 4 },
+  thin:     { bodyRx: 11, bodyRy: 9, limbW: 2, armLen: 5 },
+  normal:   { bodyRx: 12, bodyRy: 10, limbW: 3, armLen: 5 },
+  chubby:   { bodyRx: 13, bodyRy: 11, limbW: 3, armLen: 6 },
+  fat:      { bodyRx: 14, bodyRy: 12, limbW: 3, armLen: 6 },
 };
 
 // Grid size constants
@@ -197,8 +197,8 @@ const HEAD_R = 16;  // head radius
 
 function getBodyMetrics(weightState) {
   const w = WEIGHT_DIMS[weightState] || WEIGHT_DIMS.normal;
-  const bodyCy = HEAD_CY + HEAD_R + w.bodyRy - 4;
-  const legHeight = Math.max(3, Math.min(4, w.bodyRy));
+  const bodyCy = HEAD_CY + HEAD_R + Math.floor(w.bodyRy * 0.72) - 8;
+  const legHeight = Math.max(5, Math.min(7, Math.floor(w.bodyRy * 0.68)));
   const legSpread = Math.max(2, Math.floor(w.bodyRx * 0.45));
   const legTop = bodyCy + w.bodyRy - 1;
   return { w, bodyCy, legHeight, legSpread, legTop };
@@ -215,12 +215,12 @@ function buildBase(character, weightState) {
 
   // Head
   fillCircle(g, CX, HEAD_CY, HEAD_R, 'B');
-  fillEllipse(g, CX - 3, HEAD_CY - 3, HEAD_R - 5, HEAD_R - 7, 'L');
-  fillEllipse(g, CX, HEAD_CY + 7, HEAD_R - 4, HEAD_R - 7, character === 'devit' ? 'Y' : 'L');
+  fillEllipse(g, CX - 3, HEAD_CY - 4, HEAD_R - 4, HEAD_R - 7, 'L');
+  fillEllipse(g, CX, HEAD_CY + 8, HEAD_R - 2, HEAD_R - 5, character === 'devit' ? 'Y' : 'L');
 
   // Body
   fillEllipse(g, CX, bodyCy, w.bodyRx, w.bodyRy, 'B');
-  fillEllipse(g, CX - 1, bodyCy - 1, Math.max(4, w.bodyRx - 2), Math.max(3, w.bodyRy - 2), 'L');
+  fillEllipse(g, CX - 1, bodyCy - 2, Math.max(8, w.bodyRx - 1), Math.max(5, w.bodyRy - 2), 'L');
 
   // Belly patch
   fillEllipse(g, CX, bodyCy + 1, Math.max(3, Math.floor(w.bodyRx * 0.55)), Math.max(2, Math.floor(w.bodyRy * 0.5)), 'Y');
@@ -241,7 +241,7 @@ function buildArms(character, weightState) {
   const { w, bodyCy } = getBodyMetrics(weightState);
 
   // Arms as small ellipses beside the body
-  const armY = bodyCy - Math.max(1, Math.floor(w.bodyRy * 0.7));
+  const armY = bodyCy - Math.max(1, Math.floor(w.bodyRy * 0.55));
   fillEllipse(g, CX - w.bodyRx - 1, armY, 2, w.armLen, 'B');
   fillEllipse(g, CX + w.bodyRx + 1, armY, 2, w.armLen, 'B');
 
@@ -265,15 +265,13 @@ function buildFeatures(character) {
       fillTriangle(g, CX - 8, hcy - 4, CX - 11, hcy - HEAD_R, CX - 5, hcy - HEAD_R + 2, 'P');
       fillTriangle(g, CX + 8, hcy - 4, CX + 11, hcy - HEAD_R, CX + 5, hcy - HEAD_R + 2, 'P');
       // Nose + muzzle
-      fillEllipse(g, CX, hcy + 6, 6, 4, 'Y');
-      setPixel(g, CX, hcy + 4, 'N');
-      setPixel(g, CX - 1, hcy + 3, 'N');
-      setPixel(g, CX + 1, hcy + 3, 'N');
+      fillEllipse(g, CX, hcy + 9, 8, 6, 'Y');
+      fillRect(g, CX - 1, hcy + 6, 3, 2, 'N');
       // Whisker marks
-      fillRect(g, CX - 11, hcy + 5, 4, 1, 'R');
-      fillRect(g, CX + 8, hcy + 5, 4, 1, 'R');
-      fillRect(g, CX - 12, hcy + 8, 4, 1, 'R');
-      fillRect(g, CX + 8, hcy + 8, 4, 1, 'R');
+      fillRect(g, CX - 12, hcy + 5, 5, 1, 'R');
+      fillRect(g, CX + 8, hcy + 5, 5, 1, 'R');
+      fillRect(g, CX - 13, hcy + 8, 5, 1, 'R');
+      fillRect(g, CX + 8, hcy + 8, 5, 1, 'R');
       break;
     }
     case 'buu': {
@@ -287,8 +285,8 @@ function buildFeatures(character) {
       fillEllipse(g, CX - 8, hcy + 7, 3, 2, 'H');
       fillEllipse(g, CX + 8, hcy + 7, 3, 2, 'H');
       // Buu nose + mouth tint
-      fillEllipse(g, CX, hcy + 6, 5, 4, 'L');
-      fillRect(g, CX - 2, hcy + 4, 5, 3, 'N');
+      fillEllipse(g, CX, hcy + 9, 7, 6, 'L');
+      fillRect(g, CX - 2, hcy + 6, 5, 2, 'N');
       break;
     }
     case 'devit': {
@@ -299,7 +297,7 @@ function buildFeatures(character) {
       fillRect(g, CX - 8, hcy + 6, 2, 1, 'H');
       fillRect(g, CX + 6, hcy + 6, 2, 1, 'H');
       // Belly shine
-      fillEllipse(g, CX, hcy + 6, 5, 4, 'L');
+      fillEllipse(g, CX, hcy + 9, 7, 6, 'L');
       break;
     }
     case 'pixiu': {
@@ -319,8 +317,8 @@ function buildFeatures(character) {
       fillTriangle(g, CX - 11, hcy + 9, CX - 16, hcy + 4, CX - 12, hcy + 14, 'S');
       fillTriangle(g, CX + 11, hcy + 9, CX + 16, hcy + 4, CX + 12, hcy + 14, 'S');
       // Muzzle + nose
-      fillEllipse(g, CX, hcy + 6, 5, 4, 'Y');
-      setPixel(g, CX, hcy + 4, 'N');
+      fillEllipse(g, CX, hcy + 9, 7, 6, 'Y');
+      fillRect(g, CX - 1, hcy + 6, 3, 2, 'N');
       // Blush
       fillRect(g, CX - 8, hcy + 6, 2, 1, 'H');
       fillRect(g, CX + 6, hcy + 6, 2, 1, 'H');
@@ -365,85 +363,90 @@ function buildTail(character, weightState) {
 // ═══════════════════════════════════════════════════════════════
 
 function drawSmile(g, hcy, width = 2, color = 'K') {
-  setPixel(g, CX - width, hcy + 6, color);
-  setPixel(g, CX - 2, hcy + 7, color);
-  setPixel(g, CX - 1, hcy + 8, color);
-  setPixel(g, CX, hcy + 8, color);
-  setPixel(g, CX + 1, hcy + 8, color);
-  setPixel(g, CX + 2, hcy + 7, color);
-  setPixel(g, CX + width, hcy + 6, color);
+  setPixel(g, CX - width, hcy + 8, color);
+  setPixel(g, CX - 2, hcy + 9, color);
+  setPixel(g, CX - 1, hcy + 10, color);
+  setPixel(g, CX, hcy + 10, color);
+  setPixel(g, CX + 1, hcy + 10, color);
+  setPixel(g, CX + 2, hcy + 9, color);
+  setPixel(g, CX + width, hcy + 8, color);
 }
 
 function buildFace(character, mood, expression = '') {
   const g = createGrid(GW, GH);
   const hcy = HEAD_CY;
   const eyeColor = 'E';
+  const leftEyeX = CX - 7;
+  const rightEyeX = CX + 5;
+  const eyeTop = hcy - 2;
+  const browTop = hcy - 6;
+  const mouthY = hcy + 9;
 
   if (expression === 'wink') {
-    fillRect(g, CX - 8, hcy + 1, 5, 1, eyeColor);
-    fillRect(g, CX + 4, hcy - 1, 3, 5, eyeColor);
-    setPixel(g, CX + 5, hcy, 'W');
-    setPixel(g, CX + 5, hcy + 2, 'W');
+    fillRect(g, leftEyeX - 2, hcy + 1, 5, 1, eyeColor);
+    fillRect(g, rightEyeX - 1, eyeTop, 3, 6, eyeColor);
+    setPixel(g, rightEyeX, eyeTop + 1, 'W');
+    setPixel(g, rightEyeX, eyeTop + 3, 'W');
     drawSmile(g, hcy, 3);
     return g;
   }
 
   if (expression === 'smirk' || expression === 'proud') {
-    fillRect(g, CX - 7, hcy + 1, 4, 1, eyeColor);
-    fillRect(g, CX + 3, hcy, 4, 1, eyeColor);
-    setPixel(g, CX - 7, hcy, 'K');
-    setPixel(g, CX + 6, hcy - 1, 'K');
-    setPixel(g, CX - 1, hcy + 5, 'K');
-    setPixel(g, CX, hcy + 6, 'K');
-    setPixel(g, CX + 1, hcy + 6, 'K');
-    setPixel(g, CX + 3, hcy + 6, 'K');
+    fillRect(g, leftEyeX - 1, hcy + 1, 4, 1, eyeColor);
+    fillRect(g, rightEyeX - 2, hcy, 4, 1, eyeColor);
+    fillLine(g, leftEyeX - 3, browTop + 1, leftEyeX + 1, browTop + 2, 'K');
+    fillLine(g, rightEyeX + 2, browTop + 1, rightEyeX - 2, browTop + 2, 'K');
+    setPixel(g, CX - 1, mouthY - 1, 'K');
+    setPixel(g, CX, mouthY, 'K');
+    setPixel(g, CX + 1, mouthY, 'K');
+    setPixel(g, CX + 3, mouthY - 1, 'K');
     return g;
   }
 
   if (expression === 'excited' || expression === 'sparkle') {
-    fillRect(g, CX - 6, hcy - 2, 3, 6, eyeColor);
-    fillRect(g, CX + 4, hcy - 2, 3, 6, eyeColor);
-    setPixel(g, CX - 5, hcy - 2, 'W');
-    setPixel(g, CX + 5, hcy - 2, 'W');
-    setPixel(g, CX - 4, hcy + 2, 'W');
-    setPixel(g, CX + 6, hcy + 2, 'W');
+    fillRect(g, leftEyeX - 1, eyeTop - 1, 3, 7, eyeColor);
+    fillRect(g, rightEyeX - 1, eyeTop - 1, 3, 7, eyeColor);
+    setPixel(g, leftEyeX, eyeTop, 'W');
+    setPixel(g, rightEyeX, eyeTop, 'W');
+    setPixel(g, leftEyeX + 1, eyeTop + 4, 'W');
+    setPixel(g, rightEyeX + 1, eyeTop + 4, 'W');
     drawSmile(g, hcy, 3);
     return g;
   }
 
   if (expression === 'soft') {
-    fillRect(g, CX - 6, hcy + 1, 4, 1, eyeColor);
-    fillRect(g, CX + 3, hcy + 1, 4, 1, eyeColor);
+    fillRect(g, leftEyeX - 1, hcy + 2, 4, 1, eyeColor);
+    fillRect(g, rightEyeX - 2, hcy + 2, 4, 1, eyeColor);
     drawSmile(g, hcy, 2);
     return g;
   }
 
   if (expression === 'grin') {
-    fillRect(g, CX - 6, hcy - 1, 3, 5, eyeColor);
-    fillRect(g, CX + 4, hcy - 1, 3, 5, eyeColor);
-    setPixel(g, CX - 5, hcy - 1, 'W');
-    setPixel(g, CX + 5, hcy - 1, 'W');
-    fillRect(g, CX - 3, hcy + 5, 7, 2, 'W');
-    fillRect(g, CX - 3, hcy + 5, 7, 1, 'K');
+    fillRect(g, leftEyeX - 1, eyeTop, 3, 6, eyeColor);
+    fillRect(g, rightEyeX - 1, eyeTop, 3, 6, eyeColor);
+    setPixel(g, leftEyeX, eyeTop, 'W');
+    setPixel(g, rightEyeX, eyeTop, 'W');
+    fillRect(g, CX - 4, mouthY - 2, 9, 3, 'W');
+    fillRect(g, CX - 4, mouthY - 2, 9, 1, 'K');
     return g;
   }
 
   if (expression === 'eating') {
-    fillRect(g, CX - 7, hcy + 1, 4, 1, eyeColor);
-    fillRect(g, CX + 3, hcy + 1, 4, 1, eyeColor);
-    fillRect(g, CX - 2, hcy + 5, 5, 3, 'N');
-    setPixel(g, CX - 3, hcy + 6, 'K');
-    setPixel(g, CX + 3, hcy + 6, 'K');
+    fillRect(g, leftEyeX - 1, hcy + 2, 4, 1, eyeColor);
+    fillRect(g, rightEyeX - 2, hcy + 2, 4, 1, eyeColor);
+    fillRect(g, CX - 2, mouthY - 1, 5, 3, 'N');
+    setPixel(g, CX - 3, mouthY, 'K');
+    setPixel(g, CX + 3, mouthY, 'K');
     return g;
   }
 
   switch (mood) {
     case 'desperate': {
       // Teary big eyes
-      fillRect(g, CX - 6, hcy - 2, 3, 5, eyeColor);
-      fillRect(g, CX + 4, hcy - 2, 3, 5, eyeColor);
-      setPixel(g, CX - 5, hcy - 2, 'W');
-      setPixel(g, CX + 5, hcy - 2, 'W');
+      fillRect(g, leftEyeX - 1, eyeTop - 1, 3, 6, eyeColor);
+      fillRect(g, rightEyeX - 1, eyeTop - 1, 3, 6, eyeColor);
+      setPixel(g, leftEyeX, eyeTop, 'W');
+      setPixel(g, rightEyeX, eyeTop, 'W');
       // Tear drops
       setPixel(g, CX - 5, hcy + 4, 'S');
       setPixel(g, CX + 5, hcy + 4, 'S');
@@ -452,35 +455,33 @@ function buildFace(character, mood, expression = '') {
         setPixel(g, CX + 5, hcy + 5, 'S');
       }
       // Frown
-      setPixel(g, CX - 2, hcy + 7, 'K');
-      setPixel(g, CX, hcy + 6, 'K');
-      setPixel(g, CX + 2, hcy + 7, 'K');
+      setPixel(g, CX - 2, mouthY + 1, 'K');
+      setPixel(g, CX, mouthY, 'K');
+      setPixel(g, CX + 2, mouthY + 1, 'K');
       break;
     }
     case 'hungry': {
       // Sad/worried eyes
-      fillRect(g, CX - 6, hcy, 3, 3, eyeColor);
-      fillRect(g, CX + 4, hcy, 3, 3, eyeColor);
-      setPixel(g, CX - 5, hcy, 'W');
-      setPixel(g, CX + 5, hcy, 'W');
+      fillRect(g, leftEyeX - 1, hcy + 1, 3, 4, eyeColor);
+      fillRect(g, rightEyeX - 1, hcy + 1, 3, 4, eyeColor);
+      setPixel(g, leftEyeX, hcy + 1, 'W');
+      setPixel(g, rightEyeX, hcy + 1, 'W');
       // Worried brows
-      setPixel(g, CX - 7, hcy - 3, 'K');
-      setPixel(g, CX - 6, hcy - 4, 'K');
-      setPixel(g, CX + 7, hcy - 3, 'K');
-      setPixel(g, CX + 6, hcy - 4, 'K');
+      fillLine(g, leftEyeX - 2, browTop + 2, leftEyeX + 1, browTop, 'K');
+      fillLine(g, rightEyeX + 2, browTop + 2, rightEyeX - 1, browTop, 'K');
       // Pout mouth (small o)
-      fillRect(g, CX - 1, hcy + 6, 3, 2, 'N');
+      fillRect(g, CX - 1, mouthY - 1, 3, 2, 'N');
       break;
     }
     case 'content': {
       // Half-closed relaxed eyes
-      fillRect(g, CX - 6, hcy + 1, 4, 1, eyeColor);
-      fillRect(g, CX + 3, hcy + 1, 4, 1, eyeColor);
+      fillRect(g, leftEyeX - 1, hcy + 2, 4, 1, eyeColor);
+      fillRect(g, rightEyeX - 2, hcy + 2, 4, 1, eyeColor);
       // Content smirk
-      setPixel(g, CX - 2, hcy + 5, 'K');
-      setPixel(g, CX, hcy + 6, 'K');
-      setPixel(g, CX + 2, hcy + 5, 'K');
-      setPixel(g, CX + 3, hcy + 5, 'K');
+      setPixel(g, CX - 2, mouthY - 2, 'K');
+      setPixel(g, CX, mouthY - 1, 'K');
+      setPixel(g, CX + 2, mouthY - 2, 'K');
+      setPixel(g, CX + 3, mouthY - 2, 'K');
       // Blush
       if (character !== 'devit') {
         fillRect(g, CX - 8, hcy + 3, 2, 1, 'H');
@@ -490,18 +491,18 @@ function buildFace(character, mood, expression = '') {
     }
     case 'stuffed': {
       // Closed happy eyes (^ ^)
-      setPixel(g, CX - 6, hcy + 1, 'K');
-      setPixel(g, CX - 5, hcy, 'K');
-      setPixel(g, CX - 4, hcy + 1, 'K');
-      setPixel(g, CX + 4, hcy + 1, 'K');
-      setPixel(g, CX + 5, hcy, 'K');
-      setPixel(g, CX + 6, hcy + 1, 'K');
+      setPixel(g, leftEyeX - 1, hcy + 2, 'K');
+      setPixel(g, leftEyeX, hcy + 1, 'K');
+      setPixel(g, leftEyeX + 1, hcy + 2, 'K');
+      setPixel(g, rightEyeX - 1, hcy + 2, 'K');
+      setPixel(g, rightEyeX, hcy + 1, 'K');
+      setPixel(g, rightEyeX + 1, hcy + 2, 'K');
       // Full satisfied smile
-      setPixel(g, CX - 3, hcy + 5, 'K');
-      setPixel(g, CX - 1, hcy + 6, 'K');
-      setPixel(g, CX, hcy + 6, 'K');
-      setPixel(g, CX + 1, hcy + 6, 'K');
-      setPixel(g, CX + 3, hcy + 5, 'K');
+      setPixel(g, CX - 3, mouthY - 2, 'K');
+      setPixel(g, CX - 1, mouthY - 1, 'K');
+      setPixel(g, CX, mouthY - 1, 'K');
+      setPixel(g, CX + 1, mouthY - 1, 'K');
+      setPixel(g, CX + 3, mouthY - 2, 'K');
       // Heavy blush
       fillRect(g, CX - 8, hcy + 3, 2, 2, 'H');
       fillRect(g, CX + 6, hcy + 3, 2, 2, 'H');
@@ -509,37 +510,37 @@ function buildFace(character, mood, expression = '') {
     }
     default: { // happy
       if (character === 'dojocat') {
-        fillRect(g, CX - 8, hcy - 2, 2, 6, eyeColor);
-        fillRect(g, CX + 6, hcy - 2, 2, 6, eyeColor);
-        fillLine(g, CX - 10, hcy - 5, CX - 5, hcy - 3, 'K');
-        fillLine(g, CX + 10, hcy - 5, CX + 5, hcy - 3, 'K');
-        setPixel(g, CX - 7, hcy - 2, 'W');
-        setPixel(g, CX + 6, hcy - 2, 'W');
-        setPixel(g, CX - 1, hcy + 6, 'K');
-        setPixel(g, CX, hcy + 7, 'K');
-        setPixel(g, CX + 1, hcy + 6, 'K');
+        fillRect(g, leftEyeX - 1, eyeTop, 3, 6, eyeColor);
+        fillRect(g, rightEyeX - 1, eyeTop, 3, 6, eyeColor);
+        fillLine(g, leftEyeX - 3, browTop + 2, leftEyeX + 1, browTop, 'K');
+        fillLine(g, rightEyeX + 2, browTop + 2, rightEyeX - 2, browTop, 'K');
+        setPixel(g, leftEyeX, eyeTop + 1, 'W');
+        setPixel(g, rightEyeX, eyeTop + 1, 'W');
+        setPixel(g, CX - 1, mouthY - 1, 'K');
+        setPixel(g, CX, mouthY, 'K');
+        setPixel(g, CX + 1, mouthY - 1, 'K');
       } else if (character === 'buu') {
-        fillLine(g, CX - 8, hcy - 1, CX - 3, hcy, eyeColor);
-        fillLine(g, CX + 3, hcy, CX + 8, hcy - 1, eyeColor);
-        fillLine(g, CX - 9, hcy - 4, CX - 4, hcy - 2, 'K');
-        fillLine(g, CX + 9, hcy - 4, CX + 4, hcy - 2, 'K');
-        setPixel(g, CX - 2, hcy + 7, 'K');
-        setPixel(g, CX, hcy + 6, 'K');
-        setPixel(g, CX + 2, hcy + 6, 'K');
-        setPixel(g, CX + 4, hcy + 7, 'K');
+        fillLine(g, leftEyeX - 2, hcy + 1, leftEyeX + 2, hcy + 2, eyeColor);
+        fillLine(g, rightEyeX + 2, hcy + 1, rightEyeX - 2, hcy + 2, eyeColor);
+        fillLine(g, leftEyeX - 3, browTop + 2, leftEyeX + 2, browTop + 1, 'K');
+        fillLine(g, rightEyeX + 3, browTop + 2, rightEyeX - 2, browTop + 1, 'K');
+        setPixel(g, CX - 2, mouthY, 'K');
+        setPixel(g, CX, mouthY - 1, 'K');
+        setPixel(g, CX + 2, mouthY - 1, 'K');
+        setPixel(g, CX + 4, mouthY, 'K');
       } else if (character === 'pixiu') {
-        fillRect(g, CX - 7, hcy - 1, 3, 5, eyeColor);
-        fillRect(g, CX + 4, hcy - 1, 3, 5, eyeColor);
-        setPixel(g, CX - 6, hcy - 1, 'W');
-        setPixel(g, CX + 5, hcy - 1, 'W');
-        setPixel(g, CX - 5, hcy + 2, 'W');
-        setPixel(g, CX + 6, hcy + 2, 'W');
+        fillRect(g, leftEyeX - 1, eyeTop, 3, 6, eyeColor);
+        fillRect(g, rightEyeX - 1, eyeTop, 3, 6, eyeColor);
+        setPixel(g, leftEyeX, eyeTop + 1, 'W');
+        setPixel(g, rightEyeX, eyeTop + 1, 'W');
+        setPixel(g, leftEyeX + 1, eyeTop + 4, 'W');
+        setPixel(g, rightEyeX + 1, eyeTop + 4, 'W');
         drawSmile(g, hcy, 2);
       } else {
-        fillRect(g, CX - 6, hcy - 1, 3, 5, eyeColor);
-        fillRect(g, CX + 4, hcy - 1, 3, 5, eyeColor);
-        setPixel(g, CX - 5, hcy - 1, 'W');
-        setPixel(g, CX + 5, hcy - 1, 'W');
+        fillRect(g, leftEyeX - 1, eyeTop, 3, 6, eyeColor);
+        fillRect(g, rightEyeX - 1, eyeTop, 3, 6, eyeColor);
+        setPixel(g, leftEyeX, eyeTop + 1, 'W');
+        setPixel(g, rightEyeX, eyeTop + 1, 'W');
         drawSmile(g, hcy, character === 'devit' ? 2 : 3);
       }
       break;

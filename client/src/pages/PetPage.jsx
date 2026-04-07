@@ -4,6 +4,7 @@ import {
   getMyPet, adoptPet, feedPet, getPetCharacters, getPetShop,
   buyPetFood, buyPetItem, equipPetItem, unequipPetSlot,
   setPetColor, togglePetAvatar, demandTrick, performTrick,
+  interactPet, doPetActivity, claimPetMission, buyPetToy, usePetToy,
 } from '../utils/api';
 import SpritePet from '../components/SpritePet';
 
@@ -61,6 +62,13 @@ const PET_REACTIONS = {
   ],
 };
 
+const PET_ACTIONS = [
+  { id: 'praise', label: 'Praise', icon: '✨' },
+  { id: 'cuddle', label: 'Cuddle', icon: '🫶' },
+  { id: 'tease', label: 'Tease', icon: '😼' },
+  { id: 'mission', label: 'Ask Mission', icon: '🎯' },
+];
+
 // ─── Tabs ─────────────────────────────────────────────────────────
 const TABS = ['pet', 'food', 'clothing', 'tricks'];
 
@@ -85,6 +93,10 @@ export default function PetPage() {
   const [feedbackMsg, setFeedbackMsg] = useState('');
   const [petTapped, setPetTapped] = useState(false);
   const [colorPickerSlot, setColorPickerSlot] = useState(null);
+  const [activityBusy, setActivityBusy] = useState(false);
+  const [interactionBusy, setInteractionBusy] = useState(false);
+  const [missionBusyId, setMissionBusyId] = useState('');
+  const [toyBusy, setToyBusy] = useState(false);
 
   const loadPet = useCallback(async () => {
     try {
@@ -134,7 +146,7 @@ export default function PetPage() {
       const r = await buyPetFood(foodId);
       setPet(r.pet);
       showFeedback(`Fed ${r.food}! Yum!`);
-      setSpeechText(['Mmm, delicious!', 'Om nom nom!', 'That hit the spot!'][Math.floor(Math.random() * 3)]);
+      setSpeechText(r.pet_response || ['Mmm, delicious!', 'Om nom nom!', 'That hit the spot!'][Math.floor(Math.random() * 3)]);
       loadShop();
     } catch (e) {
       showFeedback(e?.message || 'Not enough Combo!');
@@ -197,7 +209,7 @@ export default function PetPage() {
       const r = await performTrick(trickId);
       if (r.success) {
         setIsTricking(true);
-        setPetReaction('celebrate');
+        setPetReaction('hop');
         setPetExpression('excited');
         setPet(r.pet);
         showFeedback(`+${r.combo_earned} Combo! +${r.bonus_xp} XP!`);
@@ -214,17 +226,109 @@ export default function PetPage() {
   };
 
   const handlePetTap = () => {
-    const options = PET_REACTIONS[pet?.character] || PET_REACTIONS.dojocat;
-    const next = options[Math.floor(Math.random() * options.length)];
+    if (interactionBusy) return;
+    setInteractionBusy(true);
+    interactPet('tap')
+      .then((r) => {
+        setPet(r.pet);
+        if (r.reaction) setPetReaction(r.reaction);
+        if (r.expression) setPetExpression(r.expression);
+        setSpeechText(r.speech || randomMsg(r.pet?.mood || pet?.mood));
+        setPetTapped(true);
+        setTimeout(() => {
+          setPetTapped(false);
+          setPetReaction('');
+          setPetExpression('');
+        }, 900);
+      })
+      .catch((e) => console.error(e))
+      .finally(() => setInteractionBusy(false));
+  };
+
+  const triggerPetResponse = (speech, reaction = '', expression = '', duration = 1200) => {
+    if (reaction) setPetReaction(reaction);
+    if (expression) setPetExpression(expression);
+    if (speech) setSpeechText(speech);
     setPetTapped(true);
-    setPetReaction(next.reaction);
-    setPetExpression(next.expression);
-    setSpeechText(next.speech);
     setTimeout(() => {
       setPetTapped(false);
       setPetReaction('');
       setPetExpression('');
-    }, 900);
+    }, duration);
+  };
+
+  const handlePetAction = async (actionId) => {
+    if (interactionBusy) return;
+    setInteractionBusy(true);
+    try {
+      const r = await interactPet(actionId);
+      setPet(r.pet);
+      triggerPetResponse(r.speech, r.reaction, r.expression);
+    } catch (e) {
+      showFeedback(e?.message || 'Could not interact');
+    } finally {
+      setInteractionBusy(false);
+    }
+  };
+
+  const handleActivity = async (activityId) => {
+    if (activityBusy) return;
+    setActivityBusy(true);
+    try {
+      const r = await doPetActivity(activityId);
+      setPet(r.pet);
+      showFeedback('Activity complete');
+      triggerPetResponse(r.speech, r.reaction, r.expression, 1500);
+    } catch (e) {
+      showFeedback(e?.message || 'Activity failed');
+    } finally {
+      setActivityBusy(false);
+    }
+  };
+
+  const handleClaimMission = async (missionId) => {
+    if (missionBusyId) return;
+    setMissionBusyId(missionId);
+    try {
+      const r = await claimPetMission(missionId);
+      setPet(r.pet);
+      showFeedback('Mission rewards claimed');
+      triggerPetResponse('Progress acknowledged.', 'nod', 'sparkle', 1500);
+    } catch (e) {
+      showFeedback(e?.message || 'Mission not ready');
+    } finally {
+      setMissionBusyId('');
+    }
+  };
+
+  const handleBuyToy = async (toyId) => {
+    if (toyBusy) return;
+    setToyBusy(true);
+    try {
+      const r = await buyPetToy(toyId);
+      setPet(r.pet);
+      showFeedback(`Bought ${r.toy}!`);
+      loadShop();
+    } catch (e) {
+      showFeedback(e?.message || 'Could not buy toy');
+    } finally {
+      setToyBusy(false);
+    }
+  };
+
+  const handleUseToy = async (toyId) => {
+    if (toyBusy) return;
+    setToyBusy(true);
+    try {
+      const r = await usePetToy(toyId);
+      setPet(r.pet);
+      triggerPetResponse(r.speech, r.reaction, r.expression, 1600);
+      showFeedback(r.preference === 'favorite' ? 'Favourite toy time' : 'Toy chest opened');
+    } catch (e) {
+      showFeedback(e?.message || 'Could not use toy');
+    } finally {
+      setToyBusy(false);
+    }
   };
 
   // ─── Gates ──────────────────────────────────────────
@@ -257,7 +361,18 @@ export default function PetPage() {
   }
 
   // ─── Main pet view ──────────────────────────────────
-  const { hunger = 50, happiness = 50, combo_balance = 0, experience = 0 } = pet;
+  const {
+    hunger = 50,
+    happiness = 50,
+    energy = 65,
+    trust = 35,
+    hype = 25,
+    bond = 0,
+    combo_balance = 0,
+    bond_tokens = 0,
+    rare_shards = 0,
+    experience = 0,
+  } = pet;
   const charName = characters.find(c => c.id === pet.character)?.name || pet.character;
   const nextTrick = pet.next_trick;
   const pendingTrickObj = pet.tricks?.find(t => t.id === pet.pending_trick);
@@ -271,6 +386,8 @@ export default function PetPage() {
           <div className="flex items-center gap-3 mt-0.5">
             <span className="text-xs text-gray-500">{experience.toLocaleString()} XP</span>
             <span className="text-xs font-bold text-amber-400">{combo_balance.toLocaleString()} Combo</span>
+            <span className="text-xs font-bold text-cyan-300">{bond_tokens.toLocaleString()} Bond</span>
+            {rare_shards > 0 ? <span className="text-xs font-bold text-fuchsia-300">{rare_shards} Shards</span> : null}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -283,42 +400,47 @@ export default function PetPage() {
       </div>
 
       {/* Pet habitat */}
-      <div className={`relative rounded-2xl border border-white/[0.06] overflow-hidden bg-gradient-to-b ${CHARACTER_BG[pet.character] || ''}`}>
-        <HabitatParticles character={pet.character} mood={pet.mood} />
-        <div className="absolute top-3 right-3 z-10"><WeightBadge state={pet.weight_state} /></div>
-        <div className={`relative z-10 flex flex-col items-center pt-6 pb-4 ${petTapped ? 'animate-[wiggle_400ms_ease]' : ''}`}>
-          <SpritePet
-            character={pet.character} weightState={pet.weight_state} mood={pet.mood}
-            equippedHat={pet.equipped_hat} equippedBelt={pet.equipped_belt} equippedShoes={pet.equipped_shoes}
-            equippedTop={pet.equipped_top}
-            hatColor={pet.hat_color} beltColor={pet.belt_color} shoesColor={pet.shoes_color}
-            topColor={pet.top_color}
-            isEating={isEating} isTricking={isTricking} reaction={petReaction}
-            expression={petExpression} foodId={activeFoodId}
-            size={146} onClick={handlePetTap} />
-          {/* Speech bubble */}
-          <div className="mt-2 relative max-w-[260px]">
-            <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-2.5 h-2.5 rotate-45 bg-white/[0.06] border-l border-t border-white/[0.08]" />
-            <div className="bg-white/[0.06] backdrop-blur-sm border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-gray-300 text-center italic transition-all duration-500">
-              &ldquo;{speechText}&rdquo;
+      <div className="sticky top-[56px] sm:top-[64px] z-30 -mx-2 mb-4 px-2 pt-1 pb-3 bg-gradient-to-b from-[#070b14] via-[#070b14]/95 to-transparent backdrop-blur-sm">
+        <div className={`relative rounded-[1.6rem] border border-white/[0.06] overflow-hidden bg-gradient-to-b shadow-[0_18px_45px_rgba(0,0,0,0.28)] ${CHARACTER_BG[pet.character] || ''}`}>
+          <HabitatParticles character={pet.character} mood={pet.mood} />
+          <div className="absolute top-3 right-3 z-10"><WeightBadge state={pet.weight_state} /></div>
+          <div className="absolute top-3 left-3 z-10"><BondBadge rank={pet.bond_rank} /></div>
+          <div className={`relative z-10 flex flex-col items-center px-4 pt-7 pb-5 min-h-[312px] sm:min-h-[332px] ${petTapped ? 'animate-[wiggle_400ms_ease]' : ''}`}>
+            <div className="flex min-h-[210px] items-end justify-center">
+              <SpritePet
+                character={pet.character} weightState={pet.weight_state} mood={pet.mood}
+                equippedHat={pet.equipped_hat} equippedBelt={pet.equipped_belt} equippedShoes={pet.equipped_shoes}
+                equippedTop={pet.equipped_top}
+                hatColor={pet.hat_color} beltColor={pet.belt_color} shoesColor={pet.shoes_color}
+                topColor={pet.top_color}
+                isEating={isEating} isTricking={isTricking} reaction={petReaction}
+                expression={petExpression} foodId={activeFoodId}
+                size={176} onClick={handlePetTap} />
+            </div>
+            {/* Speech bubble */}
+            <div className="mt-1 relative max-w-[280px]">
+              <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-2.5 h-2.5 rotate-45 bg-white/[0.06] border-l border-t border-white/[0.08]" />
+              <div className="bg-white/[0.06] backdrop-blur-sm border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-gray-300 text-center italic transition-all duration-500">
+                &ldquo;{speechText}&rdquo;
+              </div>
             </div>
           </div>
-        </div>
-        {/* Demand banner */}
-        {pet.pending_trick && (
-          <div className="relative z-10 mx-4 mb-3">
-            <button onClick={() => handlePerformTrick(pet.pending_trick)} className="w-full group">
-              <div className="relative rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 flex items-center gap-2 hover:border-amber-500/30 active:scale-[0.98] transition-all">
-                <span className="text-lg">🎯</span>
-                <div className="text-left flex-1 min-w-0">
-                  <div className="text-xs font-semibold text-white/80 truncate">{pendingTrickObj?.name || 'Trick'} Demand</div>
-                  <div className="text-[10px] text-gray-500">Lv.{pet.trick_demand_level}+ / {pet.trick_demand_grade}+ grade</div>
+          {/* Demand banner */}
+          {pet.pending_trick && (
+            <div className="relative z-10 mx-4 mb-4">
+              <button onClick={() => handlePerformTrick(pet.pending_trick)} className="w-full group">
+                <div className="relative rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 flex items-center gap-2 hover:border-amber-500/30 active:scale-[0.98] transition-all">
+                  <span className="text-lg">🎯</span>
+                  <div className="text-left flex-1 min-w-0">
+                    <div className="text-xs font-semibold text-white/80 truncate">{pendingTrickObj?.name || 'Trick'} Demand</div>
+                    <div className="text-[10px] text-gray-500">Lv.{pet.trick_demand_level}+ / {pet.trick_demand_grade}+ grade</div>
+                  </div>
+                  <span className="text-xs font-bold text-amber-400 animate-pulse">Check</span>
                 </div>
-                <span className="text-xs font-bold text-amber-400 animate-pulse">Check</span>
-              </div>
-            </button>
-          </div>
-        )}
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Feedback toast */}
@@ -332,6 +454,10 @@ export default function PetPage() {
       <div className="mt-4 grid grid-cols-2 gap-3">
         <MeterBar label="Hunger" value={hunger} color="orange" />
         <MeterBar label="Happiness" value={happiness} color="pink" />
+        <MeterBar label="Energy" value={energy} color="cyan" />
+        <MeterBar label="Trust" value={trust} color="emerald" />
+        <MeterBar label="Hype" value={hype} color="violet" />
+        <BondMeter bond={bond} bondRank={pet.bond_rank} />
       </div>
 
       {/* XP to next trick */}
@@ -348,10 +474,11 @@ export default function PetPage() {
       )}
 
       {/* Stats */}
-      <div className="mt-3 grid grid-cols-3 gap-2">
+      <div className="mt-3 grid grid-cols-4 gap-2">
         <StatCard label="Songs" value={pet.total_songs_fed} />
         <StatCard label="Mood" value={capitalize(pet.mood)} />
         <StatCard label="Level" value={pet.highest_level || '—'} />
+        <StatCard label="Specialty" value={pet.specialty?.label || '—'} />
       </div>
 
       {/* Tab bar */}
@@ -366,7 +493,23 @@ export default function PetPage() {
 
       {/* Tab content */}
       <div className="mt-3">
-        {tab === 'pet' && <PetTab pet={pet} combo={combo_balance} economy={economy} onToggleAvatar={handleToggleAvatar} />}
+        {tab === 'pet' && (
+          <PetTab
+            pet={pet}
+            shop={shop}
+            combo={combo_balance}
+            economy={economy}
+            interactionBusy={interactionBusy}
+            activityBusy={activityBusy}
+            missionBusyId={missionBusyId}
+            toyBusy={toyBusy}
+            onAction={handlePetAction}
+            onActivity={handleActivity}
+            onClaimMission={handleClaimMission}
+            onBuyToy={handleBuyToy}
+            onUseToy={handleUseToy}
+          />
+        )}
         {tab === 'food' && <FoodTab shop={shop} combo={combo_balance} economy={economy} onBuy={handleBuyFood} buying={buying} />}
         {tab === 'clothing' && <ClothingTab pet={pet} shop={shop} onBuy={handleBuyItem} onEquip={handleEquip} onUnequip={handleUnequip} onSetColor={handleSetColor} buying={buying} colorPickerSlot={colorPickerSlot} setColorPickerSlot={setColorPickerSlot} />}
         {tab === 'tricks' && <TricksTab pet={pet} onDemand={handleDemand} onPerform={handlePerformTrick} />}
@@ -411,8 +554,22 @@ function WeightBadge({ state }) {
   return <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider border ${s[state] || s.normal}`}>{state}</span>;
 }
 
+function BondBadge({ rank }) {
+  return (
+    <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider border border-cyan-400/20 bg-cyan-400/10 text-cyan-200">
+      {rank?.label || 'Training Partner'}
+    </span>
+  );
+}
+
 function MeterBar({ label, value, color }) {
-  const hues = { orange: { lo: '0', hi: '35' }, pink: { lo: '300', hi: '340' } };
+  const hues = {
+    orange: { lo: '0', hi: '35' },
+    pink: { lo: '300', hi: '340' },
+    cyan: { lo: '185', hi: '200' },
+    emerald: { lo: '140', hi: '155' },
+    violet: { lo: '255', hi: '280' },
+  };
   const h = hues[color] || hues.orange;
   const hue = value <= 30 ? h.lo : h.hi;
   return (
@@ -430,6 +587,28 @@ function MeterBar({ label, value, color }) {
   );
 }
 
+function BondMeter({ bond, bondRank }) {
+  const nextThreshold = bondRank?.next_threshold || bondRank?.threshold || 0;
+  const currentThreshold = bondRank?.threshold || 0;
+  const currentProgress = nextThreshold > currentThreshold
+    ? Math.min(100, ((bond - currentThreshold) / (nextThreshold - currentThreshold)) * 100)
+    : 100;
+  return (
+    <div className="rounded-xl border border-cyan-400/10 bg-cyan-500/[0.05] p-3">
+      <div className="flex items-center justify-between text-[11px] mb-1">
+        <span className="text-cyan-200/80">Bond</span>
+        <span className="font-mono text-cyan-100/80 tabular-nums">{bond}</span>
+      </div>
+      <div className="w-full h-2.5 bg-white/[0.04] rounded-full overflow-hidden border border-white/[0.04]">
+        <div className="h-full rounded-full bg-gradient-to-r from-cyan-600 to-sky-300 transition-all duration-700" style={{ width: `${currentProgress}%` }} />
+      </div>
+      <div className="mt-2 text-[10px] text-cyan-100/70">
+        {bondRank?.next_label ? `${bondRank.label} -> ${bondRank.next_label}` : bondRank?.label || 'Training Partner'}
+      </div>
+    </div>
+  );
+}
+
 function StatCard({ label, value }) {
   return (
     <div className="bg-white/[0.03] border border-white/[0.04] rounded-xl p-2.5 text-center">
@@ -440,12 +619,13 @@ function StatCard({ label, value }) {
 }
 
 // ─── Pet tab ──────────────────────────────────────────
-function PetTab({ pet, economy }) {
+function PetTab({ pet, shop, combo, economy, interactionBusy, activityBusy, missionBusyId, toyBusy, onAction, onActivity, onClaimMission, onBuyToy, onUseToy }) {
   return (
-    <div className="space-y-2 text-sm text-gray-400">
+    <div className="space-y-3 text-sm text-gray-400">
       <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
-        <div className="text-xs text-gray-500 mb-1">About</div>
-        <p className="text-[11px]">Your pet gets hungry and sad over time. Playing songs keeps their spirits up, but food is the real upkeep now, so you need to earn and spend Combo carefully.</p>
+        <div className="text-xs text-gray-500 mb-1">Personality</div>
+        <p className="text-[11px] text-white/80">{pet.personality?.title}</p>
+        <p className="text-[11px] mt-1">{pet.personality?.desc}</p>
       </div>
       {economy?.target_songs_per_week ? (
         <div className="bg-amber-500/[0.06] rounded-xl p-3 border border-amber-500/10">
@@ -454,11 +634,159 @@ function PetTab({ pet, economy }) {
         </div>
       ) : null}
       <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
-        <div className="text-xs text-gray-500 mb-1">How to earn Combo</div>
+        <div className="text-xs text-gray-500 mb-2">Likes & dislikes</div>
+        <div className="grid grid-cols-2 gap-3 text-[11px]">
+          <div>
+            <div className="text-emerald-300 mb-1">Favourite foods</div>
+            <div className="flex flex-wrap gap-1">
+              {(pet.food_preferences?.favorites || []).map((foodId) => (
+                <span key={foodId} className="px-2 py-0.5 rounded-full border border-emerald-400/15 bg-emerald-400/10 text-emerald-100/80">{foodId.replace(/-/g, ' ')}</span>
+              ))}
+            </div>
+          </div>
+          <div>
+            <div className="text-rose-300 mb-1">Disliked foods</div>
+            <div className="flex flex-wrap gap-1">
+              {(pet.food_preferences?.dislikes || []).map((foodId) => (
+                <span key={foodId} className="px-2 py-0.5 rounded-full border border-rose-400/15 bg-rose-400/10 text-rose-100/80">{foodId.replace(/-/g, ' ')}</span>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
+        <div className="text-xs text-gray-500 mb-2">Quick interactions</div>
+        <div className="grid grid-cols-2 gap-2">
+          {PET_ACTIONS.map((action) => (
+            <button
+              key={action.id}
+              onClick={() => onAction(action.id)}
+              disabled={interactionBusy}
+              className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-left hover:border-white/15 active:scale-[0.98] transition-all disabled:opacity-50"
+            >
+              <div className="text-lg">{action.icon}</div>
+              <div className="text-[11px] font-semibold text-white/80 mt-1">{action.label}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
+        <div className="text-xs text-gray-500 mb-2">Activities</div>
+        <div className="grid grid-cols-2 gap-2">
+          {(pet.activities || []).map((activity) => (
+            <button
+              key={activity.id}
+              onClick={() => onActivity(activity.id)}
+              disabled={activityBusy}
+              className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-left hover:border-white/15 active:scale-[0.98] transition-all disabled:opacity-50"
+            >
+              <div className="text-[11px] font-semibold text-white/85">{activity.label}</div>
+              <div className="text-[10px] text-gray-500 mt-1">{activity.desc}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
+        <div className="flex items-center justify-between gap-3 mb-2">
+          <div>
+            <div className="text-xs text-gray-500">Toy chest</div>
+            <div className="text-[11px] text-white/65 mt-0.5">Small objects that unlock more ways to play with your companion.</div>
+          </div>
+          <div className="text-[10px] font-semibold text-amber-300 whitespace-nowrap">{combo.toLocaleString()} Combo</div>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          {(shop?.toys || []).map((toy) => {
+            const owned = !!toy.owned || (pet.owned_toys || []).includes(toy.id);
+            const favorite = toy.preference === 'favorite';
+            const canAfford = combo >= toy.cost;
+            return (
+              <div key={toy.id} className="rounded-xl border border-white/[0.06] bg-black/20 p-2.5">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-semibold text-white/85 truncate">{toy.name}</div>
+                    <div className="text-[10px] text-gray-500 mt-1">{toy.desc}</div>
+                  </div>
+                  {favorite ? <span className="shrink-0 rounded-full border border-emerald-400/15 bg-emerald-400/10 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-200">fav</span> : null}
+                </div>
+                <div className="mt-2 flex items-center justify-between gap-2">
+                  <div className="text-[10px] text-amber-300">{toy.cost}c</div>
+                  <button
+                    onClick={() => (owned ? onUseToy(toy.id) : onBuyToy(toy.id))}
+                    disabled={toyBusy || (!owned && !canAfford)}
+                    className={`rounded-lg px-2.5 py-1.5 text-[10px] font-semibold transition-all ${
+                      owned
+                        ? 'bg-cyan-500/15 text-cyan-200 border border-cyan-500/20 hover:bg-cyan-500/20'
+                        : canAfford
+                          ? 'bg-white/[0.05] text-white/80 border border-white/[0.07] hover:border-white/15'
+                          : 'bg-white/[0.03] text-gray-500 border border-white/[0.05]'
+                    } disabled:opacity-50`}
+                  >
+                    {owned ? 'Use toy' : 'Buy'}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        {pet.last_toy_id ? (
+          <div className="mt-2 text-[10px] text-gray-500">
+            Last played with: <span className="text-white/70">{String(pet.last_toy_id).replace(/-/g, ' ')}</span>
+          </div>
+        ) : null}
+      </div>
+      <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
+        <div className="text-xs text-gray-500 mb-2">Mission board</div>
+        <div className="space-y-2">
+          {(pet.missions || []).map((mission) => {
+            const pct = mission.target > 0 ? (mission.progress / mission.target) * 100 : 0;
+            return (
+              <div key={mission.id} className="rounded-xl border border-white/[0.05] bg-black/20 p-2.5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-[10px] uppercase tracking-wider text-cyan-200/70">{mission.cadence}</div>
+                    <div className="text-sm font-semibold text-white/85">{mission.label}</div>
+                    <div className="text-[11px] text-gray-500">{mission.desc}</div>
+                  </div>
+                  <button
+                    onClick={() => onClaimMission(mission.id)}
+                    disabled={!mission.complete || mission.claimed || missionBusyId === mission.id}
+                    className={`shrink-0 rounded-lg px-2.5 py-1.5 text-[10px] font-semibold transition-all ${
+                      mission.claimed
+                        ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/15'
+                        : mission.complete
+                          ? 'bg-cyan-500/15 text-cyan-200 border border-cyan-500/20 hover:bg-cyan-500/20'
+                          : 'bg-white/[0.04] text-gray-500 border border-white/[0.05]'
+                    } disabled:opacity-50`}
+                  >
+                    {mission.claimed ? 'Claimed' : mission.complete ? 'Claim' : `${mission.progress}/${mission.target}`}
+                  </button>
+                </div>
+                <div className="mt-2 w-full h-1.5 bg-white/[0.04] rounded-full overflow-hidden">
+                  <div className="h-full rounded-full bg-gradient-to-r from-cyan-600 to-sky-300 transition-all duration-500" style={{ width: `${Math.min(100, pct)}%` }} />
+                </div>
+                <div className="mt-1 text-[10px] text-gray-500">{mission.reward_summary}</div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
+        <div className="text-xs text-gray-500 mb-2">Memory album</div>
+        <div className="space-y-2">
+          {(pet.memories || []).map((memory) => (
+            <div key={memory.id} className="rounded-xl border border-white/[0.05] bg-black/20 px-3 py-2">
+              <div className="text-[11px] font-semibold text-white/80">{memory.title}</div>
+              <div className="text-[10px] text-gray-500 mt-0.5">{memory.detail}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
+        <div className="text-xs text-gray-500 mb-1">How this grows</div>
         <ul className="text-[11px] space-y-0.5 list-disc list-inside">
-          <li>Sync PIU scores, especially strong grades</li>
-          <li>Play harder songs for bonus Combo</li>
-          <li>Complete trick demands for extra bursts</li>
+          <li>Play style shapes your pet specialty over time</li>
+          <li>Bond rank rises through care, missions, and activities</li>
+          <li>Combo keeps them fed while Bond Tokens feed deeper progression</li>
         </ul>
       </div>
     </div>
@@ -489,6 +817,8 @@ function FoodTab({ shop, combo, economy, onBuy, buying }) {
               <div className="flex gap-3 mt-0.5">
                 <span className="text-[10px] text-orange-400">+{food.hunger} hunger</span>
                 <span className="text-[10px] text-pink-400">+{food.happiness} happy</span>
+                {food.preference === 'favorite' ? <span className="text-[10px] text-emerald-300">favorite</span> : null}
+                {food.preference === 'disliked' ? <span className="text-[10px] text-rose-300">disliked</span> : null}
               </div>
             </div>
             <div className="text-xs font-bold text-amber-400 shrink-0">{food.cost}c</div>
