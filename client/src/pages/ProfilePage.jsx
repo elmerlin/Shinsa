@@ -2638,7 +2638,12 @@ export default function ProfilePage() {
       <div className="card mb-4 sm:mb-6 px-3 py-3 sm:p-4">
         <div className="flex flex-row items-start gap-2.5 sm:gap-6">
           <div className="grid flex-1 min-w-0 grid-cols-[3.5rem_minmax(0,1fr)] items-start gap-x-2.5 gap-y-1 sm:flex sm:items-start sm:gap-6">
-            {avatarBlock}
+            <div className="flex flex-col items-center gap-1.5 shrink-0">
+              {avatarBlock}
+              {publicPet && !isPetAvatar && (
+                <PetPresenceChip pet={publicPet} size="xs" onClick={() => setShowPetModal(true)} />
+              )}
+            </div>
             <div className="text-left min-w-0 flex-1">
             <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
               {flag && <span className="shrink-0">{flag}</span>}
@@ -2667,11 +2672,6 @@ export default function ProfilePage() {
                 <span className="hidden sm:inline text-xs sm:text-sm text-gray-500">Age {age}</span>
               )}
             </div>
-            {publicPet && !isPetAvatar && (
-              <div className="mt-1 max-w-full overflow-hidden">
-                <PetPresenceChip pet={publicPet} size="sm" onClick={() => setShowPetModal(true)} />
-              </div>
-            )}
             {profile.playing_status && (
               <div className="hidden sm:flex items-center gap-1.5 mt-1 sm:mt-2">
                 <span className="inline-block w-2 h-2 rounded-full bg-green-400 animate-pulse" />
