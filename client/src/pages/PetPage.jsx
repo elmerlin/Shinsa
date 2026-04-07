@@ -165,6 +165,7 @@ export default function PetPage() {
   const [leaderboard, setLeaderboard] = useState(null);
   const [activeToyVisual, setActiveToyVisual] = useState(null);
   const [socialFeed, setSocialFeed] = useState(null);
+  const [compactMode, setCompactMode] = useState(() => localStorage.getItem('pet_compact') === '1');
 
   const loadPet = useCallback(async () => {
     try {
@@ -533,6 +534,16 @@ export default function PetPage() {
           </div>
           <div className="flex gap-1.5 shrink-0">
             <button
+              onClick={() => { const next = !compactMode; setCompactMode(next); localStorage.setItem('pet_compact', next ? '1' : '0'); }}
+              className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] transition-all ${
+                compactMode
+                  ? 'border-cyan-500/30 bg-cyan-500/10 text-cyan-300'
+                  : 'border-white/[0.08] bg-white/[0.03] text-gray-400 hover:border-white/15 hover:text-white'
+              }`}
+            >
+              {compactMode ? '◆' : '◇'}
+            </button>
+            <button
               onClick={handleToggleAvatar}
               className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] transition-all ${
                 pet.is_pet_avatar
@@ -637,87 +648,119 @@ export default function PetPage() {
         </div>
       )}
 
-      {/* Hunger + Happiness bars */}
-      <div className="mt-4 grid grid-cols-2 gap-3">
-        <MeterBar label="Hunger" value={hunger} color="orange" />
-        <MeterBar label="Happiness" value={happiness} color="pink" />
-        <MeterBar label="Energy" value={energy} color="cyan" />
-        <MeterBar label="Trust" value={trust} color="emerald" />
-        <MeterBar label="Hype" value={hype} color="violet" />
-        <BondMeter bond={bond} bondRank={pet.bond_rank} />
-      </div>
-
-      {/* XP to next trick */}
-      {nextTrick && (
+      {/* ─── Compact mode: vitals strip + expand ─── */}
+      {compactMode ? (
         <div className="mt-3">
-          <div className="flex items-center justify-between text-[11px] mb-1">
-            <span className="text-gray-500">Next: <span className="text-white/60">{nextTrick.name}</span></span>
-            <span className="text-gray-600 tabular-nums">{experience}/{nextTrick.xp}</span>
+          <div className="rounded-xl border border-white/[0.06] bg-white/[0.025] p-2.5">
+            <div className="flex items-center gap-2">
+              <CompactVitalDot value={hunger} color="orange" label="Hunger" />
+              <CompactVitalDot value={happiness} color="pink" label="Happy" />
+              <CompactVitalDot value={energy} color="cyan" label="Energy" />
+              <div className="flex-1" />
+              <span className="text-[10px] text-gray-500 capitalize">{pet.mood}</span>
+              {pet.daily_streak > 0 && <span className="text-[10px] text-amber-300">{pet.daily_streak}d 🔥</span>}
+            </div>
           </div>
-          <div className="w-full h-1.5 bg-white/[0.04] rounded-full overflow-hidden">
-            <div className="h-full rounded-full bg-white/20 transition-all duration-500" style={{ width: `${Math.min(100, (nextTrick.progress || 0) * 100)}%` }} />
-          </div>
-        </div>
-      )}
-
-      {/* Stats */}
-      <div className="mt-3 grid grid-cols-4 gap-2">
-        <StatCard label="Songs" value={pet.total_songs_fed} />
-        <StatCard label="Mood" value={capitalize(pet.mood)} />
-        <StatCard label="Streak" value={pet.daily_streak ? `${pet.daily_streak}d` : '—'} />
-        <StatCard label="Specialty" value={pet.specialty?.label || '—'} />
-      </div>
-
-      {/* Tab bar */}
-      <div className="mt-4 flex rounded-xl border border-white/[0.06] overflow-hidden">
-        {TABS.map(t => (
-          <button key={t} onClick={() => { setTab(t); if (t === 'food' || t === 'clothing' || t === 'habitat') loadShop(); if (t === 'ranks' && !leaderboard) getPetLeaderboard().then(r => setLeaderboard(r.leaderboard)).catch(() => {}); }}
-            className={`flex-1 py-2 text-[10px] sm:text-xs font-semibold capitalize transition-all ${tab === t ? 'bg-white/[0.08] text-white' : 'text-gray-500 hover:text-white/70'}`}>
-            {t === 'food' ? '🍖 Food' : t === 'clothing' ? '👒 Gear' : t === 'tricks' ? '⭐ Tricks' : t === 'habitat' ? '🏠 Room' : t === 'ranks' ? '🏆 Ranks' : '🐾 Pet'}
+          {/* Coach tip in compact mode */}
+          {pet.companion_coach && (
+            <div className="mt-2 rounded-xl border border-cyan-500/10 bg-cyan-500/[0.04] px-3 py-2 flex items-center gap-2">
+              <span className="text-sm">💡</span>
+              <p className="text-[11px] text-cyan-100/80 flex-1">{pet.companion_coach.headline}</p>
+              <button onClick={() => { setCompactMode(false); localStorage.setItem('pet_compact', '0'); }} className="text-[10px] text-cyan-300 font-semibold shrink-0">View</button>
+            </div>
+          )}
+          <button
+            onClick={() => { setCompactMode(false); localStorage.setItem('pet_compact', '0'); }}
+            className="mt-3 w-full rounded-xl border border-white/[0.08] bg-white/[0.03] py-2.5 text-xs font-semibold text-gray-400 hover:text-white hover:border-white/15 transition-all"
+          >
+            Open full details
           </button>
-        ))}
-      </div>
+        </div>
+      ) : (
+        <>
+          {/* Hunger + Happiness bars */}
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <MeterBar label="Hunger" value={hunger} color="orange" />
+            <MeterBar label="Happiness" value={happiness} color="pink" />
+            <MeterBar label="Energy" value={energy} color="cyan" />
+            <MeterBar label="Trust" value={trust} color="emerald" />
+            <MeterBar label="Hype" value={hype} color="violet" />
+            <BondMeter bond={bond} bondRank={pet.bond_rank} />
+          </div>
 
-      {/* Tab content */}
-      <div className="mt-3">
-        {tab === 'pet' && (
-          <PetTab
-            pet={pet}
-            shop={shop}
-            combo={combo_balance}
-            economy={economy}
-            socialFeed={socialFeed}
-            interactionBusy={interactionBusy}
-            activityBusy={activityBusy}
-            missionBusyId={missionBusyId}
-            toyBusy={toyBusy}
-            trainingBusy={trainingBusy}
-            onAction={handlePetAction}
-            onActivity={handleActivity}
-            onClaimMission={handleClaimMission}
-            onBuyToy={handleBuyToy}
-            onUseToy={handleUseToy}
-            onSetTrainingPath={handleSetTrainingPath}
-            onTabSwitch={setTab}
-          />
-        )}
-        {tab === 'habitat' && (
-          <HabitatTab
-            pet={pet}
-            shop={shop}
-            combo={combo_balance}
-            habitatBusy={habitatBusy}
-            onBuyItem={handleBuyHabitatItem}
-            onEquipItem={handleEquipHabitat}
-          />
-        )}
-        {tab === 'food' && <FoodTab shop={shop} combo={combo_balance} economy={economy} onBuy={handleBuyFood} buying={buying} />}
-        {tab === 'clothing' && <ClothingTab pet={pet} shop={shop} onBuy={handleBuyItem} onEquip={handleEquip} onUnequip={handleUnequip} onSetColor={handleSetColor} buying={buying} colorPickerSlot={colorPickerSlot} setColorPickerSlot={setColorPickerSlot} />}
-        {tab === 'tricks' && <TricksTab pet={pet} onDemand={handleDemand} onPerform={handlePerformTrick} />}
-        {tab === 'ranks' && <LeaderboardTab leaderboard={leaderboard} myCharacter={pet.character} />}
-      </div>
+          {/* XP to next trick */}
+          {nextTrick && (
+            <div className="mt-3">
+              <div className="flex items-center justify-between text-[11px] mb-1">
+                <span className="text-gray-500">Next: <span className="text-white/60">{nextTrick.name}</span></span>
+                <span className="text-gray-600 tabular-nums">{experience}/{nextTrick.xp}</span>
+              </div>
+              <div className="w-full h-1.5 bg-white/[0.04] rounded-full overflow-hidden">
+                <div className="h-full rounded-full bg-white/20 transition-all duration-500" style={{ width: `${Math.min(100, (nextTrick.progress || 0) * 100)}%` }} />
+              </div>
+            </div>
+          )}
 
-      <p className="text-[10px] text-gray-600 text-center mt-4">Sync PIU scores to earn Combo, then budget it carefully to keep your pet thriving.</p>
+          {/* Stats */}
+          <div className="mt-3 grid grid-cols-4 gap-2">
+            <StatCard label="Songs" value={pet.total_songs_fed} />
+            <StatCard label="Mood" value={capitalize(pet.mood)} />
+            <StatCard label="Streak" value={pet.daily_streak ? `${pet.daily_streak}d` : '—'} />
+            <StatCard label="Specialty" value={pet.specialty?.label || '—'} />
+          </div>
+
+          {/* Tab bar */}
+          <div className="mt-4 flex rounded-xl border border-white/[0.06] overflow-hidden">
+            {TABS.map(t => (
+              <button key={t} onClick={() => { setTab(t); if (t === 'food' || t === 'clothing' || t === 'habitat') loadShop(); if (t === 'ranks' && !leaderboard) getPetLeaderboard().then(r => setLeaderboard(r.leaderboard)).catch(() => {}); }}
+                className={`flex-1 py-2 text-[10px] sm:text-xs font-semibold capitalize transition-all ${tab === t ? 'bg-white/[0.08] text-white' : 'text-gray-500 hover:text-white/70'}`}>
+                {t === 'food' ? '🍖 Food' : t === 'clothing' ? '👒 Gear' : t === 'tricks' ? '⭐ Tricks' : t === 'habitat' ? '🏠 Room' : t === 'ranks' ? '🏆 Ranks' : '🐾 Pet'}
+              </button>
+            ))}
+          </div>
+
+          {/* Tab content */}
+          <div className="mt-3">
+            {tab === 'pet' && (
+              <PetTab
+                pet={pet}
+                shop={shop}
+                combo={combo_balance}
+                economy={economy}
+                socialFeed={socialFeed}
+                interactionBusy={interactionBusy}
+                activityBusy={activityBusy}
+                missionBusyId={missionBusyId}
+                toyBusy={toyBusy}
+                trainingBusy={trainingBusy}
+                onAction={handlePetAction}
+                onActivity={handleActivity}
+                onClaimMission={handleClaimMission}
+                onBuyToy={handleBuyToy}
+                onUseToy={handleUseToy}
+                onSetTrainingPath={handleSetTrainingPath}
+                onTabSwitch={setTab}
+              />
+            )}
+            {tab === 'habitat' && (
+              <HabitatTab
+                pet={pet}
+                shop={shop}
+                combo={combo_balance}
+                habitatBusy={habitatBusy}
+                onBuyItem={handleBuyHabitatItem}
+                onEquipItem={handleEquipHabitat}
+              />
+            )}
+            {tab === 'food' && <FoodTab shop={shop} combo={combo_balance} economy={economy} onBuy={handleBuyFood} buying={buying} />}
+            {tab === 'clothing' && <ClothingTab pet={pet} shop={shop} onBuy={handleBuyItem} onEquip={handleEquip} onUnequip={handleUnequip} onSetColor={handleSetColor} buying={buying} colorPickerSlot={colorPickerSlot} setColorPickerSlot={setColorPickerSlot} />}
+            {tab === 'tricks' && <TricksTab pet={pet} onDemand={handleDemand} onPerform={handlePerformTrick} />}
+            {tab === 'ranks' && <LeaderboardTab leaderboard={leaderboard} myCharacter={pet.character} />}
+          </div>
+
+          <p className="text-[10px] text-gray-600 text-center mt-4">Sync PIU scores to earn Combo, then budget it carefully to keep your pet thriving.</p>
+        </>
+      )}
 
       <style>{`
         @keyframes slideDown { from { opacity: 0; transform: translate(-50%, -12px); } to { opacity: 1; transform: translate(-50%, 0); } }
@@ -1225,84 +1268,47 @@ function StatCard({ label, value }) {
   );
 }
 
+// ─── Compact vital dot ───────────────────────────────
+function CompactVitalDot({ value, color, label }) {
+  const fill = color === 'orange' ? 'bg-orange-400' : color === 'pink' ? 'bg-pink-400' : 'bg-cyan-400';
+  const ring = value < 25 ? 'ring-1 ring-red-500/40' : '';
+  return (
+    <div className="flex items-center gap-1.5" title={`${label}: ${value}%`}>
+      <div className={`relative w-2 h-2 rounded-full ${fill} ${ring}`} style={{ opacity: Math.max(0.3, value / 100) }} />
+      <span className="text-[10px] text-gray-500">{value}%</span>
+    </div>
+  );
+}
+
+// ─── Collapsible section ─────────────────────────────
+function CollapsibleSection({ title, icon, defaultOpen = true, count, children }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="rounded-xl border border-white/[0.04] bg-white/[0.015] overflow-hidden">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-white/[0.02] transition-colors"
+      >
+        {icon && <span className="text-sm">{icon}</span>}
+        <span className="text-[11px] font-semibold text-gray-400 flex-1">{title}</span>
+        {count != null && <span className="text-[9px] text-gray-600 tabular-nums">{count}</span>}
+        <span className={`text-[10px] text-gray-600 transition-transform duration-200 ${open ? 'rotate-0' : '-rotate-90'}`}>▾</span>
+      </button>
+      {open && <div className="px-1 pb-1 space-y-2">{children}</div>}
+    </div>
+  );
+}
+
 // ─── Pet tab ──────────────────────────────────────────
 function PetTab({ pet, shop, combo, economy, socialFeed, interactionBusy, activityBusy, missionBusyId, toyBusy, trainingBusy, onAction, onActivity, onClaimMission, onBuyToy, onUseToy, onSetTrainingPath, onTabSwitch }) {
   const REACTION_ICONS = { cheer: '📣', wow: '🤩', flex: '💪', heart: '💗' };
+  const claimableMissions = (pet.missions || []).filter(m => m.complete && !m.claimed).length;
   return (
     <div className="space-y-3 text-sm text-gray-400">
+      {/* ── Always visible: coach + alerts ── */}
       {pet.companion_coach && (
         <PetCoachPanel coach={pet.companion_coach} character={pet.character} onTabSwitch={onTabSwitch} />
       )}
-      {/* Social activity card — shows when pet has received reactions */}
-      {socialFeed && (socialFeed.today_count > 0 || socialFeed.total_reactions > 0) && (
-        <div className="bg-gradient-to-r from-amber-500/[0.06] to-pink-500/[0.04] rounded-xl p-3 border border-amber-400/10">
-          <div className="flex items-center gap-2 mb-1.5">
-            <span className="text-sm">✨</span>
-            <div className="text-xs text-amber-200 font-semibold">Social Activity</div>
-          </div>
-          {socialFeed.today_count > 0 ? (
-            <>
-              <p className="text-[11px] text-white/70 mb-2">
-                {socialFeed.today_count === 1
-                  ? 'Someone interacted with your pet today!'
-                  : `${socialFeed.today_count} reactions today!`}
-              </p>
-              <div className="flex flex-wrap gap-1">
-                {socialFeed.today_reactions.slice(0, 8).map((r, i) => (
-                  <span key={i} className="inline-flex items-center gap-1 rounded-full border border-white/[0.06] bg-white/[0.03] px-2 py-0.5 text-[10px]">
-                    <span>{REACTION_ICONS[r.type] || '💬'}</span>
-                    <span className="text-white/60 font-medium">{r.from}</span>
-                  </span>
-                ))}
-              </div>
-            </>
-          ) : (
-            <p className="text-[11px] text-white/50">{socialFeed.total_reactions} reaction{socialFeed.total_reactions !== 1 ? 's' : ''} all-time. Share your pet to get more!</p>
-          )}
-          {socialFeed.reactions?.length > 0 && (
-            <div className="flex items-center gap-2.5 mt-2 pt-2 border-t border-white/[0.04]">
-              {socialFeed.reactions.map(r => (
-                <span key={r.type} className="text-[10px] text-gray-400 flex items-center gap-0.5">
-                  <span>{REACTION_ICONS[r.type]}</span>
-                  <span className="tabular-nums">{r.count}</span>
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-      <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
-        <div className="text-xs text-gray-500 mb-1">Personality</div>
-        <p className="text-[11px] text-white/80">{pet.personality?.title}</p>
-        <p className="text-[11px] mt-1">{pet.personality?.desc}</p>
-      </div>
-      {economy?.target_songs_per_week ? (
-        <div className="bg-amber-500/[0.06] rounded-xl p-3 border border-amber-500/10">
-          <div className="text-xs text-amber-300 mb-1">Upkeep target</div>
-          <p className="text-[11px] text-amber-100/80">A healthy pet now averages about {economy.target_songs_per_week} songs per week to stay comfortably fed.</p>
-        </div>
-      ) : null}
-      <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
-        <div className="text-xs text-gray-500 mb-2">Likes & dislikes</div>
-        <div className="grid grid-cols-2 gap-3 text-[11px]">
-          <div>
-            <div className="text-emerald-300 mb-1">Favourite foods</div>
-            <div className="flex flex-wrap gap-1">
-              {(pet.food_preferences?.favorites || []).map((foodId) => (
-                <span key={foodId} className="px-2 py-0.5 rounded-full border border-emerald-400/15 bg-emerald-400/10 text-emerald-100/80">{foodId.replace(/-/g, ' ')}</span>
-              ))}
-            </div>
-          </div>
-          <div>
-            <div className="text-rose-300 mb-1">Disliked foods</div>
-            <div className="flex flex-wrap gap-1">
-              {(pet.food_preferences?.dislikes || []).map((foodId) => (
-                <span key={foodId} className="px-2 py-0.5 rounded-full border border-rose-400/15 bg-rose-400/10 text-rose-100/80">{foodId.replace(/-/g, ' ')}</span>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
       {(pet.energy < 20 || pet.hunger < 25) && (
         <div className={`rounded-xl p-3 border ${pet.energy < 10 || pet.hunger < 15 ? 'bg-red-500/[0.06] border-red-500/15' : 'bg-amber-500/[0.06] border-amber-500/10'}`}>
           <div className="flex items-center gap-2">
@@ -1316,339 +1322,400 @@ function PetTab({ pet, shop, combo, economy, socialFeed, interactionBusy, activi
           </div>
         </div>
       )}
-      <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
-        <div className="flex items-center justify-between mb-2">
-          <div className="text-xs text-gray-500">Interact</div>
-          <div className="text-[10px] text-gray-600 tabular-nums">{pet.interactions_today || 0} today</div>
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          {PET_ACTIONS.map((action) => {
-            const locked = action.minBond && (pet.bond || 0) < action.minBond;
-            return (
-              <button
-                key={action.id}
-                onClick={() => !locked && onAction(action.id)}
-                disabled={interactionBusy || locked}
-                className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-semibold transition-all active:scale-[0.97] disabled:opacity-50 ${
-                  locked
-                    ? 'border-white/[0.04] bg-white/[0.01] text-gray-600 cursor-not-allowed'
-                    : 'border-white/[0.08] bg-white/[0.03] text-white/80 hover:border-white/15 hover:bg-white/[0.05]'
-                }`}
-              >
-                <span className="text-sm">{action.icon}</span>
-                <span>{action.label}</span>
-                {locked && <span className="text-[9px] text-gray-600 ml-0.5">&#128274; {action.minBond}</span>}
-              </button>
-            );
-          })}
-        </div>
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          {(pet.activities || []).map((activity) => {
-            const locked = activity.locked;
-            const costLabel = activity.energy < 0 ? `${Math.abs(activity.energy)} energy` : activity.energy > 0 ? `+${activity.energy} energy` : '';
-            return (
-              <button
-                key={activity.id}
-                onClick={() => !locked && onActivity(activity.id)}
-                disabled={activityBusy || locked}
-                className={`rounded-xl border px-3 py-2 text-left transition-all active:scale-[0.98] disabled:opacity-50 ${
-                  locked
-                    ? 'border-white/[0.04] bg-white/[0.01] cursor-not-allowed'
-                    : 'border-white/[0.06] bg-white/[0.02] hover:border-white/15'
-                }`}
-              >
-                <div className="flex items-center justify-between gap-1">
-                  <div className="text-[11px] font-semibold text-white/85">{activity.label}</div>
-                  {locked && <span className="text-[9px] text-gray-600">&#128274;</span>}
-                </div>
-                <div className="text-[10px] text-gray-500 mt-0.5">{activity.desc}</div>
-                {locked && activity.lock_reason && <div className="text-[9px] text-rose-300/60 mt-1">{activity.lock_reason}</div>}
-                {!locked && costLabel && <div className="text-[9px] text-cyan-300/50 mt-1">{costLabel}</div>}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-      <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
-        <div className="flex items-start justify-between gap-3 mb-2">
-          <div>
-            <div className="text-xs text-gray-500">Mastery board</div>
-            <div className="text-sm font-semibold text-white/85 mt-0.5">
-              {pet.mastery?.path?.icon ? `${pet.mastery.path.icon} ` : ''}{pet.mastery?.path?.label || 'Consistency'}
-            </div>
-            <div className="text-[11px] text-gray-500 mt-1">{pet.mastery?.path?.desc}</div>
-          </div>
-          <div className="text-right shrink-0">
-            <div className="text-[10px] uppercase tracking-wider text-cyan-200/70">Mastery</div>
-            <div className="text-base font-bold text-cyan-100 tabular-nums">{pet.mastery?.mastery_xp || 0}</div>
-            <div className="text-[10px] text-cyan-200/75">{pet.mastery?.rank?.label || 'Rookie'}</div>
-          </div>
-        </div>
-        <div className="w-full h-2.5 bg-white/[0.04] rounded-full overflow-hidden border border-white/[0.04]">
-          <div className="h-full rounded-full bg-gradient-to-r from-cyan-600 to-sky-300 transition-all duration-700" style={{ width: `${Math.max(6, (pet.mastery?.rank?.progress || 0) * 100)}%` }} />
-        </div>
-        <div className="mt-2 text-[10px] text-gray-500">
-          {pet.mastery?.rank?.next_label
-            ? `${pet.mastery.rank.label} → ${pet.mastery.rank.next_label} at ${pet.mastery.rank.next_threshold} XP`
-            : `${pet.mastery?.rank?.label || 'Master'} rank reached`}
-        </div>
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          {(pet.mastery?.available_paths || []).map((path) => (
-            <button
-              key={path.id}
-              onClick={() => onSetTrainingPath(path.id)}
-              disabled={trainingBusy}
-              className={`rounded-xl border px-3 py-2 text-left transition-all ${
-                path.active
-                  ? 'border-cyan-400/20 bg-cyan-500/[0.08]'
-                  : 'border-white/[0.06] bg-white/[0.02] hover:border-white/15'
-              } disabled:opacity-50`}
-            >
-              <div className="text-[11px] font-semibold text-white/85">{path.icon ? `${path.icon} ` : ''}{path.label}</div>
-              <div className="text-[10px] text-gray-500 mt-1">{path.desc}</div>
-            </button>
-          ))}
-        </div>
-        <div className="mt-3 space-y-2">
-          <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Talent nodes</div>
-          {(pet.mastery?.milestones || []).map((node, idx) => (
-            <div key={node.id} className={`relative rounded-xl border px-3 py-2.5 transition-all ${node.unlocked ? 'border-emerald-400/15 bg-emerald-500/[0.06]' : 'border-white/[0.05] bg-black/20'}`}>
-              {idx > 0 && (
-                <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-px h-2 bg-white/10" />
-              )}
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-sm">{node.unlocked ? '✅' : '🔒'}</span>
-                  <div className="min-w-0">
-                    <div className="text-[11px] font-semibold text-white/85">{node.title}</div>
-                    <div className="text-[10px] text-gray-500 mt-0.5">{node.desc}</div>
-                  </div>
-                </div>
-                <div className={`text-[10px] font-semibold shrink-0 ${node.unlocked ? 'text-emerald-300' : 'text-gray-500'}`}>
-                  {node.unlocked ? 'Unlocked' : `${node.threshold} XP`}
-                </div>
-              </div>
-              {node.reward && (
-                <div className={`mt-1.5 flex items-center gap-1.5 rounded-lg px-2 py-1 text-[9px] ${
-                  node.unlocked
-                    ? 'bg-amber-500/[0.08] border border-amber-400/15 text-amber-200'
-                    : 'bg-white/[0.02] border border-white/[0.04] text-gray-500'
-                }`}>
-                  <span>{node.reward.type === 'title' ? '🏷️' : node.reward.type === 'habitat' ? '🏠' : '✨'}</span>
-                  <span>{node.reward.label}</span>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-      <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
-        <div className="flex items-center justify-between gap-3 mb-2">
-          <div>
-            <div className="text-xs text-gray-500">Toy chest</div>
-            <div className="text-[11px] text-white/65 mt-0.5">Small objects that unlock more ways to play with your companion.</div>
-          </div>
-          <div className="text-[10px] font-semibold text-amber-300 whitespace-nowrap">{combo.toLocaleString()} Combo</div>
-        </div>
-        <div className="space-y-1.5">
-          {(shop?.toys || []).map((toy) => {
-            const owned = !!toy.owned || (pet.owned_toys || []).includes(toy.id);
-            const favorite = toy.preference === 'favorite';
-            const canAfford = combo >= toy.cost;
-            return (
-              <div key={toy.id} className="flex items-center gap-3 rounded-xl border border-white/[0.06] bg-black/20 px-3 py-2">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[11px] font-semibold text-white/85 truncate">{toy.name}</span>
-                    {favorite ? <span className="shrink-0 rounded-full border border-emerald-400/15 bg-emerald-400/10 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-200">fav</span> : null}
-                  </div>
-                  <div className="text-[10px] text-gray-500 mt-0.5">{toy.desc}</div>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <div className="text-[10px] text-amber-300">{toy.cost}c</div>
-                  <button
-                    onClick={() => (owned ? onUseToy(toy.id) : onBuyToy(toy.id))}
-                    disabled={toyBusy || (!owned && !canAfford)}
-                    className={`rounded-lg px-2.5 py-1.5 text-[10px] font-semibold transition-all ${
-                      owned
-                        ? 'bg-cyan-500/15 text-cyan-200 border border-cyan-500/20 hover:bg-cyan-500/20'
-                        : canAfford
-                          ? 'bg-white/[0.05] text-white/80 border border-white/[0.07] hover:border-white/15'
-                          : 'bg-white/[0.03] text-gray-500 border border-white/[0.05]'
-                    } disabled:opacity-50`}
-                  >
-                    {owned ? 'Use toy' : 'Buy'}
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        {pet.last_toy_id ? (
-          <div className="mt-2 text-[10px] text-gray-500">
-            Last played with: <span className="text-white/70">{String(pet.last_toy_id).replace(/-/g, ' ')}</span>
-          </div>
-        ) : null}
-      </div>
-      <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
-        <div className="text-xs text-gray-500 mb-2">Mission board</div>
-        <div className="space-y-2">
-          {(pet.missions || []).map((mission) => {
-            const pct = mission.target > 0 ? (mission.progress / mission.target) * 100 : 0;
-            return (
-              <div key={mission.id} className="rounded-xl border border-white/[0.05] bg-black/20 p-2.5">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="text-[10px] uppercase tracking-wider text-cyan-200/70">{mission.cadence}</div>
-                    <div className="text-sm font-semibold text-white/85">{mission.label}</div>
-                    <div className="text-[11px] text-gray-500">{mission.desc}</div>
-                  </div>
-                  <button
-                    onClick={() => onClaimMission(mission.id)}
-                    disabled={!mission.complete || mission.claimed || missionBusyId === mission.id}
-                    className={`shrink-0 rounded-lg px-2.5 py-1.5 text-[10px] font-semibold transition-all ${
-                      mission.claimed
-                        ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/15'
-                        : mission.complete
-                          ? 'bg-cyan-500/15 text-cyan-200 border border-cyan-500/20 hover:bg-cyan-500/20'
-                          : 'bg-white/[0.04] text-gray-500 border border-white/[0.05]'
-                    } disabled:opacity-50`}
-                  >
-                    {mission.claimed ? 'Claimed' : mission.complete ? 'Claim' : `${mission.progress}/${mission.target}`}
-                  </button>
-                </div>
-                <div className="mt-2 w-full h-1.5 bg-white/[0.04] rounded-full overflow-hidden">
-                  <div className="h-full rounded-full bg-gradient-to-r from-cyan-600 to-sky-300 transition-all duration-500" style={{ width: `${Math.min(100, pct)}%` }} />
-                </div>
-                <div className="mt-1 text-[10px] text-gray-500">{mission.reward_summary}</div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-      {(pet.milestones?.length > 0) && (
+
+      {/* ── Section 1: Play & Care (open) ── */}
+      <CollapsibleSection title="Play & Care" icon="🎮" defaultOpen={true}>
         <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
           <div className="flex items-center justify-between mb-2">
-            <div className="text-xs text-gray-500">Milestones</div>
-            <div className="text-[10px] text-gray-600 tabular-nums">{pet.milestones.filter(m => m.unlocked).length}/{pet.milestones.length}</div>
+            <div className="text-xs text-gray-500">Interact</div>
+            <div className="text-[10px] text-gray-600 tabular-nums">{pet.interactions_today || 0} today</div>
           </div>
-          {pet.daily_streak > 0 && (
-            <div className="flex items-center gap-2 mb-2 rounded-lg border border-amber-500/10 bg-amber-500/[0.04] px-2.5 py-1.5">
-              <span className="text-sm">{pet.daily_streak >= 7 ? '\uD83D\uDD25' : '\u26A1'}</span>
-              <div>
-                <div className="text-[11px] font-semibold text-amber-200">{pet.daily_streak}-day streak</div>
-                <div className="text-[9px] text-gray-500">Best: {pet.longest_streak || pet.daily_streak}d</div>
+          <div className="flex flex-wrap gap-1.5">
+            {PET_ACTIONS.map((action) => {
+              const locked = action.minBond && (pet.bond || 0) < action.minBond;
+              return (
+                <button
+                  key={action.id}
+                  onClick={() => !locked && onAction(action.id)}
+                  disabled={interactionBusy || locked}
+                  className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-semibold transition-all active:scale-[0.97] disabled:opacity-50 ${
+                    locked
+                      ? 'border-white/[0.04] bg-white/[0.01] text-gray-600 cursor-not-allowed'
+                      : 'border-white/[0.08] bg-white/[0.03] text-white/80 hover:border-white/15 hover:bg-white/[0.05]'
+                  }`}
+                >
+                  <span className="text-sm">{action.icon}</span>
+                  <span>{action.label}</span>
+                  {locked && <span className="text-[9px] text-gray-600 ml-0.5">&#128274; {action.minBond}</span>}
+                </button>
+              );
+            })}
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            {(pet.activities || []).map((activity) => {
+              const locked = activity.locked;
+              const costLabel = activity.energy < 0 ? `${Math.abs(activity.energy)} energy` : activity.energy > 0 ? `+${activity.energy} energy` : '';
+              return (
+                <button
+                  key={activity.id}
+                  onClick={() => !locked && onActivity(activity.id)}
+                  disabled={activityBusy || locked}
+                  className={`rounded-xl border px-3 py-2 text-left transition-all active:scale-[0.98] disabled:opacity-50 ${
+                    locked
+                      ? 'border-white/[0.04] bg-white/[0.01] cursor-not-allowed'
+                      : 'border-white/[0.06] bg-white/[0.02] hover:border-white/15'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-1">
+                    <div className="text-[11px] font-semibold text-white/85">{activity.label}</div>
+                    {locked && <span className="text-[9px] text-gray-600">&#128274;</span>}
+                  </div>
+                  <div className="text-[10px] text-gray-500 mt-0.5">{activity.desc}</div>
+                  {locked && activity.lock_reason && <div className="text-[9px] text-rose-300/60 mt-1">{activity.lock_reason}</div>}
+                  {!locked && costLabel && <div className="text-[9px] text-cyan-300/50 mt-1">{costLabel}</div>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        {/* Toy chest */}
+        <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
+          <div className="flex items-center justify-between gap-3 mb-2">
+            <div className="text-xs text-gray-500">Toys</div>
+            <div className="text-[10px] font-semibold text-amber-300 whitespace-nowrap">{combo.toLocaleString()} Combo</div>
+          </div>
+          <div className="space-y-1.5">
+            {(shop?.toys || []).map((toy) => {
+              const owned = !!toy.owned || (pet.owned_toys || []).includes(toy.id);
+              const favorite = toy.preference === 'favorite';
+              const canAfford = combo >= toy.cost;
+              return (
+                <div key={toy.id} className="flex items-center gap-3 rounded-xl border border-white/[0.06] bg-black/20 px-3 py-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] font-semibold text-white/85 truncate">{toy.name}</span>
+                      {favorite ? <span className="shrink-0 rounded-full border border-emerald-400/15 bg-emerald-400/10 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-200">fav</span> : null}
+                    </div>
+                    <div className="text-[10px] text-gray-500 mt-0.5">{toy.desc}</div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <div className="text-[10px] text-amber-300">{toy.cost}c</div>
+                    <button
+                      onClick={() => (owned ? onUseToy(toy.id) : onBuyToy(toy.id))}
+                      disabled={toyBusy || (!owned && !canAfford)}
+                      className={`rounded-lg px-2.5 py-1.5 text-[10px] font-semibold transition-all ${
+                        owned
+                          ? 'bg-cyan-500/15 text-cyan-200 border border-cyan-500/20 hover:bg-cyan-500/20'
+                          : canAfford
+                            ? 'bg-white/[0.05] text-white/80 border border-white/[0.07] hover:border-white/15'
+                            : 'bg-white/[0.03] text-gray-500 border border-white/[0.05]'
+                      } disabled:opacity-50`}
+                    >
+                      {owned ? 'Use toy' : 'Buy'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {pet.last_toy_id ? (
+            <div className="mt-2 text-[10px] text-gray-500">
+              Last played with: <span className="text-white/70">{String(pet.last_toy_id).replace(/-/g, ' ')}</span>
+            </div>
+          ) : null}
+        </div>
+      </CollapsibleSection>
+
+      {/* ── Section 2: Progress (open) ── */}
+      <CollapsibleSection title="Progress" icon="📈" defaultOpen={true} count={claimableMissions ? `${claimableMissions} claimable` : null}>
+        {/* Mastery */}
+        <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
+          <div className="flex items-start justify-between gap-3 mb-2">
+            <div>
+              <div className="text-xs text-gray-500">Mastery</div>
+              <div className="text-sm font-semibold text-white/85 mt-0.5">
+                {pet.mastery?.path?.icon ? `${pet.mastery.path.icon} ` : ''}{pet.mastery?.path?.label || 'Consistency'}
               </div>
             </div>
-          )}
-          <div className="grid grid-cols-2 gap-1.5">
-            {pet.milestones.map(m => (
-              <div key={m.id} className={`rounded-lg border px-2 py-1.5 text-[10px] ${m.unlocked ? 'border-emerald-400/15 bg-emerald-400/[0.06] text-emerald-100/80' : 'border-white/[0.04] bg-black/20 text-gray-600'}`}>
-                {m.unlocked ? '\u2713 ' : '\u25CB '}{m.label}
-              </div>
+            <div className="text-right shrink-0">
+              <div className="text-base font-bold text-cyan-100 tabular-nums">{pet.mastery?.mastery_xp || 0}</div>
+              <div className="text-[10px] text-cyan-200/75">{pet.mastery?.rank?.label || 'Rookie'}</div>
+            </div>
+          </div>
+          <div className="w-full h-2.5 bg-white/[0.04] rounded-full overflow-hidden border border-white/[0.04]">
+            <div className="h-full rounded-full bg-gradient-to-r from-cyan-600 to-sky-300 transition-all duration-700" style={{ width: `${Math.max(6, (pet.mastery?.rank?.progress || 0) * 100)}%` }} />
+          </div>
+          <div className="mt-2 text-[10px] text-gray-500">
+            {pet.mastery?.rank?.next_label
+              ? `${pet.mastery.rank.label} → ${pet.mastery.rank.next_label} at ${pet.mastery.rank.next_threshold} XP`
+              : `${pet.mastery?.rank?.label || 'Master'} rank reached`}
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            {(pet.mastery?.available_paths || []).map((path) => (
+              <button
+                key={path.id}
+                onClick={() => onSetTrainingPath(path.id)}
+                disabled={trainingBusy}
+                className={`rounded-xl border px-3 py-2 text-left transition-all ${
+                  path.active
+                    ? 'border-cyan-400/20 bg-cyan-500/[0.08]'
+                    : 'border-white/[0.06] bg-white/[0.02] hover:border-white/15'
+                } disabled:opacity-50`}
+              >
+                <div className="text-[11px] font-semibold text-white/85">{path.icon ? `${path.icon} ` : ''}{path.label}</div>
+                <div className="text-[10px] text-gray-500 mt-1">{path.desc}</div>
+              </button>
             ))}
           </div>
+          {(pet.mastery?.milestones || []).length > 0 && (
+            <div className="mt-3 space-y-2">
+              <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Talent nodes</div>
+              {(pet.mastery?.milestones || []).map((node, idx) => (
+                <div key={node.id} className={`relative rounded-xl border px-3 py-2.5 transition-all ${node.unlocked ? 'border-emerald-400/15 bg-emerald-500/[0.06]' : 'border-white/[0.05] bg-black/20'}`}>
+                  {idx > 0 && <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-px h-2 bg-white/10" />}
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-sm">{node.unlocked ? '✅' : '🔒'}</span>
+                      <div className="min-w-0">
+                        <div className="text-[11px] font-semibold text-white/85">{node.title}</div>
+                        <div className="text-[10px] text-gray-500 mt-0.5">{node.desc}</div>
+                      </div>
+                    </div>
+                    <div className={`text-[10px] font-semibold shrink-0 ${node.unlocked ? 'text-emerald-300' : 'text-gray-500'}`}>
+                      {node.unlocked ? 'Unlocked' : `${node.threshold} XP`}
+                    </div>
+                  </div>
+                  {node.reward && (
+                    <div className={`mt-1.5 flex items-center gap-1.5 rounded-lg px-2 py-1 text-[9px] ${
+                      node.unlocked
+                        ? 'bg-amber-500/[0.08] border border-amber-400/15 text-amber-200'
+                        : 'bg-white/[0.02] border border-white/[0.04] text-gray-500'
+                    }`}>
+                      <span>{node.reward.type === 'title' ? '🏷️' : node.reward.type === 'habitat' ? '🏠' : '✨'}</span>
+                      <span>{node.reward.label}</span>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
-      )}
-      {(() => {
-        const moments = [];
-        if (pet.form?.id && pet.form.id !== 'fresh') {
-          moments.push({ type: 'form_upgrade', title: pet.form.label, detail: pet.form.desc });
-        }
-        if (pet.bond_rank?.label && (pet.bond || 0) >= 40) {
-          moments.push({ type: 'bond_rank', title: pet.bond_rank.label, detail: `Bond level ${pet.bond} — a meaningful connection.` });
-        }
-        if ((pet.mastery?.milestones || []).filter(m => m.unlocked).length > 0) {
-          const latest = [...(pet.mastery?.milestones || [])].reverse().find(m => m.unlocked);
-          if (latest) moments.push({ type: 'mastery_milestone', title: latest.title, detail: latest.desc });
-        }
-        if ((pet.daily_streak || 0) >= 7) {
-          moments.push({ type: 'streak_milestone', title: `${pet.daily_streak}-day streak`, detail: `Best: ${pet.longest_streak || pet.daily_streak} days` });
-        }
-        if (!moments.length) return null;
-        return (
+        {/* Missions */}
+        <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
+          <div className="text-xs text-gray-500 mb-2">Missions</div>
+          <div className="space-y-2">
+            {(pet.missions || []).map((mission) => {
+              const pct = mission.target > 0 ? (mission.progress / mission.target) * 100 : 0;
+              return (
+                <div key={mission.id} className="rounded-xl border border-white/[0.05] bg-black/20 p-2.5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-[10px] uppercase tracking-wider text-cyan-200/70">{mission.cadence}</div>
+                      <div className="text-sm font-semibold text-white/85">{mission.label}</div>
+                      <div className="text-[11px] text-gray-500">{mission.desc}</div>
+                    </div>
+                    <button
+                      onClick={() => onClaimMission(mission.id)}
+                      disabled={!mission.complete || mission.claimed || missionBusyId === mission.id}
+                      className={`shrink-0 rounded-lg px-2.5 py-1.5 text-[10px] font-semibold transition-all ${
+                        mission.claimed
+                          ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/15'
+                          : mission.complete
+                            ? 'bg-cyan-500/15 text-cyan-200 border border-cyan-500/20 hover:bg-cyan-500/20'
+                            : 'bg-white/[0.04] text-gray-500 border border-white/[0.05]'
+                      } disabled:opacity-50`}
+                    >
+                      {mission.claimed ? 'Claimed' : mission.complete ? 'Claim' : `${mission.progress}/${mission.target}`}
+                    </button>
+                  </div>
+                  <div className="mt-2 w-full h-1.5 bg-white/[0.04] rounded-full overflow-hidden">
+                    <div className="h-full rounded-full bg-gradient-to-r from-cyan-600 to-sky-300 transition-all duration-500" style={{ width: `${Math.min(100, pct)}%` }} />
+                  </div>
+                  <div className="mt-1 text-[10px] text-gray-500">{mission.reward_summary}</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        {/* Milestones */}
+        {(pet.milestones?.length > 0) && (
           <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
-            <div className="text-xs text-gray-500 mb-2">Showcase</div>
-            <div className="space-y-2">
-              {moments.slice(0, 3).map((m, i) => <PetMomentCard key={i} moment={m} />)}
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-xs text-gray-500">Milestones</div>
+              <div className="text-[10px] text-gray-600 tabular-nums">{pet.milestones.filter(m => m.unlocked).length}/{pet.milestones.length}</div>
+            </div>
+            {pet.daily_streak > 0 && (
+              <div className="flex items-center gap-2 mb-2 rounded-lg border border-amber-500/10 bg-amber-500/[0.04] px-2.5 py-1.5">
+                <span className="text-sm">{pet.daily_streak >= 7 ? '🔥' : '⚡'}</span>
+                <div>
+                  <div className="text-[11px] font-semibold text-amber-200">{pet.daily_streak}-day streak</div>
+                  <div className="text-[9px] text-gray-500">Best: {pet.longest_streak || pet.daily_streak}d</div>
+                </div>
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-1.5">
+              {pet.milestones.map(m => (
+                <div key={m.id} className={`rounded-lg border px-2 py-1.5 text-[10px] ${m.unlocked ? 'border-emerald-400/15 bg-emerald-400/[0.06] text-emerald-100/80' : 'border-white/[0.04] bg-black/20 text-gray-600'}`}>
+                  {m.unlocked ? '✓ ' : '○ '}{m.label}
+                </div>
+              ))}
             </div>
           </div>
-        );
-      })()}
-      <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
-        <div className="flex items-center justify-between mb-2">
-          <div className="text-xs text-gray-500">Memory album</div>
-          <div className="text-[10px] text-gray-600 tabular-nums">{(pet.memories || []).length} memories</div>
+        )}
+      </CollapsibleSection>
+
+      {/* ── Section 3: Identity & Social (collapsed) ── */}
+      <CollapsibleSection title="Identity & Social" icon="🪪" defaultOpen={false}>
+        {/* Personality */}
+        <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
+          <div className="text-xs text-gray-500 mb-1">Personality</div>
+          <p className="text-[11px] text-white/80">{pet.personality?.title}</p>
+          <p className="text-[11px] mt-1">{pet.personality?.desc}</p>
         </div>
-        {(() => {
-          const grouped = {};
-          (pet.memories || []).forEach(m => {
-            const cat = m.category || 'other';
-            if (!grouped[cat]) grouped[cat] = [];
-            grouped[cat].push(m);
-          });
-          const catLabels = { firsts: '🌱 Firsts', bests: '🏆 Bests', social: '🤝 Social', endurance: '💪 Endurance', identity: '🪪 Identity', other: '📝 Other' };
-          const catOrder = ['firsts', 'bests', 'social', 'endurance', 'identity', 'other'];
-          const rarityColors = {
-            legendary: 'border-amber-400/25 bg-amber-500/[0.08]',
-            rare: 'border-purple-400/20 bg-purple-500/[0.06]',
-            uncommon: 'border-cyan-400/15 bg-cyan-500/[0.04]',
-            common: 'border-white/[0.05] bg-black/20',
-          };
-          const rarityDot = { legendary: 'text-amber-400', rare: 'text-purple-400', uncommon: 'text-cyan-400', common: 'text-gray-600' };
-          return catOrder.filter(cat => grouped[cat]?.length).map(cat => (
-            <div key={cat} className="mb-3 last:mb-0">
-              <div className="text-[10px] text-gray-500 mb-1.5">{catLabels[cat] || cat}</div>
-              <div className="space-y-1.5">
-                {grouped[cat].map(memory => (
-                  <div key={memory.id} className={`rounded-xl border px-3 py-2 ${rarityColors[memory.rarity] || rarityColors.common}`}>
-                    <div className="flex items-center gap-1.5">
-                      <span className={`text-[8px] ${rarityDot[memory.rarity] || rarityDot.common}`}>●</span>
-                      <div className="text-[11px] font-semibold text-white/80">{memory.title}</div>
-                    </div>
-                    <div className="text-[10px] text-gray-500 mt-0.5 ml-3.5">{memory.detail}</div>
-                  </div>
+        {/* Likes & dislikes */}
+        <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
+          <div className="text-xs text-gray-500 mb-2">Likes & dislikes</div>
+          <div className="grid grid-cols-2 gap-3 text-[11px]">
+            <div>
+              <div className="text-emerald-300 mb-1">Favourites</div>
+              <div className="flex flex-wrap gap-1">
+                {(pet.food_preferences?.favorites || []).map((foodId) => (
+                  <span key={foodId} className="px-2 py-0.5 rounded-full border border-emerald-400/15 bg-emerald-400/10 text-emerald-100/80">{foodId.replace(/-/g, ' ')}</span>
                 ))}
               </div>
             </div>
-          ));
+            <div>
+              <div className="text-rose-300 mb-1">Dislikes</div>
+              <div className="flex flex-wrap gap-1">
+                {(pet.food_preferences?.dislikes || []).map((foodId) => (
+                  <span key={foodId} className="px-2 py-0.5 rounded-full border border-rose-400/15 bg-rose-400/10 text-rose-100/80">{foodId.replace(/-/g, ' ')}</span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+        {/* Social activity */}
+        {socialFeed && (socialFeed.today_count > 0 || socialFeed.total_reactions > 0) && (
+          <div className="bg-gradient-to-r from-amber-500/[0.06] to-pink-500/[0.04] rounded-xl p-3 border border-amber-400/10">
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className="text-sm">✨</span>
+              <div className="text-xs text-amber-200 font-semibold">Social Activity</div>
+            </div>
+            {socialFeed.today_count > 0 ? (
+              <>
+                <p className="text-[11px] text-white/70 mb-2">
+                  {socialFeed.today_count === 1
+                    ? 'Someone interacted with your pet today!'
+                    : `${socialFeed.today_count} reactions today!`}
+                </p>
+                <div className="flex flex-wrap gap-1">
+                  {socialFeed.today_reactions.slice(0, 8).map((r, i) => (
+                    <span key={i} className="inline-flex items-center gap-1 rounded-full border border-white/[0.06] bg-white/[0.03] px-2 py-0.5 text-[10px]">
+                      <span>{REACTION_ICONS[r.type] || '💬'}</span>
+                      <span className="text-white/60 font-medium">{r.from}</span>
+                    </span>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <p className="text-[11px] text-white/50">{socialFeed.total_reactions} reaction{socialFeed.total_reactions !== 1 ? 's' : ''} all-time.</p>
+            )}
+            {socialFeed.reactions?.length > 0 && (
+              <div className="flex items-center gap-2.5 mt-2 pt-2 border-t border-white/[0.04]">
+                {socialFeed.reactions.map(r => (
+                  <span key={r.type} className="text-[10px] text-gray-400 flex items-center gap-0.5">
+                    <span>{REACTION_ICONS[r.type]}</span>
+                    <span className="tabular-nums">{r.count}</span>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+        {/* Showcase */}
+        {(() => {
+          const moments = [];
+          if (pet.form?.id && pet.form.id !== 'fresh') moments.push({ type: 'form_upgrade', title: pet.form.label, detail: pet.form.desc });
+          if (pet.bond_rank?.label && (pet.bond || 0) >= 40) moments.push({ type: 'bond_rank', title: pet.bond_rank.label, detail: `Bond level ${pet.bond}` });
+          if ((pet.mastery?.milestones || []).filter(m => m.unlocked).length > 0) {
+            const latest = [...(pet.mastery?.milestones || [])].reverse().find(m => m.unlocked);
+            if (latest) moments.push({ type: 'mastery_milestone', title: latest.title, detail: latest.desc });
+          }
+          if ((pet.daily_streak || 0) >= 7) moments.push({ type: 'streak_milestone', title: `${pet.daily_streak}-day streak`, detail: `Best: ${pet.longest_streak || pet.daily_streak}d` });
+          if (!moments.length) return null;
+          return (
+            <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
+              <div className="text-xs text-gray-500 mb-2">Showcase</div>
+              <div className="space-y-2">
+                {moments.slice(0, 3).map((m, i) => <PetMomentCard key={i} moment={m} />)}
+              </div>
+            </div>
+          );
         })()}
-      </div>
-      <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
-        <div className="text-xs text-gray-500 mb-2">Economy guide</div>
-        <div className="space-y-2">
-          <div className="flex items-start gap-2">
-            <span className="text-sm shrink-0">🎵</span>
-            <div>
-              <div className="text-[11px] font-semibold text-amber-200">Combo</div>
-              <div className="text-[10px] text-gray-500">Earned from syncing PIU plays. Spent on food, clothing, habitat, and toys.</div>
-            </div>
+      </CollapsibleSection>
+
+      {/* ── Section 4: Journal (collapsed) ── */}
+      <CollapsibleSection title="Journal" icon="📖" defaultOpen={false} count={`${(pet.memories || []).length}`}>
+        <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
+          {(() => {
+            const grouped = {};
+            (pet.memories || []).forEach(m => {
+              const cat = m.category || 'other';
+              if (!grouped[cat]) grouped[cat] = [];
+              grouped[cat].push(m);
+            });
+            const catLabels = { firsts: '🌱 Firsts', bests: '🏆 Bests', social: '🤝 Social', endurance: '💪 Endurance', identity: '🪪 Identity', other: '📝 Other' };
+            const catOrder = ['firsts', 'bests', 'social', 'endurance', 'identity', 'other'];
+            const rarityColors = {
+              legendary: 'border-amber-400/25 bg-amber-500/[0.08]',
+              rare: 'border-purple-400/20 bg-purple-500/[0.06]',
+              uncommon: 'border-cyan-400/15 bg-cyan-500/[0.04]',
+              common: 'border-white/[0.05] bg-black/20',
+            };
+            const rarityDot = { legendary: 'text-amber-400', rare: 'text-purple-400', uncommon: 'text-cyan-400', common: 'text-gray-600' };
+            return catOrder.filter(cat => grouped[cat]?.length).map(cat => (
+              <div key={cat} className="mb-3 last:mb-0">
+                <div className="text-[10px] text-gray-500 mb-1.5">{catLabels[cat] || cat}</div>
+                <div className="space-y-1.5">
+                  {grouped[cat].map(memory => (
+                    <div key={memory.id} className={`rounded-xl border px-3 py-2 ${rarityColors[memory.rarity] || rarityColors.common}`}>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`text-[8px] ${rarityDot[memory.rarity] || rarityDot.common}`}>●</span>
+                        <div className="text-[11px] font-semibold text-white/80">{memory.title}</div>
+                      </div>
+                      <div className="text-[10px] text-gray-500 mt-0.5 ml-3.5">{memory.detail}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ));
+          })()}
+        </div>
+      </CollapsibleSection>
+
+      {/* ── Section 5: Reference (collapsed) ── */}
+      <CollapsibleSection title="Reference" icon="📋" defaultOpen={false}>
+        {economy?.target_songs_per_week ? (
+          <div className="bg-amber-500/[0.06] rounded-xl p-3 border border-amber-500/10">
+            <div className="text-xs text-amber-300 mb-1">Upkeep target</div>
+            <p className="text-[11px] text-amber-100/80">~{economy.target_songs_per_week} songs/week to stay comfortably fed.</p>
           </div>
-          <div className="flex items-start gap-2">
-            <span className="text-sm shrink-0">💎</span>
-            <div>
-              <div className="text-[11px] font-semibold text-cyan-200">Bond Tokens</div>
-              <div className="text-[10px] text-gray-500">Earned from missions and deep care. Used for rare unlocks and gifts.</div>
-            </div>
+        ) : null}
+        <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
+          <div className="text-xs text-gray-500 mb-2">Economy</div>
+          <div className="space-y-1.5 text-[10px]">
+            <div className="flex gap-2"><span>🎵</span><span><span className="text-amber-200 font-semibold">Combo</span> — from PIU plays. Buy food, gear, habitat, toys.</span></div>
+            <div className="flex gap-2"><span>💎</span><span><span className="text-cyan-200 font-semibold">Bond Tokens</span> — from missions. For rare unlocks & gifts.</span></div>
+            <div className="flex gap-2"><span>✨</span><span><span className="text-fuchsia-200 font-semibold">Rare Shards</span> — from events & HoP. For legendary items.</span></div>
           </div>
-          <div className="flex items-start gap-2">
-            <span className="text-sm shrink-0">✨</span>
-            <div>
-              <div className="text-[11px] font-semibold text-fuchsia-200">Rare Shards</div>
-              <div className="text-[10px] text-gray-500">Dropped from special events and HoP sessions. For legendary items.</div>
-            </div>
+          <div className="mt-2 pt-2 border-t border-white/[0.04] space-y-0.5 text-[10px] text-gray-400">
+            <div>🐾 Play style shapes specialty over time</div>
+            <div>💗 Bond rises through care, missions, activities</div>
+            <div>🧠 Mastery turns habits into long-term identity</div>
+            <div>⭐ Form evolves: Fresh → Trusted → Showcase → Ascendant → Beyond</div>
           </div>
         </div>
-        <div className="mt-3 pt-2 border-t border-white/[0.04]">
-          <div className="text-xs text-gray-500 mb-1">Progression</div>
-          <ul className="text-[10px] space-y-0.5 text-gray-400">
-            <li>🐾 Play style shapes your pet's specialty over time</li>
-            <li>💗 Bond rank rises through care, missions, and activities</li>
-            <li>🧠 Mastery paths turn your habits into long-term identity</li>
-            <li>⭐ Form evolves: Fresh → Trusted → Showcase → Ascendant → Beyond</li>
-          </ul>
-        </div>
-      </div>
+      </CollapsibleSection>
     </div>
   );
 }
@@ -1754,11 +1821,11 @@ function LeaderboardTab({ leaderboard, myCharacter }) {
             <div className={`text-sm font-black w-6 text-center tabular-nums ${rankColors[entry.rank - 1] || 'text-gray-500'}`}>
               {entry.rank <= 3 ? ['🥇', '🥈', '🥉'][entry.rank - 1] : entry.rank}
             </div>
-            <div className="w-8 h-8 shrink-0 flex items-center justify-center">
+            <div className="w-11 h-11 shrink-0 flex items-center justify-center">
               <SpritePet character={entry.character} weightState={entry.weight_state || 'normal'} mood={entry.mood || 'happy'}
                 equippedHat={entry.equipped_hat} hatColor={entry.hat_color}
                 equippedTop={entry.equipped_top} topColor={entry.top_color}
-                size={32} />
+                size={44} />
             </div>
             <div className="flex-1 min-w-0">
               <div className="text-[11px] font-semibold text-white/85 truncate">{entry.username}</div>
