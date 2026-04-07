@@ -86,7 +86,8 @@ const PET_ACTIONS = [
   { id: 'praise', label: 'Praise', icon: '✨' },
   { id: 'cuddle', label: 'Cuddle', icon: '🫶' },
   { id: 'tease', label: 'Tease', icon: '😼' },
-  { id: 'mission', label: 'Ask Mission', icon: '🎯' },
+  { id: 'perform', label: 'Perform', icon: '🎭', minBond: 40 },
+  { id: 'mission', label: 'Mission', icon: '🎯' },
 ];
 
 // ─── Tabs ─────────────────────────────────────────────────────────
@@ -119,6 +120,7 @@ export default function PetPage() {
   const [toyBusy, setToyBusy] = useState(false);
   const [habitatBusy, setHabitatBusy] = useState(false);
   const [trainingBusy, setTrainingBusy] = useState(false);
+  const [rareSpeech, setRareSpeech] = useState(false);
 
   const loadPet = useCallback(async () => {
     try {
@@ -145,7 +147,7 @@ export default function PetPage() {
 
   useEffect(() => {
     if (!pet) return;
-    const iv = setInterval(() => setSpeechText(randomMsg(pet.mood)), 8000);
+    const iv = setInterval(() => { setSpeechText(randomMsg(pet.mood)); setRareSpeech(false); }, 8000);
     return () => clearInterval(iv);
   }, [pet]);
 
@@ -167,8 +169,10 @@ export default function PetPage() {
     try {
       const r = await buyPetFood(foodId);
       setPet(r.pet);
-      showFeedback(`Fed ${r.food}! Yum!`);
-      setSpeechText(r.pet_response || ['Mmm, delicious!', 'Om nom nom!', 'That hit the spot!'][Math.floor(Math.random() * 3)]);
+      const prefTag = r.food_preference === 'favorite' ? ' \u2764\uFE0F' : r.food_preference === 'disliked' ? ' \uD83D\uDC94' : '';
+      showFeedback(`Fed ${r.food}!${prefTag}`);
+      setSpeechText(r.pet_response || 'Mmm!');
+      setRareSpeech(!!r.rare);
       loadShop();
     } catch (e) {
       showFeedback(e?.message || 'Not enough Combo!');
@@ -261,27 +265,31 @@ export default function PetPage() {
         if (r.reaction || fallback?.reaction) setPetReaction(r.reaction || fallback?.reaction || '');
         if (r.expression || fallback?.expression) setPetExpression(r.expression || fallback?.expression || '');
         setSpeechText(r.speech || fallback?.speech || randomMsg(r.pet?.mood || pet?.mood));
+        setRareSpeech(!!r.rare);
         setPetTapped(true);
         setTimeout(() => {
           setPetTapped(false);
           setPetReaction('');
           setPetExpression('');
-        }, fallback ? 1250 : 900);
+          setRareSpeech(false);
+        }, r.rare ? 2200 : fallback ? 1250 : 900);
       })
       .catch((e) => console.error(e))
       .finally(() => setInteractionBusy(false));
   };
 
-  const triggerPetResponse = (speech, reaction = '', expression = '', duration = 1200) => {
+  const triggerPetResponse = (speech, reaction = '', expression = '', duration = 1200, rare = false) => {
     if (reaction) setPetReaction(reaction);
     if (expression) setPetExpression(expression);
     if (speech) setSpeechText(speech);
+    setRareSpeech(!!rare);
     setPetTapped(true);
     setTimeout(() => {
       setPetTapped(false);
       setPetReaction('');
       setPetExpression('');
-    }, duration);
+      setRareSpeech(false);
+    }, rare ? Math.max(duration, 2200) : duration);
   };
 
   const handlePetAction = async (actionId) => {
@@ -290,7 +298,7 @@ export default function PetPage() {
     try {
       const r = await interactPet(actionId);
       setPet(r.pet);
-      triggerPetResponse(r.speech, r.reaction, r.expression);
+      triggerPetResponse(r.speech, r.reaction, r.expression, 1200, r.rare);
     } catch (e) {
       showFeedback(e?.message || 'Could not interact');
     } finally {
@@ -304,8 +312,9 @@ export default function PetPage() {
     try {
       const r = await doPetActivity(activityId);
       setPet(r.pet);
-      showFeedback('Activity complete');
-      triggerPetResponse(r.speech, r.reaction, r.expression, 1500);
+      const gainLabel = r.mastery_gain ? ` +${r.mastery_gain} mastery` : '';
+      showFeedback(`${r.activity || activityId} complete${gainLabel}`);
+      triggerPetResponse(r.speech, r.reaction, r.expression, 1500, r.rare);
     } catch (e) {
       showFeedback(e?.message || 'Activity failed');
     } finally {
@@ -521,6 +530,24 @@ export default function PetPage() {
                 expression={petExpression} foodId={activeFoodId}
                 size={170} onClick={handlePetTap} />
             </div>
+            {/* Speech bubble */}
+            <div className="mt-1 relative max-w-[280px]">
+              <div className={`absolute -top-1.5 left-1/2 -translate-x-1/2 w-2.5 h-2.5 rotate-45 ${rareSpeech ? 'bg-amber-500/20 border-amber-400/30' : 'bg-white/[0.06] border-white/[0.08]'} border-l border-t transition-colors duration-300`} />
+              <div className={`backdrop-blur-sm border rounded-xl px-3 py-2 text-sm text-center italic transition-all duration-500 ${
+                rareSpeech
+                  ? 'bg-amber-500/[0.08] border-amber-400/20 text-amber-200'
+                  : 'bg-white/[0.06] border-white/[0.08] text-gray-300'
+              }`}>
+                {rareSpeech && <span className="text-amber-400 mr-1 animate-pulse">&#10022;</span>}
+                &ldquo;{speechText}&rdquo;
+                {rareSpeech && <span className="text-amber-400 ml-1 animate-pulse">&#10022;</span>}
+              </div>
+            </div>
+            {pet.form?.desc ? (
+              <div className="mt-2 text-center text-[10px] text-white/50 max-w-[260px]">
+                {pet.form.desc}
+              </div>
+            ) : null}
           </div>
           {/* Demand banner */}
           {pet.pending_trick && (
@@ -994,35 +1021,52 @@ function PetTab({ pet, shop, combo, economy, interactionBusy, activityBusy, miss
         </div>
       </div>
       <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
-        <div className="text-xs text-gray-500 mb-2">Quick interactions</div>
-        <div className="grid grid-cols-2 gap-2">
-          {PET_ACTIONS.map((action) => (
-            <button
-              key={action.id}
-              onClick={() => onAction(action.id)}
-              disabled={interactionBusy}
-              className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-left hover:border-white/15 active:scale-[0.98] transition-all disabled:opacity-50"
-            >
-              <div className="text-lg">{action.icon}</div>
-              <div className="text-[11px] font-semibold text-white/80 mt-1">{action.label}</div>
-            </button>
-          ))}
+        <div className="text-xs text-gray-500 mb-2">Interact</div>
+        <div className="flex flex-wrap gap-1.5">
+          {PET_ACTIONS.map((action) => {
+            const locked = action.minBond && (pet.bond || 0) < action.minBond;
+            return (
+              <button
+                key={action.id}
+                onClick={() => !locked && onAction(action.id)}
+                disabled={interactionBusy || locked}
+                className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-semibold transition-all active:scale-[0.97] disabled:opacity-50 ${
+                  locked
+                    ? 'border-white/[0.04] bg-white/[0.01] text-gray-600 cursor-not-allowed'
+                    : 'border-white/[0.08] bg-white/[0.03] text-white/80 hover:border-white/15 hover:bg-white/[0.05]'
+                }`}
+              >
+                <span className="text-sm">{action.icon}</span>
+                <span>{action.label}</span>
+                {locked && <span className="text-[9px] text-gray-600 ml-0.5">&#128274; {action.minBond}</span>}
+              </button>
+            );
+          })}
         </div>
-      </div>
-      <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
-        <div className="text-xs text-gray-500 mb-2">Activities</div>
-        <div className="grid grid-cols-2 gap-2">
-          {(pet.activities || []).map((activity) => (
-            <button
-              key={activity.id}
-              onClick={() => onActivity(activity.id)}
-              disabled={activityBusy}
-              className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-left hover:border-white/15 active:scale-[0.98] transition-all disabled:opacity-50"
-            >
-              <div className="text-[11px] font-semibold text-white/85">{activity.label}</div>
-              <div className="text-[10px] text-gray-500 mt-1">{activity.desc}</div>
-            </button>
-          ))}
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          {(pet.activities || []).map((activity) => {
+            const locked = activity.locked;
+            const costLabel = activity.energy < 0 ? `${Math.abs(activity.energy)} energy` : activity.energy > 0 ? `+${activity.energy} energy` : '';
+            return (
+              <button
+                key={activity.id}
+                onClick={() => !locked && onActivity(activity.id)}
+                disabled={activityBusy || locked}
+                className={`rounded-xl border px-3 py-2 text-left transition-all active:scale-[0.98] disabled:opacity-50 ${
+                  locked
+                    ? 'border-white/[0.04] bg-white/[0.01] cursor-not-allowed'
+                    : 'border-white/[0.06] bg-white/[0.02] hover:border-white/15'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-1">
+                  <div className="text-[11px] font-semibold text-white/85">{activity.label}</div>
+                  {locked && <span className="text-[9px] text-gray-600">&#128274;</span>}
+                </div>
+                <div className="text-[10px] text-gray-500 mt-0.5">{activity.desc}</div>
+                {costLabel && <div className="text-[9px] text-cyan-300/50 mt-1">{costLabel}</div>}
+              </button>
+            );
+          })}
         </div>
       </div>
       <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">

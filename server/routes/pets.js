@@ -138,12 +138,150 @@ const CHARACTER_PROFILES = {
   },
 };
 
+// ─── Contextual speech pools ────────────────────────────
+// Deep per-character lines keyed by mood, activity, trust tier, food preference, and rare hidden lines.
+const CONTEXTUAL_SPEECH = {
+  dojocat: {
+    mood_lines: {
+      desperate: ['My stance... falters...', 'A warrior needs sustenance.', 'Even dojos close when hungry.'],
+      hungry: ['Training on empty is no honour.', 'A snack would sharpen my form.', 'The body needs fuel for the dojo.'],
+      happy: ['Form is strong today.', 'The dojo sings.', 'A worthy session awaits.'],
+      content: ['Discipline rewarded.', 'Every kata flows true.', 'This is how a champion rests.'],
+      stuffed: ['I may have overdone it.', 'So full... no more treats.', 'The belly betrays the warrior.'],
+    },
+    activity_lines: {
+      train: ['Sharpen the fundamentals.', 'Again. Precision demands repetition.', 'Good form. Once more.', 'The pad does not lie.'],
+      play: ['Even a dojo cat chases string.', 'A break between katas.', 'One moment of play, then back to training.'],
+      groom: ['A clean coat honours the dojo.', 'Maintenance is discipline.', 'You may proceed... gently.'],
+      rest: ['Resting between sets.', 'A warrior knows when to recover.', 'The body repairs what training breaks.'],
+      spar: ['Show me your best!', 'I will not hold back.', 'Steel sharpens steel.', 'A worthy opponent!'],
+      explore: ['New grounds to survey.', 'The dojo extends beyond walls.', 'Scouting for wisdom.'],
+    },
+    hidden_lines: [
+      '...I dreamed I was a regular cat once.',
+      'Between us — I like belly rubs.',
+      'The first dojo I trained at had a fish pond.',
+      'Sometimes I watch replays alone. For inspiration.',
+    ],
+    trust_lines: {
+      low: ['You are still proving yourself.', 'Watch. Learn. Then we talk.', 'Earn it.'],
+      mid: ['You are becoming reliable.', 'I see improvement.', 'Not bad, student.'],
+      high: ['I trust you with my training.', 'We move as one.', 'My finest sparring partner.'],
+    },
+    feed_lines: {
+      favorite: ['THIS is a feast.', 'Now that is a worthy offering.', 'You know my palate well.'],
+      disliked: ['...what is this.', 'I will eat it. Out of discipline.', 'Do not bring this again.'],
+      neutral: ['Acceptable nourishment.', 'It fuels the body.', 'Adequate.'],
+    },
+  },
+  buu: {
+    mood_lines: {
+      desperate: ['Buu... needs... snacks...', 'So empty inside...', 'The rhythm fades without food.'],
+      hungry: ['My tummy makes its own beats.', 'Feed me something flashy.', 'A snack would hit different right now.'],
+      happy: ['Vibes are immaculate.', 'Everything tastes better when you are happy.', 'Keep this energy going.'],
+      content: ['Mmm, perfectly full.', 'I could nap right here.', 'Bliss is a full belly and good beats.'],
+      stuffed: ['Cannot. Move.', 'I regret nothing. Maybe that last bite.', 'Roll me to the stage.'],
+    },
+    activity_lines: {
+      train: ['Training is just choreography practice.', 'I look good working out.', 'One more rep for the fans.'],
+      play: ['THIS is what life is about!', 'Hehehe, more more more!', 'Play is my cardio.', 'Catch me if you can!'],
+      groom: ['Make me shine.', 'Every hair in place.', 'Beauty maintenance is self-care.'],
+      rest: ['Nap time is sacred.', 'Five more minutes...', 'Dreaming of snacks...'],
+      spar: ['I fight pretty.', 'You are about to lose... gorgeously.', 'These paws are registered weapons.'],
+      explore: ['New snack spots incoming.', 'Adventure! ...with snack breaks.', 'I heard there are treats out here.'],
+    },
+    hidden_lines: [
+      '...sometimes I eat in secret.',
+      'Do not tell anyone, but I practise when nobody watches.',
+      'I was the smallest of my litter. Look at me now.',
+      'I once cried at a really good combo. Do NOT tell.',
+    ],
+    trust_lines: {
+      low: ['You are amusing. For now.', 'I will allow your company.', 'Prove yourself with snacks.'],
+      mid: ['Okay, you are growing on me.', 'You bring good vibes.', 'Acceptable human.'],
+      high: ['You are my favourite person.', 'We are a TEAM.', 'Best duo in the arcade.'],
+    },
+    feed_lines: {
+      favorite: ['YESSS! My favourite!', 'You really DO love me!', 'More of this. Always more.'],
+      disliked: ['Ew. Ew ew ew.', 'This is NOT it.', 'My taste buds weep.'],
+      neutral: ['Om nom nom.', 'Not bad, not bad.', 'It will do for now.'],
+    },
+  },
+  devit: {
+    mood_lines: {
+      desperate: ['Need... energy... to cause... trouble...', 'Even devils gotta eat.', 'So weak...'],
+      hungry: ['Feed me or I break something.', 'My stomach is GROWLING.', 'Hungry devit is cranky devit.'],
+      happy: ['LETS GOOO!', 'Chaos feels so good!', 'Best. Day. Ever.'],
+      content: ['Heh. Not bad at all.', 'I could get used to this.', 'Satisfied... for now.'],
+      stuffed: ['Food coma incoming...', 'Oof, too much.', 'I ate the whole thing and I would do it AGAIN.'],
+    },
+    activity_lines: {
+      train: ['Training is just advanced mischief.', 'Faster! FASTER!', 'I do not train — I level up.'],
+      play: ['ZOOMIES!', 'Catch me! You cannot!', 'Hahahaha!', 'Again! Again! AGAIN!'],
+      groom: ['Do not touch the horns.', 'Quick, before anyone sees me being cute.', 'Fine. But make it FAST.'],
+      rest: ['Not sleeping. Planning.', 'Power nap for power plays.', 'Recharging chaos batteries.'],
+      spar: ['FINALLY some action!', 'You are going DOWN!', 'Best activity EVER.', 'Come at me!'],
+      explore: ['Secret shortcuts everywhere!', 'I found something! It might explode.', 'Adventure time, let us go!'],
+    },
+    hidden_lines: [
+      '...I keep a collection of shiny things hidden under the pad.',
+      'Once I got scared by a butterfly. Do NOT tell anyone.',
+      'I pretend I do not need hugs. I do.',
+      'My first clear was a fluke. Second one was NOT.',
+    ],
+    trust_lines: {
+      low: ['You are entertaining at least.', 'Keep up or get lost.', 'Still deciding about you.'],
+      mid: ['You are alright, human.', 'We make a good chaos team.', 'I guess you can stay.'],
+      high: ['You are MY human now.', 'Nobody messes with my crew.', 'Ride or die, partner!'],
+    },
+    feed_lines: {
+      favorite: ['FIRE FOOD!', 'This SLAPS!', 'Give me ALL of it!'],
+      disliked: ['Gross gross gross!', 'Are you TRYING to poison me?', 'Absolutely not.'],
+      neutral: ['Munch munch. Fine.', 'Fuel acquired.', 'It is edible. Moving on.'],
+    },
+  },
+  pixiu: {
+    mood_lines: {
+      desperate: ['The fortune... dims...', 'A guardian must not go unfed.', 'The blessings grow faint.'],
+      hungry: ['A meal would restore the balance.', 'The spirit hungers softly.', 'Even celestial beings need nourishment.'],
+      happy: ['Fortune flows abundantly.', 'The stars align for us.', 'A blessed moment indeed.'],
+      content: ['All is in harmony.', 'The cosmos smiles upon us.', 'Perfectly balanced, as things should be.'],
+      stuffed: ['Such... abundance...', 'The guardian is very well nourished.', 'A feast worthy of the heavens.'],
+    },
+    activity_lines: {
+      train: ['Discipline honours the ancestors.', 'Each movement carries meaning.', 'The path of mastery is walked, not rushed.'],
+      play: ['Even the celestial dance.', 'A moment of levity between rituals.', 'Joy feeds the spirit.'],
+      groom: ['A ceremonial cleansing.', 'The mane must be kept with care.', 'Presentation honours tradition.'],
+      rest: ['Meditation restores all.', 'The spirit settles into stillness.', 'In stillness, strength gathers.'],
+      spar: ['A sacred duel begins.', 'Show me your honour.', 'The guardian tests you now.', 'May the worthy prevail.'],
+      explore: ['The world holds ancient secrets.', 'A pilgrimage of discovery.', 'Fortune reveals itself to the seeker.'],
+    },
+    hidden_lines: [
+      '...I sometimes miss the clouds.',
+      'In another age, I guarded a temple. It had the best garden.',
+      'You remind me of my first keeper. That is rare.',
+      'I have never told anyone my true name.',
+    ],
+    trust_lines: {
+      low: ['Trust is earned through ceremony.', 'Your intentions are yet unclear.', 'The guardian observes.'],
+      mid: ['Your aura shows promise.', 'I sense dedication in you.', 'The bond deepens.'],
+      high: ['I bestow my full protection upon you.', 'You carry my blessing always.', 'A sacred bond, forged in devotion.'],
+    },
+    feed_lines: {
+      favorite: ['An exquisite offering.', 'The ancestors approve.', 'Truly auspicious flavours.'],
+      disliked: ['This disrupts the harmony.', 'An unfortunate choice.', 'Perhaps reconsider next time.'],
+      neutral: ['Nourishment received with grace.', 'A simple offering, accepted.', 'It sustains the spirit.'],
+    },
+  },
+};
+
 const PET_INTERACTIONS = {
   praise: { label: 'Praise', bond: 4, trust: 4, happiness: 4, hype: 3, energy: 0, expression: 'proud', reaction: 'proud' },
   cuddle: { label: 'Cuddle', bond: 5, trust: 3, happiness: 5, hype: 0, energy: 1, expression: 'soft', reaction: 'sway' },
   tease: { label: 'Tease', bond: 1, trust: -2, happiness: -1, hype: 6, energy: 0, expression: 'smirk', reaction: 'mischief' },
   mission: { label: 'Ask Mission', bond: 2, trust: 2, happiness: 1, hype: 2, energy: 0, expression: 'sparkle', reaction: 'nod' },
   tap: { label: 'Tap', bond: 1, trust: 1, happiness: 2, hype: 1, energy: 0, expression: '', reaction: '' },
+  perform: { label: 'Perform', bond: 3, trust: 3, happiness: 6, hype: 8, energy: -6, expression: 'excited', reaction: 'hop', minBond: 40 },
 };
 
 const PET_ACTIVITIES = {
@@ -578,6 +716,60 @@ function getFoodPreference(character, foodId) {
 function pickRandom(list, fallback = '') {
   if (!Array.isArray(list) || !list.length) return fallback;
   return list[Math.floor(Math.random() * list.length)] || fallback;
+}
+
+/**
+ * Build a contextual speech line that considers mood, trust, activity, and food preference.
+ * Has a small chance of returning a rare "hidden" line the player hasn't seen.
+ * @param {object} pet - raw pet row from DB
+ * @param {{ type: 'interact'|'activity'|'feed', actionId?: string, activityId?: string, preference?: string }} ctx
+ * @returns {{ speech: string, rare: boolean, mood_aware: boolean }}
+ */
+function buildContextualSpeech(pet, ctx = {}) {
+  const character = pet.character || 'dojocat';
+  const sd = CONTEXTUAL_SPEECH[character] || CONTEXTUAL_SPEECH.dojocat;
+  const profile = getCharacterProfile(character);
+  const hunger = computeDecayed(pet.fullness || 50, pet.last_fed_at, HUNGER_DECAY_PER_HOUR);
+  const happiness = computeDecayed(pet.happiness || 50, pet.last_fed_at, HAPPINESS_DECAY_PER_HOUR);
+  const mood = getMood(hunger, happiness);
+  const trust = pet.trust || 35;
+  const trustTier = trust < 45 ? 'low' : trust < 75 ? 'mid' : 'high';
+
+  // 8% chance of a rare hidden line (regardless of context)
+  if (Math.random() < 0.08 && sd.hidden_lines?.length) {
+    return { speech: pickRandom(sd.hidden_lines), rare: true, mood_aware: false };
+  }
+
+  // Feed context — use preference-specific pool
+  if (ctx.type === 'feed' && ctx.preference) {
+    const pool = sd.feed_lines?.[ctx.preference] || sd.feed_lines?.neutral || [];
+    return { speech: pickRandom(pool, 'Mmm.'), rare: false, mood_aware: false };
+  }
+
+  // Activity context — use per-activity pool
+  if (ctx.type === 'activity' && ctx.activityId) {
+    const pool = sd.activity_lines?.[ctx.activityId];
+    if (pool?.length) return { speech: pickRandom(pool), rare: false, mood_aware: false };
+  }
+
+  // Interaction context — blend mood / trust / character lines
+  if (ctx.type === 'interact') {
+    // Extreme moods override 50% of the time
+    if (['desperate', 'stuffed'].includes(mood) && Math.random() < 0.5) {
+      return { speech: pickRandom(sd.mood_lines?.[mood] || [], 'Hmm.'), rare: false, mood_aware: true };
+    }
+    // 20% chance of a trust-flavoured line
+    if (Math.random() < 0.2 && sd.trust_lines?.[trustTier]?.length) {
+      return { speech: pickRandom(sd.trust_lines[trustTier]), rare: false, mood_aware: false };
+    }
+    // Default: character interaction_lines for this action
+    const actionId = ctx.actionId || 'tap';
+    const pool = profile.interaction_lines[actionId] || profile.interaction_lines.tap || [];
+    return { speech: pickRandom(pool, 'A tiny moment passes between you.'), rare: false, mood_aware: false };
+  }
+
+  // Fallback — mood line
+  return { speech: pickRandom(sd.mood_lines?.[mood] || [], 'Hello!'), rare: false, mood_aware: true };
 }
 
 function getToyPreference(character, toy) {
@@ -1343,12 +1535,8 @@ router.post('/buy-food', requireAuth, (req, res) => {
   const newHype = clamp(hype + Math.max(0, Math.floor(food.happiness / 2)) + (favoriteBonus?.hype || 0) + (dislikedPenalty?.hype || 0), 0, MAX_STAT);
   const newBond = Math.max(0, (pet.bond || 0) + (favoriteBonus?.bond || 1));
   const newTrust = clamp((pet.trust || 35) + (favoriteBonus?.trust || 0) + (dislikedPenalty?.trust || 0), 0, MAX_STAT);
-  const profile = getCharacterProfile(pet.character);
-  const response = preference === 'favorite'
-    ? `${food.name}! ${pickRandom(profile.interaction_lines.praise, 'That was perfect.')}`
-    : preference === 'disliked'
-      ? `${pickRandom(profile.interaction_lines.tease, 'Hmm.')} Maybe a different snack next time.`
-      : `${pickRandom(profile.interaction_lines.cuddle, 'Mmm.')} ${food.name} hit the spot.`;
+  const feedCtx = buildContextualSpeech(pet, { type: 'feed', preference });
+  const response = feedCtx.speech;
 
   db.prepare(`
     UPDATE user_pets
@@ -1365,6 +1553,7 @@ router.post('/buy-food', requireAuth, (req, res) => {
     food: food.name,
     food_preference: preference,
     pet_response: response,
+    rare: feedCtx.rare || false,
   });
 });
 
@@ -1578,20 +1767,29 @@ router.post('/interact', requireAuth, (req, res) => {
 
   const actionId = String(req.body?.actionId || 'tap').trim();
   const interaction = PET_INTERACTIONS[actionId] || PET_INTERACTIONS.tap;
+
+  // Bond gate (e.g. perform requires bond ≥ 40)
+  if (interaction.minBond && (pet.bond || 0) < interaction.minBond) {
+    return res.status(400).json({ error: `${interaction.label} unlocks at bond ${interaction.minBond}` });
+  }
+
   const todayKey = getUtcDayKey();
   const currentDailyInteractions = pet.daily_interaction_key === todayKey ? (pet.daily_interaction_count || 0) : 0;
   const currentEnergy = getStateValue(pet.energy || 65, pet.updated_at || pet.last_fed_at, ENERGY_DECAY_PER_HOUR);
   const currentHype = getStateValue(pet.hype || 25, pet.updated_at || pet.last_fed_at, HYPE_DECAY_PER_HOUR);
   const currentHappiness = computeDecayed(pet.happiness || 50, pet.last_fed_at, HAPPINESS_DECAY_PER_HOUR);
-  const profile = getCharacterProfile(pet.character);
+
+  // Energy gate for costly interactions (perform costs energy)
+  if (interaction.energy < 0 && currentEnergy < Math.abs(interaction.energy)) {
+    return res.status(400).json({ error: `Not enough energy for ${interaction.label}` });
+  }
 
   const newEnergy = clamp(currentEnergy + (interaction.energy || 0), 0, MAX_STAT);
   const newHype = clamp(currentHype + (interaction.hype || 0), 0, MAX_STAT);
   const newHappiness = clamp(currentHappiness + (interaction.happiness || 0), 0, MAX_STAT);
   const newTrust = clamp((pet.trust || 35) + (interaction.trust || 0), 0, MAX_STAT);
   const newBond = Math.max(0, (pet.bond || 0) + (interaction.bond || 0));
-  const lines = profile.interaction_lines[actionId] || profile.interaction_lines.tap || [];
-  const speech = pickRandom(lines, 'A tiny moment passes between you.');
+  const ctx = buildContextualSpeech(pet, { type: 'interact', actionId });
 
   db.prepare(`
     UPDATE user_pets
@@ -1606,10 +1804,12 @@ router.post('/interact', requireAuth, (req, res) => {
   const updated = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
   res.json({
     pet: formatPet(updated, false, db),
-    speech,
+    speech: ctx.speech,
     reaction: interaction.reaction,
     expression: interaction.expression,
     action: actionId,
+    rare: ctx.rare || false,
+    mood_aware: ctx.mood_aware || false,
   });
 });
 
@@ -1642,8 +1842,7 @@ router.post('/activities/:activityId', requireAuth, (req, res) => {
   const newBondTokens = Math.max(0, (pet.bond_tokens || 0) + (activity.bond_tokens || 0));
   const newRareShards = Math.max(0, (pet.rare_shards || 0) + (activity.rare_shards || 0));
   const masteryGain = getActivityMasteryGain(pet.active_training_path || 'consistency', activity.id);
-  const profile = getCharacterProfile(pet.character);
-  const speech = pickRandom(profile.interaction_lines.mission, `${activity.label} complete.`);
+  const ctx = buildContextualSpeech(pet, { type: 'activity', activityId: activity.id });
 
   db.prepare(`
     UPDATE user_pets
@@ -1657,11 +1856,12 @@ router.post('/activities/:activityId', requireAuth, (req, res) => {
   const updated = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
   res.json({
     pet: formatPet(updated, false, db),
-    speech,
+    speech: ctx.speech,
     reaction: activity.reaction,
     expression: activity.expression,
     activity: activity.id,
     mastery_gain: masteryGain,
+    rare: ctx.rare || false,
   });
 });
 
