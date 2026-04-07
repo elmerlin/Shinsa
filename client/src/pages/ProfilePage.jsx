@@ -2668,7 +2668,7 @@ export default function ProfilePage() {
               )}
             </div>
             {publicPet && !isPetAvatar && (
-              <div className="mt-1">
+              <div className="mt-1 max-w-full overflow-hidden">
                 <PetPresenceChip pet={publicPet} size="sm" onClick={() => setShowPetModal(true)} />
               </div>
             )}

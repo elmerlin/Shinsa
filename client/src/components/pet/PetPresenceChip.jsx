@@ -18,7 +18,7 @@ export default function PetPresenceChip({ pet, size = 'sm', showTitle = true, sh
   return (
     <button
       onClick={onClick}
-      className={`inline-flex items-center gap-1.5 rounded-full border border-white/[0.06] bg-white/[0.02] transition-all hover:bg-white/[0.05] hover:border-white/10 ${
+      className={`inline-flex items-center gap-1.5 rounded-full border border-white/[0.06] bg-white/[0.02] transition-all hover:bg-white/[0.05] hover:border-white/10 max-w-full ${
         isCompact ? 'px-1.5 py-0.5' : 'px-2 py-1'
       } ${onClick ? 'cursor-pointer' : 'cursor-default'}`}
       disabled={!onClick}
