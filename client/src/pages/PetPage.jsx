@@ -551,11 +551,11 @@ export default function PetPage() {
           <div className="absolute top-3 right-3 z-10"><WeightBadge state={pet.weight_state} /></div>
           <div className="absolute top-3 left-3 z-10"><BondBadge rank={pet.bond_rank} /></div>
           {pet.form?.label ? (
-            <div className="absolute left-1/2 top-3 z-10 -translate-x-1/2">
+            <div className="absolute left-1/2 top-10 z-10 -translate-x-1/2">
               <FormBadge form={pet.form} />
             </div>
           ) : null}
-          <div className={`relative z-10 flex flex-col items-center justify-end px-4 pt-14 pb-3 min-h-[280px] sm:min-h-[300px] ${petTapped ? 'animate-[wiggle_400ms_ease]' : ''}`}>
+          <div className={`relative z-10 flex flex-col items-center justify-end px-4 pt-16 pb-3 min-h-[290px] sm:min-h-[310px] ${petTapped ? 'animate-[wiggle_400ms_ease]' : ''}`}>
             {/* Speech bubble — single instance, above pet */}
             <div className="mb-2 relative max-w-[240px]">
               <div className={`backdrop-blur-sm border rounded-xl px-3 py-1.5 text-[13px] text-center italic transition-all duration-500 ${
