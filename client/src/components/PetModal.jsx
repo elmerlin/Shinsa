@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getPublicPet } from '../utils/api';
+import { getPublicPet, reactToPet } from '../utils/api';
 import SpritePet from './SpritePet';
 
 /**
@@ -20,6 +20,8 @@ export default function PetModal({ userId, onClose }) {
   const [pet, setPet] = useState(null);
   const [username, setUsername] = useState('');
   const [loading, setLoading] = useState(true);
+  const [reacting, setReacting] = useState('');
+  const [reacted, setReacted] = useState({});
 
   useEffect(() => {
     if (!userId) return;
@@ -137,6 +139,34 @@ export default function PetModal({ userId, onClose }) {
                   ))}
                 </div>
               )}
+
+              {/* Social reactions */}
+              <div className="mt-3 flex items-center justify-center gap-2">
+                {['cheer', 'wow', 'flex', 'heart'].map(type => {
+                  const icons = { cheer: '\u{1F4E3}', wow: '\u{1F929}', flex: '\u{1F4AA}', heart: '\u{1F497}' };
+                  const done = reacted[type];
+                  return (
+                    <button
+                      key={type}
+                      onClick={async () => {
+                        if (done || reacting) return;
+                        setReacting(type);
+                        try {
+                          await reactToPet(userId, type);
+                          setReacted(prev => ({ ...prev, [type]: true }));
+                        } catch {}
+                        setReacting('');
+                      }}
+                      disabled={!!done || !!reacting}
+                      className={`rounded-lg border px-2 py-1.5 text-sm transition-all ${
+                        done ? 'border-amber-400/20 bg-amber-400/10 opacity-70' : 'border-white/[0.06] bg-white/[0.03] hover:bg-white/[0.06]'
+                      } disabled:opacity-50`}
+                    >
+                      {icons[type]}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </>
         )}

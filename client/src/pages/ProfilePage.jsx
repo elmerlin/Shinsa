@@ -44,6 +44,7 @@ import PlateBadge from '../components/ui/plate-badge';
 import { buildScoreSnapshotLinkShare } from '../utils/directMessageShares';
 import SpritePet from '../components/SpritePet';
 import PetModal from '../components/PetModal';
+import PetPresenceChip from '../components/pet/PetPresenceChip';
 import { getPublicPet } from '../utils/api';
 
 function getAge(dateStr) {
@@ -2666,6 +2667,11 @@ export default function ProfilePage() {
                 <span className="hidden sm:inline text-xs sm:text-sm text-gray-500">Age {age}</span>
               )}
             </div>
+            {publicPet && !isPetAvatar && (
+              <div className="mt-1">
+                <PetPresenceChip pet={publicPet} size="sm" onClick={() => setShowPetModal(true)} />
+              </div>
+            )}
             {profile.playing_status && (
               <div className="hidden sm:flex items-center gap-1.5 mt-1 sm:mt-2">
                 <span className="inline-block w-2 h-2 rounded-full bg-green-400 animate-pulse" />

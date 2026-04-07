@@ -1520,6 +1520,30 @@ const PIXEL_ART_STYLES = `
     animation: petFoodTravel 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
     transform-origin: center center;
   }
+  /* ── Idle variant animations (intermittent, character-specific) ── */
+  @keyframes sprite-idle-nod { 0%,100% { transform: translateY(0); } 40% { transform: translateY(1px); } }
+  @keyframes sprite-idle-stance { 0%,100% { transform: rotate(0); } 30% { transform: rotate(0.5deg); } 70% { transform: rotate(-0.3deg); } }
+  @keyframes sprite-idle-whisker { 0%,100% { transform: scaleX(1); } 50% { transform: scaleX(1.003); } }
+  @keyframes sprite-idle-wobble { 0%,100% { transform: rotate(0); } 25% { transform: rotate(1.5deg); } 75% { transform: rotate(-1.5deg); } }
+  @keyframes sprite-idle-bounce { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+  @keyframes sprite-idle-sway { 0%,100% { transform: translateX(0); } 50% { transform: translateX(1.5px); } }
+  @keyframes sprite-idle-twitch { 0%,50%,100% { transform: translateX(0); } 25% { transform: translateX(-1px); } 75% { transform: translateX(1px); } }
+  @keyframes sprite-idle-shimmy { 0%,100% { transform: rotate(0); } 20% { transform: rotate(1deg); } 40% { transform: rotate(-1deg); } 60% { transform: rotate(0.5deg); } }
+  @keyframes sprite-idle-hop { 0%,100% { transform: translateY(0); } 40% { transform: translateY(-3px); } }
+  @keyframes sprite-idle-float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+  @keyframes sprite-idle-glow { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.05); } }
+  .idle-nod { animation: sprite-idle-nod 2s ease-in-out; }
+  .idle-stance { animation: sprite-idle-stance 1.8s ease-in-out; }
+  .idle-whisker { animation: sprite-idle-whisker 1.5s ease-in-out; }
+  .idle-wobble { animation: sprite-idle-wobble 2s ease-in-out; }
+  .idle-bounce { animation: sprite-idle-bounce 1.6s ease-in-out; }
+  .idle-sway { animation: sprite-idle-sway 2.2s ease-in-out; }
+  .idle-twitch { animation: sprite-idle-twitch 0.8s ease-in-out; }
+  .idle-shimmy { animation: sprite-idle-shimmy 1.4s ease-in-out; }
+  .idle-hop { animation: sprite-idle-hop 1s ease-in-out; }
+  .idle-float { animation: sprite-idle-float 2.5s ease-in-out; }
+  .idle-glow { animation: sprite-idle-glow 2s ease-in-out; }
+  .sprite-blink { opacity: 0.92; transition: opacity 0.15s ease; }
   @media (prefers-reduced-motion: reduce) {
     .pixel-pet-wrap *,
     .pixel-pet-wrap {
@@ -1527,6 +1551,11 @@ const PIXEL_ART_STYLES = `
       animation-iteration-count: 1 !important;
       transition-duration: 0.01ms !important;
     }
+    .idle-nod, .idle-stance, .idle-whisker, .idle-wobble, .idle-bounce,
+    .idle-sway, .idle-twitch, .idle-shimmy, .idle-hop, .idle-float, .idle-glow {
+      animation: none !important;
+    }
+    .sprite-blink { opacity: 1 !important; transition: none !important; }
   }
 `;
 
@@ -1580,6 +1609,45 @@ export default function SpritePet({
   const iconicLook = DEFAULT_ICONIC_LOOKS[character] || null;
   const hasReaction = (!!reaction || !!actionState) && !isEating && !isTricking;
   const renderedAspect = GH / GW;
+
+  // ─── Idle animation system ──────────────────────────
+  const [idleTick, setIdleTick] = React.useState(0);
+  const [blinkState, setBlinkState] = React.useState(false);
+
+  React.useEffect(() => {
+    // Respect reduced motion
+    if (typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    if (hasReaction || isEating || isTricking) return;
+
+    // Blink every 3-6 seconds
+    const blinkInterval = setInterval(() => {
+      setBlinkState(true);
+      setTimeout(() => setBlinkState(false), 150);
+    }, 3000 + Math.random() * 3000);
+
+    // Idle tick for subtle motion every 4-8 seconds
+    const idleInterval = setInterval(() => {
+      setIdleTick(t => t + 1);
+    }, 4000 + Math.random() * 4000);
+
+    return () => {
+      clearInterval(blinkInterval);
+      clearInterval(idleInterval);
+    };
+  }, [hasReaction, isEating, isTricking]);
+
+  // Character idle behaviors — cycle through variants on each tick
+  const idleVariant = idleTick % 4;
+  const IDLE_VARIANT_CLASSES = {
+    dojocat: ['idle-nod', 'idle-stance', 'idle-whisker', 'idle-nod'],
+    buu: ['idle-wobble', 'idle-bounce', 'idle-sway', 'idle-wobble'],
+    devit: ['idle-twitch', 'idle-shimmy', 'idle-hop', 'idle-twitch'],
+    pixiu: ['idle-float', 'idle-sway', 'idle-glow', 'idle-float'],
+  };
+  const idleVariantClass = (!hasReaction && !isEating && !isTricking)
+    ? (IDLE_VARIANT_CLASSES[character] || IDLE_VARIANT_CLASSES.dojocat)[idleVariant]
+    : '';
+  const blinkClass = blinkState ? 'sprite-blink' : '';
 
   // Memoize all grid computations
   const layers = useMemo(() => {
@@ -1700,7 +1768,7 @@ export default function SpritePet({
       <PixelLayer shadow={layers.groundShadow} />
 
       {/* Animated group */}
-      <div className={animClass} style={{ position: 'absolute', inset: 0 }}>
+      <div className={`${animClass} ${idleVariantClass} ${blinkClass}`} style={{ position: 'absolute', inset: 0 }}>
         {/* Tail */}
         <PixelLayer shadow={layers.tailShadow} className="pet-tail" />
 

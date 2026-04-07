@@ -512,6 +512,9 @@ function buildCompanionCoach(pet, summary) {
   const character = pet.character || 'dojocat';
   const priority = getCoachPriority(pet, summary);
   const template = COACH_TEMPLATES[priority] || COACH_TEMPLATES.consistency;
+  const lastPriority = pet.last_coach_priority || '';
+  const focusCount = pet.coach_focus_count || 0;
+  const sameFocus = lastPriority === priority;
 
   return {
     priority,
@@ -521,6 +524,8 @@ function buildCompanionCoach(pet, summary) {
     why: template.why,
     cta_label: template.cta_label,
     related_surface: template.related_surface,
+    streak_note: sameFocus && focusCount >= 3 ? `${focusCount} sessions on ${template.focus}` : '',
+    is_new_focus: !sameFocus && !!lastPriority,
   };
 }
 
@@ -880,6 +885,33 @@ function ensurePetTable(db) {
   addCol('last_active_date', "TEXT NOT NULL DEFAULT ''");
   addCol('lifetime_feeds', "INTEGER NOT NULL DEFAULT 0");
   addCol('lifetime_activities', "INTEGER NOT NULL DEFAULT 0");
+  addCol('last_coach_priority', "TEXT NOT NULL DEFAULT ''");
+  addCol('last_coach_at', "TEXT NOT NULL DEFAULT ''");
+  addCol('coach_focus_count', "INTEGER NOT NULL DEFAULT 0");
+}
+
+function ensurePetSocialTables(db) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS pet_social_reactions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      from_user_id INTEGER NOT NULL,
+      to_user_id INTEGER NOT NULL,
+      reaction_type TEXT NOT NULL DEFAULT 'cheer',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(from_user_id, to_user_id, reaction_type, created_at)
+    )
+  `);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS pet_gifts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      from_user_id INTEGER NOT NULL,
+      to_user_id INTEGER NOT NULL,
+      gift_type TEXT NOT NULL,
+      gift_id TEXT NOT NULL DEFAULT '',
+      message TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────
@@ -2125,6 +2157,28 @@ router.post('/training-path', requireAuth, (req, res) => {
   });
 });
 
+// POST /api/pets/coach-ack — acknowledge coach suggestion
+router.post('/coach-ack', requireAuth, (req, res) => {
+  const db = getDb();
+  ensurePetTable(db);
+  const pet = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
+  if (!pet) return res.status(404).json({ error: 'No pet adopted yet' });
+
+  const { priority } = req.body || {};
+  if (!priority) return res.status(400).json({ error: 'Missing priority' });
+
+  const sameFocus = (pet.last_coach_priority || '') === priority;
+  const newCount = sameFocus ? (pet.coach_focus_count || 0) + 1 : 1;
+
+  db.prepare(`
+    UPDATE user_pets
+    SET last_coach_priority = ?, last_coach_at = datetime('now'), coach_focus_count = ?, updated_at = datetime('now')
+    WHERE user_id = ?
+  `).run(priority, newCount, req.user.id);
+
+  res.json({ success: true, focus_count: newCount });
+});
+
 // POST /api/pets/equip — equip or unequip clothing
 router.post('/equip', requireAuth, (req, res) => {
   const db = getDb();
@@ -2610,6 +2664,118 @@ router.get('/leaderboard', (req, res) => {
   });
 
   res.json({ leaderboard: entries });
+});
+
+// ─── Pet Social ───────────────────────────────────────────────────
+
+// POST /api/pets/social/react — cheer another user's pet
+router.post('/social/react', requireAuth, (req, res) => {
+  const db = getDb();
+  ensurePetSocialTables(db);
+  ensurePetTable(db);
+  const { targetUserId, reactionType = 'cheer' } = req.body || {};
+
+  if (!targetUserId || targetUserId === req.user.id) return res.status(400).json({ error: 'Invalid target' });
+  const validReactions = ['cheer', 'wow', 'flex', 'heart'];
+  if (!validReactions.includes(reactionType)) return res.status(400).json({ error: 'Invalid reaction' });
+
+  const targetPet = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(targetUserId);
+  if (!targetPet) return res.status(404).json({ error: 'Target has no pet' });
+
+  // Rate limit: 1 reaction per type per target per day
+  const today = new Date().toISOString().slice(0, 10);
+  const existing = db.prepare(
+    `SELECT id FROM pet_social_reactions WHERE from_user_id = ? AND to_user_id = ? AND reaction_type = ? AND created_at >= ?`
+  ).get(req.user.id, targetUserId, reactionType, today);
+  if (existing) return res.status(429).json({ error: 'Already reacted today' });
+
+  db.prepare(
+    `INSERT INTO pet_social_reactions (from_user_id, to_user_id, reaction_type) VALUES (?, ?, ?)`
+  ).run(req.user.id, targetUserId, reactionType);
+
+  // Small bond boost for the target pet
+  db.prepare(`UPDATE user_pets SET bond = bond + 1, hype = MIN(100, hype + 2), updated_at = datetime('now') WHERE user_id = ?`).run(targetUserId);
+
+  res.json({ success: true, reaction: reactionType });
+});
+
+// POST /api/pets/social/gift — send food or toy gift to another user's pet
+router.post('/social/gift', requireAuth, (req, res) => {
+  const db = getDb();
+  ensurePetSocialTables(db);
+  ensurePetTable(db);
+  const { targetUserId, giftType, giftId, message = '' } = req.body || {};
+
+  if (!targetUserId || targetUserId === req.user.id) return res.status(400).json({ error: 'Invalid target' });
+  if (!['food', 'toy'].includes(giftType)) return res.status(400).json({ error: 'Invalid gift type' });
+
+  const senderPet = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
+  if (!senderPet) return res.status(404).json({ error: 'You need a pet to send gifts' });
+
+  const targetPet = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(targetUserId);
+  if (!targetPet) return res.status(404).json({ error: 'Target has no pet' });
+
+  // Rate limit: 3 gifts per day total
+  const today = new Date().toISOString().slice(0, 10);
+  const giftCount = db.prepare(
+    `SELECT COUNT(*) as cnt FROM pet_gifts WHERE from_user_id = ? AND created_at >= ?`
+  ).get(req.user.id, today);
+  if ((giftCount?.cnt || 0) >= 3) return res.status(429).json({ error: 'Gift limit reached today (3/day)' });
+
+  // Cost: 1 bond token per gift
+  const balance = senderPet.bond_tokens || 0;
+  if (balance < 1) return res.status(400).json({ error: 'Need at least 1 Bond Token to send a gift' });
+
+  db.prepare(`UPDATE user_pets SET bond_tokens = bond_tokens - 1, updated_at = datetime('now') WHERE user_id = ?`).run(req.user.id);
+
+  // Apply gift effect to target pet
+  if (giftType === 'food') {
+    const food = PET_FOODS_MAP[giftId];
+    if (food) {
+      db.prepare(`UPDATE user_pets SET fullness = MIN(100, fullness + ?), happiness = MIN(100, happiness + ?), bond = bond + 2, last_fed_at = datetime('now'), updated_at = datetime('now') WHERE user_id = ?`)
+        .run(Math.floor(food.hunger / 2), Math.floor(food.happiness / 2), targetUserId);
+    }
+  } else if (giftType === 'toy') {
+    db.prepare(`UPDATE user_pets SET happiness = MIN(100, happiness + 5), bond = bond + 3, hype = MIN(100, hype + 4), updated_at = datetime('now') WHERE user_id = ?`).run(targetUserId);
+  }
+
+  db.prepare(
+    `INSERT INTO pet_gifts (from_user_id, to_user_id, gift_type, gift_id, message) VALUES (?, ?, ?, ?, ?)`
+  ).run(req.user.id, targetUserId, giftType, giftId || '', String(message).slice(0, 100));
+
+  const updatedSender = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
+  res.json({ success: true, pet: formatPet(updatedSender, false, db) });
+});
+
+// GET /api/pets/social/feed-summary — recent social activity for current user's pet
+router.get('/social/feed-summary', requireAuth, (req, res) => {
+  const db = getDb();
+  ensurePetSocialTables(db);
+
+  const reactions = db.prepare(`
+    SELECT r.reaction_type, COUNT(*) as cnt, MAX(r.created_at) as latest
+    FROM pet_social_reactions r
+    WHERE r.to_user_id = ?
+    GROUP BY r.reaction_type
+    ORDER BY latest DESC
+  `).all(req.user.id);
+
+  const recentGifts = db.prepare(`
+    SELECT g.gift_type, g.gift_id, g.message, g.created_at, u.username as from_username
+    FROM pet_gifts g
+    JOIN users u ON u.id = g.from_user_id
+    WHERE g.to_user_id = ?
+    ORDER BY g.created_at DESC
+    LIMIT 10
+  `).all(req.user.id);
+
+  const totalReactions = reactions.reduce((sum, r) => sum + r.cnt, 0);
+
+  res.json({
+    reactions: reactions.map(r => ({ type: r.reaction_type, count: r.cnt })),
+    total_reactions: totalReactions,
+    recent_gifts: recentGifts,
+  });
 });
 
 module.exports = router;

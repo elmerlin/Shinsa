@@ -1452,3 +1452,7 @@ export const claimPetMission = (missionId) => request(`/pets/missions/${missionI
 export const demandTrick = (trickId) => request(`/pets/tricks/${trickId}/demand`, { method: 'POST' });
 export const performTrick = (trickId) => request(`/pets/tricks/${trickId}/perform`, { method: 'POST' });
 export const getPetLeaderboard = () => request('/pets/leaderboard');
+export const reactToPet = (targetUserId, reactionType) => request('/pets/social/react', { method: 'POST', body: JSON.stringify({ targetUserId, reactionType }) });
+export const sendPetGift = (targetUserId, giftType, giftId, message) => request('/pets/social/gift', { method: 'POST', body: JSON.stringify({ targetUserId, giftType, giftId, message }) });
+export const getPetSocialFeed = () => request('/pets/social/feed-summary');
+export const ackCoach = (priority) => request('/pets/coach-ack', { method: 'POST', body: JSON.stringify({ priority }) });

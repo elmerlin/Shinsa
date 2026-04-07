@@ -10,6 +10,7 @@ import {
 import SpritePet from '../components/SpritePet';
 import PetCoachPanel from '../components/pet/PetCoachPanel';
 import PetToyOverlay from '../components/pet/PetToyOverlay';
+import PetMomentCard from '../components/pet/PetMomentCard';
 
 // ─── Sound ─────────────────────────────────────────────────────────
 let _audioCtx = null;
@@ -1504,6 +1505,31 @@ function PetTab({ pet, shop, combo, economy, interactionBusy, activityBusy, miss
           </div>
         </div>
       )}
+      {(() => {
+        const moments = [];
+        if (pet.form?.id && pet.form.id !== 'fresh') {
+          moments.push({ type: 'form_upgrade', title: pet.form.label, detail: pet.form.desc });
+        }
+        if (pet.bond_rank?.label && (pet.bond || 0) >= 40) {
+          moments.push({ type: 'bond_rank', title: pet.bond_rank.label, detail: `Bond level ${pet.bond} — a meaningful connection.` });
+        }
+        if ((pet.mastery?.milestones || []).filter(m => m.unlocked).length > 0) {
+          const latest = [...(pet.mastery?.milestones || [])].reverse().find(m => m.unlocked);
+          if (latest) moments.push({ type: 'mastery_milestone', title: latest.title, detail: latest.desc });
+        }
+        if ((pet.daily_streak || 0) >= 7) {
+          moments.push({ type: 'streak_milestone', title: `${pet.daily_streak}-day streak`, detail: `Best: ${pet.longest_streak || pet.daily_streak} days` });
+        }
+        if (!moments.length) return null;
+        return (
+          <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
+            <div className="text-xs text-gray-500 mb-2">Showcase</div>
+            <div className="space-y-2">
+              {moments.slice(0, 3).map((m, i) => <PetMomentCard key={i} moment={m} />)}
+            </div>
+          </div>
+        );
+      })()}
       <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
         <div className="flex items-center justify-between mb-2">
           <div className="text-xs text-gray-500">Memory album</div>
