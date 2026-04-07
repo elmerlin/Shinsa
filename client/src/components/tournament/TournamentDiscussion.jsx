@@ -239,7 +239,7 @@ function EmojiPicker({ value, onChange }) {
         {value || '?'}
       </button>
       {open ? (
-        <div className="absolute left-0 top-full z-40 mt-1.5 w-[15.5rem] rounded-xl border border-white/10 bg-zinc-950/98 p-2.5 shadow-[0_20px_60px_rgba(0,0,0,0.6)]">
+        <div className="absolute left-0 top-full z-40 mt-1.5 w-[15.5rem] rounded-xl border border-white/10 bg-zinc-950 p-2.5 shadow-[0_20px_60px_rgba(0,0,0,0.6)]">
           <div className="grid grid-cols-6 gap-1">
             {THREAD_EMOJI_PALETTE.map((e) => (
               <button key={e} type="button" onClick={() => { onChange(e); setOpen(false); }}
