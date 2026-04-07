@@ -5,7 +5,7 @@ import {
   buyPetFood, buyPetItem, equipPetItem, unequipPetSlot,
   setPetColor, togglePetAvatar, demandTrick, performTrick,
   interactPet, doPetActivity, claimPetMission, buyPetToy, usePetToy,
-  buyPetHabitatItem, equipPetHabitat, setPetTrainingPath,
+  buyPetHabitatItem, equipPetHabitat, setPetTrainingPath, getPetLeaderboard,
 } from '../utils/api';
 import SpritePet from '../components/SpritePet';
 
@@ -128,7 +128,7 @@ const PET_ACTIONS = [
 ];
 
 // ─── Tabs ─────────────────────────────────────────────────────────
-const TABS = ['pet', 'habitat', 'food', 'clothing', 'tricks'];
+const TABS = ['pet', 'habitat', 'food', 'clothing', 'tricks', 'ranks'];
 
 // ─── Main ─────────────────────────────────────────────────────────
 export default function PetPage() {
@@ -158,6 +158,7 @@ export default function PetPage() {
   const [habitatBusy, setHabitatBusy] = useState(false);
   const [trainingBusy, setTrainingBusy] = useState(false);
   const [rareSpeech, setRareSpeech] = useState(false);
+  const [leaderboard, setLeaderboard] = useState(null);
 
   const loadPet = useCallback(async () => {
     try {
@@ -547,6 +548,8 @@ export default function PetPage() {
       <div className="sticky top-0 z-[60] -mx-2 mb-4 px-2 pt-1 pb-3 bg-gradient-to-b from-[#070b14] via-[#070b14]/95 to-transparent backdrop-blur-sm">
         <div className={`relative rounded-[1.6rem] border border-white/[0.06] overflow-hidden bg-gradient-to-b shadow-[0_18px_45px_rgba(0,0,0,0.28)] ${CHARACTER_BG[pet.character] || ''}`}>
           <HabitatBackdrop backgroundId={pet.habitat?.active_background} />
+          <HabitatFloorDisplay floorId={pet.habitat?.active_floor} />
+          <HabitatWallDisplay wallId={pet.habitat?.active_wall} />
           <HabitatParticles character={pet.character} mood={pet.mood} />
           <HabitatPropDisplay propId={pet.habitat?.active_prop} />
           <div className="absolute top-3 right-3 z-10"><WeightBadge state={pet.weight_state} /></div>
@@ -648,9 +651,9 @@ export default function PetPage() {
       {/* Tab bar */}
       <div className="mt-4 flex rounded-xl border border-white/[0.06] overflow-hidden">
         {TABS.map(t => (
-          <button key={t} onClick={() => { setTab(t); if (t === 'food' || t === 'clothing' || t === 'habitat') loadShop(); }}
-            className={`flex-1 py-2 text-xs font-semibold capitalize transition-all ${tab === t ? 'bg-white/[0.08] text-white' : 'text-gray-500 hover:text-white/70'}`}>
-            {t === 'food' ? '🍖 Food' : t === 'clothing' ? '👒 Clothes' : t === 'tricks' ? '⭐ Tricks' : t === 'habitat' ? '🏠 Room' : '🐾 Pet'}
+          <button key={t} onClick={() => { setTab(t); if (t === 'food' || t === 'clothing' || t === 'habitat') loadShop(); if (t === 'ranks' && !leaderboard) getPetLeaderboard().then(r => setLeaderboard(r.leaderboard)).catch(() => {}); }}
+            className={`flex-1 py-2 text-[10px] sm:text-xs font-semibold capitalize transition-all ${tab === t ? 'bg-white/[0.08] text-white' : 'text-gray-500 hover:text-white/70'}`}>
+            {t === 'food' ? '🍖 Food' : t === 'clothing' ? '👒 Gear' : t === 'tricks' ? '⭐ Tricks' : t === 'habitat' ? '🏠 Room' : t === 'ranks' ? '🏆 Ranks' : '🐾 Pet'}
           </button>
         ))}
       </div>
@@ -689,6 +692,7 @@ export default function PetPage() {
         {tab === 'food' && <FoodTab shop={shop} combo={combo_balance} economy={economy} onBuy={handleBuyFood} buying={buying} />}
         {tab === 'clothing' && <ClothingTab pet={pet} shop={shop} onBuy={handleBuyItem} onEquip={handleEquip} onUnequip={handleUnequip} onSetColor={handleSetColor} buying={buying} colorPickerSlot={colorPickerSlot} setColorPickerSlot={setColorPickerSlot} />}
         {tab === 'tricks' && <TricksTab pet={pet} onDemand={handleDemand} onPerform={handlePerformTrick} />}
+        {tab === 'ranks' && <LeaderboardTab leaderboard={leaderboard} myCharacter={pet.character} />}
       </div>
 
       <p className="text-[10px] text-gray-600 text-center mt-4">Sync PIU scores to earn Combo, then budget it carefully to keep your pet thriving.</p>
@@ -1024,6 +1028,77 @@ function HabitatPropDisplay({ propId }) {
     'spirit-lantern': 'left-6 top-12',
   };
   return <PixelPropSprite art={PIXEL_PROP_ART[propId]} className={positions[propId] || 'right-4 bottom-4'} />;
+}
+
+function HabitatFloorDisplay({ floorId }) {
+  if (!floorId) return null;
+  const floors = {
+    'tatami-mat': {
+      background: 'repeating-linear-gradient(0deg, rgba(180,150,100,0.08) 0px, rgba(180,150,100,0.08) 2px, transparent 2px, transparent 8px)',
+      borderTop: '1px solid rgba(180,150,100,0.12)',
+    },
+    'led-tiles': {
+      background: 'repeating-linear-gradient(90deg, rgba(80,200,255,0.06) 0px, rgba(80,200,255,0.06) 12px, rgba(255,80,180,0.06) 12px, rgba(255,80,180,0.06) 24px)',
+      boxShadow: 'inset 0 -2px 16px rgba(80,200,255,0.08)',
+    },
+    'cherry-petals': {
+      background: 'radial-gradient(circle at 20% 40%, rgba(255,150,180,0.12) 0%, transparent 25%), radial-gradient(circle at 70% 60%, rgba(255,180,200,0.10) 0%, transparent 20%), radial-gradient(circle at 45% 30%, rgba(255,160,190,0.08) 0%, transparent 18%)',
+    },
+    'galaxy-floor': {
+      background: 'radial-gradient(circle at 30% 50%, rgba(120,80,200,0.10) 0%, transparent 30%), radial-gradient(circle at 60% 40%, rgba(80,120,255,0.08) 0%, transparent 25%), radial-gradient(circle at 80% 70%, rgba(200,100,255,0.06) 0%, transparent 20%)',
+      boxShadow: 'inset 0 0 20px rgba(120,80,200,0.06)',
+    },
+  };
+  const style = floors[floorId];
+  if (!style) return null;
+  return (
+    <div
+      className="absolute bottom-0 left-0 right-0 h-[35%] pointer-events-none z-[1] opacity-90"
+      style={style}
+    />
+  );
+}
+
+function HabitatWallDisplay({ wallId }) {
+  if (!wallId) return null;
+  const walls = {
+    'dojo-scroll': (
+      <div className="absolute top-14 right-6 pointer-events-none z-[1] opacity-80">
+        <div className="w-3 h-10 rounded-sm" style={{ background: 'linear-gradient(180deg, #d4c4a0 0%, #b8a882 50%, #a89470 100%)', boxShadow: '0 2px 6px rgba(0,0,0,0.25)' }}>
+          <div className="w-full h-[2px] bg-amber-900/30 mt-1" />
+          <div className="w-full h-[2px] bg-amber-900/20 mt-1" />
+          <div className="w-full h-[2px] bg-amber-900/20 mt-1" />
+        </div>
+      </div>
+    ),
+    'neon-sign': (
+      <div className="absolute top-14 left-5 pointer-events-none z-[1]">
+        <div className="px-1.5 py-0.5 rounded text-[7px] font-black tracking-wider" style={{
+          color: '#ff80d0', textShadow: '0 0 6px rgba(255,80,200,0.5), 0 0 12px rgba(255,80,200,0.3)',
+          border: '1px solid rgba(255,80,200,0.3)', background: 'rgba(255,80,200,0.06)',
+        }}>STOMP</div>
+      </div>
+    ),
+    'photo-wall': (
+      <div className="absolute top-16 left-4 pointer-events-none z-[1] opacity-70 flex gap-0.5">
+        <div className="w-3 h-2.5 rounded-[1px] bg-white/10 border border-white/[0.08]" />
+        <div className="w-2.5 h-3 rounded-[1px] bg-white/8 border border-white/[0.06] mt-1" />
+        <div className="w-3 h-2 rounded-[1px] bg-white/10 border border-white/[0.08] mt-0.5" />
+      </div>
+    ),
+    'champion-banner': (
+      <div className="absolute top-12 right-5 pointer-events-none z-[1] opacity-85">
+        <div className="w-5 h-8 relative" style={{
+          background: 'linear-gradient(180deg, #8b0000 0%, #cc2200 100%)',
+          clipPath: 'polygon(0 0, 100% 0, 100% 70%, 50% 100%, 0 70%)',
+          boxShadow: '0 2px 8px rgba(140,0,0,0.3)',
+        }}>
+          <div className="absolute top-1 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-yellow-400/60" />
+        </div>
+      </div>
+    ),
+  };
+  return walls[wallId] || null;
 }
 
 function WeightBadge({ state }) {
@@ -1490,7 +1565,7 @@ function PetTab({ pet, shop, combo, economy, interactionBusy, activityBusy, miss
 }
 
 function HabitatTab({ pet, shop, combo, habitatBusy, onBuyItem, onEquipItem }) {
-  const habitat = shop?.habitat || pet?.habitat_items || { backgrounds: [], props: [], floor: [], wall: [] };
+  const habitat = pet?.habitat_items || shop?.habitat || { backgrounds: [], props: [], floor: [], wall: [] };
   const sections = [
     { key: 'background', label: 'Backdrops', items: habitat.backgrounds || [] },
     { key: 'prop', label: 'Props', items: habitat.props || [] },
@@ -1566,6 +1641,52 @@ function HabitatTab({ pet, shop, combo, habitatBusy, onBuyItem, onEquipItem }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// ─── Leaderboard tab ─────────────────────────────────────
+function LeaderboardTab({ leaderboard, myCharacter }) {
+  if (!leaderboard) return <div className="text-center text-gray-500 text-sm py-4"><div className="w-8 h-8 border-2 border-white/10 border-t-white/60 rounded-full animate-spin mx-auto" /></div>;
+  if (!leaderboard.length) return <div className="text-center text-gray-500 text-sm py-4">No pets yet.</div>;
+
+  const rankColors = ['text-amber-400', 'text-gray-300', 'text-amber-600'];
+  const formBorder = { beyond: 'border-purple-400/25', ascendant: 'border-amber-400/20', showcase: 'border-cyan-400/15', trusted: 'border-emerald-400/12', fresh: 'border-white/[0.06]' };
+
+  return (
+    <div className="space-y-3 text-sm text-gray-400">
+      <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
+        <div className="text-xs text-gray-500 mb-1">Dojo Rankings</div>
+        <p className="text-[11px] text-white/65">Top companions ranked by bond strength. Keep caring for your pet to climb.</p>
+      </div>
+      <div className="space-y-1.5">
+        {leaderboard.map((entry) => (
+          <div key={entry.rank} className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 ${formBorder[entry.form?.id] || formBorder.fresh} bg-black/20`}>
+            <div className={`text-sm font-black w-6 text-center tabular-nums ${rankColors[entry.rank - 1] || 'text-gray-500'}`}>
+              {entry.rank <= 3 ? ['🥇', '🥈', '🥉'][entry.rank - 1] : entry.rank}
+            </div>
+            <div className="w-8 h-8 shrink-0 flex items-center justify-center">
+              <SpritePet character={entry.character} weightState={entry.weight_state || 'normal'} mood={entry.mood || 'happy'}
+                equippedHat={entry.equipped_hat} hatColor={entry.hat_color}
+                equippedTop={entry.equipped_top} topColor={entry.top_color}
+                size={32} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-[11px] font-semibold text-white/85 truncate">{entry.username}</div>
+              <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                <span className="text-[9px] text-cyan-200/70">{entry.bond_rank?.label || 'Training Partner'}</span>
+                {entry.form?.label && entry.form.id !== 'fresh' && (
+                  <span className={`text-[9px] ${entry.form.id === 'beyond' ? 'text-purple-300' : entry.form.id === 'ascendant' ? 'text-amber-300' : 'text-gray-400'}`}>{entry.form.label}</span>
+                )}
+              </div>
+            </div>
+            <div className="text-right shrink-0">
+              <div className="text-[11px] font-bold text-cyan-100 tabular-nums">{entry.bond}</div>
+              <div className="text-[9px] text-gray-500">bond</div>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

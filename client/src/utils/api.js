@@ -1451,3 +1451,4 @@ export const usePetToy = (toyId) => request(`/pets/toys/${toyId}/use`, { method:
 export const claimPetMission = (missionId) => request(`/pets/missions/${missionId}/claim`, { method: 'POST' });
 export const demandTrick = (trickId) => request(`/pets/tricks/${trickId}/demand`, { method: 'POST' });
 export const performTrick = (trickId) => request(`/pets/tricks/${trickId}/perform`, { method: 'POST' });
+export const getPetLeaderboard = () => request('/pets/leaderboard');

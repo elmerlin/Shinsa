@@ -1858,12 +1858,14 @@ router.post('/equip-habitat', requireAuth, (req, res) => {
   if (!pet) return res.status(404).json({ error: 'No pet adopted yet' });
 
   const { itemId = '', slot = '' } = req.body || {};
-  const ownedHabitat = safeJsonParse(pet.owned_habitat_items, ['dojo-night']);
+  const ownedHabitat = safeJsonParse(pet.owned_habitat_items, []);
+  const defaultOwned = ALL_HABITAT_ITEMS.filter(i => i.default_owned).map(i => i.id);
+  const allOwned = new Set([...ownedHabitat, ...defaultOwned]);
   const slotColumnMap = { background: 'active_habitat_bg', prop: 'active_habitat_prop', floor: 'active_habitat_floor', wall: 'active_habitat_wall' };
   const slotFallbackMap = { background: 'dojo-night', prop: '', floor: '', wall: '' };
 
   if (itemId) {
-    if (!ownedHabitat.includes(itemId)) return res.status(400).json({ error: 'Habitat item not owned' });
+    if (!allOwned.has(itemId)) return res.status(400).json({ error: 'Habitat item not owned' });
     const habitatSlot = getHabitatSlot(itemId);
     if (!habitatSlot) return res.status(400).json({ error: 'Unknown habitat item type' });
     // Lock gate check on equip
