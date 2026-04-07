@@ -5,6 +5,7 @@ import {
   buyPetFood, buyPetItem, equipPetItem, unequipPetSlot,
   setPetColor, togglePetAvatar, demandTrick, performTrick,
   interactPet, doPetActivity, claimPetMission, buyPetToy, usePetToy,
+  buyPetHabitatItem, equipPetHabitat,
 } from '../utils/api';
 import SpritePet from '../components/SpritePet';
 
@@ -70,7 +71,7 @@ const PET_ACTIONS = [
 ];
 
 // ─── Tabs ─────────────────────────────────────────────────────────
-const TABS = ['pet', 'food', 'clothing', 'tricks'];
+const TABS = ['pet', 'habitat', 'food', 'clothing', 'tricks'];
 
 // ─── Main ─────────────────────────────────────────────────────────
 export default function PetPage() {
@@ -97,6 +98,7 @@ export default function PetPage() {
   const [interactionBusy, setInteractionBusy] = useState(false);
   const [missionBusyId, setMissionBusyId] = useState('');
   const [toyBusy, setToyBusy] = useState(false);
+  const [habitatBusy, setHabitatBusy] = useState(false);
 
   const loadPet = useCallback(async () => {
     try {
@@ -331,6 +333,35 @@ export default function PetPage() {
     }
   };
 
+  const handleBuyHabitatItem = async (itemId) => {
+    if (habitatBusy) return;
+    setHabitatBusy(true);
+    try {
+      const r = await buyPetHabitatItem(itemId);
+      setPet(r.pet);
+      showFeedback(`Bought ${r.item}!`);
+      loadShop();
+    } catch (e) {
+      showFeedback(e?.message || 'Could not buy room item');
+    } finally {
+      setHabitatBusy(false);
+    }
+  };
+
+  const handleEquipHabitat = async (itemId, slot) => {
+    if (habitatBusy) return;
+    setHabitatBusy(true);
+    try {
+      const r = await equipPetHabitat(itemId, slot);
+      setPet(r.pet);
+      showFeedback(itemId ? 'Habitat updated' : 'Habitat reset');
+    } catch (e) {
+      showFeedback(e?.message || 'Could not update habitat');
+    } finally {
+      setHabitatBusy(false);
+    }
+  };
+
   // ─── Gates ──────────────────────────────────────────
   if (!user) return <div className="max-w-lg mx-auto p-6 text-center"><h1 className="text-2xl font-bold mb-4">My Pet</h1><p className="text-gray-400">Log in to adopt a pet!</p></div>;
   if (loading) return <div className="max-w-lg mx-auto p-6 flex items-center justify-center min-h-[50vh]"><div className="w-12 h-12 border-2 border-white/10 border-t-white/60 rounded-full animate-spin" /></div>;
@@ -402,7 +433,9 @@ export default function PetPage() {
       {/* Pet habitat */}
       <div className="sticky top-[56px] sm:top-[64px] z-30 -mx-2 mb-4 px-2 pt-1 pb-3 bg-gradient-to-b from-[#070b14] via-[#070b14]/95 to-transparent backdrop-blur-sm">
         <div className={`relative rounded-[1.6rem] border border-white/[0.06] overflow-hidden bg-gradient-to-b shadow-[0_18px_45px_rgba(0,0,0,0.28)] ${CHARACTER_BG[pet.character] || ''}`}>
+          <HabitatBackdrop backgroundId={pet.habitat?.active_background} />
           <HabitatParticles character={pet.character} mood={pet.mood} />
+          <HabitatPropDisplay propId={pet.habitat?.active_prop} />
           <div className="absolute top-3 right-3 z-10"><WeightBadge state={pet.weight_state} /></div>
           <div className="absolute top-3 left-3 z-10"><BondBadge rank={pet.bond_rank} /></div>
           <div className={`relative z-10 flex flex-col items-center px-4 pt-7 pb-5 min-h-[312px] sm:min-h-[332px] ${petTapped ? 'animate-[wiggle_400ms_ease]' : ''}`}>
@@ -484,9 +517,9 @@ export default function PetPage() {
       {/* Tab bar */}
       <div className="mt-4 flex rounded-xl border border-white/[0.06] overflow-hidden">
         {TABS.map(t => (
-          <button key={t} onClick={() => { setTab(t); if (t === 'food' || t === 'clothing') loadShop(); }}
+          <button key={t} onClick={() => { setTab(t); if (t === 'food' || t === 'clothing' || t === 'habitat') loadShop(); }}
             className={`flex-1 py-2 text-xs font-semibold capitalize transition-all ${tab === t ? 'bg-white/[0.08] text-white' : 'text-gray-500 hover:text-white/70'}`}>
-            {t === 'food' ? '🍖 Food' : t === 'clothing' ? '👒 Clothes' : t === 'tricks' ? '⭐ Tricks' : '🐾 Pet'}
+            {t === 'food' ? '🍖 Food' : t === 'clothing' ? '👒 Clothes' : t === 'tricks' ? '⭐ Tricks' : t === 'habitat' ? '🏠 Room' : '🐾 Pet'}
           </button>
         ))}
       </div>
@@ -508,6 +541,16 @@ export default function PetPage() {
             onClaimMission={handleClaimMission}
             onBuyToy={handleBuyToy}
             onUseToy={handleUseToy}
+          />
+        )}
+        {tab === 'habitat' && (
+          <HabitatTab
+            pet={pet}
+            shop={shop}
+            combo={combo_balance}
+            habitatBusy={habitatBusy}
+            onBuyItem={handleBuyHabitatItem}
+            onEquipItem={handleEquipHabitat}
           />
         )}
         {tab === 'food' && <FoodTab shop={shop} combo={combo_balance} economy={economy} onBuy={handleBuyFood} buying={buying} />}
@@ -547,6 +590,75 @@ function HabitatParticles({ character, mood }) {
       }} />
     </div>
   );
+}
+
+function HabitatBackdrop({ backgroundId }) {
+  const backgrounds = {
+    'dojo-night': 'radial-gradient(circle at 50% 18%, rgba(88,196,255,0.16), transparent 42%), linear-gradient(180deg, rgba(18,48,80,0.12) 0%, rgba(3,7,18,0) 72%)',
+    'sunset-arcade': 'radial-gradient(circle at 50% 16%, rgba(255,158,88,0.18), transparent 42%), linear-gradient(180deg, rgba(129,45,74,0.18) 0%, rgba(3,7,18,0) 72%)',
+    'moon-festival': 'radial-gradient(circle at 50% 18%, rgba(255,220,130,0.14), transparent 42%), linear-gradient(180deg, rgba(86,42,108,0.18) 0%, rgba(3,7,18,0) 72%)',
+    'inferno-stage': 'radial-gradient(circle at 50% 18%, rgba(255,98,72,0.16), transparent 42%), linear-gradient(180deg, rgba(112,22,22,0.22) 0%, rgba(3,7,18,0) 72%)',
+  };
+  return (
+    <div
+      className="absolute inset-0 pointer-events-none opacity-95"
+      style={{ backgroundImage: backgrounds[backgroundId] || backgrounds['dojo-night'] }}
+    />
+  );
+}
+
+function HabitatPropDisplay({ propId }) {
+  if (!propId) return null;
+
+  if (propId === 'training-dummy') {
+    return (
+      <div className="pointer-events-none absolute right-5 bottom-5 z-[1] opacity-75">
+        <div className="relative h-20 w-12">
+          <div className="absolute bottom-0 left-1/2 h-8 w-1.5 -translate-x-1/2 rounded-full bg-amber-900/70" />
+          <div className="absolute bottom-7 left-1/2 h-10 w-10 -translate-x-1/2 rounded-[999px] border border-amber-300/20 bg-amber-700/35" />
+          <div className="absolute bottom-13 left-1/2 h-3 w-3 -translate-x-1/2 rounded-full bg-amber-200/30" />
+        </div>
+      </div>
+    );
+  }
+
+  if (propId === 'lucky-banner') {
+    return (
+      <div className="pointer-events-none absolute left-5 top-12 z-[1] opacity-75">
+        <div className="relative h-20 w-10">
+          <div className="absolute left-1/2 top-0 h-20 w-[2px] -translate-x-1/2 bg-amber-100/35" />
+          <div className="absolute left-1/2 top-2 h-10 w-8 -translate-x-1/2 rounded-md border border-amber-200/20 bg-rose-500/25" />
+          <div className="absolute left-1/2 top-12 h-3 w-5 -translate-x-1/2 rounded-b-full bg-amber-300/25" />
+        </div>
+      </div>
+    );
+  }
+
+  if (propId === 'boombox') {
+    return (
+      <div className="pointer-events-none absolute left-5 bottom-5 z-[1] opacity-80">
+        <div className="relative h-12 w-20 rounded-xl border border-cyan-200/15 bg-cyan-950/35">
+          <div className="absolute left-3 top-3 h-6 w-6 rounded-full border border-cyan-200/20 bg-black/30" />
+          <div className="absolute right-3 top-3 h-6 w-6 rounded-full border border-cyan-200/20 bg-black/30" />
+          <div className="absolute inset-x-8 top-4 h-2 rounded-full bg-cyan-100/15" />
+        </div>
+      </div>
+    );
+  }
+
+  if (propId === 'trophy-stand') {
+    return (
+      <div className="pointer-events-none absolute right-5 top-14 z-[1] opacity-80">
+        <div className="relative h-20 w-14">
+          <div className="absolute left-1/2 top-0 h-7 w-8 -translate-x-1/2 rounded-b-[10px] border border-amber-200/20 bg-amber-300/25" />
+          <div className="absolute left-1/2 top-6 h-8 w-2 -translate-x-1/2 bg-amber-800/50" />
+          <div className="absolute bottom-0 left-1/2 h-5 w-12 -translate-x-1/2 rounded-lg bg-slate-900/55" />
+        </div>
+      </div>
+    );
+  }
+
+  return null;
 }
 
 function WeightBadge({ state }) {
@@ -789,6 +901,73 @@ function PetTab({ pet, shop, combo, economy, interactionBusy, activityBusy, miss
           <li>Combo keeps them fed while Bond Tokens feed deeper progression</li>
         </ul>
       </div>
+    </div>
+  );
+}
+
+function HabitatTab({ pet, shop, combo, habitatBusy, onBuyItem, onEquipItem }) {
+  const habitat = shop?.habitat || pet?.habitat_items || { backgrounds: [], props: [] };
+  const sections = [
+    { key: 'background', label: 'Backdrops', items: habitat.backgrounds || [] },
+    { key: 'prop', label: 'Props', items: habitat.props || [] },
+  ];
+
+  return (
+    <div className="space-y-4 text-sm text-gray-400">
+      <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
+        <div className="text-xs text-gray-500 mb-1">Habitat</div>
+        <p className="text-[11px] text-white/75">Give your companion a room identity. Backdrops shift the mood of the habitat card, and props make the space feel lived in.</p>
+      </div>
+      {sections.map((section) => (
+        <div key={section.key} className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
+          <div className="flex items-center justify-between gap-3 mb-2">
+            <div className="text-xs text-gray-500">{section.label}</div>
+            <div className="text-[10px] font-semibold text-amber-300">{combo.toLocaleString()} Combo</div>
+          </div>
+          <div className="space-y-2">
+            {section.items.map((item) => {
+              const canAfford = combo >= item.cost;
+              return (
+                <div key={item.id} className="rounded-xl border border-white/[0.06] bg-black/20 px-3 py-2.5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-white/85">{item.name}</div>
+                      <div className="text-[11px] text-gray-500 mt-0.5">{item.desc}</div>
+                    </div>
+                    <div className="text-[10px] text-amber-300 shrink-0">{item.cost}c</div>
+                  </div>
+                  <div className="mt-2 flex items-center gap-2">
+                    <button
+                      onClick={() => (item.owned ? onEquipItem(item.id, section.key) : onBuyItem(item.id))}
+                      disabled={habitatBusy || (!item.owned && !canAfford)}
+                      className={`rounded-lg px-2.5 py-1.5 text-[10px] font-semibold transition-all ${
+                        item.active
+                          ? 'bg-emerald-500/12 text-emerald-200 border border-emerald-500/15'
+                          : item.owned
+                            ? 'bg-cyan-500/15 text-cyan-200 border border-cyan-500/20 hover:bg-cyan-500/20'
+                            : canAfford
+                              ? 'bg-white/[0.05] text-white/80 border border-white/[0.07] hover:border-white/15'
+                              : 'bg-white/[0.03] text-gray-500 border border-white/[0.05]'
+                      } disabled:opacity-50`}
+                    >
+                      {item.active ? 'Active' : item.owned ? 'Equip' : 'Buy'}
+                    </button>
+                    {item.active ? (
+                      <button
+                        onClick={() => onEquipItem('', section.key)}
+                        disabled={habitatBusy}
+                        className="rounded-lg px-2.5 py-1.5 text-[10px] font-semibold border border-white/[0.06] bg-white/[0.03] text-gray-400 hover:text-white/80 disabled:opacity-50"
+                      >
+                        Reset
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

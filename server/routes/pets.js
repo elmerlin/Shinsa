@@ -238,6 +238,29 @@ const PET_TOYS = [
 ];
 const PET_TOY_MAP = Object.fromEntries(PET_TOYS.map((toy) => [toy.id, toy]));
 
+const HABITAT_ITEMS = {
+  backgrounds: [
+    { id: 'dojo-night', name: 'Dojo Night', cost: 90, kind: 'background', desc: 'Blue-lit training hall energy.', default_owned: true },
+    { id: 'sunset-arcade', name: 'Sunset Arcade', cost: 120, kind: 'background', desc: 'Warm neon after-hours arcade glow.' },
+    { id: 'moon-festival', name: 'Moon Festival', cost: 140, kind: 'background', desc: 'Ceremonial lantern light for calmer moods.' },
+    { id: 'inferno-stage', name: 'Inferno Stage', cost: 150, kind: 'background', desc: 'A dramatic red arena for wilder pets.' },
+  ],
+  props: [
+    { id: 'training-dummy', name: 'Training Dummy', cost: 70, kind: 'prop', desc: 'A sparring buddy for focused companions.' },
+    { id: 'lucky-banner', name: 'Lucky Banner', cost: 82, kind: 'prop', desc: 'A hanging charm that brings festive energy.' },
+    { id: 'boombox', name: 'Boombox', cost: 88, kind: 'prop', desc: 'A chunky little speaker stack for practice sessions.' },
+    { id: 'trophy-stand', name: 'Trophy Stand', cost: 110, kind: 'prop', desc: 'A pedestal for pets who know they are stars.' },
+  ],
+};
+const ALL_HABITAT_ITEMS = [...HABITAT_ITEMS.backgrounds, ...HABITAT_ITEMS.props];
+const HABITAT_ITEM_MAP = Object.fromEntries(ALL_HABITAT_ITEMS.map((item) => [item.id, item]));
+
+function getHabitatSlot(itemId) {
+  if (HABITAT_ITEMS.backgrounds.find((item) => item.id === itemId)) return 'background';
+  if (HABITAT_ITEMS.props.find((item) => item.id === itemId)) return 'prop';
+  return null;
+}
+
 const BOND_RANKS = [
   { threshold: 0, key: 'training-partner', label: 'Training Partner' },
   { threshold: 40, key: 'pad-gremlin', label: 'Pad Gremlin' },
@@ -380,6 +403,9 @@ function ensurePetTable(db) {
   addCol('owned_toys', "TEXT NOT NULL DEFAULT '[]'");
   addCol('last_toy_id', "TEXT NOT NULL DEFAULT ''");
   addCol('last_toy_at', "TEXT NOT NULL DEFAULT ''");
+  addCol('owned_habitat_items', "TEXT NOT NULL DEFAULT '[\"dojo-night\"]'");
+  addCol('active_habitat_bg', "TEXT NOT NULL DEFAULT 'dojo-night'");
+  addCol('active_habitat_prop', "TEXT NOT NULL DEFAULT ''");
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────
@@ -854,6 +880,10 @@ function formatPet(pet, isPublic = false, db = null) {
     },
     last_toy_id: pet.last_toy_id || '',
     last_toy_at: pet.last_toy_at || '',
+    habitat: {
+      active_background: pet.active_habitat_bg || 'dojo-night',
+      active_prop: pet.active_habitat_prop || '',
+    },
   };
 
   if (isPublic) {
@@ -870,6 +900,7 @@ function formatPet(pet, isPublic = false, db = null) {
     rare_shards: pet.rare_shards || 0,
     owned_items: safeJsonParse(pet.owned_items),
     owned_toys: safeJsonParse(pet.owned_toys),
+    owned_habitat_items: safeJsonParse(pet.owned_habitat_items),
     tricks_unlocked: getUnlockedTricks(character, xp),
     tricks: charTricks.map(t => ({
       ...t,
@@ -894,6 +925,18 @@ function formatPet(pet, isPublic = false, db = null) {
       owned: safeJsonParse(pet.owned_toys).includes(toy.id),
       preference: getToyPreference(character, toy),
     })),
+    habitat_items: {
+      backgrounds: HABITAT_ITEMS.backgrounds.map((item) => ({
+        ...item,
+        owned: safeJsonParse(pet.owned_habitat_items).includes(item.id),
+        active: (pet.active_habitat_bg || 'dojo-night') === item.id,
+      })),
+      props: HABITAT_ITEMS.props.map((item) => ({
+        ...item,
+        owned: safeJsonParse(pet.owned_habitat_items).includes(item.id),
+        active: (pet.active_habitat_prop || '') === item.id,
+      })),
+    },
     missions,
     memories,
   };
@@ -961,9 +1004,10 @@ router.post('/adopt', requireAuth, (req, res) => {
 router.get('/shop', requireAuth, (req, res) => {
   const db = getDb();
   ensurePetTable(db);
-  const pet = db.prepare('SELECT combo_balance, owned_items, owned_toys, character FROM user_pets WHERE user_id = ?').get(req.user.id);
+  const pet = db.prepare('SELECT combo_balance, owned_items, owned_toys, owned_habitat_items, active_habitat_bg, active_habitat_prop, character FROM user_pets WHERE user_id = ?').get(req.user.id);
   const owned = safeJsonParse(pet?.owned_items);
   const ownedToys = safeJsonParse(pet?.owned_toys);
+  const ownedHabitat = safeJsonParse(pet?.owned_habitat_items, ['dojo-night']);
   res.json({
     combo_balance: pet?.combo_balance || 0,
     economy: PET_ECONOMY,
@@ -982,6 +1026,18 @@ router.get('/shop', requireAuth, (req, res) => {
       owned: ownedToys.includes(toy.id),
       preference: pet?.character ? getToyPreference(pet.character, toy) : 'neutral',
     })),
+    habitat: {
+      backgrounds: HABITAT_ITEMS.backgrounds.map((item) => ({
+        ...item,
+        owned: ownedHabitat.includes(item.id),
+        active: (pet?.active_habitat_bg || 'dojo-night') === item.id,
+      })),
+      props: HABITAT_ITEMS.props.map((item) => ({
+        ...item,
+        owned: ownedHabitat.includes(item.id),
+        active: (pet?.active_habitat_prop || '') === item.id,
+      })),
+    },
   });
 });
 
@@ -1086,6 +1142,59 @@ router.post('/buy-toy', requireAuth, (req, res) => {
 
   const updated = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
   res.json({ pet: formatPet(updated, false, db), toy: toy.name });
+});
+
+// POST /api/pets/buy-habitat-item — buy a room background or prop
+router.post('/buy-habitat-item', requireAuth, (req, res) => {
+  const db = getDb();
+  ensurePetTable(db);
+  const pet = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
+  if (!pet) return res.status(404).json({ error: 'No pet adopted yet' });
+
+  const item = HABITAT_ITEM_MAP[req.body.itemId];
+  if (!item) return res.status(400).json({ error: 'Unknown habitat item' });
+
+  const ownedHabitat = safeJsonParse(pet.owned_habitat_items, ['dojo-night']);
+  if (ownedHabitat.includes(item.id)) return res.status(400).json({ error: 'Already owned' });
+
+  const balance = pet.combo_balance || 0;
+  if (balance < item.cost) return res.status(400).json({ error: 'Not enough Combo', need: item.cost, have: balance });
+
+  ownedHabitat.push(item.id);
+  db.prepare(`
+    UPDATE user_pets SET combo_balance = combo_balance - ?, owned_habitat_items = ?, updated_at = datetime('now')
+    WHERE user_id = ?
+  `).run(item.cost, JSON.stringify(ownedHabitat), req.user.id);
+
+  const updated = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
+  res.json({ pet: formatPet(updated, false, db), item: item.name });
+});
+
+// POST /api/pets/equip-habitat — set active room background or prop
+router.post('/equip-habitat', requireAuth, (req, res) => {
+  const db = getDb();
+  ensurePetTable(db);
+  const pet = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
+  if (!pet) return res.status(404).json({ error: 'No pet adopted yet' });
+
+  const { itemId = '', slot = '' } = req.body || {};
+  const ownedHabitat = safeJsonParse(pet.owned_habitat_items, ['dojo-night']);
+
+  if (itemId) {
+    if (!ownedHabitat.includes(itemId)) return res.status(400).json({ error: 'Habitat item not owned' });
+    const habitatSlot = getHabitatSlot(itemId);
+    if (!habitatSlot) return res.status(400).json({ error: 'Unknown habitat item type' });
+    const column = habitatSlot === 'background' ? 'active_habitat_bg' : 'active_habitat_prop';
+    db.prepare(`UPDATE user_pets SET ${column} = ?, updated_at = datetime('now') WHERE user_id = ?`).run(itemId, req.user.id);
+  } else {
+    if (!['background', 'prop'].includes(slot)) return res.status(400).json({ error: 'Invalid habitat slot' });
+    const column = slot === 'background' ? 'active_habitat_bg' : 'active_habitat_prop';
+    const fallback = slot === 'background' ? 'dojo-night' : '';
+    db.prepare(`UPDATE user_pets SET ${column} = ?, updated_at = datetime('now') WHERE user_id = ?`).run(fallback, req.user.id);
+  }
+
+  const updated = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
+  res.json({ pet: formatPet(updated, false, db) });
 });
 
 // POST /api/pets/equip — equip or unequip clothing
