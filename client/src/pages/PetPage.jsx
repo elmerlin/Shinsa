@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import {
   getMyPet, adoptPet, feedPet, getPetCharacters, getPetShop,
@@ -1267,6 +1268,16 @@ function PetTab({ pet, shop, combo, economy, socialFeed, interactionBusy, activi
           </div>
         </div>
       )}
+
+      {/* ── Guide link ── */}
+      <Link to="/pet/guide" className="flex items-center gap-2 rounded-xl border border-cyan-400/10 bg-cyan-500/[0.04] px-3 py-2 hover:bg-cyan-500/[0.06] hover:border-cyan-400/15 transition-all group">
+        <span className="text-sm">📖</span>
+        <div className="flex-1 min-w-0">
+          <div className="text-[11px] font-semibold text-cyan-200 group-hover:text-cyan-100 transition-colors">Pet Companion Guide</div>
+          <div className="text-[10px] text-gray-500">Learn how to care for, train, and evolve your pet</div>
+        </div>
+        <span className="text-[10px] text-gray-600 group-hover:text-gray-400 transition-colors">→</span>
+      </Link>
 
       {/* ── Section 1: Play & Care (open) ── */}
       <CollapsibleSection title="Play & Care" icon="🎮" defaultOpen={true}>

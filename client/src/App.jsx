@@ -68,6 +68,7 @@ const TournamentPoster = lazy(() => import('./pages/TournamentPoster'));
 const PrivacyPolicyPage = lazy(() => import('./pages/PrivacyPolicyPage'));
 const StoryArchivePage = lazy(() => import('./pages/StoryArchivePage'));
 const PetPage = lazy(() => import('./pages/PetPage'));
+const PetGuidePage = lazy(() => import('./pages/PetGuidePage'));
 const TranslationEditorDrawer = lazy(() => import('./components/TranslationEditorDrawer'));
 
 const KOREAN_LOCALE_ENABLED = import.meta.env.VITE_ENABLE_KR_LOCALE === 'true';
@@ -1514,6 +1515,7 @@ export default function App() {
             <Route path="/training" element={<TrainingPage />} />
             <Route path="/head-to-head" element={<HeadToHeadPage />} />
             <Route path="/pet" element={<PetPage />} />
+            <Route path="/pet/guide" element={<PetGuidePage />} />
             <Route path="/fun" element={<FunPage />} />
             <Route path="/fantasy-match" element={<Navigate to="/fun?tab=fantasy" replace />} />
             <Route path="/motion" element={<Navigate to="/fun?tab=motion" replace />} />
