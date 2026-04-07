@@ -216,9 +216,18 @@ function buildBase(character, weightState) {
   const { w, bodyCy, legHeight, legSpread, legTop } = getBodyMetrics(weightState);
 
   // Head
-  fillEllipse(g, CX, HEAD_CY, HEAD_RX, HEAD_RY, 'B');
-  fillEllipse(g, CX - 3, HEAD_CY - 4, HEAD_RX - 6, HEAD_RY - 6, 'L');
-  fillEllipse(g, CX + 3, HEAD_CY + 5, HEAD_RX - 10, HEAD_RY - 9, 'S');
+  if (character === 'buu') {
+    // Pear-shaped head — narrow forehead, wide round cheeks
+    fillEllipse(g, CX, HEAD_CY + 3, HEAD_RX + 3, HEAD_RY - 2, 'B');   // lower cheeks (wide)
+    fillEllipse(g, CX, HEAD_CY, HEAD_RX - 1, HEAD_RY, 'B');            // middle bridge
+    fillEllipse(g, CX, HEAD_CY - 3, HEAD_RX - 5, HEAD_RY - 4, 'B');   // upper forehead (narrow)
+    fillEllipse(g, CX - 2, HEAD_CY - 4, HEAD_RX - 8, HEAD_RY - 7, 'L');
+    fillEllipse(g, CX + 2, HEAD_CY + 5, HEAD_RX - 12, HEAD_RY - 9, 'S');
+  } else {
+    fillEllipse(g, CX, HEAD_CY, HEAD_RX, HEAD_RY, 'B');
+    fillEllipse(g, CX - 3, HEAD_CY - 4, HEAD_RX - 6, HEAD_RY - 6, 'L');
+    fillEllipse(g, CX + 3, HEAD_CY + 5, HEAD_RX - 10, HEAD_RY - 9, 'S');
+  }
 
   // Body
   fillEllipse(g, CX, bodyCy, w.bodyRx, w.bodyRy, 'B');
@@ -244,8 +253,8 @@ function buildArms(character, weightState) {
   const g = createGrid(GW, GH);
   const { w, bodyCy } = getBodyMetrics(weightState);
 
-  // Arms as small ellipses beside the body
-  const armY = bodyCy - Math.max(1, Math.floor(w.bodyRy * 0.55));
+  // Arms resting at sides (centered on body)
+  const armY = bodyCy + Math.floor(w.bodyRy * 0.1);
   fillEllipse(g, CX - w.bodyRx - 1, armY, 2, w.armLen, 'B');
   fillEllipse(g, CX + w.bodyRx + 1, armY, 2, w.armLen, 'B');
 
@@ -275,13 +284,19 @@ function buildFeatures(character) {
       break;
     }
     case 'buu': {
-      fillLine(g, CX + 4, hcy - 2, CX + 7, hcy - 10, 'P');
-      fillLine(g, CX + 7, hcy - 10, CX + 5, hcy - 18, 'P');
-      fillLine(g, CX + 5, hcy - 18, CX + 1, hcy - 22, 'P');
-      fillLine(g, CX + 1, hcy - 22, CX - 3, hcy - 21, 'P');
-      setPixel(g, CX - 4, hcy - 20, 'P');
-      fillEllipse(g, CX - 9, hcy + 7, 3, 2, 'H');
-      fillEllipse(g, CX + 9, hcy + 7, 3, 2, 'H');
+      // Prominent thick tentacle from top of head
+      fillEllipse(g, CX + 3, hcy - HEAD_RY + 4, 3, 3, 'P');
+      // Thick curved body (3 parallel lines for width)
+      for (let t = -1; t <= 1; t++) {
+        fillLine(g, CX + 3 + t, hcy - HEAD_RY + 2, CX + 6 + t, hcy - HEAD_RY - 2, 'P');
+        fillLine(g, CX + 6 + t, hcy - HEAD_RY - 2, CX + 3 + t, hcy - HEAD_RY - 5, 'P');
+        fillLine(g, CX + 3 + t, hcy - HEAD_RY - 5, CX + t, hcy - HEAD_RY - 4, 'P');
+      }
+      // Bulbous tip
+      fillCircle(g, CX - 1, hcy - HEAD_RY - 4, 2, 'P');
+      // Cheek blush (wider for pear-shaped head)
+      fillEllipse(g, CX - 12, hcy + 7, 3, 2, 'H');
+      fillEllipse(g, CX + 12, hcy + 7, 3, 2, 'H');
       break;
     }
     case 'devit': {
@@ -621,6 +636,13 @@ function buildHat(hatId, color, character) {
       setPixel(g, CX + 5, cy - 2, 'K');
       fillRect(g, CX - 1, cy + 1, 3, 2, '8');
       setPixel(g, CX, cy + 3, '8');
+      // Buu's tentacle poking through the hat
+      if (character === 'buu') {
+        for (let t = -1; t <= 1; t++) {
+          fillLine(g, CX + 4 + t, cy - 3, CX + 6 + t, Math.max(0, cy - 10), '7');
+        }
+        fillCircle(g, CX + 5, Math.max(2, cy - 11), 2, '7');
+      }
       break;
     }
     case 'headband': {

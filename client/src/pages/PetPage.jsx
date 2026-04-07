@@ -71,7 +71,7 @@ const PET_ACTIONS = [
 ];
 
 // ─── Tabs ─────────────────────────────────────────────────────────
-const TABS = ['pet', 'habitat', 'food', 'clothing', 'tricks'];
+const TABS = ['pet', 'food', 'clothing', 'tricks'];
 
 // ─── Main ─────────────────────────────────────────────────────────
 export default function PetPage() {
@@ -415,13 +415,7 @@ export default function PetPage() {
   const {
     hunger = 50,
     happiness = 50,
-    energy = 65,
-    trust = 35,
-    hype = 25,
-    bond = 0,
     combo_balance = 0,
-    bond_tokens = 0,
-    rare_shards = 0,
     experience = 0,
   } = pet;
   const charName = characters.find(c => c.id === pet.character)?.name || pet.character;
@@ -435,8 +429,7 @@ export default function PetPage() {
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h1 className="text-xl font-black tracking-tight text-white">My {charName}</h1>
-            <p className="mt-0.5 text-[11px] text-cyan-100/80">{pet.identity_title || 'Training Partner'}</p>
-            <p className="mt-1 text-[11px] text-gray-500">Care, train, and shape a companion that mirrors how you play.</p>
+            <p className="mt-1 text-[11px] text-gray-500">Play songs to earn Combo. Feed and care for your companion.</p>
           </div>
           <button
             onClick={() => setShowSelect(true)}
@@ -448,8 +441,6 @@ export default function PetPage() {
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <HeaderPill label="XP" value={experience.toLocaleString()} tone="slate" />
           <HeaderPill label="Combo" value={combo_balance.toLocaleString()} tone="amber" />
-          <HeaderPill label="Bond Tokens" value={bond_tokens.toLocaleString()} tone="cyan" />
-          {rare_shards > 0 ? <HeaderPill label="Shards" value={rare_shards.toLocaleString()} tone="fuchsia" /> : null}
           <button
             onClick={handleToggleAvatar}
             className={`shrink-0 whitespace-nowrap rounded-full border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] transition-all ${
@@ -466,16 +457,7 @@ export default function PetPage() {
       {/* Pet habitat */}
       <div className="sticky top-[56px] sm:top-[64px] z-30 -mx-2 mb-4 px-2 pt-1 pb-3 bg-gradient-to-b from-[#070b14] via-[#070b14]/95 to-transparent backdrop-blur-sm">
         <div className={`relative rounded-[1.6rem] border border-white/[0.06] overflow-hidden bg-gradient-to-b shadow-[0_18px_45px_rgba(0,0,0,0.28)] ${CHARACTER_BG[pet.character] || ''}`}>
-          <HabitatBackdrop backgroundId={pet.habitat?.active_background} />
-          <HabitatParticles character={pet.character} mood={pet.mood} />
-          <HabitatPropDisplay propId={pet.habitat?.active_prop} />
           <div className="absolute top-3 right-3 z-10"><WeightBadge state={pet.weight_state} /></div>
-          <div className="absolute top-3 left-3 z-10"><BondBadge rank={pet.bond_rank} /></div>
-          {pet.form?.label ? (
-            <div className="absolute left-1/2 top-3 z-10 -translate-x-1/2">
-              <FormBadge form={pet.form} />
-            </div>
-          ) : null}
           <div className={`relative z-10 flex flex-col items-center px-4 pt-6 pb-5 min-h-[324px] sm:min-h-[346px] ${petTapped ? 'animate-[wiggle_400ms_ease]' : ''}`}>
             <div className="flex min-h-[228px] items-end justify-center">
               <SpritePet
@@ -495,11 +477,6 @@ export default function PetPage() {
                 &ldquo;{speechText}&rdquo;
               </div>
             </div>
-            {pet.form?.desc ? (
-              <div className="mt-2 text-center text-[10px] text-white/50 max-w-[260px]">
-                {pet.form.desc}
-              </div>
-            ) : null}
           </div>
           {/* Demand banner */}
           {pet.pending_trick && (
@@ -528,12 +505,8 @@ export default function PetPage() {
 
       {/* Hunger + Happiness bars */}
       <div className="mt-4 grid grid-cols-2 gap-3">
-        <MeterBar label="Hunger" value={hunger} color="orange" />
-        <MeterBar label="Happiness" value={happiness} color="pink" />
-        <MeterBar label="Energy" value={energy} color="cyan" />
-        <MeterBar label="Trust" value={trust} color="emerald" />
-        <MeterBar label="Hype" value={hype} color="violet" />
-        <BondMeter bond={bond} bondRank={pet.bond_rank} />
+        <MeterBar label="Hunger" value={pet.hunger ?? 50} color="orange" />
+        <MeterBar label="Happiness" value={pet.happiness ?? 50} color="pink" />
       </div>
 
       {/* XP to next trick */}
@@ -550,19 +523,18 @@ export default function PetPage() {
       )}
 
       {/* Stats */}
-      <div className="mt-3 grid grid-cols-4 gap-2">
+      <div className="mt-3 grid grid-cols-3 gap-2">
         <StatCard label="Songs" value={pet.total_songs_fed} />
         <StatCard label="Mood" value={capitalize(pet.mood)} />
-        <StatCard label="Level" value={pet.highest_level || '—'} />
-        <StatCard label="Specialty" value={pet.specialty?.label || '—'} />
+        <StatCard label="XP" value={experience.toLocaleString()} />
       </div>
 
       {/* Tab bar */}
       <div className="mt-4 flex rounded-xl border border-white/[0.06] overflow-hidden">
         {TABS.map(t => (
           <button key={t} onClick={() => { setTab(t); if (t === 'food' || t === 'clothing' || t === 'habitat') loadShop(); }}
-            className={`flex-1 py-2 text-xs font-semibold capitalize transition-all ${tab === t ? 'bg-white/[0.08] text-white' : 'text-gray-500 hover:text-white/70'}`}>
-            {t === 'food' ? '🍖 Food' : t === 'clothing' ? '👒 Clothes' : t === 'tricks' ? '⭐ Tricks' : t === 'habitat' ? '🏠 Room' : '🐾 Pet'}
+            className={`flex-1 py-2.5 text-xs font-semibold capitalize transition-all ${tab === t ? 'bg-white/[0.08] text-white' : 'text-gray-500 hover:text-white/70'}`}>
+            {t === 'food' ? '🍖 Food' : t === 'clothing' ? '👒 Clothes' : t === 'tricks' ? '⭐ Tricks' : '🐾 Pet'}
           </button>
         ))}
       </div>
@@ -586,16 +558,6 @@ export default function PetPage() {
             onBuyToy={handleBuyToy}
             onUseToy={handleUseToy}
             onSetTrainingPath={handleSetTrainingPath}
-          />
-        )}
-        {tab === 'habitat' && (
-          <HabitatTab
-            pet={pet}
-            shop={shop}
-            combo={combo_balance}
-            habitatBusy={habitatBusy}
-            onBuyItem={handleBuyHabitatItem}
-            onEquipItem={handleEquipHabitat}
           />
         )}
         {tab === 'food' && <FoodTab shop={shop} combo={combo_balance} economy={economy} onBuy={handleBuyFood} buying={buying} />}
@@ -945,12 +907,6 @@ function PetTab({ pet, shop, combo, economy, interactionBusy, activityBusy, miss
         <p className="text-[11px] text-white/80">{pet.personality?.title}</p>
         <p className="text-[11px] mt-1">{pet.personality?.desc}</p>
       </div>
-      {economy?.target_songs_per_week ? (
-        <div className="bg-amber-500/[0.06] rounded-xl p-3 border border-amber-500/10">
-          <div className="text-xs text-amber-300 mb-1">Upkeep target</div>
-          <p className="text-[11px] text-amber-100/80">A healthy pet now averages about {economy.target_songs_per_week} songs per week to stay comfortably fed.</p>
-        </div>
-      ) : null}
       <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
         <div className="text-xs text-gray-500 mb-2">Likes & dislikes</div>
         <div className="grid grid-cols-2 gap-3 text-[11px]">
@@ -988,247 +944,6 @@ function PetTab({ pet, shop, combo, economy, interactionBusy, activityBusy, miss
           ))}
         </div>
       </div>
-      <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
-        <div className="text-xs text-gray-500 mb-2">Activities</div>
-        <div className="grid grid-cols-2 gap-2">
-          {(pet.activities || []).map((activity) => (
-            <button
-              key={activity.id}
-              onClick={() => onActivity(activity.id)}
-              disabled={activityBusy}
-              className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-left hover:border-white/15 active:scale-[0.98] transition-all disabled:opacity-50"
-            >
-              <div className="text-[11px] font-semibold text-white/85">{activity.label}</div>
-              <div className="text-[10px] text-gray-500 mt-1">{activity.desc}</div>
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
-        <div className="flex items-start justify-between gap-3 mb-2">
-          <div>
-            <div className="text-xs text-gray-500">Mastery path</div>
-            <div className="text-sm font-semibold text-white/85 mt-0.5">
-              {pet.mastery?.path?.icon ? `${pet.mastery.path.icon} ` : ''}{pet.mastery?.path?.label || 'Consistency'}
-            </div>
-            <div className="text-[11px] text-gray-500 mt-1">{pet.mastery?.path?.desc}</div>
-          </div>
-          <div className="text-right shrink-0">
-            <div className="text-[10px] uppercase tracking-wider text-cyan-200/70">Mastery</div>
-            <div className="text-base font-bold text-cyan-100 tabular-nums">{pet.mastery?.mastery_xp || 0}</div>
-            <div className="text-[10px] text-cyan-200/75">{pet.mastery?.rank?.label || 'Rookie'}</div>
-          </div>
-        </div>
-        <div className="w-full h-2.5 bg-white/[0.04] rounded-full overflow-hidden border border-white/[0.04]">
-          <div className="h-full rounded-full bg-gradient-to-r from-cyan-600 to-sky-300 transition-all duration-700" style={{ width: `${Math.max(6, (pet.mastery?.rank?.progress || 0) * 100)}%` }} />
-        </div>
-        <div className="mt-2 text-[10px] text-gray-500">
-          {pet.mastery?.rank?.next_label
-            ? `${pet.mastery.rank.label} -> ${pet.mastery.rank.next_label} at ${pet.mastery.rank.next_threshold} XP`
-            : `${pet.mastery?.rank?.label || 'Master'} rank reached`}
-        </div>
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          {(pet.mastery?.available_paths || []).map((path) => (
-            <button
-              key={path.id}
-              onClick={() => onSetTrainingPath(path.id)}
-              disabled={trainingBusy}
-              className={`rounded-xl border px-3 py-2 text-left transition-all ${
-                path.active
-                  ? 'border-cyan-400/20 bg-cyan-500/[0.08]'
-                  : 'border-white/[0.06] bg-white/[0.02] hover:border-white/15'
-              } disabled:opacity-50`}
-            >
-              <div className="text-[11px] font-semibold text-white/85">{path.icon ? `${path.icon} ` : ''}{path.label}</div>
-              <div className="text-[10px] text-gray-500 mt-1">{path.desc}</div>
-            </button>
-          ))}
-        </div>
-        <div className="mt-3 space-y-2">
-          {(pet.mastery?.milestones || []).map((node) => (
-            <div key={node.id} className={`rounded-xl border px-3 py-2 ${node.unlocked ? 'border-emerald-400/12 bg-emerald-500/[0.06]' : 'border-white/[0.05] bg-black/20'}`}>
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-[11px] font-semibold text-white/85">{node.title}</div>
-                <div className={`text-[10px] font-semibold ${node.unlocked ? 'text-emerald-300' : 'text-gray-500'}`}>
-                  {node.unlocked ? 'Unlocked' : `${node.threshold} XP`}
-                </div>
-              </div>
-              <div className="text-[10px] text-gray-500 mt-1">{node.desc}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-      <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
-        <div className="flex items-center justify-between gap-3 mb-2">
-          <div>
-            <div className="text-xs text-gray-500">Toy chest</div>
-            <div className="text-[11px] text-white/65 mt-0.5">Small objects that unlock more ways to play with your companion.</div>
-          </div>
-          <div className="text-[10px] font-semibold text-amber-300 whitespace-nowrap">{combo.toLocaleString()} Combo</div>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          {(shop?.toys || []).map((toy) => {
-            const owned = !!toy.owned || (pet.owned_toys || []).includes(toy.id);
-            const favorite = toy.preference === 'favorite';
-            const canAfford = combo >= toy.cost;
-            return (
-              <div key={toy.id} className="rounded-xl border border-white/[0.06] bg-black/20 p-2.5">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="text-[11px] font-semibold text-white/85 truncate">{toy.name}</div>
-                    <div className="text-[10px] text-gray-500 mt-1">{toy.desc}</div>
-                  </div>
-                  {favorite ? <span className="shrink-0 rounded-full border border-emerald-400/15 bg-emerald-400/10 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-200">fav</span> : null}
-                </div>
-                <div className="mt-2 flex items-center justify-between gap-2">
-                  <div className="text-[10px] text-amber-300">{toy.cost}c</div>
-                  <button
-                    onClick={() => (owned ? onUseToy(toy.id) : onBuyToy(toy.id))}
-                    disabled={toyBusy || (!owned && !canAfford)}
-                    className={`rounded-lg px-2.5 py-1.5 text-[10px] font-semibold transition-all ${
-                      owned
-                        ? 'bg-cyan-500/15 text-cyan-200 border border-cyan-500/20 hover:bg-cyan-500/20'
-                        : canAfford
-                          ? 'bg-white/[0.05] text-white/80 border border-white/[0.07] hover:border-white/15'
-                          : 'bg-white/[0.03] text-gray-500 border border-white/[0.05]'
-                    } disabled:opacity-50`}
-                  >
-                    {owned ? 'Use toy' : 'Buy'}
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        {pet.last_toy_id ? (
-          <div className="mt-2 text-[10px] text-gray-500">
-            Last played with: <span className="text-white/70">{String(pet.last_toy_id).replace(/-/g, ' ')}</span>
-          </div>
-        ) : null}
-      </div>
-      <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
-        <div className="text-xs text-gray-500 mb-2">Mission board</div>
-        <div className="space-y-2">
-          {(pet.missions || []).map((mission) => {
-            const pct = mission.target > 0 ? (mission.progress / mission.target) * 100 : 0;
-            return (
-              <div key={mission.id} className="rounded-xl border border-white/[0.05] bg-black/20 p-2.5">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="text-[10px] uppercase tracking-wider text-cyan-200/70">{mission.cadence}</div>
-                    <div className="text-sm font-semibold text-white/85">{mission.label}</div>
-                    <div className="text-[11px] text-gray-500">{mission.desc}</div>
-                  </div>
-                  <button
-                    onClick={() => onClaimMission(mission.id)}
-                    disabled={!mission.complete || mission.claimed || missionBusyId === mission.id}
-                    className={`shrink-0 rounded-lg px-2.5 py-1.5 text-[10px] font-semibold transition-all ${
-                      mission.claimed
-                        ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/15'
-                        : mission.complete
-                          ? 'bg-cyan-500/15 text-cyan-200 border border-cyan-500/20 hover:bg-cyan-500/20'
-                          : 'bg-white/[0.04] text-gray-500 border border-white/[0.05]'
-                    } disabled:opacity-50`}
-                  >
-                    {mission.claimed ? 'Claimed' : mission.complete ? 'Claim' : `${mission.progress}/${mission.target}`}
-                  </button>
-                </div>
-                <div className="mt-2 w-full h-1.5 bg-white/[0.04] rounded-full overflow-hidden">
-                  <div className="h-full rounded-full bg-gradient-to-r from-cyan-600 to-sky-300 transition-all duration-500" style={{ width: `${Math.min(100, pct)}%` }} />
-                </div>
-                <div className="mt-1 text-[10px] text-gray-500">{mission.reward_summary}</div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-      <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
-        <div className="text-xs text-gray-500 mb-2">Memory album</div>
-        <div className="space-y-2">
-          {(pet.memories || []).map((memory) => (
-            <div key={memory.id} className="rounded-xl border border-white/[0.05] bg-black/20 px-3 py-2">
-              <div className="text-[11px] font-semibold text-white/80">{memory.title}</div>
-              <div className="text-[10px] text-gray-500 mt-0.5">{memory.detail}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-      <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
-        <div className="text-xs text-gray-500 mb-1">How this grows</div>
-        <ul className="text-[11px] space-y-0.5 list-disc list-inside">
-          <li>Play style shapes your pet specialty over time</li>
-          <li>Bond rank rises through care, missions, and activities</li>
-          <li>Mastery paths turn your habits into long-term pet identity</li>
-          <li>Combo keeps them fed while Bond Tokens feed deeper progression</li>
-        </ul>
-      </div>
-    </div>
-  );
-}
-
-function HabitatTab({ pet, shop, combo, habitatBusy, onBuyItem, onEquipItem }) {
-  const habitat = shop?.habitat || pet?.habitat_items || { backgrounds: [], props: [] };
-  const sections = [
-    { key: 'background', label: 'Backdrops', items: habitat.backgrounds || [] },
-    { key: 'prop', label: 'Props', items: habitat.props || [] },
-  ];
-
-  return (
-    <div className="space-y-4 text-sm text-gray-400">
-      <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
-        <div className="text-xs text-gray-500 mb-1">Habitat</div>
-        <p className="text-[11px] text-white/75">Give your companion a room identity. Backdrops shift the mood of the habitat card, and props make the space feel lived in.</p>
-      </div>
-      {sections.map((section) => (
-        <div key={section.key} className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
-          <div className="flex items-center justify-between gap-3 mb-2">
-            <div className="text-xs text-gray-500">{section.label}</div>
-            <div className="text-[10px] font-semibold text-amber-300">{combo.toLocaleString()} Combo</div>
-          </div>
-          <div className="space-y-2">
-            {section.items.map((item) => {
-              const canAfford = combo >= item.cost;
-              return (
-                <div key={item.id} className="rounded-xl border border-white/[0.06] bg-black/20 px-3 py-2.5">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="text-sm font-semibold text-white/85">{item.name}</div>
-                      <div className="text-[11px] text-gray-500 mt-0.5">{item.desc}</div>
-                    </div>
-                    <div className="text-[10px] text-amber-300 shrink-0">{item.cost}c</div>
-                  </div>
-                  <div className="mt-2 flex items-center gap-2">
-                    <button
-                      onClick={() => (item.owned ? onEquipItem(item.id, section.key) : onBuyItem(item.id))}
-                      disabled={habitatBusy || (!item.owned && !canAfford)}
-                      className={`rounded-lg px-2.5 py-1.5 text-[10px] font-semibold transition-all ${
-                        item.active
-                          ? 'bg-emerald-500/12 text-emerald-200 border border-emerald-500/15'
-                          : item.owned
-                            ? 'bg-cyan-500/15 text-cyan-200 border border-cyan-500/20 hover:bg-cyan-500/20'
-                            : canAfford
-                              ? 'bg-white/[0.05] text-white/80 border border-white/[0.07] hover:border-white/15'
-                              : 'bg-white/[0.03] text-gray-500 border border-white/[0.05]'
-                      } disabled:opacity-50`}
-                    >
-                      {item.active ? 'Active' : item.owned ? 'Equip' : 'Buy'}
-                    </button>
-                    {item.active ? (
-                      <button
-                        onClick={() => onEquipItem('', section.key)}
-                        disabled={habitatBusy}
-                        className="rounded-lg px-2.5 py-1.5 text-[10px] font-semibold border border-white/[0.06] bg-white/[0.03] text-gray-400 hover:text-white/80 disabled:opacity-50"
-                      >
-                        Reset
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      ))}
     </div>
   );
 }
