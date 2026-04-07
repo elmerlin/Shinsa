@@ -165,7 +165,6 @@ export default function PetPage() {
   const [leaderboard, setLeaderboard] = useState(null);
   const [activeToyVisual, setActiveToyVisual] = useState(null);
   const [socialFeed, setSocialFeed] = useState(null);
-  const [compactMode, setCompactMode] = useState(() => localStorage.getItem('pet_compact') === '1');
 
   const loadPet = useCallback(async () => {
     try {
@@ -534,16 +533,6 @@ export default function PetPage() {
           </div>
           <div className="flex gap-1.5 shrink-0">
             <button
-              onClick={() => { const next = !compactMode; setCompactMode(next); localStorage.setItem('pet_compact', next ? '1' : '0'); }}
-              className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] transition-all ${
-                compactMode
-                  ? 'border-cyan-500/30 bg-cyan-500/10 text-cyan-300'
-                  : 'border-white/[0.08] bg-white/[0.03] text-gray-400 hover:border-white/15 hover:text-white'
-              }`}
-            >
-              {compactMode ? '◆' : '◇'}
-            </button>
-            <button
               onClick={handleToggleAvatar}
               className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] transition-all ${
                 pet.is_pet_avatar
@@ -648,37 +637,7 @@ export default function PetPage() {
         </div>
       )}
 
-      {/* ─── Compact mode: vitals strip + expand ─── */}
-      {compactMode ? (
-        <div className="mt-3">
-          <div className="rounded-xl border border-white/[0.06] bg-white/[0.025] p-2.5">
-            <div className="flex items-center gap-2">
-              <CompactVitalDot value={hunger} color="orange" label="Hunger" />
-              <CompactVitalDot value={happiness} color="pink" label="Happy" />
-              <CompactVitalDot value={energy} color="cyan" label="Energy" />
-              <div className="flex-1" />
-              <span className="text-[10px] text-gray-500 capitalize">{pet.mood}</span>
-              {pet.daily_streak > 0 && <span className="text-[10px] text-amber-300">{pet.daily_streak}d 🔥</span>}
-            </div>
-          </div>
-          {/* Coach tip in compact mode */}
-          {pet.companion_coach && (
-            <div className="mt-2 rounded-xl border border-cyan-500/10 bg-cyan-500/[0.04] px-3 py-2 flex items-center gap-2">
-              <span className="text-sm">💡</span>
-              <p className="text-[11px] text-cyan-100/80 flex-1">{pet.companion_coach.headline}</p>
-              <button onClick={() => { setCompactMode(false); localStorage.setItem('pet_compact', '0'); }} className="text-[10px] text-cyan-300 font-semibold shrink-0">View</button>
-            </div>
-          )}
-          <button
-            onClick={() => { setCompactMode(false); localStorage.setItem('pet_compact', '0'); }}
-            className="mt-3 w-full rounded-xl border border-white/[0.08] bg-white/[0.03] py-2.5 text-xs font-semibold text-gray-400 hover:text-white hover:border-white/15 transition-all"
-          >
-            Open full details
-          </button>
-        </div>
-      ) : (
-        <>
-          {/* Hunger + Happiness bars */}
+      {/* Hunger + Happiness bars */}
           <div className="mt-4 grid grid-cols-2 gap-3">
             <MeterBar label="Hunger" value={hunger} color="orange" />
             <MeterBar label="Happiness" value={happiness} color="pink" />
@@ -758,9 +717,7 @@ export default function PetPage() {
             {tab === 'ranks' && <LeaderboardTab leaderboard={leaderboard} myCharacter={pet.character} />}
           </div>
 
-          <p className="text-[10px] text-gray-600 text-center mt-4">Sync PIU scores to earn Combo, then budget it carefully to keep your pet thriving.</p>
-        </>
-      )}
+      <p className="text-[10px] text-gray-600 text-center mt-4">Sync PIU scores to earn Combo, then budget it carefully to keep your pet thriving.</p>}
 
       <style>{`
         @keyframes slideDown { from { opacity: 0; transform: translate(-50%, -12px); } to { opacity: 1; transform: translate(-50%, 0); } }
@@ -1264,18 +1221,6 @@ function StatCard({ label, value }) {
     <div className="bg-white/[0.03] border border-white/[0.04] rounded-xl p-2.5 text-center">
       <div className="text-base font-bold text-white/90 tabular-nums">{value}</div>
       <div className="text-[9px] text-gray-500 mt-0.5 uppercase tracking-wider">{label}</div>
-    </div>
-  );
-}
-
-// ─── Compact vital dot ───────────────────────────────
-function CompactVitalDot({ value, color, label }) {
-  const fill = color === 'orange' ? 'bg-orange-400' : color === 'pink' ? 'bg-pink-400' : 'bg-cyan-400';
-  const ring = value < 25 ? 'ring-1 ring-red-500/40' : '';
-  return (
-    <div className="flex items-center gap-1.5" title={`${label}: ${value}%`}>
-      <div className={`relative w-2 h-2 rounded-full ${fill} ${ring}`} style={{ opacity: Math.max(0.3, value / 100) }} />
-      <span className="text-[10px] text-gray-500">{value}%</span>
     </div>
   );
 }

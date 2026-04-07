@@ -10,6 +10,7 @@ import { getCheckinClientSessionId } from './utils/checkinClient';
 import { getCountryFlag } from './utils/countryFlags';
 import { getProfilePath } from './utils/profile';
 import { useI18n } from './i18n/TranslationContext';
+import FloatingPetCompanion from './components/pet/FloatingPetCompanion';
 
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const TournamentSetup = lazy(() => import('./pages/TournamentSetup'));
@@ -1572,6 +1573,9 @@ export default function App() {
         </Link>
       </footer>
       ) : null}
+
+      {/* Floating pet companion — Clippy style */}
+      {!isChromeless && user && <FloatingPetCompanion />}
 
       {/* Mobile Bottom Navigation — Instagram style */}
       {!isChromeless && user && !hideMobileBottomNav && <MobileBottomNav />}
