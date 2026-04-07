@@ -194,10 +194,12 @@ const GH = 74;      // grid height
 const CX = 30;      // center x
 const HEAD_CY = 19; // head center y
 const HEAD_R = 16;  // head radius
+const HEAD_RX = 18;
+const HEAD_RY = 14;
 
 function getBodyMetrics(weightState) {
   const w = WEIGHT_DIMS[weightState] || WEIGHT_DIMS.normal;
-  const bodyCy = HEAD_CY + HEAD_R + Math.floor(w.bodyRy * 0.72) - 8;
+  const bodyCy = HEAD_CY + HEAD_RY + Math.floor(w.bodyRy * 0.78) - 2;
   const legHeight = Math.max(5, Math.min(7, Math.floor(w.bodyRy * 0.68)));
   const legSpread = Math.max(2, Math.floor(w.bodyRx * 0.45));
   const legTop = bodyCy + w.bodyRy - 1;
@@ -214,13 +216,14 @@ function buildBase(character, weightState) {
   const { w, bodyCy, legHeight, legSpread, legTop } = getBodyMetrics(weightState);
 
   // Head
-  fillCircle(g, CX, HEAD_CY, HEAD_R, 'B');
-  fillEllipse(g, CX - 3, HEAD_CY - 4, HEAD_R - 4, HEAD_R - 7, 'L');
-  fillEllipse(g, CX, HEAD_CY + 8, HEAD_R - 2, HEAD_R - 5, character === 'devit' ? 'Y' : 'L');
+  fillEllipse(g, CX, HEAD_CY, HEAD_RX, HEAD_RY, 'B');
+  fillEllipse(g, CX - 3, HEAD_CY - 4, HEAD_RX - 5, HEAD_RY - 6, 'L');
+  fillEllipse(g, CX, HEAD_CY + 8, HEAD_RX - 2, HEAD_RY - 7, character === 'devit' ? 'Y' : 'L');
 
   // Body
   fillEllipse(g, CX, bodyCy, w.bodyRx, w.bodyRy, 'B');
   fillEllipse(g, CX - 1, bodyCy - 2, Math.max(8, w.bodyRx - 1), Math.max(5, w.bodyRy - 2), 'L');
+  fillRect(g, CX - 4, bodyCy - w.bodyRy - 1, 9, 2, 'D');
 
   // Belly patch
   fillEllipse(g, CX, bodyCy + 1, Math.max(3, Math.floor(w.bodyRx * 0.55)), Math.max(2, Math.floor(w.bodyRy * 0.5)), 'Y');
@@ -259,14 +262,17 @@ function buildFeatures(character) {
   switch (character) {
     case 'dojocat': {
       // Pointy ears (outer)
-      fillTriangle(g, CX - 10, hcy - 3, CX - 14, hcy - HEAD_R - 3, CX - 4, hcy - HEAD_R + 2, 'B');
-      fillTriangle(g, CX + 10, hcy - 3, CX + 14, hcy - HEAD_R - 3, CX + 4, hcy - HEAD_R + 2, 'B');
+      fillTriangle(g, CX - 11, hcy - 2, CX - 16, hcy - HEAD_RY - 2, CX - 5, hcy - HEAD_RY + 2, 'B');
+      fillTriangle(g, CX + 11, hcy - 2, CX + 16, hcy - HEAD_RY - 2, CX + 5, hcy - HEAD_RY + 2, 'B');
       // Ear inner
-      fillTriangle(g, CX - 8, hcy - 4, CX - 11, hcy - HEAD_R, CX - 5, hcy - HEAD_R + 2, 'P');
-      fillTriangle(g, CX + 8, hcy - 4, CX + 11, hcy - HEAD_R, CX + 5, hcy - HEAD_R + 2, 'P');
+      fillTriangle(g, CX - 9, hcy - 3, CX - 12, hcy - HEAD_RY + 1, CX - 6, hcy - HEAD_RY + 3, 'P');
+      fillTriangle(g, CX + 9, hcy - 3, CX + 12, hcy - HEAD_RY + 1, CX + 6, hcy - HEAD_RY + 3, 'P');
       // Nose + muzzle
-      fillEllipse(g, CX, hcy + 9, 8, 6, 'Y');
+      fillEllipse(g, CX, hcy + 9, 8, 5, 'Y');
       fillRect(g, CX - 1, hcy + 6, 3, 2, 'N');
+      setPixel(g, CX - 1, hcy + 9, 'K');
+      setPixel(g, CX, hcy + 10, 'K');
+      setPixel(g, CX + 1, hcy + 9, 'K');
       // Whisker marks
       fillRect(g, CX - 12, hcy + 5, 5, 1, 'R');
       fillRect(g, CX + 8, hcy + 5, 5, 1, 'R');
@@ -276,48 +282,47 @@ function buildFeatures(character) {
     }
     case 'buu': {
       // Signature antenna curl
-      fillLine(g, CX + 1, hcy - 9, CX + 4, hcy - 14, 'P');
-      fillLine(g, CX + 4, hcy - 14, CX + 3, hcy - 19, 'P');
-      fillLine(g, CX + 3, hcy - 19, CX - 2, hcy - 19, 'P');
-      setPixel(g, CX - 3, hcy - 18, 'P');
-      setPixel(g, CX, hcy - 18, 'P');
+      fillLine(g, CX + 2, hcy - 8, CX + 5, hcy - 13, 'P');
+      fillLine(g, CX + 5, hcy - 13, CX + 3, hcy - 18, 'P');
+      fillLine(g, CX + 3, hcy - 18, CX - 2, hcy - 18, 'P');
+      setPixel(g, CX - 3, hcy - 17, 'P');
+      setPixel(g, CX, hcy - 17, 'P');
       // Rosy cheeks (always visible)
       fillEllipse(g, CX - 8, hcy + 7, 3, 2, 'H');
       fillEllipse(g, CX + 8, hcy + 7, 3, 2, 'H');
       // Buu nose + mouth tint
-      fillEllipse(g, CX, hcy + 9, 7, 6, 'L');
-      fillRect(g, CX - 2, hcy + 6, 5, 2, 'N');
+      fillEllipse(g, CX, hcy + 9, 7, 5, 'L');
+      fillRect(g, CX - 2, hcy + 7, 5, 1, 'N');
       break;
     }
     case 'devit': {
       // Red horns
-      fillTriangle(g, CX - 8, hcy - 5, CX - 11, hcy - HEAD_R - 5, CX - 4, hcy - HEAD_R + 1, 'P');
-      fillTriangle(g, CX + 8, hcy - 5, CX + 11, hcy - HEAD_R - 5, CX + 4, hcy - HEAD_R + 1, 'P');
+      fillTriangle(g, CX - 7, hcy - 5, CX - 10, hcy - HEAD_RY - 4, CX - 4, hcy - HEAD_RY + 1, 'P');
+      fillTriangle(g, CX + 7, hcy - 5, CX + 10, hcy - HEAD_RY - 4, CX + 4, hcy - HEAD_RY + 1, 'P');
       // Blush
-      fillRect(g, CX - 8, hcy + 6, 2, 1, 'H');
-      fillRect(g, CX + 6, hcy + 6, 2, 1, 'H');
-      // Belly shine
-      fillEllipse(g, CX, hcy + 9, 7, 6, 'L');
+      fillRect(g, CX - 8, hcy + 7, 2, 1, 'H');
+      fillRect(g, CX + 6, hcy + 7, 2, 1, 'H');
+      fillEllipse(g, CX, hcy + 10, 6, 4, 'L');
       break;
     }
     case 'pixiu': {
       // Cat ears
-      fillTriangle(g, CX - 9, hcy - 4, CX - 12, hcy - HEAD_R - 3, CX - 4, hcy - HEAD_R + 2, 'B');
-      fillTriangle(g, CX + 9, hcy - 4, CX + 12, hcy - HEAD_R - 3, CX + 4, hcy - HEAD_R + 2, 'B');
+      fillTriangle(g, CX - 10, hcy - 3, CX - 14, hcy - HEAD_RY - 2, CX - 5, hcy - HEAD_RY + 2, 'B');
+      fillTriangle(g, CX + 10, hcy - 3, CX + 14, hcy - HEAD_RY - 2, CX + 5, hcy - HEAD_RY + 2, 'B');
       // Ear inner
-      fillTriangle(g, CX - 8, hcy - 4, CX - 10, hcy - HEAD_R, CX - 5, hcy - HEAD_R + 2, 'R');
-      fillTriangle(g, CX + 8, hcy - 4, CX + 10, hcy - HEAD_R, CX + 5, hcy - HEAD_R + 2, 'R');
+      fillTriangle(g, CX - 8, hcy - 4, CX - 11, hcy - HEAD_RY + 1, CX - 5, hcy - HEAD_RY + 3, 'R');
+      fillTriangle(g, CX + 8, hcy - 4, CX + 11, hcy - HEAD_RY + 1, CX + 5, hcy - HEAD_RY + 3, 'R');
       // Mane tufts
-      fillCircle(g, CX - HEAD_R + 1, hcy - 2, 3, 'P');
-      fillCircle(g, CX + HEAD_R - 1, hcy - 2, 3, 'P');
-      fillCircle(g, CX - HEAD_R + 2, hcy + 3, 3, 'P');
-      fillCircle(g, CX + HEAD_R - 2, hcy + 3, 3, 'P');
+      fillCircle(g, CX - HEAD_RX + 2, hcy - 1, 3, 'P');
+      fillCircle(g, CX + HEAD_RX - 2, hcy - 1, 3, 'P');
+      fillCircle(g, CX - HEAD_RX + 3, hcy + 4, 3, 'P');
+      fillCircle(g, CX + HEAD_RX - 3, hcy + 4, 3, 'P');
       // Horn and wings
-      fillTriangle(g, CX - 1, hcy - HEAD_R + 2, CX, hcy - HEAD_R - 4, CX + 1, hcy - HEAD_R + 2, 'T');
-      fillTriangle(g, CX - 11, hcy + 9, CX - 16, hcy + 4, CX - 12, hcy + 14, 'S');
-      fillTriangle(g, CX + 11, hcy + 9, CX + 16, hcy + 4, CX + 12, hcy + 14, 'S');
+      fillTriangle(g, CX - 1, hcy - HEAD_RY + 2, CX, hcy - HEAD_RY - 4, CX + 1, hcy - HEAD_RY + 2, 'T');
+      fillTriangle(g, CX - 11, hcy + 10, CX - 16, hcy + 5, CX - 12, hcy + 15, 'S');
+      fillTriangle(g, CX + 11, hcy + 10, CX + 16, hcy + 5, CX + 12, hcy + 15, 'S');
       // Muzzle + nose
-      fillEllipse(g, CX, hcy + 9, 7, 6, 'Y');
+      fillEllipse(g, CX, hcy + 9, 7, 5, 'Y');
       fillRect(g, CX - 1, hcy + 6, 3, 2, 'N');
       // Blush
       fillRect(g, CX - 8, hcy + 6, 2, 1, 'H');
@@ -376,9 +381,9 @@ function buildFace(character, mood, expression = '') {
   const g = createGrid(GW, GH);
   const hcy = HEAD_CY;
   const eyeColor = 'E';
-  const leftEyeX = CX - 7;
-  const rightEyeX = CX + 5;
-  const eyeTop = hcy - 2;
+  const leftEyeX = CX - 8;
+  const rightEyeX = CX + 6;
+  const eyeTop = hcy - 1;
   const browTop = hcy - 6;
   const mouthY = hcy + 9;
 
@@ -510,38 +515,47 @@ function buildFace(character, mood, expression = '') {
     }
     default: { // happy
       if (character === 'dojocat') {
-        fillRect(g, leftEyeX - 1, eyeTop, 3, 6, eyeColor);
-        fillRect(g, rightEyeX - 1, eyeTop, 3, 6, eyeColor);
-        fillLine(g, leftEyeX - 3, browTop + 2, leftEyeX + 1, browTop, 'K');
-        fillLine(g, rightEyeX + 2, browTop + 2, rightEyeX - 2, browTop, 'K');
+        fillRect(g, leftEyeX - 1, eyeTop, 3, 7, eyeColor);
         setPixel(g, leftEyeX, eyeTop + 1, 'W');
-        setPixel(g, rightEyeX, eyeTop + 1, 'W');
+        setPixel(g, leftEyeX, eyeTop + 3, 'W');
+        fillRect(g, rightEyeX - 2, eyeTop + 3, 5, 1, eyeColor);
+        fillLine(g, leftEyeX - 3, browTop + 2, leftEyeX + 1, browTop, 'K');
+        fillLine(g, rightEyeX + 3, browTop + 1, rightEyeX - 2, browTop + 3, 'K');
         setPixel(g, CX - 1, mouthY - 1, 'K');
         setPixel(g, CX, mouthY, 'K');
         setPixel(g, CX + 1, mouthY - 1, 'K');
       } else if (character === 'buu') {
-        fillLine(g, leftEyeX - 2, hcy + 1, leftEyeX + 2, hcy + 2, eyeColor);
-        fillLine(g, rightEyeX + 2, hcy + 1, rightEyeX - 2, hcy + 2, eyeColor);
-        fillLine(g, leftEyeX - 3, browTop + 2, leftEyeX + 2, browTop + 1, 'K');
-        fillLine(g, rightEyeX + 3, browTop + 2, rightEyeX - 2, browTop + 1, 'K');
-        setPixel(g, CX - 2, mouthY, 'K');
-        setPixel(g, CX, mouthY - 1, 'K');
-        setPixel(g, CX + 2, mouthY - 1, 'K');
-        setPixel(g, CX + 4, mouthY, 'K');
+        fillLine(g, leftEyeX - 3, hcy + 2, leftEyeX + 2, hcy + 1, eyeColor);
+        fillLine(g, rightEyeX + 2, hcy + 2, rightEyeX - 3, hcy + 1, eyeColor);
+        fillLine(g, leftEyeX - 4, browTop + 2, leftEyeX + 2, browTop + 3, 'K');
+        fillLine(g, rightEyeX + 3, browTop + 2, rightEyeX - 2, browTop + 3, 'K');
+        setPixel(g, CX - 2, mouthY - 1, 'K');
+        setPixel(g, CX - 1, mouthY, 'K');
+        setPixel(g, CX, mouthY, 'K');
+        setPixel(g, CX + 2, mouthY, 'K');
+        setPixel(g, CX + 4, mouthY - 1, 'K');
       } else if (character === 'pixiu') {
         fillRect(g, leftEyeX - 1, eyeTop, 3, 6, eyeColor);
         fillRect(g, rightEyeX - 1, eyeTop, 3, 6, eyeColor);
+        fillLine(g, leftEyeX - 3, browTop + 2, leftEyeX + 1, browTop + 1, 'K');
+        fillLine(g, rightEyeX + 2, browTop + 2, rightEyeX - 2, browTop + 1, 'K');
         setPixel(g, leftEyeX, eyeTop + 1, 'W');
         setPixel(g, rightEyeX, eyeTop + 1, 'W');
-        setPixel(g, leftEyeX + 1, eyeTop + 4, 'W');
-        setPixel(g, rightEyeX + 1, eyeTop + 4, 'W');
+        setPixel(g, leftEyeX + 1, eyeTop + 3, 'W');
+        setPixel(g, rightEyeX + 1, eyeTop + 3, 'W');
         drawSmile(g, hcy, 2);
       } else {
-        fillRect(g, leftEyeX - 1, eyeTop, 3, 6, eyeColor);
-        fillRect(g, rightEyeX - 1, eyeTop, 3, 6, eyeColor);
-        setPixel(g, leftEyeX, eyeTop + 1, 'W');
-        setPixel(g, rightEyeX, eyeTop + 1, 'W');
-        drawSmile(g, hcy, character === 'devit' ? 2 : 3);
+        fillRect(g, leftEyeX - 1, eyeTop + 1, 3, 6, eyeColor);
+        fillRect(g, rightEyeX - 1, eyeTop + 1, 3, 6, eyeColor);
+        setPixel(g, leftEyeX, eyeTop + 2, 'W');
+        setPixel(g, rightEyeX, eyeTop + 2, 'W');
+        setPixel(g, leftEyeX, eyeTop + 4, 'W');
+        setPixel(g, rightEyeX, eyeTop + 4, 'W');
+        setPixel(g, CX - 2, mouthY - 1, 'K');
+        setPixel(g, CX - 1, mouthY, 'K');
+        setPixel(g, CX, mouthY, 'K');
+        setPixel(g, CX + 1, mouthY, 'K');
+        setPixel(g, CX + 2, mouthY - 1, 'K');
       }
       break;
     }
@@ -556,27 +570,33 @@ function buildFace(character, mood, expression = '') {
 
 function buildHat(hatId, color, character) {
   const g = createGrid(GW, GH);
-  const topY = character === 'devit' ? HEAD_CY - HEAD_R - 5 : HEAD_CY - HEAD_R - 1;
+  const topY = character === 'devit' ? HEAD_CY - HEAD_RY - 5 : HEAD_CY - HEAD_RY - 1;
 
   switch (hatId) {
     case 'chicken-hat': {
-      const cy = topY + 2;
-      fillEllipse(g, CX, cy, 9, 6, '1');
-      fillEllipse(g, CX, cy - 2, 7, 4, '1');
-      fillRect(g, CX - 12, cy + 4, 25, 3, '4');
-      fillTriangle(g, CX - 2, cy - 7, CX, cy - 11, CX + 2, cy - 7, '4');
-      setPixel(g, CX + 1, cy - 10, '4');
-      fillRect(g, CX - 2, cy - 1, 5, 2, '5');
-      setPixel(g, CX - 4, cy - 2, 'K');
-      setPixel(g, CX + 4, cy - 2, 'K');
-      setPixel(g, CX, cy + 1, '4');
-      setPixel(g, CX, cy + 2, '4');
+      const cy = topY + 3;
+      if (character === 'buu') {
+        fillLine(g, CX + 1, cy - 2, CX + 4, cy - 8, '7');
+        fillLine(g, CX + 4, cy - 8, CX + 2, cy - 13, '7');
+        fillLine(g, CX + 2, cy - 13, CX - 2, cy - 13, '7');
+      }
+      fillEllipse(g, CX, cy + 1, 10, 6, '1');
+      fillEllipse(g, CX, cy - 1, 8, 4, '1');
+      fillRect(g, CX - 9, cy + 5, 19, 2, '1');
+      fillRect(g, CX - 8, cy + 6, 17, 1, '8');
+      fillTriangle(g, CX - 2, cy - 8, CX, cy - 13, CX + 2, cy - 8, '8');
+      fillTriangle(g, CX - 1, cy - 7, CX + 1, cy - 12, CX + 4, cy - 6, '8');
+      fillRect(g, CX - 1, cy - 2, 3, 2, '5');
+      setPixel(g, CX - 4, cy - 1, 'K');
+      setPixel(g, CX + 4, cy - 1, 'K');
+      fillRect(g, CX - 1, cy + 1, 3, 2, '8');
+      setPixel(g, CX, cy + 3, '8');
       break;
     }
     case 'headband': {
-      fillRect(g, CX - HEAD_R, HEAD_CY - HEAD_R + 2, HEAD_R * 2 + 1, 2, '1');
+      fillRect(g, CX - HEAD_RX + 1, HEAD_CY - HEAD_RY + 3, HEAD_RX * 2 - 1, 2, '1');
       // Circle emblem
-      setPixel(g, CX, HEAD_CY - HEAD_R + 2, '2');
+      setPixel(g, CX, HEAD_CY - HEAD_RY + 3, '2');
       break;
     }
     case 'crown': {
@@ -1026,6 +1046,8 @@ function getClothingColorMap(color) {
     '4': '#ff6b9d', // accent (chicken wattle etc)
     '5': '#efaa3a',
     '6': '#e0c15f',
+    '7': '#efb2c5',
+    '8': '#cb5147',
     K: '#1a1a1a',
     W: '#ffffff',
   };

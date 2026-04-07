@@ -73,6 +73,8 @@ export default function PetModal({ userId, onClose }) {
               <div className="text-center mb-3">
                 <div className="text-sm font-bold text-white/90">{username ? `${username}'s` : ''} {capitalize(pet.character)}</div>
                 <WeightBadge state={pet.weight_state} />
+                <div className="mt-1 text-[10px] text-cyan-200/80">{pet.bond_rank?.label || 'Training Partner'}</div>
+                <div className="text-[10px] text-gray-500">{pet.mastery?.path?.label || pet.specialty?.label || 'Companion'}</div>
               </div>
 
               {/* Meters */}
@@ -82,7 +84,7 @@ export default function PetModal({ userId, onClose }) {
               </div>
 
               {/* Stats */}
-              <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+              <div className="mt-3 grid grid-cols-4 gap-2 text-center">
                 <div>
                   <div className="text-sm font-bold text-white/80">{pet.total_songs_fed}</div>
                   <div className="text-[9px] text-gray-500">Songs</div>
@@ -94,6 +96,10 @@ export default function PetModal({ userId, onClose }) {
                 <div>
                   <div className="text-sm font-bold text-white/80">{pet.experience?.toLocaleString() || 0}</div>
                   <div className="text-[9px] text-gray-500">XP</div>
+                </div>
+                <div>
+                  <div className="text-sm font-bold text-white/80">{pet.mastery?.rank?.label || 'Rookie'}</div>
+                  <div className="text-[9px] text-gray-500">Mastery</div>
                 </div>
               </div>
             </div>

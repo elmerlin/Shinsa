@@ -1444,6 +1444,7 @@ export const unequipPetSlot = (slot) => request('/pets/equip', { method: 'POST',
 export const equipPetHabitat = (itemId, slot) => request('/pets/equip-habitat', { method: 'POST', body: JSON.stringify(itemId ? { itemId } : { itemId: '', slot }) });
 export const setPetColor = (slot, color) => request('/pets/set-color', { method: 'POST', body: JSON.stringify({ slot, color }) });
 export const togglePetAvatar = () => request('/pets/toggle-avatar', { method: 'POST' });
+export const setPetTrainingPath = (pathId) => request('/pets/training-path', { method: 'POST', body: JSON.stringify({ pathId }) });
 export const interactPet = (actionId) => request('/pets/interact', { method: 'POST', body: JSON.stringify({ actionId }) });
 export const doPetActivity = (activityId) => request(`/pets/activities/${activityId}`, { method: 'POST' });
 export const usePetToy = (toyId) => request(`/pets/toys/${toyId}/use`, { method: 'POST' });

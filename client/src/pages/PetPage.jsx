@@ -5,7 +5,7 @@ import {
   buyPetFood, buyPetItem, equipPetItem, unequipPetSlot,
   setPetColor, togglePetAvatar, demandTrick, performTrick,
   interactPet, doPetActivity, claimPetMission, buyPetToy, usePetToy,
-  buyPetHabitatItem, equipPetHabitat,
+  buyPetHabitatItem, equipPetHabitat, setPetTrainingPath,
 } from '../utils/api';
 import SpritePet from '../components/SpritePet';
 
@@ -99,6 +99,7 @@ export default function PetPage() {
   const [missionBusyId, setMissionBusyId] = useState('');
   const [toyBusy, setToyBusy] = useState(false);
   const [habitatBusy, setHabitatBusy] = useState(false);
+  const [trainingBusy, setTrainingBusy] = useState(false);
 
   const loadPet = useCallback(async () => {
     try {
@@ -362,6 +363,21 @@ export default function PetPage() {
     }
   };
 
+  const handleSetTrainingPath = async (pathId) => {
+    if (trainingBusy) return;
+    setTrainingBusy(true);
+    try {
+      const r = await setPetTrainingPath(pathId);
+      setPet(r.pet);
+      triggerPetResponse(r.speech, 'nod', 'sparkle', 1500);
+      showFeedback(`${r.pet.mastery?.path?.label || 'Training'} focus set`);
+    } catch (e) {
+      showFeedback(e?.message || 'Could not change training path');
+    } finally {
+      setTrainingBusy(false);
+    }
+  };
+
   // ─── Gates ──────────────────────────────────────────
   if (!user) return <div className="max-w-lg mx-auto p-6 text-center"><h1 className="text-2xl font-bold mb-4">My Pet</h1><p className="text-gray-400">Log in to adopt a pet!</p></div>;
   if (loading) return <div className="max-w-lg mx-auto p-6 flex items-center justify-center min-h-[50vh]"><div className="w-12 h-12 border-2 border-white/10 border-t-white/60 rounded-full animate-spin" /></div>;
@@ -417,7 +433,7 @@ export default function PetPage() {
           <div className="flex items-center gap-3 mt-0.5">
             <span className="text-xs text-gray-500">{experience.toLocaleString()} XP</span>
             <span className="text-xs font-bold text-amber-400">{combo_balance.toLocaleString()} Combo</span>
-            <span className="text-xs font-bold text-cyan-300">{bond_tokens.toLocaleString()} Bond</span>
+            <span className="text-xs font-bold text-cyan-300">{bond_tokens.toLocaleString()} Bond Tokens</span>
             {rare_shards > 0 ? <span className="text-xs font-bold text-fuchsia-300">{rare_shards} Shards</span> : null}
           </div>
         </div>
@@ -536,11 +552,13 @@ export default function PetPage() {
             activityBusy={activityBusy}
             missionBusyId={missionBusyId}
             toyBusy={toyBusy}
+            trainingBusy={trainingBusy}
             onAction={handlePetAction}
             onActivity={handleActivity}
             onClaimMission={handleClaimMission}
             onBuyToy={handleBuyToy}
             onUseToy={handleUseToy}
+            onSetTrainingPath={handleSetTrainingPath}
           />
         )}
         {tab === 'habitat' && (
@@ -607,58 +625,188 @@ function HabitatBackdrop({ backgroundId }) {
   );
 }
 
+const PIXEL_PROP_ART = {
+  'training-dummy': {
+    width: 16,
+    pixels: [
+      '________________',
+      '______aa________',
+      '_____abca_______',
+      '_____adda_______',
+      '_____adda_______',
+      '_____adda_______',
+      '_____adda_______',
+      '_____adda_______',
+      '_____aeea_______',
+      '______ff________',
+      '______ff________',
+      '______ff________',
+      '_____ghhg_______',
+      '____giiiig______',
+      '____giiiig______',
+      '________________',
+    ],
+    colors: {
+      a: '#4d2c18',
+      b: '#f3d295',
+      c: '#b56a3f',
+      d: '#8a4d27',
+      e: '#d49d52',
+      f: '#5a341c',
+      g: '#31252b',
+      h: '#67515e',
+      i: '#40333d',
+    },
+  },
+  'lucky-banner': {
+    width: 16,
+    pixels: [
+      '_______aa_______',
+      '_______aa_______',
+      '_______aa_______',
+      '_____bbbbbb_____',
+      '_____bccdcb_____',
+      '_____beeeeb_____',
+      '_____beeeeb_____',
+      '_____beeeeb_____',
+      '_____beeeeb_____',
+      '_____bffffb_____',
+      '______fggf______',
+      '_______hh_______',
+      '_______hh_______',
+      '______iiii______',
+      '_____ijjjji_____',
+      '________________',
+    ],
+    colors: {
+      a: '#d8c79a',
+      b: '#70402e',
+      c: '#f1d37e',
+      d: '#f7efc0',
+      e: '#bb2f5c',
+      f: '#f0b44e',
+      g: '#ffd87a',
+      h: '#bb7a2a',
+      i: '#7a2d48',
+      j: '#e7a63c',
+    },
+  },
+  boombox: {
+    width: 16,
+    pixels: [
+      '________________',
+      '________________',
+      '___aaaaaaaaaa___',
+      '__abbbbbbbbbbca_',
+      '__abdddeeeddbca_',
+      '__abdfggggfdbca_',
+      '__abdfghhgfdbca_',
+      '__abdfggggfdbca_',
+      '__abdddeeeddbca_',
+      '__abbiijjiibbca_',
+      '__abbbbbbbbbbca_',
+      '___akkkkkkkkla__',
+      '____mmmmmmmm____',
+      '________________',
+      '________________',
+      '________________',
+    ],
+    colors: {
+      a: '#233246',
+      b: '#162233',
+      c: '#49647b',
+      d: '#31455d',
+      e: '#587697',
+      f: '#0e1622',
+      g: '#1c2636',
+      h: '#7fd5ff',
+      i: '#2e475e',
+      j: '#88bfe0',
+      k: '#0f1724',
+      l: '#3a556d',
+      m: '#273243',
+    },
+  },
+  'trophy-stand': {
+    width: 16,
+    pixels: [
+      '_______aa_______',
+      '______abca______',
+      '_____abddca_____',
+      '_____aefgea_____',
+      '______ahha______',
+      '_______ii_______',
+      '_______ii_______',
+      '______ajka______',
+      '______ajka______',
+      '______ajka______',
+      '_____alllla_____',
+      '_____ammmma_____',
+      '____annnnnna____',
+      '___aoooooooa___',
+      '___apppppppa___',
+      '________________',
+    ],
+    colors: {
+      a: '#5f4b36',
+      b: '#e7c56b',
+      c: '#fff1b7',
+      d: '#f0b14a',
+      e: '#f9e0a1',
+      f: '#d7962f',
+      g: '#f8f2c9',
+      h: '#d58f2c',
+      i: '#7b5928',
+      j: '#7a5737',
+      k: '#c9993f',
+      l: '#4a3943',
+      m: '#352936',
+      n: '#5a4651',
+      o: '#2f2530',
+      p: '#453541',
+    },
+  },
+};
+
+function PixelPropSprite({ art, className = '' }) {
+  if (!art) return null;
+  const rows = art.pixels.length;
+  const cols = art.width || art.pixels[0]?.length || 0;
+  const template = [];
+  for (let y = 0; y < rows; y++) {
+    const row = art.pixels[y] || '';
+    for (let x = 0; x < cols; x++) {
+      const key = row[x] || '_';
+      template.push(key === '_' ? 'transparent' : (art.colors[key] || 'transparent'));
+    }
+  }
+
+  return (
+    <div
+      className={`pointer-events-none absolute z-[1] opacity-90 ${className}`.trim()}
+      style={{ width: `${cols * 4}px`, height: `${rows * 4}px` }}
+    >
+      <div
+        className="grid h-full w-full drop-shadow-[0_6px_16px_rgba(0,0,0,0.35)]"
+        style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
+      >
+        {template.map((color, index) => (
+          <span key={index} className="block aspect-square" style={{ backgroundColor: color }} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function HabitatPropDisplay({ propId }) {
   if (!propId) return null;
-
-  if (propId === 'training-dummy') {
-    return (
-      <div className="pointer-events-none absolute right-5 bottom-5 z-[1] opacity-75">
-        <div className="relative h-20 w-12">
-          <div className="absolute bottom-0 left-1/2 h-8 w-1.5 -translate-x-1/2 rounded-full bg-amber-900/70" />
-          <div className="absolute bottom-7 left-1/2 h-10 w-10 -translate-x-1/2 rounded-[999px] border border-amber-300/20 bg-amber-700/35" />
-          <div className="absolute bottom-13 left-1/2 h-3 w-3 -translate-x-1/2 rounded-full bg-amber-200/30" />
-        </div>
-      </div>
-    );
-  }
-
-  if (propId === 'lucky-banner') {
-    return (
-      <div className="pointer-events-none absolute left-5 top-12 z-[1] opacity-75">
-        <div className="relative h-20 w-10">
-          <div className="absolute left-1/2 top-0 h-20 w-[2px] -translate-x-1/2 bg-amber-100/35" />
-          <div className="absolute left-1/2 top-2 h-10 w-8 -translate-x-1/2 rounded-md border border-amber-200/20 bg-rose-500/25" />
-          <div className="absolute left-1/2 top-12 h-3 w-5 -translate-x-1/2 rounded-b-full bg-amber-300/25" />
-        </div>
-      </div>
-    );
-  }
-
-  if (propId === 'boombox') {
-    return (
-      <div className="pointer-events-none absolute left-5 bottom-5 z-[1] opacity-80">
-        <div className="relative h-12 w-20 rounded-xl border border-cyan-200/15 bg-cyan-950/35">
-          <div className="absolute left-3 top-3 h-6 w-6 rounded-full border border-cyan-200/20 bg-black/30" />
-          <div className="absolute right-3 top-3 h-6 w-6 rounded-full border border-cyan-200/20 bg-black/30" />
-          <div className="absolute inset-x-8 top-4 h-2 rounded-full bg-cyan-100/15" />
-        </div>
-      </div>
-    );
-  }
-
-  if (propId === 'trophy-stand') {
-    return (
-      <div className="pointer-events-none absolute right-5 top-14 z-[1] opacity-80">
-        <div className="relative h-20 w-14">
-          <div className="absolute left-1/2 top-0 h-7 w-8 -translate-x-1/2 rounded-b-[10px] border border-amber-200/20 bg-amber-300/25" />
-          <div className="absolute left-1/2 top-6 h-8 w-2 -translate-x-1/2 bg-amber-800/50" />
-          <div className="absolute bottom-0 left-1/2 h-5 w-12 -translate-x-1/2 rounded-lg bg-slate-900/55" />
-        </div>
-      </div>
-    );
-  }
-
-  return null;
+  const positions = {
+    'training-dummy': 'right-4 bottom-4',
+    'lucky-banner': 'left-4 top-10',
+    boombox: 'left-4 bottom-4',
+    'trophy-stand': 'right-4 top-12',
+  };
+  return <PixelPropSprite art={PIXEL_PROP_ART[propId]} className={positions[propId] || ''} />;
 }
 
 function WeightBadge({ state }) {
@@ -706,15 +854,17 @@ function BondMeter({ bond, bondRank }) {
     ? Math.min(100, ((bond - currentThreshold) / (nextThreshold - currentThreshold)) * 100)
     : 100;
   return (
-    <div className="rounded-xl border border-cyan-400/10 bg-cyan-500/[0.05] p-3">
+    <div>
       <div className="flex items-center justify-between text-[11px] mb-1">
-        <span className="text-cyan-200/80">Bond</span>
-        <span className="font-mono text-cyan-100/80 tabular-nums">{bond}</span>
+        <span className="text-gray-500">Bond</span>
+        <span className="font-mono text-white/60 tabular-nums">{bond}</span>
       </div>
       <div className="w-full h-2.5 bg-white/[0.04] rounded-full overflow-hidden border border-white/[0.04]">
-        <div className="h-full rounded-full bg-gradient-to-r from-cyan-600 to-sky-300 transition-all duration-700" style={{ width: `${currentProgress}%` }} />
+        <div className="h-full rounded-full bg-gradient-to-r from-sky-700 to-cyan-300 transition-all duration-700 relative" style={{ width: `${currentProgress}%` }}>
+          <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent rounded-full" />
+        </div>
       </div>
-      <div className="mt-2 text-[10px] text-cyan-100/70">
+      <div className="mt-2 text-[10px] text-cyan-100/70 px-0.5">
         {bondRank?.next_label ? `${bondRank.label} -> ${bondRank.next_label}` : bondRank?.label || 'Training Partner'}
       </div>
     </div>
@@ -731,7 +881,7 @@ function StatCard({ label, value }) {
 }
 
 // ─── Pet tab ──────────────────────────────────────────
-function PetTab({ pet, shop, combo, economy, interactionBusy, activityBusy, missionBusyId, toyBusy, onAction, onActivity, onClaimMission, onBuyToy, onUseToy }) {
+function PetTab({ pet, shop, combo, economy, interactionBusy, activityBusy, missionBusyId, toyBusy, trainingBusy, onAction, onActivity, onClaimMission, onBuyToy, onUseToy, onSetTrainingPath }) {
   return (
     <div className="space-y-3 text-sm text-gray-400">
       <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
@@ -795,6 +945,60 @@ function PetTab({ pet, shop, combo, economy, interactionBusy, activityBusy, miss
               <div className="text-[11px] font-semibold text-white/85">{activity.label}</div>
               <div className="text-[10px] text-gray-500 mt-1">{activity.desc}</div>
             </button>
+          ))}
+        </div>
+      </div>
+      <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
+        <div className="flex items-start justify-between gap-3 mb-2">
+          <div>
+            <div className="text-xs text-gray-500">Mastery path</div>
+            <div className="text-sm font-semibold text-white/85 mt-0.5">
+              {pet.mastery?.path?.icon ? `${pet.mastery.path.icon} ` : ''}{pet.mastery?.path?.label || 'Consistency'}
+            </div>
+            <div className="text-[11px] text-gray-500 mt-1">{pet.mastery?.path?.desc}</div>
+          </div>
+          <div className="text-right shrink-0">
+            <div className="text-[10px] uppercase tracking-wider text-cyan-200/70">Mastery</div>
+            <div className="text-base font-bold text-cyan-100 tabular-nums">{pet.mastery?.mastery_xp || 0}</div>
+            <div className="text-[10px] text-cyan-200/75">{pet.mastery?.rank?.label || 'Rookie'}</div>
+          </div>
+        </div>
+        <div className="w-full h-2.5 bg-white/[0.04] rounded-full overflow-hidden border border-white/[0.04]">
+          <div className="h-full rounded-full bg-gradient-to-r from-cyan-600 to-sky-300 transition-all duration-700" style={{ width: `${Math.max(6, (pet.mastery?.rank?.progress || 0) * 100)}%` }} />
+        </div>
+        <div className="mt-2 text-[10px] text-gray-500">
+          {pet.mastery?.rank?.next_label
+            ? `${pet.mastery.rank.label} -> ${pet.mastery.rank.next_label} at ${pet.mastery.rank.next_threshold} XP`
+            : `${pet.mastery?.rank?.label || 'Master'} rank reached`}
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          {(pet.mastery?.available_paths || []).map((path) => (
+            <button
+              key={path.id}
+              onClick={() => onSetTrainingPath(path.id)}
+              disabled={trainingBusy}
+              className={`rounded-xl border px-3 py-2 text-left transition-all ${
+                path.active
+                  ? 'border-cyan-400/20 bg-cyan-500/[0.08]'
+                  : 'border-white/[0.06] bg-white/[0.02] hover:border-white/15'
+              } disabled:opacity-50`}
+            >
+              <div className="text-[11px] font-semibold text-white/85">{path.icon ? `${path.icon} ` : ''}{path.label}</div>
+              <div className="text-[10px] text-gray-500 mt-1">{path.desc}</div>
+            </button>
+          ))}
+        </div>
+        <div className="mt-3 space-y-2">
+          {(pet.mastery?.milestones || []).map((node) => (
+            <div key={node.id} className={`rounded-xl border px-3 py-2 ${node.unlocked ? 'border-emerald-400/12 bg-emerald-500/[0.06]' : 'border-white/[0.05] bg-black/20'}`}>
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-[11px] font-semibold text-white/85">{node.title}</div>
+                <div className={`text-[10px] font-semibold ${node.unlocked ? 'text-emerald-300' : 'text-gray-500'}`}>
+                  {node.unlocked ? 'Unlocked' : `${node.threshold} XP`}
+                </div>
+              </div>
+              <div className="text-[10px] text-gray-500 mt-1">{node.desc}</div>
+            </div>
           ))}
         </div>
       </div>
@@ -898,6 +1102,7 @@ function PetTab({ pet, shop, combo, economy, interactionBusy, activityBusy, miss
         <ul className="text-[11px] space-y-0.5 list-disc list-inside">
           <li>Play style shapes your pet specialty over time</li>
           <li>Bond rank rises through care, missions, and activities</li>
+          <li>Mastery paths turn your habits into long-term pet identity</li>
           <li>Combo keeps them fed while Bond Tokens feed deeper progression</li>
         </ul>
       </div>

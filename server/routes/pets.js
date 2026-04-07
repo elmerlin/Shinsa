@@ -238,6 +238,89 @@ const PET_TOYS = [
 ];
 const PET_TOY_MAP = Object.fromEntries(PET_TOYS.map((toy) => [toy.id, toy]));
 
+const TRAINING_PATHS = {
+  accuracy: {
+    id: 'accuracy',
+    label: 'Accuracy',
+    short_label: 'Accuracy',
+    desc: 'Clean timing, polished grades, and composed play.',
+    icon: '🎯',
+    milestones: [
+      { threshold: 40, title: 'Eye for Timing', desc: 'Your pet starts reading cleaner patterns in your play.' },
+      { threshold: 120, title: 'Judge Whisperer', desc: 'A sharper, calmer presence settles into the bond.' },
+      { threshold: 260, title: 'Perfect Form', desc: 'This pet now carries itself like a refined score hunter.' },
+    ],
+  },
+  stamina: {
+    id: 'stamina',
+    label: 'Stamina',
+    short_label: 'Stamina',
+    desc: 'Heavy sets, long sessions, and level 18+ grit.',
+    icon: '💪',
+    milestones: [
+      { threshold: 40, title: 'Endurance Spark', desc: 'The pet starts thriving on harder clears.' },
+      { threshold: 120, title: 'Iron Rhythm', desc: 'Its stance becomes tougher and more grounded.' },
+      { threshold: 260, title: 'Arena Engine', desc: 'A full-bodied training-beast energy takes over.' },
+    ],
+  },
+  tech: {
+    id: 'tech',
+    label: 'Tech',
+    short_label: 'Tech',
+    desc: 'Footwork, doubles, and clever chart solving.',
+    icon: '🧠',
+    milestones: [
+      { threshold: 40, title: 'Footwork Instinct', desc: 'The pet leans into tricky movement and agility.' },
+      { threshold: 120, title: 'Pattern Reader', desc: 'It starts to feel clever, agile, and hard to catch.' },
+      { threshold: 260, title: 'Lab Monster', desc: 'A sharp little tactician has fully emerged.' },
+    ],
+  },
+  consistency: {
+    id: 'consistency',
+    label: 'Consistency',
+    short_label: 'Consistency',
+    desc: 'Reliable routines, daily care, and steady improvement.',
+    icon: '🪴',
+    milestones: [
+      { threshold: 40, title: 'Care Rhythm', desc: 'The pet settles into dependable routines with you.' },
+      { threshold: 120, title: 'Steady Partner', desc: 'Its mood and bond feel more stable and grounded.' },
+      { threshold: 260, title: 'Evergreen Companion', desc: 'A deeply reliable training partner identity forms.' },
+    ],
+  },
+  tournament: {
+    id: 'tournament',
+    label: 'Tournament',
+    short_label: 'Tournament',
+    desc: 'Pressure moments, challenge runs, and standout clears.',
+    icon: '🏆',
+    milestones: [
+      { threshold: 40, title: 'Bracket Pulse', desc: 'The pet starts responding to higher-stakes moments.' },
+      { threshold: 120, title: 'Stage Instinct', desc: 'Its presence turns bolder and more competitive.' },
+      { threshold: 260, title: 'Finals Aura', desc: 'Your companion carries true spotlight energy now.' },
+    ],
+  },
+  social: {
+    id: 'social',
+    label: 'Social',
+    short_label: 'Social',
+    desc: 'Replays, shared moments, and scene presence.',
+    icon: '✨',
+    milestones: [
+      { threshold: 40, title: 'Replay Spark', desc: 'The pet starts to love attention and shared moments.' },
+      { threshold: 120, title: 'Scene Familiar', desc: 'A charismatic, visible identity takes shape.' },
+      { threshold: 260, title: 'Dojo Celebrity', desc: 'This pet now feels born for the spotlight.' },
+    ],
+  },
+};
+
+const MASTERY_RANKS = [
+  { threshold: 0, label: 'Rookie' },
+  { threshold: 45, label: 'Apprentice' },
+  { threshold: 120, label: 'Specialist' },
+  { threshold: 240, label: 'Elite' },
+  { threshold: 420, label: 'Master' },
+];
+
 const HABITAT_ITEMS = {
   backgrounds: [
     { id: 'dojo-night', name: 'Dojo Night', cost: 90, kind: 'background', desc: 'Blue-lit training hall energy.', default_owned: true },
@@ -406,6 +489,8 @@ function ensurePetTable(db) {
   addCol('owned_habitat_items', "TEXT NOT NULL DEFAULT '[\"dojo-night\"]'");
   addCol('active_habitat_bg', "TEXT NOT NULL DEFAULT 'dojo-night'");
   addCol('active_habitat_prop', "TEXT NOT NULL DEFAULT ''");
+  addCol('active_training_path', "TEXT NOT NULL DEFAULT 'consistency'");
+  addCol('mastery_xp', "INTEGER NOT NULL DEFAULT 0");
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────
@@ -498,6 +583,133 @@ function pickRandom(list, fallback = '') {
 function getToyPreference(character, toy) {
   if (!toy) return 'neutral';
   return Array.isArray(toy.favored) && toy.favored.includes(character) ? 'favorite' : 'neutral';
+}
+
+function getDefaultTrainingPathForSpecialty(specialtyKey = '') {
+  const map = {
+    'accuracy-fiend': 'accuracy',
+    'stamina-hound': 'stamina',
+    'double-grinder': 'tech',
+    'scene-showoff': 'social',
+    'hop-regular': 'tournament',
+    'all-rounder': 'consistency',
+  };
+  return map[specialtyKey] || 'consistency';
+}
+
+function getTrainingPath(pathId = 'consistency') {
+  return TRAINING_PATHS[pathId] || TRAINING_PATHS.consistency;
+}
+
+function getMasteryRank(masteryXp = 0) {
+  let current = MASTERY_RANKS[0];
+  let next = null;
+  for (let i = 0; i < MASTERY_RANKS.length; i++) {
+    const rank = MASTERY_RANKS[i];
+    if (masteryXp >= rank.threshold) {
+      current = rank;
+      next = MASTERY_RANKS[i + 1] || null;
+    }
+  }
+  return {
+    ...current,
+    progress: next
+      ? clamp((masteryXp - current.threshold) / Math.max(1, next.threshold - current.threshold), 0, 1)
+      : 1,
+    next_label: next?.label || '',
+    next_threshold: next?.threshold || current.threshold,
+  };
+}
+
+function getPathMasteryGain(pathId, play) {
+  const score = parseInt(play?.score, 10) || 0;
+  const grade = normalizeGrade(play?.grade) || (score > 0 ? gradeFromScore(score) : 'F');
+  const gradeIndex = GRADE_ORDER.indexOf(grade);
+  const level = parseInt(play?.level, 10) || 0;
+  const isReplay = !!(String(play?.replay_embed_url || '').trim() || String(play?.replay_video_id || '').trim());
+  const isDouble = String(play?.mode || '').startsWith('Double');
+  let gain = 1;
+
+  switch (pathId) {
+    case 'accuracy':
+      gain += gradeIndex >= GRADE_INDEX.AAA ? 2 : 0;
+      gain += gradeIndex >= GRADE_INDEX.S ? 1 : 0;
+      break;
+    case 'stamina':
+      gain += level >= 18 ? 2 : 0;
+      gain += level >= 21 ? 1 : 0;
+      break;
+    case 'tech':
+      gain += isDouble ? 2 : 0;
+      gain += level >= 17 ? 1 : 0;
+      break;
+    case 'tournament':
+      gain += level >= 20 ? 2 : 0;
+      gain += gradeIndex >= GRADE_INDEX.S ? 1 : 0;
+      break;
+    case 'social':
+      gain += isReplay ? 3 : 0;
+      gain += gradeIndex >= GRADE_INDEX.AAA ? 1 : 0;
+      break;
+    case 'consistency':
+    default:
+      gain += gradeIndex >= GRADE_INDEX.AA ? 1 : 0;
+      break;
+  }
+
+  return gain;
+}
+
+function getActivityMasteryGain(pathId, activityId) {
+  const base = { train: 7, play: 5, groom: 4, rest: 3, spar: 8, explore: 6 }[activityId] || 4;
+  if ((pathId === 'accuracy' || pathId === 'consistency') && ['train', 'groom'].includes(activityId)) return base + 2;
+  if ((pathId === 'stamina' || pathId === 'tech') && ['spar', 'train', 'explore'].includes(activityId)) return base + 2;
+  if ((pathId === 'social' || pathId === 'tournament') && ['play', 'explore', 'spar'].includes(activityId)) return base + 2;
+  return base;
+}
+
+function getMissionMasteryGain(pathId, missionId, cadence = 'daily') {
+  const base = cadence === 'weekly' ? 14 : 7;
+  const map = {
+    accuracy: ['aaa_pair'],
+    stamina: ['hard_clear_week'],
+    tech: ['double_today', 'double_week', 'new_chart_today'],
+    consistency: ['feed_today', 'interact_three'],
+    tournament: ['hop_run', 'weekly_challenge_entry'],
+    social: ['replay_today', 'replay_week'],
+  };
+  return base + ((map[pathId] || []).includes(missionId) ? 4 : 0);
+}
+
+function buildMasteryProfile(pet, specialtyKey = '') {
+  const activePathId = getTrainingPath(pet.active_training_path || getDefaultTrainingPathForSpecialty(specialtyKey)).id;
+  const path = getTrainingPath(activePathId);
+  const masteryXp = pet.mastery_xp || 0;
+  const rank = getMasteryRank(masteryXp);
+  const milestones = path.milestones.map((node, index) => ({
+    id: `${path.id}-${index + 1}`,
+    threshold: node.threshold,
+    title: node.title,
+    desc: node.desc,
+    unlocked: masteryXp >= node.threshold,
+  }));
+  const nextMilestone = milestones.find((node) => !node.unlocked) || null;
+  return {
+    active_path: path.id,
+    path,
+    mastery_xp: masteryXp,
+    rank,
+    milestones,
+    next_milestone: nextMilestone,
+    available_paths: Object.values(TRAINING_PATHS).map((entry) => ({
+      id: entry.id,
+      label: entry.label,
+      short_label: entry.short_label,
+      desc: entry.desc,
+      icon: entry.icon,
+      active: entry.id === path.id,
+    })),
+  };
 }
 
 function getUnlockedTricks(character, xp) {
@@ -823,6 +1035,7 @@ function formatPet(pet, isPublic = false, db = null) {
   const interactionsToday = pet.daily_interaction_key === getUtcDayKey() ? (pet.daily_interaction_count || 0) : 0;
   const activitySummary = db ? queryPlayActivitySummary(db, pet.user_id) : {};
   const specialty = derivePetSpecialty(activitySummary);
+  const mastery = buildMasteryProfile(pet, specialty.key);
   const missions = buildPetMissions({ ...pet, character }, {
     ...activitySummary,
     fed_today: !!pet.last_food_at && String(pet.last_food_at).startsWith(getUtcDayKey()),
@@ -868,6 +1081,7 @@ function formatPet(pet, isPublic = false, db = null) {
     last_trick_at: pet.last_trick_at || '',
     created_at: pet.created_at || '',
     specialty,
+    mastery,
     personality: {
       title: profile.title,
       desc: profile.personality,
@@ -978,6 +1192,7 @@ router.post('/adopt', requireAuth, (req, res) => {
       bond = 0, energy = 65, trust = 35, hype = 25, bond_tokens = 0, rare_shards = 0,
       interaction_count = 0, daily_interaction_count = 0, daily_interaction_key = '',
       claimed_missions = '[]', last_food_id = '', last_food_at = '', owned_toys = '[]', last_toy_id = '', last_toy_at = '',
+      active_training_path = 'consistency', mastery_xp = 0,
       tricks_unlocked = '[]', pending_trick = '', trick_demand_level = 0, trick_demand_grade = '',
       trick_demand_expires = '', last_trick_performed = '', last_trick_at = '',
       equipped_hat = '', equipped_belt = '', equipped_shoes = '', equipped_top = '',
@@ -991,9 +1206,10 @@ router.post('/adopt', requireAuth, (req, res) => {
         user_id, character, fullness, happiness, total_songs_fed, experience,
         bond, energy, trust, hype, bond_tokens, rare_shards,
         daily_interaction_count, daily_interaction_key, claimed_missions, last_food_id, last_food_at, owned_toys, last_toy_id, last_toy_at,
+        active_training_path, mastery_xp,
         last_fed_at
       )
-      VALUES (?, ?, 50, 50, 0, 0, 0, 65, 35, 25, 0, 0, 0, '', '[]', '', '', '[]', '', '', datetime('now'))
+      VALUES (?, ?, 50, 50, 0, 0, 0, 65, 35, 25, 0, 0, 0, '', '[]', '', '', '[]', '', '', 'consistency', 0, datetime('now'))
     `).run(req.user.id, character);
   }
   const pet = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
@@ -1197,6 +1413,31 @@ router.post('/equip-habitat', requireAuth, (req, res) => {
   res.json({ pet: formatPet(updated, false, db) });
 });
 
+// POST /api/pets/training-path — choose active mastery path
+router.post('/training-path', requireAuth, (req, res) => {
+  const db = getDb();
+  ensurePetTable(db);
+  const pet = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
+  if (!pet) return res.status(404).json({ error: 'No pet adopted yet' });
+
+  const pathId = String(req.body?.pathId || '').trim();
+  if (!TRAINING_PATHS[pathId]) return res.status(400).json({ error: 'Unknown training path' });
+
+  db.prepare(`
+    UPDATE user_pets
+    SET active_training_path = ?, updated_at = datetime('now')
+    WHERE user_id = ?
+  `).run(pathId, req.user.id);
+
+  const updated = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
+  const profile = getCharacterProfile(updated.character);
+  res.json({
+    pet: formatPet(updated, false, db),
+    speech: `${pickRandom(profile.interaction_lines.mission, 'A new focus begins.')} ${TRAINING_PATHS[pathId].label} training it is.`,
+    path: pathId,
+  });
+});
+
 // POST /api/pets/equip — equip or unequip clothing
 router.post('/equip', requireAuth, (req, res) => {
   const db = getDb();
@@ -1340,6 +1581,7 @@ router.post('/activities/:activityId', requireAuth, (req, res) => {
   const newCombo = Math.max(0, (pet.combo_balance || 0) + (activity.combo || 0));
   const newBondTokens = Math.max(0, (pet.bond_tokens || 0) + (activity.bond_tokens || 0));
   const newRareShards = Math.max(0, (pet.rare_shards || 0) + (activity.rare_shards || 0));
+  const masteryGain = getActivityMasteryGain(pet.active_training_path || 'consistency', activity.id);
   const profile = getCharacterProfile(pet.character);
   const speech = pickRandom(profile.interaction_lines.mission, `${activity.label} complete.`);
 
@@ -1347,9 +1589,10 @@ router.post('/activities/:activityId', requireAuth, (req, res) => {
     UPDATE user_pets
     SET happiness = ?, energy = ?, trust = ?, hype = ?, bond = ?,
         combo_balance = ?, bond_tokens = ?, rare_shards = ?,
+        mastery_xp = mastery_xp + ?,
         updated_at = datetime('now')
     WHERE user_id = ?
-  `).run(newHappiness, newEnergy, newTrust, newHype, newBond, newCombo, newBondTokens, newRareShards, req.user.id);
+  `).run(newHappiness, newEnergy, newTrust, newHype, newBond, newCombo, newBondTokens, newRareShards, masteryGain, req.user.id);
 
   const updated = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
   res.json({
@@ -1358,6 +1601,7 @@ router.post('/activities/:activityId', requireAuth, (req, res) => {
     reaction: activity.reaction,
     expression: activity.expression,
     activity: activity.id,
+    mastery_gain: masteryGain,
   });
 });
 
@@ -1459,6 +1703,7 @@ router.post('/missions/:missionId/claim', requireAuth, (req, res) => {
   const currentEnergy = getStateValue(pet.energy || 65, pet.updated_at || pet.last_fed_at, ENERGY_DECAY_PER_HOUR);
   const currentHype = getStateValue(pet.hype || 25, pet.updated_at || pet.last_fed_at, HYPE_DECAY_PER_HOUR);
   const currentHappiness = computeDecayed(pet.happiness || 50, pet.last_fed_at, HAPPINESS_DECAY_PER_HOUR);
+  const masteryGain = getMissionMasteryGain(pet.active_training_path || 'consistency', mission.id, mission.cadence);
 
   db.prepare(`
     UPDATE user_pets
@@ -1471,6 +1716,7 @@ router.post('/missions/:missionId/claim', requireAuth, (req, res) => {
         combo_balance = ?,
         bond_tokens = ?,
         rare_shards = ?,
+        mastery_xp = mastery_xp + ?,
         updated_at = datetime('now')
     WHERE user_id = ?
   `).run(
@@ -1483,6 +1729,7 @@ router.post('/missions/:missionId/claim', requireAuth, (req, res) => {
     Math.max(0, (pet.combo_balance || 0) + (reward.combo_balance || 0)),
     Math.max(0, (pet.bond_tokens || 0) + (reward.bond_tokens || 0)),
     Math.max(0, (pet.rare_shards || 0) + (reward.rare_shards || 0)),
+    masteryGain,
     req.user.id,
   );
 
@@ -1491,6 +1738,7 @@ router.post('/missions/:missionId/claim', requireAuth, (req, res) => {
     pet: formatPet(updated, false, db),
     mission: mission.id,
     reward: mission.reward,
+    mastery_gain: masteryGain,
   });
 });
 
@@ -1599,9 +1847,11 @@ module.exports.feedPetForUser = function feedPetForUser(userId, playsOrCount) {
   let totalTrust = 0;
   let totalHype = 0;
   let totalEnergy = 0;
+  let totalMastery = 0;
   let highestLevel = pet.highest_level || 0;
   let songCount = 0;
   let trickDemandMet = false;
+  const activePath = pet.active_training_path || 'consistency';
 
   if (Array.isArray(playsOrCount)) {
     for (const play of playsOrCount) {
@@ -1620,6 +1870,7 @@ module.exports.feedPetForUser = function feedPetForUser(userId, playsOrCount) {
       totalTrust += (GRADE_INDEX[rawGrade] >= GRADE_INDEX.AAA ? 1 : 0) + (isDouble ? 1 : 0);
       totalHype += 2 + (isReplay ? 2 : 0) + (level >= 20 ? 1 : 0);
       totalEnergy += Math.max(0, Math.floor(level / 8));
+      totalMastery += getPathMasteryGain(activePath, play);
       songCount++;
       if (pet.pending_trick && !trickDemandMet) {
         const minIdx = GRADE_ORDER.indexOf(pet.trick_demand_grade || 'A');
@@ -1638,7 +1889,11 @@ module.exports.feedPetForUser = function feedPetForUser(userId, playsOrCount) {
     totalTrust = Math.max(0, Math.floor(songCount / 2));
     totalHype = songCount * 2;
     totalEnergy = songCount;
+    totalMastery = songCount * (activePath === 'consistency' ? 2 : 1);
   }
+
+  if (activePath === 'consistency' && songCount >= 5) totalMastery += 4;
+  if (activePath === 'tournament' && highestLevel >= 20) totalMastery += 3;
 
   const curHunger = computeDecayed(pet.fullness, pet.last_fed_at, HUNGER_DECAY_PER_HOUR);
   const curHappiness = computeDecayed(pet.happiness || 50, pet.last_fed_at, HAPPINESS_DECAY_PER_HOUR);
@@ -1665,22 +1920,24 @@ module.exports.feedPetForUser = function feedPetForUser(userId, playsOrCount) {
       SET fullness = ?, happiness = ?, total_songs_fed = total_songs_fed + ?,
           energy = ?, hype = ?, bond = ?, trust = ?,
           experience = experience + ?, combo_balance = combo_balance + ?,
+          mastery_xp = mastery_xp + ?,
           highest_level = MAX(highest_level, ?),
           last_fed_at = datetime('now'), updated_at = datetime('now'),
           last_trick_performed = pending_trick, last_trick_at = datetime('now'),
           pending_trick = '', trick_demand_level = 0, trick_demand_grade = '', trick_demand_expires = ''
       WHERE user_id = ?
-    `).run(newHunger, newHappiness, songCount, newEnergy, newHype, newBond, newTrust, totalXp + 25, totalCombo + bonusCombo, highestLevel, userId);
+    `).run(newHunger, newHappiness, songCount, newEnergy, newHype, newBond, newTrust, totalXp + 25, totalCombo + bonusCombo, totalMastery + 5, highestLevel, userId);
   } else {
     db.prepare(`
       UPDATE user_pets
       SET fullness = ?, happiness = ?, total_songs_fed = total_songs_fed + ?,
           energy = ?, hype = ?, bond = ?, trust = ?,
           experience = experience + ?, combo_balance = combo_balance + ?,
+          mastery_xp = mastery_xp + ?,
           highest_level = MAX(highest_level, ?),
           last_fed_at = datetime('now'), updated_at = datetime('now')
       WHERE user_id = ?
-    `).run(newHunger, newHappiness, songCount, newEnergy, newHype, newBond, newTrust, totalXp, totalCombo, highestLevel, userId);
+    `).run(newHunger, newHappiness, songCount, newEnergy, newHype, newBond, newTrust, totalXp, totalCombo, totalMastery, highestLevel, userId);
   }
 
   return {
@@ -1692,6 +1949,7 @@ module.exports.feedPetForUser = function feedPetForUser(userId, playsOrCount) {
     bond: totalBond,
     trust: totalTrust,
     hype: totalHype,
+    mastery: totalMastery,
     trickDemandMet,
   };
 };
