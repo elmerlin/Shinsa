@@ -181,11 +181,11 @@ const PALETTES = {
 // ═══════════════════════════════════════════════════════════════
 
 const WEIGHT_DIMS = {
-  starving: { bodyRx: 12, bodyRy: 7, limbW: 2, armLen: 4 },
-  thin:     { bodyRx: 13, bodyRy: 8, limbW: 2, armLen: 5 },
-  normal:   { bodyRx: 14, bodyRy: 9, limbW: 3, armLen: 5 },
-  chubby:   { bodyRx: 15, bodyRy: 10, limbW: 3, armLen: 6 },
-  fat:      { bodyRx: 16, bodyRy: 11, limbW: 3, armLen: 6 },
+  starving: { bodyRx: 10, bodyRy: 6,  limbW: 2, armLen: 3, legH: 6, bellyDroop: 0 },
+  thin:     { bodyRx: 12, bodyRy: 7,  limbW: 2, armLen: 4, legH: 6, bellyDroop: 0 },
+  normal:   { bodyRx: 14, bodyRy: 9,  limbW: 3, armLen: 5, legH: 6, bellyDroop: 0 },
+  chubby:   { bodyRx: 17, bodyRy: 11, limbW: 3, armLen: 6, legH: 5, bellyDroop: 2 },
+  fat:      { bodyRx: 20, bodyRy: 13, limbW: 4, armLen: 6, legH: 4, bellyDroop: 4 },
 };
 
 // Grid size constants
@@ -200,9 +200,9 @@ const HEAD_RY = 13;
 function getBodyMetrics(weightState) {
   const w = WEIGHT_DIMS[weightState] || WEIGHT_DIMS.normal;
   const bodyCy = HEAD_CY + HEAD_RY + Math.floor(w.bodyRy * 0.94) + 3;
-  const legHeight = Math.max(5, Math.min(7, Math.floor(w.bodyRy * 0.68)));
+  const legHeight = w.legH || Math.max(5, Math.min(7, Math.floor(w.bodyRy * 0.68)));
   const legSpread = Math.max(2, Math.floor(w.bodyRx * 0.45));
-  const legTop = bodyCy + w.bodyRy - 1;
+  const legTop = bodyCy + w.bodyRy - 1 + (w.bellyDroop || 0);
   return { w, bodyCy, legHeight, legSpread, legTop };
 }
 
@@ -222,13 +222,28 @@ function buildBase(character, weightState) {
   // Belly patch
   fillEllipse(g, CX, bodyCy + 2, Math.max(4, Math.floor(w.bodyRx * 0.5)), Math.max(3, Math.floor(w.bodyRy * 0.46)), 'Y');
 
-  // Legs
+  // Belly droop for chubby/fat — extra ellipse hanging below body center
+  if (w.bellyDroop > 0) {
+    fillEllipse(g, CX, bodyCy + w.bodyRy - 1, Math.floor(w.bodyRx * 0.65), w.bellyDroop + 2, 'B');
+    fillEllipse(g, CX, bodyCy + w.bodyRy, Math.floor(w.bodyRx * 0.4), w.bellyDroop + 1, 'Y');
+  }
+
+  // Ribs for starving — subtle horizontal lines on sides
+  if (weightState === 'starving') {
+    for (let ry = -2; ry <= 2; ry += 2) {
+      setPixel(g, CX - w.bodyRx + 1, bodyCy + ry, 'K');
+      setPixel(g, CX + w.bodyRx - 1, bodyCy + ry, 'K');
+    }
+  }
+
+  // Legs — shorter and wider for fat
   fillRect(g, CX - legSpread - w.limbW + 1, legTop, w.limbW, legHeight, 'D');
   fillRect(g, CX + legSpread, legTop, w.limbW, legHeight, 'D');
 
-  // Feet
-  fillRect(g, CX - legSpread - w.limbW - 1, legTop + legHeight - 1, w.limbW + 2, 2, 'D');
-  fillRect(g, CX + legSpread - 1, legTop + legHeight - 1, w.limbW + 2, 2, 'D');
+  // Feet — wider for fat
+  const footW = w.limbW + 2 + (w.bellyDroop > 2 ? 1 : 0);
+  fillRect(g, CX - legSpread - w.limbW - 1, legTop + legHeight - 1, footW, 2, 'D');
+  fillRect(g, CX + legSpread - 1, legTop + legHeight - 1, footW, 2, 'D');
 
   // Short visible neck
   if (character !== 'buu') {
@@ -298,16 +313,21 @@ function buildFeatures(character) {
       break;
     }
     case 'buu': {
-      // Very prominent thick head tentacle
-      fillEllipse(g, CX + 3, hcy - HEAD_RY + 5, 4, 4, 'P');
-      // Thick curved body (5 parallel lines for width)
-      for (let t = -2; t <= 2; t++) {
-        fillLine(g, CX + 3 + t, hcy - HEAD_RY + 2, CX + 7 + t, hcy - HEAD_RY - 3, 'P');
-        fillLine(g, CX + 7 + t, hcy - HEAD_RY - 3, CX + 3 + t, hcy - HEAD_RY - 6, 'P');
-        fillLine(g, CX + 3 + t, hcy - HEAD_RY - 6, CX - 1 + t, hcy - HEAD_RY - 5, 'P');
+      // Very prominent thick head tentacle (Majin Buu's iconic antenna)
+      // Wide base emerging from top of head
+      fillEllipse(g, CX + 2, hcy - HEAD_RY + 5, 5, 4, 'P');
+      // Thick curved body — 7 parallel lines for real width
+      for (let t = -3; t <= 3; t++) {
+        // Rise up from head
+        fillLine(g, CX + 2 + t, hcy - HEAD_RY + 2, CX + 8 + t, hcy - HEAD_RY - 2, 'P');
+        // Curve over to the right
+        fillLine(g, CX + 8 + t, hcy - HEAD_RY - 2, CX + 12 + Math.min(t, 1), hcy - HEAD_RY + 1, 'P');
+        // Droop down slightly at the end
+        fillLine(g, CX + 12 + Math.min(t, 1), hcy - HEAD_RY + 1, CX + 14 + Math.min(t, 0), hcy - HEAD_RY + 4, 'P');
       }
-      // Large bulbous tip
-      fillCircle(g, CX - 2, hcy - HEAD_RY - 5, 3, 'P');
+      // Bulbous tip at the end of droop
+      fillCircle(g, CX + 14, hcy - HEAD_RY + 5, 3, 'P');
+      fillCircle(g, CX + 13, hcy - HEAD_RY + 4, 2, 'P');
       // (blush drawn on face layer to avoid dark outline)
       break;
     }
@@ -663,12 +683,13 @@ function buildHat(hatId, color, character) {
       // Wattle
       fillRect(g, CX - 1, cy + 2, 3, 3, '8');
       setPixel(g, CX, cy + 5, '8');
-      // Buu's tentacle poking through
+      // Buu's tentacle poking through hat — curves to the right
       if (character === 'buu') {
         for (let t = -2; t <= 2; t++) {
-          fillLine(g, CX + 5 + t, cy - 5, CX + 8 + t, Math.max(0, cy - 14), '7');
+          fillLine(g, CX + 3 + t, cy - 5, CX + 10 + t, Math.max(0, cy - 10), '7');
+          fillLine(g, CX + 10 + t, Math.max(0, cy - 10), CX + 14 + Math.min(t, 0), Math.max(1, cy - 7), '7');
         }
-        fillCircle(g, CX + 7, Math.max(2, cy - 15), 3, '7');
+        fillCircle(g, CX + 14, Math.max(3, cy - 6), 3, '7');
       }
       break;
     }
@@ -1521,6 +1542,7 @@ const PIXEL_ART_STYLES = `
     transform-origin: center center;
   }
   /* ── Idle variant animations (intermittent, character-specific) ── */
+  /* ── Subtle idle ── */
   @keyframes sprite-idle-nod { 0%,100% { transform: translateY(0); } 40% { transform: translateY(1px); } }
   @keyframes sprite-idle-stance { 0%,100% { transform: rotate(0); } 30% { transform: rotate(0.5deg); } 70% { transform: rotate(-0.3deg); } }
   @keyframes sprite-idle-whisker { 0%,100% { transform: scaleX(1); } 50% { transform: scaleX(1.003); } }
@@ -1532,6 +1554,21 @@ const PIXEL_ART_STYLES = `
   @keyframes sprite-idle-hop { 0%,100% { transform: translateY(0); } 40% { transform: translateY(-3px); } }
   @keyframes sprite-idle-float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
   @keyframes sprite-idle-glow { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.05); } }
+  /* ── Active idle — martial arts, stretching, looking ── */
+  @keyframes sprite-idle-kick { 0%,100% { transform: rotate(0) translateY(0); } 20% { transform: rotate(-3deg) translateY(-1px); } 35% { transform: rotate(6deg) translateY(-4px); } 55% { transform: rotate(4deg) translateY(-2px); } 75% { transform: rotate(0) translateY(0); } }
+  @keyframes sprite-idle-punch { 0%,100% { transform: translateX(0) scaleX(1); } 15% { transform: translateX(-2px) scaleX(0.97); } 30% { transform: translateX(5px) scaleX(1.04); } 50% { transform: translateX(3px) scaleX(1.02); } 70% { transform: translateX(0) scaleX(1); } }
+  @keyframes sprite-idle-crane { 0%,100% { transform: translateY(0) rotate(0); } 25% { transform: translateY(-5px) rotate(-1deg); } 50% { transform: translateY(-5px) rotate(0.5deg); } 80% { transform: translateY(-2px) rotate(0); } }
+  @keyframes sprite-idle-stretch { 0%,100% { transform: scaleY(1) translateY(0); } 30% { transform: scaleY(1.06) translateY(-3px); } 60% { transform: scaleY(1.04) translateY(-2px); } }
+  @keyframes sprite-idle-look { 0%,100% { transform: scaleX(1) translateX(0); } 25% { transform: scaleX(-1) translateX(0); } 60% { transform: scaleX(-1) translateX(0); } 75% { transform: scaleX(1) translateX(0); } }
+  @keyframes sprite-idle-jump { 0%,100% { transform: translateY(0); } 20% { transform: translateY(2px); } 40% { transform: translateY(-8px); } 55% { transform: translateY(-6px); } 70% { transform: translateY(1px); } 85% { transform: translateY(0); } }
+  @keyframes sprite-idle-kata { 0%,100% { transform: rotate(0) translateX(0); } 15% { transform: rotate(3deg) translateX(2px); } 30% { transform: rotate(-4deg) translateX(-3px); } 50% { transform: rotate(2deg) translateX(1px); } 70% { transform: rotate(0); } }
+  @keyframes sprite-idle-flex { 0%,100% { transform: scaleX(1) scaleY(1); } 25% { transform: scaleX(1.05) scaleY(0.97); } 50% { transform: scaleX(1.07) scaleY(0.95); } 75% { transform: scaleX(1.03) scaleY(0.98); } }
+  @keyframes sprite-idle-spin { 0% { transform: scaleX(1); } 25% { transform: scaleX(0.15); } 50% { transform: scaleX(-1); } 75% { transform: scaleX(-0.15); } 100% { transform: scaleX(1); } }
+  @keyframes sprite-idle-dart { 0%,100% { transform: translateX(0); } 15% { transform: translateX(-6px); } 30% { transform: translateX(6px); } 50% { transform: translateX(-3px); } 65% { transform: translateX(3px); } 80% { transform: translateX(0); } }
+  @keyframes sprite-idle-mischief { 0%,100% { transform: rotate(0) translateY(0); } 20% { transform: rotate(-2deg) translateY(-1px); } 40% { transform: rotate(3deg) translateY(-3px); } 55% { transform: rotate(-1deg) translateY(-1px); } 75% { transform: rotate(1deg); } }
+  @keyframes sprite-idle-swing { 0%,100% { transform: rotate(0); } 20% { transform: rotate(5deg); } 40% { transform: rotate(-5deg); } 60% { transform: rotate(3deg); } 80% { transform: rotate(-2deg); } }
+  @keyframes sprite-idle-bless { 0%,100% { transform: translateY(0) scale(1); filter: brightness(1); } 30% { transform: translateY(-3px) scale(1.02); filter: brightness(1.08); } 60% { transform: translateY(-2px) scale(1.01); filter: brightness(1.04); } }
+  /* ── Subtle idle classes ── */
   .idle-nod { animation: sprite-idle-nod 2s ease-in-out; }
   .idle-stance { animation: sprite-idle-stance 1.8s ease-in-out; }
   .idle-whisker { animation: sprite-idle-whisker 1.5s ease-in-out; }
@@ -1543,18 +1580,24 @@ const PIXEL_ART_STYLES = `
   .idle-hop { animation: sprite-idle-hop 1s ease-in-out; }
   .idle-float { animation: sprite-idle-float 2.5s ease-in-out; }
   .idle-glow { animation: sprite-idle-glow 2s ease-in-out; }
+  /* ── Active idle classes ── */
+  .idle-kick { animation: sprite-idle-kick 1.2s cubic-bezier(0.4,0,0.2,1); }
+  .idle-punch { animation: sprite-idle-punch 0.9s cubic-bezier(0.4,0,0.2,1); }
+  .idle-crane { animation: sprite-idle-crane 2.5s ease-in-out; }
+  .idle-stretch { animation: sprite-idle-stretch 2s ease-in-out; }
+  .idle-look { animation: sprite-idle-look 2.2s ease-in-out; }
+  .idle-jump { animation: sprite-idle-jump 1s cubic-bezier(0.4,0,0.2,1); }
+  .idle-kata { animation: sprite-idle-kata 1.6s cubic-bezier(0.4,0,0.2,1); }
+  .idle-flex { animation: sprite-idle-flex 1.8s ease-in-out; }
+  .idle-spin { animation: sprite-idle-spin 1.4s ease-in-out; }
+  .idle-dart { animation: sprite-idle-dart 1.2s cubic-bezier(0.4,0,0.2,1); }
+  .idle-mischief { animation: sprite-idle-mischief 1.5s ease-in-out; }
+  .idle-swing { animation: sprite-idle-swing 1.6s ease-in-out; }
+  .idle-bless { animation: sprite-idle-bless 2.2s ease-in-out; }
   .sprite-blink { opacity: 0.92; transition: opacity 0.15s ease; }
   @media (prefers-reduced-motion: reduce) {
-    .pixel-pet-wrap *,
-    .pixel-pet-wrap {
-      animation-duration: 0.01ms !important;
-      animation-iteration-count: 1 !important;
-      transition-duration: 0.01ms !important;
-    }
-    .idle-nod, .idle-stance, .idle-whisker, .idle-wobble, .idle-bounce,
-    .idle-sway, .idle-twitch, .idle-shimmy, .idle-hop, .idle-float, .idle-glow {
-      animation: none !important;
-    }
+    .pixel-pet-wrap *, .pixel-pet-wrap { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+    [class*="idle-"] { animation: none !important; }
     .sprite-blink { opacity: 1 !important; transition: none !important; }
   }
 `;
@@ -1636,16 +1679,17 @@ export default function SpritePet({
     };
   }, [hasReaction, isEating, isTricking]);
 
-  // Character idle behaviors — cycle through variants on each tick
-  const idleVariant = idleTick % 4;
+  // Character idle behaviors — cycle through 10 variants for richer life
   const IDLE_VARIANT_CLASSES = {
-    dojocat: ['idle-nod', 'idle-stance', 'idle-whisker', 'idle-nod'],
-    buu: ['idle-wobble', 'idle-bounce', 'idle-sway', 'idle-wobble'],
-    devit: ['idle-twitch', 'idle-shimmy', 'idle-hop', 'idle-twitch'],
-    pixiu: ['idle-float', 'idle-sway', 'idle-glow', 'idle-float'],
+    dojocat: ['idle-nod', 'idle-stance', 'idle-kick', 'idle-stretch', 'idle-look', 'idle-punch', 'idle-crane', 'idle-whisker', 'idle-jump', 'idle-kata'],
+    buu:     ['idle-wobble', 'idle-bounce', 'idle-kick', 'idle-stretch', 'idle-look', 'idle-punch', 'idle-sway', 'idle-jump', 'idle-flex', 'idle-spin'],
+    devit:   ['idle-twitch', 'idle-shimmy', 'idle-hop', 'idle-stretch', 'idle-look', 'idle-dart', 'idle-mischief', 'idle-jump', 'idle-kick', 'idle-swing'],
+    pixiu:   ['idle-float', 'idle-sway', 'idle-glow', 'idle-stretch', 'idle-look', 'idle-kick', 'idle-bless', 'idle-jump', 'idle-punch', 'idle-crane'],
   };
+  const pool = IDLE_VARIANT_CLASSES[character] || IDLE_VARIANT_CLASSES.dojocat;
+  const idleVariant = idleTick % pool.length;
   const idleVariantClass = (!hasReaction && !isEating && !isTricking)
-    ? (IDLE_VARIANT_CLASSES[character] || IDLE_VARIANT_CLASSES.dojocat)[idleVariant]
+    ? pool[idleVariant]
     : '';
   const blinkClass = blinkState ? 'sprite-blink' : '';
 

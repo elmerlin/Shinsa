@@ -1661,7 +1661,42 @@ function PetTab({ pet, shop, combo, economy, socialFeed, interactionBusy, activi
           </div>
         </div>
       </CollapsibleSection>
+
+      {/* ── Floating Companion toggle ── */}
+      <div className="rounded-xl border border-white/[0.04] bg-white/[0.015] px-3 py-2.5 flex items-center justify-between">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-sm">📎</span>
+          <div className="min-w-0">
+            <div className="text-[11px] font-semibold text-gray-300">Companion Overlay</div>
+            <div className="text-[10px] text-gray-600">Show your pet on every page</div>
+          </div>
+        </div>
+        <CompanionToggle />
+      </div>
     </div>
+  );
+}
+
+function CompanionToggle() {
+  const [enabled, setEnabled] = useState(() => localStorage.getItem('pet_clippy_hidden') !== '1');
+  const toggle = () => {
+    const next = !enabled;
+    setEnabled(next);
+    if (next) {
+      localStorage.removeItem('pet_clippy_hidden');
+    } else {
+      localStorage.setItem('pet_clippy_hidden', '1');
+    }
+    // Notify FloatingPetCompanion in real time
+    window.dispatchEvent(new Event('pet-clippy-toggle'));
+  };
+  return (
+    <button
+      onClick={toggle}
+      className={`relative w-10 h-5 rounded-full transition-colors duration-200 ${enabled ? 'bg-cyan-500/40' : 'bg-white/[0.08]'}`}
+    >
+      <div className={`absolute top-0.5 w-4 h-4 rounded-full transition-all duration-200 ${enabled ? 'left-5 bg-cyan-400' : 'left-0.5 bg-gray-500'}`} />
+    </button>
   );
 }
 

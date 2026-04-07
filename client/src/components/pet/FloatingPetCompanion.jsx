@@ -43,9 +43,15 @@ export default function FloatingPetCompanion() {
     loadPet();
     // Refresh every 3 minutes
     refreshTimer.current = setInterval(loadPet, 180000);
+    // Listen for toggle from PetPage
+    const onToggle = () => {
+      if (mounted.current) setHidden(localStorage.getItem('pet_clippy_hidden') === '1');
+    };
+    window.addEventListener('pet-clippy-toggle', onToggle);
     return () => {
       mounted.current = false;
       clearInterval(refreshTimer.current);
+      window.removeEventListener('pet-clippy-toggle', onToggle);
     };
   }, [loadPet]);
 
@@ -101,9 +107,10 @@ export default function FloatingPetCompanion() {
         {/* Pet sprite button */}
         <button
           onClick={() => setExpanded(e => !e)}
-          className="relative w-16 h-16 rounded-2xl border border-white/[0.08] bg-gray-950/80 backdrop-blur-sm shadow-[0_8px_24px_rgba(0,0,0,0.4)] flex items-center justify-center hover:border-white/15 active:scale-95 transition-all overflow-hidden group"
+          className="relative w-16 h-16 rounded-2xl border border-white/[0.08] bg-gray-950/80 backdrop-blur-sm shadow-[0_8px_24px_rgba(0,0,0,0.4)] flex items-end justify-center hover:border-white/15 active:scale-95 transition-all group"
+          style={{ paddingBottom: 2 }}
         >
-          <div className="absolute inset-0 bg-gradient-to-b from-white/[0.03] to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+          <div className="absolute inset-0 bg-gradient-to-b from-white/[0.03] to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl" />
           <SpritePet
             character={pet.character}
             weightState={pet.weight_state}
@@ -112,7 +119,7 @@ export default function FloatingPetCompanion() {
             equippedTop={pet.equipped_top}
             hatColor={pet.hat_color}
             topColor={pet.top_color}
-            size={52}
+            size={46}
           />
         </button>
 
@@ -127,7 +134,7 @@ export default function FloatingPetCompanion() {
                   <div className="text-[9px] text-gray-500">{pet.identity_title || pet.bond_rank?.label || 'Companion'}</div>
                 </div>
                 <button
-                  onClick={(e) => { e.stopPropagation(); setHidden(true); localStorage.setItem('pet_clippy_hidden', '1'); setExpanded(false); }}
+                  onClick={(e) => { e.stopPropagation(); setHidden(true); localStorage.setItem('pet_clippy_hidden', '1'); setExpanded(false); window.dispatchEvent(new Event('pet-clippy-toggle')); }}
                   className="text-[9px] text-gray-600 hover:text-gray-400 transition-colors"
                   title="Hide companion"
                 >
