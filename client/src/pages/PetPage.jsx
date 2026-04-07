@@ -10,23 +10,47 @@ import {
 import SpritePet from '../components/SpritePet';
 
 // ─── Sound ─────────────────────────────────────────────────────────
-function playPetBoop() {
+let _audioCtx = null;
+function getAudioCtx() {
+  if (!_audioCtx || _audioCtx.state === 'closed') _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (_audioCtx.state === 'suspended') _audioCtx.resume();
+  return _audioCtx;
+}
+function playSynth(freq, endFreq, type = 'sine', dur = 0.15, vol = 0.10) {
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = getAudioCtx();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
-    osc.type = 'sine';
+    osc.type = type;
     osc.connect(gain);
     gain.connect(ctx.destination);
-    osc.frequency.setValueAtTime(800, ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(400, ctx.currentTime + 0.1);
-    gain.gain.setValueAtTime(0.12, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+    osc.frequency.setValueAtTime(freq, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(endFreq, ctx.currentTime + dur);
+    gain.gain.setValueAtTime(vol, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
     osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + 0.15);
-    setTimeout(() => ctx.close(), 200);
+    osc.stop(ctx.currentTime + dur + 0.02);
   } catch (e) { /* Audio not available */ }
 }
+function playPetBoop() { playSynth(800, 400, 'sine', 0.12, 0.10); }
+function playPetPraise() { playSynth(520, 780, 'sine', 0.18, 0.09); }
+function playPetCuddle() { playSynth(340, 280, 'triangle', 0.22, 0.08); }
+function playPetTease() { playSynth(600, 900, 'square', 0.10, 0.06); }
+function playPetPerform() {
+  playSynth(440, 660, 'sine', 0.12, 0.09);
+  setTimeout(() => playSynth(660, 880, 'sine', 0.14, 0.08), 130);
+}
+function playPetActivity() { playSynth(380, 520, 'triangle', 0.20, 0.08); }
+function playPetFeed(pref) {
+  if (pref === 'favorite') { playSynth(500, 800, 'sine', 0.15, 0.10); setTimeout(() => playSynth(800, 1000, 'sine', 0.12, 0.07), 160); }
+  else if (pref === 'disliked') { playSynth(300, 200, 'sawtooth', 0.18, 0.06); }
+  else { playSynth(440, 550, 'sine', 0.14, 0.08); }
+}
+function playPetRare() {
+  playSynth(600, 900, 'sine', 0.14, 0.08);
+  setTimeout(() => playSynth(900, 1200, 'triangle', 0.18, 0.07), 160);
+}
+const VERB_SOUND = { tap: playPetBoop, praise: playPetPraise, cuddle: playPetCuddle, tease: playPetTease, perform: playPetPerform, mission: playPetBoop };
 
 // ─── Dialogue ─────────────────────────────────────────────────────
 const MOOD_MESSAGES = {
@@ -64,23 +88,36 @@ const PET_REACTIONS = {
     { speech: 'Hya!', reaction: 'kata', expression: 'wink' },
     { speech: '*proud purr*', reaction: 'proud', expression: 'proud' },
     { speech: 'Watch this.', reaction: 'swish', expression: 'smirk' },
+    { speech: 'Focus!', reaction: 'nod', expression: 'sparkle' },
+    { speech: '*quick stretch*', reaction: 'hop', expression: 'grin' },
+    { speech: 'Not bad.', reaction: 'sway', expression: 'soft' },
   ],
   buu: [
     { speech: 'Hehehe.', reaction: 'squish', expression: 'smirk' },
     { speech: 'More pats.', reaction: 'wobble', expression: 'grin' },
     { speech: 'I know I am cute.', reaction: 'swagger', expression: 'proud' },
+    { speech: '*happy wiggle*', reaction: 'hop', expression: 'excited' },
+    { speech: 'Mmhmm.', reaction: 'sway', expression: 'soft' },
+    { speech: 'You may continue.', reaction: 'nod', expression: 'sparkle' },
   ],
   devit: [
     { speech: 'Heh.', reaction: 'hop', expression: 'grin' },
     { speech: 'Again!', reaction: 'dart', expression: 'excited' },
     { speech: 'Caught you.', reaction: 'mischief', expression: 'smirk' },
+    { speech: 'Too slow!', reaction: 'swish', expression: 'wink' },
+    { speech: '*chaos giggle*', reaction: 'wobble', expression: 'grin' },
+    { speech: 'Do that again.', reaction: 'nod', expression: 'sparkle' },
   ],
   pixiu: [
     { speech: 'Fortune favours us.', reaction: 'bless', expression: 'sparkle' },
     { speech: '*tail swish*', reaction: 'sway', expression: 'soft' },
     { speech: 'A fine tribute.', reaction: 'nod', expression: 'proud' },
+    { speech: 'Blessed touch.', reaction: 'hop', expression: 'grin' },
+    { speech: '*warm glow*', reaction: 'wobble', expression: 'sparkle' },
+    { speech: 'The stars notice.', reaction: 'proud', expression: 'wink' },
   ],
 };
+const _tapIndex = { dojocat: 0, buu: 0, devit: 0, pixiu: 0 };
 
 const PET_ACTIONS = [
   { id: 'praise', label: 'Praise', icon: '✨' },
@@ -168,6 +205,8 @@ export default function PetPage() {
     setPetExpression('eating');
     try {
       const r = await buyPetFood(foodId);
+      playPetFeed(r.food_preference);
+      if (r.rare) playPetRare();
       setPet(r.pet);
       const prefTag = r.food_preference === 'favorite' ? ' \u2764\uFE0F' : r.food_preference === 'disliked' ? ' \uD83D\uDC94' : '';
       showFeedback(`Fed ${r.food}!${prefTag}`);
@@ -186,6 +225,7 @@ export default function PetPage() {
         setActiveFoodId('');
         setPetReaction('');
         setPetExpression('');
+        setRareSpeech(false);
       }, 1400);
     }
   };
@@ -257,10 +297,15 @@ export default function PetPage() {
     setInteractionBusy(true);
     interactPet('tap')
       .then((r) => {
-        const characterResponses = PET_REACTIONS[r.pet?.character || pet?.character] || [];
-        const fallback = characterResponses.length > 0
-          ? characterResponses[Math.floor(Math.random() * characterResponses.length)]
-          : null;
+        if (r.rare) playPetRare();
+        const charKey = r.pet?.character || pet?.character || 'dojocat';
+        const characterResponses = PET_REACTIONS[charKey] || [];
+        let fallback = null;
+        if (characterResponses.length > 0) {
+          const idx = (_tapIndex[charKey] || 0) % characterResponses.length;
+          fallback = characterResponses[idx];
+          _tapIndex[charKey] = idx + 1;
+        }
         setPet(r.pet);
         if (r.reaction || fallback?.reaction) setPetReaction(r.reaction || fallback?.reaction || '');
         if (r.expression || fallback?.expression) setPetExpression(r.expression || fallback?.expression || '');
@@ -294,9 +339,11 @@ export default function PetPage() {
 
   const handlePetAction = async (actionId) => {
     if (interactionBusy) return;
+    (VERB_SOUND[actionId] || playPetBoop)();
     setInteractionBusy(true);
     try {
       const r = await interactPet(actionId);
+      if (r.rare) playPetRare();
       setPet(r.pet);
       triggerPetResponse(r.speech, r.reaction, r.expression, 1200, r.rare);
     } catch (e) {
@@ -308,9 +355,11 @@ export default function PetPage() {
 
   const handleActivity = async (activityId) => {
     if (activityBusy) return;
+    playPetActivity();
     setActivityBusy(true);
     try {
       const r = await doPetActivity(activityId);
+      if (r.rare) playPetRare();
       setPet(r.pet);
       const gainLabel = r.mastery_gain ? ` +${r.mastery_gain} mastery` : '';
       showFeedback(`${r.activity || activityId} complete${gainLabel}`);
