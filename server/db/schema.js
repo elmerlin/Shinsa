@@ -3908,16 +3908,18 @@ function initializeDb() {
     )
   `);
 
-  // Tournament discussion messages
+  // Tournament discussion messages (threaded wall: parent_id = null → top-level post)
   db.exec(`
     CREATE TABLE IF NOT EXISTS tournament_discussion_messages (
       id TEXT PRIMARY KEY,
       tournament_id TEXT NOT NULL REFERENCES tournaments(id) ON DELETE CASCADE,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      parent_id TEXT DEFAULT NULL,
       username TEXT NOT NULL DEFAULT '',
       avatar TEXT DEFAULT '',
       skill_title TEXT DEFAULT '',
       message TEXT NOT NULL DEFAULT '',
+      thread_emoji TEXT DEFAULT '',
       is_participant INTEGER NOT NULL DEFAULT 0,
       created_at TEXT DEFAULT (datetime('now'))
     )
@@ -3925,6 +3927,13 @@ function initializeDb() {
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_tdm_tournament ON tournament_discussion_messages(tournament_id, created_at)
   `);
+  // Migration: add parent_id and thread_emoji if missing
+  try {
+    db.exec(`ALTER TABLE tournament_discussion_messages ADD COLUMN parent_id TEXT DEFAULT NULL`);
+  } catch { /* column already exists */ }
+  try {
+    db.exec(`ALTER TABLE tournament_discussion_messages ADD COLUMN thread_emoji TEXT DEFAULT ''`);
+  } catch { /* column already exists */ }
 
   // Tournament discussion message pumps
   db.exec(`

@@ -141,7 +141,7 @@ router.delete('/:id', (req, res) => {
   res.json({ success: true });
 });
 
-// ── Tournament Discussion ──
+// ── Tournament Discussion (threaded wall) ──
 
 function normalizeTournamentMessage(row, userId) {
   if (!row) return null;
@@ -150,17 +150,23 @@ function normalizeTournamentMessage(row, userId) {
   const userPumped = userId
     ? !!(db.prepare('SELECT 1 FROM tournament_discussion_pumps WHERE message_id = ? AND user_id = ?').get(row.id, userId))
     : false;
+  const replyCount = !row.parent_id
+    ? db.prepare('SELECT COUNT(*) as c FROM tournament_discussion_messages WHERE parent_id = ?').get(row.id)?.c || 0
+    : 0;
   return {
     id: row.id,
     tournament_id: row.tournament_id,
     user_id: row.user_id,
+    parent_id: row.parent_id || null,
     username: row.username || '',
     avatar: row.avatar || '',
     skill_title: row.skill_title || '',
     message: row.message || '',
+    thread_emoji: row.thread_emoji || '',
     is_participant: !!row.is_participant,
     pump_count: pumpCount,
     user_pumped: userPumped,
+    reply_count: replyCount,
     created_at: row.created_at || '',
   };
 }
@@ -183,7 +189,6 @@ router.get('/:id/discussion/stream', optionalAuth, (req, res) => {
     try { res.write(':ping\n\n'); } catch { /* ignore */ }
   }, 25000);
 
-  // Send viewer count on connect
   const vc = getTournamentDiscussionViewerCount(tournamentId);
   emitTournamentDiscussionEvent(tournamentId, 'viewer_count', { count: vc });
 
@@ -195,53 +200,78 @@ router.get('/:id/discussion/stream', optionalAuth, (req, res) => {
   });
 });
 
-// GET discussion messages
+// GET discussion — returns threaded posts with replies
 router.get('/:id/discussion', optionalAuth, (req, res) => {
   const db = getDb();
   const tournamentId = req.params.id;
   const userId = req.user?.id || '';
-  const limit = Math.min(parseInt(req.query.limit, 10) || 200, 500);
 
-  const rows = db.prepare(
-    'SELECT * FROM tournament_discussion_messages WHERE tournament_id = ? ORDER BY created_at ASC LIMIT ?'
-  ).all(tournamentId, limit);
+  // Top-level posts (newest first)
+  const posts = db.prepare(
+    `SELECT * FROM tournament_discussion_messages
+     WHERE tournament_id = ? AND (parent_id IS NULL OR parent_id = '')
+     ORDER BY created_at DESC LIMIT 100`
+  ).all(tournamentId);
 
-  const messages = rows.map(r => normalizeTournamentMessage(r, userId));
+  const threads = posts.map(post => {
+    const normalized = normalizeTournamentMessage(post, userId);
+    const replies = db.prepare(
+      `SELECT * FROM tournament_discussion_messages
+       WHERE parent_id = ? ORDER BY created_at ASC LIMIT 50`
+    ).all(post.id).map(r => normalizeTournamentMessage(r, userId));
+    return { ...normalized, replies };
+  });
+
   const viewerCount = getTournamentDiscussionViewerCount(tournamentId);
-
-  res.json({ messages, viewer_count: viewerCount });
+  res.json({ threads, viewer_count: viewerCount });
 });
 
-// POST a new discussion message
+// POST a new thread or reply
 router.post('/:id/discussion', requireAuth, (req, res) => {
   const db = getDb();
   const tournamentId = req.params.id;
   const userId = req.user.id;
   const rawMessage = String(req.body.message || '').trim();
+  const parentId = String(req.body.parent_id || '').trim() || null;
+  const threadEmoji = String(req.body.thread_emoji || '').trim().slice(0, 8);
+
   if (!rawMessage) return res.status(400).json({ error: 'Message is required' });
   if (rawMessage.length > 500) return res.status(400).json({ error: 'Message too long (max 500 characters)' });
 
   const tournament = db.prepare('SELECT id FROM tournaments WHERE id = ?').get(tournamentId);
   if (!tournament) return res.status(404).json({ error: 'Tournament not found' });
 
+  if (parentId) {
+    const parent = db.prepare(
+      'SELECT id FROM tournament_discussion_messages WHERE id = ? AND tournament_id = ? AND (parent_id IS NULL OR parent_id = ?)'
+    ).get(parentId, tournamentId, '');
+    if (!parent) return res.status(404).json({ error: 'Thread not found' });
+  }
+
   const user = db.prepare('SELECT id, username, avatar, skill_title FROM users WHERE id = ?').get(userId);
   if (!user) return res.status(404).json({ error: 'User not found' });
 
-  // Check if user is a participant (player) in this tournament
   const isParticipant = !!(db.prepare(
     'SELECT 1 FROM players WHERE tournament_id = ? AND (LOWER(name) = LOWER(?) OR avatar = ?) AND is_active = 1'
   ).get(tournamentId, user.username, user.avatar));
 
   const id = uuidv4();
   db.prepare(`
-    INSERT INTO tournament_discussion_messages (id, tournament_id, user_id, username, avatar, skill_title, message, is_participant)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, tournamentId, userId, user.username || '', user.avatar || '', user.skill_title || '', rawMessage, isParticipant ? 1 : 0);
+    INSERT INTO tournament_discussion_messages (id, tournament_id, user_id, parent_id, username, avatar, skill_title, message, thread_emoji, is_participant)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, tournamentId, userId, parentId, user.username || '', user.avatar || '', user.skill_title || '', rawMessage, parentId ? '' : threadEmoji, isParticipant ? 1 : 0);
 
   const row = db.prepare('SELECT * FROM tournament_discussion_messages WHERE id = ?').get(id);
   const message = normalizeTournamentMessage(row, userId);
 
-  emitTournamentDiscussionEvent(tournamentId, 'message_added', { message });
+  if (parentId) {
+    // Also send updated parent so reply_count is refreshed
+    const parentRow = db.prepare('SELECT * FROM tournament_discussion_messages WHERE id = ?').get(parentId);
+    const parentMsg = normalizeTournamentMessage(parentRow, userId);
+    emitTournamentDiscussionEvent(tournamentId, 'reply_added', { message, parent: parentMsg });
+  } else {
+    emitTournamentDiscussionEvent(tournamentId, 'thread_added', { message });
+  }
 
   res.status(201).json({ message });
 });
@@ -284,9 +314,13 @@ router.delete('/:id/discussion/:messageId', requireAuth, (req, res) => {
   if (!msg) return res.status(404).json({ error: 'Message not found' });
   if (msg.user_id !== userId) return res.status(403).json({ error: 'Not authorized' });
 
+  // Delete replies too if deleting a thread
+  if (!msg.parent_id) {
+    db.prepare('DELETE FROM tournament_discussion_messages WHERE parent_id = ?').run(messageId);
+  }
   db.prepare('DELETE FROM tournament_discussion_messages WHERE id = ?').run(messageId);
 
-  emitTournamentDiscussionEvent(tournamentId, 'message_removed', { message_id: messageId });
+  emitTournamentDiscussionEvent(tournamentId, 'message_removed', { message_id: messageId, parent_id: msg.parent_id || null });
 
   res.json({ success: true });
 });
