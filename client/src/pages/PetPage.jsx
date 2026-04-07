@@ -9,6 +9,25 @@ import {
 } from '../utils/api';
 import SpritePet from '../components/SpritePet';
 
+// ─── Sound ─────────────────────────────────────────────────────────
+function playPetBoop() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.setValueAtTime(800, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(400, ctx.currentTime + 0.1);
+    gain.gain.setValueAtTime(0.12, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.15);
+    setTimeout(() => ctx.close(), 200);
+  } catch (e) { /* Audio not available */ }
+}
+
 // ─── Dialogue ─────────────────────────────────────────────────────
 const MOOD_MESSAGES = {
   desperate: ["I'm wasting away... play some songs!", 'So... hungry...', 'Feed me!'],
@@ -230,6 +249,7 @@ export default function PetPage() {
 
   const handlePetTap = () => {
     if (interactionBusy) return;
+    playPetBoop();
     setInteractionBusy(true);
     interactPet('tap')
       .then((r) => {
@@ -432,38 +452,40 @@ export default function PetPage() {
     <div className="max-w-lg mx-auto p-4 sm:p-6 pb-24">
       {/* Header */}
       <div className="mb-2 rounded-[1.25rem] border border-white/[0.06] bg-white/[0.025] px-3.5 py-2 shadow-[0_10px_30px_rgba(0,0,0,0.18)]">
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <h1 className="text-xl font-black tracking-tight text-white">My {charName}</h1>
-            <p className="mt-0.5 text-[11px] text-cyan-100/80">{pet.identity_title || 'Training Partner'}</p>
+            <h1 className="text-lg font-black tracking-tight text-white">My {charName}</h1>
+            <p className="text-[11px] text-cyan-100/80">{pet.identity_title || 'Training Partner'}</p>
           </div>
-          <button
-            onClick={() => setShowSelect(true)}
-            className="shrink-0 whitespace-nowrap rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-400 transition-all hover:border-white/15 hover:text-white"
-          >
-            Switch
-          </button>
+          <div className="flex gap-1.5 shrink-0">
+            <button
+              onClick={handleToggleAvatar}
+              className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] transition-all ${
+                pet.is_pet_avatar
+                  ? 'border-amber-500/30 bg-amber-500/10 text-amber-300'
+                  : 'border-white/[0.08] bg-white/[0.03] text-gray-400 hover:border-white/15 hover:text-white'
+              }`}
+            >
+              {pet.is_pet_avatar ? 'Avatar On' : 'Set Avatar'}
+            </button>
+            <button
+              onClick={() => setShowSelect(true)}
+              className="whitespace-nowrap rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-400 transition-all hover:border-white/15 hover:text-white"
+            >
+              Switch
+            </button>
+          </div>
         </div>
-        <div className="mt-1.5 flex flex-wrap items-center gap-2">
+        <div className="mt-1 flex flex-wrap items-center gap-1.5">
           <HeaderPill label="XP" value={experience.toLocaleString()} tone="slate" />
           <HeaderPill label="Combo" value={combo_balance.toLocaleString()} tone="amber" />
           <HeaderPill label="Bond Tokens" value={bond_tokens.toLocaleString()} tone="cyan" />
           {rare_shards > 0 ? <HeaderPill label="Shards" value={rare_shards.toLocaleString()} tone="fuchsia" /> : null}
-          <button
-            onClick={handleToggleAvatar}
-            className={`shrink-0 whitespace-nowrap rounded-full border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] transition-all ${
-              pet.is_pet_avatar
-                ? 'border-amber-500/30 bg-amber-500/10 text-amber-300'
-                : 'border-white/[0.08] bg-white/[0.03] text-gray-400 hover:border-white/15 hover:text-white'
-            }`}
-          >
-            {pet.is_pet_avatar ? 'Avatar On' : 'Set Avatar'}
-          </button>
         </div>
       </div>
 
       {/* Pet habitat */}
-      <div className="sticky top-[56px] sm:top-[64px] z-30 -mx-2 mb-4 px-2 pt-1 pb-3 bg-gradient-to-b from-[#070b14] via-[#070b14]/95 to-transparent backdrop-blur-sm">
+      <div className="sticky top-0 z-40 -mx-2 mb-4 px-2 pt-1 pb-3 bg-gradient-to-b from-[#070b14] via-[#070b14]/95 to-transparent backdrop-blur-sm">
         <div className={`relative rounded-[1.6rem] border border-white/[0.06] overflow-hidden bg-gradient-to-b shadow-[0_18px_45px_rgba(0,0,0,0.28)] ${CHARACTER_BG[pet.character] || ''}`}>
           <HabitatBackdrop backgroundId={pet.habitat?.active_background} />
           <HabitatParticles character={pet.character} mood={pet.mood} />
@@ -475,8 +497,20 @@ export default function PetPage() {
               <FormBadge form={pet.form} />
             </div>
           ) : null}
-          <div className={`relative z-10 flex flex-col items-center px-4 pt-4 pb-4 min-h-[280px] sm:min-h-[300px] ${petTapped ? 'animate-[wiggle_400ms_ease]' : ''}`}>
-            <div className="flex min-h-[190px] items-end justify-center">
+          <div className={`relative z-10 flex flex-col items-center justify-end px-4 pt-3 pb-3 min-h-[280px] sm:min-h-[300px] ${petTapped ? 'animate-[wiggle_400ms_ease]' : ''}`}>
+            {/* Speech bubble — above pet */}
+            <div className="mb-2 relative max-w-[240px]">
+              <div className="bg-white/[0.06] backdrop-blur-sm border border-white/[0.08] rounded-xl px-3 py-1.5 text-[13px] text-gray-300 text-center italic transition-all duration-500">
+                &ldquo;{speechText}&rdquo;
+              </div>
+              <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-2.5 h-2.5 rotate-45 bg-white/[0.06] border-r border-b border-white/[0.08]" />
+            </div>
+            {pet.form?.desc ? (
+              <div className="mb-1 text-center text-[10px] text-white/50 max-w-[240px]">
+                {pet.form.desc}
+              </div>
+            ) : null}
+            <div className="flex items-end justify-center">
               <SpritePet
                 character={pet.character} weightState={pet.weight_state} mood={pet.mood}
                 equippedHat={pet.equipped_hat} equippedBelt={pet.equipped_belt} equippedShoes={pet.equipped_shoes}
@@ -487,18 +521,6 @@ export default function PetPage() {
                 expression={petExpression} foodId={activeFoodId}
                 size={170} onClick={handlePetTap} />
             </div>
-            {/* Speech bubble */}
-            <div className="mt-1 relative max-w-[280px]">
-              <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-2.5 h-2.5 rotate-45 bg-white/[0.06] border-l border-t border-white/[0.08]" />
-              <div className="bg-white/[0.06] backdrop-blur-sm border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-gray-300 text-center italic transition-all duration-500">
-                &ldquo;{speechText}&rdquo;
-              </div>
-            </div>
-            {pet.form?.desc ? (
-              <div className="mt-2 text-center text-[10px] text-white/50 max-w-[260px]">
-                {pet.form.desc}
-              </div>
-            ) : null}
           </div>
           {/* Demand banner */}
           {pet.pending_trick && (

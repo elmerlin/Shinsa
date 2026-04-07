@@ -181,11 +181,11 @@ const PALETTES = {
 // ═══════════════════════════════════════════════════════════════
 
 const WEIGHT_DIMS = {
-  starving: { bodyRx: 11, bodyRy: 9, limbW: 2, armLen: 4 },
-  thin:     { bodyRx: 12, bodyRy: 10, limbW: 2, armLen: 5 },
-  normal:   { bodyRx: 13, bodyRy: 11, limbW: 3, armLen: 5 },
-  chubby:   { bodyRx: 14, bodyRy: 12, limbW: 3, armLen: 6 },
-  fat:      { bodyRx: 15, bodyRy: 13, limbW: 3, armLen: 6 },
+  starving: { bodyRx: 12, bodyRy: 7, limbW: 2, armLen: 4 },
+  thin:     { bodyRx: 13, bodyRy: 8, limbW: 2, armLen: 5 },
+  normal:   { bodyRx: 14, bodyRy: 9, limbW: 3, armLen: 5 },
+  chubby:   { bodyRx: 15, bodyRy: 10, limbW: 3, armLen: 6 },
+  fat:      { bodyRx: 16, bodyRy: 11, limbW: 3, armLen: 6 },
 };
 
 // Grid size constants
@@ -199,7 +199,7 @@ const HEAD_RY = 13;
 
 function getBodyMetrics(weightState) {
   const w = WEIGHT_DIMS[weightState] || WEIGHT_DIMS.normal;
-  const bodyCy = HEAD_CY + HEAD_RY + Math.floor(w.bodyRy * 0.94);
+  const bodyCy = HEAD_CY + HEAD_RY + Math.floor(w.bodyRy * 0.94) + 3;
   const legHeight = Math.max(5, Math.min(7, Math.floor(w.bodyRy * 0.68)));
   const legSpread = Math.max(2, Math.floor(w.bodyRx * 0.45));
   const legTop = bodyCy + w.bodyRy - 1;
@@ -215,30 +215,9 @@ function buildBase(character, weightState) {
   const g = createGrid(GW, GH);
   const { w, bodyCy, legHeight, legSpread, legTop } = getBodyMetrics(weightState);
 
-  // Head
-  if (character === 'buu') {
-    // Pear-shaped head — narrow forehead, wide droopy cheeks, uniform color
-    fillEllipse(g, CX, HEAD_CY + 4, HEAD_RX + 3, HEAD_RY - 1, 'B');   // lower cheeks (wide, hangs low)
-    fillEllipse(g, CX, HEAD_CY, HEAD_RX - 1, HEAD_RY, 'B');            // middle bridge
-    fillEllipse(g, CX, HEAD_CY - 3, HEAD_RX - 5, HEAD_RY - 4, 'B');   // upper forehead (narrow)
-  } else {
-    fillEllipse(g, CX, HEAD_CY, HEAD_RX, HEAD_RY, 'B');
-    fillEllipse(g, CX - 3, HEAD_CY - 4, HEAD_RX - 6, HEAD_RY - 6, 'L');
-    fillEllipse(g, CX + 3, HEAD_CY + 5, HEAD_RX - 10, HEAD_RY - 9, 'S');
-    // Centered muzzle mask for cat-like characters
-    if (character === 'dojocat' || character === 'pixiu') {
-      fillEllipse(g, CX, HEAD_CY + 4, 7, 5, 'Y');
-    }
-  }
-
-  // Body
+  // === Body drawn FIRST (behind head) ===
   fillEllipse(g, CX, bodyCy, w.bodyRx, w.bodyRy, 'B');
-  fillEllipse(g, CX - 1, bodyCy - 3, Math.max(8, w.bodyRx - 2), Math.max(6, w.bodyRy - 3), 'L');
-  // Neck band (skip for Buu — head overlaps body seamlessly)
-  if (character !== 'buu') {
-    fillRect(g, CX - 6, bodyCy - w.bodyRy - 1, 13, 2, 'D');
-    fillRect(g, CX - 4, bodyCy - w.bodyRy - 3, 9, 1, 'K');
-  }
+  fillEllipse(g, CX - 1, bodyCy - 2, Math.max(8, w.bodyRx - 2), Math.max(5, w.bodyRy - 2), 'L');
 
   // Belly patch
   fillEllipse(g, CX, bodyCy + 2, Math.max(4, Math.floor(w.bodyRx * 0.5)), Math.max(3, Math.floor(w.bodyRy * 0.46)), 'Y');
@@ -250,6 +229,35 @@ function buildBase(character, weightState) {
   // Feet
   fillRect(g, CX - legSpread - w.limbW - 1, legTop + legHeight - 1, w.limbW + 2, 2, 'D');
   fillRect(g, CX + legSpread - 1, legTop + legHeight - 1, w.limbW + 2, 2, 'D');
+
+  // Short visible neck
+  if (character !== 'buu') {
+    const neckTop = bodyCy - w.bodyRy;
+    fillRect(g, CX - 5, neckTop - 2, 11, 3, 'B');
+    fillRect(g, CX - 3, neckTop - 1, 7, 2, 'D');
+  }
+
+  return g;
+}
+
+// Head as a separate layer — rendered ABOVE clothing
+function buildHead(character) {
+  const g = createGrid(GW, GH);
+
+  if (character === 'buu') {
+    // Pear-shaped head — narrow forehead, wide droopy cheeks, uniform color
+    fillEllipse(g, CX, HEAD_CY + 4, HEAD_RX + 3, HEAD_RY - 1, 'B');
+    fillEllipse(g, CX, HEAD_CY, HEAD_RX - 1, HEAD_RY, 'B');
+    fillEllipse(g, CX, HEAD_CY - 3, HEAD_RX - 5, HEAD_RY - 4, 'B');
+  } else {
+    fillEllipse(g, CX, HEAD_CY, HEAD_RX, HEAD_RY, 'B');
+    fillEllipse(g, CX - 3, HEAD_CY - 4, HEAD_RX - 6, HEAD_RY - 6, 'L');
+    fillEllipse(g, CX + 3, HEAD_CY + 5, HEAD_RX - 10, HEAD_RY - 9, 'S');
+    // Centered muzzle mask for cat-like characters
+    if (character === 'dojocat' || character === 'pixiu') {
+      fillEllipse(g, CX, HEAD_CY + 4, 7, 5, 'Y');
+    }
+  }
 
   return g;
 }
@@ -630,129 +638,180 @@ function buildHat(hatId, color, character) {
 
   switch (hatId) {
     case 'chicken-hat': {
-      const cy = topY + 4;
-      fillEllipse(g, CX, cy + 1, 9, 5, '1');
-      fillEllipse(g, CX, cy - 1, 7, 4, '1');
-      fillRect(g, CX - 9, cy + 3, 19, 2, '1');
-      fillRect(g, CX - 11, cy + 4, 3, 2, '1');
-      fillRect(g, CX + 8, cy + 4, 3, 2, '1');
-      fillRect(g, CX - 8, cy + 5, 17, 1, '8');
-      fillTriangle(g, CX - 2, cy - 10, CX, cy - 16, CX + 2, cy - 10, '8');
-      fillTriangle(g, CX - 1, cy - 8, CX + 1, cy - 14, CX + 4, cy - 7, '8');
-      fillRect(g, CX - 2, cy - 3, 5, 2, '5');
-      setPixel(g, CX - 5, cy - 2, 'K');
-      setPixel(g, CX + 5, cy - 2, 'K');
-      fillRect(g, CX - 1, cy + 1, 3, 2, '8');
-      setPixel(g, CX, cy + 3, '8');
-      // Buu's tentacle poking through the hat
+      const cy = topY + 5;
+      // Larger round body that covers head top
+      fillEllipse(g, CX, cy, 14, 8, '1');
+      fillEllipse(g, CX, cy - 2, 12, 7, '1');
+      // Wide brim
+      fillRect(g, CX - 15, cy + 6, 31, 3, '1');
+      fillRect(g, CX - 16, cy + 7, 3, 2, '1');
+      fillRect(g, CX + 13, cy + 7, 3, 2, '1');
+      // Brim shadow
+      fillRect(g, CX - 14, cy + 8, 29, 1, '8');
+      // Large comb (3 points)
+      fillTriangle(g, CX - 3, cy - 12, CX - 1, cy - 18, CX + 1, cy - 12, '8');
+      fillTriangle(g, CX, cy - 10, CX + 2, cy - 16, CX + 4, cy - 10, '8');
+      fillTriangle(g, CX + 2, cy - 11, CX + 5, cy - 17, CX + 7, cy - 10, '8');
+      // Beak
+      fillRect(g, CX - 3, cy - 1, 7, 3, '5');
+      fillRect(g, CX - 2, cy, 5, 2, '5');
+      // Eyes
+      setPixel(g, CX - 6, cy - 3, 'K');
+      setPixel(g, CX + 6, cy - 3, 'K');
+      setPixel(g, CX - 6, cy - 4, 'W');
+      setPixel(g, CX + 6, cy - 4, 'W');
+      // Wattle
+      fillRect(g, CX - 1, cy + 2, 3, 3, '8');
+      setPixel(g, CX, cy + 5, '8');
+      // Buu's tentacle poking through
       if (character === 'buu') {
-        for (let t = -1; t <= 1; t++) {
-          fillLine(g, CX + 4 + t, cy - 3, CX + 6 + t, Math.max(0, cy - 10), '7');
+        for (let t = -2; t <= 2; t++) {
+          fillLine(g, CX + 5 + t, cy - 5, CX + 8 + t, Math.max(0, cy - 14), '7');
         }
-        fillCircle(g, CX + 5, Math.max(2, cy - 11), 2, '7');
+        fillCircle(g, CX + 7, Math.max(2, cy - 15), 3, '7');
       }
       break;
     }
     case 'headband': {
-      fillRect(g, CX - HEAD_RX + 1, HEAD_CY - HEAD_RY + 3, HEAD_RX * 2 - 1, 2, '1');
-      // Circle emblem
-      setPixel(g, CX, HEAD_CY - HEAD_RY + 3, '2');
+      fillRect(g, CX - HEAD_RX + 1, HEAD_CY - HEAD_RY + 3, HEAD_RX * 2 - 1, 3, '1');
+      // Circle emblem (bigger)
+      fillCircle(g, CX, HEAD_CY - HEAD_RY + 4, 2, '2');
+      // Knot tails at back
+      setPixel(g, CX + HEAD_RX - 2, HEAD_CY - HEAD_RY + 5, '1');
+      setPixel(g, CX + HEAD_RX - 1, HEAD_CY - HEAD_RY + 6, '1');
+      setPixel(g, CX + HEAD_RX, HEAD_CY - HEAD_RY + 7, '1');
       break;
     }
     case 'crown': {
-      const cy = topY;
-      fillRect(g, CX - 5, cy + 1, 11, 3, '1');
-      // Crown points
-      setPixel(g, CX - 4, cy, '1');
-      setPixel(g, CX - 2, cy - 1, '1');
-      setPixel(g, CX, cy - 2, '1');
-      setPixel(g, CX + 2, cy - 1, '1');
-      setPixel(g, CX + 4, cy, '1');
+      const cy = topY + 1;
+      // Wider crown base
+      fillRect(g, CX - 8, cy + 1, 17, 4, '1');
+      // 5 crown points
+      setPixel(g, CX - 7, cy, '1');
+      setPixel(g, CX - 4, cy - 1, '1'); setPixel(g, CX - 4, cy, '1');
+      setPixel(g, CX, cy - 2, '1'); setPixel(g, CX, cy - 1, '1');
+      setPixel(g, CX + 4, cy - 1, '1'); setPixel(g, CX + 4, cy, '1');
+      setPixel(g, CX + 7, cy, '1');
+      // Band detail
+      fillRect(g, CX - 8, cy + 3, 17, 1, '2');
       // Gems
-      setPixel(g, CX - 2, cy + 2, '2');
-      setPixel(g, CX + 2, cy + 2, '3');
-      setPixel(g, CX, cy + 2, '4');
+      fillRect(g, CX - 4, cy + 2, 2, 1, '2');
+      fillRect(g, CX + 3, cy + 2, 2, 1, '3');
+      fillRect(g, CX - 1, cy + 1, 2, 2, '4');
       break;
     }
     case 'beanie': {
-      const cy = topY;
-      fillEllipse(g, CX, cy + 1, 7, 3, '1');
-      fillRect(g, CX - 7, cy + 2, 15, 2, '1');
-      // Pom pom
-      fillCircle(g, CX, cy - 2, 2, '1');
-      // Stripe
-      fillRect(g, CX - 6, cy + 3, 13, 1, '2');
+      const cy = topY + 1;
+      fillEllipse(g, CX, cy + 2, 12, 6, '1');
+      fillRect(g, CX - 12, cy + 6, 25, 3, '1');
+      // Pom pom (bigger)
+      fillCircle(g, CX, cy - 3, 3, '1');
+      // Stripes
+      fillRect(g, CX - 11, cy + 6, 23, 1, '2');
+      fillRect(g, CX - 11, cy + 8, 23, 1, '2');
+      // Ribbed texture
+      for (let x = CX - 9; x <= CX + 9; x += 3) {
+        fillLine(g, x, cy + 2, x, cy + 5, '2');
+      }
       break;
     }
     case 'wizard-hat': {
       const cy = topY;
-      fillTriangle(g, CX - 7, cy + 4, CX, cy - 8, CX + 7, cy + 4, '1');
-      fillRect(g, CX - 8, cy + 3, 17, 2, '1');
-      // Stars
-      setPixel(g, CX + 2, cy - 2, '2');
-      setPixel(g, CX - 1, cy + 1, '2');
-      setPixel(g, CX + 3, cy - 5, '2');
+      fillTriangle(g, CX - 10, cy + 5, CX, cy - 12, CX + 10, cy + 5, '1');
+      fillRect(g, CX - 12, cy + 4, 25, 3, '1');
+      // Stars and sparkles
+      setPixel(g, CX + 3, cy - 3, '2');
+      setPixel(g, CX - 2, cy + 1, '2');
+      setPixel(g, CX + 5, cy - 7, '2');
+      setPixel(g, CX - 4, cy - 2, '2');
+      // Moon
+      setPixel(g, CX + 1, cy - 5, '2');
+      setPixel(g, CX + 2, cy - 6, '2');
+      // Brim accent
+      fillRect(g, CX - 11, cy + 5, 23, 1, '2');
       break;
     }
     case 'party-hat': {
       const cy = topY;
-      fillTriangle(g, CX - 4, cy + 3, CX, cy - 5, CX + 4, cy + 3, '1');
-      // Pom pom top
-      setPixel(g, CX, cy - 6, '2');
-      setPixel(g, CX - 1, cy - 6, '2');
-      // Stripes
+      fillTriangle(g, CX - 6, cy + 4, CX, cy - 8, CX + 6, cy + 4, '1');
+      // Pom pom (bigger)
+      fillCircle(g, CX, cy - 9, 2, '2');
+      // Diagonal stripes
+      setPixel(g, CX - 3, cy + 2, '2');
       setPixel(g, CX - 2, cy + 1, '2');
+      setPixel(g, CX + 2, cy, '2');
       setPixel(g, CX + 1, cy - 1, '2');
+      setPixel(g, CX - 1, cy - 2, '2');
+      // Base band
+      fillRect(g, CX - 5, cy + 3, 11, 1, '2');
       break;
     }
     case 'astronaut-helmet': {
-      const cy = topY + 1;
-      // Glass dome
-      fillEllipse(g, CX, HEAD_CY, HEAD_R + 2, HEAD_R + 2, '1');
-      fillEllipse(g, CX, HEAD_CY, HEAD_R + 1, HEAD_R + 1, null);
+      // Large glass dome
+      fillEllipse(g, CX, HEAD_CY, HEAD_RX + 3, HEAD_RY + 3, '1');
+      fillEllipse(g, CX, HEAD_CY, HEAD_RX + 1, HEAD_RY + 1, null);
       // Visor shine
-      setPixel(g, CX - HEAD_R, HEAD_CY - 2, '2');
-      setPixel(g, CX - HEAD_R, HEAD_CY - 1, '2');
+      setPixel(g, CX - HEAD_RX - 1, HEAD_CY - 3, '2');
+      setPixel(g, CX - HEAD_RX - 1, HEAD_CY - 2, '2');
+      setPixel(g, CX - HEAD_RX, HEAD_CY - 1, '2');
+      // Antenna
+      setPixel(g, CX, HEAD_CY - HEAD_RY - 3, '2');
+      setPixel(g, CX, HEAD_CY - HEAD_RY - 2, '1');
       break;
     }
     case 'goggles': {
-      fillRect(g, CX - 6, HEAD_CY - 2, 5, 3, '1');
-      fillRect(g, CX + 2, HEAD_CY - 2, 5, 3, '1');
-      fillRect(g, CX - 5, HEAD_CY - 1, 3, 1, '2');
-      fillRect(g, CX + 3, HEAD_CY - 1, 3, 1, '2');
+      // Left lens
+      fillRect(g, CX - 9, HEAD_CY - 3, 8, 5, '1');
+      fillRect(g, CX - 8, HEAD_CY - 2, 6, 3, '2');
+      // Right lens
+      fillRect(g, CX + 2, HEAD_CY - 3, 8, 5, '1');
+      fillRect(g, CX + 3, HEAD_CY - 2, 6, 3, '2');
       // Bridge
-      fillRect(g, CX - 1, HEAD_CY - 1, 3, 1, '1');
+      fillRect(g, CX - 1, HEAD_CY - 2, 3, 2, '1');
       // Strap
-      fillRect(g, CX - 7, HEAD_CY - 1, 1, 1, '1');
-      fillRect(g, CX + 7, HEAD_CY - 1, 1, 1, '1');
+      fillRect(g, CX - 10, HEAD_CY - 2, 1, 2, '1');
+      fillRect(g, CX + 10, HEAD_CY - 2, 1, 2, '1');
+      // Lens shine
+      setPixel(g, CX - 7, HEAD_CY - 2, 'W');
+      setPixel(g, CX + 4, HEAD_CY - 2, 'W');
       break;
     }
     case 'cat-hoodie': {
-      // Hood covering head with cat ears on top
-      fillEllipse(g, CX, HEAD_CY - 1, HEAD_R + 1, HEAD_R + 1, '1');
-      // Cat ear tips on hood
-      fillTriangle(g, CX - 6, HEAD_CY - 5, CX - 8, HEAD_CY - HEAD_R - 3, CX - 3, HEAD_CY - HEAD_R, '1');
-      fillTriangle(g, CX + 6, HEAD_CY - 5, CX + 8, HEAD_CY - HEAD_R - 3, CX + 3, HEAD_CY - HEAD_R, '1');
-      // Face opening (clear center)
-      fillEllipse(g, CX, HEAD_CY + 1, HEAD_R - 2, HEAD_R - 2, null);
+      fillEllipse(g, CX, HEAD_CY - 1, HEAD_RX + 2, HEAD_RY + 2, '1');
+      // Cat ear tips (bigger)
+      fillTriangle(g, CX - 8, HEAD_CY - 6, CX - 11, HEAD_CY - HEAD_RY - 4, CX - 4, HEAD_CY - HEAD_RY - 1, '1');
+      fillTriangle(g, CX + 8, HEAD_CY - 6, CX + 11, HEAD_CY - HEAD_RY - 4, CX + 4, HEAD_CY - HEAD_RY - 1, '1');
+      // Inner ears
+      fillTriangle(g, CX - 7, HEAD_CY - 7, CX - 9, HEAD_CY - HEAD_RY - 2, CX - 5, HEAD_CY - HEAD_RY, '2');
+      fillTriangle(g, CX + 7, HEAD_CY - 7, CX + 9, HEAD_CY - HEAD_RY - 2, CX + 5, HEAD_CY - HEAD_RY, '2');
+      // Face opening
+      fillEllipse(g, CX, HEAD_CY + 2, HEAD_RX - 2, HEAD_RY - 2, null);
+      // Hood seam
+      fillLine(g, CX, HEAD_CY - HEAD_RY - 1, CX, HEAD_CY - 4, '2');
       break;
     }
     case 'ranger-helmet': {
       const cy = topY;
-      fillEllipse(g, CX, HEAD_CY - 2, HEAD_R + 1, HEAD_R - 1, '1');
+      fillEllipse(g, CX, HEAD_CY - 2, HEAD_RX + 2, HEAD_RY, '1');
       // Visor
-      fillRect(g, CX - 5, HEAD_CY - 1, 11, 2, '2');
+      fillRect(g, CX - 7, HEAD_CY - 1, 15, 3, '2');
       // Crest
-      fillTriangle(g, CX - 1, cy - 2, CX, cy - 5, CX + 1, cy - 2, '1');
+      fillTriangle(g, CX - 2, cy - 1, CX, cy - 6, CX + 2, cy - 1, '1');
+      // Ear covers
+      fillRect(g, CX - HEAD_RX - 1, HEAD_CY - 1, 2, 4, '1');
+      fillRect(g, CX + HEAD_RX, HEAD_CY - 1, 2, 4, '1');
       break;
     }
     case 'santa-hat': {
       const cy = topY;
-      fillTriangle(g, CX - 6, cy + 3, CX + 5, cy - 4, CX + 7, cy + 3, '1');
-      // Brim
-      fillRect(g, CX - 7, cy + 2, 15, 2, 'W');
-      // Pom pom
-      fillCircle(g, CX + 6, cy - 4, 2, 'W');
+      fillTriangle(g, CX - 8, cy + 4, CX + 7, cy - 6, CX + 9, cy + 4, '1');
+      // Fur brim (white, thick)
+      fillRect(g, CX - 10, cy + 3, 21, 3, 'W');
+      // Pom pom (bigger)
+      fillCircle(g, CX + 8, cy - 6, 3, 'W');
+      // Fold detail
+      setPixel(g, CX + 3, cy - 2, '2');
+      setPixel(g, CX + 5, cy - 4, '2');
       break;
     }
     default: break;
@@ -763,43 +822,69 @@ function buildHat(hatId, color, character) {
 function buildTop(topId, color, weightState) {
   const g = createGrid(GW, GH);
   const { w, bodyCy } = getBodyMetrics(weightState);
+  const bt = bodyCy - w.bodyRy;
+  const bb = bodyCy + w.bodyRy;
 
   switch (topId) {
     case 'denim-jacket': {
       fillEllipse(g, CX, bodyCy, w.bodyRx, w.bodyRy, '1');
-      fillRect(g, CX - 4, bodyCy - w.bodyRy + 3, 9, w.bodyRy * 2 - 1, 'W');
-      fillTriangle(g, CX - 4, bodyCy - w.bodyRy + 2, CX - 7, bodyCy - 1, CX - 1, bodyCy, '2');
-      fillTriangle(g, CX + 4, bodyCy - w.bodyRy + 2, CX + 7, bodyCy - 1, CX + 1, bodyCy, '2');
-      fillRect(g, CX - w.bodyRx + 1, bodyCy - 1, 3, 4, '2');
-      fillRect(g, CX + w.bodyRx - 3, bodyCy - 1, 3, 4, '2');
-      fillRect(g, CX - 6, bodyCy, 3, 2, '2');
-      fillRect(g, CX + 3, bodyCy, 3, 2, '2');
-      fillLine(g, CX, bodyCy - w.bodyRy + 3, CX, bodyCy + w.bodyRy - 1, '2');
+      // Lighter wash center panel
+      fillRect(g, CX - 3, bt + 2, 7, w.bodyRy * 2 - 4, 'W');
+      // Center zipper line
+      fillLine(g, CX, bt + 2, CX, bb - 1, 'K');
+      // Collar — V-neck
+      fillLine(g, CX - 4, bt, CX, bt + 3, '2');
+      fillLine(g, CX + 4, bt, CX, bt + 3, '2');
+      // Chest pockets
+      fillRect(g, CX - w.bodyRx + 3, bodyCy - 2, 4, 3, '2');
+      fillRect(g, CX + w.bodyRx - 6, bodyCy - 2, 4, 3, '2');
+      // Pocket flaps
+      fillRect(g, CX - w.bodyRx + 3, bodyCy - 2, 4, 1, 'K');
+      fillRect(g, CX + w.bodyRx - 6, bodyCy - 2, 4, 1, 'K');
+      // Buttons
+      setPixel(g, CX + 1, bt + 4, 'K');
+      setPixel(g, CX + 1, bodyCy, 'K');
+      setPixel(g, CX + 1, bodyCy + 3, 'K');
       break;
     }
     case 'leather-jacket': {
       fillEllipse(g, CX, bodyCy, w.bodyRx, w.bodyRy, '1');
-      fillRect(g, CX - 4, bodyCy - w.bodyRy + 3, 9, w.bodyRy * 2 - 2, 'W');
-      fillTriangle(g, CX - 3, bodyCy - w.bodyRy + 1, CX - 7, bodyCy - 1, CX, bodyCy - 1, '2');
-      fillTriangle(g, CX + 3, bodyCy - w.bodyRy + 1, CX + 7, bodyCy - 1, CX, bodyCy - 1, '2');
+      // Diagonal zipper
+      fillLine(g, CX - 3, bt + 1, CX + 2, bodyCy + 2, 'K');
+      // Stand collar
+      fillRect(g, CX - 5, bt, 10, 2, '2');
+      // Shoulder epaulets
+      fillRect(g, CX - w.bodyRx + 1, bt + 2, 3, 1, 'K');
+      fillRect(g, CX + w.bodyRx - 3, bt + 2, 3, 1, 'K');
+      // Side panels (darker)
       fillRect(g, CX - w.bodyRx + 1, bodyCy - 1, 3, 5, '2');
       fillRect(g, CX + w.bodyRx - 3, bodyCy - 1, 3, 5, '2');
-      fillLine(g, CX, bodyCy - w.bodyRy + 2, CX, bodyCy + w.bodyRy - 1, '2');
+      // Zipper pull
+      setPixel(g, CX + 2, bodyCy + 2, 'W');
       break;
     }
     case 'lab-coat': {
       fillEllipse(g, CX, bodyCy, w.bodyRx + 1, w.bodyRy + 1, '1');
-      // Pocket
-      fillRect(g, CX + 1, bodyCy, 3, 2, '2');
-      // Badge
-      setPixel(g, CX - 3, bodyCy - w.bodyRy + 3, '3');
-      setPixel(g, CX - 2, bodyCy - w.bodyRy + 3, '3');
+      // Lapels
+      fillLine(g, CX - 4, bt - 1, CX - 1, bt + 4, '2');
+      fillLine(g, CX + 4, bt - 1, CX + 1, bt + 4, '2');
+      // Center closure
+      fillLine(g, CX, bt + 3, CX, bb, 'K');
+      // Breast pocket with pen
+      fillRect(g, CX - w.bodyRx + 3, bt + 3, 3, 2, '2');
+      setPixel(g, CX - w.bodyRx + 4, bt + 2, '3');
+      // Lower pocket
+      fillRect(g, CX + 2, bodyCy + 1, 4, 3, '2');
+      // ID badge
+      fillRect(g, CX - w.bodyRx + 3, bodyCy - 2, 2, 3, '3');
       break;
     }
     case 'sailor-shirt': {
       fillEllipse(g, CX, bodyCy, w.bodyRx, w.bodyRy, '1');
-      // Horizontal stripes
-      for (let sy = bodyCy - w.bodyRy + 2; sy < bodyCy + w.bodyRy; sy += 2) {
+      // Sailor collar (wide triangular)
+      fillTriangle(g, CX - w.bodyRx + 1, bt + 2, CX, bt + 5, CX + w.bodyRx - 1, bt + 2, '2');
+      // Horizontal stripes (lower half)
+      for (let sy = bodyCy - 1; sy < bb; sy += 2) {
         for (let sx = CX - w.bodyRx; sx <= CX + w.bodyRx; sx++) {
           if (sx >= 0 && sx < GW && sy >= 0 && sy < GH) {
             const dx = (sx - CX) / w.bodyRx, dy = (sy - bodyCy) / w.bodyRy;
@@ -807,59 +892,115 @@ function buildTop(topId, color, weightState) {
           }
         }
       }
+      // V-neck opening
+      fillTriangle(g, CX - 2, bt + 1, CX, bt + 4, CX + 2, bt + 1, 'W');
+      // Ribbon tie
+      setPixel(g, CX, bt + 4, '3');
+      setPixel(g, CX - 1, bt + 5, '3');
+      setPixel(g, CX + 1, bt + 5, '3');
       break;
     }
     case 'dress': {
-      // Dress that flares at bottom
-      fillEllipse(g, CX, bodyCy, w.bodyRx, w.bodyRy, '1');
+      fillEllipse(g, CX, bodyCy - 1, w.bodyRx - 1, w.bodyRy - 1, '1');
       // Flared skirt
-      fillTriangle(g, CX - w.bodyRx - 2, bodyCy + w.bodyRy + 2, CX, bodyCy + 1, CX + w.bodyRx + 2, bodyCy + w.bodyRy + 2, '1');
-      // Bow
-      setPixel(g, CX - 1, bodyCy - w.bodyRy + 2, '2');
-      setPixel(g, CX, bodyCy - w.bodyRy + 2, '2');
-      setPixel(g, CX + 1, bodyCy - w.bodyRy + 2, '2');
+      fillTriangle(g, CX - w.bodyRx - 2, bb + 2, CX, bodyCy, CX + w.bodyRx + 2, bb + 2, '1');
+      // Waistline
+      for (let x = CX - w.bodyRx + 2; x <= CX + w.bodyRx - 2; x++) {
+        const dx = (x - CX) / w.bodyRx;
+        if (dx * dx <= 0.85) setPixel(g, x, bodyCy, '2');
+      }
+      // Straps
+      fillLine(g, CX - 3, bt, CX - 5, bt - 2, '1');
+      fillLine(g, CX + 3, bt, CX + 5, bt - 2, '1');
+      // Bow at waist
+      setPixel(g, CX - 1, bodyCy - 1, '2');
+      setPixel(g, CX, bodyCy - 1, '2');
+      setPixel(g, CX + 1, bodyCy - 1, '2');
+      setPixel(g, CX - 2, bodyCy, '2');
+      setPixel(g, CX + 2, bodyCy, '2');
       break;
     }
     case 'hoodie': {
       fillEllipse(g, CX, bodyCy, w.bodyRx + 1, w.bodyRy, '1');
       // Hood visible behind head
-      fillEllipse(g, CX, HEAD_CY + HEAD_R, HEAD_R, 4, '1');
-      // Front pocket
-      fillRect(g, CX - 3, bodyCy + 1, 7, 2, '2');
+      fillEllipse(g, CX, HEAD_CY + HEAD_R - 2, HEAD_R + 2, 6, '1');
+      // Kangaroo pocket
+      fillEllipse(g, CX, bodyCy + 2, 5, 3, '2');
+      // Front center line
+      fillLine(g, CX, bt + 2, CX, bb - 1, '2');
+      // Drawstrings
+      fillLine(g, CX - 1, bt + 1, CX - 2, bt + 4, 'W');
+      fillLine(g, CX + 1, bt + 1, CX + 2, bt + 4, 'W');
+      // Ribbed bottom
+      for (let x = CX - w.bodyRx + 1; x <= CX + w.bodyRx - 1; x += 2) {
+        const dx = (x - CX) / (w.bodyRx + 1);
+        if (dx * dx <= 0.9) setPixel(g, x, bb - 1, '2');
+      }
       break;
     }
     case 'camo-vest': {
       fillEllipse(g, CX, bodyCy, w.bodyRx, w.bodyRy, '1');
-      // Camo patches
-      setPixel(g, CX - 3, bodyCy - 2, '2');
-      setPixel(g, CX + 2, bodyCy, '2');
-      setPixel(g, CX - 1, bodyCy + 2, '2');
-      setPixel(g, CX + 4, bodyCy - 1, '3');
-      setPixel(g, CX - 4, bodyCy + 1, '3');
+      // Camo patches (scattered)
+      fillRect(g, CX - 5, bodyCy - 3, 3, 2, '2');
+      fillRect(g, CX + 3, bodyCy - 1, 2, 3, '2');
+      fillRect(g, CX - 2, bodyCy + 2, 4, 2, '3');
+      fillRect(g, CX + 1, bodyCy - 4, 3, 2, '3');
+      fillRect(g, CX - 6, bodyCy + 1, 2, 2, '2');
+      // Front zipper
+      fillLine(g, CX, bt + 1, CX, bb - 1, 'K');
+      // Pockets
+      fillRect(g, CX - w.bodyRx + 2, bodyCy, 3, 3, '2');
+      fillRect(g, CX + w.bodyRx - 4, bodyCy, 3, 3, '2');
       break;
     }
     case 'power-suit': {
       fillEllipse(g, CX, bodyCy, w.bodyRx, w.bodyRy, '1');
-      // Chest emblem (diamond)
-      setPixel(g, CX, bodyCy - 2, '2');
-      setPixel(g, CX - 1, bodyCy - 1, '2');
-      setPixel(g, CX + 1, bodyCy - 1, '2');
-      setPixel(g, CX, bodyCy, '2');
+      // Tech panel lines
+      fillLine(g, CX - w.bodyRx + 3, bt + 2, CX - w.bodyRx + 3, bb - 2, '2');
+      fillLine(g, CX + w.bodyRx - 3, bt + 2, CX + w.bodyRx - 3, bb - 2, '2');
+      // Chest emblem (glowing diamond)
+      setPixel(g, CX, bodyCy - 3, '3');
+      setPixel(g, CX - 1, bodyCy - 2, '3');
+      setPixel(g, CX + 1, bodyCy - 2, '3');
+      setPixel(g, CX - 2, bodyCy - 1, '2');
+      setPixel(g, CX, bodyCy - 1, '3');
+      setPixel(g, CX + 2, bodyCy - 1, '2');
+      setPixel(g, CX - 1, bodyCy, '3');
+      setPixel(g, CX + 1, bodyCy, '3');
+      setPixel(g, CX, bodyCy + 1, '3');
       // Belt line
-      fillRect(g, CX - w.bodyRx + 1, bodyCy + w.bodyRy - 3, w.bodyRx * 2 - 1, 1, '2');
+      for (let x = CX - w.bodyRx + 1; x <= CX + w.bodyRx - 1; x++) {
+        const dx = (x - CX) / w.bodyRx;
+        if (dx * dx <= 1) setPixel(g, x, bb - 3, '2');
+      }
+      // Shoulder pads
+      fillRect(g, CX - w.bodyRx, bt + 1, 3, 2, '2');
+      fillRect(g, CX + w.bodyRx - 2, bt + 1, 3, 2, '2');
       break;
     }
     case 'traditional-robe': {
       fillEllipse(g, CX, bodyCy, w.bodyRx + 1, w.bodyRy + 1, '1');
-      fillLine(g, CX - 3, bodyCy - w.bodyRy + 1, CX + 1, bodyCy + 2, '2');
-      fillLine(g, CX + 3, bodyCy - w.bodyRy + 1, CX - 1, bodyCy + 2, '2');
-      fillRect(g, CX - 4, bodyCy - 1, 8, 2, '6');
-      for (let i = -w.bodyRx; i <= w.bodyRx; i += 2) {
-        const bx = CX + i, by = bodyCy + w.bodyRy;
-        if (bx >= 0 && bx < GW && by >= 0 && by < GH) {
-          const dx = i / w.bodyRx;
-          if (dx * dx <= 1) setPixel(g, bx, by, '6');
+      // Crossed front panels
+      fillLine(g, CX - 5, bt, CX + 2, bodyCy + 3, '2');
+      fillLine(g, CX + 5, bt, CX - 2, bodyCy + 3, '2');
+      // Neckline
+      fillLine(g, CX - 3, bt, CX, bt + 2, '2');
+      fillLine(g, CX + 3, bt, CX, bt + 2, '2');
+      // Obi/sash belt
+      for (let x = CX - w.bodyRx; x <= CX + w.bodyRx; x++) {
+        const dx = (x - CX) / (w.bodyRx + 1);
+        if (dx * dx <= 1) {
+          setPixel(g, x, bodyCy - 1, '6');
+          setPixel(g, x, bodyCy, '6');
+          setPixel(g, x, bodyCy + 1, '6');
         }
+      }
+      // Obi knot
+      fillRect(g, CX + w.bodyRx - 2, bodyCy - 1, 3, 3, '6');
+      // Bottom trim
+      for (let x = CX - w.bodyRx; x <= CX + w.bodyRx; x += 2) {
+        const dx = (x - CX) / (w.bodyRx + 1);
+        if (dx * dx <= 1 && bb + 1 < GH) setPixel(g, x, bb + 1, '6');
       }
       break;
     }
@@ -875,52 +1016,7 @@ function buildBelt(beltId, color, weightState) {
 
   switch (beltId) {
     case 'stomp-belt': {
-      // Belt across middle
-      for (let x = CX - w.bodyRx + 1; x <= CX + w.bodyRx - 1; x++) {
-        const dx = (x - CX) / w.bodyRx;
-        if (dx * dx <= 1) setPixel(g, x, beltY, '1');
-      }
-      // Buckle
-      setPixel(g, CX - 1, beltY, '2');
-      setPixel(g, CX, beltY, '2');
-      setPixel(g, CX + 1, beltY, '2');
-      break;
-    }
-    case 'chain-belt': {
-      for (let x = CX - w.bodyRx + 2; x <= CX + w.bodyRx - 2; x += 2) {
-        const dx = (x - CX) / w.bodyRx;
-        if (dx * dx <= 1) setPixel(g, x, beltY, '1');
-      }
-      break;
-    }
-    case 'medal-chain': {
-      fillLine(g, CX - 4, bodyCy - w.bodyRy + 1, CX - 1, bodyCy - 1, '6');
-      fillLine(g, CX + 4, bodyCy - w.bodyRy + 1, CX + 1, bodyCy - 1, '6');
-      fillRect(g, CX - 3, bodyCy, 7, 6, '6');
-      fillRect(g, CX - 2, bodyCy + 1, 5, 4, 'K');
-      fillRect(g, CX - 1, bodyCy + 2, 3, 2, '6');
-      break;
-    }
-    case 'ribbon': {
-      for (let x = CX - w.bodyRx + 1; x <= CX + w.bodyRx - 1; x++) {
-        const dx = (x - CX) / w.bodyRx;
-        if (dx * dx <= 1) setPixel(g, x, beltY + 1, '1');
-      }
-      // Bow
-      setPixel(g, CX + w.bodyRx - 2, beltY, '1');
-      setPixel(g, CX + w.bodyRx - 1, beltY + 2, '1');
-      break;
-    }
-    case 'sash': {
-      // Diagonal sash
-      fillLine(g, CX - w.bodyRx + 2, bodyCy - w.bodyRy + 2, CX + w.bodyRx - 2, bodyCy + w.bodyRy - 2, '1');
-      fillLine(g, CX - w.bodyRx + 3, bodyCy - w.bodyRy + 2, CX + w.bodyRx - 1, bodyCy + w.bodyRy - 2, '1');
-      // Medal
-      setPixel(g, CX + w.bodyRx - 3, bodyCy + w.bodyRy - 3, '2');
-      setPixel(g, CX + w.bodyRx - 2, bodyCy + w.bodyRy - 3, '2');
-      break;
-    }
-    case 'utility-belt': {
+      // Wide belt — 2 rows
       for (let x = CX - w.bodyRx + 1; x <= CX + w.bodyRx - 1; x++) {
         const dx = (x - CX) / w.bodyRx;
         if (dx * dx <= 1) {
@@ -928,9 +1024,93 @@ function buildBelt(beltId, color, weightState) {
           setPixel(g, x, beltY + 1, '1');
         }
       }
+      // Large buckle
+      fillRect(g, CX - 2, beltY - 1, 5, 3, '2');
+      fillRect(g, CX - 1, beltY, 3, 1, '1');
+      // Belt holes
+      setPixel(g, CX + 4, beltY, 'K');
+      setPixel(g, CX + 6, beltY, 'K');
+      break;
+    }
+    case 'chain-belt': {
+      // Chain links — alternating pattern
+      for (let x = CX - w.bodyRx + 2; x <= CX + w.bodyRx - 2; x++) {
+        const dx = (x - CX) / w.bodyRx;
+        if (dx * dx <= 1) {
+          if (x % 3 === 0) {
+            setPixel(g, x, beltY, '1');
+            setPixel(g, x, beltY + 1, '1');
+          } else if (x % 3 === 1) {
+            setPixel(g, x, beltY - 1, '1');
+            setPixel(g, x, beltY, '1');
+          }
+        }
+      }
+      // Hanging chain dangle
+      fillLine(g, CX - 3, beltY + 1, CX - 5, beltY + 3, '1');
+      setPixel(g, CX - 5, beltY + 4, '2');
+      break;
+    }
+    case 'medal-chain': {
+      // V-shaped chain
+      fillLine(g, CX - 5, bodyCy - w.bodyRy + 1, CX, bodyCy, '6');
+      fillLine(g, CX + 5, bodyCy - w.bodyRy + 1, CX, bodyCy, '6');
+      // Medal body
+      fillCircle(g, CX, bodyCy + 2, 3, '6');
+      fillCircle(g, CX, bodyCy + 2, 2, 'K');
+      // Emblem on medal
+      setPixel(g, CX, bodyCy + 1, '6');
+      setPixel(g, CX - 1, bodyCy + 2, '6');
+      setPixel(g, CX + 1, bodyCy + 2, '6');
+      setPixel(g, CX, bodyCy + 3, '6');
+      break;
+    }
+    case 'ribbon': {
+      // Thin satin ribbon
+      for (let x = CX - w.bodyRx + 1; x <= CX + w.bodyRx - 1; x++) {
+        const dx = (x - CX) / w.bodyRx;
+        if (dx * dx <= 1) setPixel(g, x, beltY + 1, '1');
+      }
+      // Bow on the side
+      fillRect(g, CX + w.bodyRx - 4, beltY - 1, 3, 1, '1');
+      fillRect(g, CX + w.bodyRx - 4, beltY + 2, 3, 1, '1');
+      setPixel(g, CX + w.bodyRx - 3, beltY, '2');
+      setPixel(g, CX + w.bodyRx - 3, beltY + 1, '2');
+      // Tail ribbons hanging down
+      fillLine(g, CX + w.bodyRx - 4, beltY + 2, CX + w.bodyRx - 5, beltY + 4, '1');
+      fillLine(g, CX + w.bodyRx - 2, beltY + 2, CX + w.bodyRx - 1, beltY + 4, '1');
+      break;
+    }
+    case 'sash': {
+      // Diagonal sash — 2px wide
+      fillLine(g, CX - w.bodyRx + 2, bodyCy - w.bodyRy + 2, CX + w.bodyRx - 2, bodyCy + w.bodyRy - 2, '1');
+      fillLine(g, CX - w.bodyRx + 3, bodyCy - w.bodyRy + 2, CX + w.bodyRx - 1, bodyCy + w.bodyRy - 2, '1');
+      // Decorative trim
+      fillLine(g, CX - w.bodyRx + 2, bodyCy - w.bodyRy + 3, CX + w.bodyRx - 2, bodyCy + w.bodyRy - 1, '2');
+      // Medal at hip
+      fillCircle(g, CX + w.bodyRx - 3, bodyCy + w.bodyRy - 3, 2, '2');
+      setPixel(g, CX + w.bodyRx - 3, bodyCy + w.bodyRy - 3, '3');
+      break;
+    }
+    case 'utility-belt': {
+      // Thick belt — 3 rows
+      for (let x = CX - w.bodyRx + 1; x <= CX + w.bodyRx - 1; x++) {
+        const dx = (x - CX) / w.bodyRx;
+        if (dx * dx <= 1) {
+          setPixel(g, x, beltY - 1, '1');
+          setPixel(g, x, beltY, '1');
+          setPixel(g, x, beltY + 1, '1');
+        }
+      }
       // Pouches
-      fillRect(g, CX - 4, beltY, 2, 2, '2');
-      fillRect(g, CX + 3, beltY, 2, 2, '2');
+      fillRect(g, CX - 6, beltY - 1, 3, 4, '2');
+      fillRect(g, CX - 2, beltY, 2, 3, '2');
+      fillRect(g, CX + 4, beltY - 1, 3, 4, '2');
+      // Buckle
+      fillRect(g, CX + 1, beltY - 1, 2, 3, '3');
+      // Pouch flaps
+      fillRect(g, CX - 6, beltY - 1, 3, 1, 'K');
+      fillRect(g, CX + 4, beltY - 1, 3, 1, 'K');
       break;
     }
     default: break;
@@ -940,58 +1120,109 @@ function buildBelt(beltId, color, weightState) {
 
 function buildShoes(shoeId, color, weightState) {
   const g = createGrid(GW, GH);
-  const { w, legSpread, legTop } = getBodyMetrics(weightState);
-  const footY = legTop + 4;
+  const { w, legSpread, legTop, legHeight } = getBodyMetrics(weightState);
+  const footY = legTop + legHeight - 2;
 
   switch (shoeId) {
     case 'sneakers': {
-      fillRect(g, CX - legSpread - w.limbW, footY, w.limbW + 2, 2, '1');
-      fillRect(g, CX + legSpread - 1, footY, w.limbW + 2, 2, '1');
+      // Shoe body
+      fillRect(g, CX - legSpread - w.limbW - 1, footY, w.limbW + 3, 3, '1');
+      fillRect(g, CX + legSpread - 2, footY, w.limbW + 3, 3, '1');
+      // White sole
+      fillRect(g, CX - legSpread - w.limbW - 1, footY + 2, w.limbW + 3, 1, 'W');
+      fillRect(g, CX + legSpread - 2, footY + 2, w.limbW + 3, 1, 'W');
       // Stripe
-      setPixel(g, CX - legSpread - w.limbW + 1, footY, '2');
-      setPixel(g, CX + legSpread, footY, '2');
-      break;
-    }
-    case 'boots': {
-      fillRect(g, CX - legSpread - w.limbW, footY - 2, w.limbW + 1, 4, '1');
-      fillRect(g, CX + legSpread - 1, footY - 2, w.limbW + 1, 4, '1');
-      // Boot tip extends forward
-      setPixel(g, CX - legSpread - w.limbW - 1, footY + 1, '1');
-      setPixel(g, CX + legSpread + w.limbW, footY + 1, '1');
-      break;
-    }
-    case 'sandals': {
-      fillRect(g, CX - legSpread - w.limbW, footY + 1, w.limbW + 1, 1, '1');
-      fillRect(g, CX + legSpread - 1, footY + 1, w.limbW + 1, 1, '1');
-      // Straps
-      setPixel(g, CX - legSpread - 1, footY, '1');
-      setPixel(g, CX + legSpread, footY, '1');
-      break;
-    }
-    case 'dance-shoes': {
-      fillRect(g, CX - legSpread - w.limbW, footY, w.limbW + 1, 2, '1');
-      fillRect(g, CX + legSpread - 1, footY, w.limbW + 1, 2, '1');
-      // Shine
-      setPixel(g, CX - legSpread - w.limbW + 1, footY, 'W');
+      fillRect(g, CX - legSpread - w.limbW, footY + 1, w.limbW + 1, 1, '2');
+      fillRect(g, CX + legSpread - 1, footY + 1, w.limbW + 1, 1, '2');
+      // Lace dots
+      setPixel(g, CX - legSpread - 1, footY, 'W');
       setPixel(g, CX + legSpread, footY, 'W');
       break;
     }
+    case 'boots': {
+      // Tall boot shaft
+      fillRect(g, CX - legSpread - w.limbW - 1, footY - 3, w.limbW + 2, 6, '1');
+      fillRect(g, CX + legSpread - 1, footY - 3, w.limbW + 2, 6, '1');
+      // Boot toe
+      fillRect(g, CX - legSpread - w.limbW - 2, footY + 2, w.limbW + 3, 1, '1');
+      fillRect(g, CX + legSpread - 2, footY + 2, w.limbW + 3, 1, '1');
+      // Thick sole
+      fillRect(g, CX - legSpread - w.limbW - 2, footY + 2, w.limbW + 4, 1, '2');
+      fillRect(g, CX + legSpread - 2, footY + 2, w.limbW + 4, 1, '2');
+      // Lacing
+      setPixel(g, CX - legSpread, footY - 2, 'W');
+      setPixel(g, CX - legSpread, footY - 1, 'W');
+      setPixel(g, CX + legSpread, footY - 2, 'W');
+      setPixel(g, CX + legSpread, footY - 1, 'W');
+      // Boot strap
+      fillRect(g, CX - legSpread - w.limbW, footY - 1, w.limbW + 1, 1, '2');
+      fillRect(g, CX + legSpread - 1, footY - 1, w.limbW + 1, 1, '2');
+      break;
+    }
+    case 'sandals': {
+      // Flat sole
+      fillRect(g, CX - legSpread - w.limbW - 1, footY + 2, w.limbW + 3, 1, '1');
+      fillRect(g, CX + legSpread - 2, footY + 2, w.limbW + 3, 1, '1');
+      // Cross straps
+      setPixel(g, CX - legSpread - 1, footY, '1');
+      setPixel(g, CX - legSpread, footY + 1, '1');
+      setPixel(g, CX + legSpread, footY, '1');
+      setPixel(g, CX + legSpread - 1, footY + 1, '1');
+      // Back strap
+      setPixel(g, CX - legSpread - w.limbW + 1, footY + 1, '2');
+      setPixel(g, CX + legSpread + w.limbW - 2, footY + 1, '2');
+      break;
+    }
+    case 'dance-shoes': {
+      // Sleek low shoe
+      fillRect(g, CX - legSpread - w.limbW - 1, footY + 1, w.limbW + 3, 2, '1');
+      fillRect(g, CX + legSpread - 2, footY + 1, w.limbW + 3, 2, '1');
+      // High shine
+      setPixel(g, CX - legSpread - w.limbW, footY + 1, 'W');
+      setPixel(g, CX - legSpread, footY + 1, 'W');
+      setPixel(g, CX + legSpread - 1, footY + 1, 'W');
+      setPixel(g, CX + legSpread + 1, footY + 1, 'W');
+      // Thin heel
+      setPixel(g, CX - legSpread - w.limbW, footY + 2, 'K');
+      setPixel(g, CX + legSpread + w.limbW - 1, footY + 2, 'K');
+      break;
+    }
     case 'power-boots': {
-      fillRect(g, CX - legSpread - w.limbW - 1, footY - 2, w.limbW + 2, 5, '1');
-      fillRect(g, CX + legSpread - 1, footY - 2, w.limbW + 2, 5, '1');
-      // Accent stripe
-      setPixel(g, CX - legSpread - w.limbW, footY - 1, '2');
-      setPixel(g, CX + legSpread, footY - 1, '2');
+      // Chunky armored boots
+      fillRect(g, CX - legSpread - w.limbW - 2, footY - 3, w.limbW + 4, 7, '1');
+      fillRect(g, CX + legSpread - 2, footY - 3, w.limbW + 4, 7, '1');
+      // Armor plating
+      fillRect(g, CX - legSpread - w.limbW - 1, footY - 2, w.limbW + 2, 2, '2');
+      fillRect(g, CX + legSpread - 1, footY - 2, w.limbW + 2, 2, '2');
+      // Thick sole
+      fillRect(g, CX - legSpread - w.limbW - 2, footY + 3, w.limbW + 5, 1, '2');
+      fillRect(g, CX + legSpread - 2, footY + 3, w.limbW + 5, 1, '2');
+      // Glow accent
+      setPixel(g, CX - legSpread - 1, footY - 1, '3');
+      setPixel(g, CX + legSpread, footY - 1, '3');
       break;
     }
     case 'cat-slippers': {
-      fillRect(g, CX - legSpread - w.limbW, footY, w.limbW + 2, 2, '1');
-      fillRect(g, CX + legSpread - 1, footY, w.limbW + 2, 2, '1');
-      // Little ears
+      // Round slipper body
+      fillEllipse(g, CX - legSpread, footY + 1, w.limbW + 1, 2, '1');
+      fillEllipse(g, CX + legSpread, footY + 1, w.limbW + 1, 2, '1');
+      // Cat ears
       setPixel(g, CX - legSpread - w.limbW, footY - 1, '1');
       setPixel(g, CX - legSpread - w.limbW + 2, footY - 1, '1');
       setPixel(g, CX + legSpread - 1, footY - 1, '1');
       setPixel(g, CX + legSpread + 1, footY - 1, '1');
+      // Cat face — eyes & nose
+      setPixel(g, CX - legSpread - 1, footY, 'K');
+      setPixel(g, CX - legSpread + 1, footY, 'K');
+      setPixel(g, CX - legSpread, footY + 1, '2');
+      setPixel(g, CX + legSpread - 1, footY, 'K');
+      setPixel(g, CX + legSpread + 1, footY, 'K');
+      setPixel(g, CX + legSpread, footY + 1, '2');
+      // Whiskers
+      setPixel(g, CX - legSpread - 2, footY + 1, 'K');
+      setPixel(g, CX - legSpread + 2, footY + 1, 'K');
+      setPixel(g, CX + legSpread - 2, footY + 1, 'K');
+      setPixel(g, CX + legSpread + 2, footY + 1, 'K');
       break;
     }
     default: break;
@@ -1141,22 +1372,42 @@ const PIXEL_ART_STYLES = `
     50% { transform: translateY(-0.4em); }
   }
   @keyframes dojoIdle {
-    0%, 100% { transform: translateY(0) rotate(0deg); }
-    35% { transform: translateY(-0.35em) rotate(-1deg); }
-    70% { transform: translateY(-0.15em) rotate(1deg); }
+    0%, 100% { transform: translateY(0) rotate(0deg) scale(1, 1); }
+    12% { transform: translateY(-0.25em) rotate(-1.5deg) scale(1.01, 0.99); }
+    28% { transform: translateY(-0.05em) rotate(0.5deg) scale(1, 1); }
+    42% { transform: translateY(0.04em) rotate(0deg) scale(0.99, 1.01); }
+    58% { transform: translateY(-0.4em) rotate(1deg) scale(1.01, 0.99); }
+    75% { transform: translateY(-0.12em) rotate(-0.5deg) scale(1, 1); }
+    88% { transform: translateY(0.02em) rotate(0deg) scale(1, 1.01); }
   }
   @keyframes buuIdle {
-    0%, 100% { transform: translateY(0) scale(1, 1); }
-    50% { transform: translateY(-0.25em) scale(1.03, 0.98); }
+    0%, 100% { transform: translateY(0) scale(1, 1) rotate(0deg); }
+    10% { transform: translateY(-0.12em) scale(1.04, 0.96) rotate(-1deg); }
+    22% { transform: translateY(0.04em) scale(0.97, 1.03) rotate(0.5deg); }
+    36% { transform: translateY(-0.28em) scale(1.02, 0.98) rotate(0deg); }
+    50% { transform: translateY(0em) scale(0.98, 1.02) rotate(-0.5deg); }
+    65% { transform: translateY(-0.18em) scale(1.05, 0.96) rotate(1deg); }
+    80% { transform: translateY(-0.04em) scale(1, 1) rotate(0deg); }
+    90% { transform: translateY(0.03em) scale(0.99, 1.01) rotate(0deg); }
   }
   @keyframes devitIdle {
-    0%, 100% { transform: translateY(0) rotate(0deg); }
-    40% { transform: translateY(-0.55em) rotate(-2deg); }
-    80% { transform: translateY(-0.1em) rotate(2deg); }
+    0%, 100% { transform: translateY(0) rotate(0deg) scale(1); }
+    8% { transform: translateY(-0.55em) rotate(-2deg) scale(1.02); }
+    18% { transform: translateY(-0.08em) rotate(1.5deg) scale(0.99); }
+    30% { transform: translateY(-0.35em) rotate(-1deg) scale(1.01); }
+    44% { transform: translateY(0.05em) rotate(2deg) scale(0.98); }
+    58% { transform: translateY(-0.65em) rotate(-2.5deg) scale(1.03); }
+    72% { transform: translateY(-0.12em) rotate(1deg) scale(1); }
+    85% { transform: translateY(-0.4em) rotate(-0.5deg) scale(1.01); }
   }
   @keyframes pixiuIdle {
-    0%, 100% { transform: translateY(0) translateX(0); }
-    50% { transform: translateY(-0.3em) translateX(0.2em); }
+    0%, 100% { transform: translateY(0) translateX(0) rotate(0deg) scale(1); }
+    15% { transform: translateY(-0.18em) translateX(0.08em) rotate(0.5deg) scale(1.01, 0.99); }
+    32% { transform: translateY(-0.04em) translateX(-0.04em) rotate(-0.5deg) scale(1, 1); }
+    48% { transform: translateY(-0.32em) translateX(0.12em) rotate(1deg) scale(1.01, 0.99); }
+    62% { transform: translateY(-0.08em) translateX(-0.08em) rotate(-0.3deg) scale(1, 1); }
+    78% { transform: translateY(-0.2em) translateX(0.05em) rotate(0.3deg) scale(1, 1.01); }
+    90% { transform: translateY(-0.04em) translateX(-0.02em) rotate(0deg) scale(1, 1); }
   }
   @keyframes petBounce {
     0%, 100% { transform: translateY(0) scaleY(1); }
@@ -1336,6 +1587,7 @@ export default function SpritePet({
     let featShadow = '';
     let faceShadow = '';
     let tailShadow = '';
+    let headShadow = '';
 
     // Shadow ellipse (simple dark oval at feet)
     const shadowGrid = createGrid(GW, GH);
@@ -1346,9 +1598,13 @@ export default function SpritePet({
     // Clothing layers
     let hatShadow = '', topShadow = '', beltShadow2 = '', shoesShadow = '', foodShadow = '';
 
-    // Base body
+    // Base body (no head — head is a separate layer above clothing)
     const baseGrid = outlineGrid(buildBase(character, weightState));
     baseShadow = composeShadow(baseGrid, palette);
+
+    // Head (separate layer — rendered above clothing, below features)
+    const headGrid = outlineGrid(buildHead(character));
+    headShadow = composeShadow(headGrid, palette);
 
     // Arms
     const armsGrid = outlineGrid(buildArms(character, weightState));
@@ -1407,7 +1663,7 @@ export default function SpritePet({
       });
     }
 
-    return { baseShadow, armsShadow, featShadow, faceShadow, tailShadow, groundShadow, hatShadow, topShadow, beltShadow2, shoesShadow, foodShadow };
+    return { baseShadow, headShadow, armsShadow, featShadow, faceShadow, tailShadow, groundShadow, hatShadow, topShadow, beltShadow2, shoesShadow, foodShadow };
   }, [character, weightState, mood, expression, equippedHat, equippedBelt, equippedShoes, equippedTop, hatColor, beltColor, shoesColor, topColor, foodId, iconicLook, palette]);
 
   const idleClass = `pet-idle-${character}`;
@@ -1458,6 +1714,9 @@ export default function SpritePet({
 
         {/* Clothing: shoes */}
         {layers.shoesShadow && <PixelLayer shadow={layers.shoesShadow} />}
+
+        {/* Head (in front of clothing, behind features) */}
+        <PixelLayer shadow={layers.headShadow} />
 
         {/* Arms */}
         <PixelLayer shadow={layers.armsShadow} />
