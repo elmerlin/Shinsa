@@ -8,31 +8,39 @@ const router = express.Router();
 // ─── Constants ────────────────────────────────────────────────────
 const VALID_CHARACTERS = ['dojocat', 'buu', 'devit', 'pixiu'];
 const MAX_STAT = 100;
-const HUNGER_DECAY_PER_HOUR = 2;
-const HAPPINESS_DECAY_PER_HOUR = 1.2;
+const TARGET_WEEKLY_SONGS = 75;
+const TARGET_WEEKLY_HUNGER_UPKEEP = 76;
+const TARGET_WEEKLY_HAPPINESS_UPKEEP = 48;
+const HUNGER_DECAY_PER_HOUR = TARGET_WEEKLY_HUNGER_UPKEEP / (7 * 24);
+const HAPPINESS_DECAY_PER_HOUR = TARGET_WEEKLY_HAPPINESS_UPKEEP / (7 * 24);
+const PET_ECONOMY = {
+  target_songs_per_week: TARGET_WEEKLY_SONGS,
+  weekly_hunger_upkeep: TARGET_WEEKLY_HUNGER_UPKEEP,
+  weekly_happiness_upkeep: TARGET_WEEKLY_HAPPINESS_UPKEEP,
+};
 
 // Combo earned per grade when syncing plays
 const GRADE_COMBO = {
-  'SSS+': 12, 'SSS': 10, 'SS+': 9, 'SS': 8, 'S+': 7, 'S': 6,
-  'AAA+': 5, 'AAA': 4, 'AA+': 3, 'AA': 3, 'A+': 2, 'A': 2,
-  'B': 1, 'C': 1, 'D': 0, 'F': 0,
+  'SSS+': 5, 'SSS': 5, 'SS+': 4, 'SS': 4, 'S+': 4, 'S': 3,
+  'AAA+': 3, 'AAA': 3, 'AA+': 2, 'AA': 2, 'A+': 2, 'A': 1,
+  'B': 1, 'C': 0, 'D': 0, 'F': 0,
 };
 
-// Small hunger/happiness trickle per play (from sync)
+// Playing keeps your pet engaged, but feeding should still require real upkeep.
 const GRADE_FEED_TABLE = {
-  'SSS+': { hunger: 3, happiness: 4, xp: 50 },
-  'SSS':  { hunger: 3, happiness: 3, xp: 45 },
-  'SS+':  { hunger: 2, happiness: 3, xp: 35 },
-  'SS':   { hunger: 2, happiness: 3, xp: 30 },
-  'S+':   { hunger: 2, happiness: 2, xp: 25 },
-  'S':    { hunger: 2, happiness: 2, xp: 22 },
-  'AAA+': { hunger: 1, happiness: 2, xp: 18 },
-  'AAA':  { hunger: 1, happiness: 2, xp: 15 },
-  'AA+':  { hunger: 1, happiness: 1, xp: 12 },
-  'AA':   { hunger: 1, happiness: 1, xp: 10 },
-  'A+':   { hunger: 1, happiness: 1, xp: 8 },
-  'A':    { hunger: 1, happiness: 1, xp: 6 },
-  'B':    { hunger: 1, happiness: 0, xp: 4 },
+  'SSS+': { hunger: 1, happiness: 4, xp: 42 },
+  'SSS':  { hunger: 1, happiness: 4, xp: 38 },
+  'SS+':  { hunger: 1, happiness: 3, xp: 34 },
+  'SS':   { hunger: 1, happiness: 3, xp: 30 },
+  'S+':   { hunger: 1, happiness: 2, xp: 26 },
+  'S':    { hunger: 1, happiness: 2, xp: 23 },
+  'AAA+': { hunger: 0, happiness: 2, xp: 19 },
+  'AAA':  { hunger: 0, happiness: 2, xp: 16 },
+  'AA+':  { hunger: 0, happiness: 1, xp: 13 },
+  'AA':   { hunger: 0, happiness: 1, xp: 11 },
+  'A+':   { hunger: 0, happiness: 1, xp: 9 },
+  'A':    { hunger: 0, happiness: 1, xp: 7 },
+  'B':    { hunger: 0, happiness: 0, xp: 4 },
   'C':    { hunger: 0, happiness: 0, xp: 2 },
   'D':    { hunger: 0, happiness: 0, xp: 1 },
   'F':    { hunger: 0, happiness: 0, xp: 0 },
@@ -48,26 +56,26 @@ function levelXpBonus(level) {
 }
 
 function levelComboBonus(level) {
-  if (level >= 25) return 5;
-  if (level >= 22) return 3;
-  if (level >= 19) return 2;
-  if (level >= 15) return 1;
+  if (level >= 25) return 3;
+  if (level >= 22) return 2;
+  if (level >= 19) return 1;
+  if (level >= 16) return 1;
   return 0;
 }
 
 // ─── Pet Food ─────────────────────────────────────────────────────
 const PET_FOODS = [
-  { id: 'pump-chow', name: 'Pump Chow', cost: 5, hunger: 12, happiness: 2, emoji: '🥩', desc: 'Hearty pad fuel' },
-  { id: 'beat-bites', name: 'Beat Bites', cost: 8, hunger: 8, happiness: 6, emoji: '🍪', desc: 'Crunchy rhythm snacks' },
-  { id: 'slam-grub', name: 'Slam Grub', cost: 12, hunger: 18, happiness: 3, emoji: '🍖', desc: 'Heavy-duty stomp food' },
-  { id: 'step-fuel', name: 'Step Fuel', cost: 10, hunger: 14, happiness: 5, emoji: '⚡', desc: 'Energy for endless runs' },
-  { id: 'rhythm-rations', name: 'Rhythm Rations', cost: 6, hunger: 7, happiness: 8, emoji: '🎵', desc: 'Musical munchies' },
-  { id: 'gargoyle-munch', name: 'Gargoyle Munch', cost: 15, hunger: 22, happiness: 2, emoji: '👹', desc: 'Fills you up fast' },
-  { id: 'pad-power', name: 'Pad Power', cost: 20, hunger: 20, happiness: 10, emoji: '💪', desc: 'Premium dance nutrition' },
-  { id: 'dance-dust', name: 'Dance Dust', cost: 3, hunger: 3, happiness: 14, emoji: '✨', desc: 'Pure joy in a pinch' },
-  { id: 'doof-bites', name: 'Doof Bites', cost: 7, hunger: 10, happiness: 8, emoji: '🔥', desc: 'Spicy electronic flavor' },
-  { id: 'adrenaline-chow', name: 'Adrenaline Chow', cost: 25, hunger: 25, happiness: 14, emoji: '🚀', desc: 'For the hardcore stepper' },
-  { id: 'banya-biscuits', name: 'Banya Biscuits', cost: 30, hunger: 22, happiness: 18, emoji: '🏆', desc: 'Legendary gourmet treats' },
+  { id: 'pump-chow', name: 'Pump Chow', cost: 22, hunger: 7, happiness: 1, emoji: '🥩', desc: 'Basic upkeep kibble for hungry stompers' },
+  { id: 'beat-bites', name: 'Beat Bites', cost: 28, hunger: 6, happiness: 5, emoji: '🍪', desc: 'Crunchy snacks that cheer them up' },
+  { id: 'slam-grub', name: 'Slam Grub', cost: 36, hunger: 11, happiness: 2, emoji: '🍖', desc: 'A proper meal after a hard set' },
+  { id: 'step-fuel', name: 'Step Fuel', cost: 42, hunger: 13, happiness: 4, emoji: '⚡', desc: 'Reliable energy with a little spark' },
+  { id: 'rhythm-rations', name: 'Rhythm Rations', cost: 26, hunger: 5, happiness: 7, emoji: '🎵', desc: 'Lighter food with a happiness boost' },
+  { id: 'gargoyle-munch', name: 'Gargoyle Munch', cost: 52, hunger: 16, happiness: 2, emoji: '👹', desc: 'Dense feed for serious recovery' },
+  { id: 'pad-power', name: 'Pad Power', cost: 68, hunger: 21, happiness: 8, emoji: '💪', desc: 'Premium fuel for well-loved pets' },
+  { id: 'dance-dust', name: 'Dance Dust', cost: 18, hunger: 3, happiness: 10, emoji: '✨', desc: 'Not filling, but impossible not to love' },
+  { id: 'doof-bites', name: 'Doof Bites', cost: 32, hunger: 9, happiness: 6, emoji: '🔥', desc: 'Spicy bites with extra personality' },
+  { id: 'adrenaline-chow', name: 'Adrenaline Chow', cost: 82, hunger: 25, happiness: 10, emoji: '🚀', desc: 'Expensive, but it keeps them thriving' },
+  { id: 'banya-biscuits', name: 'Banya Biscuits', cost: 94, hunger: 24, happiness: 16, emoji: '🏆', desc: 'Legendary treats for pampered champions' },
 ];
 const PET_FOODS_MAP = Object.fromEntries(PET_FOODS.map(f => [f.id, f]));
 
@@ -305,8 +313,8 @@ router.get('/me', requireAuth, (req, res) => {
   const db = getDb();
   ensurePetTable(db);
   const pet = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
-  if (!pet) return res.json({ pet: null });
-  res.json({ pet: formatPet(pet) });
+  if (!pet) return res.json({ pet: null, economy: PET_ECONOMY });
+  res.json({ pet: formatPet(pet), economy: PET_ECONOMY });
 });
 
 // GET /api/pets/user/:userId — public pet view (for avatar modals)
@@ -333,8 +341,8 @@ router.post('/adopt', requireAuth, (req, res) => {
       UPDATE user_pets SET character = ?, fullness = 50, happiness = 50, total_songs_fed = 0, experience = 0,
       tricks_unlocked = '[]', pending_trick = '', trick_demand_level = 0, trick_demand_grade = '',
       trick_demand_expires = '', last_trick_performed = '', last_trick_at = '',
-      equipped_hat = '', equipped_belt = '', equipped_shoes = '',
-      hat_color = '', belt_color = '', shoes_color = '',
+      equipped_hat = '', equipped_belt = '', equipped_shoes = '', equipped_top = '',
+      hat_color = '', belt_color = '', shoes_color = '', top_color = '',
       last_fed_at = datetime('now'), updated_at = datetime('now')
       WHERE user_id = ?
     `).run(character, req.user.id);
@@ -356,9 +364,11 @@ router.get('/shop', requireAuth, (req, res) => {
   const owned = safeJsonParse(pet?.owned_items);
   res.json({
     combo_balance: pet?.combo_balance || 0,
+    economy: PET_ECONOMY,
     foods: PET_FOODS,
     clothing: {
       hats: CLOTHING.hats.map(c => ({ ...c, owned: owned.includes(c.id) })),
+      tops: (CLOTHING.tops || []).map(c => ({ ...c, owned: owned.includes(c.id) })),
       belts: CLOTHING.belts.map(c => ({ ...c, owned: owned.includes(c.id) })),
       shoes: CLOTHING.shoes.map(c => ({ ...c, owned: owned.includes(c.id) })),
     },

@@ -38,6 +38,29 @@ const CHARACTER_BG = {
   pixiu: 'from-yellow-950/30 via-gray-950 to-gray-950',
 };
 
+const PET_REACTIONS = {
+  dojocat: [
+    { speech: 'Hya!', reaction: 'kata', expression: 'wink' },
+    { speech: '*proud purr*', reaction: 'proud', expression: 'proud' },
+    { speech: 'Watch this.', reaction: 'swish', expression: 'smirk' },
+  ],
+  buu: [
+    { speech: 'Hehehe.', reaction: 'squish', expression: 'smirk' },
+    { speech: 'More pats.', reaction: 'wobble', expression: 'grin' },
+    { speech: 'I know I am cute.', reaction: 'swagger', expression: 'proud' },
+  ],
+  devit: [
+    { speech: 'Heh.', reaction: 'hop', expression: 'grin' },
+    { speech: 'Again!', reaction: 'dart', expression: 'excited' },
+    { speech: 'Caught you.', reaction: 'mischief', expression: 'smirk' },
+  ],
+  pixiu: [
+    { speech: 'Fortune favours us.', reaction: 'bless', expression: 'sparkle' },
+    { speech: '*tail swish*', reaction: 'sway', expression: 'soft' },
+    { speech: 'A fine tribute.', reaction: 'nod', expression: 'proud' },
+  ],
+};
+
 // ─── Tabs ─────────────────────────────────────────────────────────
 const TABS = ['pet', 'food', 'clothing', 'tricks'];
 
@@ -47,11 +70,15 @@ export default function PetPage() {
   const [pet, setPet] = useState(null);
   const [characters, setCharacters] = useState([]);
   const [shop, setShop] = useState(null);
+  const [economy, setEconomy] = useState(null);
   const [loading, setLoading] = useState(true);
   const [adopting, setAdopting] = useState(false);
   const [showSelect, setShowSelect] = useState(false);
   const [isEating, setIsEating] = useState(false);
   const [isTricking, setIsTricking] = useState(false);
+  const [petReaction, setPetReaction] = useState('');
+  const [petExpression, setPetExpression] = useState('');
+  const [activeFoodId, setActiveFoodId] = useState('');
   const [speechText, setSpeechText] = useState('');
   const [tab, setTab] = useState('pet');
   const [buying, setBuying] = useState(false);
@@ -63,6 +90,7 @@ export default function PetPage() {
     try {
       const [petRes, charRes] = await Promise.all([getMyPet(), getPetCharacters()]);
       setPet(petRes.pet);
+      setEconomy(petRes.economy || null);
       setCharacters(charRes.characters || []);
       if (!petRes.pet) setShowSelect(true);
       if (petRes.pet) setSpeechText(randomMsg(petRes.pet.mood));
@@ -71,7 +99,11 @@ export default function PetPage() {
   }, []);
 
   const loadShop = useCallback(async () => {
-    try { const s = await getPetShop(); setShop(s); }
+    try {
+      const s = await getPetShop();
+      setShop(s);
+      if (s?.economy) setEconomy(s.economy);
+    }
     catch (err) { console.error(err); }
   }, []);
 
@@ -95,17 +127,28 @@ export default function PetPage() {
     if (buying) return;
     setBuying(true);
     setIsEating(true);
+    setActiveFoodId(foodId);
+    setPetReaction('feeding');
+    setPetExpression('eating');
     try {
       const r = await buyPetFood(foodId);
       setPet(r.pet);
       showFeedback(`Fed ${r.food}! Yum!`);
-      setSpeechText('Mmm, delicious!');
+      setSpeechText(['Mmm, delicious!', 'Om nom nom!', 'That hit the spot!'][Math.floor(Math.random() * 3)]);
       loadShop();
     } catch (e) {
       showFeedback(e?.message || 'Not enough Combo!');
+      setActiveFoodId('');
+      setPetReaction('');
+      setPetExpression('');
     } finally {
       setBuying(false);
-      setTimeout(() => setIsEating(false), 800);
+      setTimeout(() => {
+        setIsEating(false);
+        setActiveFoodId('');
+        setPetReaction('');
+        setPetExpression('');
+      }, 1400);
     }
   };
 
@@ -154,10 +197,16 @@ export default function PetPage() {
       const r = await performTrick(trickId);
       if (r.success) {
         setIsTricking(true);
+        setPetReaction('celebrate');
+        setPetExpression('excited');
         setPet(r.pet);
         showFeedback(`+${r.combo_earned} Combo! +${r.bonus_xp} XP!`);
         setSpeechText('TA-DA!');
-        setTimeout(() => setIsTricking(false), 2500);
+        setTimeout(() => {
+          setIsTricking(false);
+          setPetReaction('');
+          setPetExpression('');
+        }, 2500);
       } else {
         showFeedback(r.message || 'Not yet!');
       }
@@ -165,9 +214,17 @@ export default function PetPage() {
   };
 
   const handlePetTap = () => {
+    const options = PET_REACTIONS[pet?.character] || PET_REACTIONS.dojocat;
+    const next = options[Math.floor(Math.random() * options.length)];
     setPetTapped(true);
-    setSpeechText(['Hehe!', '*purrs*', 'Hey!', 'More!'][Math.floor(Math.random() * 4)]);
-    setTimeout(() => setPetTapped(false), 500);
+    setPetReaction(next.reaction);
+    setPetExpression(next.expression);
+    setSpeechText(next.speech);
+    setTimeout(() => {
+      setPetTapped(false);
+      setPetReaction('');
+      setPetExpression('');
+    }, 900);
   };
 
   // ─── Gates ──────────────────────────────────────────
@@ -236,7 +293,9 @@ export default function PetPage() {
             equippedTop={pet.equipped_top}
             hatColor={pet.hat_color} beltColor={pet.belt_color} shoesColor={pet.shoes_color}
             topColor={pet.top_color}
-            isEating={isEating} isTricking={isTricking} size={130} onClick={handlePetTap} />
+            isEating={isEating} isTricking={isTricking} reaction={petReaction}
+            expression={petExpression} foodId={activeFoodId}
+            size={146} onClick={handlePetTap} />
           {/* Speech bubble */}
           <div className="mt-2 relative max-w-[260px]">
             <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-2.5 h-2.5 rotate-45 bg-white/[0.06] border-l border-t border-white/[0.08]" />
@@ -307,13 +366,13 @@ export default function PetPage() {
 
       {/* Tab content */}
       <div className="mt-3">
-        {tab === 'pet' && <PetTab pet={pet} combo={combo_balance} onToggleAvatar={handleToggleAvatar} />}
-        {tab === 'food' && <FoodTab shop={shop} combo={combo_balance} onBuy={handleBuyFood} buying={buying} />}
+        {tab === 'pet' && <PetTab pet={pet} combo={combo_balance} economy={economy} onToggleAvatar={handleToggleAvatar} />}
+        {tab === 'food' && <FoodTab shop={shop} combo={combo_balance} economy={economy} onBuy={handleBuyFood} buying={buying} />}
         {tab === 'clothing' && <ClothingTab pet={pet} shop={shop} onBuy={handleBuyItem} onEquip={handleEquip} onUnequip={handleUnequip} onSetColor={handleSetColor} buying={buying} colorPickerSlot={colorPickerSlot} setColorPickerSlot={setColorPickerSlot} />}
         {tab === 'tricks' && <TricksTab pet={pet} onDemand={handleDemand} onPerform={handlePerformTrick} />}
       </div>
 
-      <p className="text-[10px] text-gray-600 text-center mt-4">Sync PIU scores to earn Combo. Buy food to feed your pet!</p>
+      <p className="text-[10px] text-gray-600 text-center mt-4">Sync PIU scores to earn Combo, then budget it carefully to keep your pet thriving.</p>
 
       <style>{`
         @keyframes slideDown { from { opacity: 0; transform: translate(-50%, -12px); } to { opacity: 1; transform: translate(-50%, 0); } }
@@ -381,19 +440,25 @@ function StatCard({ label, value }) {
 }
 
 // ─── Pet tab ──────────────────────────────────────────
-function PetTab({ pet }) {
+function PetTab({ pet, economy }) {
   return (
     <div className="space-y-2 text-sm text-gray-400">
       <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
         <div className="text-xs text-gray-500 mb-1">About</div>
-        <p className="text-[11px]">Your pet gets hungry and sad over time. Play PIU songs to earn Combo, then buy food from the shop to keep them fed and happy. Unlock tricks by gaining XP!</p>
+        <p className="text-[11px]">Your pet gets hungry and sad over time. Playing songs keeps their spirits up, but food is the real upkeep now, so you need to earn and spend Combo carefully.</p>
       </div>
+      {economy?.target_songs_per_week ? (
+        <div className="bg-amber-500/[0.06] rounded-xl p-3 border border-amber-500/10">
+          <div className="text-xs text-amber-300 mb-1">Upkeep target</div>
+          <p className="text-[11px] text-amber-100/80">A healthy pet now averages about {economy.target_songs_per_week} songs per week to stay comfortably fed.</p>
+        </div>
+      ) : null}
       <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
         <div className="text-xs text-gray-500 mb-1">How to earn Combo</div>
         <ul className="text-[11px] space-y-0.5 list-disc list-inside">
-          <li>Sync PIU scores (higher grade = more Combo)</li>
-          <li>Complete trick demands</li>
-          <li>Hard songs give bonus Combo</li>
+          <li>Sync PIU scores, especially strong grades</li>
+          <li>Play harder songs for bonus Combo</li>
+          <li>Complete trick demands for extra bursts</li>
         </ul>
       </div>
     </div>
@@ -401,10 +466,15 @@ function PetTab({ pet }) {
 }
 
 // ─── Food tab ─────────────────────────────────────────
-function FoodTab({ shop, combo, onBuy, buying }) {
+function FoodTab({ shop, combo, economy, onBuy, buying }) {
   if (!shop) return <div className="text-center text-gray-500 text-sm py-4">Loading shop...</div>;
   return (
     <div className="space-y-1.5">
+      {economy?.target_songs_per_week ? (
+        <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] px-3 py-2 text-[11px] text-gray-400">
+          Feeding is tuned to stay meaningful: plan around roughly <span className="font-semibold text-white/80">{economy.target_songs_per_week} songs/week</span> for steady upkeep.
+        </div>
+      ) : null}
       {shop.foods.map(food => {
         const canAfford = combo >= food.cost;
         return (

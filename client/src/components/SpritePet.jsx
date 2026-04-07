@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useEffect, useState } from 'react';
+import React, { useMemo } from 'react';
 
 /**
  * CSS Pixel Art Pet Renderer — box-shadow technique
@@ -83,14 +83,6 @@ function gridToShadow(grid, colorMap) {
     }
   return shadows.join(',');
 }
-
-// Merge grid B onto grid A (B overwrites non-null cells)
-function mergeGrids(a, b, ox = 0, oy = 0) {
-  for (let y = 0; y < b.length; y++)
-    for (let x = 0; x < b[0].length; x++)
-      if (b[y][x] !== null) setPixel(a, x + ox, y + oy, b[y][x]);
-}
-
 
 // ═══════════════════════════════════════════════════════════════
 // 2. COLOR PALETTES
@@ -239,30 +231,31 @@ function buildFeatures(character) {
       // Ear inner
       fillTriangle(g, CX - 6, hcy - 4, CX - 8, hcy - HEAD_R - 2, CX - 4, hcy - HEAD_R + 1, 'P');
       fillTriangle(g, CX + 6, hcy - 4, CX + 8, hcy - HEAD_R - 2, CX + 4, hcy - HEAD_R + 1, 'P');
-      // Nose (small inverted triangle)
+      // Nose + muzzle
       setPixel(g, CX, hcy + 2, 'N');
       setPixel(g, CX - 1, hcy + 1, 'N');
       setPixel(g, CX + 1, hcy + 1, 'N');
+      fillRect(g, CX - 2, hcy + 2, 5, 2, 'L');
       // Whisker marks
       setPixel(g, CX - 4, hcy + 2, 'R');
       setPixel(g, CX + 4, hcy + 2, 'R');
       setPixel(g, CX - 5, hcy + 1, 'R');
       setPixel(g, CX + 5, hcy + 1, 'R');
+      setPixel(g, CX - 6, hcy + 2, 'R');
+      setPixel(g, CX + 6, hcy + 2, 'R');
       break;
     }
     case 'buu': {
-      // Hair (brown bangs covering top of head)
-      fillEllipse(g, CX, hcy - 4, 7, 4, 'P');
-      fillEllipse(g, CX, hcy - 5, 6, 3, 'P');
-      // Hair highlight
-      setPixel(g, CX - 2, hcy - 7, 'P');
-      setPixel(g, CX + 1, hcy - 8, 'P');
-      setPixel(g, CX, hcy - 7, 'P');
+      // Signature antenna curl
+      fillLine(g, CX + 1, hcy - 6, CX + 3, hcy - 9, 'P');
+      fillLine(g, CX + 3, hcy - 9, CX + 2, hcy - 12, 'P');
+      fillLine(g, CX + 2, hcy - 12, CX - 1, hcy - 12, 'P');
+      setPixel(g, CX - 2, hcy - 12, 'P');
       // Rosy cheeks (always visible)
-      fillRect(g, CX - 6, hcy + 2, 2, 1, 'H');
-      fillRect(g, CX + 5, hcy + 2, 2, 1, 'H');
-      // Small nose
-      setPixel(g, CX, hcy + 1, 'N');
+      fillRect(g, CX - 6, hcy + 2, 2, 2, 'H');
+      fillRect(g, CX + 5, hcy + 2, 2, 2, 'H');
+      // Buu nose + mouth tint
+      fillRect(g, CX - 1, hcy + 1, 3, 2, 'N');
       break;
     }
     case 'devit': {
@@ -298,6 +291,7 @@ function buildFeatures(character) {
       fillTriangle(g, CX + wg.bodyRx, bcy - 3, CX + wg.bodyRx + 4, bcy - 5, CX + wg.bodyRx + 3, bcy, 'S');
       // Nose
       setPixel(g, CX, hcy + 1, 'N');
+      fillRect(g, CX - 1, hcy + 1, 3, 2, 'L');
       // Blush
       fillRect(g, CX - 5, hcy + 2, 2, 1, 'H');
       fillRect(g, CX + 4, hcy + 2, 2, 1, 'H');
@@ -341,11 +335,75 @@ function buildTail(character, weightState) {
 // 5. FACE / EXPRESSION BUILDERS
 // ═══════════════════════════════════════════════════════════════
 
-function buildFace(character, mood) {
+function drawSmile(g, hcy, width = 2, color = 'K') {
+  setPixel(g, CX - width, hcy + 3, color);
+  setPixel(g, CX - 1, hcy + 4, color);
+  setPixel(g, CX, hcy + 4, color);
+  setPixel(g, CX + 1, hcy + 4, color);
+  setPixel(g, CX + width, hcy + 3, color);
+}
+
+function buildFace(character, mood, expression = '') {
   const g = createGrid(GW, GH);
   const hcy = HEAD_CY;
-  const isDevit = character === 'devit';
-  const eyeColor = isDevit ? 'E' : 'E'; // both use E, but devit's palette maps E to red
+  const eyeColor = 'E';
+
+  if (expression === 'wink') {
+    fillRect(g, CX - 5, hcy, 4, 1, eyeColor);
+    fillRect(g, CX + 3, hcy - 1, 2, 3, eyeColor);
+    setPixel(g, CX + 4, hcy - 1, 'W');
+    drawSmile(g, hcy, 2);
+    return g;
+  }
+
+  if (expression === 'smirk' || expression === 'proud') {
+    fillRect(g, CX - 5, hcy, 3, 1, eyeColor);
+    fillRect(g, CX + 2, hcy - 1, 3, 1, eyeColor);
+    setPixel(g, CX - 5, hcy - 1, 'K');
+    setPixel(g, CX + 4, hcy - 2, 'K');
+    setPixel(g, CX - 1, hcy + 3, 'K');
+    setPixel(g, CX, hcy + 4, 'K');
+    setPixel(g, CX + 1, hcy + 4, 'K');
+    setPixel(g, CX + 2, hcy + 4, 'K');
+    return g;
+  }
+
+  if (expression === 'excited' || expression === 'sparkle') {
+    fillRect(g, CX - 4, hcy - 2, 2, 4, eyeColor);
+    fillRect(g, CX + 3, hcy - 2, 2, 4, eyeColor);
+    setPixel(g, CX - 3, hcy - 2, 'W');
+    setPixel(g, CX + 4, hcy - 2, 'W');
+    setPixel(g, CX - 3, hcy + 2, 'W');
+    setPixel(g, CX + 4, hcy + 2, 'W');
+    drawSmile(g, hcy, 2);
+    return g;
+  }
+
+  if (expression === 'soft') {
+    fillRect(g, CX - 4, hcy, 3, 1, eyeColor);
+    fillRect(g, CX + 2, hcy, 3, 1, eyeColor);
+    drawSmile(g, hcy, 1);
+    return g;
+  }
+
+  if (expression === 'grin') {
+    fillRect(g, CX - 4, hcy - 1, 2, 3, eyeColor);
+    fillRect(g, CX + 3, hcy - 1, 2, 3, eyeColor);
+    setPixel(g, CX - 3, hcy - 1, 'W');
+    setPixel(g, CX + 4, hcy - 1, 'W');
+    fillRect(g, CX - 2, hcy + 3, 5, 2, 'W');
+    fillRect(g, CX - 2, hcy + 3, 5, 1, 'K');
+    return g;
+  }
+
+  if (expression === 'eating') {
+    fillRect(g, CX - 5, hcy, 3, 1, eyeColor);
+    fillRect(g, CX + 2, hcy, 3, 1, eyeColor);
+    fillRect(g, CX - 1, hcy + 3, 3, 2, 'N');
+    setPixel(g, CX - 2, hcy + 4, 'K');
+    setPixel(g, CX + 2, hcy + 4, 'K');
+    return g;
+  }
 
   switch (mood) {
     case 'desperate': {
@@ -420,28 +478,30 @@ function buildFace(character, mood) {
       break;
     }
     default: { // happy
-      // Open bright eyes
-      fillRect(g, CX - 4, hcy - 1, 2, 3, eyeColor);
-      fillRect(g, CX + 3, hcy - 1, 2, 3, eyeColor);
-      // Highlights
-      setPixel(g, CX - 3, hcy - 1, 'W');
-      setPixel(g, CX + 4, hcy - 1, 'W');
-      // Buu special: default squinting happy (override)
       if (character === 'buu') {
-        // Clear the open eyes and draw squinting lines
-        fillRect(g, CX - 4, hcy - 1, 2, 3, null);
-        fillRect(g, CX + 3, hcy - 1, 2, 3, null);
-        fillRect(g, CX - 5, hcy, 3, 1, 'E');
-        fillRect(g, CX + 3, hcy, 3, 1, 'E');
-        setPixel(g, CX - 5, hcy - 1, 'E');
-        setPixel(g, CX + 5, hcy - 1, 'E');
+        fillRect(g, CX - 5, hcy, 3, 1, eyeColor);
+        fillRect(g, CX + 3, hcy, 3, 1, eyeColor);
+        setPixel(g, CX - 5, hcy - 1, eyeColor);
+        setPixel(g, CX + 5, hcy - 1, eyeColor);
+        setPixel(g, CX - 1, hcy + 4, 'K');
+        setPixel(g, CX, hcy + 3, 'K');
+        setPixel(g, CX + 1, hcy + 3, 'K');
+        setPixel(g, CX + 2, hcy + 4, 'K');
+      } else if (character === 'pixiu') {
+        fillRect(g, CX - 4, hcy - 1, 2, 3, eyeColor);
+        fillRect(g, CX + 3, hcy - 1, 2, 3, eyeColor);
+        setPixel(g, CX - 3, hcy - 1, 'W');
+        setPixel(g, CX + 4, hcy - 1, 'W');
+        setPixel(g, CX - 3, hcy + 1, 'W');
+        setPixel(g, CX + 4, hcy + 1, 'W');
+        drawSmile(g, hcy, 1);
+      } else {
+        fillRect(g, CX - 4, hcy - 1, 2, 3, eyeColor);
+        fillRect(g, CX + 3, hcy - 1, 2, 3, eyeColor);
+        setPixel(g, CX - 3, hcy - 1, 'W');
+        setPixel(g, CX + 4, hcy - 1, 'W');
+        drawSmile(g, hcy, character === 'devit' ? 1 : 2);
       }
-      // Smile
-      setPixel(g, CX - 2, hcy + 3, 'K');
-      setPixel(g, CX - 1, hcy + 4, 'K');
-      setPixel(g, CX, hcy + 4, 'K');
-      setPixel(g, CX + 1, hcy + 4, 'K');
-      setPixel(g, CX + 2, hcy + 3, 'K');
       break;
     }
   }
@@ -832,6 +892,92 @@ function buildShoes(shoeId, color, weightState) {
   return g;
 }
 
+const DEFAULT_ICONIC_LOOKS = {
+  dojocat: {
+    hat: { id: 'chicken-hat', color: '#f5edd0' },
+    top: { id: 'denim-jacket', color: '#42649f' },
+    belt: { id: 'medal-chain', color: '#d4a43a' },
+  },
+  buu: {
+    hat: { id: 'chicken-hat', color: '#f3f0df' },
+    top: { id: 'leather-jacket', color: '#24283b' },
+    belt: { id: 'medal-chain', color: '#b88b3e' },
+  },
+  pixiu: {
+    hat: { id: 'chicken-hat', color: '#fff0ea' },
+    top: { id: 'traditional-robe', color: '#d6548d' },
+    belt: { id: 'sash', color: '#d9b04a' },
+  },
+};
+
+function buildFood(foodId) {
+  const g = createGrid(12, 12);
+  switch (foodId) {
+    case 'pump-chow':
+      fillRect(g, 2, 5, 8, 4, '1');
+      fillRect(g, 3, 4, 6, 1, '2');
+      break;
+    case 'beat-bites':
+      fillCircle(g, 6, 6, 4, '1');
+      setPixel(g, 4, 5, '2');
+      setPixel(g, 7, 7, '2');
+      setPixel(g, 8, 4, '2');
+      break;
+    case 'slam-grub':
+      fillEllipse(g, 6, 6, 4, 3, '1');
+      fillRect(g, 1, 5, 2, 2, '2');
+      fillRect(g, 9, 5, 2, 2, '2');
+      break;
+    case 'step-fuel':
+      fillTriangle(g, 5, 1, 9, 6, 6, 11, '1');
+      fillTriangle(g, 7, 1, 3, 6, 6, 11, '2');
+      break;
+    case 'rhythm-rations':
+      fillCircle(g, 6, 6, 4, '1');
+      fillLine(g, 6, 2, 6, 10, '2');
+      fillLine(g, 2, 6, 10, 6, '2');
+      break;
+    case 'gargoyle-munch':
+      fillRect(g, 2, 4, 8, 5, '1');
+      setPixel(g, 4, 3, '2');
+      setPixel(g, 7, 3, '2');
+      break;
+    case 'pad-power':
+      fillRect(g, 3, 2, 6, 8, '1');
+      fillRect(g, 4, 3, 4, 6, 'W');
+      setPixel(g, 6, 6, '2');
+      break;
+    case 'dance-dust':
+      setPixel(g, 6, 2, '1');
+      setPixel(g, 3, 5, '1');
+      setPixel(g, 6, 5, '1');
+      setPixel(g, 9, 5, '1');
+      setPixel(g, 4, 8, '1');
+      setPixel(g, 8, 8, '1');
+      break;
+    case 'doof-bites':
+      fillRect(g, 3, 5, 6, 3, '1');
+      setPixel(g, 4, 4, '2');
+      setPixel(g, 7, 4, '2');
+      setPixel(g, 5, 8, '2');
+      break;
+    case 'adrenaline-chow':
+      fillTriangle(g, 6, 1, 10, 10, 2, 10, '1');
+      fillTriangle(g, 6, 3, 8, 8, 4, 8, '2');
+      break;
+    case 'banya-biscuits':
+      fillCircle(g, 6, 6, 4, '1');
+      setPixel(g, 6, 2, '2');
+      setPixel(g, 3, 5, '2');
+      setPixel(g, 9, 5, '2');
+      break;
+    default:
+      fillRect(g, 3, 4, 6, 4, '1');
+      break;
+  }
+  return g;
+}
+
 
 // ═══════════════════════════════════════════════════════════════
 // 7. SHADOW COMPOSITION
@@ -883,6 +1029,24 @@ const PIXEL_ART_STYLES = `
     0%, 100% { transform: translateY(0); }
     50% { transform: translateY(-0.4em); }
   }
+  @keyframes dojoIdle {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    35% { transform: translateY(-0.35em) rotate(-1deg); }
+    70% { transform: translateY(-0.15em) rotate(1deg); }
+  }
+  @keyframes buuIdle {
+    0%, 100% { transform: translateY(0) scale(1, 1); }
+    50% { transform: translateY(-0.25em) scale(1.03, 0.98); }
+  }
+  @keyframes devitIdle {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    40% { transform: translateY(-0.55em) rotate(-2deg); }
+    80% { transform: translateY(-0.1em) rotate(2deg); }
+  }
+  @keyframes pixiuIdle {
+    0%, 100% { transform: translateY(0) translateX(0); }
+    50% { transform: translateY(-0.3em) translateX(0.2em); }
+  }
   @keyframes petBounce {
     0%, 100% { transform: translateY(0) scaleY(1); }
     25% { transform: translateY(-1.5em) scaleY(1.05); }
@@ -896,24 +1060,61 @@ const PIXEL_ART_STYLES = `
     75% { transform: rotate(-10deg) translateY(-1em); }
     100% { transform: rotate(0deg); }
   }
-  @keyframes armWave {
-    0%, 100% { transform: rotate(0deg); }
-    50% { transform: rotate(-12deg); }
+  @keyframes petKata {
+    0% { transform: translateY(0) rotate(0deg) scale(1); }
+    30% { transform: translateY(-0.8em) rotate(-4deg) scale(1.04); }
+    60% { transform: translateY(-0.2em) rotate(4deg) scale(1.01); }
+    100% { transform: translateY(0) rotate(0deg) scale(1); }
   }
-  @keyframes armWaveR {
-    0%, 100% { transform: rotate(0deg); }
-    50% { transform: rotate(12deg); }
+  @keyframes petBuuSquish {
+    0%, 100% { transform: translateY(0) scale(1, 1); }
+    30% { transform: translateY(0.15em) scale(1.08, 0.92); }
+    65% { transform: translateY(-0.3em) scale(0.96, 1.04); }
+  }
+  @keyframes petDevitHop {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    30% { transform: translateY(-1.15em) rotate(-6deg); }
+    60% { transform: translateY(-0.15em) rotate(6deg); }
+  }
+  @keyframes petPixiuBless {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    35% { transform: translateY(-0.55em) rotate(-2deg); }
+    70% { transform: translateY(-0.15em) rotate(2deg); }
   }
   @keyframes tailWag {
     0%, 100% { transform: scaleX(1); }
     50% { transform: scaleX(-1); }
   }
+  @keyframes petFoodTravel {
+    0% { transform: translate(-6em, 9em) scale(0.7); opacity: 0; }
+    15% { opacity: 1; }
+    65% { transform: translate(-1.4em, 3.8em) scale(1); opacity: 1; }
+    100% { transform: translate(0.1em, 2.6em) scale(0.25); opacity: 0; }
+  }
   .pet-breathe { animation: petBreathe 3s ease-in-out infinite; }
   .pet-eating { animation: petBounce 0.6s ease-in-out infinite; }
   .pet-tricking { animation: petSpin 1s ease-in-out infinite; }
-  .pet-arm-l { animation: armWave 3s ease-in-out infinite; transform-origin: right center; }
-  .pet-arm-r { animation: armWaveR 3s ease-in-out infinite; transform-origin: left center; }
   .pet-tail { animation: tailWag 2s ease-in-out infinite; }
+  .pet-idle-dojocat { animation: dojoIdle 3.4s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
+  .pet-idle-buu { animation: buuIdle 3.1s cubic-bezier(0.25, 1, 0.5, 1) infinite; }
+  .pet-idle-devit { animation: devitIdle 2.7s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
+  .pet-idle-pixiu { animation: pixiuIdle 3.8s cubic-bezier(0.25, 1, 0.5, 1) infinite; }
+  .pet-react-dojocat, .pet-react-kata, .pet-react-proud, .pet-react-swish { animation: petKata 700ms cubic-bezier(0.22, 1, 0.36, 1); }
+  .pet-react-buu, .pet-react-squish, .pet-react-wobble, .pet-react-swagger { animation: petBuuSquish 700ms cubic-bezier(0.22, 1, 0.36, 1); }
+  .pet-react-devit, .pet-react-hop, .pet-react-dart, .pet-react-mischief { animation: petDevitHop 650ms cubic-bezier(0.22, 1, 0.36, 1); }
+  .pet-react-pixiu, .pet-react-bless, .pet-react-sway, .pet-react-nod { animation: petPixiuBless 800ms cubic-bezier(0.22, 1, 0.36, 1); }
+  .pet-food {
+    animation: petFoodTravel 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    transform-origin: center center;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pixel-pet-wrap *,
+    .pixel-pet-wrap {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
 `;
 
 
@@ -953,12 +1154,17 @@ export default function SpritePet({
   topColor = '',
   isEating = false,
   isTricking = false,
+  reaction = '',
+  expression = '',
+  foodId = '',
   size = 140,
   className = '',
   onClick,
 }) {
   const palette = PALETTES[character] || PALETTES.dojocat;
   const pixelSize = size / GW;
+  const iconicLook = DEFAULT_ICONIC_LOOKS[character] || null;
+  const hasReaction = !!reaction && !isEating && !isTricking;
 
   // Memoize all grid computations
   const layers = useMemo(() => {
@@ -975,7 +1181,7 @@ export default function SpritePet({
     const featShadow = composeShadow(featGrid, palette);
 
     // Face / expression
-    const faceGrid = buildFace(character, mood);
+    const faceGrid = buildFace(character, mood, expression);
     const faceShadow = composeShadow(faceGrid, palette);
 
     // Tail
@@ -991,7 +1197,23 @@ export default function SpritePet({
     const groundShadow = gridToShadow(shadowGrid, { X: 'rgba(0,0,0,0.15)' });
 
     // Clothing layers
-    let hatShadow = '', topShadow = '', beltShadow2 = '', shoesShadow = '';
+    let hatShadow = '', topShadow = '', beltShadow2 = '', shoesShadow = '', foodShadow = '';
+    const defaultHat = equippedHat ? null : iconicLook?.hat;
+    const defaultTop = equippedTop ? null : iconicLook?.top;
+    const defaultBelt = equippedBelt ? null : iconicLook?.belt;
+
+    if (defaultHat) {
+      const hg = buildHat(defaultHat.id, defaultHat.color, character);
+      hatShadow = gridToShadow(hg, getClothingColorMap(defaultHat.color));
+    }
+    if (defaultTop) {
+      const tg = buildTop(defaultTop.id, defaultTop.color, weightState);
+      topShadow = gridToShadow(tg, getClothingColorMap(defaultTop.color));
+    }
+    if (defaultBelt) {
+      const bg = buildBelt(defaultBelt.id, defaultBelt.color, weightState);
+      beltShadow2 = gridToShadow(bg, getClothingColorMap(defaultBelt.color));
+    }
     if (equippedHat) {
       const hg = buildHat(equippedHat, hatColor, character);
       hatShadow = gridToShadow(hg, getClothingColorMap(hatColor));
@@ -1008,11 +1230,33 @@ export default function SpritePet({
       const sg = buildShoes(equippedShoes, shoesColor, weightState);
       shoesShadow = gridToShadow(sg, getClothingColorMap(shoesColor));
     }
+    if (foodId) {
+      const fg = buildFood(foodId);
+      foodShadow = gridToShadow(fg, {
+        '1': '#f6d17a',
+        '2': '#d95c4f',
+        W: '#ffffff',
+      });
+    }
 
-    return { baseShadow, armsShadow, featShadow, faceShadow, tailShadow, groundShadow, hatShadow, topShadow, beltShadow2, shoesShadow };
-  }, [character, weightState, mood, equippedHat, equippedBelt, equippedShoes, equippedTop, hatColor, beltColor, shoesColor, topColor, palette]);
+    return { baseShadow, armsShadow, featShadow, faceShadow, tailShadow, groundShadow, hatShadow, topShadow, beltShadow2, shoesShadow, foodShadow };
+  }, [character, weightState, mood, expression, equippedHat, equippedBelt, equippedShoes, equippedTop, hatColor, beltColor, shoesColor, topColor, foodId, iconicLook, palette]);
 
-  const animClass = isTricking ? 'pet-tricking' : isEating ? 'pet-eating' : 'pet-breathe';
+  const idleClass = `pet-idle-${character}`;
+  const reactionClass = hasReaction
+    ? (
+      ['dojocat', 'buu', 'devit', 'pixiu'].includes(character)
+        ? `pet-react-${reaction}`
+        : ''
+    )
+    : '';
+  const animClass = isTricking
+    ? 'pet-tricking'
+    : isEating
+      ? 'pet-eating'
+      : hasReaction
+        ? reactionClass
+        : idleClass;
 
   return (
     <div
@@ -1059,6 +1303,14 @@ export default function SpritePet({
         {/* Hat (on top of everything) */}
         {layers.hatShadow && <PixelLayer shadow={layers.hatShadow} />}
       </div>
+
+      {layers.foodShadow && (
+        <PixelLayer
+          shadow={layers.foodShadow}
+          className="pet-food"
+          style={{ left: '50%', top: '0.5em' }}
+        />
+      )}
     </div>
   );
 }
