@@ -370,7 +370,7 @@ function ShareButton({ path }) {
 }
 
 // Pump Button
-function PumpButton({ postId, initialCount, initialPumped }) {
+function PumpButton({ postId, initialCount, initialPumped, postUsername, postContentSnippet, postKind }) {
   const { user } = useAuth();
   const [pumped, setPumped] = useState(!!initialPumped);
   const [count, setCount] = useState(initialCount || 0);
@@ -386,6 +386,12 @@ function PumpButton({ postId, initialCount, initialPumped }) {
       if (res.pumped) {
         setAnimating(true);
         setTimeout(() => setAnimating(false), 600);
+        // Notify floating pet companion about the pump
+        try {
+          window.dispatchEvent(new CustomEvent('pet-feed-action', {
+            detail: { action: 'pump', postId, username: postUsername || '', snippet: postContentSnippet || '', postKind: postKind || '', pumpCount: res.pump_count },
+          }));
+        } catch (_) {}
       }
     } catch (err) {
       console.error(err);
@@ -1154,6 +1160,9 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
             postId={post.id}
             initialCount={post.pump_count || 0}
             initialPumped={post.user_pumped}
+            postUsername={post.username}
+            postContentSnippet={(visibleContent || '').slice(0, 120)}
+            postKind={post.post_kind || ''}
           />
           <CommentSection
             postId={post.id}

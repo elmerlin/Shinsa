@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { getMyPet } from '../../utils/api';
 import SpritePet from '../SpritePet';
 
+// ─── Idle speech pools ───────────────────────────────────────
 const SPEECH_IDLE = [
   'Hey there!', "Let's play!", 'How are you?', 'Feed me?', "I'm here!",
   'Nice day!', 'Pet me!', 'Combo time!', "What's up?",
@@ -10,9 +11,95 @@ const SPEECH_IDLE = [
 const SPEECH_HUNGRY = ["I'm hungry...", 'Feed me...', 'So empty...'];
 const SPEECH_HAPPY = ["I'm great!", 'Love this!', 'Feeling good!'];
 
+// ─── Pump reaction speech pools ──────────────────────────────
+const PUMP_GENERIC = [
+  'Nice pump!', 'Spread the love!', 'You pumped it! 🔥', 'That was fire!',
+  'Pumping is caring!', 'Good vibes only!', 'Keep pumping!', 'Energy!',
+  'The people approve!', 'Community moment!', 'You love to see it!',
+  'Hype train! 🚂', 'Pump it up!', "That's the spirit!",
+  'Good taste!', 'Respect ✊', 'The crowd goes wild!',
+];
+
+// Pump reactions that reference the post author — {name} is replaced
+const PUMP_AUTHOR = [
+  '{name} earned that pump!', 'Big ups for {name}!', '{name} is on fire!',
+  'Showing {name} some love!', 'You and {name} — vibes!',
+  '{name} will appreciate that!', "Let's go {name}!",
+  '{name} is putting in work!', 'Respect to {name}!',
+  '{name} just got pumped!', "That's {name} for you!",
+  'Another one for {name}!', '{name} stays winning!',
+  'Pump for {name}! 💪', '{name} needs to see this love!',
+];
+
+// Post-pump comment nudges
+const COMMENT_NUDGE = [
+  'Leave a comment too!', 'Say something nice?', 'Drop a comment!',
+  'Words > silence!', 'They\'d love a comment!', 'Comment = extra love!',
+  'A comment goes far!', 'Tell them how you feel!', 'Share your thoughts!',
+  'Pumps are cool but comments hit different!', 'Type something!',
+  'Comments make their day!', 'Don\'t be shy, comment!',
+  'Pump ✓ Comment next?', 'One more step — comment!',
+  'A comment would be 🔥', 'Words of encouragement?',
+  "Wouldn't a comment be nice?", 'Let them know!', 'Say the thing!',
+];
+
+// ─── Hardcoded user-specific reactions ───────────────────────
+const USER_REACTIONS = {
+  afii: [
+    'No back pain I hope!',
+    'Vying for the best brown player!',
+    'Mr. I see arrow, I hit, has done it again!',
+    'He screamed like Moonearth to do this!',
+    'Afii plays like his life depends on it!',
+    'Back pain is temporary, SSS is forever!',
+    'The Brown Baron strikes again!',
+    'His chiropractor sends a thank-you note!',
+    'Afii diff!',
+    'Built different, plays different!',
+  ],
+  soft: [
+    'Bad bitch 不 cry',
+    'The twist queen is back in business!',
+    'Anything less than SSS is a fail',
+    'She obviously hates this game',
+    'Reconsidering her life choices',
+    'Queen of twists, ruler of pads!',
+    'Another day, another slay!',
+    'She makes it look easy!',
+    'SSS or she\'s filing a complaint!',
+    'Soft by name, ruthless by game!',
+  ],
+};
+
+function pick(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+/**
+ * Build a contextual pump speech line.
+ * Priority: user-specific > author-aware > generic
+ */
+function buildPumpSpeech(detail) {
+  const username = (detail?.username || '').toLowerCase().trim();
+  const name = detail?.username || '';
+
+  // 40% chance of user-specific joke if available
+  if (username && USER_REACTIONS[username] && Math.random() < 0.4) {
+    return pick(USER_REACTIONS[username]);
+  }
+
+  // 50% chance of author-aware line
+  if (name && Math.random() < 0.5) {
+    return pick(PUMP_AUTHOR).replace(/\{name\}/g, name);
+  }
+
+  return pick(PUMP_GENERIC);
+}
+
 /**
  * FloatingPetCompanion — a Clippy-style pet that floats on every page.
  * Shows a small sprite in the bottom-right. Tap to expand a status card.
+ * Reacts contextually to feed actions (pumps, comments).
  * Hidden on the pet page itself and on chromeless routes.
  */
 export default function FloatingPetCompanion() {
@@ -23,8 +110,10 @@ export default function FloatingPetCompanion() {
   const [hidden, setHidden] = useState(() => localStorage.getItem('pet_clippy_hidden') === '1');
   const [speech, setSpeech] = useState('');
   const [showSpeech, setShowSpeech] = useState(false);
+  const [petReaction, setPetReaction] = useState('');
   const speechTimer = useRef(null);
   const refreshTimer = useRef(null);
+  const reactiveSpeechTimer = useRef(null);
   const mounted = useRef(true);
 
   // Don't show on pet page or chromeless routes
@@ -36,6 +125,18 @@ export default function FloatingPetCompanion() {
       const res = await getMyPet();
       if (mounted.current) setPet(res.pet || null);
     } catch { /* no pet or not logged in */ }
+  }, []);
+
+  // Show a speech bubble for a duration, then hide it
+  const showBubble = useCallback((text, duration = 3500) => {
+    if (!mounted.current) return;
+    setSpeech(text);
+    setShowSpeech(true);
+    // Clear any pending hide
+    clearTimeout(reactiveSpeechTimer.current);
+    reactiveSpeechTimer.current = setTimeout(() => {
+      if (mounted.current) setShowSpeech(false);
+    }, duration);
   }, []);
 
   useEffect(() => {
@@ -55,21 +156,55 @@ export default function FloatingPetCompanion() {
     };
   }, [loadPet]);
 
-  // Occasional speech bubble
+  // ─── Reactive speech: respond to feed actions ───────────────
+  useEffect(() => {
+    if (!pet || isPetPage || isChromeless || hidden) return;
+
+    let nudgeTimeout = null;
+
+    const onFeedAction = (e) => {
+      const detail = e.detail || {};
+      if (detail.action === 'pump') {
+        // Immediate pump reaction
+        const line = buildPumpSpeech(detail);
+        showBubble(line, 3200);
+
+        // Trigger a happy sprite reaction
+        setPetReaction('happy');
+        setTimeout(() => { if (mounted.current) setPetReaction(''); }, 1200);
+
+        // Follow up with a comment nudge after 4-6s
+        clearTimeout(nudgeTimeout);
+        nudgeTimeout = setTimeout(() => {
+          if (mounted.current) {
+            showBubble(pick(COMMENT_NUDGE), 3500);
+          }
+        }, 4000 + Math.random() * 2000);
+      }
+    };
+
+    window.addEventListener('pet-feed-action', onFeedAction);
+    return () => {
+      window.removeEventListener('pet-feed-action', onFeedAction);
+      clearTimeout(nudgeTimeout);
+    };
+  }, [pet, isPetPage, isChromeless, hidden, showBubble]);
+
+  // ─── Idle speech (ambient chatter when nothing is happening) ─
   useEffect(() => {
     if (!pet || isPetPage || isChromeless || hidden) return;
     const speak = () => {
+      // Don't interrupt reactive speech
+      if (showSpeech) return;
       const pool = pet.hunger < 30 ? SPEECH_HUNGRY : pet.mood === 'happy' ? SPEECH_HAPPY : SPEECH_IDLE;
-      setSpeech(pool[Math.floor(Math.random() * pool.length)]);
-      setShowSpeech(true);
-      setTimeout(() => { if (mounted.current) setShowSpeech(false); }, 3500);
+      showBubble(pick(pool), 3500);
     };
-    // First speech after 5s
-    const initial = setTimeout(speak, 5000);
-    // Then every 20-40s
-    speechTimer.current = setInterval(speak, 20000 + Math.random() * 20000);
+    // First idle speech after 8s (give reactive speech priority)
+    const initial = setTimeout(speak, 8000);
+    // Then every 25-45s
+    speechTimer.current = setInterval(speak, 25000 + Math.random() * 20000);
     return () => { clearTimeout(initial); clearInterval(speechTimer.current); };
-  }, [pet, isPetPage, isChromeless, hidden]);
+  }, [pet, isPetPage, isChromeless, hidden, showBubble, showSpeech]);
 
   // Close expanded card on route change
   useEffect(() => { setExpanded(false); }, [location.pathname]);
@@ -89,7 +224,7 @@ export default function FloatingPetCompanion() {
         {/* Speech bubble */}
         {showSpeech && !expanded && (
           <div className="absolute bottom-full right-0 mb-1 animate-[clippyFadeIn_200ms_ease-out]">
-            <div className="relative bg-gray-950/95 border border-white/[0.1] rounded-xl px-2.5 py-1.5 text-[10px] text-gray-300 whitespace-nowrap shadow-lg backdrop-blur-sm">
+            <div className="relative bg-gray-950/95 border border-white/[0.1] rounded-xl px-2.5 py-1.5 text-[10px] text-gray-300 whitespace-nowrap shadow-lg backdrop-blur-sm max-w-[200px]" style={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>
               {speech}
               <div className="absolute -bottom-1 right-4 w-2 h-2 rotate-45 bg-gray-950/95 border-r border-b border-white/[0.1]" />
             </div>
@@ -120,6 +255,7 @@ export default function FloatingPetCompanion() {
             hatColor={pet.hat_color}
             topColor={pet.top_color}
             size={46}
+            reaction={petReaction}
           />
         </button>
 
