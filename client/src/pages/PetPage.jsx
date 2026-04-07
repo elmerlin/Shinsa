@@ -8,6 +8,8 @@ import {
   buyPetHabitatItem, equipPetHabitat, setPetTrainingPath, getPetLeaderboard,
 } from '../utils/api';
 import SpritePet from '../components/SpritePet';
+import PetCoachPanel from '../components/pet/PetCoachPanel';
+import PetToyOverlay from '../components/pet/PetToyOverlay';
 
 // ─── Sound ─────────────────────────────────────────────────────────
 let _audioCtx = null;
@@ -159,6 +161,7 @@ export default function PetPage() {
   const [trainingBusy, setTrainingBusy] = useState(false);
   const [rareSpeech, setRareSpeech] = useState(false);
   const [leaderboard, setLeaderboard] = useState(null);
+  const [activeToyVisual, setActiveToyVisual] = useState(null);
 
   const loadPet = useCallback(async () => {
     try {
@@ -409,8 +412,13 @@ export default function PetPage() {
     try {
       const r = await usePetToy(toyId);
       setPet(r.pet);
-      triggerPetResponse(r.speech, r.reaction, r.expression, 1600);
+      const dur = r.toy_visual?.duration_ms || 1600;
+      triggerPetResponse(r.speech, r.reaction, r.expression, dur);
       showFeedback(r.preference === 'favorite' ? 'Favourite toy time' : 'Toy chest opened');
+      if (r.toy_visual?.overlay_id) {
+        setActiveToyVisual(r.toy_visual);
+        setTimeout(() => setActiveToyVisual(null), dur + 200);
+      }
     } catch (e) {
       showFeedback(e?.message || 'Could not use toy');
     } finally {
@@ -580,7 +588,7 @@ export default function PetPage() {
                 {pet.form.desc}
               </div>
             ) : null}
-            <div className="flex items-end justify-center">
+            <div className="flex items-end justify-center relative">
               <SpritePet
                 character={pet.character} weightState={pet.weight_state} mood={pet.mood}
                 equippedHat={pet.equipped_hat} equippedBelt={pet.equipped_belt} equippedShoes={pet.equipped_shoes}
@@ -589,7 +597,13 @@ export default function PetPage() {
                 topColor={pet.top_color}
                 isEating={isEating} isTricking={isTricking} reaction={petReaction}
                 expression={petExpression} foodId={activeFoodId}
+                actionState={activeToyVisual?.action_state || ''}
                 size={170} onClick={handlePetTap} />
+              <PetToyOverlay
+                overlayId={activeToyVisual?.overlay_id}
+                active={!!activeToyVisual}
+                durationMs={activeToyVisual?.duration_ms || 1600}
+              />
             </div>
           </div>
           {/* Demand banner */}
@@ -677,6 +691,7 @@ export default function PetPage() {
             onBuyToy={handleBuyToy}
             onUseToy={handleUseToy}
             onSetTrainingPath={handleSetTrainingPath}
+            onTabSwitch={setTab}
           />
         )}
         {tab === 'habitat' && (
@@ -1204,9 +1219,12 @@ function StatCard({ label, value }) {
 }
 
 // ─── Pet tab ──────────────────────────────────────────
-function PetTab({ pet, shop, combo, economy, interactionBusy, activityBusy, missionBusyId, toyBusy, trainingBusy, onAction, onActivity, onClaimMission, onBuyToy, onUseToy, onSetTrainingPath }) {
+function PetTab({ pet, shop, combo, economy, interactionBusy, activityBusy, missionBusyId, toyBusy, trainingBusy, onAction, onActivity, onClaimMission, onBuyToy, onUseToy, onSetTrainingPath, onTabSwitch }) {
   return (
     <div className="space-y-3 text-sm text-gray-400">
+      {pet.companion_coach && (
+        <PetCoachPanel coach={pet.companion_coach} character={pet.character} onTabSwitch={onTabSwitch} />
+      )}
       <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
         <div className="text-xs text-gray-500 mb-1">Personality</div>
         <p className="text-[11px] text-white/80">{pet.personality?.title}</p>

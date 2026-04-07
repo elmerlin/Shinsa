@@ -323,65 +323,274 @@ const PET_ACTIVITIES = {
   },
 };
 
+// ─── Companion Coach ──────────────────────────────────────────────
+const COACH_TEMPLATES = {
+  care: {
+    headlines: {
+      dojocat: 'A warrior needs fuel.',
+      buu: 'Tummy noises... loud ones.',
+      devit: 'Running on fumes here.',
+      pixiu: 'The flame needs tending.',
+    },
+    suggestions: {
+      dojocat: 'Feed me before we train. Discipline starts with upkeep.',
+      buu: 'I can\'t bounce on an empty belly. Snacks first!',
+      devit: 'Even chaos needs energy. Don\'t let me fade.',
+      pixiu: 'Nourish the bond. A hungry guardian is a distracted one.',
+    },
+    focus: 'Pet care',
+    why: 'Your pet is hungry or low on energy — stats recover slower when neglected.',
+    cta_label: 'Feed now',
+    related_surface: 'feed',
+  },
+  recovery: {
+    headlines: {
+      dojocat: 'Rest period.',
+      buu: 'Nap time vibes.',
+      devit: 'Even I need a breather.',
+      pixiu: 'A moment of stillness.',
+    },
+    suggestions: {
+      dojocat: 'We trained hard. Let your companion recharge before the next push.',
+      buu: 'Low energy means grumpy gremlin. Let me recover a bit.',
+      devit: 'I can go harder after a rest. Trust the cooldown.',
+      pixiu: 'Patience restores what haste depletes.',
+    },
+    focus: 'Rest & recharge',
+    why: 'Energy is low — activities cost more than they return right now.',
+    cta_label: 'Rest',
+    related_surface: 'pet',
+  },
+  accuracy: {
+    headlines: {
+      dojocat: 'Sharpen the form.',
+      buu: 'Grade obsession mode!',
+      devit: 'Hit cleaner.',
+      pixiu: 'Precision honours the path.',
+    },
+    suggestions: {
+      dojocat: 'Focus on AAA-or-better clears. Your timing can go higher.',
+      buu: 'Go for fewer songs but cleaner grades today.',
+      devit: 'Pick a chart you almost AAA and nail it.',
+      pixiu: 'A single perfect clear teaches more than ten rushed ones.',
+    },
+    focus: 'Grade improvement',
+    why: 'Your accuracy path benefits most from high-grade plays right now.',
+    cta_label: 'Train accuracy',
+    related_surface: 'training',
+  },
+  stamina: {
+    headlines: {
+      dojocat: 'Push the level ceiling.',
+      buu: 'Heavy set incoming!',
+      devit: 'Time to suffer.',
+      pixiu: 'Endurance reveals character.',
+    },
+    suggestions: {
+      dojocat: 'Try clearing three level 18+ charts this week.',
+      buu: 'You haven\'t done enough hard charts lately. Let\'s grind.',
+      devit: 'Higher levels mean more mastery. Stop playing it safe.',
+      pixiu: 'The mountain does not move. You must climb.',
+    },
+    focus: 'Hard chart clears',
+    why: 'Your stamina path needs level 18+ clears to progress efficiently.',
+    cta_label: 'Train stamina',
+    related_surface: 'training',
+  },
+  tech: {
+    headlines: {
+      dojocat: 'Footwork check.',
+      buu: 'Doubles, doubles, doubles.',
+      devit: 'Get clever.',
+      pixiu: 'The silk path demands agility.',
+    },
+    suggestions: {
+      dojocat: 'Work in some doubles charts or tricky footwork patterns.',
+      buu: 'You haven\'t touched doubles much. Even one today helps.',
+      devit: 'Try a doubles chart at your comfort level. Expand the toolkit.',
+      pixiu: 'New movement vocabulary strengthens the bond.',
+    },
+    focus: 'Doubles & footwork',
+    why: 'Your tech path grows fastest from doubles play and varied chart types.',
+    cta_label: 'Try doubles',
+    related_surface: 'training',
+  },
+  social: {
+    headlines: {
+      dojocat: 'Show the scene.',
+      buu: 'Replay diva mode.',
+      devit: 'Feed presence.',
+      pixiu: 'Let the light be seen.',
+    },
+    suggestions: {
+      dojocat: 'Post a replay of a clean clear. The dojo notices.',
+      buu: 'Record a replay! I want to be famous.',
+      devit: 'One good replay clip is worth more than ten silent clears.',
+      pixiu: 'Share your journey. Others draw strength from your progress.',
+    },
+    focus: 'Replay & sharing',
+    why: 'Your social path thrives on replays and community visibility.',
+    cta_label: 'Post a replay',
+    related_surface: 'profile',
+  },
+  tournament: {
+    headlines: {
+      dojocat: 'Bracket prep.',
+      buu: 'Tournament energy!',
+      devit: 'Stage mode.',
+      pixiu: 'The arena calls.',
+    },
+    suggestions: {
+      dojocat: 'Enter an Hour of Power or weekly challenge to sharpen your edge.',
+      buu: 'You should do an HoP run — it\'s where the hype lives.',
+      devit: 'Weekly challenge or HoP. Pick one and commit.',
+      pixiu: 'Ceremonial challenge sharpens both player and companion.',
+    },
+    focus: 'Competitive readiness',
+    why: 'Your tournament path benefits from challenge entries and HoP runs.',
+    cta_label: 'Join event',
+    related_surface: 'live',
+  },
+  consistency: {
+    headlines: {
+      dojocat: 'Keep the rhythm.',
+      buu: 'Daily vibes.',
+      devit: 'Steady wins.',
+      pixiu: 'The garden grows with patience.',
+    },
+    suggestions: {
+      dojocat: 'Feed me and play a few songs today. Consistency is the real grind.',
+      buu: 'Just check in daily. I remember who shows up.',
+      devit: 'Even a short session counts. Don\'t break the streak.',
+      pixiu: 'Daily care compounds. Small acts build the deepest bonds.',
+    },
+    focus: 'Daily routine',
+    why: 'Consistent daily engagement gives the strongest long-term bond growth.',
+    cta_label: 'Daily check-in',
+    related_surface: 'pet',
+  },
+};
+
+function getCoachPriority(pet, summary) {
+  const hunger = computeDecayed(pet.fullness, pet.last_fed_at, HUNGER_DECAY_PER_HOUR);
+  const energy = getStateValue(pet.energy || 65, pet.updated_at || pet.last_fed_at, ENERGY_DECAY_PER_HOUR);
+
+  // Urgent care
+  if (hunger < 20 || energy < 12) return 'care';
+  if (hunger < 35 && energy < 25) return 'recovery';
+
+  const path = pet.active_training_path || 'consistency';
+  const played7d = summary.plays_7d || 0;
+  const playedToday = summary.plays_today || 0;
+  const highGrades7d = summary.high_grades_7d || 0;
+  const doubles7d = summary.doubles_7d || 0;
+  const hard7d = summary.hard_7d || 0;
+  const replays7d = summary.replays_7d || 0;
+  const hop7d = summary.hop_sessions_7d || 0;
+
+  // Not played at all this week
+  if (played7d === 0) return 'consistency';
+
+  // Path-aware priorities
+  if (path === 'accuracy' && played7d > 0 && highGrades7d / played7d < 0.3) return 'accuracy';
+  if (path === 'stamina' && hard7d < 2) return 'stamina';
+  if (path === 'tech' && doubles7d === 0) return 'tech';
+  if (path === 'social' && replays7d === 0) return 'social';
+  if (path === 'tournament' && hop7d === 0 && !(summary.weekly_challenge_entries > 0)) return 'tournament';
+
+  // General gaps
+  if (energy < 20) return 'recovery';
+  if (replays7d === 0 && played7d >= 5) return 'social';
+  if (hard7d === 0 && (summary.max_level_all || 0) >= 16) return 'stamina';
+  if (doubles7d === 0 && played7d >= 8) return 'tech';
+
+  // Default to path focus
+  return path;
+}
+
+function buildCompanionCoach(pet, summary) {
+  const character = pet.character || 'dojocat';
+  const priority = getCoachPriority(pet, summary);
+  const template = COACH_TEMPLATES[priority] || COACH_TEMPLATES.consistency;
+
+  return {
+    priority,
+    headline: template.headlines[character] || template.headlines.dojocat,
+    suggestion: template.suggestions[character] || template.suggestions.dojocat,
+    focus: template.focus,
+    why: template.why,
+    cta_label: template.cta_label,
+    related_surface: template.related_surface,
+  };
+}
+
 const PET_TOYS = [
   {
     id: 'mini-pad',
     name: 'Mini Pad',
     cost: 64,
     desc: 'A tiny practice stage for proud little performances.',
-    bond: 5,
-    trust: 2,
-    happiness: 6,
-    energy: -8,
-    hype: 7,
+    bond: 5, trust: 2, happiness: 6, energy: -8, hype: 7,
     bond_tokens: 1,
     expression: 'excited',
     reaction: 'hop',
     favored: ['dojocat', 'devit'],
+    visual_type: 'ground',
+    hold_slot: 'none',
+    action_state: 'dance_step',
+    overlay_id: 'mini-pad',
+    duration_ms: 2400,
+    fx: 'step_flash',
   },
   {
     id: 'laser-pointer',
     name: 'Laser Pointer',
     cost: 56,
     desc: 'Turns idle paws into full chibi chase mode.',
-    bond: 4,
-    trust: 1,
-    happiness: 8,
-    energy: -6,
-    hype: 9,
+    bond: 4, trust: 1, happiness: 8, energy: -6, hype: 9,
     expression: 'grin',
     reaction: 'dart',
     favored: ['dojocat', 'buu', 'devit'],
+    visual_type: 'projectile',
+    hold_slot: 'none',
+    action_state: 'chase',
+    overlay_id: 'laser-dot',
+    duration_ms: 2000,
+    fx: 'dot_bounce',
   },
   {
     id: 'lucky-lantern',
     name: 'Lucky Lantern',
     cost: 72,
     desc: 'A ceremonial toy that fills the habitat with soft glow.',
-    bond: 6,
-    trust: 4,
-    happiness: 5,
-    energy: -4,
-    hype: 5,
+    bond: 6, trust: 4, happiness: 5, energy: -4, hype: 5,
     bond_tokens: 1,
     expression: 'sparkle',
     reaction: 'bless',
     favored: ['pixiu', 'dojocat'],
+    visual_type: 'held',
+    hold_slot: 'mouth',
+    action_state: 'lantern_bless',
+    overlay_id: 'lantern',
+    duration_ms: 2800,
+    fx: 'warm_glow',
   },
   {
     id: 'punch-mitts',
     name: 'Punch Mitts',
     cost: 78,
     desc: 'Training mitts for fierce little sparring drills.',
-    bond: 6,
-    trust: 5,
-    happiness: 4,
-    energy: -10,
-    hype: 8,
+    bond: 6, trust: 5, happiness: 4, energy: -10, hype: 8,
     combo_balance: 8,
     expression: 'proud',
     reaction: 'kata',
     favored: ['dojocat', 'devit'],
+    visual_type: 'held',
+    hold_slot: 'hand',
+    action_state: 'spar_combo',
+    overlay_id: 'mitts',
+    duration_ms: 2200,
+    fx: 'impact_flash',
   },
 ];
 const PET_TOY_MAP = Object.fromEntries(PET_TOYS.map((toy) => [toy.id, toy]));
@@ -1592,6 +1801,7 @@ function formatPet(pet, isPublic = false, db = null) {
         lock_reason: item.minBond && bond < item.minBond ? `Bond ${item.minBond}+` : item.minMastery && (pet.mastery_xp || 0) < item.minMastery ? `Mastery ${item.minMastery}+` : '',
       })),
     },
+    companion_coach: buildCompanionCoach(pet, activitySummary),
     missions,
     memories,
   };
@@ -2197,6 +2407,14 @@ router.post('/toys/:toyId/use', requireAuth, (req, res) => {
     reaction: toy.reaction,
     expression: toy.expression,
     preference,
+    toy_visual: {
+      action_state: toy.action_state || '',
+      overlay_id: toy.overlay_id || '',
+      duration_ms: toy.duration_ms || 1600,
+      fx: toy.fx || '',
+      visual_type: toy.visual_type || '',
+      hold_slot: toy.hold_slot || 'none',
+    },
   });
 });
 

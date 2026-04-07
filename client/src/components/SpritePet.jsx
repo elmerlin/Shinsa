@@ -1570,6 +1570,7 @@ export default function SpritePet({
   reaction = '',
   expression = '',
   foodId = '',
+  actionState = '',
   size = 140,
   className = '',
   onClick,
@@ -1577,7 +1578,7 @@ export default function SpritePet({
   const palette = PALETTES[character] || PALETTES.dojocat;
   const pixelSize = size / GW;
   const iconicLook = DEFAULT_ICONIC_LOOKS[character] || null;
-  const hasReaction = !!reaction && !isEating && !isTricking;
+  const hasReaction = (!!reaction || !!actionState) && !isEating && !isTricking;
   const renderedAspect = GH / GW;
 
   // Memoize all grid computations
