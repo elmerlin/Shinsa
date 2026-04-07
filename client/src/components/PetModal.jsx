@@ -84,8 +84,27 @@ export default function PetModal({ userId, onClose }) {
                 <MiniMeter label="Happiness" value={pet.happiness} color="pink" />
               </div>
 
+              {/* Identity badges */}
+              <div className="mt-3 flex flex-wrap items-center justify-center gap-1.5">
+                {pet.bond_rank?.label && (
+                  <span className="rounded-full border border-cyan-400/15 bg-cyan-500/[0.06] px-2 py-0.5 text-[9px] font-semibold text-cyan-200">{pet.bond_rank.label}</span>
+                )}
+                {pet.form?.label && (
+                  <span className={`rounded-full border px-2 py-0.5 text-[9px] font-semibold ${
+                    pet.form.id === 'beyond' ? 'border-purple-400/20 text-purple-300' :
+                    pet.form.id === 'ascendant' ? 'border-amber-400/20 text-amber-300' :
+                    pet.form.id === 'showcase' ? 'border-cyan-400/15 text-cyan-300' :
+                    pet.form.id === 'trusted' ? 'border-emerald-400/15 text-emerald-300' :
+                    'border-white/[0.08] text-gray-400'
+                  } bg-black/30`}>{pet.form.label}</span>
+                )}
+                {pet.mastery?.rank?.label && (
+                  <span className="rounded-full border border-white/[0.06] bg-white/[0.03] px-2 py-0.5 text-[9px] font-semibold text-gray-300">{pet.mastery.rank.label}</span>
+                )}
+              </div>
+
               {/* Stats */}
-              <div className="mt-3 grid grid-cols-4 gap-2 text-center">
+              <div className="mt-2 grid grid-cols-4 gap-2 text-center">
                 <div>
                   <div className="text-sm font-bold text-white/80">{pet.total_songs_fed}</div>
                   <div className="text-[9px] text-gray-500">Songs</div>
@@ -95,14 +114,29 @@ export default function PetModal({ userId, onClose }) {
                   <div className="text-[9px] text-gray-500">Mood</div>
                 </div>
                 <div>
-                  <div className="text-sm font-bold text-white/80">{pet.experience?.toLocaleString() || 0}</div>
-                  <div className="text-[9px] text-gray-500">XP</div>
+                  <div className="text-sm font-bold text-white/80">{pet.bond || 0}</div>
+                  <div className="text-[9px] text-gray-500">Bond</div>
                 </div>
                 <div>
-                  <div className="text-sm font-bold text-white/80">{pet.mastery?.rank?.label || 'Rookie'}</div>
-                  <div className="text-[9px] text-gray-500">Mastery</div>
+                  <div className="text-sm font-bold text-white/80">{pet.daily_streak ? `${pet.daily_streak}d` : '—'}</div>
+                  <div className="text-[9px] text-gray-500">Streak</div>
                 </div>
               </div>
+
+              {/* Memories */}
+              {pet.memories?.length > 0 && (
+                <div className="mt-3 space-y-1">
+                  {pet.memories.slice(0, 3).map(m => (
+                    <div key={m.id} className={`rounded-lg border px-2 py-1 text-[10px] ${
+                      m.rarity === 'legendary' ? 'border-amber-400/20 bg-amber-500/[0.06] text-amber-200' :
+                      m.rarity === 'rare' ? 'border-purple-400/15 bg-purple-500/[0.04] text-purple-200' :
+                      'border-white/[0.05] bg-black/20 text-gray-400'
+                    }`}>
+                      <span className="font-semibold text-white/70">{m.title}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </>
         )}

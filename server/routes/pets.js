@@ -19,6 +19,12 @@ const PET_ECONOMY = {
   target_songs_per_week: TARGET_WEEKLY_SONGS,
   weekly_hunger_upkeep: TARGET_WEEKLY_HUNGER_UPKEEP,
   weekly_happiness_upkeep: TARGET_WEEKLY_HAPPINESS_UPKEEP,
+  currencies: {
+    combo: { name: 'Combo', desc: 'Earned from syncing PIU plays. Spent on food, clothing, habitat, and toys.', icon: '🎵' },
+    bond_tokens: { name: 'Bond Tokens', desc: 'Earned from missions and deep care. Used for rare unlocks and gifts.', icon: '💎' },
+    rare_shards: { name: 'Rare Shards', desc: 'Dropped from special events and HoP sessions. For legendary items.', icon: '✨' },
+  },
+  sinks: ['Food upkeep', 'Clothing & accessories', 'Habitat decorations', 'Toys & play items', 'Gifts to friends'],
 };
 const GRADE_ORDER = ['F', 'D', 'C', 'B', 'A', 'A+', 'AA', 'AA+', 'AAA', 'AAA+', 'S', 'S+', 'SS', 'SS+', 'SSS', 'SSS+'];
 const GRADE_INDEX = Object.fromEntries(GRADE_ORDER.map((grade, index) => [grade, index]));
@@ -388,9 +394,9 @@ const TRAINING_PATHS = {
     desc: 'Clean timing, polished grades, and composed play.',
     icon: '🎯',
     milestones: [
-      { threshold: 40, title: 'Eye for Timing', desc: 'Your pet starts reading cleaner patterns in your play.' },
-      { threshold: 120, title: 'Judge Whisperer', desc: 'A sharper, calmer presence settles into the bond.' },
-      { threshold: 260, title: 'Perfect Form', desc: 'This pet now carries itself like a refined score hunter.' },
+      { threshold: 40, title: 'Eye for Timing', desc: 'Your pet starts reading cleaner patterns in your play.', reward: { type: 'title', value: 'Precision Student', label: 'Title: Precision Student' } },
+      { threshold: 120, title: 'Judge Whisperer', desc: 'A sharper, calmer presence settles into the bond.', reward: { type: 'habitat', value: 'medal-rack', label: 'Unlock: Medal Rack (Room)' } },
+      { threshold: 260, title: 'Perfect Form', desc: 'This pet now carries itself like a refined score hunter.', reward: { type: 'aura', value: 'precision', label: 'Aura: Precision Glow' } },
     ],
   },
   stamina: {
@@ -400,9 +406,9 @@ const TRAINING_PATHS = {
     desc: 'Heavy sets, long sessions, and level 18+ grit.',
     icon: '💪',
     milestones: [
-      { threshold: 40, title: 'Endurance Spark', desc: 'The pet starts thriving on harder clears.' },
-      { threshold: 120, title: 'Iron Rhythm', desc: 'Its stance becomes tougher and more grounded.' },
-      { threshold: 260, title: 'Arena Engine', desc: 'A full-bodied training-beast energy takes over.' },
+      { threshold: 40, title: 'Endurance Spark', desc: 'The pet starts thriving on harder clears.', reward: { type: 'title', value: 'Iron Trainee', label: 'Title: Iron Trainee' } },
+      { threshold: 120, title: 'Iron Rhythm', desc: 'Its stance becomes tougher and more grounded.', reward: { type: 'habitat', value: 'punching-bag', label: 'Unlock: Punching Bag (Room)' } },
+      { threshold: 260, title: 'Arena Engine', desc: 'A full-bodied training-beast energy takes over.', reward: { type: 'aura', value: 'ironclad', label: 'Aura: Ironclad Pulse' } },
     ],
   },
   tech: {
@@ -412,9 +418,9 @@ const TRAINING_PATHS = {
     desc: 'Footwork, doubles, and clever chart solving.',
     icon: '🧠',
     milestones: [
-      { threshold: 40, title: 'Footwork Instinct', desc: 'The pet leans into tricky movement and agility.' },
-      { threshold: 120, title: 'Pattern Reader', desc: 'It starts to feel clever, agile, and hard to catch.' },
-      { threshold: 260, title: 'Lab Monster', desc: 'A sharp little tactician has fully emerged.' },
+      { threshold: 40, title: 'Footwork Instinct', desc: 'The pet leans into tricky movement and agility.', reward: { type: 'title', value: 'Clever Feet', label: 'Title: Clever Feet' } },
+      { threshold: 120, title: 'Pattern Reader', desc: 'It starts to feel clever, agile, and hard to catch.', reward: { type: 'habitat', value: 'arcade-cab', label: 'Unlock: Arcade Cabinet (Room)' } },
+      { threshold: 260, title: 'Lab Monster', desc: 'A sharp little tactician has fully emerged.', reward: { type: 'aura', value: 'circuit', label: 'Aura: Circuit Trace' } },
     ],
   },
   consistency: {
@@ -424,9 +430,9 @@ const TRAINING_PATHS = {
     desc: 'Reliable routines, daily care, and steady improvement.',
     icon: '🪴',
     milestones: [
-      { threshold: 40, title: 'Care Rhythm', desc: 'The pet settles into dependable routines with you.' },
-      { threshold: 120, title: 'Steady Partner', desc: 'Its mood and bond feel more stable and grounded.' },
-      { threshold: 260, title: 'Evergreen Companion', desc: 'A deeply reliable training partner identity forms.' },
+      { threshold: 40, title: 'Care Rhythm', desc: 'The pet settles into dependable routines with you.', reward: { type: 'title', value: 'Steady Caretaker', label: 'Title: Steady Caretaker' } },
+      { threshold: 120, title: 'Steady Partner', desc: 'Its mood and bond feel more stable and grounded.', reward: { type: 'habitat', value: 'cherry-petals', label: 'Unlock: Cherry Petals (Floor)' } },
+      { threshold: 260, title: 'Evergreen Companion', desc: 'A deeply reliable training partner identity forms.', reward: { type: 'aura', value: 'evergreen', label: 'Aura: Evergreen Calm' } },
     ],
   },
   tournament: {
@@ -436,9 +442,9 @@ const TRAINING_PATHS = {
     desc: 'Pressure moments, challenge runs, and standout clears.',
     icon: '🏆',
     milestones: [
-      { threshold: 40, title: 'Bracket Pulse', desc: 'The pet starts responding to higher-stakes moments.' },
-      { threshold: 120, title: 'Stage Instinct', desc: 'Its presence turns bolder and more competitive.' },
-      { threshold: 260, title: 'Finals Aura', desc: 'Your companion carries true spotlight energy now.' },
+      { threshold: 40, title: 'Bracket Pulse', desc: 'The pet starts responding to higher-stakes moments.', reward: { type: 'title', value: 'Bracket Runner', label: 'Title: Bracket Runner' } },
+      { threshold: 120, title: 'Stage Instinct', desc: 'Its presence turns bolder and more competitive.', reward: { type: 'habitat', value: 'champion-banner', label: 'Unlock: Champion Banner (Wall)' } },
+      { threshold: 260, title: 'Finals Aura', desc: 'Your companion carries true spotlight energy now.', reward: { type: 'aura', value: 'spotlight', label: 'Aura: Stage Spotlight' } },
     ],
   },
   social: {
@@ -448,9 +454,9 @@ const TRAINING_PATHS = {
     desc: 'Replays, shared moments, and scene presence.',
     icon: '✨',
     milestones: [
-      { threshold: 40, title: 'Replay Spark', desc: 'The pet starts to love attention and shared moments.' },
-      { threshold: 120, title: 'Scene Familiar', desc: 'A charismatic, visible identity takes shape.' },
-      { threshold: 260, title: 'Dojo Celebrity', desc: 'This pet now feels born for the spotlight.' },
+      { threshold: 40, title: 'Replay Spark', desc: 'The pet starts to love attention and shared moments.', reward: { type: 'title', value: 'Scene Kid', label: 'Title: Scene Kid' } },
+      { threshold: 120, title: 'Scene Familiar', desc: 'A charismatic, visible identity takes shape.', reward: { type: 'habitat', value: 'photo-wall', label: 'Unlock: Photo Wall (Wall)' } },
+      { threshold: 260, title: 'Dojo Celebrity', desc: 'This pet now feels born for the spotlight.', reward: { type: 'aura', value: 'fame', label: 'Aura: Fame Shimmer' } },
     ],
   },
 };
@@ -469,20 +475,42 @@ const HABITAT_ITEMS = {
     { id: 'sunset-arcade', name: 'Sunset Arcade', cost: 120, kind: 'background', desc: 'Warm neon after-hours arcade glow.' },
     { id: 'moon-festival', name: 'Moon Festival', cost: 140, kind: 'background', desc: 'Ceremonial lantern light for calmer moods.' },
     { id: 'inferno-stage', name: 'Inferno Stage', cost: 150, kind: 'background', desc: 'A dramatic red arena for wilder pets.' },
+    { id: 'neon-alley', name: 'Neon Alley', cost: 180, kind: 'background', desc: 'Pink and cyan city lights after midnight.', minBond: 40 },
+    { id: 'sakura-garden', name: 'Sakura Garden', cost: 200, kind: 'background', desc: 'Soft petals drifting through warm twilight.', minBond: 90 },
+    { id: 'thunderdome', name: 'Thunderdome', cost: 240, kind: 'background', desc: 'Electric arena energy for tournament veterans.', minBond: 160, minMastery: 120 },
+    { id: 'celestial-shrine', name: 'Celestial Shrine', cost: 300, kind: 'background', desc: 'An ancient glow reserved for ascendant companions.', minBond: 260, minMastery: 220 },
   ],
   props: [
     { id: 'training-dummy', name: 'Training Dummy', cost: 70, kind: 'prop', desc: 'A sparring buddy for focused companions.' },
     { id: 'lucky-banner', name: 'Lucky Banner', cost: 82, kind: 'prop', desc: 'A hanging charm that brings festive energy.' },
     { id: 'boombox', name: 'Boombox', cost: 88, kind: 'prop', desc: 'A chunky little speaker stack for practice sessions.' },
     { id: 'trophy-stand', name: 'Trophy Stand', cost: 110, kind: 'prop', desc: 'A pedestal for pets who know they are stars.' },
+    { id: 'punching-bag', name: 'Punching Bag', cost: 95, kind: 'prop', desc: 'A heavy bag for when your pet needs to blow off steam.', minBond: 40 },
+    { id: 'arcade-cab', name: 'Arcade Cabinet', cost: 130, kind: 'prop', desc: 'A tiny PIU cab — your pet watches the screen intently.', minBond: 90 },
+    { id: 'medal-rack', name: 'Medal Rack', cost: 160, kind: 'prop', desc: 'A gleaming display of hard-earned accolades.', minBond: 90, minMastery: 45 },
+    { id: 'spirit-lantern', name: 'Spirit Lantern', cost: 220, kind: 'prop', desc: 'An ethereal glow that responds to bond strength.', minBond: 160, minMastery: 120 },
+  ],
+  floor: [
+    { id: 'tatami-mat', name: 'Tatami Mat', cost: 60, kind: 'floor', desc: 'Traditional woven mats for a proper dojo feel.' },
+    { id: 'led-tiles', name: 'LED Tiles', cost: 100, kind: 'floor', desc: 'Light-up dance tiles that pulse with energy.', minBond: 40 },
+    { id: 'cherry-petals', name: 'Cherry Petals', cost: 140, kind: 'floor', desc: 'Scattered blossoms across the habitat floor.', minBond: 90 },
+    { id: 'galaxy-floor', name: 'Galaxy Floor', cost: 200, kind: 'floor', desc: 'Stars beneath your companion\'s feet.', minBond: 160, minMastery: 120 },
+  ],
+  wall: [
+    { id: 'dojo-scroll', name: 'Dojo Scroll', cost: 55, kind: 'wall', desc: 'A hanging scroll with training wisdom.' },
+    { id: 'neon-sign', name: 'Neon Sign', cost: 90, kind: 'wall', desc: 'A glowing sign that says "STOMP".', minBond: 40 },
+    { id: 'photo-wall', name: 'Photo Wall', cost: 120, kind: 'wall', desc: 'Pinned memories and polaroids from past sessions.', minBond: 90 },
+    { id: 'champion-banner', name: 'Champion Banner', cost: 180, kind: 'wall', desc: 'A legendary banner only elite companions earn.', minBond: 160, minMastery: 120 },
   ],
 };
-const ALL_HABITAT_ITEMS = [...HABITAT_ITEMS.backgrounds, ...HABITAT_ITEMS.props];
+const ALL_HABITAT_ITEMS = [...HABITAT_ITEMS.backgrounds, ...HABITAT_ITEMS.props, ...(HABITAT_ITEMS.floor || []), ...(HABITAT_ITEMS.wall || [])];
 const HABITAT_ITEM_MAP = Object.fromEntries(ALL_HABITAT_ITEMS.map((item) => [item.id, item]));
 
 function getHabitatSlot(itemId) {
   if (HABITAT_ITEMS.backgrounds.find((item) => item.id === itemId)) return 'background';
   if (HABITAT_ITEMS.props.find((item) => item.id === itemId)) return 'prop';
+  if ((HABITAT_ITEMS.floor || []).find((item) => item.id === itemId)) return 'floor';
+  if ((HABITAT_ITEMS.wall || []).find((item) => item.id === itemId)) return 'wall';
   return null;
 }
 
@@ -631,6 +659,10 @@ function ensurePetTable(db) {
   addCol('owned_habitat_items', "TEXT NOT NULL DEFAULT '[\"dojo-night\"]'");
   addCol('active_habitat_bg', "TEXT NOT NULL DEFAULT 'dojo-night'");
   addCol('active_habitat_prop', "TEXT NOT NULL DEFAULT ''");
+  addCol('active_habitat_floor', "TEXT NOT NULL DEFAULT ''");
+  addCol('active_habitat_wall', "TEXT NOT NULL DEFAULT ''");
+  addCol('unlocked_mastery_rewards', "TEXT NOT NULL DEFAULT '[]'");
+  addCol('gift_log', "TEXT NOT NULL DEFAULT '[]'");
   addCol('active_training_path', "TEXT NOT NULL DEFAULT 'consistency'");
   addCol('mastery_xp', "INTEGER NOT NULL DEFAULT 0");
   // Streak & engagement tracking
@@ -999,12 +1031,22 @@ function buildMasteryProfile(pet, specialtyKey = '') {
 }
 
 function getPetForm(bond = 0, masteryXp = 0) {
+  if (bond >= 500 && masteryXp >= 400) {
+    return {
+      id: 'beyond',
+      label: 'Beyond Form',
+      aura: 'transcendent',
+      desc: 'A companion that has surpassed all known limits.',
+      tier: 5,
+    };
+  }
   if (bond >= 320 && masteryXp >= 220) {
     return {
       id: 'ascendant',
       label: 'Ascendant Form',
       aura: 'legend',
       desc: 'A scene-defining companion presence.',
+      tier: 4,
     };
   }
   if (bond >= 190 && masteryXp >= 120) {
@@ -1013,6 +1055,7 @@ function getPetForm(bond = 0, masteryXp = 0) {
       label: 'Showcase Form',
       aura: 'spotlight',
       desc: 'A polished companion that turns heads.',
+      tier: 3,
     };
   }
   if (bond >= 90 && masteryXp >= 45) {
@@ -1021,6 +1064,7 @@ function getPetForm(bond = 0, masteryXp = 0) {
       label: 'Trusted Form',
       aura: 'bonded',
       desc: 'A companion visibly shaped by routine and trust.',
+      tier: 2,
     };
   }
   return {
@@ -1028,6 +1072,7 @@ function getPetForm(bond = 0, masteryXp = 0) {
     label: 'Fresh Form',
     aura: 'calm',
     desc: 'A young companion still finding its rhythm.',
+    tier: 1,
   };
 }
 
@@ -1175,7 +1220,7 @@ function derivePetSpecialty(summary = {}) {
     return { key: 'stamina-hound', label: 'Stamina hound', desc: 'Big clears are making your pet tougher and prouder.' };
   }
   if ((summary.replays_7d || 0) >= 2) {
-    return { key: 'scene-showoff', label: 'Scene showoff', desc: 'Replay-ready moments are feeding this pet’s confidence.' };
+    return { key: 'scene-showoff', label: 'Scene showoff', desc: "Replay-ready moments are feeding this pet's confidence." };
   }
   if ((summary.hop_sessions_7d || 0) >= 1) {
     return { key: 'hop-regular', label: 'HoP regular', desc: 'Hour of Power energy is making this pet thrive.' };
@@ -1185,54 +1230,67 @@ function derivePetSpecialty(summary = {}) {
 
 function buildPetMemories(pet, summary = {}) {
   const memories = [];
+
+  // ── Firsts ──
   if (pet.created_at) {
-    memories.push({
-      id: 'adopted',
-      title: 'Bond began',
-      detail: `Adopted on ${String(pet.created_at).slice(0, 10)}`,
-      tone: 'bond',
-    });
+    memories.push({ id: 'adopted', title: 'Bond began', detail: `Adopted on ${String(pet.created_at).slice(0, 10)}`, tone: 'bond', category: 'firsts', rarity: 'common' });
   }
+  if ((pet.total_songs_fed || 0) >= 1) {
+    memories.push({ id: 'first-song', title: 'First song synced', detail: 'The very first score your pet witnessed.', tone: 'bond', category: 'firsts', rarity: 'common' });
+  }
+  if ((pet.bond || 0) >= 40) {
+    memories.push({ id: 'first-bond-rank', title: 'Trust earned', detail: 'Reached Pad Gremlin bond rank for the first time.', tone: 'bond', category: 'firsts', rarity: 'uncommon' });
+  }
+  if ((pet.mastery_xp || 0) >= 45) {
+    memories.push({ id: 'first-mastery', title: 'Path awakened', detail: 'Reached Apprentice mastery rank.', tone: 'mastery', category: 'firsts', rarity: 'uncommon' });
+  }
+
+  // ── Bests ──
   if ((summary.max_level_all || 0) > 0) {
-    memories.push({
-      id: 'max-level',
-      title: 'Biggest clear watched',
-      detail: `Level ${summary.max_level_all} is the highest chart your pet has seen you conquer.`,
-      tone: 'level',
-    });
+    const lvl = summary.max_level_all;
+    memories.push({ id: 'max-level', title: 'Biggest clear watched', detail: `Level ${lvl} is the highest chart your pet has seen you conquer.`, tone: 'level', category: 'bests', rarity: lvl >= 22 ? 'rare' : lvl >= 18 ? 'uncommon' : 'common' });
   }
+  if ((summary.best_grade_all || '') !== '') {
+    memories.push({ id: 'best-grade', title: 'Peak precision', detail: `Best grade achieved: ${summary.best_grade_all}.`, tone: 'grade', category: 'bests', rarity: ['SSS+', 'SSS', 'SS+', 'SS'].includes(summary.best_grade_all) ? 'rare' : 'common' });
+  }
+  if ((pet.longest_streak || 0) >= 7) {
+    memories.push({ id: 'best-streak', title: 'Streak legend', detail: `Longest daily streak: ${pet.longest_streak} days of care.`, tone: 'streak', category: 'bests', rarity: pet.longest_streak >= 30 ? 'legendary' : pet.longest_streak >= 14 ? 'rare' : 'uncommon' });
+  }
+  if ((pet.lifetime_feeds || 0) >= 50) {
+    memories.push({ id: 'dedicated-feeder', title: 'Well-fed companion', detail: `${pet.lifetime_feeds} meals served with care.`, tone: 'feed', category: 'bests', rarity: pet.lifetime_feeds >= 200 ? 'rare' : 'uncommon' });
+  }
+
+  // ── Social ──
   if ((summary.replays_all || 0) > 0) {
-    memories.push({
-      id: 'replays',
-      title: 'Replay memory',
-      detail: `${summary.replays_all} replay-ready ${summary.replays_all === 1 ? 'moment' : 'moments'} recorded together.`,
-      tone: 'replay',
-    });
-  }
-  if ((summary.hop_sessions_7d || 0) > 0) {
-    memories.push({
-      id: 'hop',
-      title: 'Hour of Power spark',
-      detail: `Shared ${summary.hop_sessions_7d} HoP ${summary.hop_sessions_7d === 1 ? 'session' : 'sessions'} in the last week.`,
-      tone: 'hop',
-    });
+    memories.push({ id: 'replays', title: 'Replay memory', detail: `${summary.replays_all} replay-ready ${summary.replays_all === 1 ? 'moment' : 'moments'} recorded together.`, tone: 'replay', category: 'social', rarity: summary.replays_all >= 20 ? 'rare' : 'common' });
   }
   if ((summary.weekly_challenge_entries || 0) > 0) {
-    memories.push({
-      id: 'weekly',
-      title: 'Weekly challenger',
-      detail: `Active in this week’s weekly challenge board.`,
-      tone: 'challenge',
-    });
+    memories.push({ id: 'weekly', title: 'Weekly challenger', detail: 'Active in this week\'s weekly challenge board.', tone: 'challenge', category: 'social', rarity: 'common' });
   }
+
+  // ── Endurance ──
+  if ((summary.hop_sessions_7d || 0) > 0) {
+    memories.push({ id: 'hop', title: 'Hour of Power spark', detail: `Shared ${summary.hop_sessions_7d} HoP ${summary.hop_sessions_7d === 1 ? 'session' : 'sessions'} in the last week.`, tone: 'hop', category: 'endurance', rarity: summary.hop_sessions_7d >= 3 ? 'rare' : 'common' });
+  }
+  if ((summary.hard_7d || 0) >= 3) {
+    memories.push({ id: 'hard-grind', title: 'Heavy lifter', detail: `${summary.hard_7d} level 18+ clears this week.`, tone: 'stamina', category: 'endurance', rarity: summary.hard_7d >= 10 ? 'rare' : 'uncommon' });
+  }
+  if ((pet.lifetime_activities || 0) >= 30) {
+    memories.push({ id: 'active-companion', title: 'Active companion', detail: `${pet.lifetime_activities} activities completed together.`, tone: 'activity', category: 'endurance', rarity: pet.lifetime_activities >= 100 ? 'rare' : 'uncommon' });
+  }
+
+  // ── Identity ──
   const specialty = derivePetSpecialty(summary);
-  memories.push({
-    id: 'specialty',
-    title: specialty.label,
-    detail: specialty.desc,
-    tone: 'specialty',
-  });
-  return memories.slice(0, 5);
+  memories.push({ id: 'specialty', title: specialty.label, detail: specialty.desc, tone: 'specialty', category: 'identity', rarity: 'common' });
+
+  if ((pet.bond || 0) >= 160) {
+    memories.push({ id: 'deep-bond', title: 'Unbreakable bond', detail: 'A connection forged through hundreds of interactions.', tone: 'bond', category: 'identity', rarity: 'rare' });
+  }
+  if ((pet.mastery_xp || 0) >= 240) {
+    memories.push({ id: 'elite-mastery', title: 'Elite practitioner', detail: 'Mastery that few companions ever reach.', tone: 'mastery', category: 'identity', rarity: 'rare' });
+  }
+
+  return memories;
 }
 
 const PET_MISSIONS = {
@@ -1443,13 +1501,18 @@ function formatPet(pet, isPublic = false, db = null) {
     habitat: {
       active_background: pet.active_habitat_bg || 'dojo-night',
       active_prop: pet.active_habitat_prop || '',
+      active_floor: pet.active_habitat_floor || '',
+      active_wall: pet.active_habitat_wall || '',
     },
   };
 
   if (isPublic) {
     return {
       ...base,
-      memories: memories.slice(0, 2),
+      daily_streak: pet.daily_streak || 0,
+      longest_streak: pet.longest_streak || 0,
+      interactions_today: interactionsToday,
+      memories: memories.filter(m => m.rarity !== 'common').slice(0, 4),
     };
   }
 
@@ -1502,13 +1565,31 @@ function formatPet(pet, isPublic = false, db = null) {
     habitat_items: {
       backgrounds: HABITAT_ITEMS.backgrounds.map((item) => ({
         ...item,
-        owned: safeJsonParse(pet.owned_habitat_items).includes(item.id),
+        owned: safeJsonParse(pet.owned_habitat_items).includes(item.id) || !!item.default_owned,
         active: (pet.active_habitat_bg || 'dojo-night') === item.id,
+        locked: !!(item.minBond && bond < item.minBond) || !!(item.minMastery && (pet.mastery_xp || 0) < item.minMastery),
+        lock_reason: item.minBond && bond < item.minBond ? `Bond ${item.minBond}+` : item.minMastery && (pet.mastery_xp || 0) < item.minMastery ? `Mastery ${item.minMastery}+` : '',
       })),
       props: HABITAT_ITEMS.props.map((item) => ({
         ...item,
         owned: safeJsonParse(pet.owned_habitat_items).includes(item.id),
         active: (pet.active_habitat_prop || '') === item.id,
+        locked: !!(item.minBond && bond < item.minBond) || !!(item.minMastery && (pet.mastery_xp || 0) < item.minMastery),
+        lock_reason: item.minBond && bond < item.minBond ? `Bond ${item.minBond}+` : item.minMastery && (pet.mastery_xp || 0) < item.minMastery ? `Mastery ${item.minMastery}+` : '',
+      })),
+      floor: (HABITAT_ITEMS.floor || []).map((item) => ({
+        ...item,
+        owned: safeJsonParse(pet.owned_habitat_items).includes(item.id),
+        active: (pet.active_habitat_floor || '') === item.id,
+        locked: !!(item.minBond && bond < item.minBond) || !!(item.minMastery && (pet.mastery_xp || 0) < item.minMastery),
+        lock_reason: item.minBond && bond < item.minBond ? `Bond ${item.minBond}+` : item.minMastery && (pet.mastery_xp || 0) < item.minMastery ? `Mastery ${item.minMastery}+` : '',
+      })),
+      wall: (HABITAT_ITEMS.wall || []).map((item) => ({
+        ...item,
+        owned: safeJsonParse(pet.owned_habitat_items).includes(item.id),
+        active: (pet.active_habitat_wall || '') === item.id,
+        locked: !!(item.minBond && bond < item.minBond) || !!(item.minMastery && (pet.mastery_xp || 0) < item.minMastery),
+        lock_reason: item.minBond && bond < item.minBond ? `Bond ${item.minBond}+` : item.minMastery && (pet.mastery_xp || 0) < item.minMastery ? `Mastery ${item.minMastery}+` : '',
       })),
     },
     missions,
@@ -1580,7 +1661,7 @@ router.post('/adopt', requireAuth, (req, res) => {
 router.get('/shop', requireAuth, (req, res) => {
   const db = getDb();
   ensurePetTable(db);
-  const pet = db.prepare('SELECT combo_balance, owned_items, owned_toys, owned_habitat_items, active_habitat_bg, active_habitat_prop, character FROM user_pets WHERE user_id = ?').get(req.user.id);
+  const pet = db.prepare('SELECT combo_balance, owned_items, owned_toys, owned_habitat_items, active_habitat_bg, active_habitat_prop, active_habitat_floor, active_habitat_wall, character, bond, mastery_xp FROM user_pets WHERE user_id = ?').get(req.user.id);
   const owned = safeJsonParse(pet?.owned_items);
   const ownedToys = safeJsonParse(pet?.owned_toys);
   const ownedHabitat = safeJsonParse(pet?.owned_habitat_items, ['dojo-night']);
@@ -1605,13 +1686,31 @@ router.get('/shop', requireAuth, (req, res) => {
     habitat: {
       backgrounds: HABITAT_ITEMS.backgrounds.map((item) => ({
         ...item,
-        owned: ownedHabitat.includes(item.id),
+        owned: ownedHabitat.includes(item.id) || !!item.default_owned,
         active: (pet?.active_habitat_bg || 'dojo-night') === item.id,
+        locked: !!(item.minBond && (pet?.bond || 0) < item.minBond) || !!(item.minMastery && (pet?.mastery_xp || 0) < item.minMastery),
+        lock_reason: item.minBond && (pet?.bond || 0) < item.minBond ? `Bond ${item.minBond}+` : item.minMastery && (pet?.mastery_xp || 0) < item.minMastery ? `Mastery ${item.minMastery}+` : '',
       })),
       props: HABITAT_ITEMS.props.map((item) => ({
         ...item,
         owned: ownedHabitat.includes(item.id),
         active: (pet?.active_habitat_prop || '') === item.id,
+        locked: !!(item.minBond && (pet?.bond || 0) < item.minBond) || !!(item.minMastery && (pet?.mastery_xp || 0) < item.minMastery),
+        lock_reason: item.minBond && (pet?.bond || 0) < item.minBond ? `Bond ${item.minBond}+` : item.minMastery && (pet?.mastery_xp || 0) < item.minMastery ? `Mastery ${item.minMastery}+` : '',
+      })),
+      floor: (HABITAT_ITEMS.floor || []).map((item) => ({
+        ...item,
+        owned: ownedHabitat.includes(item.id),
+        active: (pet?.active_habitat_floor || '') === item.id,
+        locked: !!(item.minBond && (pet?.bond || 0) < item.minBond) || !!(item.minMastery && (pet?.mastery_xp || 0) < item.minMastery),
+        lock_reason: item.minBond && (pet?.bond || 0) < item.minBond ? `Bond ${item.minBond}+` : item.minMastery && (pet?.mastery_xp || 0) < item.minMastery ? `Mastery ${item.minMastery}+` : '',
+      })),
+      wall: (HABITAT_ITEMS.wall || []).map((item) => ({
+        ...item,
+        owned: ownedHabitat.includes(item.id),
+        active: (pet?.active_habitat_wall || '') === item.id,
+        locked: !!(item.minBond && (pet?.bond || 0) < item.minBond) || !!(item.minMastery && (pet?.mastery_xp || 0) < item.minMastery),
+        lock_reason: item.minBond && (pet?.bond || 0) < item.minBond ? `Bond ${item.minBond}+` : item.minMastery && (pet?.mastery_xp || 0) < item.minMastery ? `Mastery ${item.minMastery}+` : '',
       })),
     },
   });
@@ -1719,7 +1818,7 @@ router.post('/buy-toy', requireAuth, (req, res) => {
   res.json({ pet: formatPet(updated, false, db), toy: toy.name });
 });
 
-// POST /api/pets/buy-habitat-item — buy a room background or prop
+// POST /api/pets/buy-habitat-item — buy a room background, prop, floor, or wall item
 router.post('/buy-habitat-item', requireAuth, (req, res) => {
   const db = getDb();
   ensurePetTable(db);
@@ -1731,6 +1830,12 @@ router.post('/buy-habitat-item', requireAuth, (req, res) => {
 
   const ownedHabitat = safeJsonParse(pet.owned_habitat_items, ['dojo-night']);
   if (ownedHabitat.includes(item.id)) return res.status(400).json({ error: 'Already owned' });
+
+  // Lock gate checks
+  const bond = pet.bond || 0;
+  const masteryXp = pet.mastery_xp || 0;
+  if (item.minBond && bond < item.minBond) return res.status(400).json({ error: `Bond ${item.minBond}+ required`, need_bond: item.minBond, have_bond: bond });
+  if (item.minMastery && masteryXp < item.minMastery) return res.status(400).json({ error: `Mastery ${item.minMastery}+ required`, need_mastery: item.minMastery, have_mastery: masteryXp });
 
   const balance = pet.combo_balance || 0;
   if (balance < item.cost) return res.status(400).json({ error: 'Not enough Combo', need: item.cost, have: balance });
@@ -1745,7 +1850,7 @@ router.post('/buy-habitat-item', requireAuth, (req, res) => {
   res.json({ pet: formatPet(updated, false, db), item: item.name });
 });
 
-// POST /api/pets/equip-habitat — set active room background or prop
+// POST /api/pets/equip-habitat — set active room background, prop, floor, or wall
 router.post('/equip-habitat', requireAuth, (req, res) => {
   const db = getDb();
   ensurePetTable(db);
@@ -1754,17 +1859,28 @@ router.post('/equip-habitat', requireAuth, (req, res) => {
 
   const { itemId = '', slot = '' } = req.body || {};
   const ownedHabitat = safeJsonParse(pet.owned_habitat_items, ['dojo-night']);
+  const slotColumnMap = { background: 'active_habitat_bg', prop: 'active_habitat_prop', floor: 'active_habitat_floor', wall: 'active_habitat_wall' };
+  const slotFallbackMap = { background: 'dojo-night', prop: '', floor: '', wall: '' };
 
   if (itemId) {
     if (!ownedHabitat.includes(itemId)) return res.status(400).json({ error: 'Habitat item not owned' });
     const habitatSlot = getHabitatSlot(itemId);
     if (!habitatSlot) return res.status(400).json({ error: 'Unknown habitat item type' });
-    const column = habitatSlot === 'background' ? 'active_habitat_bg' : 'active_habitat_prop';
+    // Lock gate check on equip
+    const item = HABITAT_ITEM_MAP[itemId];
+    if (item) {
+      const bond = pet.bond || 0;
+      const masteryXp = pet.mastery_xp || 0;
+      if (item.minBond && bond < item.minBond) return res.status(400).json({ error: `Bond ${item.minBond}+ required` });
+      if (item.minMastery && masteryXp < item.minMastery) return res.status(400).json({ error: `Mastery ${item.minMastery}+ required` });
+    }
+    const column = slotColumnMap[habitatSlot];
+    if (!column) return res.status(400).json({ error: 'Unknown habitat slot' });
     db.prepare(`UPDATE user_pets SET ${column} = ?, updated_at = datetime('now') WHERE user_id = ?`).run(itemId, req.user.id);
   } else {
-    if (!['background', 'prop'].includes(slot)) return res.status(400).json({ error: 'Invalid habitat slot' });
-    const column = slot === 'background' ? 'active_habitat_bg' : 'active_habitat_prop';
-    const fallback = slot === 'background' ? 'dojo-night' : '';
+    if (!['background', 'prop', 'floor', 'wall'].includes(slot)) return res.status(400).json({ error: 'Invalid habitat slot' });
+    const column = slotColumnMap[slot];
+    const fallback = slotFallbackMap[slot];
     db.prepare(`UPDATE user_pets SET ${column} = ?, updated_at = datetime('now') WHERE user_id = ?`).run(fallback, req.user.id);
   }
 
@@ -2230,6 +2346,50 @@ router.get('/characters', (_req, res) => {
       tricks: (TRICKS[id] || []).map(t => ({ id: t.id, name: t.name, xp: t.xp })),
     })),
   });
+});
+
+// GET /api/pets/leaderboard — pet rankings
+router.get('/leaderboard', (req, res) => {
+  const db = getDb();
+  ensurePetTable(db);
+  const pets = db.prepare(`
+    SELECT p.*, u.username
+    FROM user_pets p
+    JOIN users u ON u.id = p.user_id
+    ORDER BY p.bond DESC
+    LIMIT 25
+  `).all();
+
+  const entries = pets.map((pet, index) => {
+    const bond = pet.bond || 0;
+    const masteryXp = pet.mastery_xp || 0;
+    const form = getPetForm(bond, masteryXp);
+    const bondRank = getBondRank(bond);
+    const rank = getMasteryRank(masteryXp);
+    return {
+      rank: index + 1,
+      username: pet.username || 'Unknown',
+      character: pet.character,
+      bond,
+      bond_rank: bondRank,
+      mastery_xp: masteryXp,
+      mastery_rank: rank.label,
+      form: form,
+      daily_streak: pet.daily_streak || 0,
+      total_songs_fed: pet.total_songs_fed || 0,
+      equipped_hat: pet.equipped_hat || '',
+      equipped_top: pet.equipped_top || '',
+      hat_color: pet.hat_color || '',
+      top_color: pet.top_color || '',
+      weight_state: getWeightState(computeDecayed(pet.fullness, pet.last_fed_at, HUNGER_DECAY_PER_HOUR)),
+      mood: getMood(
+        computeDecayed(pet.fullness, pet.last_fed_at, HUNGER_DECAY_PER_HOUR),
+        computeDecayed(pet.happiness || 50, pet.last_fed_at, HAPPINESS_DECAY_PER_HOUR),
+      ),
+    };
+  });
+
+  res.json({ leaderboard: entries });
 });
 
 module.exports = router;

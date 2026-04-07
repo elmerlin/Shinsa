@@ -698,6 +698,12 @@ export default function PetPage() {
         @keyframes wiggle { 0%,100% { transform: rotate(0); } 25% { transform: rotate(-3deg); } 75% { transform: rotate(3deg); } }
         @keyframes float-up { 0% { opacity: 0.5; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-50px) scale(0.5); } }
         @keyframes pulse-glow { 0%,100% { opacity: 0.15; } 50% { opacity: 0.3; } }
+        @keyframes unlock-pop { 0% { transform: scale(0.8); opacity: 0; } 50% { transform: scale(1.05); } 100% { transform: scale(1); opacity: 1; } }
+        @keyframes shimmer { 0% { background-position: -200% center; } 100% { background-position: 200% center; } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+        @media (prefers-reduced-motion: reduce) {
+          *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+        }
       `}</style>
     </div>
   );
@@ -731,6 +737,10 @@ function HabitatBackdrop({ backgroundId }) {
     'sunset-arcade': 'radial-gradient(circle at 50% 16%, rgba(255,158,88,0.18), transparent 42%), linear-gradient(180deg, rgba(129,45,74,0.18) 0%, rgba(3,7,18,0) 72%)',
     'moon-festival': 'radial-gradient(circle at 50% 18%, rgba(255,220,130,0.14), transparent 42%), linear-gradient(180deg, rgba(86,42,108,0.18) 0%, rgba(3,7,18,0) 72%)',
     'inferno-stage': 'radial-gradient(circle at 50% 18%, rgba(255,98,72,0.16), transparent 42%), linear-gradient(180deg, rgba(112,22,22,0.22) 0%, rgba(3,7,18,0) 72%)',
+    'neon-alley': 'radial-gradient(circle at 30% 20%, rgba(255,80,180,0.14), transparent 38%), radial-gradient(circle at 70% 25%, rgba(80,200,255,0.12), transparent 35%), linear-gradient(180deg, rgba(30,10,50,0.22) 0%, rgba(3,7,18,0) 72%)',
+    'sakura-garden': 'radial-gradient(circle at 50% 15%, rgba(255,180,200,0.16), transparent 40%), linear-gradient(180deg, rgba(120,50,80,0.14) 0%, rgba(3,7,18,0) 72%)',
+    'thunderdome': 'radial-gradient(circle at 50% 20%, rgba(120,180,255,0.18), transparent 40%), radial-gradient(circle at 50% 60%, rgba(255,200,60,0.08), transparent 40%), linear-gradient(180deg, rgba(15,20,60,0.25) 0%, rgba(3,7,18,0) 72%)',
+    'celestial-shrine': 'radial-gradient(circle at 50% 15%, rgba(255,230,180,0.12), transparent 35%), radial-gradient(circle at 50% 50%, rgba(200,160,255,0.08), transparent 40%), linear-gradient(180deg, rgba(40,20,60,0.20) 0%, rgba(3,7,18,0) 72%)',
   };
   return (
     <div
@@ -881,6 +891,94 @@ const PIXEL_PROP_ART = {
       p: '#453541',
     },
   },
+  'punching-bag': {
+    width: 16,
+    pixels: [
+      '______aaa_______',
+      '_____abbba______',
+      '_____abbba______',
+      '______bbb_______',
+      '_____cdddc______',
+      '____cddddc______',
+      '____cddddc______',
+      '____cdeedc______',
+      '____cddddc______',
+      '____cddddc______',
+      '____cddddc______',
+      '_____cdddc______',
+      '______ccc_______',
+      '______fff_______',
+      '_____fffff______',
+      '________________',
+    ],
+    colors: { a: '#8a8a8a', b: '#b0b0b0', c: '#5a2a1a', d: '#8b4513', e: '#d4a574', f: '#3d3d3d' },
+  },
+  'arcade-cab': {
+    width: 16,
+    pixels: [
+      '___aaaaaaaaa____',
+      '___abbbbbba_____',
+      '___abcccba______',
+      '___abcdcba______',
+      '___abcccba______',
+      '___abbbbbba_____',
+      '___aeeeeea______',
+      '___aeffea_______',
+      '___aeeeeea______',
+      '___aaaaaa_______',
+      '____affa________',
+      '____affa________',
+      '___affffa_______',
+      '___affffa_______',
+      '___agggga_______',
+      '________________',
+    ],
+    colors: { a: '#1a1a2e', b: '#0f0f23', c: '#2a4a8a', d: '#5ac8fa', e: '#2d2d44', f: '#3a3a55', g: '#151525' },
+  },
+  'medal-rack': {
+    width: 16,
+    pixels: [
+      '__aaaaaaaaaa____',
+      '__abbbbbbbba____',
+      '__aaaaaaaaaa____',
+      '___cd__ef__g____',
+      '___cd__ef__g____',
+      '___hh__ii__jj___',
+      '___hkh_ili_jmj__',
+      '___hhh_iii_jjj__',
+      '____h___i___j___',
+      '________________',
+      '________________',
+      '________________',
+      '________________',
+      '________________',
+      '________________',
+      '________________',
+    ],
+    colors: { a: '#5a3a2a', b: '#8a6a4a', c: '#d4a017', d: '#ffd700', e: '#c0c0c0', f: '#e8e8e8', g: '#cd7f32', h: '#ffd700', i: '#c0c0c0', j: '#cd7f32', k: '#fff8dc', l: '#f0f0f0', m: '#deb887' },
+  },
+  'spirit-lantern': {
+    width: 16,
+    pixels: [
+      '______aa________',
+      '______aa________',
+      '_____abba_______',
+      '____abccba______',
+      '____acdca_______',
+      '____abccba______',
+      '_____abba_______',
+      '______ee________',
+      '______ee________',
+      '_____efffe______',
+      '_____efffe______',
+      '_____efffe______',
+      '______eee_______',
+      '______gg________',
+      '______gg________',
+      '________________',
+    ],
+    colors: { a: '#4a3060', b: '#8a60b0', c: '#e0c0ff', d: '#ffffff', e: '#3a2040', f: '#6040a0', g: '#2a1530' },
+  },
 };
 
 function PixelPropSprite({ art, className = '' }) {
@@ -920,8 +1018,12 @@ function HabitatPropDisplay({ propId }) {
     'lucky-banner': 'left-4 top-10',
     boombox: 'left-4 bottom-4',
     'trophy-stand': 'right-4 top-12',
+    'punching-bag': 'right-6 bottom-6',
+    'arcade-cab': 'left-3 bottom-3',
+    'medal-rack': 'right-3 top-14',
+    'spirit-lantern': 'left-6 top-12',
   };
-  return <PixelPropSprite art={PIXEL_PROP_ART[propId]} className={positions[propId] || ''} />;
+  return <PixelPropSprite art={PIXEL_PROP_ART[propId]} className={positions[propId] || 'right-4 bottom-4'} />;
 }
 
 function WeightBadge({ state }) {
@@ -938,15 +1040,17 @@ function BondBadge({ rank }) {
 }
 
 function FormBadge({ form }) {
-  const tones = {
-    calm: 'border-white/10 bg-black/25 text-white/70',
-    bonded: 'border-emerald-400/20 bg-emerald-500/10 text-emerald-200',
-    spotlight: 'border-fuchsia-400/20 bg-fuchsia-500/10 text-fuchsia-100',
-    legend: 'border-amber-400/20 bg-amber-500/10 text-amber-200',
+  if (!form) return null;
+  const formStyles = {
+    fresh: 'border-white/[0.08] text-gray-400',
+    trusted: 'border-emerald-400/20 text-emerald-300',
+    showcase: 'border-cyan-400/20 text-cyan-300',
+    ascendant: 'border-amber-400/25 text-amber-300',
+    beyond: 'border-purple-400/30 text-purple-300 animate-pulse',
   };
   return (
-    <span className={`inline-flex items-center whitespace-nowrap rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] ${tones[form?.aura] || tones.calm}`}>
-      {form?.label || 'Fresh Form'}
+    <span className={`rounded-full border bg-black/40 backdrop-blur-sm px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${formStyles[form.id] || formStyles.fresh}`}>
+      {form.label}
     </span>
   );
 }
@@ -1129,7 +1233,7 @@ function PetTab({ pet, shop, combo, economy, interactionBusy, activityBusy, miss
       <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
         <div className="flex items-start justify-between gap-3 mb-2">
           <div>
-            <div className="text-xs text-gray-500">Mastery path</div>
+            <div className="text-xs text-gray-500">Mastery board</div>
             <div className="text-sm font-semibold text-white/85 mt-0.5">
               {pet.mastery?.path?.icon ? `${pet.mastery.path.icon} ` : ''}{pet.mastery?.path?.label || 'Consistency'}
             </div>
@@ -1146,7 +1250,7 @@ function PetTab({ pet, shop, combo, economy, interactionBusy, activityBusy, miss
         </div>
         <div className="mt-2 text-[10px] text-gray-500">
           {pet.mastery?.rank?.next_label
-            ? `${pet.mastery.rank.label} -> ${pet.mastery.rank.next_label} at ${pet.mastery.rank.next_threshold} XP`
+            ? `${pet.mastery.rank.label} → ${pet.mastery.rank.next_label} at ${pet.mastery.rank.next_threshold} XP`
             : `${pet.mastery?.rank?.label || 'Master'} rank reached`}
         </div>
         <div className="mt-3 grid grid-cols-2 gap-2">
@@ -1167,15 +1271,34 @@ function PetTab({ pet, shop, combo, economy, interactionBusy, activityBusy, miss
           ))}
         </div>
         <div className="mt-3 space-y-2">
-          {(pet.mastery?.milestones || []).map((node) => (
-            <div key={node.id} className={`rounded-xl border px-3 py-2 ${node.unlocked ? 'border-emerald-400/12 bg-emerald-500/[0.06]' : 'border-white/[0.05] bg-black/20'}`}>
+          <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Talent nodes</div>
+          {(pet.mastery?.milestones || []).map((node, idx) => (
+            <div key={node.id} className={`relative rounded-xl border px-3 py-2.5 transition-all ${node.unlocked ? 'border-emerald-400/15 bg-emerald-500/[0.06]' : 'border-white/[0.05] bg-black/20'}`}>
+              {idx > 0 && (
+                <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-px h-2 bg-white/10" />
+              )}
               <div className="flex items-center justify-between gap-3">
-                <div className="text-[11px] font-semibold text-white/85">{node.title}</div>
-                <div className={`text-[10px] font-semibold ${node.unlocked ? 'text-emerald-300' : 'text-gray-500'}`}>
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-sm">{node.unlocked ? '✅' : '🔒'}</span>
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-semibold text-white/85">{node.title}</div>
+                    <div className="text-[10px] text-gray-500 mt-0.5">{node.desc}</div>
+                  </div>
+                </div>
+                <div className={`text-[10px] font-semibold shrink-0 ${node.unlocked ? 'text-emerald-300' : 'text-gray-500'}`}>
                   {node.unlocked ? 'Unlocked' : `${node.threshold} XP`}
                 </div>
               </div>
-              <div className="text-[10px] text-gray-500 mt-1">{node.desc}</div>
+              {node.reward && (
+                <div className={`mt-1.5 flex items-center gap-1.5 rounded-lg px-2 py-1 text-[9px] ${
+                  node.unlocked
+                    ? 'bg-amber-500/[0.08] border border-amber-400/15 text-amber-200'
+                    : 'bg-white/[0.02] border border-white/[0.04] text-gray-500'
+                }`}>
+                  <span>{node.reward.type === 'title' ? '🏷️' : node.reward.type === 'habitat' ? '🏠' : '✨'}</span>
+                  <span>{node.reward.label}</span>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -1289,92 +1412,160 @@ function PetTab({ pet, shop, combo, economy, interactionBusy, activityBusy, miss
         </div>
       )}
       <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
-        <div className="text-xs text-gray-500 mb-2">Memory album</div>
-        <div className="space-y-2">
-          {(pet.memories || []).map((memory) => (
-            <div key={memory.id} className="rounded-xl border border-white/[0.05] bg-black/20 px-3 py-2">
-              <div className="text-[11px] font-semibold text-white/80">{memory.title}</div>
-              <div className="text-[10px] text-gray-500 mt-0.5">{memory.detail}</div>
-            </div>
-          ))}
+        <div className="flex items-center justify-between mb-2">
+          <div className="text-xs text-gray-500">Memory album</div>
+          <div className="text-[10px] text-gray-600 tabular-nums">{(pet.memories || []).length} memories</div>
         </div>
+        {(() => {
+          const grouped = {};
+          (pet.memories || []).forEach(m => {
+            const cat = m.category || 'other';
+            if (!grouped[cat]) grouped[cat] = [];
+            grouped[cat].push(m);
+          });
+          const catLabels = { firsts: '🌱 Firsts', bests: '🏆 Bests', social: '🤝 Social', endurance: '💪 Endurance', identity: '🪪 Identity', other: '📝 Other' };
+          const catOrder = ['firsts', 'bests', 'social', 'endurance', 'identity', 'other'];
+          const rarityColors = {
+            legendary: 'border-amber-400/25 bg-amber-500/[0.08]',
+            rare: 'border-purple-400/20 bg-purple-500/[0.06]',
+            uncommon: 'border-cyan-400/15 bg-cyan-500/[0.04]',
+            common: 'border-white/[0.05] bg-black/20',
+          };
+          const rarityDot = { legendary: 'text-amber-400', rare: 'text-purple-400', uncommon: 'text-cyan-400', common: 'text-gray-600' };
+          return catOrder.filter(cat => grouped[cat]?.length).map(cat => (
+            <div key={cat} className="mb-3 last:mb-0">
+              <div className="text-[10px] text-gray-500 mb-1.5">{catLabels[cat] || cat}</div>
+              <div className="space-y-1.5">
+                {grouped[cat].map(memory => (
+                  <div key={memory.id} className={`rounded-xl border px-3 py-2 ${rarityColors[memory.rarity] || rarityColors.common}`}>
+                    <div className="flex items-center gap-1.5">
+                      <span className={`text-[8px] ${rarityDot[memory.rarity] || rarityDot.common}`}>●</span>
+                      <div className="text-[11px] font-semibold text-white/80">{memory.title}</div>
+                    </div>
+                    <div className="text-[10px] text-gray-500 mt-0.5 ml-3.5">{memory.detail}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ));
+        })()}
       </div>
       <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
-        <div className="text-xs text-gray-500 mb-1">How this grows</div>
-        <ul className="text-[11px] space-y-0.5 list-disc list-inside">
-          <li>Play style shapes your pet specialty over time</li>
-          <li>Bond rank rises through care, missions, and activities</li>
-          <li>Mastery paths turn your habits into long-term pet identity</li>
-          <li>Combo keeps them fed while Bond Tokens feed deeper progression</li>
-        </ul>
+        <div className="text-xs text-gray-500 mb-2">Economy guide</div>
+        <div className="space-y-2">
+          <div className="flex items-start gap-2">
+            <span className="text-sm shrink-0">🎵</span>
+            <div>
+              <div className="text-[11px] font-semibold text-amber-200">Combo</div>
+              <div className="text-[10px] text-gray-500">Earned from syncing PIU plays. Spent on food, clothing, habitat, and toys.</div>
+            </div>
+          </div>
+          <div className="flex items-start gap-2">
+            <span className="text-sm shrink-0">💎</span>
+            <div>
+              <div className="text-[11px] font-semibold text-cyan-200">Bond Tokens</div>
+              <div className="text-[10px] text-gray-500">Earned from missions and deep care. Used for rare unlocks and gifts.</div>
+            </div>
+          </div>
+          <div className="flex items-start gap-2">
+            <span className="text-sm shrink-0">✨</span>
+            <div>
+              <div className="text-[11px] font-semibold text-fuchsia-200">Rare Shards</div>
+              <div className="text-[10px] text-gray-500">Dropped from special events and HoP sessions. For legendary items.</div>
+            </div>
+          </div>
+        </div>
+        <div className="mt-3 pt-2 border-t border-white/[0.04]">
+          <div className="text-xs text-gray-500 mb-1">Progression</div>
+          <ul className="text-[10px] space-y-0.5 text-gray-400">
+            <li>🐾 Play style shapes your pet's specialty over time</li>
+            <li>💗 Bond rank rises through care, missions, and activities</li>
+            <li>🧠 Mastery paths turn your habits into long-term identity</li>
+            <li>⭐ Form evolves: Fresh → Trusted → Showcase → Ascendant → Beyond</li>
+          </ul>
+        </div>
       </div>
     </div>
   );
 }
 
 function HabitatTab({ pet, shop, combo, habitatBusy, onBuyItem, onEquipItem }) {
-  const habitat = shop?.habitat || pet?.habitat_items || { backgrounds: [], props: [] };
+  const habitat = shop?.habitat || pet?.habitat_items || { backgrounds: [], props: [], floor: [], wall: [] };
   const sections = [
     { key: 'background', label: 'Backdrops', items: habitat.backgrounds || [] },
     { key: 'prop', label: 'Props', items: habitat.props || [] },
+    { key: 'floor', label: 'Floor', items: habitat.floor || [] },
+    { key: 'wall', label: 'Wall', items: habitat.wall || [] },
   ];
 
   return (
     <div className="space-y-4 text-sm text-gray-400">
       <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
         <div className="text-xs text-gray-500 mb-1">Habitat</div>
-        <p className="text-[11px] text-white/75">Give your companion a room identity. Backdrops shift the mood of the habitat card, and props make the space feel lived in.</p>
+        <p className="text-[11px] text-white/75">Give your companion a room identity. Backdrops shift the mood, props add character, and floor and wall decor make the space feel lived in.</p>
       </div>
-      {sections.map((section) => (
-        <div key={section.key} className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
-          <div className="flex items-center justify-between gap-3 mb-2">
-            <div className="text-xs text-gray-500">{section.label}</div>
-            <div className="text-[10px] font-semibold text-amber-300">{combo.toLocaleString()} Combo</div>
-          </div>
-          <div className="space-y-2">
-            {section.items.map((item) => {
-              const canAfford = combo >= item.cost;
-              return (
-                <div key={item.id} className="rounded-xl border border-white/[0.06] bg-black/20 px-3 py-2.5">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="text-sm font-semibold text-white/85">{item.name}</div>
-                      <div className="text-[11px] text-gray-500 mt-0.5">{item.desc}</div>
+      {sections.map((section) => {
+        if (!section.items.length) return null;
+        return (
+          <div key={section.key} className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
+            <div className="flex items-center justify-between gap-3 mb-2">
+              <div className="text-xs text-gray-500">{section.label}</div>
+              <div className="text-[10px] font-semibold text-amber-300">{combo.toLocaleString()} Combo</div>
+            </div>
+            <div className="space-y-2">
+              {section.items.map((item) => {
+                const canAfford = combo >= item.cost;
+                const locked = item.locked;
+                return (
+                  <div key={item.id} className={`rounded-xl border px-3 py-2.5 ${locked ? 'border-white/[0.03] bg-black/30 opacity-60' : 'border-white/[0.06] bg-black/20'}`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <div className="text-sm font-semibold text-white/85">{item.name}</div>
+                          {locked && <span className="text-[9px] text-gray-500">🔒</span>}
+                        </div>
+                        <div className="text-[11px] text-gray-500 mt-0.5">{item.desc}</div>
+                        {locked && item.lock_reason && (
+                          <div className="text-[9px] text-rose-300/60 mt-1">{item.lock_reason} required</div>
+                        )}
+                      </div>
+                      <div className="text-[10px] text-amber-300 shrink-0">{item.cost}c</div>
                     </div>
-                    <div className="text-[10px] text-amber-300 shrink-0">{item.cost}c</div>
+                    {!locked && (
+                      <div className="mt-2 flex items-center gap-2">
+                        <button
+                          onClick={() => (item.owned ? onEquipItem(item.id, section.key) : onBuyItem(item.id))}
+                          disabled={habitatBusy || (!item.owned && !canAfford)}
+                          className={`rounded-lg px-2.5 py-1.5 text-[10px] font-semibold transition-all ${
+                            item.active
+                              ? 'bg-emerald-500/12 text-emerald-200 border border-emerald-500/15'
+                              : item.owned
+                                ? 'bg-cyan-500/15 text-cyan-200 border border-cyan-500/20 hover:bg-cyan-500/20'
+                                : canAfford
+                                  ? 'bg-white/[0.05] text-white/80 border border-white/[0.07] hover:border-white/15'
+                                  : 'bg-white/[0.03] text-gray-500 border border-white/[0.05]'
+                          } disabled:opacity-50`}
+                        >
+                          {item.active ? 'Active' : item.owned ? 'Equip' : 'Buy'}
+                        </button>
+                        {item.active ? (
+                          <button
+                            onClick={() => onEquipItem('', section.key)}
+                            disabled={habitatBusy}
+                            className="rounded-lg px-2.5 py-1.5 text-[10px] font-semibold border border-white/[0.06] bg-white/[0.03] text-gray-400 hover:text-white/80 disabled:opacity-50"
+                          >
+                            Reset
+                          </button>
+                        ) : null}
+                      </div>
+                    )}
                   </div>
-                  <div className="mt-2 flex items-center gap-2">
-                    <button
-                      onClick={() => (item.owned ? onEquipItem(item.id, section.key) : onBuyItem(item.id))}
-                      disabled={habitatBusy || (!item.owned && !canAfford)}
-                      className={`rounded-lg px-2.5 py-1.5 text-[10px] font-semibold transition-all ${
-                        item.active
-                          ? 'bg-emerald-500/12 text-emerald-200 border border-emerald-500/15'
-                          : item.owned
-                            ? 'bg-cyan-500/15 text-cyan-200 border border-cyan-500/20 hover:bg-cyan-500/20'
-                            : canAfford
-                              ? 'bg-white/[0.05] text-white/80 border border-white/[0.07] hover:border-white/15'
-                              : 'bg-white/[0.03] text-gray-500 border border-white/[0.05]'
-                      } disabled:opacity-50`}
-                    >
-                      {item.active ? 'Active' : item.owned ? 'Equip' : 'Buy'}
-                    </button>
-                    {item.active ? (
-                      <button
-                        onClick={() => onEquipItem('', section.key)}
-                        disabled={habitatBusy}
-                        className="rounded-lg px-2.5 py-1.5 text-[10px] font-semibold border border-white/[0.06] bg-white/[0.03] text-gray-400 hover:text-white/80 disabled:opacity-50"
-                      >
-                        Reset
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
