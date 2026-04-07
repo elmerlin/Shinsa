@@ -166,7 +166,7 @@ export default function PetPage() {
       setEconomy(petRes.economy || null);
       setCharacters(charRes.characters || []);
       if (!petRes.pet) setShowSelect(true);
-      if (petRes.pet) setSpeechText(randomMsg(petRes.pet.mood));
+      if (petRes.pet) setSpeechText(petRes.pet.time_greeting || randomMsg(petRes.pet.mood));
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
   }, []);
@@ -345,7 +345,8 @@ export default function PetPage() {
       const r = await interactPet(actionId);
       if (r.rare) playPetRare();
       setPet(r.pet);
-      if (r.stat_changes?.length) showFeedback(r.stat_changes.join('  '));
+      if (r.streak?.day) showFeedback(`\uD83D\uDD25 Day ${r.streak.day} streak! +${r.streak.bonus} bond bonus`);
+      else if (r.stat_changes?.length) showFeedback(r.stat_changes.join('  '));
       triggerPetResponse(r.speech, r.reaction, r.expression, 1200, r.rare);
     } catch (e) {
       showFeedback(e?.message || 'Could not interact');
@@ -640,7 +641,7 @@ export default function PetPage() {
       <div className="mt-3 grid grid-cols-4 gap-2">
         <StatCard label="Songs" value={pet.total_songs_fed} />
         <StatCard label="Mood" value={capitalize(pet.mood)} />
-        <StatCard label="Level" value={pet.highest_level || '—'} />
+        <StatCard label="Streak" value={pet.daily_streak ? `${pet.daily_streak}d` : '—'} />
         <StatCard label="Specialty" value={pet.specialty?.label || '—'} />
       </div>
 
@@ -1263,6 +1264,30 @@ function PetTab({ pet, shop, combo, economy, interactionBusy, activityBusy, miss
           })}
         </div>
       </div>
+      {(pet.milestones?.length > 0) && (
+        <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-xs text-gray-500">Milestones</div>
+            <div className="text-[10px] text-gray-600 tabular-nums">{pet.milestones.filter(m => m.unlocked).length}/{pet.milestones.length}</div>
+          </div>
+          {pet.daily_streak > 0 && (
+            <div className="flex items-center gap-2 mb-2 rounded-lg border border-amber-500/10 bg-amber-500/[0.04] px-2.5 py-1.5">
+              <span className="text-sm">{pet.daily_streak >= 7 ? '\uD83D\uDD25' : '\u26A1'}</span>
+              <div>
+                <div className="text-[11px] font-semibold text-amber-200">{pet.daily_streak}-day streak</div>
+                <div className="text-[9px] text-gray-500">Best: {pet.longest_streak || pet.daily_streak}d</div>
+              </div>
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-1.5">
+            {pet.milestones.map(m => (
+              <div key={m.id} className={`rounded-lg border px-2 py-1.5 text-[10px] ${m.unlocked ? 'border-emerald-400/15 bg-emerald-400/[0.06] text-emerald-100/80' : 'border-white/[0.04] bg-black/20 text-gray-600'}`}>
+                {m.unlocked ? '\u2713 ' : '\u25CB '}{m.label}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
         <div className="text-xs text-gray-500 mb-2">Memory album</div>
         <div className="space-y-2">

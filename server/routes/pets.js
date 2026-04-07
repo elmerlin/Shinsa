@@ -633,6 +633,12 @@ function ensurePetTable(db) {
   addCol('active_habitat_prop', "TEXT NOT NULL DEFAULT ''");
   addCol('active_training_path', "TEXT NOT NULL DEFAULT 'consistency'");
   addCol('mastery_xp', "INTEGER NOT NULL DEFAULT 0");
+  // Streak & engagement tracking
+  addCol('daily_streak', "INTEGER NOT NULL DEFAULT 0");
+  addCol('longest_streak', "INTEGER NOT NULL DEFAULT 0");
+  addCol('last_active_date', "TEXT NOT NULL DEFAULT ''");
+  addCol('lifetime_feeds', "INTEGER NOT NULL DEFAULT 0");
+  addCol('lifetime_activities', "INTEGER NOT NULL DEFAULT 0");
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────
@@ -656,6 +662,90 @@ function getUtcWeekKey(date = new Date()) {
   const diff = day === 0 ? -6 : 1 - day;
   copy.setUTCDate(copy.getUTCDate() + diff);
   return copy.toISOString().slice(0, 10);
+}
+
+/**
+ * Update daily streak. Call on any meaningful pet interaction.
+ * Returns { streak, longest, isNewDay, streakBonus }
+ */
+function updateStreak(db, pet) {
+  const today = getUtcDayKey();
+  const lastActive = pet.last_active_date || '';
+  if (lastActive === today) {
+    // Already active today — no change
+    return { streak: pet.daily_streak || 1, longest: pet.longest_streak || 1, isNewDay: false, streakBonus: 0 };
+  }
+  const yesterday = getUtcDayKey(new Date(Date.now() - 86400000));
+  let streak = 1;
+  if (lastActive === yesterday) {
+    streak = (pet.daily_streak || 0) + 1;
+  }
+  const longest = Math.max(streak, pet.longest_streak || 0);
+  const streakBonus = Math.min(streak, 7); // cap at +7 per streak day
+  db.prepare(`
+    UPDATE user_pets SET daily_streak = ?, longest_streak = ?, last_active_date = ?, updated_at = datetime('now')
+    WHERE user_id = ?
+  `).run(streak, longest, today, pet.user_id);
+  return { streak, longest, isNewDay: true, streakBonus };
+}
+
+/** Time-of-day greeting flavour (UTC-based, good enough for most users) */
+function getTimeGreeting() {
+  const h = new Date().getUTCHours();
+  if (h < 6) return 'night';
+  if (h < 12) return 'morning';
+  if (h < 18) return 'afternoon';
+  return 'evening';
+}
+
+const TIME_GREETINGS = {
+  dojocat: {
+    morning: 'Morning drills begin.', afternoon: 'Afternoon training awaits.', evening: 'Evening kata session.', night: 'The dojo rests... for now.',
+  },
+  buu: {
+    morning: 'Good morning! Breakfast?', afternoon: 'Afternoon snack time!', evening: 'Evening vibes are the best.', night: 'Midnight munchies...',
+  },
+  devit: {
+    morning: 'Up early? Chaos waits for no one!', afternoon: 'Peak mischief hours.', evening: 'Evening chaos is elite chaos.', night: 'The night shift troublemaker.',
+  },
+  pixiu: {
+    morning: 'The morning light brings fortune.', afternoon: 'A blessed afternoon.', evening: 'Evening blessings upon you.', night: 'The stars watch over us.',
+  },
+};
+
+/**
+ * Build milestone events from lifetime stats.
+ * Returns array of { id, label, unlocked } milestone markers.
+ */
+function detectMilestones(pet) {
+  const milestones = [];
+  const interactions = pet.interaction_count || 0;
+  const feeds = pet.lifetime_feeds || pet.total_songs_fed || 0;
+  const activities = pet.lifetime_activities || 0;
+  const bond = pet.bond || 0;
+  const streak = pet.daily_streak || 0;
+
+  const checks = [
+    { id: 'first_tap', label: 'First Touch', threshold: 1, stat: interactions },
+    { id: 'social_10', label: '10 Interactions', threshold: 10, stat: interactions },
+    { id: 'social_50', label: '50 Interactions', threshold: 50, stat: interactions },
+    { id: 'social_200', label: '200 Interactions', threshold: 200, stat: interactions },
+    { id: 'fed_10', label: '10 Meals Served', threshold: 10, stat: feeds },
+    { id: 'fed_50', label: '50 Meals Served', threshold: 50, stat: feeds },
+    { id: 'active_10', label: '10 Activities', threshold: 10, stat: activities },
+    { id: 'active_50', label: '50 Activities', threshold: 50, stat: activities },
+    { id: 'bond_40', label: 'Bond 40 — Perform Unlocked', threshold: 40, stat: bond },
+    { id: 'bond_90', label: 'Bond 90 — Dojo Mascot', threshold: 90, stat: bond },
+    { id: 'bond_160', label: 'Bond 160 — Arena Spirit', threshold: 160, stat: bond },
+    { id: 'streak_3', label: '3-Day Streak', threshold: 3, stat: streak },
+    { id: 'streak_7', label: '7-Day Streak', threshold: 7, stat: streak },
+    { id: 'streak_14', label: '14-Day Streak', threshold: 14, stat: streak },
+    { id: 'streak_30', label: '30-Day Streak', threshold: 30, stat: streak },
+  ];
+  for (const c of checks) {
+    milestones.push({ id: c.id, label: c.label, unlocked: c.stat >= c.threshold });
+  }
+  return milestones;
 }
 
 function computeDecayed(storedValue, lastFedAt, decayPerHour) {
@@ -1388,6 +1478,12 @@ function formatPet(pet, isPublic = false, db = null) {
     last_fed_at: pet.last_fed_at || '',
     interactions_today: interactionsToday,
     interaction_count: pet.interaction_count || 0,
+    daily_streak: pet.daily_streak || 0,
+    longest_streak: pet.longest_streak || 0,
+    lifetime_feeds: pet.lifetime_feeds || pet.total_songs_fed || 0,
+    lifetime_activities: pet.lifetime_activities || 0,
+    time_greeting: (TIME_GREETINGS[character] || TIME_GREETINGS.dojocat)[getTimeGreeting()],
+    milestones: detectMilestones(pet),
     activity_summary: activitySummary,
     activities: Object.values(PET_ACTIVITIES).map(a => ({
       ...a,
@@ -1549,11 +1645,13 @@ router.post('/buy-food', requireAuth, (req, res) => {
   const newTrust = clamp((pet.trust || 35) + (favoriteBonus?.trust || 0) + (dislikedPenalty?.trust || 0), 0, MAX_STAT);
   const feedCtx = buildContextualSpeech(pet, { type: 'feed', preference });
   const response = feedCtx.speech;
+  updateStreak(db, pet);
 
   db.prepare(`
     UPDATE user_pets
     SET fullness = ?, happiness = ?, energy = ?, hype = ?, bond = ?, trust = ?,
         combo_balance = combo_balance - ?, total_songs_fed = total_songs_fed + 1,
+        lifetime_feeds = lifetime_feeds + 1,
         last_food_id = ?, last_food_at = datetime('now'),
         last_fed_at = datetime('now'), updated_at = datetime('now')
     WHERE user_id = ?
@@ -1796,11 +1894,15 @@ router.post('/interact', requireAuth, (req, res) => {
     return res.status(400).json({ error: `Not enough energy for ${interaction.label}` });
   }
 
+  // Streak tracking
+  const streakInfo = updateStreak(db, pet);
+
   const newEnergy = clamp(currentEnergy + (interaction.energy || 0), 0, MAX_STAT);
   const newHype = clamp(currentHype + (interaction.hype || 0), 0, MAX_STAT);
   const newHappiness = clamp(currentHappiness + (interaction.happiness || 0), 0, MAX_STAT);
   const newTrust = clamp((pet.trust || 35) + (interaction.trust || 0), 0, MAX_STAT);
-  const newBond = Math.max(0, (pet.bond || 0) + (interaction.bond || 0));
+  const streakBondExtra = streakInfo.isNewDay ? streakInfo.streakBonus : 0;
+  const newBond = Math.max(0, (pet.bond || 0) + (interaction.bond || 0) + streakBondExtra);
   const ctx = buildContextualSpeech(pet, { type: 'interact', actionId });
 
   db.prepare(`
@@ -1823,6 +1925,7 @@ router.post('/interact', requireAuth, (req, res) => {
   if (interaction.hype > 0) changes.push(`+${interaction.hype} hype`);
   if (interaction.energy < 0) changes.push(`${interaction.energy} energy`);
   else if (interaction.energy > 0) changes.push(`+${interaction.energy} energy`);
+  if (streakBondExtra) changes.push(`+${streakBondExtra} streak bonus`);
 
   res.json({
     pet: formatPet(updated, false, db),
@@ -1833,6 +1936,7 @@ router.post('/interact', requireAuth, (req, res) => {
     rare: ctx.rare || false,
     mood_aware: ctx.mood_aware || false,
     stat_changes: changes,
+    streak: streakInfo.isNewDay ? { day: streakInfo.streak, bonus: streakBondExtra } : null,
   });
 });
 
@@ -1856,6 +1960,9 @@ router.post('/activities/:activityId', requireAuth, (req, res) => {
     return res.status(400).json({ error: `${activity.label} unlocks once trust reaches ${activity.minTrust}` });
   }
 
+  // Streak tracking
+  const streakInfo = updateStreak(db, pet);
+
   const newEnergy = clamp(currentEnergy + activity.energy, 0, MAX_STAT);
   const newHappiness = clamp(currentHappiness + activity.happiness, 0, MAX_STAT);
   const newTrust = clamp((pet.trust || 35) + activity.trust, 0, MAX_STAT);
@@ -1872,6 +1979,7 @@ router.post('/activities/:activityId', requireAuth, (req, res) => {
     SET happiness = ?, energy = ?, trust = ?, hype = ?, bond = ?,
         combo_balance = ?, bond_tokens = ?, rare_shards = ?,
         mastery_xp = mastery_xp + ?,
+        lifetime_activities = lifetime_activities + 1,
         updated_at = datetime('now')
     WHERE user_id = ?
   `).run(newHappiness, newEnergy, newTrust, newHype, newBond, newCombo, newBondTokens, newRareShards, masteryGain, req.user.id);
