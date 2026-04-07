@@ -224,7 +224,7 @@ export default function FloatingPetCompanion() {
         {/* Speech bubble */}
         {showSpeech && !expanded && (
           <div className="absolute bottom-full right-0 mb-1 animate-[clippyFadeIn_200ms_ease-out]">
-            <div className="relative bg-gray-950/95 border border-white/[0.1] rounded-xl px-2.5 py-1.5 text-[10px] text-gray-300 whitespace-nowrap shadow-lg backdrop-blur-sm max-w-[200px]" style={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>
+            <div className="relative bg-gray-950/95 border border-white/[0.1] rounded-xl px-2.5 py-1.5 text-[10px] text-gray-300 shadow-lg backdrop-blur-sm" style={{ maxWidth: 220, whiteSpace: 'normal', overflowWrap: 'break-word' }}>
               {speech}
               <div className="absolute -bottom-1 right-4 w-2 h-2 rotate-45 bg-gray-950/95 border-r border-b border-white/[0.1]" />
             </div>
@@ -242,7 +242,7 @@ export default function FloatingPetCompanion() {
         {/* Pet sprite button */}
         <button
           onClick={() => setExpanded(e => !e)}
-          className="relative w-16 h-16 rounded-2xl border border-white/[0.08] bg-gray-950/80 backdrop-blur-sm shadow-[0_8px_24px_rgba(0,0,0,0.4)] flex items-end justify-center hover:border-white/15 active:scale-95 transition-all group"
+          className="relative w-[72px] h-[72px] rounded-2xl border border-white/[0.08] bg-gray-950/80 backdrop-blur-sm shadow-[0_8px_24px_rgba(0,0,0,0.4)] flex items-end justify-center hover:border-white/15 active:scale-95 transition-all group"
           style={{ paddingBottom: 2 }}
         >
           <div className="absolute inset-0 bg-gradient-to-b from-white/[0.03] to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl" />
@@ -254,7 +254,7 @@ export default function FloatingPetCompanion() {
             equippedTop={pet.equipped_top}
             hatColor={pet.hat_color}
             topColor={pet.top_color}
-            size={46}
+            size={56}
             reaction={petReaction}
           />
         </button>

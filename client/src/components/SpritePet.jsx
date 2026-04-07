@@ -211,7 +211,7 @@ function getBodyMetrics(weightState) {
 // 4. CHARACTER BODY BUILDERS
 // ═══════════════════════════════════════════════════════════════
 
-function buildBase(character, weightState) {
+function buildBase(character, weightState, pose = 'rest') {
   const g = createGrid(GW, GH);
   const { w, bodyCy, legHeight, legSpread, legTop } = getBodyMetrics(weightState);
 
@@ -222,13 +222,13 @@ function buildBase(character, weightState) {
   // Belly patch
   fillEllipse(g, CX, bodyCy + 2, Math.max(4, Math.floor(w.bodyRx * 0.5)), Math.max(3, Math.floor(w.bodyRy * 0.46)), 'Y');
 
-  // Belly droop for chubby/fat — extra ellipse hanging below body center
+  // Belly droop for chubby/fat
   if (w.bellyDroop > 0) {
     fillEllipse(g, CX, bodyCy + w.bodyRy - 1, Math.floor(w.bodyRx * 0.65), w.bellyDroop + 2, 'B');
     fillEllipse(g, CX, bodyCy + w.bodyRy, Math.floor(w.bodyRx * 0.4), w.bellyDroop + 1, 'Y');
   }
 
-  // Ribs for starving — subtle horizontal lines on sides
+  // Ribs for starving
   if (weightState === 'starving') {
     for (let ry = -2; ry <= 2; ry += 2) {
       setPixel(g, CX - w.bodyRx + 1, bodyCy + ry, 'K');
@@ -236,14 +236,35 @@ function buildBase(character, weightState) {
     }
   }
 
-  // Legs — shorter and wider for fat
-  fillRect(g, CX - legSpread - w.limbW + 1, legTop, w.limbW, legHeight, 'D');
-  fillRect(g, CX + legSpread, legTop, w.limbW, legHeight, 'D');
-
-  // Feet — wider for fat
+  // ── Legs — pose-dependent ──
   const footW = w.limbW + 2 + (w.bellyDroop > 2 ? 1 : 0);
-  fillRect(g, CX - legSpread - w.limbW - 1, legTop + legHeight - 1, footW, 2, 'D');
-  fillRect(g, CX + legSpread - 1, legTop + legHeight - 1, footW, 2, 'D');
+
+  if (pose === 'kick') {
+    // Left leg normal, right leg raised outward
+    fillRect(g, CX - legSpread - w.limbW + 1, legTop, w.limbW, legHeight, 'D');
+    fillRect(g, CX - legSpread - w.limbW - 1, legTop + legHeight - 1, footW, 2, 'D');
+    // Right leg — horizontal kick
+    fillRect(g, CX + legSpread, legTop + 1, legHeight - 1, w.limbW, 'D');
+    fillRect(g, CX + legSpread + legHeight - 2, legTop, footW - 1, 2, 'D');
+  } else if (pose === 'crane') {
+    // Left leg normal, right leg tucked up
+    fillRect(g, CX - legSpread - w.limbW + 1, legTop, w.limbW, legHeight, 'D');
+    fillRect(g, CX - legSpread - w.limbW - 1, legTop + legHeight - 1, footW, 2, 'D');
+    // Right leg — tucked (half height, no foot visible)
+    fillRect(g, CX + legSpread, legTop, w.limbW, Math.max(2, legHeight - 3), 'D');
+  } else if (pose === 'lunge') {
+    // Both legs wide stance
+    fillRect(g, CX - legSpread - w.limbW - 1, legTop, w.limbW, legHeight, 'D');
+    fillRect(g, CX - legSpread - w.limbW - 3, legTop + legHeight - 1, footW, 2, 'D');
+    fillRect(g, CX + legSpread + 2, legTop, w.limbW, legHeight, 'D');
+    fillRect(g, CX + legSpread + 1, legTop + legHeight - 1, footW, 2, 'D');
+  } else {
+    // Default legs
+    fillRect(g, CX - legSpread - w.limbW + 1, legTop, w.limbW, legHeight, 'D');
+    fillRect(g, CX + legSpread, legTop, w.limbW, legHeight, 'D');
+    fillRect(g, CX - legSpread - w.limbW - 1, legTop + legHeight - 1, footW, 2, 'D');
+    fillRect(g, CX + legSpread - 1, legTop + legHeight - 1, footW, 2, 'D');
+  }
 
   // Short visible neck
   if (character !== 'buu') {
@@ -277,18 +298,71 @@ function buildHead(character) {
   return g;
 }
 
-function buildArms(character, weightState) {
+function buildArms(character, weightState, pose = 'rest') {
   const g = createGrid(GW, GH);
   const { w, bodyCy } = getBodyMetrics(weightState);
-
-  // Arms resting at sides (centered on body)
   const armY = bodyCy + Math.floor(w.bodyRy * 0.1);
-  fillEllipse(g, CX - w.bodyRx - 1, armY, 2, w.armLen, 'B');
-  fillEllipse(g, CX + w.bodyRx + 1, armY, 2, w.armLen, 'B');
+  const lx = CX - w.bodyRx - 1;    // left arm x
+  const rx = CX + w.bodyRx + 1;    // right arm x
 
-  // Hands (slightly darker)
-  setPixel(g, CX - w.bodyRx - 1, armY + w.armLen, 'D');
-  setPixel(g, CX + w.bodyRx + 1, armY + w.armLen, 'D');
+  if (pose === 'guard') {
+    // Arms raised, bent inward — fighting guard
+    fillEllipse(g, lx + 2, armY - 3, 2, w.armLen - 1, 'B');
+    fillEllipse(g, rx - 2, armY - 3, 2, w.armLen - 1, 'B');
+    setPixel(g, lx + 2, armY - 3 - w.armLen + 1, 'D');
+    setPixel(g, rx - 2, armY - 3 - w.armLen + 1, 'D');
+  } else if (pose === 'punch') {
+    // Left arm guard, right arm extended outward (horizontal)
+    fillEllipse(g, lx + 1, armY - 2, 2, w.armLen - 1, 'B');
+    setPixel(g, lx + 1, armY - 2 - w.armLen + 1, 'D');
+    // Right arm horizontal punch
+    fillEllipse(g, rx + 3, armY - 2, w.armLen + 1, 2, 'B');
+    setPixel(g, rx + w.armLen + 3, armY - 2, 'D');
+    setPixel(g, rx + w.armLen + 4, armY - 2, 'D');
+  } else if (pose === 'wave') {
+    // Left arm at side, right arm raised high (waving)
+    fillEllipse(g, lx, armY, 2, w.armLen, 'B');
+    setPixel(g, lx, armY + w.armLen, 'D');
+    // Right arm up and slightly out
+    fillEllipse(g, rx + 1, armY - w.armLen - 1, 2, w.armLen, 'B');
+    setPixel(g, rx + 1, armY - w.armLen * 2 - 1, 'D');
+  } else if (pose === 'flex') {
+    // Both arms raised and bent — flexing/showing muscles
+    fillEllipse(g, lx - 1, armY - 4, 3, w.armLen - 1, 'B');
+    fillEllipse(g, rx + 1, armY - 4, 3, w.armLen - 1, 'B');
+    setPixel(g, lx - 1, armY - 4 - w.armLen + 1, 'D');
+    setPixel(g, rx + 1, armY - 4 - w.armLen + 1, 'D');
+  } else if (pose === 'crane') {
+    // Arms spread wide horizontally — crane stance
+    fillEllipse(g, lx - 3, armY - 1, w.armLen, 2, 'B');
+    fillEllipse(g, rx + 3, armY - 1, w.armLen, 2, 'B');
+    setPixel(g, lx - w.armLen - 3, armY - 1, 'D');
+    setPixel(g, rx + w.armLen + 3, armY - 1, 'D');
+  } else if (pose === 'kick') {
+    // Arms back for balance during kick
+    fillEllipse(g, lx - 1, armY - 1, 2, w.armLen, 'B');
+    fillEllipse(g, rx + 1, armY + 1, 2, w.armLen - 1, 'B');
+    setPixel(g, lx - 1, armY - 1 + w.armLen, 'D');
+    setPixel(g, rx + 1, armY + w.armLen, 'D');
+  } else if (pose === 'lunge') {
+    // One arm forward, one back — lunge/reach
+    fillEllipse(g, lx - 1, armY + 1, 2, w.armLen, 'B');
+    setPixel(g, lx - 1, armY + 1 + w.armLen, 'D');
+    fillEllipse(g, rx + 2, armY - 3, w.armLen, 2, 'B');
+    setPixel(g, rx + w.armLen + 2, armY - 3, 'D');
+  } else if (pose === 'bless') {
+    // Both arms raised — blessing/ceremony
+    fillEllipse(g, lx, armY - w.armLen, 2, w.armLen, 'B');
+    fillEllipse(g, rx, armY - w.armLen, 2, w.armLen, 'B');
+    setPixel(g, lx, armY - w.armLen * 2, 'D');
+    setPixel(g, rx, armY - w.armLen * 2, 'D');
+  } else {
+    // Default: arms at sides
+    fillEllipse(g, lx, armY, 2, w.armLen, 'B');
+    fillEllipse(g, rx, armY, 2, w.armLen, 'B');
+    setPixel(g, lx, armY + w.armLen, 'D');
+    setPixel(g, rx, armY + w.armLen, 'D');
+  }
 
   return g;
 }
@@ -1679,18 +1753,17 @@ export default function SpritePet({
     };
   }, [hasReaction, isEating, isTricking]);
 
-  // Character idle behaviors — cycle through 10 variants for richer life
-  const IDLE_VARIANT_CLASSES = {
-    dojocat: ['idle-nod', 'idle-stance', 'idle-kick', 'idle-stretch', 'idle-look', 'idle-punch', 'idle-crane', 'idle-whisker', 'idle-jump', 'idle-kata'],
-    buu:     ['idle-wobble', 'idle-bounce', 'idle-kick', 'idle-stretch', 'idle-look', 'idle-punch', 'idle-sway', 'idle-jump', 'idle-flex', 'idle-spin'],
-    devit:   ['idle-twitch', 'idle-shimmy', 'idle-hop', 'idle-stretch', 'idle-look', 'idle-dart', 'idle-mischief', 'idle-jump', 'idle-kick', 'idle-swing'],
-    pixiu:   ['idle-float', 'idle-sway', 'idle-glow', 'idle-stretch', 'idle-look', 'idle-kick', 'idle-bless', 'idle-jump', 'idle-punch', 'idle-crane'],
+  // Character idle poses — actual pixel-frame animation via arm/leg changes
+  const IDLE_POSE_SEQUENCE = {
+    dojocat: ['rest', 'guard', 'rest', 'punch', 'rest', 'kick', 'rest', 'crane', 'rest', 'lunge'],
+    buu:     ['rest', 'wave', 'rest', 'flex', 'rest', 'punch', 'rest', 'bless', 'rest', 'guard'],
+    devit:   ['rest', 'punch', 'rest', 'kick', 'rest', 'lunge', 'rest', 'guard', 'rest', 'wave'],
+    pixiu:   ['rest', 'bless', 'rest', 'crane', 'rest', 'guard', 'rest', 'wave', 'rest', 'kick'],
   };
-  const pool = IDLE_VARIANT_CLASSES[character] || IDLE_VARIANT_CLASSES.dojocat;
-  const idleVariant = idleTick % pool.length;
-  const idleVariantClass = (!hasReaction && !isEating && !isTricking)
-    ? pool[idleVariant]
-    : '';
+  const posePool = IDLE_POSE_SEQUENCE[character] || IDLE_POSE_SEQUENCE.dojocat;
+  const currentPose = (!hasReaction && !isEating && !isTricking)
+    ? posePool[idleTick % posePool.length]
+    : 'rest';
   const blinkClass = blinkState ? 'sprite-blink' : '';
 
   // Memoize all grid computations
@@ -1712,15 +1785,15 @@ export default function SpritePet({
     let hatShadow = '', topShadow = '', beltShadow2 = '', shoesShadow = '', foodShadow = '';
 
     // Base body (no head — head is a separate layer above clothing)
-    const baseGrid = outlineGrid(buildBase(character, weightState));
+    const baseGrid = outlineGrid(buildBase(character, weightState, currentPose));
     baseShadow = composeShadow(baseGrid, palette);
 
     // Head (separate layer — rendered above clothing, below features)
     const headGrid = outlineGrid(buildHead(character));
     headShadow = composeShadow(headGrid, palette);
 
-    // Arms
-    const armsGrid = outlineGrid(buildArms(character, weightState));
+    // Arms — pose-dependent pixel frames
+    const armsGrid = outlineGrid(buildArms(character, weightState, currentPose));
     armsShadow = composeShadow(armsGrid, palette);
 
     // Character features (ears, horns, etc)
@@ -1777,7 +1850,7 @@ export default function SpritePet({
     }
 
     return { baseShadow, headShadow, armsShadow, featShadow, faceShadow, tailShadow, groundShadow, hatShadow, topShadow, beltShadow2, shoesShadow, foodShadow };
-  }, [character, weightState, mood, expression, equippedHat, equippedBelt, equippedShoes, equippedTop, hatColor, beltColor, shoesColor, topColor, foodId, iconicLook, palette]);
+  }, [character, weightState, mood, expression, equippedHat, equippedBelt, equippedShoes, equippedTop, hatColor, beltColor, shoesColor, topColor, foodId, iconicLook, palette, currentPose]);
 
   const idleClass = `pet-idle-${character}`;
   const reactionClass = hasReaction
@@ -1794,6 +1867,7 @@ export default function SpritePet({
       : hasReaction
         ? reactionClass
         : idleClass;
+  // Idle variant classes removed — animation now happens via pixel-frame pose changes
 
   return (
     <div
@@ -1812,7 +1886,7 @@ export default function SpritePet({
       <PixelLayer shadow={layers.groundShadow} />
 
       {/* Animated group */}
-      <div className={`${animClass} ${idleVariantClass} ${blinkClass}`} style={{ position: 'absolute', inset: 0 }}>
+      <div className={`${animClass} ${blinkClass}`} style={{ position: 'absolute', inset: 0 }}>
         {/* Tail */}
         <PixelLayer shadow={layers.tailShadow} className="pet-tail" />
 
