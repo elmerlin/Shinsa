@@ -233,7 +233,9 @@ export default function PetPage() {
           <SpritePet
             character={pet.character} weightState={pet.weight_state} mood={pet.mood}
             equippedHat={pet.equipped_hat} equippedBelt={pet.equipped_belt} equippedShoes={pet.equipped_shoes}
+            equippedTop={pet.equipped_top}
             hatColor={pet.hat_color} beltColor={pet.belt_color} shoesColor={pet.shoes_color}
+            topColor={pet.top_color}
             isEating={isEating} isTricking={isTricking} size={130} onClick={handlePetTap} />
           {/* Speech bubble */}
           <div className="mt-2 relative max-w-[260px]">
@@ -435,6 +437,7 @@ function ClothingTab({ pet, shop, onBuy, onEquip, onUnequip, onSetColor, buying,
   const owned = pet.owned_items || [];
   const slots = [
     { key: 'hat', label: '👒 Hats', items: shop.clothing.hats, equipped: pet.equipped_hat, color: pet.hat_color },
+    { key: 'top', label: '👔 Tops', items: shop.clothing.tops || [], equipped: pet.equipped_top, color: pet.top_color },
     { key: 'belt', label: '🥋 Belts', items: shop.clothing.belts, equipped: pet.equipped_belt, color: pet.belt_color },
     { key: 'shoes', label: '👟 Shoes', items: shop.clothing.shoes, equipped: pet.equipped_shoes, color: pet.shoes_color },
   ];

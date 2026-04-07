@@ -42,6 +42,9 @@ import SendToDirectMessageButton from '../components/SendToDirectMessageButton';
 import WeeklyChallengePersonalCard from '../components/WeeklyChallengePersonalCard';
 import PlateBadge from '../components/ui/plate-badge';
 import { buildScoreSnapshotLinkShare } from '../utils/directMessageShares';
+import SpritePet from '../components/SpritePet';
+import PetModal from '../components/PetModal';
+import { getPublicPet } from '../utils/api';
 
 function getAge(dateStr) {
   if (!dateStr) return null;
@@ -1116,6 +1119,8 @@ export default function ProfilePage() {
   const [profileLive, setProfileLive] = useState({ active_session: null, ended_sessions: [] });
   const [liveVisibilityBusyId, setLiveVisibilityBusyId] = useState('');
   const [liveDeleteBusyId, setLiveDeleteBusyId] = useState('');
+  const [publicPet, setPublicPet] = useState(null);
+  const [showPetModal, setShowPetModal] = useState(false);
 
   const profileId = profile?.id || null;
   const isOwner = authUser && profileId && authUser.id === profileId;
@@ -1212,6 +1217,9 @@ export default function ProfilePage() {
 
         // Load weekly challenge history (non-blocking)
         getUserWeeklyChallengeHistory(uid).then(setWeeklyChallengeHistory).catch(() => {});
+
+        // Load public pet data (non-blocking, for pet-as-avatar)
+        getPublicPet(uid).then(res => { if (!cancelled && res.pet) setPublicPet(res.pet); }).catch(() => {});
 
         if (authUser) {
           const status = await getFollowStatus(uid).catch(() => null);
@@ -2265,7 +2273,29 @@ export default function ProfilePage() {
   const activePiuTabLabel = isPiuTab ? tabLabels[tab] : 'Select';
 
   const showOverviewHeatmapCard = overviewPlayHeatmap.weeks.length > 0 || hasPiuData;
-  const avatarCore = profile.avatar ? (
+  const isPetAvatar = publicPet && publicPet.is_pet_avatar;
+  const avatarCore = isPetAvatar ? (
+    <div
+      className="w-14 h-14 sm:w-24 sm:h-24 rounded-full border-2 border-amber-500/30 bg-gradient-to-br from-amber-950/40 to-gray-950 shadow-lg shrink-0 flex items-center justify-center overflow-hidden cursor-pointer"
+      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowPetModal(true); }}
+      title={`${profile.username}'s pet`}
+    >
+      <SpritePet
+        character={publicPet.character}
+        weightState={publicPet.weight_state}
+        mood={publicPet.mood}
+        equippedHat={publicPet.equipped_hat}
+        equippedBelt={publicPet.equipped_belt}
+        equippedShoes={publicPet.equipped_shoes}
+        equippedTop={publicPet.equipped_top}
+        hatColor={publicPet.hat_color}
+        beltColor={publicPet.belt_color}
+        shoesColor={publicPet.shoes_color}
+        topColor={publicPet.top_color}
+        size={52}
+      />
+    </div>
+  ) : profile.avatar ? (
     <img
       src={getAvatarUrl(profile.avatar)}
       alt=""
@@ -4829,6 +4859,11 @@ export default function ProfilePage() {
             <PlayerScoutingCard userId={profileId} />
           </div>
         </div>
+      )}
+
+      {/* Pet Modal (shown when clicking pet avatar) */}
+      {showPetModal && profileId && (
+        <PetModal userId={profileId} onClose={() => setShowPetModal(false)} />
       )}
     </div>
   );

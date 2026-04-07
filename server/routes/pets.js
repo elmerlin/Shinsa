@@ -80,24 +80,45 @@ const CLOTHING = {
     { id: 'beanie', name: 'Beanie', cost: 30, defaultColor: '#607D8B' },
     { id: 'wizard-hat', name: 'Wizard Hat', cost: 75, defaultColor: '#7B1FA2' },
     { id: 'party-hat', name: 'Party Hat', cost: 15, defaultColor: '#FF4081' },
+    { id: 'astronaut-helmet', name: 'Astronaut Helmet', cost: 120, defaultColor: '#CFD8DC' },
+    { id: 'goggles', name: 'Lab Goggles', cost: 35, defaultColor: '#4FC3F7' },
+    { id: 'cat-hoodie', name: 'Cat Hoodie', cost: 60, defaultColor: '#FFEB3B' },
+    { id: 'ranger-helmet', name: 'Ranger Helmet', cost: 90, defaultColor: '#E53935' },
+    { id: 'santa-hat', name: 'Santa Hat', cost: 40, defaultColor: '#E53935' },
+  ],
+  tops: [
+    { id: 'denim-jacket', name: 'STOMP Jacket', cost: 60, defaultColor: '#42649f' },
+    { id: 'leather-jacket', name: 'Leather Jacket', cost: 70, defaultColor: '#1a1a1a' },
+    { id: 'lab-coat', name: 'Lab Coat', cost: 55, defaultColor: '#f5f5f5' },
+    { id: 'sailor-shirt', name: 'Sailor Shirt', cost: 40, defaultColor: '#f5f5f5' },
+    { id: 'dress', name: 'Dress', cost: 45, defaultColor: '#F48FB1' },
+    { id: 'hoodie', name: 'Hoodie', cost: 35, defaultColor: '#90CAF9' },
+    { id: 'camo-vest', name: 'Camo Vest', cost: 50, defaultColor: '#6b8e4e' },
+    { id: 'power-suit', name: 'Power Suit', cost: 100, defaultColor: '#E53935' },
+    { id: 'traditional-robe', name: 'Traditional Robe', cost: 80, defaultColor: '#E91E63' },
   ],
   belts: [
     { id: 'stomp-belt', name: 'Stomp Belt', cost: 40, defaultColor: '#1A1A2E' },
     { id: 'chain-belt', name: 'Chain Belt', cost: 35, defaultColor: '#B0BEC5' },
+    { id: 'medal-chain', name: 'Medal Chain', cost: 55, defaultColor: '#FFD700' },
     { id: 'ribbon', name: 'Ribbon', cost: 15, defaultColor: '#F06292' },
     { id: 'sash', name: 'Champion Sash', cost: 60, defaultColor: '#FFD700' },
+    { id: 'utility-belt', name: 'Utility Belt', cost: 45, defaultColor: '#5D4037' },
   ],
   shoes: [
     { id: 'sneakers', name: 'Sneakers', cost: 25, defaultColor: '#FFFFFF' },
     { id: 'boots', name: 'Boots', cost: 45, defaultColor: '#5D4037' },
     { id: 'sandals', name: 'Sandals', cost: 10, defaultColor: '#8D6E63' },
     { id: 'dance-shoes', name: 'Dance Shoes', cost: 55, defaultColor: '#E53935' },
+    { id: 'power-boots', name: 'Power Boots', cost: 65, defaultColor: '#E53935' },
+    { id: 'cat-slippers', name: 'Cat Slippers', cost: 30, defaultColor: '#FFEB3B' },
   ],
 };
-const ALL_CLOTHING = [...CLOTHING.hats, ...CLOTHING.belts, ...CLOTHING.shoes];
+const ALL_CLOTHING = [...CLOTHING.hats, ...(CLOTHING.tops || []), ...CLOTHING.belts, ...CLOTHING.shoes];
 const CLOTHING_MAP = Object.fromEntries(ALL_CLOTHING.map(c => [c.id, c]));
 function getClothingSlot(itemId) {
   if (CLOTHING.hats.find(h => h.id === itemId)) return 'hat';
+  if (CLOTHING.tops && CLOTHING.tops.find(t => t.id === itemId)) return 'top';
   if (CLOTHING.belts.find(b => b.id === itemId)) return 'belt';
   if (CLOTHING.shoes.find(s => s.id === itemId)) return 'shoes';
   return null;
@@ -163,9 +184,11 @@ function ensurePetTable(db) {
   addCol('equipped_hat', "TEXT NOT NULL DEFAULT ''");
   addCol('equipped_belt', "TEXT NOT NULL DEFAULT ''");
   addCol('equipped_shoes', "TEXT NOT NULL DEFAULT ''");
+  addCol('equipped_top', "TEXT NOT NULL DEFAULT ''");
   addCol('hat_color', "TEXT NOT NULL DEFAULT ''");
   addCol('belt_color', "TEXT NOT NULL DEFAULT ''");
   addCol('shoes_color', "TEXT NOT NULL DEFAULT ''");
+  addCol('top_color', "TEXT NOT NULL DEFAULT ''");
   addCol('is_pet_avatar', "INTEGER NOT NULL DEFAULT 0");
 }
 
@@ -240,9 +263,11 @@ function formatPet(pet, isPublic = false) {
     equipped_hat: pet.equipped_hat || '',
     equipped_belt: pet.equipped_belt || '',
     equipped_shoes: pet.equipped_shoes || '',
+    equipped_top: pet.equipped_top || '',
     hat_color: pet.hat_color || '',
     belt_color: pet.belt_color || '',
     shoes_color: pet.shoes_color || '',
+    top_color: pet.top_color || '',
     is_pet_avatar: pet.is_pet_avatar || 0,
     last_trick_performed: pet.last_trick_performed || '',
     last_trick_at: pet.last_trick_at || '',
@@ -408,16 +433,16 @@ router.post('/equip', requireAuth, (req, res) => {
     if (!owned.includes(itemId)) return res.status(400).json({ error: 'Item not owned' });
     const slot = getClothingSlot(itemId);
     if (!slot) return res.status(400).json({ error: 'Unknown item type' });
-    const colMap = { hat: 'equipped_hat', belt: 'equipped_belt', shoes: 'equipped_shoes' };
-    const colorColMap = { hat: 'hat_color', belt: 'belt_color', shoes: 'shoes_color' };
+    const colMap = { hat: 'equipped_hat', belt: 'equipped_belt', shoes: 'equipped_shoes', top: 'equipped_top' };
+    const colorColMap = { hat: 'hat_color', belt: 'belt_color', shoes: 'shoes_color', top: 'top_color' };
     const item = CLOTHING_MAP[itemId];
     db.prepare(`UPDATE user_pets SET ${colMap[slot]} = ?, ${colorColMap[slot]} = ?, updated_at = datetime('now') WHERE user_id = ?`)
       .run(itemId, item.defaultColor, req.user.id);
   } else {
     // Unequip a slot
-    const slot = req.body.slot; // 'hat', 'belt', or 'shoes'
-    if (!['hat', 'belt', 'shoes'].includes(slot)) return res.status(400).json({ error: 'Invalid slot' });
-    const colMap = { hat: 'equipped_hat', belt: 'equipped_belt', shoes: 'equipped_shoes' };
+    const slot = req.body.slot; // 'hat', 'belt', 'shoes', or 'top'
+    if (!['hat', 'belt', 'shoes', 'top'].includes(slot)) return res.status(400).json({ error: 'Invalid slot' });
+    const colMap = { hat: 'equipped_hat', belt: 'equipped_belt', shoes: 'equipped_shoes', top: 'equipped_top' };
     db.prepare(`UPDATE user_pets SET ${colMap[slot]} = '', updated_at = datetime('now') WHERE user_id = ?`).run(req.user.id);
   }
 
@@ -430,9 +455,9 @@ router.post('/set-color', requireAuth, (req, res) => {
   const db = getDb();
   ensurePetTable(db);
   const { slot, color } = req.body;
-  if (!['hat', 'belt', 'shoes'].includes(slot)) return res.status(400).json({ error: 'Invalid slot' });
+  if (!['hat', 'belt', 'shoes', 'top'].includes(slot)) return res.status(400).json({ error: 'Invalid slot' });
   if (!color || !/^#[0-9a-fA-F]{6}$/.test(color)) return res.status(400).json({ error: 'Invalid color (use #RRGGBB)' });
-  const colMap = { hat: 'hat_color', belt: 'belt_color', shoes: 'shoes_color' };
+  const colMap = { hat: 'hat_color', belt: 'belt_color', shoes: 'shoes_color', top: 'top_color' };
   db.prepare(`UPDATE user_pets SET ${colMap[slot]} = ?, updated_at = datetime('now') WHERE user_id = ?`).run(color, req.user.id);
   const updated = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
   res.json({ pet: formatPet(updated) });

@@ -55,9 +55,11 @@ export default function PetModal({ userId, onClose }) {
                 equippedHat={pet.equipped_hat}
                 equippedBelt={pet.equipped_belt}
                 equippedShoes={pet.equipped_shoes}
+                equippedTop={pet.equipped_top}
                 hatColor={pet.hat_color}
                 beltColor={pet.belt_color}
                 shoesColor={pet.shoes_color}
+                topColor={pet.top_color}
                 size={100}
               />
               {/* Speech */}
