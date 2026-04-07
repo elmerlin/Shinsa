@@ -114,7 +114,7 @@ export default function TournamentView() {
 
     const allPhasesComplete = phases.length > 0 && phases.every((phase) => phase.status === 'COMPLETED');
     const validTabs = phases.map((phase) => `phase-${phase.id}`);
-    validTabs.push('players');
+    validTabs.push('players', 'discussion');
     if (allPhasesComplete) validTabs.push('final');
 
     const activePhase = phases.find((phase) => phase.status === 'ACTIVE');

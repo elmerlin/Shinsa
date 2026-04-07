@@ -103,7 +103,7 @@ export default function TournamentWatch() {
 
     const allPhasesComplete = phases.length > 0 && phases.every((phase) => phase.status === 'COMPLETED');
     const validTabs = phases.map((phase) => `phase-${phase.id}`);
-    validTabs.push('players', 'standings');
+    validTabs.push('players', 'standings', 'discussion');
     if (allPhasesComplete) validTabs.push('final');
 
     if (activeTab && validTabs.includes(activeTab)) return;
