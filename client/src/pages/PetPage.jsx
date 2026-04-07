@@ -6,6 +6,7 @@ import {
   setPetColor, togglePetAvatar, demandTrick, performTrick,
   interactPet, doPetActivity, claimPetMission, buyPetToy, usePetToy,
   buyPetHabitatItem, equipPetHabitat, setPetTrainingPath, getPetLeaderboard,
+  getPetSocialFeed,
 } from '../utils/api';
 import SpritePet from '../components/SpritePet';
 import PetCoachPanel from '../components/pet/PetCoachPanel';
@@ -163,6 +164,7 @@ export default function PetPage() {
   const [rareSpeech, setRareSpeech] = useState(false);
   const [leaderboard, setLeaderboard] = useState(null);
   const [activeToyVisual, setActiveToyVisual] = useState(null);
+  const [socialFeed, setSocialFeed] = useState(null);
 
   const loadPet = useCallback(async () => {
     try {
@@ -185,7 +187,10 @@ export default function PetPage() {
     catch (err) { console.error(err); }
   }, []);
 
-  useEffect(() => { if (user) { loadPet(); loadShop(); } else setLoading(false); }, [user, loadPet, loadShop]);
+  useEffect(() => {
+    if (user) { loadPet(); loadShop(); getPetSocialFeed().then(setSocialFeed).catch(() => {}); }
+    else setLoading(false);
+  }, [user, loadPet, loadShop]);
 
   useEffect(() => {
     if (!pet) return;
@@ -681,6 +686,7 @@ export default function PetPage() {
             shop={shop}
             combo={combo_balance}
             economy={economy}
+            socialFeed={socialFeed}
             interactionBusy={interactionBusy}
             activityBusy={activityBusy}
             missionBusyId={missionBusyId}
@@ -1220,11 +1226,50 @@ function StatCard({ label, value }) {
 }
 
 // ─── Pet tab ──────────────────────────────────────────
-function PetTab({ pet, shop, combo, economy, interactionBusy, activityBusy, missionBusyId, toyBusy, trainingBusy, onAction, onActivity, onClaimMission, onBuyToy, onUseToy, onSetTrainingPath, onTabSwitch }) {
+function PetTab({ pet, shop, combo, economy, socialFeed, interactionBusy, activityBusy, missionBusyId, toyBusy, trainingBusy, onAction, onActivity, onClaimMission, onBuyToy, onUseToy, onSetTrainingPath, onTabSwitch }) {
+  const REACTION_ICONS = { cheer: '📣', wow: '🤩', flex: '💪', heart: '💗' };
   return (
     <div className="space-y-3 text-sm text-gray-400">
       {pet.companion_coach && (
         <PetCoachPanel coach={pet.companion_coach} character={pet.character} onTabSwitch={onTabSwitch} />
+      )}
+      {/* Social activity card — shows when pet has received reactions */}
+      {socialFeed && (socialFeed.today_count > 0 || socialFeed.total_reactions > 0) && (
+        <div className="bg-gradient-to-r from-amber-500/[0.06] to-pink-500/[0.04] rounded-xl p-3 border border-amber-400/10">
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className="text-sm">✨</span>
+            <div className="text-xs text-amber-200 font-semibold">Social Activity</div>
+          </div>
+          {socialFeed.today_count > 0 ? (
+            <>
+              <p className="text-[11px] text-white/70 mb-2">
+                {socialFeed.today_count === 1
+                  ? 'Someone interacted with your pet today!'
+                  : `${socialFeed.today_count} reactions today!`}
+              </p>
+              <div className="flex flex-wrap gap-1">
+                {socialFeed.today_reactions.slice(0, 8).map((r, i) => (
+                  <span key={i} className="inline-flex items-center gap-1 rounded-full border border-white/[0.06] bg-white/[0.03] px-2 py-0.5 text-[10px]">
+                    <span>{REACTION_ICONS[r.type] || '💬'}</span>
+                    <span className="text-white/60 font-medium">{r.from}</span>
+                  </span>
+                ))}
+              </div>
+            </>
+          ) : (
+            <p className="text-[11px] text-white/50">{socialFeed.total_reactions} reaction{socialFeed.total_reactions !== 1 ? 's' : ''} all-time. Share your pet to get more!</p>
+          )}
+          {socialFeed.reactions?.length > 0 && (
+            <div className="flex items-center gap-2.5 mt-2 pt-2 border-t border-white/[0.04]">
+              {socialFeed.reactions.map(r => (
+                <span key={r.type} className="text-[10px] text-gray-400 flex items-center gap-0.5">
+                  <span>{REACTION_ICONS[r.type]}</span>
+                  <span className="tabular-nums">{r.count}</span>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
       )}
       <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
         <div className="text-xs text-gray-500 mb-1">Personality</div>

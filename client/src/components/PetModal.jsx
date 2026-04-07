@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { getPublicPet, reactToPet } from '../utils/api';
 import SpritePet from './SpritePet';
 
@@ -22,6 +22,10 @@ export default function PetModal({ userId, onClose }) {
   const [loading, setLoading] = useState(true);
   const [reacting, setReacting] = useState('');
   const [reacted, setReacted] = useState({});
+  const [floatingEmoji, setFloatingEmoji] = useState(null);   // { id, emoji, x }
+  const [confirmText, setConfirmText] = useState('');
+  const [petReaction, setPetReaction] = useState('');           // triggers SpritePet reaction
+  let floatIdRef = useRef(0);
 
   useEffect(() => {
     if (!userId) return;
@@ -63,6 +67,7 @@ export default function PetModal({ userId, onClose }) {
                 shoesColor={pet.shoes_color}
                 topColor={pet.top_color}
                 size={100}
+                reaction={petReaction}
               />
               {/* Speech */}
               <div className="mt-2 bg-white/[0.06] rounded-xl px-3 py-1.5 text-xs text-gray-300 italic text-center max-w-[200px]">
@@ -141,31 +146,67 @@ export default function PetModal({ userId, onClose }) {
               )}
 
               {/* Social reactions */}
-              <div className="mt-3 flex items-center justify-center gap-2">
-                {['cheer', 'wow', 'flex', 'heart'].map(type => {
-                  const icons = { cheer: '\u{1F4E3}', wow: '\u{1F929}', flex: '\u{1F4AA}', heart: '\u{1F497}' };
-                  const done = reacted[type];
-                  return (
-                    <button
-                      key={type}
-                      onClick={async () => {
-                        if (done || reacting) return;
-                        setReacting(type);
-                        try {
-                          await reactToPet(userId, type);
-                          setReacted(prev => ({ ...prev, [type]: true }));
-                        } catch {}
-                        setReacting('');
-                      }}
-                      disabled={!!done || !!reacting}
-                      className={`rounded-lg border px-2 py-1.5 text-sm transition-all ${
-                        done ? 'border-amber-400/20 bg-amber-400/10 opacity-70' : 'border-white/[0.06] bg-white/[0.03] hover:bg-white/[0.06]'
-                      } disabled:opacity-50`}
-                    >
-                      {icons[type]}
-                    </button>
-                  );
-                })}
+              <div className="mt-3 relative">
+                <div className="flex items-center justify-center gap-2">
+                  {['cheer', 'wow', 'flex', 'heart'].map((type, i) => {
+                    const icons = { cheer: '📣', wow: '🤩', flex: '💪', heart: '💗' };
+                    const labels = { cheer: 'Cheer', wow: 'Wow', flex: 'Flex', heart: 'Love' };
+                    const done = reacted[type];
+                    return (
+                      <button
+                        key={type}
+                        onClick={async () => {
+                          if (done || reacting) return;
+                          setReacting(type);
+                          try {
+                            const res = await reactToPet(userId, type);
+                            setReacted(prev => ({ ...prev, [type]: true }));
+                            // Floating emoji burst
+                            const fid = ++floatIdRef.current;
+                            setFloatingEmoji({ id: fid, emoji: icons[type] });
+                            setTimeout(() => setFloatingEmoji(prev => prev?.id === fid ? null : prev), 900);
+                            // Pet reacts
+                            setPetReaction('happy');
+                            setTimeout(() => setPetReaction(''), 1200);
+                            // Confirmation text
+                            setConfirmText(res.label || `${labels[type]}ed!`);
+                            setTimeout(() => setConfirmText(''), 2500);
+                          } catch (err) {
+                            if (err?.message?.includes('Already')) {
+                              setReacted(prev => ({ ...prev, [type]: true }));
+                              setConfirmText('Already sent today');
+                              setTimeout(() => setConfirmText(''), 2000);
+                            }
+                          }
+                          setReacting('');
+                        }}
+                        disabled={!!done || !!reacting}
+                        className={`group flex flex-col items-center gap-0.5 rounded-xl border px-2.5 py-1.5 text-sm transition-all ${
+                          done
+                            ? 'border-amber-400/20 bg-amber-400/10 scale-95'
+                            : reacting === type
+                              ? 'border-white/15 bg-white/[0.08] scale-110'
+                              : 'border-white/[0.06] bg-white/[0.03] hover:border-white/15 hover:bg-white/[0.06] active:scale-110'
+                        } disabled:opacity-50`}
+                      >
+                        <span className={`text-base transition-transform ${reacting === type ? 'animate-[reactionPop_300ms_ease-out]' : ''}`}>{icons[type]}</span>
+                        <span className="text-[8px] text-gray-500 font-medium">{labels[type]}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {/* Floating emoji */}
+                {floatingEmoji && (
+                  <div key={floatingEmoji.id} className="absolute left-1/2 -translate-x-1/2 bottom-full pointer-events-none animate-[emojiFloat_800ms_ease-out_forwards] text-2xl">
+                    {floatingEmoji.emoji}
+                  </div>
+                )}
+                {/* Confirmation text */}
+                {confirmText && (
+                  <div className="mt-1.5 text-center text-[10px] text-amber-200/80 font-medium animate-[fadeInUp_200ms_ease-out]">
+                    {confirmText}
+                  </div>
+                )}
               </div>
             </div>
           </>
@@ -179,6 +220,9 @@ export default function PetModal({ userId, onClose }) {
 
         <style>{`
           @keyframes modalIn { from { opacity: 0; transform: scale(0.95) translateY(8px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+          @keyframes emojiFloat { 0% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); } 100% { opacity: 0; transform: translateX(-50%) translateY(-48px) scale(1.5); } }
+          @keyframes reactionPop { 0% { transform: scale(1); } 40% { transform: scale(1.4); } 100% { transform: scale(1); } }
+          @keyframes fadeInUp { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
         `}</style>
       </div>
     </div>

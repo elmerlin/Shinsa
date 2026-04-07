@@ -2696,7 +2696,9 @@ router.post('/social/react', requireAuth, (req, res) => {
   // Small bond boost for the target pet
   db.prepare(`UPDATE user_pets SET bond = bond + 1, hype = MIN(100, hype + 2), updated_at = datetime('now') WHERE user_id = ?`).run(targetUserId);
 
-  res.json({ success: true, reaction: reactionType });
+  const petChar = targetPet.character || 'pet';
+  const labels = { cheer: 'Cheered', wow: 'Wowed', flex: 'Flexed on', heart: 'Loved' };
+  res.json({ success: true, reaction: reactionType, petCharacter: petChar, label: `${labels[reactionType] || 'Reacted to'} ${petChar.charAt(0).toUpperCase() + petChar.slice(1)}!`, bond_given: 1 });
 });
 
 // POST /api/pets/social/gift — send food or toy gift to another user's pet
@@ -2771,9 +2773,23 @@ router.get('/social/feed-summary', requireAuth, (req, res) => {
 
   const totalReactions = reactions.reduce((sum, r) => sum + r.cnt, 0);
 
+  // Today's reactions with who sent them
+  const today = new Date().toISOString().slice(0, 10);
+  const todayReactions = db.prepare(`
+    SELECT r.reaction_type, r.created_at, u.username as from_username
+    FROM pet_social_reactions r
+    JOIN users u ON u.id = r.from_user_id
+    WHERE r.to_user_id = ? AND r.created_at >= ?
+    ORDER BY r.created_at DESC
+    LIMIT 20
+  `).all(req.user.id, today);
+  const todayCount = todayReactions.length;
+
   res.json({
     reactions: reactions.map(r => ({ type: r.reaction_type, count: r.cnt })),
     total_reactions: totalReactions,
+    today_count: todayCount,
+    today_reactions: todayReactions.map(r => ({ type: r.reaction_type, from: r.from_username, at: r.created_at })),
     recent_gifts: recentGifts,
   });
 });
