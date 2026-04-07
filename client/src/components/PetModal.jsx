@@ -74,7 +74,8 @@ export default function PetModal({ userId, onClose }) {
                 <div className="text-sm font-bold text-white/90">{username ? `${username}'s` : ''} {capitalize(pet.character)}</div>
                 <WeightBadge state={pet.weight_state} />
                 <div className="mt-1 text-[10px] text-cyan-200/80">{pet.bond_rank?.label || 'Training Partner'}</div>
-                <div className="text-[10px] text-gray-500">{pet.mastery?.path?.label || pet.specialty?.label || 'Companion'}</div>
+                <div className="text-[10px] text-white/75">{pet.identity_title || pet.mastery?.path?.label || pet.specialty?.label || 'Companion'}</div>
+                {pet.form?.label ? <div className="text-[10px] text-gray-500 mt-0.5">{pet.form.label}</div> : null}
               </div>
 
               {/* Meters */}

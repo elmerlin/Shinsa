@@ -712,6 +712,62 @@ function buildMasteryProfile(pet, specialtyKey = '') {
   };
 }
 
+function getPetForm(bond = 0, masteryXp = 0) {
+  if (bond >= 320 && masteryXp >= 220) {
+    return {
+      id: 'ascendant',
+      label: 'Ascendant Form',
+      aura: 'legend',
+      desc: 'A scene-defining companion presence.',
+    };
+  }
+  if (bond >= 190 && masteryXp >= 120) {
+    return {
+      id: 'showcase',
+      label: 'Showcase Form',
+      aura: 'spotlight',
+      desc: 'A polished companion that turns heads.',
+    };
+  }
+  if (bond >= 90 && masteryXp >= 45) {
+    return {
+      id: 'trusted',
+      label: 'Trusted Form',
+      aura: 'bonded',
+      desc: 'A companion visibly shaped by routine and trust.',
+    };
+  }
+  return {
+    id: 'fresh',
+    label: 'Fresh Form',
+    aura: 'calm',
+    desc: 'A young companion still finding its rhythm.',
+  };
+}
+
+function getPetIdentityTitle(character = 'dojocat', mastery = null, specialty = null, bondRank = null, form = null) {
+  const pathId = mastery?.path?.id || 'consistency';
+  const pathTitles = {
+    accuracy: { dojocat: 'Precision Sensei', buu: 'Perfect Gremlin', devit: 'Redline Judge', pixiu: 'Fortune Reader' },
+    stamina: { dojocat: 'Endurance Mascot', buu: 'Bottomless Belly', devit: 'Inferno Runner', pixiu: 'Golden Strider' },
+    tech: { dojocat: 'Dojo Technician', buu: 'Pattern Thief', devit: 'Chaos Stepper', pixiu: 'Silk Dancer' },
+    consistency: { dojocat: 'Training Partner', buu: 'Rhythm Buddy', devit: 'Steady Menace', pixiu: 'Lucky Companion' },
+    tournament: { dojocat: 'Arena Spirit', buu: 'Bracket Menace', devit: 'Gauntlet Imp', pixiu: 'Ceremonial Guardian' },
+    social: { dojocat: 'Spotlight Cat', buu: 'Replay Diva', devit: 'Feed Menace', pixiu: 'Festival Mascot' },
+  };
+  const fallback = {
+    dojocat: 'Training Partner',
+    buu: 'Rhythm Buddy',
+    devit: 'Chaos Familiar',
+    pixiu: 'Lucky Guardian',
+  };
+  const baseTitle = pathTitles[pathId]?.[character] || fallback[character] || 'Companion';
+  if (form?.id === 'ascendant') return `${baseTitle} Prime`;
+  if ((bondRank?.label || '').toLowerCase().includes('mascot')) return `${baseTitle} Mascot`;
+  if ((specialty?.key || '') === 'scene-showoff') return `${baseTitle} Deluxe`;
+  return baseTitle;
+}
+
 function getUnlockedTricks(character, xp) {
   return (TRICKS[character] || []).filter(t => xp >= t.xp).map(t => t.id);
 }
@@ -1036,6 +1092,8 @@ function formatPet(pet, isPublic = false, db = null) {
   const activitySummary = db ? queryPlayActivitySummary(db, pet.user_id) : {};
   const specialty = derivePetSpecialty(activitySummary);
   const mastery = buildMasteryProfile(pet, specialty.key);
+  const form = getPetForm(bond, mastery.mastery_xp || 0);
+  const identityTitle = getPetIdentityTitle(character, mastery, specialty, bondRank, form);
   const missions = buildPetMissions({ ...pet, character }, {
     ...activitySummary,
     fed_today: !!pet.last_food_at && String(pet.last_food_at).startsWith(getUtcDayKey()),
@@ -1082,6 +1140,8 @@ function formatPet(pet, isPublic = false, db = null) {
     created_at: pet.created_at || '',
     specialty,
     mastery,
+    form,
+    identity_title: identityTitle,
     personality: {
       title: profile.title,
       desc: profile.personality,

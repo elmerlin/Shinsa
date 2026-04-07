@@ -233,16 +233,20 @@ export default function PetPage() {
     setInteractionBusy(true);
     interactPet('tap')
       .then((r) => {
+        const characterResponses = PET_REACTIONS[r.pet?.character || pet?.character] || [];
+        const fallback = characterResponses.length > 0
+          ? characterResponses[Math.floor(Math.random() * characterResponses.length)]
+          : null;
         setPet(r.pet);
-        if (r.reaction) setPetReaction(r.reaction);
-        if (r.expression) setPetExpression(r.expression);
-        setSpeechText(r.speech || randomMsg(r.pet?.mood || pet?.mood));
+        if (r.reaction || fallback?.reaction) setPetReaction(r.reaction || fallback?.reaction || '');
+        if (r.expression || fallback?.expression) setPetExpression(r.expression || fallback?.expression || '');
+        setSpeechText(r.speech || fallback?.speech || randomMsg(r.pet?.mood || pet?.mood));
         setPetTapped(true);
         setTimeout(() => {
           setPetTapped(false);
           setPetReaction('');
           setPetExpression('');
-        }, 900);
+        }, fallback ? 1250 : 900);
       })
       .catch((e) => console.error(e))
       .finally(() => setInteractionBusy(false));
@@ -427,22 +431,35 @@ export default function PetPage() {
   return (
     <div className="max-w-lg mx-auto p-4 sm:p-6 pb-24">
       {/* Header */}
-      <div className="flex items-center justify-between mb-3">
-        <div>
-          <h1 className="text-xl font-black tracking-tight">My {charName}</h1>
-          <div className="flex items-center gap-3 mt-0.5">
-            <span className="text-xs text-gray-500">{experience.toLocaleString()} XP</span>
-            <span className="text-xs font-bold text-amber-400">{combo_balance.toLocaleString()} Combo</span>
-            <span className="text-xs font-bold text-cyan-300">{bond_tokens.toLocaleString()} Bond Tokens</span>
-            {rare_shards > 0 ? <span className="text-xs font-bold text-fuchsia-300">{rare_shards} Shards</span> : null}
+      <div className="mb-3 rounded-[1.25rem] border border-white/[0.06] bg-white/[0.025] px-3.5 py-3 shadow-[0_10px_30px_rgba(0,0,0,0.18)]">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-xl font-black tracking-tight text-white">My {charName}</h1>
+            <p className="mt-0.5 text-[11px] text-cyan-100/80">{pet.identity_title || 'Training Partner'}</p>
+            <p className="mt-1 text-[11px] text-gray-500">Care, train, and shape a companion that mirrors how you play.</p>
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <button onClick={handleToggleAvatar}
-            className={`text-[10px] px-2 py-1 rounded-lg border transition-all ${pet.is_pet_avatar ? 'border-amber-500/30 bg-amber-500/10 text-amber-400' : 'border-white/[0.06] text-gray-500 hover:text-white'}`}>
-            {pet.is_pet_avatar ? 'Avatar ON' : 'Set Avatar'}
+          <button
+            onClick={() => setShowSelect(true)}
+            className="shrink-0 whitespace-nowrap rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-400 transition-all hover:border-white/15 hover:text-white"
+          >
+            Switch
           </button>
-          <button onClick={() => setShowSelect(true)} className="text-xs text-gray-500 hover:text-white border border-white/[0.06] rounded-lg px-2 py-1 transition-all">Switch</button>
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <HeaderPill label="XP" value={experience.toLocaleString()} tone="slate" />
+          <HeaderPill label="Combo" value={combo_balance.toLocaleString()} tone="amber" />
+          <HeaderPill label="Bond Tokens" value={bond_tokens.toLocaleString()} tone="cyan" />
+          {rare_shards > 0 ? <HeaderPill label="Shards" value={rare_shards.toLocaleString()} tone="fuchsia" /> : null}
+          <button
+            onClick={handleToggleAvatar}
+            className={`shrink-0 whitespace-nowrap rounded-full border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] transition-all ${
+              pet.is_pet_avatar
+                ? 'border-amber-500/30 bg-amber-500/10 text-amber-300'
+                : 'border-white/[0.08] bg-white/[0.03] text-gray-400 hover:border-white/15 hover:text-white'
+            }`}
+          >
+            {pet.is_pet_avatar ? 'Avatar On' : 'Set Avatar'}
+          </button>
         </div>
       </div>
 
@@ -454,8 +471,13 @@ export default function PetPage() {
           <HabitatPropDisplay propId={pet.habitat?.active_prop} />
           <div className="absolute top-3 right-3 z-10"><WeightBadge state={pet.weight_state} /></div>
           <div className="absolute top-3 left-3 z-10"><BondBadge rank={pet.bond_rank} /></div>
-          <div className={`relative z-10 flex flex-col items-center px-4 pt-7 pb-5 min-h-[312px] sm:min-h-[332px] ${petTapped ? 'animate-[wiggle_400ms_ease]' : ''}`}>
-            <div className="flex min-h-[210px] items-end justify-center">
+          {pet.form?.label ? (
+            <div className="absolute left-1/2 top-3 z-10 -translate-x-1/2">
+              <FormBadge form={pet.form} />
+            </div>
+          ) : null}
+          <div className={`relative z-10 flex flex-col items-center px-4 pt-6 pb-5 min-h-[324px] sm:min-h-[346px] ${petTapped ? 'animate-[wiggle_400ms_ease]' : ''}`}>
+            <div className="flex min-h-[228px] items-end justify-center">
               <SpritePet
                 character={pet.character} weightState={pet.weight_state} mood={pet.mood}
                 equippedHat={pet.equipped_hat} equippedBelt={pet.equipped_belt} equippedShoes={pet.equipped_shoes}
@@ -464,7 +486,7 @@ export default function PetPage() {
                 topColor={pet.top_color}
                 isEating={isEating} isTricking={isTricking} reaction={petReaction}
                 expression={petExpression} foodId={activeFoodId}
-                size={176} onClick={handlePetTap} />
+                size={196} onClick={handlePetTap} />
             </div>
             {/* Speech bubble */}
             <div className="mt-1 relative max-w-[280px]">
@@ -473,6 +495,11 @@ export default function PetPage() {
                 &ldquo;{speechText}&rdquo;
               </div>
             </div>
+            {pet.form?.desc ? (
+              <div className="mt-2 text-center text-[10px] text-white/50 max-w-[260px]">
+                {pet.form.desc}
+              </div>
+            ) : null}
           </div>
           {/* Demand banner */}
           {pet.pending_trick && (
@@ -819,6 +846,35 @@ function BondBadge({ rank }) {
     <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider border border-cyan-400/20 bg-cyan-400/10 text-cyan-200">
       {rank?.label || 'Training Partner'}
     </span>
+  );
+}
+
+function FormBadge({ form }) {
+  const tones = {
+    calm: 'border-white/10 bg-black/25 text-white/70',
+    bonded: 'border-emerald-400/20 bg-emerald-500/10 text-emerald-200',
+    spotlight: 'border-fuchsia-400/20 bg-fuchsia-500/10 text-fuchsia-100',
+    legend: 'border-amber-400/20 bg-amber-500/10 text-amber-200',
+  };
+  return (
+    <span className={`inline-flex items-center whitespace-nowrap rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] ${tones[form?.aura] || tones.calm}`}>
+      {form?.label || 'Fresh Form'}
+    </span>
+  );
+}
+
+function HeaderPill({ label, value, tone = 'slate' }) {
+  const tones = {
+    slate: 'border-white/[0.08] bg-white/[0.03] text-gray-200',
+    amber: 'border-amber-400/20 bg-amber-500/[0.08] text-amber-200',
+    cyan: 'border-cyan-400/20 bg-cyan-500/[0.08] text-cyan-100',
+    fuchsia: 'border-fuchsia-400/20 bg-fuchsia-500/[0.08] text-fuchsia-100',
+  };
+  return (
+    <div className={`inline-flex items-center gap-2 whitespace-nowrap rounded-full border px-3 py-1.5 ${tones[tone] || tones.slate}`}>
+      <span className="text-[9px] font-semibold uppercase tracking-[0.18em] text-white/55">{label}</span>
+      <span className="text-[11px] font-semibold tabular-nums">{value}</span>
+    </div>
   );
 }
 
