@@ -239,11 +239,11 @@ function EmojiPicker({ value, onChange }) {
         {value || '?'}
       </button>
       {open ? (
-        <div className="absolute left-0 top-full z-40 mt-1.5 rounded-xl border border-white/10 bg-zinc-950/98 p-2.5 shadow-[0_20px_60px_rgba(0,0,0,0.6)]">
+        <div className="absolute left-0 top-full z-40 mt-1.5 w-[15.5rem] rounded-xl border border-white/10 bg-zinc-950/98 p-2.5 shadow-[0_20px_60px_rgba(0,0,0,0.6)]">
           <div className="grid grid-cols-6 gap-1">
             {THREAD_EMOJI_PALETTE.map((e) => (
               <button key={e} type="button" onClick={() => { onChange(e); setOpen(false); }}
-                className={`h-9 w-9 rounded-lg text-lg transition-all hover:scale-115 active:scale-90 ${value === e ? 'bg-rose-500/20 ring-1 ring-rose-400/40' : 'hover:bg-white/6'}`}>
+                className={`flex items-center justify-center h-9 w-9 rounded-lg text-lg transition-all hover:scale-[1.15] active:scale-90 ${value === e ? 'bg-rose-500/20 ring-1 ring-rose-400/40' : 'hover:bg-white/6'}`}>
                 {e}
               </button>
             ))}
