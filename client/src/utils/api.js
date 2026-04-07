@@ -87,6 +87,12 @@ export const searchTournaments = (q) => request(`/tournaments/search?q=${encodeU
 export const getArchivedTournaments = () => request('/tournaments/archived');
 export const archiveTournament = (id, archived) => request(`/tournaments/${id}/archive`, { method: 'PUT', body: JSON.stringify({ archived }) });
 
+// Tournament Discussion
+export const getTournamentDiscussion = (id) => request(`/tournaments/${id}/discussion`);
+export const sendTournamentDiscussionMessage = (id, data) => request(`/tournaments/${id}/discussion`, { method: 'POST', body: JSON.stringify(data) });
+export const pumpTournamentDiscussionMessage = (id, messageId) => request(`/tournaments/${id}/discussion/${messageId}/pump`, { method: 'POST' });
+export const deleteTournamentDiscussionMessage = (id, messageId) => request(`/tournaments/${id}/discussion/${messageId}`, { method: 'DELETE' });
+
 // Phase management
 export const getPhases = (tournamentId) => request(`/phases/tournament/${tournamentId}`);
 export const createPhase = (data) => request('/phases', { method: 'POST', body: JSON.stringify(data) });

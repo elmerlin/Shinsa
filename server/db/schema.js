@@ -3908,6 +3908,34 @@ function initializeDb() {
     )
   `);
 
+  // Tournament discussion messages
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS tournament_discussion_messages (
+      id TEXT PRIMARY KEY,
+      tournament_id TEXT NOT NULL REFERENCES tournaments(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      username TEXT NOT NULL DEFAULT '',
+      avatar TEXT DEFAULT '',
+      skill_title TEXT DEFAULT '',
+      message TEXT NOT NULL DEFAULT '',
+      is_participant INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_tdm_tournament ON tournament_discussion_messages(tournament_id, created_at)
+  `);
+
+  // Tournament discussion message pumps
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS tournament_discussion_pumps (
+      message_id TEXT NOT NULL REFERENCES tournament_discussion_messages(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (message_id, user_id)
+    )
+  `);
+
   // System user for official posts (weekly challenge summaries, etc.)
   const PREFERRED_SYSTEM_USERNAME = '__shinsa__';
   const existingSystemUser = db.prepare('SELECT id, username FROM users WHERE id = ?').get(SYSTEM_USER_ID);

@@ -18,6 +18,7 @@ import {
   TournamentTabs,
 } from '../components/tournament/TournamentChrome';
 import TournamentRoster from '../components/tournament/TournamentRoster';
+import TournamentDiscussion from '../components/tournament/TournamentDiscussion';
 
 const LEGACY_PHASE_TABS = {
   SETUP: [],
@@ -76,7 +77,7 @@ export default function TournamentWatch() {
           else setActiveTab(`phase-${loadedPhases[0].id}`);
         } else {
           const tabs = LEGACY_PHASE_TABS[t.phase] || [];
-          setActiveTab(tabs[0] || '');
+          setActiveTab(tabs[0] || 'discussion');
         }
       }
       if (t.current_round > 0 && !selectedRoundRef.current) {
@@ -164,6 +165,7 @@ export default function TournamentWatch() {
     if (allPhasesComplete) {
       phaseTabs.push({ key: 'final', label: 'Final', icon: '\u{1F3C6}', phase: null, status: null });
     }
+    phaseTabs.push({ key: 'discussion', label: 'Discussion', icon: '💬', phase: null, status: null });
 
     const currentTabPhase = phaseTabs.find(t => t.key === activeTab)?.phase;
     const phaseMatches = currentTabPhase
@@ -223,6 +225,10 @@ export default function TournamentWatch() {
             matches={matches}
             config={config}
           />
+        )}
+
+        {activeTab === 'discussion' && (
+          <TournamentDiscussion tournamentId={id} players={players} tournament={tournament} />
         )}
 
         {currentTabPhase && (
@@ -292,9 +298,10 @@ export default function TournamentWatch() {
   const hasGauntlet = config.gauntlet_enabled;
   const gauntletMatches = matches.filter(m => m.match_type === 'gauntlet');
   const hasGauntletMatches = gauntletMatches.length > 0;
-  let tabs = LEGACY_PHASE_TABS[tournament.phase] || [];
+  let tabs = [...(LEGACY_PHASE_TABS[tournament.phase] || [])];
   if (!hasGauntletMatches) tabs = tabs.filter(t => t !== 'gauntlet');
   if (tournament.phase !== 'COMPLETED') tabs = tabs.filter(t => t !== 'final');
+  tabs.push('discussion');
 
   const currentRound = tournament.current_round;
   const totalRounds = tournament.total_rounds || 3;
@@ -348,6 +355,7 @@ export default function TournamentWatch() {
           tabs={tabs.map((tab) => ({
             key: tab,
             label: tab === 'rounds' ? `Rounds (${currentRound})` : tab === 'final' ? 'Final' : tab.charAt(0).toUpperCase() + tab.slice(1),
+            icon: tab === 'discussion' ? '💬' : undefined,
           }))}
         />
       )}
@@ -405,6 +413,10 @@ export default function TournamentWatch() {
           matches={matches}
           showFinal={tournament.phase === 'COMPLETED' || (allRoundsDone && allCurrentDone)}
         />
+      )}
+
+      {activeTab === 'discussion' && (
+        <TournamentDiscussion tournamentId={id} players={players} tournament={tournament} />
       )}
 
       {/* Empty state for SETUP */}

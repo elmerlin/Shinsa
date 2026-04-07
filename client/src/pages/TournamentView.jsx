@@ -26,6 +26,7 @@ import {
   TournamentTabs,
 } from '../components/tournament/TournamentChrome';
 import TournamentRoster from '../components/tournament/TournamentRoster';
+import TournamentDiscussion from '../components/tournament/TournamentDiscussion';
 import { useAuth } from '../contexts/AuthContext';
 
 // Legacy phase tabs for old tournaments without the phase system
@@ -247,6 +248,7 @@ export default function TournamentView() {
     if (allPhasesComplete) {
       phaseTabs.push({ key: 'final', label: 'Final', icon: '\u{1F3C6}', phase: null, status: null });
     }
+    phaseTabs.push({ key: 'discussion', label: 'Discussion', icon: '💬', phase: null, status: null });
 
     const currentTabPhase = phaseTabs.find(t => t.key === activeTab)?.phase;
     const phaseMatches = currentTabPhase
@@ -366,6 +368,10 @@ export default function TournamentView() {
             matches={matches}
             config={config}
           />
+        )}
+
+        {activeTab === 'discussion' && (
+          <TournamentDiscussion tournamentId={id} players={players} tournament={tournament} />
         )}
 
         {currentTabPhase && (
@@ -596,6 +602,10 @@ export default function TournamentView() {
           matches={matches}
           showFinal={tournament.phase === 'COMPLETED' || (allRoundsDone && allCurrentDone)}
         />
+      )}
+
+      {activeTab === 'discussion' && (
+        <TournamentDiscussion tournamentId={id} players={players} tournament={tournament} />
       )}
     </div>
   );
