@@ -494,7 +494,7 @@ export default function PetPage() {
       </div>
 
       {/* Pet habitat */}
-      <div className="sticky top-0 z-40 -mx-2 mb-4 px-2 pt-1 pb-3 bg-gradient-to-b from-[#070b14] via-[#070b14]/95 to-transparent backdrop-blur-sm">
+      <div className="sticky top-0 z-[60] -mx-2 mb-4 px-2 pt-1 pb-3 bg-gradient-to-b from-[#070b14] via-[#070b14]/95 to-transparent backdrop-blur-sm">
         <div className={`relative rounded-[1.6rem] border border-white/[0.06] overflow-hidden bg-gradient-to-b shadow-[0_18px_45px_rgba(0,0,0,0.28)] ${CHARACTER_BG[pet.character] || ''}`}>
           <HabitatBackdrop backgroundId={pet.habitat?.active_background} />
           <HabitatParticles character={pet.character} mood={pet.mood} />
@@ -506,13 +506,21 @@ export default function PetPage() {
               <FormBadge form={pet.form} />
             </div>
           ) : null}
-          <div className={`relative z-10 flex flex-col items-center justify-end px-4 pt-3 pb-3 min-h-[280px] sm:min-h-[300px] ${petTapped ? 'animate-[wiggle_400ms_ease]' : ''}`}>
-            {/* Speech bubble — above pet */}
+          <div className={`relative z-10 flex flex-col items-center justify-end px-4 pt-14 pb-3 min-h-[280px] sm:min-h-[300px] ${petTapped ? 'animate-[wiggle_400ms_ease]' : ''}`}>
+            {/* Speech bubble — single instance, above pet */}
             <div className="mb-2 relative max-w-[240px]">
-              <div className="bg-white/[0.06] backdrop-blur-sm border border-white/[0.08] rounded-xl px-3 py-1.5 text-[13px] text-gray-300 text-center italic transition-all duration-500">
+              <div className={`backdrop-blur-sm border rounded-xl px-3 py-1.5 text-[13px] text-center italic transition-all duration-500 ${
+                rareSpeech
+                  ? 'bg-amber-500/[0.08] border-amber-400/20 text-amber-200'
+                  : 'bg-white/[0.06] border-white/[0.08] text-gray-300'
+              }`}>
+                {rareSpeech && <span className="text-amber-400 mr-1 animate-pulse">&#10022;</span>}
                 &ldquo;{speechText}&rdquo;
+                {rareSpeech && <span className="text-amber-400 ml-1 animate-pulse">&#10022;</span>}
               </div>
-              <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-2.5 h-2.5 rotate-45 bg-white/[0.06] border-r border-b border-white/[0.08]" />
+              <div className={`absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-2.5 h-2.5 rotate-45 border-r border-b transition-colors duration-300 ${
+                rareSpeech ? 'bg-amber-500/20 border-amber-400/30' : 'bg-white/[0.06] border-white/[0.08]'
+              }`} />
             </div>
             {pet.form?.desc ? (
               <div className="mb-1 text-center text-[10px] text-white/50 max-w-[240px]">
@@ -530,24 +538,6 @@ export default function PetPage() {
                 expression={petExpression} foodId={activeFoodId}
                 size={170} onClick={handlePetTap} />
             </div>
-            {/* Speech bubble */}
-            <div className="mt-1 relative max-w-[280px]">
-              <div className={`absolute -top-1.5 left-1/2 -translate-x-1/2 w-2.5 h-2.5 rotate-45 ${rareSpeech ? 'bg-amber-500/20 border-amber-400/30' : 'bg-white/[0.06] border-white/[0.08]'} border-l border-t transition-colors duration-300`} />
-              <div className={`backdrop-blur-sm border rounded-xl px-3 py-2 text-sm text-center italic transition-all duration-500 ${
-                rareSpeech
-                  ? 'bg-amber-500/[0.08] border-amber-400/20 text-amber-200'
-                  : 'bg-white/[0.06] border-white/[0.08] text-gray-300'
-              }`}>
-                {rareSpeech && <span className="text-amber-400 mr-1 animate-pulse">&#10022;</span>}
-                &ldquo;{speechText}&rdquo;
-                {rareSpeech && <span className="text-amber-400 ml-1 animate-pulse">&#10022;</span>}
-              </div>
-            </div>
-            {pet.form?.desc ? (
-              <div className="mt-2 text-center text-[10px] text-white/50 max-w-[260px]">
-                {pet.form.desc}
-              </div>
-            ) : null}
           </div>
           {/* Demand banner */}
           {pet.pending_trick && (
