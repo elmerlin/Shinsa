@@ -217,23 +217,28 @@ function buildBase(character, weightState) {
 
   // Head
   if (character === 'buu') {
-    // Pear-shaped head — narrow forehead, wide round cheeks
-    fillEllipse(g, CX, HEAD_CY + 3, HEAD_RX + 3, HEAD_RY - 2, 'B');   // lower cheeks (wide)
+    // Pear-shaped head — narrow forehead, wide droopy cheeks, uniform color
+    fillEllipse(g, CX, HEAD_CY + 4, HEAD_RX + 3, HEAD_RY - 1, 'B');   // lower cheeks (wide, hangs low)
     fillEllipse(g, CX, HEAD_CY, HEAD_RX - 1, HEAD_RY, 'B');            // middle bridge
     fillEllipse(g, CX, HEAD_CY - 3, HEAD_RX - 5, HEAD_RY - 4, 'B');   // upper forehead (narrow)
-    fillEllipse(g, CX - 2, HEAD_CY - 4, HEAD_RX - 8, HEAD_RY - 7, 'L');
-    fillEllipse(g, CX + 2, HEAD_CY + 5, HEAD_RX - 12, HEAD_RY - 9, 'S');
   } else {
     fillEllipse(g, CX, HEAD_CY, HEAD_RX, HEAD_RY, 'B');
     fillEllipse(g, CX - 3, HEAD_CY - 4, HEAD_RX - 6, HEAD_RY - 6, 'L');
     fillEllipse(g, CX + 3, HEAD_CY + 5, HEAD_RX - 10, HEAD_RY - 9, 'S');
+    // Centered muzzle mask for cat-like characters
+    if (character === 'dojocat' || character === 'pixiu') {
+      fillEllipse(g, CX, HEAD_CY + 4, 7, 5, 'Y');
+    }
   }
 
   // Body
   fillEllipse(g, CX, bodyCy, w.bodyRx, w.bodyRy, 'B');
   fillEllipse(g, CX - 1, bodyCy - 3, Math.max(8, w.bodyRx - 2), Math.max(6, w.bodyRy - 3), 'L');
-  fillRect(g, CX - 6, bodyCy - w.bodyRy - 1, 13, 2, 'D');
-  fillRect(g, CX - 4, bodyCy - w.bodyRy - 3, 9, 1, 'K');
+  // Neck band (skip for Buu — head overlaps body seamlessly)
+  if (character !== 'buu') {
+    fillRect(g, CX - 6, bodyCy - w.bodyRy - 1, 13, 2, 'D');
+    fillRect(g, CX - 4, bodyCy - w.bodyRy - 3, 9, 1, 'K');
+  }
 
   // Belly patch
   fillEllipse(g, CX, bodyCy + 2, Math.max(4, Math.floor(w.bodyRx * 0.5)), Math.max(3, Math.floor(w.bodyRy * 0.46)), 'Y');
@@ -271,32 +276,31 @@ function buildFeatures(character) {
 
   switch (character) {
     case 'dojocat': {
+      // Pointy ears at top of head
       fillTriangle(g, CX - 11, hcy - 2, CX - 17, hcy - HEAD_RY - 2, CX - 6, hcy - HEAD_RY + 3, 'B');
       fillTriangle(g, CX + 11, hcy - 2, CX + 17, hcy - HEAD_RY - 2, CX + 6, hcy - HEAD_RY + 3, 'B');
+      // Inner ear pink
       fillTriangle(g, CX - 10, hcy - 3, CX - 14, hcy - HEAD_RY, CX - 7, hcy - HEAD_RY + 4, 'P');
       fillTriangle(g, CX + 10, hcy - 3, CX + 14, hcy - HEAD_RY, CX + 7, hcy - HEAD_RY + 4, 'P');
-      fillTriangle(g, CX - 18, hcy + 7, CX - 14, hcy + 3, CX - 12, hcy + 10, 'B');
-      fillTriangle(g, CX + 18, hcy + 7, CX + 14, hcy + 3, CX + 12, hcy + 10, 'B');
-      fillRect(g, CX - 15, hcy + 5, 4, 1, 'R');
-      fillRect(g, CX + 11, hcy + 5, 4, 1, 'R');
-      fillRect(g, CX - 16, hcy + 8, 4, 1, 'R');
-      fillRect(g, CX + 12, hcy + 8, 4, 1, 'R');
+      // Whisker lines from cheeks (not triangles)
+      fillLine(g, CX - 8, hcy + 6, CX - 19, hcy + 4, 'R');
+      fillLine(g, CX - 8, hcy + 8, CX - 19, hcy + 8, 'R');
+      fillLine(g, CX + 8, hcy + 6, CX + 19, hcy + 4, 'R');
+      fillLine(g, CX + 8, hcy + 8, CX + 19, hcy + 8, 'R');
       break;
     }
     case 'buu': {
-      // Prominent thick tentacle from top of head
-      fillEllipse(g, CX + 3, hcy - HEAD_RY + 4, 3, 3, 'P');
-      // Thick curved body (3 parallel lines for width)
-      for (let t = -1; t <= 1; t++) {
-        fillLine(g, CX + 3 + t, hcy - HEAD_RY + 2, CX + 6 + t, hcy - HEAD_RY - 2, 'P');
-        fillLine(g, CX + 6 + t, hcy - HEAD_RY - 2, CX + 3 + t, hcy - HEAD_RY - 5, 'P');
-        fillLine(g, CX + 3 + t, hcy - HEAD_RY - 5, CX + t, hcy - HEAD_RY - 4, 'P');
+      // Very prominent thick head tentacle
+      fillEllipse(g, CX + 3, hcy - HEAD_RY + 5, 4, 4, 'P');
+      // Thick curved body (5 parallel lines for width)
+      for (let t = -2; t <= 2; t++) {
+        fillLine(g, CX + 3 + t, hcy - HEAD_RY + 2, CX + 7 + t, hcy - HEAD_RY - 3, 'P');
+        fillLine(g, CX + 7 + t, hcy - HEAD_RY - 3, CX + 3 + t, hcy - HEAD_RY - 6, 'P');
+        fillLine(g, CX + 3 + t, hcy - HEAD_RY - 6, CX - 1 + t, hcy - HEAD_RY - 5, 'P');
       }
-      // Bulbous tip
-      fillCircle(g, CX - 1, hcy - HEAD_RY - 4, 2, 'P');
-      // Cheek blush (wider for pear-shaped head)
-      fillEllipse(g, CX - 12, hcy + 7, 3, 2, 'H');
-      fillEllipse(g, CX + 12, hcy + 7, 3, 2, 'H');
+      // Large bulbous tip
+      fillCircle(g, CX - 2, hcy - HEAD_RY - 5, 3, 'P');
+      // (blush drawn on face layer to avoid dark outline)
       break;
     }
     case 'devit': {
@@ -307,17 +311,13 @@ function buildFeatures(character) {
       break;
     }
     case 'pixiu': {
+      // Pointy ears
       fillTriangle(g, CX - 10, hcy - 3, CX - 15, hcy - HEAD_RY - 2, CX - 6, hcy - HEAD_RY + 2, 'B');
       fillTriangle(g, CX + 10, hcy - 3, CX + 15, hcy - HEAD_RY - 2, CX + 6, hcy - HEAD_RY + 2, 'B');
+      // Inner ear
       fillTriangle(g, CX - 8, hcy - 4, CX - 11, hcy - HEAD_RY + 1, CX - 5, hcy - HEAD_RY + 4, 'R');
       fillTriangle(g, CX + 8, hcy - 4, CX + 11, hcy - HEAD_RY + 1, CX + 5, hcy - HEAD_RY + 4, 'R');
-      fillCircle(g, CX - HEAD_RX + 2, hcy - 1, 3, 'P');
-      fillCircle(g, CX + HEAD_RX - 2, hcy - 1, 3, 'P');
-      fillCircle(g, CX - HEAD_RX + 3, hcy + 4, 3, 'P');
-      fillCircle(g, CX + HEAD_RX - 3, hcy + 4, 3, 'P');
-      fillTriangle(g, CX - 1, hcy - HEAD_RY + 2, CX, hcy - HEAD_RY - 4, CX + 1, hcy - HEAD_RY + 2, 'T');
-      fillTriangle(g, CX - 11, hcy + 10, CX - 16, hcy + 5, CX - 12, hcy + 15, 'S');
-      fillTriangle(g, CX + 11, hcy + 10, CX + 16, hcy + 5, CX + 12, hcy + 15, 'S');
+      // Small blush
       fillRect(g, CX - 9, hcy + 6, 2, 1, 'H');
       fillRect(g, CX + 7, hcy + 6, 2, 1, 'H');
       break;
@@ -570,21 +570,29 @@ function buildFace(character, mood, expression = '') {
     }
     default: { // happy
       if (character === 'dojocat') {
-        fillRect(g, leftEyeX - 1, eyeTop, 3, 7, eyeColor);
+        // Both eyes big & wide (cat-like)
+        fillRect(g, leftEyeX - 1, eyeTop, 4, 7, eyeColor);
         setPixel(g, leftEyeX, eyeTop + 1, 'W');
         setPixel(g, leftEyeX, eyeTop + 3, 'W');
-        fillRect(g, rightEyeX - 2, eyeTop + 3, 5, 1, eyeColor);
-        fillLine(g, leftEyeX - 3, browTop + 2, leftEyeX + 1, browTop, 'K');
-        fillLine(g, rightEyeX + 3, browTop + 1, rightEyeX - 2, browTop + 3, 'K');
+        fillRect(g, rightEyeX - 2, eyeTop, 4, 7, eyeColor);
+        setPixel(g, rightEyeX - 1, eyeTop + 1, 'W');
+        setPixel(g, rightEyeX - 1, eyeTop + 3, 'W');
+        fillLine(g, leftEyeX - 3, browTop + 2, leftEyeX + 2, browTop, 'K');
+        fillLine(g, rightEyeX + 2, browTop + 2, rightEyeX - 3, browTop, 'K');
         drawCatNose(g, noseY);
         drawCatMouth(g, noseY, 'smile');
       } else if (character === 'buu') {
-        fillLine(g, leftEyeX - 3, hcy + 2, leftEyeX + 2, hcy + 1, eyeColor);
-        fillLine(g, rightEyeX + 2, hcy + 2, rightEyeX - 3, hcy + 1, eyeColor);
-        fillLine(g, leftEyeX - 4, browTop + 2, leftEyeX + 2, browTop + 3, 'K');
-        fillLine(g, rightEyeX + 3, browTop + 2, rightEyeX - 2, browTop + 3, 'K');
-        drawTinySmile(g, mouthY);
-        setPixel(g, CX + 3, mouthY - 1, 'K');
+        // Small dot eyes — high up on face, close together
+        const buuEyeY = hcy - 1;
+        fillCircle(g, CX - 5, buuEyeY, 1, eyeColor);
+        fillCircle(g, CX + 5, buuEyeY, 1, eyeColor);
+        // Mouth close to eyes, higher up
+        const buuMouthY = hcy + 3;
+        drawTinySmile(g, buuMouthY);
+        setPixel(g, CX + 3, buuMouthY - 1, 'K');
+        // Rosy cheeks on face layer (no outline)
+        fillEllipse(g, CX - 9, hcy + 2, 3, 2, 'H');
+        fillEllipse(g, CX + 9, hcy + 2, 3, 2, 'H');
       } else if (character === 'pixiu') {
         fillRect(g, leftEyeX - 1, eyeTop - 1, 4, 7, eyeColor);
         fillRect(g, rightEyeX - 2, eyeTop - 1, 4, 7, eyeColor);

@@ -431,12 +431,11 @@ export default function PetPage() {
   return (
     <div className="max-w-lg mx-auto p-4 sm:p-6 pb-24">
       {/* Header */}
-      <div className="mb-3 rounded-[1.25rem] border border-white/[0.06] bg-white/[0.025] px-3.5 py-3 shadow-[0_10px_30px_rgba(0,0,0,0.18)]">
+      <div className="mb-2 rounded-[1.25rem] border border-white/[0.06] bg-white/[0.025] px-3.5 py-2 shadow-[0_10px_30px_rgba(0,0,0,0.18)]">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h1 className="text-xl font-black tracking-tight text-white">My {charName}</h1>
             <p className="mt-0.5 text-[11px] text-cyan-100/80">{pet.identity_title || 'Training Partner'}</p>
-            <p className="mt-1 text-[11px] text-gray-500">Care, train, and shape a companion that mirrors how you play.</p>
           </div>
           <button
             onClick={() => setShowSelect(true)}
@@ -445,7 +444,7 @@ export default function PetPage() {
             Switch
           </button>
         </div>
-        <div className="mt-3 flex flex-wrap items-center gap-2">
+        <div className="mt-1.5 flex flex-wrap items-center gap-2">
           <HeaderPill label="XP" value={experience.toLocaleString()} tone="slate" />
           <HeaderPill label="Combo" value={combo_balance.toLocaleString()} tone="amber" />
           <HeaderPill label="Bond Tokens" value={bond_tokens.toLocaleString()} tone="cyan" />
@@ -476,8 +475,8 @@ export default function PetPage() {
               <FormBadge form={pet.form} />
             </div>
           ) : null}
-          <div className={`relative z-10 flex flex-col items-center px-4 pt-6 pb-5 min-h-[324px] sm:min-h-[346px] ${petTapped ? 'animate-[wiggle_400ms_ease]' : ''}`}>
-            <div className="flex min-h-[228px] items-end justify-center">
+          <div className={`relative z-10 flex flex-col items-center px-4 pt-4 pb-4 min-h-[280px] sm:min-h-[300px] ${petTapped ? 'animate-[wiggle_400ms_ease]' : ''}`}>
+            <div className="flex min-h-[190px] items-end justify-center">
               <SpritePet
                 character={pet.character} weightState={pet.weight_state} mood={pet.mood}
                 equippedHat={pet.equipped_hat} equippedBelt={pet.equipped_belt} equippedShoes={pet.equipped_shoes}
@@ -486,7 +485,7 @@ export default function PetPage() {
                 topColor={pet.top_color}
                 isEating={isEating} isTricking={isTricking} reaction={petReaction}
                 expression={petExpression} foodId={activeFoodId}
-                size={196} onClick={handlePetTap} />
+                size={170} onClick={handlePetTap} />
             </div>
             {/* Speech bubble */}
             <div className="mt-1 relative max-w-[280px]">
@@ -1066,21 +1065,21 @@ function PetTab({ pet, shop, combo, economy, interactionBusy, activityBusy, miss
           </div>
           <div className="text-[10px] font-semibold text-amber-300 whitespace-nowrap">{combo.toLocaleString()} Combo</div>
         </div>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="space-y-1.5">
           {(shop?.toys || []).map((toy) => {
             const owned = !!toy.owned || (pet.owned_toys || []).includes(toy.id);
             const favorite = toy.preference === 'favorite';
             const canAfford = combo >= toy.cost;
             return (
-              <div key={toy.id} className="rounded-xl border border-white/[0.06] bg-black/20 p-2.5">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="text-[11px] font-semibold text-white/85 truncate">{toy.name}</div>
-                    <div className="text-[10px] text-gray-500 mt-1">{toy.desc}</div>
+              <div key={toy.id} className="flex items-center gap-3 rounded-xl border border-white/[0.06] bg-black/20 px-3 py-2">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] font-semibold text-white/85 truncate">{toy.name}</span>
+                    {favorite ? <span className="shrink-0 rounded-full border border-emerald-400/15 bg-emerald-400/10 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-200">fav</span> : null}
                   </div>
-                  {favorite ? <span className="shrink-0 rounded-full border border-emerald-400/15 bg-emerald-400/10 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-200">fav</span> : null}
+                  <div className="text-[10px] text-gray-500 mt-0.5">{toy.desc}</div>
                 </div>
-                <div className="mt-2 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 shrink-0">
                   <div className="text-[10px] text-amber-300">{toy.cost}c</div>
                   <button
                     onClick={() => (owned ? onUseToy(toy.id) : onBuyToy(toy.id))}
