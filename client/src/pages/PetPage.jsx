@@ -345,6 +345,7 @@ export default function PetPage() {
       const r = await interactPet(actionId);
       if (r.rare) playPetRare();
       setPet(r.pet);
+      if (r.stat_changes?.length) showFeedback(r.stat_changes.join('  '));
       triggerPetResponse(r.speech, r.reaction, r.expression, 1200, r.rare);
     } catch (e) {
       showFeedback(e?.message || 'Could not interact');
@@ -361,8 +362,7 @@ export default function PetPage() {
       const r = await doPetActivity(activityId);
       if (r.rare) playPetRare();
       setPet(r.pet);
-      const gainLabel = r.mastery_gain ? ` +${r.mastery_gain} mastery` : '';
-      showFeedback(`${r.activity || activityId} complete${gainLabel}`);
+      showFeedback(r.stat_changes?.length ? r.stat_changes.join('  ') : `${r.activity || activityId} complete`);
       triggerPetResponse(r.speech, r.reaction, r.expression, 1500, r.rare);
     } catch (e) {
       showFeedback(e?.message || 'Activity failed');
@@ -1059,8 +1059,24 @@ function PetTab({ pet, shop, combo, economy, interactionBusy, activityBusy, miss
           </div>
         </div>
       </div>
+      {(pet.energy < 20 || pet.hunger < 25) && (
+        <div className={`rounded-xl p-3 border ${pet.energy < 10 || pet.hunger < 15 ? 'bg-red-500/[0.06] border-red-500/15' : 'bg-amber-500/[0.06] border-amber-500/10'}`}>
+          <div className="flex items-center gap-2">
+            <span className="text-sm">{pet.energy < 10 || pet.hunger < 15 ? '⚠️' : '💤'}</span>
+            <div className="text-[11px]">
+              {pet.hunger < 15 && <span className="text-red-300">Very hungry — feed your pet! </span>}
+              {pet.hunger >= 15 && pet.hunger < 25 && <span className="text-amber-200">Getting hungry. </span>}
+              {pet.energy < 10 && <span className="text-red-300">Exhausted — let them rest. </span>}
+              {pet.energy >= 10 && pet.energy < 20 && <span className="text-amber-200">Low energy. </span>}
+            </div>
+          </div>
+        </div>
+      )}
       <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
-        <div className="text-xs text-gray-500 mb-2">Interact</div>
+        <div className="flex items-center justify-between mb-2">
+          <div className="text-xs text-gray-500">Interact</div>
+          <div className="text-[10px] text-gray-600 tabular-nums">{pet.interactions_today || 0} today</div>
+        </div>
         <div className="flex flex-wrap gap-1.5">
           {PET_ACTIONS.map((action) => {
             const locked = action.minBond && (pet.bond || 0) < action.minBond;
@@ -1102,7 +1118,8 @@ function PetTab({ pet, shop, combo, economy, interactionBusy, activityBusy, miss
                   {locked && <span className="text-[9px] text-gray-600">&#128274;</span>}
                 </div>
                 <div className="text-[10px] text-gray-500 mt-0.5">{activity.desc}</div>
-                {costLabel && <div className="text-[9px] text-cyan-300/50 mt-1">{costLabel}</div>}
+                {locked && activity.lock_reason && <div className="text-[9px] text-rose-300/60 mt-1">{activity.lock_reason}</div>}
+                {!locked && costLabel && <div className="text-[9px] text-cyan-300/50 mt-1">{costLabel}</div>}
               </button>
             );
           })}

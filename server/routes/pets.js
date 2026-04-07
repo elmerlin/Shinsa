@@ -93,6 +93,7 @@ const CHARACTER_PROFILES = {
       praise: ['Acceptable form.', 'That was disciplined.', 'You noticed. Good.'],
       cuddle: ['A brief headbutt.', 'Only for a moment.', '*tiny purr*'],
       tease: ['Watch it.', 'Do not test the dojo mascot.', 'Hmph.'],
+      perform: ['A demonstration of form.', 'Watch closely.', 'This is a real kata.'],
       mission: ['Train with intent today.', 'Bring me a clean clear.', 'We should sharpen our form.'],
       tap: ['Eyes up, stance strong.', 'Ready when you are.', '*whiskers twitch*'],
     },
@@ -106,6 +107,7 @@ const CHARACTER_PROFILES = {
       praise: ['Of course I was amazing.', 'Tell me more.', 'Hehe, keep going.'],
       cuddle: ['Mmm, cozy.', 'I will allow this.', 'Soft pats accepted.'],
       tease: ['Rude. Funny, but rude.', 'You wish you looked this good.', 'Hehehe.'],
+      perform: ['Watch my moves!', 'Prepare to be amazed.', 'I was BORN for this.'],
       mission: ['Let us make today delicious.', 'Bring me something flashy.', 'A replay would look good on us.'],
       tap: ['Hehehe.', 'Admiring me again?', 'I am listening.'],
     },
@@ -119,6 +121,7 @@ const CHARACTER_PROFILES = {
       praise: ['Again, again!', 'That ruled.', 'Did you see me hop?'],
       cuddle: ['Only if we wrestle after.', 'Quick hug, then zoomies.', 'Fine, but make it fast.'],
       tease: ['Catch me first.', 'Heh. Try harder.', 'That just made me stronger.'],
+      perform: ['CHECK THIS OUT!', 'Hold my snacks.', 'Bet you cannot do THIS.'],
       mission: ['Let us cause a little trouble.', 'I want doubles chaos.', 'Bring me something hard.'],
       tap: ['Heh.', 'Ready to dash.', 'Do it again.'],
     },
@@ -132,6 +135,7 @@ const CHARACTER_PROFILES = {
       praise: ['Fortune smiles on discipline.', 'A graceful effort.', 'I am pleased.'],
       cuddle: ['A warm blessing for you.', 'Stay a while.', 'Such a gentle moment.'],
       tease: ['I choose mercy.', 'Mischief clouds the spirit.', '*tiny amused snort*'],
+      perform: ['A ceremonial display.', 'Witness the ancient art.', 'Blessings through movement.'],
       mission: ['Let us seek a worthy clear.', 'A ceremonial challenge awaits.', 'We should honour today with good play.'],
       tap: ['Auspicious timing.', 'I am here.', 'Let us see what today brings.'],
     },
@@ -1385,7 +1389,15 @@ function formatPet(pet, isPublic = false, db = null) {
     interactions_today: interactionsToday,
     interaction_count: pet.interaction_count || 0,
     activity_summary: activitySummary,
-    activities: Object.values(PET_ACTIVITIES),
+    activities: Object.values(PET_ACTIVITIES).map(a => ({
+      ...a,
+      locked: !!(a.minTrust && trust < a.minTrust) || !!(a.minEnergy && energy < a.minEnergy),
+      lock_reason: a.minTrust && trust < a.minTrust
+        ? `Trust ${a.minTrust}+ needed`
+        : a.minEnergy && energy < a.minEnergy
+          ? `Energy ${a.minEnergy}+ needed`
+          : '',
+    })),
     toys: PET_TOYS.map((toy) => ({
       ...toy,
       owned: safeJsonParse(pet.owned_toys).includes(toy.id),
@@ -1802,6 +1814,16 @@ router.post('/interact', requireAuth, (req, res) => {
   `).run(newHappiness, newEnergy, newHype, newTrust, newBond, currentDailyInteractions + 1, todayKey, req.user.id);
 
   const updated = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
+  const changes = [];
+  if (interaction.bond) changes.push(`+${interaction.bond} bond`);
+  if (interaction.trust > 0) changes.push(`+${interaction.trust} trust`);
+  else if (interaction.trust < 0) changes.push(`${interaction.trust} trust`);
+  if (interaction.happiness > 0) changes.push(`+${interaction.happiness} happy`);
+  else if (interaction.happiness < 0) changes.push(`${interaction.happiness} happy`);
+  if (interaction.hype > 0) changes.push(`+${interaction.hype} hype`);
+  if (interaction.energy < 0) changes.push(`${interaction.energy} energy`);
+  else if (interaction.energy > 0) changes.push(`+${interaction.energy} energy`);
+
   res.json({
     pet: formatPet(updated, false, db),
     speech: ctx.speech,
@@ -1810,6 +1832,7 @@ router.post('/interact', requireAuth, (req, res) => {
     action: actionId,
     rare: ctx.rare || false,
     mood_aware: ctx.mood_aware || false,
+    stat_changes: changes,
   });
 });
 
@@ -1854,6 +1877,17 @@ router.post('/activities/:activityId', requireAuth, (req, res) => {
   `).run(newHappiness, newEnergy, newTrust, newHype, newBond, newCombo, newBondTokens, newRareShards, masteryGain, req.user.id);
 
   const updated = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
+  const changes = [];
+  if (activity.energy < 0) changes.push(`${activity.energy} energy`);
+  else if (activity.energy > 0) changes.push(`+${activity.energy} energy`);
+  if (activity.happiness) changes.push(`+${activity.happiness} happy`);
+  if (activity.trust) changes.push(`+${activity.trust} trust`);
+  if (activity.bond) changes.push(`+${activity.bond} bond`);
+  if (activity.hype > 0) changes.push(`+${activity.hype} hype`);
+  else if (activity.hype < 0) changes.push(`${activity.hype} hype`);
+  if (activity.bond_tokens) changes.push(`+${activity.bond_tokens} token`);
+  if (masteryGain) changes.push(`+${masteryGain} mastery`);
+
   res.json({
     pet: formatPet(updated, false, db),
     speech: ctx.speech,
@@ -1862,6 +1896,7 @@ router.post('/activities/:activityId', requireAuth, (req, res) => {
     activity: activity.id,
     mastery_gain: masteryGain,
     rare: ctx.rare || false,
+    stat_changes: changes,
   });
 });
 
