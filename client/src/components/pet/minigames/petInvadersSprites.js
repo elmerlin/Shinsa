@@ -45,6 +45,16 @@ function px(ctx, x, y, s, color) {
   ctx.fillRect(Math.round(x), Math.round(y), s, s);
 }
 
+function drawPixelEllipse(ctx, cx, cy, rx, ry, ps, color) {
+  for (let yy = -ry; yy <= ry; yy++) {
+    for (let xx = -rx; xx <= rx; xx++) {
+      if ((xx * xx) / (rx * rx) + (yy * yy) / (ry * ry) <= 1) {
+        px(ctx, cx + xx * ps, cy + yy * ps, ps, color);
+      }
+    }
+  }
+}
+
 /** Draw a grid of pixels from a compact string map.
  *  map: array of strings, each char = one pixel.
  *  palette: { char: '#color', ... }. Space = transparent.
