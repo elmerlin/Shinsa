@@ -9,12 +9,26 @@ const router = express.Router();
 const VALID_CHARACTERS = ['dojocat', 'buu', 'devit', 'pixiu'];
 const MAX_STAT = 100;
 const TARGET_WEEKLY_SONGS = 75;
-const TARGET_WEEKLY_HUNGER_UPKEEP = 76;
-const TARGET_WEEKLY_HAPPINESS_UPKEEP = 48;
-const HUNGER_DECAY_PER_HOUR = TARGET_WEEKLY_HUNGER_UPKEEP / (7 * 24);
+const TARGET_WEEKLY_HUNGER_UPKEEP = 134;
+const TARGET_WEEKLY_HAPPINESS_UPKEEP = 20;
+const HUNGER_DECAY_PER_HOUR = 0.8;
 const HAPPINESS_DECAY_PER_HOUR = TARGET_WEEKLY_HAPPINESS_UPKEEP / (7 * 24);
-const ENERGY_DECAY_PER_HOUR = 22 / (7 * 24);
-const HYPE_DECAY_PER_HOUR = 90 / (7 * 24);
+const ENERGY_DECAY_PER_HOUR = 0;
+const MOMENTUM_DECAY_PER_HOUR = 1.25;
+const HYPE_DECAY_PER_HOUR = MOMENTUM_DECAY_PER_HOUR;
+const ENERGY_RECOVERY_HIGH_PER_HOUR = 4;
+const ENERGY_RECOVERY_MEDIUM_PER_HOUR = 2;
+const ENERGY_RECOVERY_LOW_PER_HOUR = 0;
+const NEGLECT_DECAY_DELAY_HOURS = 48;
+const TRUST_NEGLECT_DECAY_PER_DAY = 2;
+const CRITICAL_HUNGER_THRESHOLD = 15;
+const LOW_HUNGER_THRESHOLD = 30;
+const LOW_ENERGY_THRESHOLD = 20;
+const LOW_TRUST_THRESHOLD = 25;
+const MID_TRUST_THRESHOLD = 40;
+const LOW_MOMENTUM_THRESHOLD = 20;
+const REQUEST_LIFETIME_HOURS = 24;
+const REQUEST_REFRESH_COOLDOWN_HOURS = 8;
 const PET_ECONOMY = {
   target_songs_per_week: TARGET_WEEKLY_SONGS,
   weekly_hunger_upkeep: TARGET_WEEKLY_HUNGER_UPKEEP,
@@ -28,8 +42,8 @@ const PET_ECONOMY = {
 };
 // Minigame play costs
 const MINIGAME_COST = {
-  'mini-pump': { combo: 5, energy: -4, hunger: -3, happiness: 3, hype: 2 },
-  'pet-invaders': { combo: 8, energy: -6, hunger: -4, happiness: 4, hype: 3 },
+  'mini-pump': { combo: 5, energy: -4, hunger: -3, happiness: 2, hype: 4 },
+  'pet-invaders': { combo: 8, energy: -6, hunger: -4, happiness: 2, hype: 6 },
 };
 
 const GRADE_ORDER = ['F', 'D', 'C', 'B', 'A', 'A+', 'AA', 'AA+', 'AAA', 'AAA+', 'S', 'S+', 'SS', 'SS+', 'SSS', 'SSS+'];
@@ -42,24 +56,24 @@ const GRADE_COMBO = {
   'B': 1, 'C': 0, 'D': 0, 'F': 0,
 };
 
-// Playing keeps your pet engaged, but feeding should still require real upkeep.
-const GRADE_FEED_TABLE = {
-  'SSS+': { hunger: 1, happiness: 4, xp: 42 },
-  'SSS':  { hunger: 1, happiness: 4, xp: 38 },
-  'SS+':  { hunger: 1, happiness: 3, xp: 34 },
-  'SS':   { hunger: 1, happiness: 3, xp: 30 },
-  'S+':   { hunger: 1, happiness: 2, xp: 26 },
-  'S':    { hunger: 1, happiness: 2, xp: 23 },
-  'AAA+': { hunger: 0, happiness: 2, xp: 19 },
-  'AAA':  { hunger: 0, happiness: 2, xp: 16 },
-  'AA+':  { hunger: 0, happiness: 1, xp: 13 },
-  'AA':   { hunger: 0, happiness: 1, xp: 11 },
-  'A+':   { hunger: 0, happiness: 1, xp: 9 },
-  'A':    { hunger: 0, happiness: 1, xp: 7 },
-  'B':    { hunger: 0, happiness: 0, xp: 4 },
-  'C':    { hunger: 0, happiness: 0, xp: 2 },
-  'D':    { hunger: 0, happiness: 0, xp: 1 },
-  'F':    { hunger: 0, happiness: 0, xp: 0 },
+// Pump sync should generate resources and momentum, not directly solve upkeep.
+const GRADE_SYNC_REWARD_TABLE = {
+  'SSS+': { xp: 42, momentum: 6, trust: 2, hunger: -2, energy: -3 },
+  'SSS':  { xp: 38, momentum: 6, trust: 2, hunger: -2, energy: -3 },
+  'SS+':  { xp: 34, momentum: 5, trust: 1, hunger: -2, energy: -3 },
+  'SS':   { xp: 30, momentum: 5, trust: 1, hunger: -2, energy: -3 },
+  'S+':   { xp: 26, momentum: 5, trust: 1, hunger: -2, energy: -2 },
+  'S':    { xp: 23, momentum: 4, trust: 1, hunger: -2, energy: -2 },
+  'AAA+': { xp: 19, momentum: 4, trust: 1, hunger: -1, energy: -2 },
+  'AAA':  { xp: 16, momentum: 4, trust: 1, hunger: -1, energy: -2 },
+  'AA+':  { xp: 13, momentum: 3, trust: 0, hunger: -1, energy: -1 },
+  'AA':   { xp: 11, momentum: 3, trust: 0, hunger: -1, energy: -1 },
+  'A+':   { xp: 9, momentum: 2, trust: 0, hunger: -1, energy: -1 },
+  'A':    { xp: 7, momentum: 2, trust: 0, hunger: -1, energy: -1 },
+  'B':    { xp: 4, momentum: 1, trust: 0, hunger: -1, energy: 0 },
+  'C':    { xp: 2, momentum: 0, trust: 0, hunger: 0, energy: 0 },
+  'D':    { xp: 1, momentum: 0, trust: 0, hunger: 0, energy: 0 },
+  'F':    { xp: 0, momentum: 0, trust: 0, hunger: 0, energy: 0 },
 };
 
 function levelXpBonus(level) {
@@ -496,8 +510,9 @@ const COACH_TEMPLATES = {
 };
 
 function getCoachPriority(pet, summary) {
-  const hunger = computeDecayed(pet.fullness, pet.last_fed_at, HUNGER_DECAY_PER_HOUR);
-  const energy = getStateValue(pet.energy || 65, pet.updated_at || pet.last_fed_at, ENERGY_DECAY_PER_HOUR);
+  const vitals = buildPetVitalsSnapshot(pet);
+  const hunger = vitals.hunger;
+  const energy = vitals.energy;
 
   // Urgent care
   if (hunger < 20 || energy < 12) return 'care';
@@ -955,6 +970,16 @@ function ensurePetTable(db) {
   addCol('daily_tap_key', "TEXT NOT NULL DEFAULT ''");
   addCol('last_rest_at', "TEXT NOT NULL DEFAULT ''");
   addCol('nickname', "TEXT NOT NULL DEFAULT ''");
+  addCol('last_meaningful_care_at', "TEXT NOT NULL DEFAULT ''");
+  addCol('last_pump_play_at', "TEXT NOT NULL DEFAULT ''");
+  addCol('last_request_refresh_at', "TEXT NOT NULL DEFAULT ''");
+  addCol('active_request_type', "TEXT NOT NULL DEFAULT ''");
+  addCol('active_request_payload', "TEXT NOT NULL DEFAULT '{}'");
+  addCol('active_request_status', "TEXT NOT NULL DEFAULT ''");
+  addCol('active_request_created_at', "TEXT NOT NULL DEFAULT ''");
+  addCol('active_request_expires_at', "TEXT NOT NULL DEFAULT ''");
+  addCol('active_request_completed_at', "TEXT NOT NULL DEFAULT ''");
+  addCol('neglect_strikes', "INTEGER NOT NULL DEFAULT 0");
 }
 
 function ensurePetSocialTables(db) {
@@ -1095,8 +1120,52 @@ function computeDecayed(storedValue, lastFedAt, decayPerHour) {
   return clamp(Math.round(storedValue - hoursSince * decayPerHour), 0, MAX_STAT);
 }
 
+function getHoursSince(lastAt) {
+  if (!lastAt) return 0;
+  const lastMs = new Date(`${lastAt}Z`).getTime();
+  if (!Number.isFinite(lastMs)) return 0;
+  return Math.max(0, (Date.now() - lastMs) / (1000 * 60 * 60));
+}
+
+function formatPetStatLabel(key = '') {
+  const map = {
+    combo_balance: 'combo',
+    bond_tokens: 'bond tokens',
+    rare_shards: 'shards',
+    hype: 'momentum',
+  };
+  return map[key] || key.replace(/_/g, ' ');
+}
+
 function getStateValue(storedValue, lastAt, decayPerHour) {
   return computeDecayed(storedValue, lastAt, decayPerHour);
+}
+
+function getEnergyRecoveryRate(hunger) {
+  if (hunger >= 40) return ENERGY_RECOVERY_HIGH_PER_HOUR;
+  if (hunger >= 20) return ENERGY_RECOVERY_MEDIUM_PER_HOUR;
+  return ENERGY_RECOVERY_LOW_PER_HOUR;
+}
+
+function getEnergyStateValue(storedValue, lastAt, hunger) {
+  const safeStored = clamp(parseInt(storedValue, 10) || 0, 0, MAX_STAT);
+  const hoursSince = getHoursSince(lastAt);
+  if (hoursSince <= 0) return safeStored;
+  const recovery = getEnergyRecoveryRate(hunger);
+  return clamp(Math.round(safeStored + (hoursSince * recovery)), 0, MAX_STAT);
+}
+
+function getMomentumStateValue(storedValue, lastAt) {
+  return computeDecayed(storedValue, lastAt, MOMENTUM_DECAY_PER_HOUR);
+}
+
+function getTrustStateValue(storedValue, lastMeaningfulCareAt) {
+  const safeStored = clamp(parseInt(storedValue, 10) || 0, 0, MAX_STAT);
+  const hoursSince = getHoursSince(lastMeaningfulCareAt);
+  if (hoursSince <= NEGLECT_DECAY_DELAY_HOURS) return safeStored;
+  const decayHours = hoursSince - NEGLECT_DECAY_DELAY_HOURS;
+  const decayAmount = (decayHours / 24) * TRUST_NEGLECT_DECAY_PER_DAY;
+  return clamp(Math.round(safeStored - decayAmount), 0, MAX_STAT);
 }
 
 function getWeightState(hunger) {
@@ -1114,6 +1183,124 @@ function getMood(hunger, happiness) {
   if (avg <= 65) return 'happy';
   if (avg <= 85) return 'content';
   return 'stuffed';
+}
+
+function getMoodState(vitals) {
+  const hunger = vitals?.hunger || 0;
+  const energy = vitals?.energy || 0;
+  const trust = vitals?.trust || 0;
+  const momentum = vitals?.momentum || 0;
+  if (hunger >= 70 && energy >= 60 && trust >= 50 && momentum >= 40) return 'thriving';
+  if (hunger < 20 || energy < 15 || (hunger < 30 && energy < 30)) return 'neglected';
+  if (hunger < 35 || energy < 35 || momentum < 20) return 'restless';
+  return 'stable';
+}
+
+function getWellbeingRewardMultiplier(vitals) {
+  const values = [vitals?.hunger || 0, vitals?.energy || 0, vitals?.trust || 0, vitals?.momentum || 0];
+  if (values.some((value) => value < 20)) return 0.6;
+  if (values.some((value) => value < 40)) return 0.85;
+  if (values.every((value) => value >= 70)) return 1.15;
+  return 1;
+}
+
+function buildPetVitalsSnapshot(pet) {
+  const hunger = computeDecayed(pet.fullness || 50, pet.last_fed_at, HUNGER_DECAY_PER_HOUR);
+  const happiness = computeDecayed(pet.happiness || 50, pet.last_fed_at, HAPPINESS_DECAY_PER_HOUR);
+  const energy = getEnergyStateValue(pet.energy || 65, pet.updated_at || pet.last_fed_at, hunger);
+  const momentum = getMomentumStateValue(pet.hype || 25, pet.updated_at || pet.last_fed_at);
+  const trust = getTrustStateValue(
+    pet.trust || 35,
+    pet.last_meaningful_care_at || pet.last_food_at || pet.last_fed_at || ''
+  );
+  const bond = Math.max(0, pet.bond || 0);
+  const moodState = getMoodState({ hunger, energy, trust, momentum });
+  return {
+    hunger,
+    happiness,
+    energy,
+    momentum,
+    trust,
+    bond,
+    mood_state: moodState,
+    mood: getMood(hunger, happiness),
+    reward_multiplier: getWellbeingRewardMultiplier({ hunger, energy, trust, momentum }),
+  };
+}
+
+function buildPetNeeds(vitals, pet, summary = {}) {
+  const needs = [];
+  if ((vitals?.hunger || 0) < CRITICAL_HUNGER_THRESHOLD) {
+    needs.push({
+      id: 'feed-now',
+      priority: 'critical',
+      label: 'Very hungry',
+      detail: 'Feed your pet before trying demanding actions.',
+      cta: 'food',
+    });
+  } else if ((vitals?.hunger || 0) < LOW_HUNGER_THRESHOLD) {
+    needs.push({
+      id: 'feed-soon',
+      priority: 'high',
+      label: 'Getting hungry',
+      detail: 'A meal will keep recovery and training reliable.',
+      cta: 'food',
+    });
+  }
+
+  if ((vitals?.energy || 0) < LOW_ENERGY_THRESHOLD) {
+    needs.push({
+      id: 'rest',
+      priority: (vitals?.energy || 0) < 10 ? 'critical' : 'high',
+      label: 'Low energy',
+      detail: 'Rest or feed before sparring, exploring, or minigames.',
+      cta: 'pet',
+    });
+  }
+
+  if ((vitals?.trust || 0) < MID_TRUST_THRESHOLD) {
+    needs.push({
+      id: 'bonding',
+      priority: (vitals?.trust || 0) < LOW_TRUST_THRESHOLD ? 'high' : 'medium',
+      label: 'Trust needs work',
+      detail: 'Grooming, praise, and consistent care will unlock stronger actions.',
+      cta: 'pet',
+    });
+  }
+
+  if ((vitals?.momentum || 0) < LOW_MOMENTUM_THRESHOLD) {
+    needs.push({
+      id: 'pump-session',
+      priority: 'medium',
+      label: 'Momentum fading',
+      detail: (summary?.plays_today || 0) > 0
+        ? 'A strong play, replay, or live session will wake the pet up again.'
+        : 'Sync a Pump session to rebuild short-term excitement.',
+      cta: 'pump',
+    });
+  }
+
+  if (!needs.length) {
+    needs.push({
+      id: 'thriving',
+      priority: 'low',
+      label: 'Doing well',
+      detail: 'Your pet is stable. Push bond, missions, or style next.',
+      cta: 'pet',
+    });
+  }
+
+  return needs;
+}
+
+function getRecommendedActions(vitals, pet, summary = {}) {
+  const actions = [];
+  if ((vitals?.hunger || 0) < LOW_HUNGER_THRESHOLD) actions.push('feed');
+  if ((vitals?.energy || 0) < LOW_ENERGY_THRESHOLD) actions.push('rest');
+  if ((vitals?.trust || 0) < MID_TRUST_THRESHOLD) actions.push('groom');
+  if ((vitals?.momentum || 0) < LOW_MOMENTUM_THRESHOLD || !(summary?.plays_today > 0)) actions.push('play-pump');
+  if ((pet?.bond || 0) >= 40 && (vitals?.energy || 0) >= 35 && (vitals?.trust || 0) >= 40) actions.push('perform');
+  return Array.from(new Set(actions)).slice(0, 4);
 }
 
 function getBondRank(bond = 0) {
@@ -1729,18 +1916,269 @@ function buildPetMissions(pet, summary = {}) {
       claim_key: claimKey,
       reward: mission.reward,
       reward_summary: Object.entries(mission.reward)
-        .map(([key, value]) => `${value} ${key.replace('_', ' ')}`)
+        .map(([key, value]) => `${value} ${formatPetStatLabel(key)}`)
         .join(' • '),
     };
   });
 }
 
+function formatPetRequestRewardSummary(reward = {}) {
+  return Object.entries(reward)
+    .filter(([, value]) => Number(value) > 0)
+    .map(([key, value]) => `${value} ${formatPetStatLabel(key)}`)
+    .join(' • ');
+}
+
+function buildPetRequestTemplate(type, payload = {}) {
+  if (type === 'meal') {
+    const target = Math.max(55, Math.min(MAX_STAT, parseInt(payload.target_hunger, 10) || 60));
+    const reward = { bond: 6, trust: 2, combo_balance: 6 };
+    return {
+      type,
+      label: 'Meal request',
+      desc: `Get hunger back to ${target}% or higher.`,
+      cta_label: 'Open Food',
+      cta_target: 'food',
+      target_hunger: target,
+      reward,
+      reward_summary: formatPetRequestRewardSummary(reward),
+    };
+  }
+  if (type === 'recovery') {
+    const target = Math.max(50, Math.min(MAX_STAT, parseInt(payload.target_energy, 10) || 55));
+    const reward = { bond: 5, trust: 3, bond_tokens: 1 };
+    return {
+      type,
+      label: 'Recovery request',
+      desc: `Restore energy to ${target}% or higher.`,
+      cta_label: 'Rest Up',
+      cta_target: 'pet',
+      target_energy: target,
+      reward,
+      reward_summary: formatPetRequestRewardSummary(reward),
+    };
+  }
+  if (type === 'bonding') {
+    const target = Math.max(2, parseInt(payload.target_interactions, 10) || 3);
+    const reward = { bond: 7, trust: 4, combo_balance: 8 };
+    return {
+      type,
+      label: 'Bonding request',
+      desc: `Spend quality time with ${target} interaction${target === 1 ? '' : 's'} today.`,
+      cta_label: 'Interact',
+      cta_target: 'pet',
+      target_interactions: target,
+      reward,
+      reward_summary: formatPetRequestRewardSummary(reward),
+    };
+  }
+  if (type === 'pump-session') {
+    const targetPlays = Math.max(1, parseInt(payload.target_plays_today, 10) || 2);
+    const targetMomentum = Math.max(35, parseInt(payload.target_momentum, 10) || 40);
+    const reward = { bond: 6, hype: 10, combo_balance: 10 };
+    return {
+      type,
+      label: 'Momentum request',
+      desc: `Sync ${targetPlays} Pump ${targetPlays === 1 ? 'play' : 'plays'} today or rebuild momentum to ${targetMomentum}%.`,
+      cta_label: 'Play Pump',
+      cta_target: 'pump',
+      target_plays_today: targetPlays,
+      target_momentum: targetMomentum,
+      reward,
+      reward_summary: formatPetRequestRewardSummary(reward),
+    };
+  }
+  return null;
+}
+
+function pickPetRequestTemplate(pet, vitals, summary = {}) {
+  if ((vitals?.hunger || 0) < 45) {
+    return buildPetRequestTemplate('meal', { target_hunger: 60 });
+  }
+  if ((vitals?.energy || 0) < 40) {
+    return buildPetRequestTemplate('recovery', { target_energy: 55 });
+  }
+  if ((vitals?.trust || 0) < 45) {
+    const interactionsToday = pet.daily_interaction_key === getUtcDayKey() ? (pet.daily_interaction_count || 0) : 0;
+    return buildPetRequestTemplate('bonding', { target_interactions: Math.max(3, interactionsToday + 2) });
+  }
+  if ((vitals?.momentum || 0) < 30 || !(summary?.plays_today > 0)) {
+    return buildPetRequestTemplate('pump-session', {
+      target_plays_today: Math.max(2, (summary?.plays_today || 0) + 1),
+      target_momentum: 42,
+    });
+  }
+  return null;
+}
+
+function getCurrentPetRequest(pet, vitals, summary = {}) {
+  const requestType = String(pet?.active_request_type || '').trim();
+  const status = String(pet?.active_request_status || '').trim();
+  if (!requestType || !status) return null;
+  const payload = safeJsonParse(pet?.active_request_payload || '{}', {});
+  const template = buildPetRequestTemplate(requestType, payload);
+  if (!template) return null;
+
+  const interactionsToday = pet?.daily_interaction_key === getUtcDayKey() ? (pet?.daily_interaction_count || 0) : 0;
+  let progress = 0;
+  let target = 1;
+
+  if (template.type === 'meal') {
+    progress = vitals?.hunger || 0;
+    target = template.target_hunger || 60;
+  } else if (template.type === 'recovery') {
+    progress = vitals?.energy || 0;
+    target = template.target_energy || 55;
+  } else if (template.type === 'bonding') {
+    progress = interactionsToday;
+    target = template.target_interactions || 3;
+  } else if (template.type === 'pump-session') {
+    progress = Math.max(summary?.plays_today || 0, Math.round((vitals?.momentum || 0) / 10));
+    target = Math.max(template.target_plays_today || 2, Math.round((template.target_momentum || 40) / 10));
+  }
+
+  return {
+    ...template,
+    status,
+    progress: Math.min(target, progress),
+    progress_raw: progress,
+    target,
+    complete: status === 'completed',
+    created_at: pet.active_request_created_at || '',
+    expires_at: pet.active_request_expires_at || '',
+    completed_at: pet.active_request_completed_at || '',
+  };
+}
+
+function isPetRequestSatisfied(request, vitals, pet, summary = {}) {
+  if (!request) return false;
+  if (request.type === 'meal') return (vitals?.hunger || 0) >= (request.target_hunger || 60);
+  if (request.type === 'recovery') return (vitals?.energy || 0) >= (request.target_energy || 55);
+  if (request.type === 'bonding') {
+    const interactionsToday = pet?.daily_interaction_key === getUtcDayKey() ? (pet?.daily_interaction_count || 0) : 0;
+    return interactionsToday >= (request.target_interactions || 3);
+  }
+  if (request.type === 'pump-session') {
+    return (summary?.plays_today || 0) >= (request.target_plays_today || 2)
+      || (vitals?.momentum || 0) >= (request.target_momentum || 40);
+  }
+  return false;
+}
+
+function syncPetRequestState(db, pet, summary = null) {
+  if (!pet?.user_id) return pet;
+  const activitySummary = summary || queryPlayActivitySummary(db, pet.user_id);
+  let workingPet = pet;
+  let vitals = buildPetVitalsSnapshot(workingPet);
+  let changed = false;
+
+  const activeStatus = String(workingPet.active_request_status || '').trim();
+  const activeType = String(workingPet.active_request_type || '').trim();
+  const expiresAt = String(workingPet.active_request_expires_at || '').trim();
+
+  if (activeType && activeStatus === 'active' && expiresAt && getHoursSince(expiresAt) > 0) {
+    const nextTrust = clamp((workingPet.trust || 35) - 4, 0, MAX_STAT);
+    const nextHype = clamp((workingPet.hype || 25) - 6, 0, MAX_STAT);
+    db.prepare(`
+      UPDATE user_pets
+      SET trust = ?,
+          hype = ?,
+          neglect_strikes = neglect_strikes + 1,
+          active_request_status = 'expired',
+          updated_at = datetime('now')
+      WHERE user_id = ?
+    `).run(nextTrust, nextHype, workingPet.user_id);
+    workingPet = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(workingPet.user_id);
+    vitals = buildPetVitalsSnapshot(workingPet);
+    changed = true;
+  }
+
+  const currentRequest = getCurrentPetRequest(workingPet, vitals, activitySummary);
+  if (currentRequest && currentRequest.status === 'active' && isPetRequestSatisfied(currentRequest, vitals, workingPet, activitySummary)) {
+    db.prepare(`
+      UPDATE user_pets
+      SET active_request_status = 'completed',
+          active_request_completed_at = datetime('now'),
+          updated_at = datetime('now')
+      WHERE user_id = ?
+    `).run(workingPet.user_id);
+    workingPet = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(workingPet.user_id);
+    vitals = buildPetVitalsSnapshot(workingPet);
+    changed = true;
+  }
+
+  const resolvedStatus = String(workingPet.active_request_status || '').trim();
+  const hasBlockingRequest = !!String(workingPet.active_request_type || '').trim()
+    && (resolvedStatus === 'active' || resolvedStatus === 'completed');
+  const hoursSinceRefresh = getHoursSince(workingPet.last_request_refresh_at || '');
+  const canRefresh = !hasBlockingRequest
+    && (!workingPet.last_request_refresh_at || hoursSinceRefresh >= REQUEST_REFRESH_COOLDOWN_HOURS);
+
+  if (canRefresh) {
+    const nextRequest = pickPetRequestTemplate(workingPet, vitals, activitySummary);
+    if (nextRequest) {
+      const expires = new Date(Date.now() + (REQUEST_LIFETIME_HOURS * 60 * 60 * 1000));
+      db.prepare(`
+        UPDATE user_pets
+        SET active_request_type = ?,
+            active_request_payload = ?,
+            active_request_status = 'active',
+            active_request_created_at = datetime('now'),
+            active_request_expires_at = ?,
+            active_request_completed_at = '',
+            last_request_refresh_at = datetime('now'),
+            updated_at = datetime('now')
+        WHERE user_id = ?
+      `).run(
+        nextRequest.type,
+        JSON.stringify(nextRequest),
+        toSqliteDateTime(expires),
+        workingPet.user_id
+      );
+      workingPet = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(workingPet.user_id);
+      changed = true;
+    } else if (!workingPet.last_request_refresh_at) {
+      db.prepare(`UPDATE user_pets SET last_request_refresh_at = datetime('now') WHERE user_id = ?`).run(workingPet.user_id);
+      workingPet = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(workingPet.user_id);
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    return db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(workingPet.user_id);
+  }
+  return workingPet;
+}
+
+function loadPetWithRequestState(db, userId, summary = null) {
+  const pet = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(userId);
+  if (!pet) return null;
+  return syncPetRequestState(db, pet, summary);
+}
+
+function clearPetRequestFields(db, userId) {
+  db.prepare(`
+    UPDATE user_pets
+    SET active_request_type = '',
+        active_request_payload = '{}',
+        active_request_status = '',
+        active_request_created_at = '',
+        active_request_expires_at = '',
+        active_request_completed_at = '',
+        last_request_refresh_at = datetime('now'),
+        updated_at = datetime('now')
+    WHERE user_id = ?
+  `).run(userId);
+}
+
 // ─── Format pet for API response ──────────────────────────────────
 function formatPet(pet, isPublic = false, db = null) {
-  const hunger = computeDecayed(pet.fullness, pet.last_fed_at, HUNGER_DECAY_PER_HOUR);
-  const happiness = computeDecayed(pet.happiness || 50, pet.last_fed_at, HAPPINESS_DECAY_PER_HOUR);
-  const energy = getStateValue(pet.energy || 65, pet.updated_at || pet.last_fed_at, ENERGY_DECAY_PER_HOUR);
-  const hype = getStateValue(pet.hype || 25, pet.updated_at || pet.last_fed_at, HYPE_DECAY_PER_HOUR);
+  const vitals = buildPetVitalsSnapshot(pet);
+  const hunger = vitals.hunger;
+  const happiness = vitals.happiness;
+  const energy = vitals.energy;
+  const momentum = vitals.momentum;
+  const hype = momentum;
   const xp = pet.experience || 0;
   const levelInfo = getLevelFromXp(xp);
   const character = pet.character || 'dojocat';
@@ -1748,7 +2186,7 @@ function formatPet(pet, isPublic = false, db = null) {
   const nextTrick = getNextTrick(character, xp);
   const profile = getCharacterProfile(character);
   const bond = pet.bond || 0;
-  const trust = clamp(pet.trust || 35, 0, MAX_STAT);
+  const trust = vitals.trust;
   const bondRank = getBondRank(bond);
   const interactionsToday = pet.daily_interaction_key === getUtcDayKey() ? (pet.daily_interaction_count || 0) : 0;
   const activitySummary = db ? queryPlayActivitySummary(db, pet.user_id) : {};
@@ -1762,6 +2200,9 @@ function formatPet(pet, isPublic = false, db = null) {
     interactions_today: interactionsToday,
   });
   const memories = buildPetMemories(pet, activitySummary);
+  const needs = buildPetNeeds(vitals, pet, activitySummary);
+  const currentRequest = getCurrentPetRequest(pet, vitals, activitySummary);
+  const recommendedActions = getRecommendedActions(vitals, pet, activitySummary);
 
   let pendingTrick = pet.pending_trick || '';
   let trickDemandLevel = pet.trick_demand_level || 0;
@@ -1779,12 +2220,34 @@ function formatPet(pet, isPublic = false, db = null) {
     hunger,
     happiness,
     weight_state: getWeightState(hunger),
-    mood: getMood(hunger, happiness),
+    mood: vitals.mood,
+    mood_state: vitals.mood_state,
     bond,
     bond_rank: bondRank,
     energy,
     trust,
+    momentum,
     hype,
+    needs,
+    recommended_actions: recommendedActions,
+    reward_multiplier: vitals.reward_multiplier,
+    current_request: currentRequest,
+    wellbeing: {
+      hunger,
+      energy,
+      trust,
+      momentum,
+      mood_state: vitals.mood_state,
+      reward_multiplier: vitals.reward_multiplier,
+    },
+    progression: {
+      bond,
+      combo_balance: pet.combo_balance || 0,
+      bond_tokens: pet.bond_tokens || 0,
+      rare_shards: pet.rare_shards || 0,
+      experience: xp,
+      level: levelInfo.level,
+    },
     total_songs_fed: pet.total_songs_fed,
     experience: xp,
     level: levelInfo.level,
@@ -1821,6 +2284,7 @@ function formatPet(pet, isPublic = false, db = null) {
     },
     last_toy_id: pet.last_toy_id || '',
     last_toy_at: pet.last_toy_at || '',
+    neglect_strikes: pet.neglect_strikes || 0,
     habitat: {
       active_background: pet.active_habitat_bg || 'dojo-night',
       active_prop: pet.active_habitat_prop || '',
@@ -1878,22 +2342,30 @@ function formatPet(pet, isPublic = false, db = null) {
     activity_summary: activitySummary,
     activities: Object.values(PET_ACTIVITIES).map(a => ({
       ...a,
-      locked: !!(a.minTrust && trust < a.minTrust) || !!(a.minEnergy && energy < a.minEnergy)
+      locked: !!(a.minTrust && trust < a.minTrust)
+        || !!(a.minEnergy && energy < a.minEnergy)
+        || (a.id !== 'rest' && hunger < CRITICAL_HUNGER_THRESHOLD)
+        || ((a.id === 'spar' || a.id === 'explore') && energy < Math.max(a.minEnergy || 0, LOW_ENERGY_THRESHOLD))
+        || ((a.id === 'spar' || a.id === 'explore') && momentum < LOW_MOMENTUM_THRESHOLD)
         || (a.id === 'rest' && pet.last_rest_at && (Date.now() - new Date(pet.last_rest_at + 'Z').getTime()) < REST_COOLDOWN_MS),
-      lock_reason: a.minTrust && trust < a.minTrust
-        ? `Trust ${a.minTrust}+ needed`
-        : a.minEnergy && energy < a.minEnergy
-          ? `Energy ${a.minEnergy}+ needed`
-          : (a.id === 'rest' && pet.last_rest_at && (Date.now() - new Date(pet.last_rest_at + 'Z').getTime()) < REST_COOLDOWN_MS)
-            ? `Cooldown: ${Math.ceil((REST_COOLDOWN_MS - (Date.now() - new Date(pet.last_rest_at + 'Z').getTime())) / 1000)}s`
-            : '',
+      lock_reason: a.id !== 'rest' && hunger < CRITICAL_HUNGER_THRESHOLD
+        ? 'Feed first - hunger is too low'
+        : a.minTrust && trust < a.minTrust
+          ? `Trust ${a.minTrust}+ needed`
+          : a.minEnergy && energy < a.minEnergy
+            ? `Energy ${a.minEnergy}+ needed`
+            : ((a.id === 'spar' || a.id === 'explore') && momentum < LOW_MOMENTUM_THRESHOLD)
+              ? `Momentum ${LOW_MOMENTUM_THRESHOLD}+ needed`
+              : (a.id === 'rest' && pet.last_rest_at && (Date.now() - new Date(pet.last_rest_at + 'Z').getTime()) < REST_COOLDOWN_MS)
+                ? `Cooldown: ${Math.ceil((REST_COOLDOWN_MS - (Date.now() - new Date(pet.last_rest_at + 'Z').getTime())) / 1000)}s`
+                : '',
       // Cost/gain breakdown for the UI
       costs: (() => {
         const c = [];
         if (a.energy < 0) c.push({ stat: 'energy', value: a.energy });
         const hDrain = a.id === 'rest' ? REST_HUNGER_COST : (a.energy < 0 ? Math.round(Math.abs(a.energy) * ENERGY_TO_HUNGER_RATIO) : 0);
         if (hDrain > 0) c.push({ stat: 'hunger', value: -hDrain });
-        if (a.hype < 0) c.push({ stat: 'hype', value: a.hype });
+        if (a.hype < 0) c.push({ stat: 'momentum', value: a.hype });
         return c;
       })(),
       gains: (() => {
@@ -1902,7 +2374,7 @@ function formatPet(pet, isPublic = false, db = null) {
         if (a.happiness > 0) g.push({ stat: 'happiness', value: a.happiness });
         if (a.trust > 0) g.push({ stat: 'trust', value: a.trust });
         if (a.bond > 0) g.push({ stat: 'bond', value: scaleBondGain(a.bond, bond) });
-        if (a.hype > 0) g.push({ stat: 'hype', value: a.hype });
+        if (a.hype > 0) g.push({ stat: 'momentum', value: a.hype });
         if (a.combo > 0) g.push({ stat: 'combo', value: a.combo });
         if (a.bond_tokens > 0) g.push({ stat: 'tokens', value: a.bond_tokens });
         if (a.rare_shards > 0) g.push({ stat: 'shards', value: a.rare_shards });
@@ -1956,7 +2428,7 @@ function formatPet(pet, isPublic = false, db = null) {
 router.get('/me', requireAuth, (req, res) => {
   const db = getDb();
   ensurePetTable(db);
-  const pet = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
+  const pet = loadPetWithRequestState(db, req.user.id);
   if (!pet) return res.json({ pet: null, economy: PET_ECONOMY });
   res.json({ pet: formatPet(pet, false, db), economy: PET_ECONOMY });
 });
@@ -1991,6 +2463,10 @@ router.post('/adopt', requireAuth, (req, res) => {
       trick_demand_expires = '', last_trick_performed = '', last_trick_at = '',
       equipped_hat = '', equipped_belt = '', equipped_shoes = '', equipped_top = '',
       hat_color = '', belt_color = '', shoes_color = '', top_color = '',
+      last_meaningful_care_at = datetime('now'), last_pump_play_at = '', last_request_refresh_at = '',
+      active_request_type = '', active_request_payload = '{}', active_request_status = '',
+      active_request_created_at = '', active_request_expires_at = '', active_request_completed_at = '',
+      neglect_strikes = 0,
       last_fed_at = datetime('now'), updated_at = datetime('now')
       WHERE user_id = ?
     `).run(character, req.user.id);
@@ -2001,12 +2477,12 @@ router.post('/adopt', requireAuth, (req, res) => {
         bond, energy, trust, hype, bond_tokens, rare_shards,
         daily_interaction_count, daily_interaction_key, claimed_missions, last_food_id, last_food_at, owned_toys, last_toy_id, last_toy_at,
         active_training_path, mastery_xp,
-        last_fed_at
+        last_fed_at, last_meaningful_care_at
       )
-      VALUES (?, ?, 50, 50, 0, 0, 0, 65, 35, 25, 0, 0, 0, '', '[]', '', '', '[]', '', '', 'consistency', 0, datetime('now'))
+      VALUES (?, ?, 50, 50, 0, 0, 0, 65, 35, 25, 0, 0, 0, '', '[]', '', '', '[]', '', '', 'consistency', 0, datetime('now'), datetime('now'))
     `).run(req.user.id, character);
   }
-  const pet = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
+  const pet = loadPetWithRequestState(db, req.user.id);
   res.json({ pet: formatPet(pet, false, db) });
 });
 
@@ -2098,19 +2574,21 @@ router.post('/buy-food', requireAuth, (req, res) => {
   const balance = pet.combo_balance || 0;
   if (balance < food.cost) return res.status(400).json({ error: 'Not enough Combo', need: food.cost, have: balance });
 
-  const hunger = computeDecayed(pet.fullness, pet.last_fed_at, HUNGER_DECAY_PER_HOUR);
-  const happiness = computeDecayed(pet.happiness || 50, pet.last_fed_at, HAPPINESS_DECAY_PER_HOUR);
-  const energy = getStateValue(pet.energy || 65, pet.updated_at || pet.last_fed_at, ENERGY_DECAY_PER_HOUR);
-  const hype = getStateValue(pet.hype || 25, pet.updated_at || pet.last_fed_at, HYPE_DECAY_PER_HOUR);
+  const vitals = buildPetVitalsSnapshot(pet);
+  const hunger = vitals.hunger;
+  const happiness = vitals.happiness;
+  const energy = vitals.energy;
+  const momentum = vitals.momentum;
+  const trust = vitals.trust;
   const preference = getFoodPreference(pet.character, food.id);
   const favoriteBonus = preference === 'favorite' ? { happiness: 4, bond: 5, trust: 2, energy: 5, hype: 4 } : null;
   const dislikedPenalty = preference === 'disliked' ? { happiness: -3, trust: -1, hype: -2 } : null;
   const newHunger = clamp(hunger + food.hunger, 0, MAX_STAT);
   const newHappiness = clamp(happiness + food.happiness + (favoriteBonus?.happiness || 0) + (dislikedPenalty?.happiness || 0), 0, MAX_STAT);
   const newEnergy = clamp(energy + Math.max(2, Math.floor(food.hunger / 2)) + (favoriteBonus?.energy || 0), 0, MAX_STAT);
-  const newHype = clamp(hype + Math.max(0, Math.floor(food.happiness / 2)) + (favoriteBonus?.hype || 0) + (dislikedPenalty?.hype || 0), 0, MAX_STAT);
+  const newHype = clamp(momentum + Math.max(0, Math.floor(food.happiness / 2)) + (favoriteBonus?.hype || 0) + (dislikedPenalty?.hype || 0), 0, MAX_STAT);
   const newBond = Math.max(0, (pet.bond || 0) + (favoriteBonus?.bond || 1));
-  const newTrust = clamp((pet.trust || 35) + (favoriteBonus?.trust || 0) + (dislikedPenalty?.trust || 0), 0, MAX_STAT);
+  const newTrust = clamp(trust + (favoriteBonus?.trust || 0) + (dislikedPenalty?.trust || 0), 0, MAX_STAT);
   const feedCtx = buildContextualSpeech(pet, { type: 'feed', preference });
   const response = feedCtx.speech;
   updateStreak(db, pet);
@@ -2118,14 +2596,15 @@ router.post('/buy-food', requireAuth, (req, res) => {
   db.prepare(`
     UPDATE user_pets
     SET fullness = ?, happiness = ?, energy = ?, hype = ?, bond = ?, trust = ?,
-        combo_balance = combo_balance - ?, total_songs_fed = total_songs_fed + 1,
+        combo_balance = combo_balance - ?,
         lifetime_feeds = lifetime_feeds + 1,
         last_food_id = ?, last_food_at = datetime('now'),
+        last_meaningful_care_at = datetime('now'),
         last_fed_at = datetime('now'), updated_at = datetime('now')
     WHERE user_id = ?
   `).run(newHunger, newHappiness, newEnergy, newHype, newBond, newTrust, food.cost, food.id, req.user.id);
 
-  const updated = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
+  const updated = loadPetWithRequestState(db, req.user.id);
   res.json({
     pet: formatPet(updated, false, db),
     food: food.name,
@@ -2368,13 +2847,100 @@ router.post('/feed', requireAuth, (req, res) => {
   const pet = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
   if (!pet) return res.status(404).json({ error: 'No pet adopted yet' });
   const hunger = computeDecayed(pet.fullness, pet.last_fed_at, HUNGER_DECAY_PER_HOUR);
+  const currentEnergy = getEnergyStateValue(pet.energy || 65, pet.updated_at || pet.last_fed_at, hunger);
+  const currentMomentum = getMomentumStateValue(pet.hype || 25, pet.updated_at || pet.last_fed_at);
   const newHunger = clamp(hunger + 5, 0, MAX_STAT);
+  const newEnergy = clamp(currentEnergy + 2, 0, MAX_STAT);
+  const newMomentum = clamp(currentMomentum + 1, 0, MAX_STAT);
   db.prepare(`
-    UPDATE user_pets SET fullness = ?, total_songs_fed = total_songs_fed + 1,
+    UPDATE user_pets SET fullness = ?, energy = ?, hype = ?,
+    lifetime_feeds = lifetime_feeds + 1,
+    last_meaningful_care_at = datetime('now'),
     last_fed_at = datetime('now'), updated_at = datetime('now') WHERE user_id = ?
-  `).run(newHunger, req.user.id);
-  const updated = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
+  `).run(newHunger, newEnergy, newMomentum, req.user.id);
+  const updated = loadPetWithRequestState(db, req.user.id);
   res.json({ pet: formatPet(updated, false, db), fed: 1 });
+});
+
+router.get('/requests/current', requireAuth, (req, res) => {
+  const db = getDb();
+  ensurePetTable(db);
+  const summary = queryPlayActivitySummary(db, req.user.id);
+  const pet = loadPetWithRequestState(db, req.user.id, summary);
+  if (!pet) return res.json({ request: null, pet: null });
+  const vitals = buildPetVitalsSnapshot(pet);
+  res.json({
+    request: getCurrentPetRequest(pet, vitals, summary),
+    pet: formatPet(pet, false, db),
+  });
+});
+
+router.post('/requests/current/complete', requireAuth, (req, res) => {
+  const db = getDb();
+  ensurePetTable(db);
+  const summary = queryPlayActivitySummary(db, req.user.id);
+  const pet = loadPetWithRequestState(db, req.user.id, summary);
+  if (!pet) return res.status(404).json({ error: 'No pet adopted yet' });
+
+  const vitals = buildPetVitalsSnapshot(pet);
+  const request = getCurrentPetRequest(pet, vitals, summary);
+  if (!request) return res.status(404).json({ error: 'No active request' });
+  if (request.status !== 'completed' && !isPetRequestSatisfied(request, vitals, pet, summary)) {
+    return res.status(400).json({ error: 'Request is not complete yet' });
+  }
+
+  const reward = request.reward || {};
+  db.prepare(`
+    UPDATE user_pets
+    SET bond = ?,
+        trust = ?,
+        energy = ?,
+        hype = ?,
+        happiness = ?,
+        combo_balance = ?,
+        bond_tokens = ?,
+        rare_shards = ?,
+        active_request_type = '',
+        active_request_payload = '{}',
+        active_request_status = '',
+        active_request_created_at = '',
+        active_request_expires_at = '',
+        active_request_completed_at = '',
+        last_request_refresh_at = datetime('now'),
+        updated_at = datetime('now')
+    WHERE user_id = ?
+  `).run(
+    Math.max(0, (pet.bond || 0) + (reward.bond || 0)),
+    clamp(vitals.trust + (reward.trust || 0), 0, MAX_STAT),
+    clamp(vitals.energy + (reward.energy || 0), 0, MAX_STAT),
+    clamp(vitals.momentum + (reward.hype || reward.momentum || 0), 0, MAX_STAT),
+    clamp(vitals.happiness + (reward.happiness || 0), 0, MAX_STAT),
+    Math.max(0, (pet.combo_balance || 0) + (reward.combo_balance || 0)),
+    Math.max(0, (pet.bond_tokens || 0) + (reward.bond_tokens || 0)),
+    Math.max(0, (pet.rare_shards || 0) + (reward.rare_shards || 0)),
+    req.user.id
+  );
+
+  const updated = loadPetWithRequestState(db, req.user.id);
+  res.json({
+    request_claimed: true,
+    reward,
+    pet: formatPet(updated, false, db),
+  });
+});
+
+router.post('/requests/current/dismiss', requireAuth, (req, res) => {
+  const db = getDb();
+  ensurePetTable(db);
+  const pet = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
+  if (!pet) return res.status(404).json({ error: 'No pet adopted yet' });
+
+  clearPetRequestFields(db, req.user.id);
+  const updated = loadPetWithRequestState(db, req.user.id);
+  res.json({
+    dismissed: true,
+    pet: formatPet(updated, false, db),
+  });
 });
 
 // POST /api/pets/interact
@@ -2395,14 +2961,22 @@ router.post('/interact', requireAuth, (req, res) => {
 
   const todayKey = getUtcDayKey();
   const currentDailyInteractions = pet.daily_interaction_key === todayKey ? (pet.daily_interaction_count || 0) : 0;
-  const currentEnergy = getStateValue(pet.energy || 65, pet.updated_at || pet.last_fed_at, ENERGY_DECAY_PER_HOUR);
-  const currentHype = getStateValue(pet.hype || 25, pet.updated_at || pet.last_fed_at, HYPE_DECAY_PER_HOUR);
-  const currentHappiness = computeDecayed(pet.happiness || 50, pet.last_fed_at, HAPPINESS_DECAY_PER_HOUR);
-  const currentHunger = computeDecayed(pet.fullness, pet.last_fed_at, HUNGER_DECAY_PER_HOUR);
+  const vitals = buildPetVitalsSnapshot(pet);
+  const currentEnergy = vitals.energy;
+  const currentHype = vitals.momentum;
+  const currentHappiness = vitals.happiness;
+  const currentHunger = vitals.hunger;
+  const currentTrust = vitals.trust;
 
   // Energy gate for costly interactions (perform costs energy)
   if (interaction.energy < 0 && currentEnergy < Math.abs(interaction.energy)) {
     return res.status(400).json({ error: `Not enough energy for ${interaction.label}` });
+  }
+  if (actionId === 'perform' && currentHunger < LOW_HUNGER_THRESHOLD) {
+    return res.status(400).json({ error: 'Feed your pet first before asking for a performance.' });
+  }
+  if (actionId === 'perform' && currentHype < LOW_MOMENTUM_THRESHOLD) {
+    return res.status(400).json({ error: `Momentum ${LOW_MOMENTUM_THRESHOLD}+ needed for ${interaction.label}` });
   }
 
   // ─── Tap diminishing returns ───────────────────────────
@@ -2433,7 +3007,7 @@ router.post('/interact', requireAuth, (req, res) => {
   const newHunger = clamp(currentHunger - hungerDrain, 0, MAX_STAT);
   const newHype = clamp(currentHype + effectiveHype, 0, MAX_STAT);
   const newHappiness = clamp(currentHappiness + effectiveHappy, 0, MAX_STAT);
-  const newTrust = clamp((pet.trust || 35) + effectiveTrust, 0, MAX_STAT);
+  const newTrust = clamp(currentTrust + effectiveTrust, 0, MAX_STAT);
   const streakBondExtra = streakInfo.isNewDay ? streakInfo.streakBonus : 0;
   // Scale bond gain based on current bond level
   const rawBondGain = effectiveBond + streakBondExtra;
@@ -2452,19 +3026,20 @@ router.post('/interact', requireAuth, (req, res) => {
         daily_interaction_key = ?,
         daily_tap_count = ?,
         daily_tap_key = ?,
+        last_meaningful_care_at = datetime('now'),
         updated_at = datetime('now')
     WHERE user_id = ?
   `).run(newHappiness, newEnergy, newHype, newTrust, newBond, newHunger, currentDailyInteractions + 1, todayKey, newDailyTaps, todayKey, req.user.id);
 
-  const updated = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
+  const updated = loadPetWithRequestState(db, req.user.id);
   const changes = [];
   if (scaledBondGain > 0) changes.push(`+${scaledBondGain} bond`);
   if (effectiveTrust > 0) changes.push(`+${effectiveTrust} trust`);
   else if (effectiveTrust < 0) changes.push(`${effectiveTrust} trust`);
   if (effectiveHappy > 0) changes.push(`+${effectiveHappy} happy`);
   else if (effectiveHappy < 0) changes.push(`${effectiveHappy} happy`);
-  if (effectiveHype > 0) changes.push(`+${effectiveHype} hype`);
-  else if (effectiveHype < 0) changes.push(`${effectiveHype} hype`);
+  if (effectiveHype > 0) changes.push(`+${effectiveHype} momentum`);
+  else if (effectiveHype < 0) changes.push(`${effectiveHype} momentum`);
   if (energyCost < 0) changes.push(`${energyCost} energy`);
   else if (energyCost > 0) changes.push(`+${energyCost} energy`);
   if (hungerDrain > 0) changes.push(`-${hungerDrain} hunger`);
@@ -2513,16 +3088,24 @@ router.post('/activities/:activityId', requireAuth, (req, res) => {
   const activity = PET_ACTIVITIES[req.params.activityId];
   if (!activity) return res.status(404).json({ error: 'Unknown activity' });
 
-  const currentEnergy = getStateValue(pet.energy || 65, pet.updated_at || pet.last_fed_at, ENERGY_DECAY_PER_HOUR);
-  const currentHype = getStateValue(pet.hype || 25, pet.updated_at || pet.last_fed_at, HYPE_DECAY_PER_HOUR);
-  const currentHappiness = computeDecayed(pet.happiness || 50, pet.last_fed_at, HAPPINESS_DECAY_PER_HOUR);
-  const currentHunger = computeDecayed(pet.fullness, pet.last_fed_at, HUNGER_DECAY_PER_HOUR);
+  const vitals = buildPetVitalsSnapshot(pet);
+  const currentEnergy = vitals.energy;
+  const currentHype = vitals.momentum;
+  const currentHappiness = vitals.happiness;
+  const currentHunger = vitals.hunger;
+  const currentTrust = vitals.trust;
 
   if (activity.minEnergy && currentEnergy < activity.minEnergy) {
     return res.status(400).json({ error: `Needs at least ${activity.minEnergy} energy for ${activity.label}` });
   }
-  if (activity.minTrust && (pet.trust || 35) < activity.minTrust) {
+  if (activity.minTrust && currentTrust < activity.minTrust) {
     return res.status(400).json({ error: `${activity.label} unlocks once trust reaches ${activity.minTrust}` });
+  }
+  if (activity.id !== 'rest' && currentHunger < CRITICAL_HUNGER_THRESHOLD) {
+    return res.status(400).json({ error: 'Feed your pet before trying demanding activities.' });
+  }
+  if ((activity.id === 'spar' || activity.id === 'explore') && currentHype < LOW_MOMENTUM_THRESHOLD) {
+    return res.status(400).json({ error: `Momentum ${LOW_MOMENTUM_THRESHOLD}+ needed for ${activity.label}` });
   }
 
   // ─── Rest cooldown ─────────────────────────────────────
@@ -2544,7 +3127,7 @@ router.post('/activities/:activityId', requireAuth, (req, res) => {
 
   const newEnergy = clamp(currentEnergy + activity.energy, 0, MAX_STAT);
   const newHappiness = clamp(currentHappiness + activity.happiness, 0, MAX_STAT);
-  const newTrust = clamp((pet.trust || 35) + activity.trust, 0, MAX_STAT);
+  const newTrust = clamp(currentTrust + activity.trust, 0, MAX_STAT);
   const newHype = clamp(currentHype + activity.hype, 0, MAX_STAT);
 
   // Scale bond gain based on current bond level
@@ -2578,11 +3161,12 @@ router.post('/activities/:activityId', requireAuth, (req, res) => {
         mastery_xp = mastery_xp + ?,
         lifetime_activities = lifetime_activities + 1,
         last_rest_at = ?,
+        last_meaningful_care_at = datetime('now'),
         updated_at = datetime('now')
     WHERE user_id = ?
   `).run(newHappiness, newEnergy, newTrust, newHype, newBond, newCombo, newBondTokens, newRareShards, newHunger, masteryGain, lastRestUpdate, req.user.id);
 
-  const updated = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
+  const updated = loadPetWithRequestState(db, req.user.id);
   const changes = [];
   if (activity.energy < 0) changes.push(`${activity.energy} energy`);
   else if (activity.energy > 0) changes.push(`+${activity.energy} energy`);
@@ -2590,8 +3174,8 @@ router.post('/activities/:activityId', requireAuth, (req, res) => {
   if (activity.happiness) changes.push(`+${activity.happiness} happy`);
   if (activity.trust) changes.push(`+${activity.trust} trust`);
   if (scaledBond > 0) changes.push(`+${scaledBond} bond`);
-  if (activity.hype > 0) changes.push(`+${activity.hype} hype`);
-  else if (activity.hype < 0) changes.push(`${activity.hype} hype`);
+  if (activity.hype > 0) changes.push(`+${activity.hype} momentum`);
+  else if (activity.hype < 0) changes.push(`${activity.hype} momentum`);
   if (activity.combo) changes.push(`+${activity.combo} combo`);
   if (activity.bond_tokens) changes.push(`+${activity.bond_tokens} token`);
   if (masteryGain) changes.push(`+${masteryGain} mastery`);
@@ -2621,9 +3205,11 @@ router.post('/toys/:toyId/use', requireAuth, (req, res) => {
   const ownedToys = safeJsonParse(pet.owned_toys);
   if (!ownedToys.includes(toy.id)) return res.status(400).json({ error: 'Toy not owned yet' });
 
-  const currentEnergy = getStateValue(pet.energy || 65, pet.updated_at || pet.last_fed_at, ENERGY_DECAY_PER_HOUR);
-  const currentHype = getStateValue(pet.hype || 25, pet.updated_at || pet.last_fed_at, HYPE_DECAY_PER_HOUR);
-  const currentHappiness = computeDecayed(pet.happiness || 50, pet.last_fed_at, HAPPINESS_DECAY_PER_HOUR);
+  const vitals = buildPetVitalsSnapshot(pet);
+  const currentEnergy = vitals.energy;
+  const currentHype = vitals.momentum;
+  const currentHappiness = vitals.happiness;
+  const currentTrust = vitals.trust;
   const todayKey = getUtcDayKey();
   const currentDailyInteractions = pet.daily_interaction_key === todayKey ? (pet.daily_interaction_count || 0) : 0;
   const preference = getToyPreference(pet.character, toy);
@@ -2637,7 +3223,7 @@ router.post('/toys/:toyId/use', requireAuth, (req, res) => {
 
   const newEnergy = clamp(currentEnergy + (toy.energy || 0), 0, MAX_STAT);
   const newHappiness = clamp(currentHappiness + (toy.happiness || 0) + favoredBonus.happiness, 0, MAX_STAT);
-  const newTrust = clamp((pet.trust || 35) + (toy.trust || 0) + favoredBonus.trust, 0, MAX_STAT);
+  const newTrust = clamp(currentTrust + (toy.trust || 0) + favoredBonus.trust, 0, MAX_STAT);
   const newHype = clamp(currentHype + (toy.hype || 0) + favoredBonus.hype, 0, MAX_STAT);
   const newBond = Math.max(0, (pet.bond || 0) + (toy.bond || 0) + favoredBonus.bond);
   const newBondTokens = Math.max(0, (pet.bond_tokens || 0) + (toy.bond_tokens || 0));
@@ -2655,6 +3241,7 @@ router.post('/toys/:toyId/use', requireAuth, (req, res) => {
         daily_interaction_count = ?,
         daily_interaction_key = ?,
         last_toy_id = ?, last_toy_at = datetime('now'),
+        last_meaningful_care_at = datetime('now'),
         updated_at = datetime('now')
     WHERE user_id = ?
   `).run(
@@ -2671,7 +3258,7 @@ router.post('/toys/:toyId/use', requireAuth, (req, res) => {
     req.user.id,
   );
 
-  const updated = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
+  const updated = loadPetWithRequestState(db, req.user.id);
   res.json({
     pet: formatPet(updated, false, db),
     toy: toy.id,
@@ -2711,9 +3298,11 @@ router.post('/missions/:missionId/claim', requireAuth, (req, res) => {
   const claimed = safeJsonParse(pet.claimed_missions);
   claimed.push(mission.claim_key);
   const reward = mission.reward || {};
-  const currentEnergy = getStateValue(pet.energy || 65, pet.updated_at || pet.last_fed_at, ENERGY_DECAY_PER_HOUR);
-  const currentHype = getStateValue(pet.hype || 25, pet.updated_at || pet.last_fed_at, HYPE_DECAY_PER_HOUR);
-  const currentHappiness = computeDecayed(pet.happiness || 50, pet.last_fed_at, HAPPINESS_DECAY_PER_HOUR);
+  const vitals = buildPetVitalsSnapshot(pet);
+  const currentEnergy = vitals.energy;
+  const currentHype = vitals.momentum;
+  const currentHappiness = vitals.happiness;
+  const currentTrust = vitals.trust;
   const masteryGain = getMissionMasteryGain(pet.active_training_path || 'consistency', mission.id, mission.cadence);
 
   db.prepare(`
@@ -2733,7 +3322,7 @@ router.post('/missions/:missionId/claim', requireAuth, (req, res) => {
   `).run(
     JSON.stringify(claimed),
     Math.max(0, (pet.bond || 0) + (reward.bond || 0)),
-    clamp((pet.trust || 35) + (reward.trust || 0), 0, MAX_STAT),
+    clamp(currentTrust + (reward.trust || 0), 0, MAX_STAT),
     clamp(currentEnergy + (reward.energy || 0), 0, MAX_STAT),
     clamp(currentHype + (reward.hype || 0), 0, MAX_STAT),
     clamp(currentHappiness + (reward.happiness || 0), 0, MAX_STAT),
@@ -2744,7 +3333,7 @@ router.post('/missions/:missionId/claim', requireAuth, (req, res) => {
     req.user.id,
   );
 
-  const updated = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
+  const updated = loadPetWithRequestState(db, req.user.id);
   res.json({
     pet: formatPet(updated, false, db),
     mission: mission.id,
@@ -3157,10 +3746,11 @@ router.post('/minigames/mini-pump/complete', requireAuth, (req, res) => {
   let costApplied = null;
   if (pet) {
     const cost = MINIGAME_COST['mini-pump'];
-    const curHunger = computeDecayed(pet.fullness, pet.last_fed_at, HUNGER_DECAY_PER_HOUR);
-    const curHappiness = computeDecayed(pet.happiness || 50, pet.last_fed_at, HAPPINESS_DECAY_PER_HOUR);
-    const curEnergy = getStateValue(pet.energy || 65, pet.updated_at || pet.last_fed_at, ENERGY_DECAY_PER_HOUR);
-    const curHype = getStateValue(pet.hype || 25, pet.updated_at || pet.last_fed_at, HYPE_DECAY_PER_HOUR);
+    const vitals = buildPetVitalsSnapshot(pet);
+    const curHunger = vitals.hunger;
+    const curHappiness = vitals.happiness;
+    const curEnergy = vitals.energy;
+    const curHype = vitals.momentum;
 
     // Score-based reward on top of base cost effects
     const happyBump = Math.min(3, Math.max(1, Math.floor(safeScore / 5)));
@@ -3174,10 +3764,10 @@ router.post('/minigames/mini-pump/complete', requireAuth, (req, res) => {
     const comboDeduct = Math.min(cost.combo || 0, pet.combo_balance || 0);
 
     db.prepare(`UPDATE user_pets SET fullness = ?, happiness = ?, energy = ?, hype = ?, bond = ?,
-      combo_balance = combo_balance - ?, updated_at = datetime('now'), last_fed_at = datetime('now')
+      combo_balance = combo_balance - ?, updated_at = datetime('now')
       WHERE user_id = ?`).run(newHunger, newHappiness, newEnergy, newHype, newBond, comboDeduct, req.user.id);
-    petReward = { happiness: happyBump + (cost.happiness || 0), bond: bondBump };
-    costApplied = { combo: comboDeduct, energy: cost.energy || 0, hunger: cost.hunger || 0 };
+    petReward = { happiness: happyBump + (cost.happiness || 0), bond: bondBump, momentum: cost.hype || 0 };
+    costApplied = { combo: comboDeduct, energy: cost.energy || 0, hunger: cost.hunger || 0, momentum: cost.hype || 0 };
   }
 
   const updated = db.prepare('SELECT * FROM pet_minigame_stats WHERE user_id = ? AND game_id = ?')
@@ -3267,10 +3857,11 @@ router.post('/minigames/pet-invaders/complete', requireAuth, (req, res) => {
   let costApplied = null;
   if (pet) {
     const cost = MINIGAME_COST['pet-invaders'];
-    const curHunger = computeDecayed(pet.fullness, pet.last_fed_at, HUNGER_DECAY_PER_HOUR);
-    const curHappiness = computeDecayed(pet.happiness || 50, pet.last_fed_at, HAPPINESS_DECAY_PER_HOUR);
-    const curEnergy = getStateValue(pet.energy || 65, pet.updated_at || pet.last_fed_at, ENERGY_DECAY_PER_HOUR);
-    const curHype = getStateValue(pet.hype || 25, pet.updated_at || pet.last_fed_at, HYPE_DECAY_PER_HOUR);
+    const vitals = buildPetVitalsSnapshot(pet);
+    const curHunger = vitals.hunger;
+    const curHappiness = vitals.happiness;
+    const curEnergy = vitals.energy;
+    const curHype = vitals.momentum;
 
     const happyBump = Math.min(4, Math.max(1, Math.floor(safeScore / 50)));
     const bondBump = Math.min(3, Math.max(0, Math.floor(safeScore / 100)));
@@ -3283,10 +3874,10 @@ router.post('/minigames/pet-invaders/complete', requireAuth, (req, res) => {
     const comboDeduct = Math.min(cost.combo || 0, pet.combo_balance || 0);
 
     db.prepare(`UPDATE user_pets SET fullness = ?, happiness = ?, energy = ?, hype = ?, bond = ?,
-      combo_balance = combo_balance - ?, updated_at = datetime('now'), last_fed_at = datetime('now')
+      combo_balance = combo_balance - ?, updated_at = datetime('now')
       WHERE user_id = ?`).run(newHunger, newHappiness, newEnergy, newHype, newBond, comboDeduct, req.user.id);
-    petReward = { happiness: happyBump + (cost.happiness || 0), bond: bondBump };
-    costApplied = { combo: comboDeduct, energy: cost.energy || 0, hunger: cost.hunger || 0 };
+    petReward = { happiness: happyBump + (cost.happiness || 0), bond: bondBump, momentum: cost.hype || 0 };
+    costApplied = { combo: comboDeduct, energy: cost.energy || 0, hunger: cost.hunger || 0, momentum: cost.hype || 0 };
   }
 
   const updated = db.prepare('SELECT * FROM pet_invaders_stats WHERE user_id = ?')
@@ -3407,20 +3998,22 @@ module.exports.feedPetForUser = function feedPetForUser(userId, playsOrCount) {
       const score = parseInt(play.score, 10) || 0;
       const rawGrade = normalizeGrade(play.grade) || (score > 0 ? gradeFromScore(score) : 'F');
       const level = parseInt(play.level, 10) || 0;
-      const isReplay = String(play.replay_embed_url || '').trim() || String(play.replay_video_id || '').trim();
+      const isReplay = !!(String(play.replay_embed_url || '').trim() || String(play.replay_video_id || '').trim());
       const isDouble = String(play.mode || '').startsWith('Double');
+      const reward = GRADE_SYNC_REWARD_TABLE[rawGrade] || GRADE_SYNC_REWARD_TABLE.F;
+
       if (level > highestLevel) highestLevel = level;
-      const feed = GRADE_FEED_TABLE[rawGrade] || GRADE_FEED_TABLE['F'];
-      totalHunger += feed.hunger;
-      totalHappiness += feed.happiness;
-      totalXp += feed.xp + levelXpBonus(level);
+
+      totalHunger += reward.hunger || 0;
+      totalXp += (reward.xp || 0) + levelXpBonus(level);
       totalCombo += (GRADE_COMBO[rawGrade] || 0) + levelComboBonus(level);
       totalBond += 1 + (level >= 18 ? 1 : 0) + (GRADE_INDEX[rawGrade] >= GRADE_INDEX.AAA ? 1 : 0);
-      totalTrust += (GRADE_INDEX[rawGrade] >= GRADE_INDEX.AAA ? 1 : 0) + (isDouble ? 1 : 0);
-      totalHype += 2 + (isReplay ? 2 : 0) + (level >= 20 ? 1 : 0);
-      totalEnergy += Math.max(0, Math.floor(level / 8));
+      totalTrust += (reward.trust || 0) + (isDouble ? 1 : 0);
+      totalHype += (reward.momentum || 0) + (isReplay ? 1 : 0) + (level >= 20 ? 1 : 0);
+      totalEnergy += reward.energy || 0;
       totalMastery += getPathMasteryGain(activePath, play);
       songCount++;
+
       if (pet.pending_trick && !trickDemandMet) {
         const minIdx = GRADE_ORDER.indexOf(pet.trick_demand_grade || 'A');
         if (level >= (pet.trick_demand_level || 0) && GRADE_ORDER.indexOf(rawGrade) >= minIdx) {
@@ -3430,30 +4023,31 @@ module.exports.feedPetForUser = function feedPetForUser(userId, playsOrCount) {
     }
   } else {
     songCount = Math.max(1, Math.min(10, parseInt(playsOrCount, 10) || 1));
-    totalHunger = songCount * 2;
-    totalHappiness = songCount * 1;
-    totalXp = songCount * 5;
+    totalHunger = -songCount;
+    totalXp = songCount * 6;
     totalCombo = songCount * 2;
-    totalBond = songCount;
-    totalTrust = Math.max(0, Math.floor(songCount / 2));
+    totalBond = Math.max(1, Math.floor(songCount * 0.75));
+    totalTrust = Math.max(0, Math.floor(songCount / 3));
     totalHype = songCount * 2;
-    totalEnergy = songCount;
+    totalEnergy = -Math.max(1, Math.floor(songCount / 2));
     totalMastery = songCount * (activePath === 'consistency' ? 2 : 1);
   }
 
   if (activePath === 'consistency' && songCount >= 5) totalMastery += 4;
   if (activePath === 'tournament' && highestLevel >= 20) totalMastery += 3;
 
-  const curHunger = computeDecayed(pet.fullness, pet.last_fed_at, HUNGER_DECAY_PER_HOUR);
-  const curHappiness = computeDecayed(pet.happiness || 50, pet.last_fed_at, HAPPINESS_DECAY_PER_HOUR);
-  const curEnergy = getStateValue(pet.energy || 65, pet.updated_at || pet.last_fed_at, ENERGY_DECAY_PER_HOUR);
-  const curHype = getStateValue(pet.hype || 25, pet.updated_at || pet.last_fed_at, HYPE_DECAY_PER_HOUR);
+  const vitals = buildPetVitalsSnapshot(pet);
+  const curHunger = vitals.hunger;
+  const curHappiness = vitals.happiness;
+  const curEnergy = vitals.energy;
+  const curHype = vitals.momentum;
+  const curTrust = vitals.trust;
   const newHunger = clamp(curHunger + totalHunger, 0, MAX_STAT);
   let newHappiness = clamp(curHappiness + totalHappiness, 0, MAX_STAT);
   const newEnergy = clamp(curEnergy + totalEnergy, 0, MAX_STAT);
   let newHype = clamp(curHype + totalHype, 0, MAX_STAT);
   let newBond = Math.max(0, (pet.bond || 0) + totalBond);
-  let newTrust = clamp((pet.trust || 35) + totalTrust, 0, MAX_STAT);
+  let newTrust = clamp(curTrust + totalTrust, 0, MAX_STAT);
 
   if (trickDemandMet) {
     const charTricks = TRICKS[pet.character] || [];
@@ -3471,7 +4065,7 @@ module.exports.feedPetForUser = function feedPetForUser(userId, playsOrCount) {
           experience = experience + ?, combo_balance = combo_balance + ?,
           mastery_xp = mastery_xp + ?,
           highest_level = MAX(highest_level, ?),
-          last_fed_at = datetime('now'), updated_at = datetime('now'),
+          last_pump_play_at = datetime('now'), updated_at = datetime('now'),
           last_trick_performed = pending_trick, last_trick_at = datetime('now'),
           pending_trick = '', trick_demand_level = 0, trick_demand_grade = '', trick_demand_expires = ''
       WHERE user_id = ?
@@ -3484,7 +4078,7 @@ module.exports.feedPetForUser = function feedPetForUser(userId, playsOrCount) {
           experience = experience + ?, combo_balance = combo_balance + ?,
           mastery_xp = mastery_xp + ?,
           highest_level = MAX(highest_level, ?),
-          last_fed_at = datetime('now'), updated_at = datetime('now')
+          last_pump_play_at = datetime('now'), updated_at = datetime('now')
       WHERE user_id = ?
     `).run(newHunger, newHappiness, songCount, newEnergy, newHype, newBond, newTrust, totalXp, totalCombo, totalMastery, highestLevel, userId);
   }
@@ -3497,8 +4091,26 @@ module.exports.feedPetForUser = function feedPetForUser(userId, playsOrCount) {
     combo: totalCombo,
     bond: totalBond,
     trust: totalTrust,
+    momentum: totalHype,
     hype: totalHype,
+    energy: totalEnergy,
     mastery: totalMastery,
     trickDemandMet,
   };
+};
+
+module.exports._test = {
+  getEnergyRecoveryRate,
+  getEnergyStateValue,
+  getMomentumStateValue,
+  getTrustStateValue,
+  getMoodState,
+  getWellbeingRewardMultiplier,
+  buildPetVitalsSnapshot,
+  buildPetNeeds,
+  getRecommendedActions,
+  buildPetRequestTemplate,
+  getCurrentPetRequest,
+  isPetRequestSatisfied,
+  formatPetStatLabel,
 };

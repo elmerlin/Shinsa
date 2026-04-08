@@ -2,13 +2,14 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import {
-  getMyPet, adoptPet, feedPet, getPetCharacters, getPetShop,
+  getMyPet, adoptPet, getPetCharacters, getPetShop,
   buyPetFood, buyPetItem, equipPetItem, unequipPetSlot,
   setPetColor, togglePetAvatar, demandTrick, performTrick,
   interactPet, doPetActivity, claimPetMission, buyPetToy, usePetToy,
   buyPetHabitatItem, equipPetHabitat, setPetTrainingPath, getPetLeaderboard,
   getPetSocialFeed, renamePet, getMiniPumpStats, getMiniPumpLeaderboard, completeMiniPump,
   getPetInvadersStats, getPetInvadersLeaderboard, completePetInvaders, getMinigameCosts,
+  completeCurrentPetRequest, dismissCurrentPetRequest,
 } from '../utils/api';
 import SpritePet, { renderPetToCanvas } from '../components/SpritePet';
 import PetCoachPanel from '../components/pet/PetCoachPanel';
@@ -182,6 +183,7 @@ export default function PetPage() {
   const [petInvadersStats, setPetInvadersStats] = useState(null);
   const [petInvadersLeaderboard, setPetInvadersLeaderboard] = useState(null);
   const [minigameCosts, setMinigameCosts] = useState(null);
+  const [requestBusy, setRequestBusy] = useState(false);
   const habitatRef = useRef(null);
 
   const loadPet = useCallback(async () => {
@@ -445,6 +447,53 @@ export default function PetPage() {
       showFeedback(e?.message || 'Mission not ready');
     } finally {
       setMissionBusyId('');
+    }
+  };
+
+  const handleClaimCurrentRequest = async () => {
+    if (requestBusy) return;
+    setRequestBusy(true);
+    try {
+      const r = await completeCurrentPetRequest();
+      setPet(r.pet);
+      showFeedback('Request rewards claimed');
+      triggerPetResponse('Perfect. That helped a lot.', 'nod', 'sparkle', 1500);
+    } catch (e) {
+      showFeedback(e?.message || 'Request is not ready yet');
+    } finally {
+      setRequestBusy(false);
+    }
+  };
+
+  const handleDismissCurrentRequest = async () => {
+    if (requestBusy) return;
+    setRequestBusy(true);
+    try {
+      const r = await dismissCurrentPetRequest();
+      setPet(r.pet);
+      showFeedback('Request cleared');
+    } catch (e) {
+      showFeedback(e?.message || 'Could not clear request');
+    } finally {
+      setRequestBusy(false);
+    }
+  };
+
+  const handleRequestCta = async (request) => {
+    const target = request?.cta_target;
+    if (target === 'food') {
+      setTab('food');
+      loadShop();
+      return;
+    }
+    if (target === 'pet') {
+      setTab('pet');
+      return;
+    }
+    if (target === 'pump') {
+      showFeedback('Play Pump, then refresh here to check progress');
+      const petData = await getMyPet().catch(() => null);
+      if (petData?.pet) setPet(petData.pet);
     }
   };
 
@@ -740,7 +789,7 @@ export default function PetPage() {
       const r = await completeMiniPump(results);
       setMiniPumpStats(r);
       getMiniPumpLeaderboard().then((lb) => setMiniPumpLeaderboard(lb.leaderboard || [])).catch(() => {});
-      // Refresh pet to reflect happiness/bond bump
+      // Refresh pet to reflect updated rewards and vitals
       const petData = await getMyPet();
       if (petData?.pet) setPet(petData.pet);
     } catch (e) { console.error('Mini-pump save failed', e); }
@@ -772,7 +821,7 @@ export default function PetPage() {
       <div className="max-w-2xl mx-auto p-4 sm:p-6">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-black tracking-tight mb-2">Choose Your Companion</h1>
-          <p className="text-gray-400 text-sm">Play songs to earn Combo. Buy food to keep them happy!</p>
+          <p className="text-gray-400 text-sm">Play songs to earn Combo, then spend it on food, rest, and care.</p>
         </div>
         <div className="grid grid-cols-2 gap-4">
           {characters.map((c) => (
@@ -792,18 +841,22 @@ export default function PetPage() {
   }
 
   // ─── Main pet view ──────────────────────────────────
+  const wellbeing = pet.wellbeing || {};
+  const progression = pet.progression || {};
+  const needs = Array.isArray(pet.needs) ? pet.needs : [];
+  const currentRequest = pet.current_request || null;
   const {
-    hunger = 50,
-    happiness = 50,
-    energy = 65,
-    trust = 35,
-    hype = 25,
-    bond = 0,
-    combo_balance = 0,
-    bond_tokens = 0,
-    rare_shards = 0,
-    experience = 0,
-  } = pet;
+    bond = progression.bond ?? 0,
+    combo_balance = progression.combo_balance ?? 0,
+    bond_tokens = progression.bond_tokens ?? 0,
+    rare_shards = progression.rare_shards ?? 0,
+    experience = progression.experience ?? 0,
+  } = progression;
+  const hunger = wellbeing.hunger ?? pet.hunger ?? 50;
+  const energy = wellbeing.energy ?? pet.energy ?? 65;
+  const trust = wellbeing.trust ?? pet.trust ?? 35;
+  const momentum = wellbeing.momentum ?? pet.momentum ?? pet.hype ?? 25;
+  const moodState = pet.mood_state || wellbeing.mood_state || 'stable';
   const charName = characters.find(c => c.id === pet.character)?.name || pet.character;
   const nextTrick = pet.next_trick;
   const pendingTrickObj = pet.tricks?.find(t => t.id === pet.pending_trick);
@@ -811,8 +864,8 @@ export default function PetPage() {
   return (
     <div className="max-w-lg mx-auto p-4 sm:p-6 pb-24">
       {/* Header */}
-      <div className="mb-2 rounded-[1.25rem] border border-white/[0.06] bg-white/[0.025] px-3.5 py-2 shadow-[0_10px_30px_rgba(0,0,0,0.18)]">
-        <div className="flex items-start justify-between gap-2">
+      <div className="mb-2 rounded-[1.25rem] border border-white/[0.06] bg-white/[0.025] px-3.5 py-3 shadow-[0_10px_30px_rgba(0,0,0,0.18)]">
+        <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             {editingName ? (
               <div className="flex items-center gap-1.5">
@@ -831,42 +884,47 @@ export default function PetPage() {
               </div>
             ) : (
               <div className="flex items-center gap-1.5">
-                <h1 className="text-lg font-black tracking-tight text-white">{pet.nickname || `My ${charName}`}</h1>
+                <h1 className="truncate text-lg font-black tracking-tight text-white">{pet.nickname || `My ${charName}`}</h1>
                 <button onClick={handleStartRename} className="text-gray-500 hover:text-white transition-colors" title="Rename pet">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3"><path d="M13.5 3.3a1.1 1.1 0 00-1.6 0L4.6 10.6l-.6 2 2-.6L13.5 4.8a1.1 1.1 0 000-1.5zM3 13h10v1H3v-1z" /></svg>
                 </button>
               </div>
             )}
-            <p className="text-[11px] text-cyan-100/80">{pet.identity_title || 'Training Partner'}</p>
+            <div className="mt-1 inline-flex max-w-full items-center rounded-full border border-cyan-400/15 bg-cyan-500/[0.06] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-cyan-100/85">
+              <span className="truncate whitespace-nowrap">{pet.identity_title || 'Training Partner'}</span>
+            </div>
           </div>
-          <div className="flex gap-1.5 shrink-0">
-            <button
+          <div className="flex gap-2 shrink-0">
+            <HeaderIconButton
+              label={pet.is_pet_avatar ? 'Pet avatar on' : 'Set pet avatar'}
+              title={pet.is_pet_avatar ? 'Pet avatar on' : 'Set pet avatar'}
+              active={pet.is_pet_avatar}
               onClick={handleToggleAvatar}
-              className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] transition-all ${
-                pet.is_pet_avatar
-                  ? 'border-amber-500/30 bg-amber-500/10 text-amber-300'
-                  : 'border-white/[0.08] bg-white/[0.03] text-gray-400 hover:border-white/15 hover:text-white'
-              }`}
             >
-              {pet.is_pet_avatar ? 'Avatar On' : 'Set Avatar'}
-            </button>
-            <button
-              onClick={handleSharePet}
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
+                <path d="M12 12.75a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9Zm0 2.25c-4.83 0-8.75 2.46-8.75 5.5 0 .41.34.75.75.75h16a.75.75 0 0 0 .75-.75c0-3.04-3.92-5.5-8.75-5.5Z" />
+              </svg>
+            </HeaderIconButton>
+            <HeaderIconButton
+              label={shareStatus === 'capturing' ? 'Saving pet card' : shareStatus === 'done' ? 'Pet card saved' : 'Share pet'}
+              title={shareStatus === 'capturing' ? 'Saving pet card' : shareStatus === 'done' ? 'Pet card saved' : 'Share pet'}
+              active={shareStatus === 'done'}
               disabled={shareStatus === 'capturing'}
-              className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] transition-all ${
-                shareStatus === 'done'
-                  ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
-                  : 'border-white/[0.08] bg-white/[0.03] text-gray-400 hover:border-white/15 hover:text-white'
-              } disabled:opacity-50`}
+              onClick={handleSharePet}
             >
-              {shareStatus === 'capturing' ? 'Saving...' : shareStatus === 'done' ? 'Shared!' : 'Share'}
-            </button>
-            <button
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
+                <path d="M15.75 8.25a3 3 0 1 0-2.82-3.99l-4.71 2.36a3 3 0 0 0 0 2.76l4.71 2.36a3 3 0 1 0 .67-1.34l-4.71-2.36a3.02 3.02 0 0 0 0-.72l4.71-2.36a3 3 0 0 0 2.15.93Z" />
+              </svg>
+            </HeaderIconButton>
+            <HeaderIconButton
+              label="Switch companion"
+              title="Switch companion"
               onClick={() => setShowSelect(true)}
-              className="whitespace-nowrap rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-400 transition-all hover:border-white/15 hover:text-white"
             >
-              Switch
-            </button>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
+                <path d="M4.5 7.5A2.25 2.25 0 0 1 6.75 5.25h9.19l-1.72-1.72a.75.75 0 1 1 1.06-1.06l3 3a.75.75 0 0 1 0 1.06l-3 3a.75.75 0 0 1-1.06-1.06l1.72-1.72H6.75A.75.75 0 0 0 6 7.5v1.5a.75.75 0 0 1-1.5 0V7.5Zm15 9A2.25 2.25 0 0 1 17.25 18.75H8.06l1.72 1.72a.75.75 0 1 1-1.06 1.06l-3-3a.75.75 0 0 1 0-1.06l3-3a.75.75 0 0 1 1.06 1.06l-1.72 1.72h9.19a.75.75 0 0 0 .75-.75V15a.75.75 0 0 1 1.5 0v1.5Z" />
+              </svg>
+            </HeaderIconButton>
           </div>
         </div>
         {/* Level + XP progress bar */}
@@ -966,15 +1024,32 @@ export default function PetPage() {
         </div>
       )}
 
-      {/* Hunger + Happiness bars */}
-          <div className="mt-4 grid grid-cols-2 gap-3">
-            <MeterBar label="Hunger" value={hunger} color="orange" />
-            <MeterBar label="Happiness" value={happiness} color="pink" />
-            <MeterBar label="Energy" value={energy} color="cyan" />
-            <MeterBar label="Trust" value={trust} color="emerald" />
-            <MeterBar label="Hype" value={hype} color="violet" />
-            <BondMeter bond={bond} bondRank={pet.bond_rank} />
+      <div className="mt-4 space-y-3">
+        <div className="grid grid-cols-2 gap-3">
+          <VitalBar label="Hunger" value={hunger} color="orange" emphasis="primary" />
+          <VitalBar label="Energy" value={energy} color="cyan" emphasis="primary" />
+          <VitalBar label="Trust" value={trust} color="emerald" />
+          <VitalBar label="Momentum" value={momentum} color="violet" />
+        </div>
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+          <BondMeter bond={bond} bondRank={pet.bond_rank} />
+          <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-[10px] uppercase tracking-[0.16em] text-white/45">Mood</div>
+                <div className="mt-1"><MoodBadge moodState={moodState} /></div>
+              </div>
+              <div className="text-right">
+                <div className="text-[10px] uppercase tracking-[0.16em] text-white/45">Wellbeing</div>
+                <div className="mt-1 text-lg font-black text-white/90">{Math.round((pet.reward_multiplier || 1) * 100)}%</div>
+              </div>
+            </div>
+            <div className="mt-3">
+              <NeedsPanel needs={needs} />
+            </div>
           </div>
+        </div>
+      </div>
 
           {/* XP to next trick */}
           {nextTrick && (
@@ -992,7 +1067,7 @@ export default function PetPage() {
           {/* Stats */}
           <div className="mt-3 grid grid-cols-4 gap-2">
             <StatCard label="Songs" value={pet.total_songs_fed} />
-            <StatCard label="Mood" value={capitalize(pet.mood)} />
+            <StatCard label="Mood" value={capitalize(moodState)} />
             <StatCard label="Streak" value={pet.daily_streak ? `${pet.daily_streak}d` : '—'} />
             <StatCard label="Specialty" value={pet.specialty?.label || '—'} />
           </div>
@@ -1036,6 +1111,11 @@ export default function PetPage() {
                 petInvadersLeaderboard={petInvadersLeaderboard}
                 minigameCosts={minigameCosts}
                 comboBalance={combo_balance}
+                currentRequest={currentRequest}
+                requestBusy={requestBusy}
+                onClaimCurrentRequest={handleClaimCurrentRequest}
+                onDismissCurrentRequest={handleDismissCurrentRequest}
+                onRequestCta={handleRequestCta}
               />
             )}
             {tab === 'habitat' && (
@@ -1054,7 +1134,7 @@ export default function PetPage() {
             {tab === 'ranks' && <LeaderboardTab leaderboard={leaderboard} myCharacter={pet.character} />}
           </div>
 
-      <p className="text-[10px] text-gray-600 text-center mt-4">Sync PIU scores to earn Combo, then budget it carefully to keep your pet thriving.</p>
+      <p className="text-[10px] text-gray-600 text-center mt-4">Sync PIU scores to earn Combo and Momentum, then turn that into food, rest, and stronger bond growth.</p>
 
       <style>{`
         @keyframes slideDown { from { opacity: 0; transform: translate(-50%, -12px); } to { opacity: 1; transform: translate(-50%, 0); } }
@@ -1510,6 +1590,25 @@ function FormBadge({ form }) {
   );
 }
 
+function HeaderIconButton({ label, title, active = false, disabled = false, onClick, children }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title || label}
+      aria-label={label}
+      disabled={disabled}
+      className={`flex h-11 w-11 items-center justify-center rounded-2xl border transition-all disabled:opacity-50 ${
+        active
+          ? 'border-amber-400/25 bg-amber-500/[0.10] text-amber-200 shadow-[0_0_20px_rgba(245,158,11,0.12)]'
+          : 'border-white/[0.08] bg-white/[0.03] text-gray-300 hover:border-white/15 hover:text-white'
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
 function HeaderPill({ label, value, tone = 'slate' }) {
   const tones = {
     slate: 'border-white/[0.08] bg-white/[0.03] text-gray-200',
@@ -1525,24 +1624,45 @@ function HeaderPill({ label, value, tone = 'slate' }) {
   );
 }
 
-function MeterBar({ label, value, color }) {
+function getVitalBand(value) {
+  if (value < 20) return { label: 'Critical', tone: 'critical' };
+  if (value < 40) return { label: 'Low', tone: 'low' };
+  if (value < 70) return { label: 'Stable', tone: 'stable' };
+  return { label: 'Thriving', tone: 'high' };
+}
+
+function VitalBar({ label, value, color, emphasis = 'secondary' }) {
   const hues = {
     orange: { lo: '0', hi: '35' },
-    pink: { lo: '300', hi: '340' },
     cyan: { lo: '185', hi: '200' },
     emerald: { lo: '140', hi: '155' },
     violet: { lo: '255', hi: '280' },
   };
   const h = hues[color] || hues.orange;
   const hue = value <= 30 ? h.lo : h.hi;
+  const band = getVitalBand(value);
+  const bandTone = {
+    critical: 'text-rose-300',
+    low: 'text-amber-300',
+    stable: 'text-cyan-100/75',
+    high: 'text-emerald-300',
+  };
   return (
-    <div>
-      <div className="flex items-center justify-between text-[11px] mb-1">
-        <span className="text-gray-500">{label}</span>
-        <span className="font-mono text-white/60 tabular-nums">{value}%</span>
+    <div className={`rounded-2xl border p-3 ${emphasis === 'primary' ? 'border-white/[0.08] bg-white/[0.04]' : 'border-white/[0.05] bg-white/[0.025]'}`}>
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.16em] text-white/45">{label}</div>
+          <div className="mt-1 text-2xl font-black tabular-nums text-white/90">{value}%</div>
+        </div>
+        <div className={`text-[10px] font-semibold uppercase tracking-[0.14em] ${bandTone[band.tone] || 'text-white/60'}`}>
+          {band.label}
+        </div>
       </div>
-      <div className="w-full h-2.5 bg-white/[0.04] rounded-full overflow-hidden border border-white/[0.04]">
-        <div className="h-full rounded-full transition-all duration-700 relative" style={{ width: `${value}%`, background: `linear-gradient(90deg, hsl(${hue}, 70%, 35%), hsl(${hue}, 70%, 50%))` }}>
+      <div className="relative h-2.5 w-full overflow-hidden rounded-full border border-white/[0.04] bg-white/[0.04]">
+        <div className="absolute inset-y-0 left-[20%] w-px bg-white/10" />
+        <div className="absolute inset-y-0 left-[40%] w-px bg-white/10" />
+        <div className="absolute inset-y-0 left-[70%] w-px bg-white/10" />
+        <div className="relative h-full rounded-full transition-all duration-700" style={{ width: `${value}%`, background: `linear-gradient(90deg, hsl(${hue}, 70%, 35%), hsl(${hue}, 70%, 50%))` }}>
           <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent rounded-full" />
         </div>
       </div>
@@ -1557,10 +1677,16 @@ function BondMeter({ bond, bondRank }) {
     ? Math.min(100, ((bond - currentThreshold) / (nextThreshold - currentThreshold)) * 100)
     : 100;
   return (
-    <div>
-      <div className="flex items-center justify-between text-[11px] mb-1">
-        <span className="text-gray-500">Bond</span>
-        <span className="font-mono text-white/60 tabular-nums">{bond}</span>
+    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-3">
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.16em] text-white/45">Bond</div>
+          <div className="mt-1 text-2xl font-black tabular-nums text-white/90">{bond}</div>
+        </div>
+        <div className="text-right">
+          <div className="text-[10px] uppercase tracking-[0.16em] text-white/45">Rank</div>
+          <div className="mt-1 text-sm font-semibold text-cyan-100/80">{bondRank?.label || 'Training Partner'}</div>
+        </div>
       </div>
       <div className="w-full h-2.5 bg-white/[0.04] rounded-full overflow-hidden border border-white/[0.04]">
         <div className="h-full rounded-full bg-gradient-to-r from-sky-700 to-cyan-300 transition-all duration-700 relative" style={{ width: `${currentProgress}%` }}>
@@ -1569,6 +1695,42 @@ function BondMeter({ bond, bondRank }) {
       </div>
       <div className="mt-2 text-[10px] text-cyan-100/70 px-0.5">
         {bondRank?.next_label ? `${bondRank.label} -> ${bondRank.next_label}` : bondRank?.label || 'Training Partner'}
+      </div>
+    </div>
+  );
+}
+
+function MoodBadge({ moodState }) {
+  const tones = {
+    thriving: 'border-emerald-400/20 bg-emerald-500/[0.10] text-emerald-200',
+    stable: 'border-cyan-400/15 bg-cyan-500/[0.08] text-cyan-100',
+    restless: 'border-amber-400/20 bg-amber-500/[0.10] text-amber-200',
+    neglected: 'border-rose-400/20 bg-rose-500/[0.10] text-rose-200',
+  };
+  return (
+    <span className={`inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${tones[moodState] || tones.stable}`}>
+      {moodState}
+    </span>
+  );
+}
+
+function NeedsPanel({ needs = [] }) {
+  return (
+    <div className="space-y-2">
+      <div className="text-[10px] uppercase tracking-[0.16em] text-white/45">Needs now</div>
+      <div className="flex flex-wrap gap-2">
+        {needs.slice(0, 3).map((need) => (
+          <div key={need.id} className={`rounded-xl border px-2.5 py-2 text-[11px] ${
+            need.priority === 'critical'
+              ? 'border-rose-400/15 bg-rose-500/[0.08] text-rose-100'
+              : need.priority === 'high'
+                ? 'border-amber-400/15 bg-amber-500/[0.08] text-amber-100'
+                : 'border-white/[0.06] bg-white/[0.03] text-gray-200'
+          }`}>
+            <div className="font-semibold">{need.label}</div>
+            <div className="mt-1 text-[10px] text-white/55">{need.detail}</div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -1603,35 +1765,100 @@ function CollapsibleSection({ title, icon, defaultOpen = true, count, children }
 }
 
 // ─── Pet tab ──────────────────────────────────────────
-function PetTab({ pet, shop, combo, economy, socialFeed, interactionBusy, activityBusy, missionBusyId, toyBusy, trainingBusy, onAction, onActivity, onClaimMission, onBuyToy, onUseToy, onSetTrainingPath, onTabSwitch, onMiniPump, miniPumpStats, miniPumpLeaderboard, onPetInvaders, petInvadersStats, petInvadersLeaderboard, minigameCosts, comboBalance }) {
+function PetTab({ pet, shop, combo, economy, socialFeed, interactionBusy, activityBusy, missionBusyId, toyBusy, trainingBusy, onAction, onActivity, onClaimMission, onBuyToy, onUseToy, onSetTrainingPath, onTabSwitch, onMiniPump, miniPumpStats, miniPumpLeaderboard, onPetInvaders, petInvadersStats, petInvadersLeaderboard, minigameCosts, comboBalance, currentRequest, requestBusy, onClaimCurrentRequest, onDismissCurrentRequest, onRequestCta }) {
   const REACTION_ICONS = { cheer: '📣', wow: '🤩', flex: '💪', heart: '💗' };
   const claimableMissions = (pet.missions || []).filter(m => m.complete && !m.claimed).length;
+  const needs = Array.isArray(pet.needs) ? pet.needs : [];
   return (
     <div className="space-y-3 text-sm text-gray-400">
-      {/* ── Always visible: coach + alerts ── */}
+      {/* ── Always visible: coach + needs ── */}
       {pet.companion_coach && (
         <PetCoachPanel coach={pet.companion_coach} character={pet.character} onTabSwitch={onTabSwitch} />
       )}
-      {(pet.energy < 20 || pet.hunger < 25) && (
-        <div className={`rounded-xl p-3 border ${pet.energy < 10 || pet.hunger < 15 ? 'bg-red-500/[0.06] border-red-500/15' : 'bg-amber-500/[0.06] border-amber-500/10'}`}>
-          <div className="flex items-center gap-2">
-            <span className="text-sm">{pet.energy < 10 || pet.hunger < 15 ? '⚠️' : '💤'}</span>
-            <div className="text-[11px]">
-              {pet.hunger < 15 && <span className="text-red-300">Very hungry — feed your pet! </span>}
-              {pet.hunger >= 15 && pet.hunger < 25 && <span className="text-amber-200">Getting hungry. </span>}
-              {pet.energy < 10 && <span className="text-red-300">Exhausted — let them rest. </span>}
-              {pet.energy >= 10 && pet.energy < 20 && <span className="text-amber-200">Low energy. </span>}
+      <div className="rounded-xl border border-white/[0.05] bg-white/[0.03] p-3">
+        <div className="text-[10px] uppercase tracking-[0.16em] text-white/45">What your pet needs now</div>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {needs.slice(0, 3).map((need) => (
+            <button
+              key={need.id}
+              type="button"
+              onClick={() => {
+                if (need.cta === 'food') onTabSwitch('food');
+                else if (need.cta === 'pet') onTabSwitch('pet');
+              }}
+              className={`rounded-xl border px-3 py-2 text-left transition-all ${
+                need.priority === 'critical'
+                  ? 'border-rose-400/15 bg-rose-500/[0.08] text-rose-100'
+                  : need.priority === 'high'
+                    ? 'border-amber-400/15 bg-amber-500/[0.08] text-amber-100'
+                    : 'border-white/[0.06] bg-black/20 text-gray-200'
+              }`}
+            >
+              <div className="text-[11px] font-semibold">{need.label}</div>
+              <div className="mt-1 text-[10px] text-white/55">{need.detail}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {currentRequest ? (
+        <div className={`rounded-xl border p-3 ${
+          currentRequest.complete
+            ? 'border-emerald-400/20 bg-emerald-500/[0.08]'
+            : 'border-cyan-400/15 bg-cyan-500/[0.06]'
+        }`}>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-[10px] uppercase tracking-[0.16em] text-white/45">Current request</div>
+              <div className="mt-1 text-sm font-semibold text-white/90">{currentRequest.label}</div>
+              <div className="mt-1 text-[11px] text-white/70">{currentRequest.desc}</div>
+              <div className="mt-2 text-[10px] text-white/55">{currentRequest.reward_summary}</div>
+            </div>
+            <div className="shrink-0 text-right">
+              <div className={`text-xs font-bold ${currentRequest.complete ? 'text-emerald-300' : 'text-cyan-200'}`}>
+                {currentRequest.complete ? 'Ready' : `${currentRequest.progress}/${currentRequest.target}`}
+              </div>
+              <div className="mt-1 text-[10px] text-white/45">{currentRequest.type === 'pump-session' ? 'session goal' : 'care goal'}</div>
             </div>
           </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {currentRequest.complete ? (
+              <button
+                type="button"
+                onClick={onClaimCurrentRequest}
+                disabled={requestBusy}
+                className="rounded-lg border border-emerald-400/20 bg-emerald-500/[0.12] px-3 py-2 text-[11px] font-semibold text-emerald-100 transition-all hover:bg-emerald-500/[0.16] disabled:opacity-50"
+              >
+                Claim rewards
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => onRequestCta(currentRequest)}
+                disabled={requestBusy}
+                className="rounded-lg border border-cyan-400/20 bg-cyan-500/[0.12] px-3 py-2 text-[11px] font-semibold text-cyan-100 transition-all hover:bg-cyan-500/[0.16] disabled:opacity-50"
+              >
+                {currentRequest.cta_label || 'Do it'}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onDismissCurrentRequest}
+              disabled={requestBusy}
+              className="rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-[11px] font-semibold text-white/70 transition-all hover:border-white/15 hover:text-white disabled:opacity-50"
+            >
+              Dismiss
+            </button>
+          </div>
         </div>
-      )}
+      ) : null}
 
       {/* ── Guide link ── */}
       <Link to="/pet/guide" className="flex items-center gap-2 rounded-xl border border-cyan-400/10 bg-cyan-500/[0.04] px-3 py-2 hover:bg-cyan-500/[0.06] hover:border-cyan-400/15 transition-all group">
         <span className="text-sm">📖</span>
         <div className="flex-1 min-w-0">
           <div className="text-[11px] font-semibold text-cyan-200 group-hover:text-cyan-100 transition-colors">Pet Companion Guide</div>
-          <div className="text-[10px] text-gray-500">Learn how to care for, train, and evolve your pet</div>
+          <div className="text-[10px] text-gray-500">Play Pump, earn Combo and Momentum, then care for your companion</div>
         </div>
         <span className="text-[10px] text-gray-600 group-hover:text-gray-400 transition-colors">→</span>
       </Link>
@@ -1714,7 +1941,7 @@ function PetTab({ pet, shop, combo, economy, socialFeed, interactionBusy, activi
                       {/* Gains */}
                       {activity.gains?.length > 0 && (
                         <div className="flex flex-wrap gap-x-2 gap-y-0">
-                          {activity.gains.map((g, i) => (
+                          {activity.gains.filter((g) => g.stat !== 'happiness').map((g, i) => (
                             <span key={i} className="text-[9px] tabular-nums text-emerald-300/70">+{g.value} {g.stat}</span>
                           ))}
                         </div>
@@ -2253,7 +2480,7 @@ function FoodTab({ shop, combo, economy, onBuy, buying }) {
               <div className="text-[10px] text-gray-500 truncate">{food.desc}</div>
               <div className="flex gap-3 mt-0.5">
                 <span className="text-[10px] text-orange-400">+{food.hunger} hunger</span>
-                <span className="text-[10px] text-pink-400">+{food.happiness} happy</span>
+                <span className="text-[10px] text-pink-400">+{food.happiness} mood</span>
                 {food.preference === 'favorite' ? <span className="text-[10px] text-emerald-300">favorite</span> : null}
                 {food.preference === 'disliked' ? <span className="text-[10px] text-rose-300">disliked</span> : null}
               </div>
@@ -2347,7 +2574,7 @@ function TricksTab({ pet, onDemand, onPerform }) {
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-semibold text-white/80">{trick.name}</div>
                 <div className="text-[10px] text-gray-500">{trick.description}</div>
-                {trick.unlocked && <div className="text-[10px] text-amber-400/70 mt-0.5">+{trick.comboReward}c +{trick.happinessReward} happy</div>}
+                {trick.unlocked && <div className="text-[10px] text-amber-400/70 mt-0.5">+{trick.comboReward}c +{trick.happinessReward} mood</div>}
                 {!trick.unlocked && (
                   <div className="mt-1 flex items-center gap-1.5">
                     <div className="flex-1 h-1 bg-white/[0.04] rounded-full overflow-hidden">
