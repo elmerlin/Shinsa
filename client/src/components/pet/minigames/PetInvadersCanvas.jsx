@@ -221,9 +221,7 @@ export default function PetInvadersCanvas({ game, character, onStart, reducedMot
     render(game.getState());
   }, [game, render]);
 
-  // Touch input — left half = move left, right half = move right
-  const touchRef = useRef(null);
-
+  // Touch input — tap left = move left, tap right = move right, tap same = stop
   const handleTouchStart = useCallback((e) => {
     const state = game.getState();
     if (state.mode === 'idle') { onStart(); return; }
@@ -234,23 +232,9 @@ export default function PetInvadersCanvas({ game, character, onStart, reducedMot
     const rect = canvas.getBoundingClientRect();
     const touch = e.touches ? e.touches[0] : e;
     const relX = (touch.clientX - rect.left) / rect.width;
-    touchRef.current = relX;
-    game.setMoveDir(relX < 0.5 ? -1 : 1);
+    const dir = relX < 0.5 ? -1 : 1;
+    game.setTouchDir(dir); // toggle: same dir = stop
   }, [game, onStart]);
-
-  const handleTouchMove = useCallback((e) => {
-    if (!e.touches || e.touches.length === 0) return;
-    const canvas = canvasRef.current; if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const relX = (e.touches[0].clientX - rect.left) / rect.width;
-    touchRef.current = relX;
-    game.setMoveDir(relX < 0.5 ? -1 : 1);
-  }, [game]);
-
-  const handleTouchEnd = useCallback(() => {
-    touchRef.current = null;
-    game.setMoveDir(0);
-  }, [game]);
 
   // Keyboard
   useEffect(() => {
@@ -284,8 +268,6 @@ export default function PetInvadersCanvas({ game, character, onStart, reducedMot
         ref={canvasRef}
         className="absolute inset-0 w-full h-full"
         onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
         onClick={handleTouchStart}
         style={{ touchAction: 'none' }}
       />

@@ -1,507 +1,453 @@
 /**
- * Pet Invaders Canvas Sprites
- * Player pet, fodder enemies, bosses, projectiles, power-ups, explosions, HUD
+ * Pet Invaders Canvas Sprites v2 — Pixel Art Edition
+ * All characters rendered via box-shadow-style pixel grids on canvas.
+ * Player pet in spaceship, pixel-art fodder enemies, pixel-art bosses,
+ * tiered projectiles, power-ups with heal, explosions, HUD.
  */
 
 import { CHAR_COLORS } from './miniPumpSprites';
 
-// ─── Enemy color themes ─────────────────────────────
+// ─── Color palettes ─────────────────────────────────
 const ENEMY_COLORS = {
-  jelly:     { body: '#66dd88', dark: '#44aa66', eye: '#ffffff', pupil: '#222222', outline: '#338855' },
-  bat:       { body: '#9966cc', dark: '#7744aa', eye: '#ffcc00', pupil: '#222222', outline: '#664499', wing: '#bb88ee' },
-  robot:     { body: '#aabbcc', dark: '#8899aa', eye: '#ff4444', pupil: '#880000', outline: '#667788', accent: '#4488ff' },
-  cloud:     { body: '#ddeeff', dark: '#aaccee', eye: '#6688aa', pupil: '#334455', outline: '#99bbdd' },
-  slime:     { body: '#ffaa44', dark: '#dd8822', eye: '#ffffff', pupil: '#222222', outline: '#cc7711' },
-  star:      { body: '#ffee44', dark: '#ddcc22', eye: '#ff6644', pupil: '#882200', outline: '#bbaa11' },
+  jelly:  { body: '#66dd88', dark: '#338855', light: '#aaffbb', eye: '#ffffff', pupil: '#222222', outline: '#225533' },
+  bat:    { body: '#9966cc', dark: '#664499', light: '#cc99ff', eye: '#ffcc00', pupil: '#222222', outline: '#442266', wing: '#bb88ee' },
+  robot:  { body: '#99aacc', dark: '#667799', light: '#bbccee', eye: '#ff4444', pupil: '#880000', outline: '#445566', accent: '#4488ff' },
+  cloud:  { body: '#ccddff', dark: '#99bbee', light: '#eef4ff', eye: '#5577aa', pupil: '#334455', outline: '#7799cc' },
+  slime:  { body: '#ffaa44', dark: '#cc7711', light: '#ffcc88', eye: '#ffffff', pupil: '#222222', outline: '#995500' },
+  star:   { body: '#ffee44', dark: '#ccaa11', light: '#ffffaa', eye: '#ff4422', pupil: '#881100', outline: '#998800' },
 };
 
-// Boss color themes
 const BOSS_COLORS = {
-  labubu:     { body: '#c9e8a0', dark: '#96c06c', eye: '#222222', outline: '#6a9040', accent: '#ff88aa' },
-  buu:        { body: '#f0b8c8', dark: '#d98ea7', eye: '#2d2d2d', outline: '#b06a80', accent: '#ff4488' },
-  dojocat:    { body: '#dfae6f', dark: '#b77739', eye: '#2d2d2d', outline: '#8a5520', accent: '#ff6644' },
-  pixiu:      { body: '#fff2f7', dark: '#efc0cf', eye: '#6d4c41', outline: '#aa6688', accent: '#ee81b0' },
-  vegetacat:  { body: '#4466cc', dark: '#2244aa', eye: '#ffcc00', outline: '#112288', accent: '#ffdd44' },
+  labubu:    { body: '#c9e8a0', dark: '#7aaa55', light: '#e0f5cc', eye: '#222222', outline: '#557733', accent: '#ff88aa', ear: '#a0cc70' },
+  buu:       { body: '#f0b8c8', dark: '#cc7799', light: '#ffd8e8', eye: '#2d2d2d', outline: '#995577', accent: '#ff4488', tentacle: '#e090aa' },
+  dojocat:   { body: '#dfae6f', dark: '#aa7733', light: '#f5d5a0', eye: '#2d2d2d', outline: '#774411', accent: '#ee3322', earInner: '#ffbbaa', belly: '#fff2df' },
+  pixiu:     { body: '#fff2f7', dark: '#ddaacc', light: '#ffffff', eye: '#5a3a2a', outline: '#996677', accent: '#ee81b0', mane: '#ffcc88', whisker: '#cc8899' },
+  vegetacat: { body: '#4466cc', dark: '#223399', light: '#6688ee', eye: '#ffcc00', outline: '#112266', accent: '#ffdd44', hair: '#ffee55', armor: '#334488' },
+};
+
+const SHIP_COLORS = {
+  hull: '#3a4466', hullLight: '#5566aa', hullDark: '#222244', cockpit: '#88ccff',
+  cockpitGlow: '#aaddff', wing: '#445577', wingTip: '#667799', engine: '#ff8844',
+  engineGlow: '#ffaa66', trim: '#6688bb',
 };
 
 const POWER_UP_COLORS = {
-  spread: { fill: '#ff6644', glow: 'rgba(255,102,68,0.4)', icon: 'S' },
-  rate:   { fill: '#44ccff', glow: 'rgba(68,204,255,0.4)', icon: 'R' },
-  damage: { fill: '#ff44cc', glow: 'rgba(255,68,204,0.4)', icon: 'D' },
-  hybrid: { fill: '#ffcc22', glow: 'rgba(255,204,34,0.5)', icon: '*' },
+  spread: { fill: '#ff6644', glow: 'rgba(255,102,68,0.4)', icon: 'S', label: 'SPREAD' },
+  rate:   { fill: '#44ccff', glow: 'rgba(68,204,255,0.4)', icon: 'R', label: 'RATE' },
+  damage: { fill: '#ff44cc', glow: 'rgba(255,68,204,0.4)', icon: 'D', label: 'DMG' },
+  heal:   { fill: '#44ff88', glow: 'rgba(68,255,136,0.5)', icon: '+', label: 'HEAL' },
+  hybrid: { fill: '#ffcc22', glow: 'rgba(255,204,34,0.5)', icon: '*', label: 'ALL' },
 };
 
-// ─── Drawing helpers ─────────────────────────────────
-function px(ctx, x, y, size, color) {
+// ─── Pixel drawing core ─────────────────────────────
+function px(ctx, x, y, s, color) {
   ctx.fillStyle = color;
-  ctx.fillRect(Math.round(x), Math.round(y), size, size);
+  ctx.fillRect(Math.round(x), Math.round(y), s, s);
 }
 
-function drawPixelEllipse(ctx, cx, cy, rx, ry, ps, color) {
-  for (let dy = -ry; dy <= ry; dy++)
-    for (let dx = -rx; dx <= rx; dx++) {
-      if ((dx / rx) ** 2 + (dy / ry) ** 2 <= 1)
-        px(ctx, cx + dx * ps, cy + dy * ps, ps, color);
+/** Draw a grid of pixels from a compact string map.
+ *  map: array of strings, each char = one pixel.
+ *  palette: { char: '#color', ... }. Space = transparent.
+ */
+function drawPixelMap(ctx, cx, cy, ps, map, palette) {
+  const rows = map.length;
+  const cols = map[0].length;
+  const ox = cx - (cols * ps) / 2;
+  const oy = cy - (rows * ps) / 2;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const ch = map[r][c];
+      if (ch === ' ' || ch === '.') continue;
+      const color = palette[ch];
+      if (color) px(ctx, ox + c * ps, oy + r * ps, ps, color);
     }
+  }
 }
 
-// ─── Player Pet (simplified for game) ────────────────
-export function drawPlayerPet(ctx, x, y, size, character, firing) {
+// ─── Player Spaceship + Character Head ───────────────
+// 16x20 pixel ship with character head visible in cockpit
+
+const SHIP_MAP = [
+  '       HH       ',
+  '      HHHH      ',
+  '      HHHH      ',
+  '     HHHHHH     ',
+  '     HHHHHH     ',
+  '    ..CCCC..    ',
+  '   .ssCCCCss.   ',
+  '  .ssssssssss.  ',
+  ' .ssSSSSSSSss.  ',
+  ' wSSSSSSSSSSSSw ',
+  'wwSSSSSSSSSSSSww',
+  'wWSSSSSSSSSSSSWw',
+  ' WSSSSSSSSSSSSW ',
+  ' WWSSSSSSSSSWW  ',
+  '  WWWWWWWWWWWW  ',
+  '   WWeeeeeWW   ',
+  '    WeeEeeW    ',
+  '     eEEEe     ',
+];
+
+function getCharHeadPalette(character) {
   const cc = CHAR_COLORS[character] || CHAR_COLORS.dojocat;
-  const ps = Math.max(1, Math.round(size / 12));
-  const hw = ps * 5, hh = ps * 6;
+  return {
+    // Head pixels
+    'H': cc.body, 'h': cc.dark, 'E': cc.eye,
+    'N': cc.nose || cc.accent || cc.dark,
+    'L': cc.light || cc.body, 'A': cc.accent || cc.dark,
+    'B': cc.belly || cc.light || '#ffffff',
+  };
+}
 
-  // Body
-  ctx.fillStyle = cc.body;
-  ctx.beginPath();
-  ctx.roundRect(x - hw, y - hh, hw * 2, hh * 2, ps * 2);
-  ctx.fill();
-  ctx.strokeStyle = cc.outline;
-  ctx.lineWidth = 1;
-  ctx.stroke();
+// Character-specific head maps (8x6 pixel heads that sit on top of ship)
+const CHAR_HEADS = {
+  dojocat: [
+    ' hh  hh ',
+    ' hBhhBh ',
+    'BBBBBBBB',
+    'BBELBELB',
+    'BBBNNBBB',
+    'BB_BB_BB',
+    ' BBBBBB ',
+  ],
+  buu: [
+    '   AAA  ',
+    '  AAAA  ',
+    'BBBBBBBB',
+    'BBELBELB',
+    'BBBBBBBB',
+    'BBB__BBB',
+    ' BBBBBB ',
+  ],
+  devit: [
+    'hh    hh',
+    ' hh  hh ',
+    'BBBBBBBB',
+    'BBELBELB',
+    'BBBNNBBB',
+    'BB_BB_BB',
+    ' BBBBBB ',
+  ],
+  pixiu: [
+    ' AAAAAA ',
+    'AABBBBAA',
+    'BBBBBBBB',
+    'BBELBELB',
+    'BBBNNBBB',
+    'BBhBBhBB',
+    ' BBBBBB ',
+  ],
+};
 
-  // Belly
-  drawPixelEllipse(ctx, x, y + ps * 2, 3, 2, ps, cc.belly || cc.light);
+function buildShipPalette(character) {
+  const headP = getCharHeadPalette(character);
+  return {
+    ...headP,
+    's': SHIP_COLORS.hull, 'S': SHIP_COLORS.hullLight, '.': SHIP_COLORS.hullDark,
+    'C': SHIP_COLORS.cockpit, 'c': SHIP_COLORS.cockpitGlow,
+    'w': SHIP_COLORS.wing, 'W': SHIP_COLORS.wingTip,
+    'e': SHIP_COLORS.engine, 'G': SHIP_COLORS.engineGlow,
+    't': SHIP_COLORS.trim, '_': '#444444',
+  };
+}
 
-  // Eyes
-  const eyeSpread = ps * 2;
-  px(ctx, x - eyeSpread - ps, y - ps * 2, ps * 2, cc.eye);
-  px(ctx, x + eyeSpread - ps, y - ps * 2, ps * 2, cc.eye);
+// Build the full ship map with character head inserted
+function buildShipWithHead(character) {
+  const headMap = CHAR_HEADS[character] || CHAR_HEADS.dojocat;
+  // Replace generic 'H' rows in ship map with character head
+  const fullMap = [...SHIP_MAP];
+  // Head occupies rows 0-6 (top of ship)
+  const headStart = 0;
+  for (let r = 0; r < headMap.length && r + headStart < fullMap.length; r++) {
+    const headRow = headMap[r];
+    const shipRow = fullMap[r + headStart];
+    // Center head in ship row
+    const padL = Math.floor((shipRow.length - headRow.length) / 2);
+    let merged = '';
+    for (let c = 0; c < shipRow.length; c++) {
+      const hc = c - padL;
+      if (hc >= 0 && hc < headRow.length && headRow[hc] !== ' ') {
+        merged += headRow[hc];
+      } else {
+        merged += shipRow[c];
+      }
+    }
+    fullMap[r + headStart] = merged;
+  }
+  return fullMap;
+}
 
-  // Ears (triangles)
-  ctx.fillStyle = cc.dark;
-  ctx.beginPath();
-  ctx.moveTo(x - hw + ps, y - hh);
-  ctx.lineTo(x - hw + ps * 3, y - hh - ps * 3);
-  ctx.lineTo(x - hw + ps * 5, y - hh);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(x + hw - ps * 5, y - hh);
-  ctx.lineTo(x + hw - ps * 3, y - hh - ps * 3);
-  ctx.lineTo(x + hw - ps, y - hh);
-  ctx.fill();
+export function drawPlayerPet(ctx, x, y, size, character, firing) {
+  const ps = Math.max(1, Math.round(size / 16));
+  const shipMap = buildShipWithHead(character);
+  const palette = buildShipPalette(character);
 
-  // Firing muzzle flash
+  drawPixelMap(ctx, x, y, ps, shipMap, palette);
+
+  // Engine flame animation
+  if (firing) {
+    const flameColors = ['#ff4400', '#ff8844', '#ffcc66', '#ffffff'];
+    const fh = ps * 2;
+    const fw = ps * 3;
+    const fy = y + (shipMap.length * ps) / 2;
+    for (let i = 0; i < 3; i++) {
+      const fx = x - fw / 2 + i * ps;
+      const color = flameColors[Math.floor(Math.random() * flameColors.length)];
+      px(ctx, fx, fy, ps, color);
+      px(ctx, fx, fy + ps, ps, flameColors[Math.floor(Math.random() * 2)]);
+    }
+  }
+
+  // Muzzle flash when firing
   if (firing) {
     ctx.save();
-    ctx.shadowColor = '#ffffff';
-    ctx.shadowBlur = 8;
+    ctx.shadowColor = '#88eeff';
+    ctx.shadowBlur = 6;
     ctx.fillStyle = '#ffffff';
-    ctx.beginPath();
-    ctx.arc(x, y - hh - ps * 2, ps * 1.5, 0, Math.PI * 2);
-    ctx.fill();
+    const muzzleY = y - (shipMap.length * ps) / 2 - ps;
+    px(ctx, x - ps / 2, muzzleY, ps, '#ffffff');
+    px(ctx, x - ps / 2, muzzleY - ps, ps, '#88eeff');
     ctx.restore();
   }
 }
 
-// ─── Fodder Enemies ──────────────────────────────────
+// ─── Pixel-Art Fodder Enemies ────────────────────────
 
-function drawJelly(ctx, x, y, size, animFrame) {
-  const ec = ENEMY_COLORS.jelly;
-  const r = size / 2;
-  const squish = Math.sin(animFrame * 0.15) * 2;
+const JELLY_MAP = [
+  '  .OOO.  ',
+  ' .OOOOO. ',
+  '.OOLLLOO.',
+  'OOELOELO.',
+  'OOOOOOOO ',
+  '.OO__OO. ',
+  ' .O..O.  ',
+  '  .  .   ',
+];
 
-  ctx.fillStyle = ec.body;
-  ctx.beginPath();
-  ctx.ellipse(x, y, r + squish, r - squish * 0.5, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = ec.outline;
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
+const BAT_MAP = [
+  'W.    .W',
+  'WW.  .WW',
+  'WWWBBWWW',
+  '.WBEEBW.',
+  ' .BBBB. ',
+  '  BPPB  ',
+  '  .BB.  ',
+  '   ..   ',
+];
 
-  // Face
-  ctx.fillStyle = ec.eye;
-  ctx.beginPath(); ctx.arc(x - r * 0.3, y - r * 0.1, r * 0.2, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(x + r * 0.3, y - r * 0.1, r * 0.2, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = ec.pupil;
-  ctx.beginPath(); ctx.arc(x - r * 0.3, y - r * 0.05, r * 0.1, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(x + r * 0.3, y - r * 0.05, r * 0.1, 0, Math.PI * 2); ctx.fill();
+const ROBOT_MAP = [
+  '   .A.   ',
+  '  .DDD.  ',
+  ' .DDDDD. ',
+  ' DDEEDED ',
+  ' DDDDDDD ',
+  ' .DAAAD. ',
+  '  .DDD.  ',
+  '   .D.   ',
+];
 
-  // Smile
-  ctx.strokeStyle = ec.dark;
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.arc(x, y + r * 0.1, r * 0.25, 0, Math.PI);
-  ctx.stroke();
+const CLOUD_MAP = [
+  '  .CC.CC.  ',
+  ' .CCCCCCC. ',
+  '.CCCCCCCCC.',
+  'CCCEPPECCC ',
+  '.CCCCCCCCC.',
+  ' .CCCCCCC. ',
+  '  ..CCC..  ',
+];
+
+const SLIME_MAP = [
+  '  .OOOO.  ',
+  ' .OLLOOO. ',
+  '.OOEPOEO. ',
+  'OOOOOOOO  ',
+  '.OO__OO.  ',
+  ' .OOOO.   ',
+  '  ....    ',
+];
+
+const STAR_MAP = [
+  '   .O.   ',
+  '  .OOO.  ',
+  '..OOOOO..',
+  'OOOEOEOOO',
+  '.OOOOOOO.',
+  ' .OOOOO. ',
+  '.OO. .OO.',
+  'O.     .O',
+];
+
+function getEnemyPalette(type) {
+  const ec = ENEMY_COLORS[type];
+  if (!ec) return {};
+  return {
+    'O': ec.body, 'D': ec.body, 'C': ec.body,
+    '.': ec.dark, 'L': ec.light,
+    'E': ec.eye, 'P': ec.pupil, '_': ec.outline,
+    'A': ec.accent || ec.dark, 'W': ec.wing || ec.body,
+    'B': ec.body,
+  };
 }
 
-function drawBat(ctx, x, y, size, animFrame) {
-  const ec = ENEMY_COLORS.bat;
-  const r = size / 2;
-  const wingFlap = Math.sin(animFrame * 0.25) * 8;
-
-  // Wings
-  ctx.fillStyle = ec.wing;
-  ctx.beginPath();
-  ctx.ellipse(x - r * 1.2, y - wingFlap, r * 0.7, r * 0.4, -0.3, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.ellipse(x + r * 1.2, y + wingFlap, r * 0.7, r * 0.4, 0.3, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Body
-  ctx.fillStyle = ec.body;
-  ctx.beginPath();
-  ctx.arc(x, y, r * 0.7, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = ec.outline;
-  ctx.lineWidth = 1;
-  ctx.stroke();
-
-  // Eyes
-  ctx.fillStyle = ec.eye;
-  ctx.beginPath(); ctx.arc(x - r * 0.25, y - r * 0.15, r * 0.15, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(x + r * 0.25, y - r * 0.15, r * 0.15, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = ec.pupil;
-  ctx.beginPath(); ctx.arc(x - r * 0.25, y - r * 0.12, r * 0.07, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(x + r * 0.25, y - r * 0.12, r * 0.07, 0, Math.PI * 2); ctx.fill();
-}
-
-function drawRobot(ctx, x, y, size, animFrame) {
-  const ec = ENEMY_COLORS.robot;
-  const hw = size * 0.4, hh = size * 0.45;
-
-  // Body
-  ctx.fillStyle = ec.body;
-  ctx.fillRect(x - hw, y - hh, hw * 2, hh * 2);
-  ctx.strokeStyle = ec.outline;
-  ctx.lineWidth = 1.5;
-  ctx.strokeRect(x - hw, y - hh, hw * 2, hh * 2);
-
-  // Antenna
-  ctx.strokeStyle = ec.accent;
-  ctx.lineWidth = 1.5;
-  ctx.beginPath(); ctx.moveTo(x, y - hh); ctx.lineTo(x, y - hh - size * 0.2); ctx.stroke();
-  ctx.fillStyle = ec.accent;
-  ctx.beginPath(); ctx.arc(x, y - hh - size * 0.2, 2, 0, Math.PI * 2); ctx.fill();
-
-  // Eyes (LED blink)
-  const blink = Math.sin(animFrame * 0.1) > 0;
-  ctx.fillStyle = blink ? ec.eye : ec.dark;
-  ctx.fillRect(x - hw * 0.5, y - hh * 0.4, hw * 0.3, hh * 0.3);
-  ctx.fillRect(x + hw * 0.2, y - hh * 0.4, hw * 0.3, hh * 0.3);
-
-  // Chest plate
-  ctx.fillStyle = ec.accent;
-  ctx.fillRect(x - hw * 0.3, y + hh * 0.1, hw * 0.6, hh * 0.3);
-}
-
-function drawCloudImp(ctx, x, y, size, animFrame) {
-  const ec = ENEMY_COLORS.cloud;
-  const r = size / 2;
-  const bob = Math.sin(animFrame * 0.08) * 3;
-
-  // Cloud body (bumpy circles)
-  ctx.fillStyle = ec.body;
-  ctx.beginPath(); ctx.arc(x, y + bob, r * 0.6, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(x - r * 0.4, y + bob + r * 0.1, r * 0.4, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(x + r * 0.4, y + bob + r * 0.1, r * 0.4, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(x - r * 0.15, y + bob - r * 0.3, r * 0.35, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(x + r * 0.2, y + bob - r * 0.25, r * 0.3, 0, Math.PI * 2); ctx.fill();
-
-  // Outline
-  ctx.strokeStyle = ec.outline;
-  ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.arc(x, y + bob, r * 0.6, 0, Math.PI * 2); ctx.stroke();
-
-  // Face
-  ctx.fillStyle = ec.eye;
-  ctx.beginPath(); ctx.arc(x - r * 0.2, y + bob - r * 0.05, r * 0.1, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(x + r * 0.2, y + bob - r * 0.05, r * 0.1, 0, Math.PI * 2); ctx.fill();
-}
-
-function drawSlime(ctx, x, y, size, animFrame) {
-  const ec = ENEMY_COLORS.slime;
-  const r = size / 2;
-  const bounce = Math.abs(Math.sin(animFrame * 0.12)) * 4;
-
-  ctx.fillStyle = ec.body;
-  ctx.beginPath();
-  ctx.ellipse(x, y - bounce, r, r * 0.7, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = ec.outline;
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
-
-  // Shine
-  ctx.fillStyle = 'rgba(255,255,255,0.3)';
-  ctx.beginPath();
-  ctx.ellipse(x - r * 0.25, y - bounce - r * 0.2, r * 0.2, r * 0.15, -0.3, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Face
-  ctx.fillStyle = ec.eye;
-  ctx.beginPath(); ctx.arc(x - r * 0.3, y - bounce - r * 0.1, r * 0.18, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(x + r * 0.3, y - bounce - r * 0.1, r * 0.18, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = ec.pupil;
-  ctx.beginPath(); ctx.arc(x - r * 0.28, y - bounce - r * 0.05, r * 0.08, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(x + r * 0.32, y - bounce - r * 0.05, r * 0.08, 0, Math.PI * 2); ctx.fill();
-}
-
-function drawStarCritter(ctx, x, y, size, animFrame) {
-  const ec = ENEMY_COLORS.star;
-  const r = size / 2;
-  const spin = animFrame * 0.05;
-
-  // Star shape
-  ctx.fillStyle = ec.body;
-  ctx.beginPath();
-  for (let i = 0; i < 5; i++) {
-    const angle = spin + (i * Math.PI * 2) / 5 - Math.PI / 2;
-    const innerAngle = spin + ((i + 0.5) * Math.PI * 2) / 5 - Math.PI / 2;
-    ctx.lineTo(x + Math.cos(angle) * r, y + Math.sin(angle) * r);
-    ctx.lineTo(x + Math.cos(innerAngle) * r * 0.4, y + Math.sin(innerAngle) * r * 0.4);
-  }
-  ctx.closePath();
-  ctx.fill();
-  ctx.strokeStyle = ec.outline;
-  ctx.lineWidth = 1;
-  ctx.stroke();
-
-  // Face
-  ctx.fillStyle = ec.eye;
-  ctx.beginPath(); ctx.arc(x - r * 0.2, y - r * 0.1, r * 0.12, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(x + r * 0.2, y - r * 0.1, r * 0.12, 0, Math.PI * 2); ctx.fill();
-}
+const ENEMY_MAPS = {
+  jelly: JELLY_MAP, bat: BAT_MAP, robot: ROBOT_MAP,
+  cloud: CLOUD_MAP, slime: SLIME_MAP, star: STAR_MAP,
+};
 
 export function drawEnemy(ctx, x, y, size, type, animFrame, hp, maxHp) {
-  const drawFns = { jelly: drawJelly, bat: drawBat, robot: drawRobot, cloud: drawCloudImp, slime: drawSlime, star: drawStarCritter };
-  const fn = drawFns[type];
-  if (fn) fn(ctx, x, y, size, animFrame);
+  const map = ENEMY_MAPS[type];
+  if (!map) return;
+  const palette = getEnemyPalette(type);
+  const ps = Math.max(1, Math.round(size / (map[0].length)));
+
+  // Animate: bob/wobble
+  const bobY = type === 'cloud' ? Math.sin(animFrame * 0.08) * 2 : 0;
+  const wobbleX = type === 'bat' ? Math.sin(animFrame * 0.12) * 1.5 : 0;
+
+  drawPixelMap(ctx, x + wobbleX, y + bobY, ps, map, palette);
 
   // HP bar for multi-hit enemies
   if (maxHp > 1 && hp > 0) {
-    const barW = size * 0.8;
+    const barW = size * 0.9;
     const barH = 3;
     const barX = x - barW / 2;
-    const barY = y - size / 2 - 6;
-    ctx.fillStyle = 'rgba(0,0,0,0.5)';
-    ctx.fillRect(barX, barY, barW, barH);
+    const barY = y - (map.length * ps) / 2 - 6;
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(barX - 1, barY - 1, barW + 2, barH + 2);
     ctx.fillStyle = hp / maxHp > 0.5 ? '#44ff88' : '#ff6644';
     ctx.fillRect(barX, barY, barW * (hp / maxHp), barH);
   }
 }
 
-// ─── Boss Sprites ────────────────────────────────────
+// ─── Pixel-Art Boss Sprites ─────────────────────────
+// Bosses are 14x14+ pixel grids, much larger on screen
 
-function drawBossBase(ctx, x, y, size, colors, animFrame) {
-  const r = size / 2;
-  const pulse = Math.sin(animFrame * 0.06) * 3;
+const BOSS_LABUBU_MAP = [
+  '   .ee. .ee.   ',
+  '  .eEEe.eEEe.  ',
+  '  .EEEE.EEEE.  ',
+  ' ..BBBBBBBBBB.. ',
+  ' .BBBBBBBBBBBB. ',
+  '.BBBWEPWEPBBBB.',
+  '.BBBBBBBBBBBBB.',
+  '.BBBBB__BBBBBB.',
+  ' .BBBB__BBBBB. ',
+  ' ..BBBBBBBBBB.. ',
+  '  ..BBBBBBBB..  ',
+  '   ....BB....   ',
+  '    .BB..BB.    ',
+];
 
-  // Glow
-  ctx.save();
-  ctx.shadowColor = colors.accent;
-  ctx.shadowBlur = 10 + pulse;
-  ctx.fillStyle = colors.body;
-  ctx.beginPath();
-  ctx.arc(x, y, r, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
+const BOSS_BUU_MAP = [
+  '      .AAA.     ',
+  '     .AAAAA.    ',
+  '    .AAAAAA.    ',
+  '   .AAAAAAA.    ',
+  '  ..BBBBBBBB..  ',
+  ' .BBBBBBBBBBBB. ',
+  '.BBBWEPBWEPBBB.',
+  '.BBBBBBBBBBBBBB.',
+  '.BBBBBB__BBBBBB.',
+  ' .BBBBBBBBBBBB. ',
+  '  ..BBBBBBBB..  ',
+  '   ..BBBBBB..   ',
+  '    .BB..BB.    ',
+];
 
-  // Body
-  ctx.fillStyle = colors.body;
-  ctx.beginPath();
-  ctx.arc(x, y, r, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = colors.outline;
-  ctx.lineWidth = 2;
-  ctx.stroke();
+const BOSS_DOJOCAT_MAP = [
+  '  .ee.    .ee.  ',
+  '  .eAe.  .eAe.  ',
+  '   .BB....BB.   ',
+  '  .BBAAAAAABB.  ',
+  ' .BBBBBBBBBBBB. ',
+  '.BBBWEPBWEPBBB.',
+  '.BBBBBBBBBBBBBB.',
+  '.BBBBBNNBBBBBBB.',
+  ' .BBB_BB_BBBB. ',
+  '  .BBBBBBBBBB.  ',
+  '   ..BBBBBB..   ',
+  '    .BB..BB.    ',
+];
 
-  // Inner detail
-  ctx.fillStyle = colors.dark;
-  ctx.beginPath();
-  ctx.arc(x, y + r * 0.1, r * 0.6, 0, Math.PI * 2);
-  ctx.fill();
+const BOSS_PIXIU_MAP = [
+  '  .MMMMMMMM.    ',
+  ' .MMBBBBBBMM.   ',
+  '.BBBBBBBBBBBB.  ',
+  '.BBBWEPWEPBBB.  ',
+  '.BBBBBBBBBBBB.  ',
+  '.BBBBBNNBBBBBB. ',
+  ' .BBhBBBBhBBB. ',
+  '  .BBBBBBBBBB.  ',
+  '  h.BBBBBBBB.h  ',
+  ' h ..BBBBBB.. h ',
+  '    .BB..BB.    ',
+];
 
-  return r;
+const BOSS_VEGETACAT_MAP = [
+  '    .HHH.       ',
+  '   .HHHHH.      ',
+  '  .HHHHHHH.     ',
+  '  .HHH.HHH.    ',
+  ' ..BBBBBBBB..   ',
+  '.BBBBBBBBBBBB.  ',
+  '.BBBEPBBEPBBB.  ',
+  '.BBBBBBBBBBBB.  ',
+  '.BBBBB__BBBBB.  ',
+  ' .RBBBBBBBBR.   ',
+  '  .RBBBBBBR.    ',
+  '   ..BBBB..     ',
+  '    .BB.BB.     ',
+];
+
+function getBossPalette(type) {
+  const bc = BOSS_COLORS[type];
+  if (!bc) return {};
+  return {
+    'B': bc.body, '.': bc.dark, 'L': bc.light,
+    'E': bc.eye, 'P': bc.eye, 'W': '#ffffff',
+    '_': '#555555', 'A': bc.accent, 'N': bc.accent || bc.dark,
+    'e': bc.ear || bc.light || bc.body,
+    'M': bc.mane || bc.accent,
+    'H': bc.hair || bc.accent,
+    'R': bc.armor || bc.dark,
+    'h': bc.whisker || bc.dark,
+  };
 }
 
-function drawBossLabubu(ctx, x, y, size, animFrame, hp, maxHp) {
-  const bc = BOSS_COLORS.labubu;
-  const r = drawBossBase(ctx, x, y, size, bc, animFrame);
-
-  // Pointed ears
-  ctx.fillStyle = bc.body;
-  ctx.beginPath();
-  ctx.moveTo(x - r * 0.6, y - r * 0.7);
-  ctx.lineTo(x - r * 0.3, y - r * 1.2);
-  ctx.lineTo(x, y - r * 0.7);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(x, y - r * 0.7);
-  ctx.lineTo(x + r * 0.3, y - r * 1.2);
-  ctx.lineTo(x + r * 0.6, y - r * 0.7);
-  ctx.fill();
-
-  // Eyes (big round)
-  ctx.fillStyle = '#ffffff';
-  ctx.beginPath(); ctx.arc(x - r * 0.3, y - r * 0.15, r * 0.22, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(x + r * 0.3, y - r * 0.15, r * 0.22, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = bc.eye;
-  ctx.beginPath(); ctx.arc(x - r * 0.3, y - r * 0.12, r * 0.12, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(x + r * 0.3, y - r * 0.12, r * 0.12, 0, Math.PI * 2); ctx.fill();
-
-  // Cute mouth
-  ctx.strokeStyle = bc.accent;
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.arc(x, y + r * 0.15, r * 0.15, 0, Math.PI);
-  ctx.stroke();
-}
-
-function drawBossBuu(ctx, x, y, size, animFrame, hp, maxHp) {
-  const bc = BOSS_COLORS.buu;
-  const r = drawBossBase(ctx, x, y, size, bc, animFrame);
-
-  // Head tentacle
-  ctx.fillStyle = bc.accent;
-  ctx.beginPath();
-  const tentX = x + Math.sin(animFrame * 0.08) * r * 0.3;
-  ctx.moveTo(x, y - r * 0.8);
-  ctx.quadraticCurveTo(tentX + r * 0.5, y - r * 1.5, tentX, y - r * 1.3);
-  ctx.lineWidth = 4;
-  ctx.strokeStyle = bc.accent;
-  ctx.stroke();
-
-  // Eyes
-  ctx.fillStyle = '#ffffff';
-  ctx.beginPath(); ctx.arc(x - r * 0.25, y - r * 0.2, r * 0.18, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(x + r * 0.25, y - r * 0.2, r * 0.18, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = bc.eye;
-  ctx.beginPath(); ctx.arc(x - r * 0.25, y - r * 0.18, r * 0.1, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(x + r * 0.25, y - r * 0.18, r * 0.1, 0, Math.PI * 2); ctx.fill();
-
-  // Angry mouth
-  ctx.strokeStyle = bc.eye;
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(x - r * 0.2, y + r * 0.15);
-  ctx.lineTo(x + r * 0.2, y + r * 0.15);
-  ctx.stroke();
-}
-
-function drawBossDojocat(ctx, x, y, size, animFrame, hp, maxHp) {
-  const bc = BOSS_COLORS.dojocat;
-  const r = drawBossBase(ctx, x, y, size, bc, animFrame);
-
-  // Cat ears
-  ctx.fillStyle = bc.body;
-  ctx.beginPath();
-  ctx.moveTo(x - r * 0.7, y - r * 0.5);
-  ctx.lineTo(x - r * 0.4, y - r * 1.1);
-  ctx.lineTo(x - r * 0.1, y - r * 0.5);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(x + r * 0.1, y - r * 0.5);
-  ctx.lineTo(x + r * 0.4, y - r * 1.1);
-  ctx.lineTo(x + r * 0.7, y - r * 0.5);
-  ctx.fill();
-
-  // Headband
-  ctx.fillStyle = bc.accent;
-  ctx.fillRect(x - r * 0.8, y - r * 0.3, r * 1.6, r * 0.15);
-
-  // Eyes (determined)
-  ctx.fillStyle = bc.eye;
-  ctx.beginPath(); ctx.arc(x - r * 0.3, y - r * 0.1, r * 0.12, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(x + r * 0.3, y - r * 0.1, r * 0.12, 0, Math.PI * 2); ctx.fill();
-
-  // Smile
-  ctx.strokeStyle = bc.eye;
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.arc(x, y + r * 0.1, r * 0.2, 0, Math.PI);
-  ctx.stroke();
-}
-
-function drawBossPixiu(ctx, x, y, size, animFrame, hp, maxHp) {
-  const bc = BOSS_COLORS.pixiu;
-  const r = drawBossBase(ctx, x, y, size, bc, animFrame);
-
-  // Mane/crown
-  for (let i = -2; i <= 2; i++) {
-    ctx.fillStyle = bc.accent;
-    ctx.beginPath();
-    ctx.arc(x + i * r * 0.25, y - r * 0.9, r * 0.15, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  // Eyes (gentle)
-  ctx.fillStyle = '#ffffff';
-  ctx.beginPath(); ctx.arc(x - r * 0.25, y - r * 0.15, r * 0.18, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(x + r * 0.25, y - r * 0.15, r * 0.18, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = bc.eye;
-  ctx.beginPath(); ctx.arc(x - r * 0.25, y - r * 0.13, r * 0.1, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(x + r * 0.25, y - r * 0.13, r * 0.1, 0, Math.PI * 2); ctx.fill();
-
-  // Whiskers
-  ctx.strokeStyle = bc.dark;
-  ctx.lineWidth = 0.8;
-  ctx.beginPath(); ctx.moveTo(x - r * 0.4, y + r * 0.05); ctx.lineTo(x - r * 0.9, y - r * 0.05); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(x - r * 0.4, y + r * 0.1); ctx.lineTo(x - r * 0.9, y + r * 0.15); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(x + r * 0.4, y + r * 0.05); ctx.lineTo(x + r * 0.9, y - r * 0.05); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(x + r * 0.4, y + r * 0.1); ctx.lineTo(x + r * 0.9, y + r * 0.15); ctx.stroke();
-}
-
-function drawBossVegetacat(ctx, x, y, size, animFrame, hp, maxHp) {
-  const bc = BOSS_COLORS.vegetacat;
-  const r = drawBossBase(ctx, x, y, size, bc, animFrame);
-
-  // Flame hair (spiky)
-  ctx.fillStyle = bc.accent;
-  for (let i = -2; i <= 2; i++) {
-    const spikeH = (3 - Math.abs(i)) * r * 0.3;
-    ctx.beginPath();
-    ctx.moveTo(x + i * r * 0.2 - r * 0.1, y - r * 0.7);
-    ctx.lineTo(x + i * r * 0.2, y - r * 0.7 - spikeH);
-    ctx.lineTo(x + i * r * 0.2 + r * 0.1, y - r * 0.7);
-    ctx.fill();
-  }
-
-  // Eyes (fierce)
-  ctx.fillStyle = bc.eye;
-  const eyeAngle = -0.15;
-  ctx.save();
-  ctx.translate(x - r * 0.3, y - r * 0.15);
-  ctx.rotate(eyeAngle);
-  ctx.fillRect(-r * 0.12, -r * 0.06, r * 0.24, r * 0.12);
-  ctx.restore();
-  ctx.save();
-  ctx.translate(x + r * 0.3, y - r * 0.15);
-  ctx.rotate(-eyeAngle);
-  ctx.fillRect(-r * 0.12, -r * 0.06, r * 0.24, r * 0.12);
-  ctx.restore();
-
-  // Frown
-  ctx.strokeStyle = bc.eye;
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(x - r * 0.2, y + r * 0.2);
-  ctx.lineTo(x + r * 0.2, y + r * 0.15);
-  ctx.stroke();
-}
-
-const BOSS_DRAW_FNS = {
-  labubu: drawBossLabubu,
-  buu: drawBossBuu,
-  dojocat: drawBossDojocat,
-  pixiu: drawBossPixiu,
-  vegetacat: drawBossVegetacat,
+const BOSS_MAPS = {
+  labubu: BOSS_LABUBU_MAP, buu: BOSS_BUU_MAP, dojocat: BOSS_DOJOCAT_MAP,
+  pixiu: BOSS_PIXIU_MAP, vegetacat: BOSS_VEGETACAT_MAP,
 };
 
 export function drawBoss(ctx, x, y, size, type, animFrame, hp, maxHp) {
-  const fn = BOSS_DRAW_FNS[type];
-  if (fn) fn(ctx, x, y, size, animFrame, hp, maxHp);
+  const map = BOSS_MAPS[type];
+  if (!map) return;
+  const palette = getBossPalette(type);
+  const ps = Math.max(1, Math.round(size / map[0].length));
+  const pulse = Math.sin(animFrame * 0.06) * 1.5;
+
+  // Boss aura glow
+  const bc = BOSS_COLORS[type];
+  if (bc) {
+    ctx.save();
+    ctx.shadowColor = bc.accent;
+    ctx.shadowBlur = 8 + pulse * 3;
+    ctx.fillStyle = 'rgba(0,0,0,0)';
+    ctx.fillRect(x - 1, y - 1, 2, 2);
+    ctx.restore();
+  }
+
+  drawPixelMap(ctx, x, y + pulse, ps, map, palette);
 
   // HP bar
   if (maxHp > 0) {
-    const barW = size * 1.2;
+    const barW = size * 1.3;
     const barH = 5;
     const barX = x - barW / 2;
-    const barY = y - size / 2 - 12;
-    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    const barY = y - (map.length * ps) / 2 - 14;
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
     ctx.fillRect(barX - 1, barY - 1, barW + 2, barH + 2);
-    ctx.fillStyle = '#333';
+    ctx.fillStyle = '#222';
     ctx.fillRect(barX, barY, barW, barH);
     const pct = hp / maxHp;
     ctx.fillStyle = pct > 0.5 ? '#44ff88' : pct > 0.25 ? '#ffcc22' : '#ff4455';
@@ -509,74 +455,128 @@ export function drawBoss(ctx, x, y, size, type, animFrame, hp, maxHp) {
     // Boss name
     ctx.font = 'bold 10px system-ui';
     ctx.textAlign = 'center';
-    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
     ctx.fillText(type.toUpperCase(), x, barY - 3);
   }
 }
 
-// ─── Projectiles ─────────────────────────────────────
+// ─── Tiered Projectiles ─────────────────────────────
+// power 0=basic, 1=enhanced, 2=strong, 3=mega, 4+=ultra
+
 export function drawProjectile(ctx, x, y, type, powerLevel) {
   if (type === 'player') {
-    const colors = ['#44ff88', '#88ffaa', '#ffffff'];
-    const color = colors[Math.min(powerLevel, 2)];
-    const size = 3 + powerLevel;
     ctx.save();
-    ctx.shadowColor = color;
-    ctx.shadowBlur = 6;
-    ctx.fillStyle = color;
-    ctx.fillRect(x - 1.5, y - size, 3, size * 2);
+    if (powerLevel <= 0) {
+      // Basic: thin green bolt
+      ctx.shadowColor = '#44ff88';
+      ctx.shadowBlur = 4;
+      ctx.fillStyle = '#44ff88';
+      ctx.fillRect(x - 1, y - 4, 2, 8);
+      ctx.fillStyle = '#aaffcc';
+      ctx.fillRect(x - 0.5, y - 3, 1, 6);
+    } else if (powerLevel === 1) {
+      // Enhanced: wider cyan bolt
+      ctx.shadowColor = '#44ddff';
+      ctx.shadowBlur = 5;
+      ctx.fillStyle = '#44ddff';
+      ctx.fillRect(x - 1.5, y - 5, 3, 10);
+      ctx.fillStyle = '#aaeeff';
+      ctx.fillRect(x - 0.5, y - 4, 1, 8);
+    } else if (powerLevel === 2) {
+      // Strong: fat pink-white bolt with trail
+      ctx.shadowColor = '#ff88ff';
+      ctx.shadowBlur = 7;
+      ctx.fillStyle = '#ff66cc';
+      ctx.fillRect(x - 2, y - 6, 4, 12);
+      ctx.fillStyle = '#ffaaee';
+      ctx.fillRect(x - 1, y - 5, 2, 10);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(x - 0.5, y - 4, 1, 8);
+    } else if (powerLevel === 3) {
+      // Mega: orange plasma orb
+      ctx.shadowColor = '#ffaa22';
+      ctx.shadowBlur = 10;
+      ctx.fillStyle = '#ff8822';
+      ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ffcc66';
+      ctx.beginPath(); ctx.arc(x, y, 2.5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.arc(x, y, 1, 0, Math.PI * 2); ctx.fill();
+    } else {
+      // Ultra (4+): huge spinning star projectile
+      ctx.shadowColor = '#ffffff';
+      ctx.shadowBlur = 12;
+      const angle = Date.now() * 0.01;
+      ctx.fillStyle = '#ffdd44';
+      ctx.beginPath();
+      for (let i = 0; i < 4; i++) {
+        const a = angle + (i * Math.PI) / 2;
+        ctx.lineTo(x + Math.cos(a) * 5, y + Math.sin(a) * 5);
+        ctx.lineTo(x + Math.cos(a + Math.PI / 4) * 2, y + Math.sin(a + Math.PI / 4) * 2);
+      }
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.arc(x, y, 2, 0, Math.PI * 2); ctx.fill();
+    }
     ctx.restore();
   } else if (type === 'enemy') {
     ctx.save();
     ctx.shadowColor = '#ff4455';
     ctx.shadowBlur = 4;
     ctx.fillStyle = '#ff4455';
-    ctx.beginPath();
-    ctx.arc(x, y, 3, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.fillRect(x - 1.5, y - 1.5, 3, 3);
+    ctx.fillStyle = '#ff8888';
+    ctx.fillRect(x - 0.5, y - 0.5, 1, 1);
     ctx.restore();
   } else if (type === 'boss') {
     ctx.save();
     ctx.shadowColor = '#ff22cc';
-    ctx.shadowBlur = 6;
+    ctx.shadowBlur = 8;
     ctx.fillStyle = '#ff44dd';
-    ctx.beginPath();
-    ctx.arc(x, y, 5, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#ffaaee';
+    ctx.beginPath(); ctx.arc(x, y, 2, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#ffffff';
-    ctx.beginPath();
-    ctx.arc(x, y, 2, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.beginPath(); ctx.arc(x, y, 1, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
   }
 }
 
-// ─── Power-ups ───────────────────────────────────────
+// ─── Power-ups (pixel-art crates) ───────────────────
+const CRATE_MAP = [
+  '...........',
+  '.LLLLLLLLL.',
+  '.LFFFFFFFL.',
+  '.LFFIIIFL.',
+  '.LFFFFFFFL.',
+  '.LLLLLLLLL.',
+  '...........',
+];
+
 export function drawPowerUp(ctx, x, y, type, animFrame) {
   const pc = POWER_UP_COLORS[type];
   if (!pc) return;
-  const r = 10;
-  const bob = Math.sin(animFrame * 0.1) * 2;
+  const ps = 2;
+  const bob = Math.sin((animFrame || 0) * 0.1) * 2;
 
   ctx.save();
   ctx.shadowColor = pc.glow;
   ctx.shadowBlur = 8;
 
-  // Box
-  ctx.fillStyle = pc.fill;
-  ctx.beginPath();
-  ctx.roundRect(x - r, y - r + bob, r * 2, r * 2, 3);
-  ctx.fill();
-  ctx.strokeStyle = 'rgba(255,255,255,0.5)';
-  ctx.lineWidth = 1;
-  ctx.stroke();
+  const palette = {
+    '.': '#333333', 'L': '#555555',
+    'F': pc.fill, 'I': '#ffffff',
+  };
 
-  // Icon
-  ctx.font = 'bold 12px system-ui';
+  drawPixelMap(ctx, x, y + bob, ps, CRATE_MAP, palette);
+
+  // Icon letter
+  ctx.font = 'bold 10px system-ui';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = '#ffffff';
   ctx.fillText(pc.icon, x, y + bob);
+
   ctx.restore();
 }
 
@@ -586,33 +586,26 @@ export function drawExplosion(ctx, x, y, progress, size, color) {
   const alpha = 1 - progress;
   ctx.save();
 
-  // Outer ring
-  ctx.strokeStyle = `rgba(255,255,255,${alpha * 0.5})`;
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.arc(x, y, r, 0, Math.PI * 2);
-  ctx.stroke();
+  // Pixel particle burst
+  const particleCount = 8;
+  for (let i = 0; i < particleCount; i++) {
+    const angle = (i / particleCount) * Math.PI * 2 + progress * 1.5;
+    const dist = r * progress;
+    const pxX = x + Math.cos(angle) * dist;
+    const pxY = y + Math.sin(angle) * dist;
+    const pSize = Math.max(1, 3 * (1 - progress));
+    ctx.fillStyle = i % 2 === 0
+      ? `rgba(255,255,255,${alpha})`
+      : (color || `rgba(255,180,80,${alpha})`);
+    ctx.fillRect(pxX - pSize / 2, pxY - pSize / 2, pSize, pSize);
+  }
 
-  // Inner flash
-  const grad = ctx.createRadialGradient(x, y, 0, x, y, r * 0.6);
-  grad.addColorStop(0, `rgba(255,255,255,${alpha * 0.8})`);
-  grad.addColorStop(0.5, color || `rgba(255,200,100,${alpha * 0.4})`);
-  grad.addColorStop(1, 'rgba(255,100,50,0)');
-  ctx.fillStyle = grad;
-  ctx.beginPath();
-  ctx.arc(x, y, r * 0.6, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Particles
-  for (let i = 0; i < 6; i++) {
-    const angle = (i / 6) * Math.PI * 2 + progress * 2;
-    const dist = r * 0.7 * progress;
-    const px = x + Math.cos(angle) * dist;
-    const py = y + Math.sin(angle) * dist;
-    ctx.fillStyle = `rgba(255,200,100,${alpha})`;
-    ctx.beginPath();
-    ctx.arc(px, py, 2 * (1 - progress), 0, Math.PI * 2);
-    ctx.fill();
+  // Center flash
+  if (progress < 0.3) {
+    const flashAlpha = (0.3 - progress) / 0.3;
+    ctx.fillStyle = `rgba(255,255,255,${flashAlpha * 0.8})`;
+    const flashR = r * 0.4;
+    ctx.fillRect(x - flashR, y - flashR, flashR * 2, flashR * 2);
   }
 
   ctx.restore();
@@ -643,35 +636,40 @@ export function drawHUD(ctx, w, score, lives, wave, activeBuffs) {
   ctx.fillStyle = '#66bbff';
   ctx.fillText(`WAVE ${wave}`, w / 2, 20);
 
-  // Lives — top left
+  // Lives — top left, pixel hearts
   ctx.textAlign = 'left';
-  ctx.font = '14px system-ui';
   for (let i = 0; i < lives; i++) {
+    const hx = 10 + i * 18, hy = 12;
     ctx.fillStyle = '#ff4466';
-    ctx.fillText('\u2764', 10 + i * 18, 22);
+    // Pixel heart: 5x4
+    ctx.fillRect(hx + 1, hy, 2, 1); ctx.fillRect(hx + 4, hy, 2, 1);
+    ctx.fillRect(hx, hy + 1, 7, 1);
+    ctx.fillRect(hx + 1, hy + 2, 5, 1);
+    ctx.fillRect(hx + 2, hy + 3, 3, 1);
+    ctx.fillRect(hx + 3, hy + 4, 1, 1);
   }
 
-  // Active power-ups
+  // Active power-up indicators
   if (activeBuffs && activeBuffs.length > 0) {
-    const buffY = 44;
+    const buffY = 42;
     activeBuffs.forEach((buff, i) => {
       const pc = POWER_UP_COLORS[buff.type];
       if (!pc) return;
-      const bx = 10 + i * 28;
+      const bx = 10 + i * 32;
       ctx.fillStyle = pc.fill;
-      ctx.globalAlpha = 0.6;
+      ctx.globalAlpha = 0.7;
       ctx.beginPath();
-      ctx.roundRect(bx, buffY, 24, 14, 3);
+      ctx.roundRect(bx, buffY, 28, 16, 3);
       ctx.fill();
       ctx.globalAlpha = 1;
-      ctx.font = 'bold 9px system-ui';
+      ctx.font = 'bold 8px system-ui';
       ctx.textAlign = 'center';
       ctx.fillStyle = '#ffffff';
-      ctx.fillText(pc.icon, bx + 12, buffY + 10);
+      ctx.fillText(pc.label, bx + 14, buffY + 10);
       // Timer bar
       const pct = buff.remaining / buff.duration;
-      ctx.fillStyle = 'rgba(255,255,255,0.3)';
-      ctx.fillRect(bx, buffY + 14, 24 * pct, 2);
+      ctx.fillStyle = 'rgba(255,255,255,0.4)';
+      ctx.fillRect(bx, buffY + 16, 28 * pct, 2);
     });
   }
 
@@ -717,19 +715,19 @@ let _stars = null;
 export function drawStarfield(ctx, w, h, scrollOffset) {
   if (!_stars || _stars.w !== w || _stars.h !== h) {
     const stars = [];
-    for (let i = 0; i < 80; i++) {
+    for (let i = 0; i < 100; i++) {
       stars.push({
         x: Math.random() * w,
         y: Math.random() * h,
-        size: Math.random() * 1.5 + 0.5,
-        speed: Math.random() * 0.5 + 0.2,
-        brightness: Math.random() * 0.5 + 0.2,
+        size: Math.random() < 0.7 ? 1 : 2,
+        speed: Math.random() * 0.5 + 0.15,
+        brightness: Math.random() * 0.6 + 0.2,
       });
     }
     _stars = { w, h, stars };
   }
 
-  // Background
+  // Background gradient
   const grad = ctx.createLinearGradient(0, 0, 0, h);
   grad.addColorStop(0, '#020408');
   grad.addColorStop(0.5, '#060c14');
@@ -737,10 +735,10 @@ export function drawStarfield(ctx, w, h, scrollOffset) {
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, w, h);
 
-  // Stars
+  // Stars as pixel dots
   _stars.stars.forEach(star => {
-    const sy = (star.y + scrollOffset * star.speed) % h;
+    const sy = (star.y + scrollOffset * star.speed * 30) % h;
     ctx.fillStyle = `rgba(200,220,255,${star.brightness})`;
-    ctx.fillRect(star.x, sy, star.size, star.size);
+    ctx.fillRect(Math.round(star.x), Math.round(sy), star.size, star.size);
   });
 }
