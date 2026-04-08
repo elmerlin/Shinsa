@@ -4,6 +4,7 @@ import ScoreSnapshotModal from './ScoreSnapshotModal';
 import YouTubeReplayModal from './YouTubeReplayModal';
 import { HourOfPowerLogo } from './HourOfPowerBrand';
 import { parseGrade } from '../utils/grades';
+import { getChartKeyMap } from '../utils/api';
 import { buildScoreSnapshotLinkShare } from '../utils/directMessageShares';
 import { buildReplayModalTitle } from '../utils/replayTitle';
 
@@ -105,9 +106,19 @@ function SongJacketButton({ row, onClick }) {
   );
 }
 
-function buildSessionRowChartPath(row) {
+function buildSessionRowChartPath(row, chartKeyMap = {}) {
+  const playId = String(row?.play_id || '').trim();
+  if (playId) return `/play/${encodeURIComponent(playId)}`;
+  const directPath = String(row?.chart_path || '').trim();
+  if (directPath) return directPath;
+  const directChartId = parseInt(row?.chart_id, 10) || 0;
+  if (directChartId > 0) return `/songs/chart/${directChartId}`;
   const title = String(row?.song_title || '').trim();
-  return title ? `/songs?q=${encodeURIComponent(title)}` : '/songs';
+  if (!title) return '/songs';
+  const normalizedTitle = title.toLowerCase().replace(/\s+/g, ' ').trim();
+  const exactKey = `${normalizedTitle}|${row?.mode || ''}|${row?.level || ''}`;
+  const chartId = chartKeyMap?.[exactKey] || chartKeyMap?.[normalizedTitle];
+  return chartId ? `/songs/chart/${chartId}` : `/songs?q=${encodeURIComponent(title)}`;
 }
 
 function slugify(value) {
@@ -275,6 +286,7 @@ export default function SessionShareCard({
   const [selectedReplay, setSelectedReplay] = useState(null);
   const [shareImageStatus, setShareImageStatus] = useState('');
   const [sharingImage, setSharingImage] = useState(false);
+  const [chartKeyMap, setChartKeyMap] = useState({});
   const captureRef = useRef(null);
   const exportRef = useRef(null);
 
@@ -282,16 +294,34 @@ export default function SessionShareCard({
   const totalPages = Math.max(1, Math.ceil(rows.length / 10));
   const isHopShare = share?.shareType === 'hour_of_power';
   const displayTitle = title === 'Session Share' && isHopShare ? 'Hour of Power Recap' : title;
+
+  useEffect(() => {
+    let active = true;
+    getChartKeyMap()
+      .then((map) => {
+        if (!active) return;
+        setChartKeyMap(map && typeof map === 'object' ? map : {});
+      })
+      .catch(() => {
+        if (!active) return;
+        setChartKeyMap({});
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const activeRowDmShare = useMemo(() => {
     if (!activeRow) return null;
+    const chartPath = buildSessionRowChartPath(activeRow, chartKeyMap);
     return buildScoreSnapshotLinkShare({
       kind: 'score_snapshot',
       score: activeRow,
-      path: buildSessionRowChartPath(activeRow),
-      chartPath: buildSessionRowChartPath(activeRow),
+      path: chartPath,
+      chartPath,
       jacketUrl: activeRow.jacket_url,
     });
-  }, [activeRow]);
+  }, [activeRow, chartKeyMap]);
 
   useEffect(() => {
     if (!expanded) setPage(1);
@@ -630,7 +660,7 @@ export default function SessionShareCard({
       <ScoreSnapshotModal
         score={activeRow}
         jacketUrl={activeRow?.jacket_url || ''}
-        chartLink={activeRow ? buildSessionRowChartPath(activeRow) : ''}
+        chartLink={activeRow ? buildSessionRowChartPath(activeRow, chartKeyMap) : ''}
         directMessageLinkShare={activeRowDmShare}
         modalLabel={isHopShare ? 'Session result' : 'Shared result'}
         onClose={() => setActiveRow(null)}

@@ -473,6 +473,105 @@ function summarizePlay(play) {
   };
 }
 
+function toAbsolutePreviewUrl(origin, value, fallbackPath = '/icons/app-icon-1024.png') {
+  const raw = String(value || '').trim();
+  if (!raw) return `${origin}${fallbackPath}`;
+  if (/^https?:\/\//i.test(raw)) return raw;
+  return `${origin}${raw.startsWith('/') ? raw : `/${raw}`}`;
+}
+
+function guessPreviewImageType(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (raw.endsWith('.png')) return 'image/png';
+  if (raw.endsWith('.webp')) return 'image/webp';
+  if (raw.endsWith('.gif')) return 'image/gif';
+  return 'image/jpeg';
+}
+
+function findSongPreviewRowByTitle(db, query) {
+  const normalizedQuery = normalizeWhitespace(query);
+  if (!normalizedQuery) return null;
+
+  const exact = db.prepare(`
+    SELECT
+      id,
+      title,
+      artist,
+      mode,
+      level,
+      COALESCE(NULLIF(jacket_url, ''), NULLIF(background_url, ''), '') AS artwork_url
+    FROM songs
+    WHERE lower(title) = lower(?)
+    ORDER BY
+      CASE mode
+        WHEN 'Single' THEN 0
+        WHEN 'Double' THEN 1
+        ELSE 2
+      END,
+      level ASC,
+      id ASC
+    LIMIT 1
+  `).get(normalizedQuery);
+  if (exact) return exact;
+
+  return db.prepare(`
+    SELECT
+      id,
+      title,
+      artist,
+      mode,
+      level,
+      COALESCE(NULLIF(jacket_url, ''), NULLIF(background_url, ''), '') AS artwork_url
+    FROM songs
+    WHERE lower(title) LIKE lower(?)
+    ORDER BY
+      CASE
+        WHEN lower(title) LIKE lower(?) THEN 0
+        ELSE 1
+      END,
+      CASE mode
+        WHEN 'Single' THEN 0
+        WHEN 'Double' THEN 1
+        ELSE 2
+      END,
+      level ASC,
+      id ASC
+    LIMIT 1
+  `).get(`%${normalizedQuery}%`, `${normalizedQuery}%`);
+}
+
+function summarizeSongChart(chart) {
+  const songTitle = String(chart?.title || '').trim() || 'Song chart';
+  const chartMode = modeShort(chart?.mode);
+  const chartLevel = parseInt(chart?.level, 10) || 0;
+  const chartLabel = chartMode && chartLevel ? `${chartMode}${chartLevel}` : '';
+  const artist = normalizeWhitespace(String(chart?.artist || ''));
+
+  return {
+    title: chartLabel
+      ? `${songTitle} • ${chartLabel} • Pump Shinsa`
+      : `${songTitle} • Pump Shinsa`,
+    description: artist
+      ? `${songTitle}${chartLabel ? ` (${chartLabel})` : ''} by ${artist}. View chart info, scores, and replays on Pump Shinsa.`
+      : `${songTitle}${chartLabel ? ` (${chartLabel})` : ''}. View chart info, scores, and replays on Pump Shinsa.`,
+    imageAlt: chartLabel
+      ? `${songTitle} ${chartLabel} jacket art`
+      : `${songTitle} jacket art`,
+  };
+}
+
+function summarizeSongSearch(row, query) {
+  const songTitle = String(row?.title || query || '').trim() || 'Song';
+  const artist = normalizeWhitespace(String(row?.artist || ''));
+  return {
+    title: `${songTitle} • Pump Shinsa`,
+    description: artist
+      ? `${songTitle} by ${artist}. Explore charts, scores, and replays on Pump Shinsa.`
+      : `${songTitle}. Explore charts, scores, and replays on Pump Shinsa.`,
+    imageAlt: `${songTitle} jacket art`,
+  };
+}
+
 function formatScore(value) {
   return (parseInt(value, 10) || 0).toLocaleString();
 }
@@ -2472,6 +2571,86 @@ function registerSharePreviewRoutes(app, { clientBuildDir }) {
       imageAlt: 'Pump Shinsa play preview',
       twitterCard: 'summary_large_image',
     });
+    res.set('Content-Type', 'text/html');
+    return res.send(html);
+  });
+
+  app.get('/songs/chart/:chartId', (req, res, next) => {
+    const chartId = parseInt(req.params.chartId, 10);
+    if (Number.isNaN(chartId)) return next();
+
+    const indexHtml = getIndexHtml();
+    if (!indexHtml) return next();
+
+    const db = getDb();
+    const chart = db.prepare(`
+      SELECT
+        id,
+        title,
+        artist,
+        mode,
+        level,
+        COALESCE(NULLIF(jacket_url, ''), NULLIF(background_url, ''), '') AS artwork_url
+      FROM songs
+      WHERE id = ?
+      LIMIT 1
+    `).get(chartId);
+
+    if (!chart) {
+      res.set('Content-Type', 'text/html');
+      return res.send(indexHtml);
+    }
+
+    const origin = getRequestOrigin(req);
+    const url = `${origin}/songs/chart/${chartId}`;
+    const summary = summarizeSongChart(chart);
+    const image = toAbsolutePreviewUrl(origin, chart.artwork_url);
+    const html = injectSocialMeta(indexHtml, {
+      type: 'website',
+      siteName: 'Pump Shinsa',
+      title: summary.title,
+      description: summary.description,
+      url,
+      image,
+      imageType: guessPreviewImageType(image),
+      imageAlt: summary.imageAlt,
+      twitterCard: 'summary_large_image',
+    });
+
+    res.set('Content-Type', 'text/html');
+    return res.send(html);
+  });
+
+  app.get('/songs', (req, res, next) => {
+    const query = normalizeWhitespace(req.query?.q || '');
+    if (!query) return next();
+
+    const indexHtml = getIndexHtml();
+    if (!indexHtml) return next();
+
+    const db = getDb();
+    const row = findSongPreviewRowByTitle(db, query);
+    if (!row) {
+      res.set('Content-Type', 'text/html');
+      return res.send(indexHtml);
+    }
+
+    const origin = getRequestOrigin(req);
+    const url = `${origin}/songs?q=${encodeURIComponent(query)}`;
+    const summary = summarizeSongSearch(row, query);
+    const image = toAbsolutePreviewUrl(origin, row.artwork_url);
+    const html = injectSocialMeta(indexHtml, {
+      type: 'website',
+      siteName: 'Pump Shinsa',
+      title: summary.title,
+      description: summary.description,
+      url,
+      image,
+      imageType: guessPreviewImageType(image),
+      imageAlt: summary.imageAlt,
+      twitterCard: 'summary_large_image',
+    });
+
     res.set('Content-Type', 'text/html');
     return res.send(html);
   });
