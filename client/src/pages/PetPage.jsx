@@ -906,10 +906,14 @@ export default function PetPage() {
     { threshold: 260, label: 'Blessed Beast', desc: 'A bond this deep brings blessings. Your companion radiates rare energy.' },
     { threshold: 400, label: 'Legendary Bond', desc: 'Few reach this depth. Your companion has become part of your legend.' },
     { threshold: 600, label: 'Eternal Companion', desc: 'An unbreakable bond. This companion has been through everything with you.' },
-    { threshold: 900, label: 'Mythic Guardian', desc: 'The highest known bond. Your companion has transcended the mortal dojo.' },
+    { threshold: 900, label: 'Mythic Guardian', desc: 'Your companion has transcended the mortal dojo. A guardian of myth and rhythm.' },
     { threshold: 1300, label: 'Celestial Warden', desc: 'A guardian between realms. Your bond resonates across dimensions.' },
     { threshold: 1800, label: 'Astral Sovereign', desc: 'Sovereign of the stars. Your companion\'s presence warps reality itself.' },
     { threshold: 2500, label: 'Primordial Spirit', desc: 'A bond older than the dojo itself. Your companion remembers the first beat.' },
+    { threshold: 3500, label: 'Void Walker', desc: 'Your companion has peered beyond the veil and returned with forbidden knowledge.' },
+    { threshold: 5000, label: 'World Shaper', desc: 'The dojo reshapes itself around your companion. Reality bends to your bond.' },
+    { threshold: 7000, label: 'Rhythm Incarnate', desc: 'Your companion IS the rhythm. Every beat in every song echoes your bond.' },
+    { threshold: 10000, label: 'The Eternal One', desc: 'There is no rank beyond this. You and your companion are one. Always have been.' },
   ];
   const FORM_TABLE = [
     { id: 'fresh', label: 'Fresh Form', bond: 0, mastery: 0, desc: 'A young companion still finding its rhythm.', aura: 'calm' },
@@ -921,6 +925,10 @@ export default function PetPage() {
     { id: 'celestial', label: 'Celestial Form', bond: 1300, mastery: 850, desc: 'A companion that channels the stars themselves.', aura: 'celestial' },
     { id: 'astral', label: 'Astral Form', bond: 1800, mastery: 1200, desc: 'A being of pure rhythm and light, beyond mortal understanding.', aura: 'astral' },
     { id: 'primordial', label: 'Primordial Form', bond: 2500, mastery: 1800, desc: 'The first form. The last form. A companion that simply IS.', aura: 'primordial' },
+    { id: 'void', label: 'Void Form', bond: 3500, mastery: 2100, desc: 'A companion that has seen beyond the veil and returned changed.', aura: 'void' },
+    { id: 'world-shaper', label: 'World Shaper Form', bond: 5000, mastery: 3000, desc: 'Reality reshapes at every step. The dojo exists because this companion wills it.', aura: 'worldshaper' },
+    { id: 'omniscient', label: 'Omniscient Form', bond: 7000, mastery: 4200, desc: 'A companion that perceives every rhythm across every dimension simultaneously.', aura: 'omniscient' },
+    { id: 'eternal', label: 'Eternal Form', bond: 10000, mastery: 6000, desc: 'Time itself bends around this companion. There is no beginning. There is no end.', aura: 'eternal' },
   ];
 
   function getBondRankInfo(currentRank, currentBond) {
@@ -1065,14 +1073,14 @@ export default function PetPage() {
           <div className="absolute top-3 right-3 z-10">
             <WeightBadge state={pet.weight_state} />
           </div>
-          <div data-share-exclude="true" className="absolute top-3 left-3 z-10">
-            <button onClick={() => setRankInfoModal(getBondRankInfo(pet.bond_rank, bond))} className="cursor-pointer">
+          <div data-share-exclude="true" className="absolute top-3 left-3 z-20">
+            <button type="button" onClick={(e) => { e.stopPropagation(); setRankInfoModal(getBondRankInfo(pet.bond_rank, bond)); }} className="cursor-pointer block">
               <BondBadge rank={pet.bond_rank} />
             </button>
           </div>
           {pet.form?.label ? (
-            <div data-share-exclude="true" className="absolute left-1/2 top-10 z-10 -translate-x-1/2">
-              <button onClick={() => setRankInfoModal(getFormInfo(pet.form, bond, pet.mastery?.mastery_xp || 0))} className="cursor-pointer">
+            <div data-share-exclude="true" className="absolute left-1/2 top-10 z-20 -translate-x-1/2">
+              <button type="button" onClick={(e) => { e.stopPropagation(); setRankInfoModal(getFormInfo(pet.form, bond, pet.mastery?.mastery_xp || 0)); }} className="cursor-pointer block">
                 <FormBadge form={pet.form} />
               </button>
             </div>
@@ -1807,6 +1815,10 @@ function FormBadge({ form }) {
     celestial: 'border-sky-300/30 text-sky-200 shadow-[0_0_28px_rgba(56,189,248,0.22)] animate-pulse',
     astral: 'border-indigo-300/35 text-indigo-200 shadow-[0_0_32px_rgba(129,140,248,0.25)] animate-pulse',
     primordial: 'border-yellow-200/40 text-yellow-100 shadow-[0_0_36px_rgba(253,224,71,0.28)] animate-pulse',
+    void: 'border-slate-300/40 text-slate-100 shadow-[0_0_32px_rgba(148,163,184,0.25)] animate-pulse',
+    'world-shaper': 'border-teal-300/40 text-teal-100 shadow-[0_0_36px_rgba(94,234,212,0.28)] animate-pulse',
+    omniscient: 'border-violet-200/45 text-violet-100 shadow-[0_0_40px_rgba(196,181,253,0.30)] animate-pulse',
+    eternal: 'border-white/50 text-white shadow-[0_0_44px_rgba(255,255,255,0.35)] animate-pulse',
   };
   return (
     <span className={`rounded-full border bg-black/40 backdrop-blur-sm px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider transition-all ${formStyles[form.id] || formStyles.fresh}`}>

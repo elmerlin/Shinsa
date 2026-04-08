@@ -724,6 +724,9 @@ const MASTERY_RANKS = [
   { threshold: 1050, label: 'Sage' },
   { threshold: 1500, label: 'Transcendent' },
   { threshold: 2100, label: 'Eternal' },
+  { threshold: 3000, label: 'Mythic Sage' },
+  { threshold: 4200, label: 'Astral Mind' },
+  { threshold: 6000, label: 'Omniscient' },
 ];
 
 const HABITAT_ITEMS = {
@@ -783,6 +786,10 @@ const BOND_RANKS = [
   { threshold: 1300, key: 'celestial-warden', label: 'Celestial Warden' },
   { threshold: 1800, key: 'astral-sovereign', label: 'Astral Sovereign' },
   { threshold: 2500, key: 'primordial-spirit', label: 'Primordial Spirit' },
+  { threshold: 3500, key: 'void-walker', label: 'Void Walker' },
+  { threshold: 5000, key: 'world-shaper', label: 'World Shaper' },
+  { threshold: 7000, key: 'rhythm-incarnate', label: 'Rhythm Incarnate' },
+  { threshold: 10000, key: 'the-eternal-one', label: 'The Eternal One' },
 ];
 
 // ─── Bond gain scaling ───────────────────────────────────────────
@@ -795,7 +802,11 @@ function scaleBondGain(rawGain, currentBond) {
   if (currentBond < 900) return Math.max(1, Math.round(rawGain * 0.3));
   if (currentBond < 1300) return Math.max(1, Math.round(rawGain * 0.15));
   if (currentBond < 1800) return Math.max(1, Math.round(rawGain * 0.10));
-  return Math.max(1, Math.round(rawGain * 0.07));
+  if (currentBond < 2500) return Math.max(1, Math.round(rawGain * 0.07));
+  if (currentBond < 3500) return Math.max(1, Math.round(rawGain * 0.05));
+  if (currentBond < 5000) return Math.max(1, Math.round(rawGain * 0.04));
+  if (currentBond < 7000) return Math.max(1, Math.round(rawGain * 0.03));
+  return Math.max(1, Math.round(rawGain * 0.02));
 }
 
 // ─── Tap diminishing returns ─────────────────────────────────────
@@ -1535,6 +1546,42 @@ function buildMasteryProfile(pet, specialtyKey = '') {
 }
 
 function getPetForm(bond = 0, masteryXp = 0) {
+  if (bond >= 10000 && masteryXp >= 6000) {
+    return {
+      id: 'eternal',
+      label: 'Eternal Form',
+      aura: 'eternal',
+      desc: 'Time itself bends around this companion. There is no beginning. There is no end.',
+      tier: 13,
+    };
+  }
+  if (bond >= 7000 && masteryXp >= 4200) {
+    return {
+      id: 'omniscient',
+      label: 'Omniscient Form',
+      aura: 'omniscient',
+      desc: 'A companion that perceives every rhythm across every dimension simultaneously.',
+      tier: 12,
+    };
+  }
+  if (bond >= 5000 && masteryXp >= 3000) {
+    return {
+      id: 'world-shaper',
+      label: 'World Shaper Form',
+      aura: 'worldshaper',
+      desc: 'Reality reshapes at every step. The dojo exists because this companion wills it.',
+      tier: 11,
+    };
+  }
+  if (bond >= 3500 && masteryXp >= 2100) {
+    return {
+      id: 'void',
+      label: 'Void Form',
+      aura: 'void',
+      desc: 'A companion that has seen beyond the veil and returned changed.',
+      tier: 10,
+    };
+  }
   if (bond >= 2500 && masteryXp >= 1800) {
     return {
       id: 'primordial',
