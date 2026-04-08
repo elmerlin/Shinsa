@@ -233,7 +233,8 @@ function buildBase(character, weightState, pose = 'rest') {
   const { w, bodyCy, legHeight, legSpread, legTop } = getBodyMetrics(weightState);
 
   // === Body drawn FIRST (behind head) ===
-  fillEllipse(g, CX, bodyCy, w.bodyRx, w.bodyRy, 'B');
+  const bodyWobble = pose === 'hop_land' ? 2 : 0; // Fat wobble on landing
+  fillEllipse(g, CX, bodyCy, w.bodyRx + bodyWobble, w.bodyRy, 'B');
   fillEllipse(g, CX - 1, bodyCy - 2, Math.max(8, w.bodyRx - 2), Math.max(5, w.bodyRy - 2), 'L');
 
   // Belly patch
@@ -297,6 +298,24 @@ function buildBase(character, weightState, pose = 'rest') {
     fillRect(g, CX - legSpread - w.limbW - 3, legTop + legHeight - 1, footW, 2, 'D');
     fillRect(g, CX + legSpread + 2, legTop, w.limbW, legHeight, 'D');
     fillRect(g, CX + legSpread + 1, legTop + legHeight - 1, footW, 2, 'D');
+  } else if (pose === 'squat_down') {
+    // Squat — bent legs, shorter, wider stance
+    const sqH = Math.max(2, legHeight - 3);
+    fillRect(g, CX - legSpread - w.limbW, legTop + 2, w.limbW, sqH, 'D');
+    fillRect(g, CX + legSpread + 1, legTop + 2, w.limbW, sqH, 'D');
+    fillRect(g, CX - legSpread - w.limbW - 2, legTop + sqH + 1, footW + 1, 2, 'D');
+    fillRect(g, CX + legSpread, legTop + sqH + 1, footW + 1, 2, 'D');
+  } else if (pose === 'hop_up') {
+    // Both legs tucked under — airborne
+    const tucked = Math.max(2, legHeight - 4);
+    fillRect(g, CX - legSpread - w.limbW + 2, legTop, w.limbW, tucked, 'D');
+    fillRect(g, CX + legSpread - 1, legTop, w.limbW, tucked, 'D');
+  } else if (pose === 'hop_land') {
+    // Wide splayed landing — feet planted outward, fat jiggle
+    fillRect(g, CX - legSpread - w.limbW - 1, legTop, w.limbW, legHeight, 'D');
+    fillRect(g, CX + legSpread + 2, legTop, w.limbW, legHeight, 'D');
+    fillRect(g, CX - legSpread - w.limbW - 3, legTop + legHeight - 1, footW + 1, 2, 'D');
+    fillRect(g, CX + legSpread + 1, legTop + legHeight - 1, footW + 1, 2, 'D');
   } else {
     // Default legs
     fillRect(g, CX - legSpread - w.limbW + 1, legTop, w.limbW, legHeight, 'D');
@@ -412,6 +431,24 @@ function buildArms(character, weightState, pose = 'rest') {
     fillEllipse(g, rx + 1, armY - 4, 2, w.armLen, 'B');
     setPixel(g, lx - 1, armY - 4 - w.armLen, 'D');
     setPixel(g, rx + 1, armY - 4 - w.armLen, 'D');
+  } else if (pose === 'squat_down') {
+    // Arms forward for balance during squat
+    fillEllipse(g, lx - 2, armY - 1, w.armLen, 2, 'B');
+    fillEllipse(g, rx + 2, armY - 1, w.armLen, 2, 'B');
+    setPixel(g, lx - w.armLen - 2, armY - 1, 'D');
+    setPixel(g, rx + w.armLen + 2, armY - 1, 'D');
+  } else if (pose === 'hop_up') {
+    // Arms raised high — jumping
+    fillEllipse(g, lx, armY - w.armLen - 1, 2, w.armLen, 'B');
+    fillEllipse(g, rx, armY - w.armLen - 1, 2, w.armLen, 'B');
+    setPixel(g, lx, armY - w.armLen * 2 - 1, 'D');
+    setPixel(g, rx, armY - w.armLen * 2 - 1, 'D');
+  } else if (pose === 'hop_land') {
+    // Arms spread wide for balance on landing
+    fillEllipse(g, lx - 4, armY, w.armLen + 1, 2, 'B');
+    fillEllipse(g, rx + 4, armY, w.armLen + 1, 2, 'B');
+    setPixel(g, lx - w.armLen - 4, armY, 'D');
+    setPixel(g, rx + w.armLen + 4, armY, 'D');
   } else {
     // Default: arms at sides
     fillEllipse(g, lx, armY, 2, w.armLen, 'B');
@@ -647,6 +684,26 @@ function buildFace(character, mood, expression = '') {
       drawCatMouth(g, noseY, 'smile');
     } else {
       drawTinySmile(g, mouthY + 1);
+    }
+    return g;
+  }
+
+  if (expression === 'pout') {
+    // Baby pout — droopy half-closed eyes, pouty lower lip
+    fillRect(g, leftEyeX - 1, hcy + 1, 4, 2, eyeColor);
+    fillRect(g, rightEyeX - 2, hcy + 1, 4, 2, eyeColor);
+    // Sad brow
+    fillLine(g, leftEyeX - 2, browTop + 3, leftEyeX + 2, browTop + 1, 'K');
+    fillLine(g, rightEyeX + 1, browTop + 3, rightEyeX - 3, browTop + 1, 'K');
+    if (character === 'buu') {
+      drawPout(g, hcy + 4, 'N');
+      fillEllipse(g, CX - 9, hcy + 2, 3, 2, 'H');
+      fillEllipse(g, CX + 9, hcy + 2, 3, 2, 'H');
+    } else if (character === 'dojocat' || character === 'pixiu') {
+      drawCatNose(g, noseY);
+      drawCatMouth(g, noseY, 'frown');
+    } else {
+      drawPout(g, mouthY, 'N');
     }
     return g;
   }
@@ -1556,7 +1613,8 @@ const PIXEL_ART_STYLES = `
 // Poses that only move the head (body stays in rest)
 function getBodyPose(pose) {
   if (pose === 'head_bob_l' || pose === 'head_bob_r' ||
-      pose === 'head_nod_down' || pose === 'head_nod_up') return 'rest';
+      pose === 'head_nod_down' || pose === 'head_nod_up' ||
+      pose === 'pout') return 'rest';
   return pose;
 }
 
@@ -1566,11 +1624,23 @@ function getHeadOffset(pose) {
     case 'waddle_l':     return [-1, 0];
     case 'waddle_r':     return [1, 0];
     case 'stomp':        return [0, 2];
+    case 'squat_down':   return [0, 3];
+    case 'hop_up':       return [0, -4];
+    case 'hop_land':     return [0, 2];
     case 'head_bob_l':   return [-2, 0];
     case 'head_bob_r':   return [2, 0];
     case 'head_nod_down': return [0, 2];
     case 'head_nod_up':  return [0, -1];
     default:             return [0, 0];
+  }
+}
+
+// Some poses override the face expression
+function getPoseExpression(pose) {
+  switch (pose) {
+    case 'pout':     return 'pout';
+    case 'hop_up':   return 'excited';
+    default:         return '';
   }
 }
 
@@ -1766,7 +1836,7 @@ export default function SpritePet({
   // Character idle poses — now includes waddle, head bob/nod, stomp, punch
   const IDLE_POSE_SEQUENCE = {
     dojocat: ['rest', 'guard', 'rest', 'waddle_l', 'waddle_r', 'waddle_l', 'waddle_r', 'rest', 'head_bob_l', 'head_bob_r', 'rest', 'punch', 'rest', 'kick', 'rest', 'stomp', 'rest', 'crane', 'rest', 'head_nod_down', 'head_nod_up', 'rest', 'lunge', 'rest'],
-    buu:     ['rest', 'wave', 'rest', 'waddle_l', 'waddle_r', 'rest', 'head_bob_l', 'head_bob_r', 'rest', 'flex', 'rest', 'punch', 'rest', 'head_nod_down', 'head_nod_up', 'rest', 'bless', 'rest', 'punch_forward', 'rest', 'guard', 'rest'],
+    buu:     ['rest', 'waddle_l', 'waddle_r', 'waddle_l', 'waddle_r', 'rest', 'pout', 'rest', 'squat_down', 'rest', 'squat_down', 'rest', 'hop_up', 'hop_land', 'rest', 'head_bob_l', 'head_bob_r', 'rest', 'waddle_l', 'waddle_r', 'pout', 'rest', 'wave', 'rest', 'flex', 'rest', 'hop_up', 'hop_land', 'rest', 'punch', 'rest', 'bless', 'rest'],
     devit:   ['rest', 'punch', 'rest', 'waddle_l', 'waddle_r', 'waddle_l', 'waddle_r', 'rest', 'kick', 'rest', 'head_bob_l', 'head_bob_r', 'rest', 'stomp', 'rest', 'lunge', 'rest', 'head_nod_down', 'head_nod_up', 'rest', 'guard', 'rest', 'punch_forward', 'rest', 'wave', 'rest'],
     pixiu:   ['rest', 'bless', 'rest', 'waddle_l', 'waddle_r', 'rest', 'head_bob_l', 'head_bob_r', 'rest', 'crane', 'rest', 'head_nod_down', 'head_nod_up', 'rest', 'guard', 'rest', 'wave', 'rest', 'stomp', 'rest', 'kick', 'rest'],
   };
@@ -1799,10 +1869,12 @@ export default function SpritePet({
   }
   const blinkClass = blinkState ? 'sprite-blink' : '';
 
-  // Derive body pose and head offset from the composite current pose
+  // Derive body pose, head offset, and expression override from pose
   const bodyPose = getBodyPose(currentPose);
   const [headDx, headDy] = getHeadOffset(currentPose);
   const featureFrame = tailFrame; // Buu tentacle sways with tail frame
+  const poseExpression = getPoseExpression(currentPose);
+  const effectiveExpression = poseExpression || expression;
 
   // Memoize all grid computations
   const layers = useMemo(() => {
@@ -1838,8 +1910,8 @@ export default function SpritePet({
     const featGrid = shiftGrid(outlineGrid(buildFeatures(character, featureFrame)), headDx, headDy);
     featShadow = composeShadow(featGrid, palette);
 
-    // Face / expression — shifted with head
-    const faceGrid = shiftGrid(buildFace(character, mood, expression), headDx, headDy);
+    // Face / expression — shifted with head, uses effectiveExpression for pose-based expressions
+    const faceGrid = shiftGrid(buildFace(character, mood, effectiveExpression), headDx, headDy);
     faceShadow = composeShadow(faceGrid, palette);
 
     // Tail — frame-based wiggle animation
@@ -1889,7 +1961,7 @@ export default function SpritePet({
     }
 
     return { baseShadow, headShadow, armsShadow, featShadow, faceShadow, tailShadow, groundShadow, hatShadow, topShadow, beltShadow2, shoesShadow, foodShadow };
-  }, [character, weightState, mood, expression, equippedHat, equippedBelt, equippedShoes, equippedTop, hatColor, beltColor, shoesColor, topColor, foodId, iconicLook, palette, bodyPose, headDx, headDy, tailFrame, featureFrame]);
+  }, [character, weightState, mood, effectiveExpression, equippedHat, equippedBelt, equippedShoes, equippedTop, hatColor, beltColor, shoesColor, topColor, foodId, iconicLook, palette, bodyPose, headDx, headDy, tailFrame, featureFrame]);
 
   return (
     <div

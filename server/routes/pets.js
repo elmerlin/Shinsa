@@ -2842,25 +2842,30 @@ router.get('/leaderboard', (req, res) => {
     SELECT p.*, u.username
     FROM user_pets p
     JOIN users u ON u.id = p.user_id
-    ORDER BY p.bond DESC
+    ORDER BY p.experience DESC
     LIMIT 25
   `).all();
 
   const entries = pets.map((pet, index) => {
     const bond = pet.bond || 0;
+    const xp = pet.experience || 0;
     const masteryXp = pet.mastery_xp || 0;
     const form = getPetForm(bond, masteryXp);
     const bondRank = getBondRank(bond);
     const rank = getMasteryRank(masteryXp);
+    const levelInfo = getLevelFromXp(xp);
     return {
       rank: index + 1,
       username: pet.username || 'Unknown',
       character: pet.character,
       bond,
       bond_rank: bondRank,
+      level: levelInfo.level,
+      experience: xp,
       mastery_xp: masteryXp,
       mastery_rank: rank.label,
       form: form,
+      nickname: pet.nickname || '',
       daily_streak: pet.daily_streak || 0,
       total_songs_fed: pet.total_songs_fed || 0,
       equipped_hat: pet.equipped_hat || '',

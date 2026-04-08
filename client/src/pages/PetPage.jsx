@@ -799,6 +799,17 @@ export default function PetPage() {
               {pet.is_pet_avatar ? 'Avatar On' : 'Set Avatar'}
             </button>
             <button
+              onClick={handleSharePet}
+              disabled={shareStatus === 'capturing'}
+              className={`whitespace-nowrap rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] transition-all ${
+                shareStatus === 'done'
+                  ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                  : 'border-white/[0.08] bg-white/[0.03] text-gray-400 hover:border-white/15 hover:text-white'
+              } disabled:opacity-50`}
+            >
+              {shareStatus === 'capturing' ? 'Saving...' : shareStatus === 'done' ? 'Shared!' : 'Share'}
+            </button>
+            <button
               onClick={() => setShowSelect(true)}
               className="whitespace-nowrap rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-400 transition-all hover:border-white/15 hover:text-white"
             >
@@ -830,22 +841,7 @@ export default function PetPage() {
           <HabitatWallDisplay wallId={pet.habitat?.active_wall} />
           <HabitatParticles character={pet.character} mood={pet.mood} />
           <HabitatPropDisplay propId={pet.habitat?.active_prop} />
-          <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5">
-            <button
-              data-share-exclude="true"
-              onClick={handleSharePet}
-              disabled={shareStatus === 'capturing'}
-              className="flex items-center justify-center w-7 h-7 rounded-lg bg-black/40 border border-white/10 text-white/60 hover:text-white hover:bg-black/60 transition-all active:scale-90 disabled:opacity-50"
-              title="Share pet as image"
-            >
-              {shareStatus === 'capturing' ? (
-                <span className="text-[10px] animate-spin">\u23F3</span>
-              ) : shareStatus === 'done' ? (
-                <span className="text-[10px] text-emerald-400">\u2713</span>
-              ) : (
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5"><path d="M13 4.5a2.5 2.5 0 11.702 1.737L6.97 9.604a2.518 2.518 0 010 .792l6.733 3.367a2.5 2.5 0 11-.671 1.341l-6.733-3.367a2.5 2.5 0 110-3.474l6.733-3.367A2.52 2.52 0 0113 4.5z" /></svg>
-              )}
-            </button>
+          <div className="absolute top-3 right-3 z-10">
             <WeightBadge state={pet.weight_state} />
           </div>
           <div data-share-exclude="true" className="absolute top-3 left-3 z-10"><BondBadge rank={pet.bond_rank} /></div>
@@ -2115,7 +2111,7 @@ function LeaderboardTab({ leaderboard, myCharacter }) {
     <div className="space-y-3 text-sm text-gray-400">
       <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
         <div className="text-xs text-gray-500 mb-1">Dojo Rankings</div>
-        <p className="text-[11px] text-white/65">Top companions ranked by bond strength. Keep caring for your pet to climb.</p>
+        <p className="text-[11px] text-white/65">Top companions ranked by level. Play songs and care for your pet to climb.</p>
       </div>
       <div className="space-y-1.5">
         {leaderboard.map((entry) => (
@@ -2130,7 +2126,7 @@ function LeaderboardTab({ leaderboard, myCharacter }) {
                 size={44} />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-[11px] font-semibold text-white/85 truncate">{entry.username}</div>
+              <div className="text-[11px] font-semibold text-white/85 truncate">{entry.nickname || entry.username}</div>
               <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                 <span className="text-[9px] text-cyan-200/70">{entry.bond_rank?.label || 'Training Partner'}</span>
                 {entry.form?.label && entry.form.id !== 'fresh' && (
@@ -2139,8 +2135,8 @@ function LeaderboardTab({ leaderboard, myCharacter }) {
               </div>
             </div>
             <div className="text-right shrink-0">
-              <div className="text-[11px] font-bold text-cyan-100 tabular-nums">{entry.bond}</div>
-              <div className="text-[9px] text-gray-500">bond</div>
+              <div className="text-[11px] font-bold text-amber-400 tabular-nums">Lv.{entry.level || 1}</div>
+              <div className="text-[9px] text-gray-500">level</div>
             </div>
           </div>
         ))}

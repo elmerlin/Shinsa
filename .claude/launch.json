@@ -2,16 +2,16 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "shinsa-full",
-      "runtimeExecutable": "/usr/local/bin/npm",
-      "runtimeArgs": ["run", "dev"],
-      "port": 5173
+      "name": "shinsa-server",
+      "runtimeExecutable": "/usr/local/bin/node",
+      "runtimeArgs": ["server/index.js"],
+      "port": 3001
     },
     {
-      "name": "shinsa-dev",
+      "name": "shinsa-client",
       "runtimeExecutable": "/usr/local/bin/node",
-      "runtimeArgs": ["node_modules/.bin/vite", "--port", "5199"],
-      "port": 5199,
+      "runtimeArgs": ["node_modules/.bin/vite", "--host", "--port", "5173"],
+      "port": 5173,
       "cwd": "client"
     },
     {
