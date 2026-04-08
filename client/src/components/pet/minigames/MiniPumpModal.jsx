@@ -7,11 +7,13 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import useMiniPumpGame from './useMiniPumpGame';
 import MiniPumpCanvas from './MiniPumpCanvas';
 import { isMuted, setMuted as setAudioMuted } from './miniPumpAudio';
+import SpritePet from '../../SpritePet';
 
-export default function MiniPumpModal({ open, onClose, character, onComplete }) {
+export default function MiniPumpModal({ open, onClose, character, onComplete, stats, leaderboard }) {
   const game = useMiniPumpGame();
   const [muted, setMutedState] = useState(isMuted());
   const [reducedMotion, setReducedMotion] = useState(false);
+  const [mode, setMode] = useState('idle');
   const completedRef = useRef(false);
 
   // Check prefers-reduced-motion
@@ -28,10 +30,19 @@ export default function MiniPumpModal({ open, onClose, character, onComplete }) 
     if (open) {
       game.reset();
       completedRef.current = false;
+      setMode('idle');
     } else {
       game.stopLoop();
     }
   }, [open, game]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const interval = setInterval(() => {
+      setMode(game.getState().mode);
+    }, 100);
+    return () => clearInterval(interval);
+  }, [game, open]);
 
   // Watch for round_end to trigger persistence
   useEffect(() => {
@@ -55,6 +66,9 @@ export default function MiniPumpModal({ open, onClose, character, onComplete }) 
 
   const handleStart = useCallback(() => {
     completedRef.current = false;
+    if (game.getState().mode === 'round_end') {
+      game.reset();
+    }
     game.startGame();
   }, [game]);
 
@@ -120,43 +134,103 @@ export default function MiniPumpModal({ open, onClose, character, onComplete }) 
         />
       </div>
 
-      {/* Bottom touch buttons — only during playing */}
-      <GameButtons game={game} onShoot={handleShoot} onStart={handleStart} />
+      {/* Bottom controls / leaderboard */}
+      <GameButtons
+        game={game}
+        mode={mode}
+        onShoot={handleShoot}
+        onStart={handleStart}
+        stats={stats}
+        leaderboard={leaderboard}
+      />
     </div>
   );
 }
 
-// ─── Touch button bar ────────────────────────────────
-function GameButtons({ game, onShoot, onStart }) {
-  const [mode, setMode] = useState('idle');
+function GameButtons({ game, mode, onShoot, onStart, stats, leaderboard }) {
+  if (mode === 'playing') {
+    const buttons = [
+      { color: 'red', label: 'A', bg: 'bg-red-500/20 border-red-500/40 active:bg-red-500/50', text: 'text-red-400' },
+      { color: 'yellow', label: 'S', bg: 'bg-yellow-500/20 border-yellow-500/40 active:bg-yellow-500/50', text: 'text-yellow-400' },
+      { color: 'blue', label: 'D', bg: 'bg-blue-500/20 border-blue-500/40 active:bg-blue-500/50', text: 'text-blue-400' },
+    ];
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setMode(game.getState().mode);
-    }, 100);
-    return () => clearInterval(interval);
-  }, [game]);
+    return (
+      <div className="flex gap-2 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-black/60 border-t border-white/[0.04] shrink-0">
+        {buttons.map(b => (
+          <button
+            key={b.color}
+            onTouchStart={(e) => { e.preventDefault(); onShoot(b.color); }}
+            onMouseDown={() => onShoot(b.color)}
+            className={`flex-1 h-14 rounded-xl border-2 ${b.bg} ${b.text} font-black text-lg transition-transform active:scale-95 select-none touch-none`}
+          >
+            {b.label}
+          </button>
+        ))}
+      </div>
+    );
+  }
 
-  if (mode !== 'playing') return null;
-
-  const buttons = [
-    { color: 'red', label: 'A', bg: 'bg-red-500/20 border-red-500/40 active:bg-red-500/50', text: 'text-red-400' },
-    { color: 'yellow', label: 'S', bg: 'bg-yellow-500/20 border-yellow-500/40 active:bg-yellow-500/50', text: 'text-yellow-400' },
-    { color: 'blue', label: 'D', bg: 'bg-blue-500/20 border-blue-500/40 active:bg-blue-500/50', text: 'text-blue-400' },
-  ];
+  const topEntries = Array.isArray(leaderboard) ? leaderboard.slice(0, 5) : [];
+  const personalBest = stats?.personalBest ?? 0;
+  const roundsPlayed = stats?.roundsPlayed ?? 0;
+  const buttonLabel = mode === 'round_end' ? 'Play Again' : 'Start Mini-Pump';
 
   return (
-    <div className="flex gap-2 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-black/60 border-t border-white/[0.04] shrink-0">
-      {buttons.map(b => (
-        <button
-          key={b.color}
-          onTouchStart={(e) => { e.preventDefault(); onShoot(b.color); }}
-          onMouseDown={() => onShoot(b.color)}
-          className={`flex-1 h-14 rounded-xl border-2 ${b.bg} ${b.text} font-black text-lg transition-transform active:scale-95 select-none touch-none`}
-        >
-          {b.label}
-        </button>
-      ))}
+    <div className="bg-black/70 border-t border-white/[0.06] shrink-0 px-3 py-3 pb-[max(0.9rem,env(safe-area-inset-bottom))]">
+      <button
+        onClick={onStart}
+        className="w-full h-12 rounded-xl border border-cyan-400/30 bg-cyan-500/15 text-cyan-100 font-black tracking-wide hover:bg-cyan-500/20 active:scale-[0.99] transition-all"
+      >
+        {buttonLabel}
+      </button>
+
+      <div className="mt-3 rounded-xl border border-white/[0.05] bg-white/[0.03] p-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-[10px] font-black tracking-[0.2em] uppercase text-cyan-200/80">Community Board</div>
+            <div className="text-[10px] text-gray-500 mt-0.5">Best blob runs from other players and their pets</div>
+          </div>
+          <div className="text-right">
+            <div className="text-[10px] text-gray-500">Your best</div>
+            <div className="text-sm font-black tabular-nums text-white">{personalBest}</div>
+            <div className="text-[10px] text-gray-600">{roundsPlayed} rounds</div>
+          </div>
+        </div>
+
+        <div className="mt-3 space-y-2">
+          {topEntries.length > 0 ? topEntries.map((entry) => (
+            <div key={`${entry.user_id || entry.username}-${entry.rank}`} className={`flex items-center gap-2 rounded-lg px-2 py-1.5 ${entry.is_me ? 'bg-cyan-400/[0.08]' : 'bg-black/20'}`}>
+              <div className={`w-6 text-[10px] font-black tabular-nums ${entry.rank === 1 ? 'text-amber-300' : entry.rank === 2 ? 'text-slate-300' : 'text-orange-300'}`}>#{entry.rank}</div>
+              <div className="rounded-md border border-white/[0.06] bg-white/[0.03] px-1 py-0.5 shrink-0">
+                <SpritePet
+                  character={entry.character}
+                  weightState={entry.weight_state || 'normal'}
+                  mood={entry.mood || 'happy'}
+                  hat={entry.equipped_hat || ''}
+                  top={entry.equipped_top || ''}
+                  hatColor={entry.hat_color || ''}
+                  topColor={entry.top_color || ''}
+                  size={24}
+                />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[11px] font-semibold text-white/90">
+                  {entry.username}
+                  {entry.nickname ? <span className="text-gray-500"> · {entry.nickname}</span> : null}
+                </div>
+                <div className="truncate text-[9px] text-gray-500">{entry.form || 'Companion'} · streak {entry.best_streak || 0}</div>
+              </div>
+              <div className="text-right shrink-0">
+                <div className="text-[12px] font-black tabular-nums text-cyan-200">{entry.personal_best}</div>
+                <div className="text-[9px] text-gray-600 tabular-nums">{entry.fastest_cadence || 1000}ms</div>
+              </div>
+            </div>
+          )) : (
+            <div className="text-[10px] text-gray-500">Loading leaderboard...</div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

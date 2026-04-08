@@ -61,9 +61,8 @@ function drawStartScreen(ctx, w, h) {
   ctx.fillText('Survive waves of invaders \u2022 Boss every 5th wave', w / 2, h * 0.48);
   ctx.fillText('Collect power-ups: Spread \u2022 Rate \u2022 Damage', w / 2, h * 0.52);
 
-  const pulse = 0.6 + Math.sin(Date.now() / 400) * 0.4;
-  ctx.font = '700 16px system-ui'; ctx.fillStyle = `rgba(100,255,200,${pulse})`;
-  ctx.fillText('TAP TO START', w / 2, h * 0.64);
+  ctx.font = '700 15px system-ui'; ctx.fillStyle = 'rgba(100,255,200,0.75)';
+  ctx.fillText('Use the button below to start', w / 2, h * 0.64);
   ctx.restore();
 }
 
@@ -95,12 +94,11 @@ function drawResults(ctx, w, h, state) {
     ctx.fillText(String(s.value), w * 0.75, y);
   });
 
-  const pulse = 0.7 + Math.sin(Date.now() / 350) * 0.3;
-  ctx.font = '700 16px system-ui'; ctx.textAlign = 'center';
-  ctx.fillStyle = `rgba(100,255,200,${pulse})`;
-  ctx.fillText('TAP TO REPLAY', w / 2, h * 0.62);
+  ctx.font = '700 15px system-ui'; ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(100,255,200,0.75)';
+  ctx.fillText('Use the button below to play again', w / 2, h * 0.62);
   ctx.font = '600 11px system-ui'; ctx.fillStyle = 'rgba(255,255,255,0.25)';
-  ctx.fillText('or press any key', w / 2, h * 0.66);
+  ctx.fillText('Leaderboard sits under the game', w / 2, h * 0.66);
   ctx.restore();
 }
 
@@ -140,30 +138,30 @@ export default function PetInvadersCanvas({ game, character, onStart, reducedMot
 
     // ─── Mode-specific ───
     if (state.mode === 'idle') {
-      drawPlayerPet(ctx, w / 2, h * PLAYER_Y, Math.max(24, h / 14), character, false);
+      drawPlayerPet(ctx, w / 2, h * PLAYER_Y, Math.max(32, h / 12.5), character, false);
       drawStartScreen(ctx, w, h);
       return;
     }
     if (state.mode === 'countdown') {
-      drawPlayerPet(ctx, w / 2, h * PLAYER_Y, Math.max(24, h / 14), character, false);
+      drawPlayerPet(ctx, w / 2, h * PLAYER_Y, Math.max(32, h / 12.5), character, false);
       drawCountdown(ctx, w, h, state.countdownValue);
       return;
     }
 
     // ─── Playing / wave_clear / boss_warning / game_over ───
-    const petSize = Math.max(24, h / 14);
+    const petSize = Math.max(32, h / 12.5);
 
     // Enemies
     state.enemies.forEach(enemy => {
       const ex = enemy.x * w, ey = enemy.y * h;
-      const eSize = w * 0.04 * (1 + Math.min(enemy.maxHp - 1, 3) * 0.1);
+      const eSize = w * 0.06 * (1 + Math.min(enemy.maxHp - 1, 3) * 0.12);
       drawEnemy(ctx, ex, ey, eSize, enemy.type, enemy.animFrame, enemy.hp, enemy.maxHp);
     });
 
     // Bosses
     state.bosses.forEach(boss => {
       const bx = boss.x * w, by = boss.y * h;
-      const bSize = w * 0.10;
+      const bSize = w * 0.15;
       drawBoss(ctx, bx, by, bSize, boss.type, boss.animFrame, boss.hp, boss.maxHp);
     });
 
@@ -224,8 +222,6 @@ export default function PetInvadersCanvas({ game, character, onStart, reducedMot
   // Touch input — tap left = move left, tap right = move right, tap same = stop
   const handleTouchStart = useCallback((e) => {
     const state = game.getState();
-    if (state.mode === 'idle') { onStart(); return; }
-    if (state.mode === 'game_over') { game.reset(); setTimeout(onStart, 100); return; }
     if (state.mode !== 'playing' && state.mode !== 'wave_clear' && state.mode !== 'boss_warning') return;
 
     const canvas = canvasRef.current; if (!canvas) return;
@@ -240,8 +236,7 @@ export default function PetInvadersCanvas({ game, character, onStart, reducedMot
   useEffect(() => {
     const handleKeyDown = (e) => {
       const state = game.getState();
-      if (state.mode === 'idle') { onStart(); return; }
-      if (state.mode === 'game_over') { game.reset(); setTimeout(onStart, 100); return; }
+      if (state.mode !== 'playing' && state.mode !== 'wave_clear' && state.mode !== 'boss_warning') return;
       const key = e.key;
       if (['ArrowLeft', 'ArrowRight', 'a', 'd'].includes(key)) {
         e.preventDefault();

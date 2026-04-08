@@ -92,9 +92,9 @@ function drawStartScreen(ctx, w, h) {
   ctx.fillText('Match the color \u2022 Wrong color = miss', w / 2, h * 0.52);
   ctx.fillText('Missed blobs bonk your pet (-1s)', w / 2, h * 0.56);
 
-  const pulse = 0.6 + Math.sin(Date.now() / 400) * 0.4;
-  ctx.font = '700 16px system-ui'; ctx.fillStyle = `rgba(100,200,255,${pulse})`;
-  ctx.fillText('TAP TO START', w / 2, h * 0.65);
+  ctx.font = '700 15px system-ui';
+  ctx.fillStyle = 'rgba(100,200,255,0.75)';
+  ctx.fillText('Use the button below to start', w / 2, h * 0.65);
   ctx.restore();
 }
 
@@ -123,12 +123,11 @@ function drawResults(ctx, w, h, state) {
     ctx.font = 'bold 14px system-ui'; ctx.textAlign = 'right'; ctx.fillStyle = s.color;
     ctx.fillText(String(s.value), w * 0.8, y);
   });
-  const pulse = 0.7 + Math.sin(Date.now() / 350) * 0.3;
-  ctx.font = '700 16px system-ui'; ctx.textAlign = 'center';
-  ctx.fillStyle = `rgba(100,200,255,${pulse})`;
-  ctx.fillText('TAP TO REPLAY', w / 2, h * 0.75);
+  ctx.font = '700 15px system-ui'; ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(100,200,255,0.75)';
+  ctx.fillText('Use the button below to play again', w / 2, h * 0.75);
   ctx.font = '600 11px system-ui'; ctx.fillStyle = 'rgba(255,255,255,0.25)';
-  ctx.fillText('or press any key', w / 2, h * 0.79);
+  ctx.fillText('Check the community board below', w / 2, h * 0.79);
   ctx.restore();
 }
 
@@ -274,8 +273,6 @@ export default function MiniPumpCanvas({ game, character, onStart, onShoot, redu
   // Touch input
   const handleTouch = useCallback((e) => {
     const state = game.getState();
-    if (state.mode === 'idle') { onStart(); return; }
-    if (state.mode === 'round_end') { game.reset(); setTimeout(onStart, 100); return; }
     if (state.mode !== 'playing') return;
     const canvas = canvasRef.current; if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
@@ -288,8 +285,6 @@ export default function MiniPumpCanvas({ game, character, onStart, onShoot, redu
   useEffect(() => {
     const handleKey = (e) => {
       const state = game.getState();
-      if (state.mode === 'idle') { onStart(); return; }
-      if (state.mode === 'round_end') { game.reset(); setTimeout(onStart, 100); return; }
       if (state.mode !== 'playing') return;
       const key = e.key.toLowerCase();
       if (key === 'a') onShoot('red');

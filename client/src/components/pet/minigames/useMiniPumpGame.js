@@ -1,6 +1,6 @@
 /**
  * Mini-Pump Game State Machine v2
- * Timing-based target-line judgement (±70ms tolerance)
+ * Timing-based target-line judgement while the blob is still touching the line.
  *
  * Each blob has a computed targetTimeMs — the exact game-clock moment
  * its center reaches the target line. Shots are judged against this.
@@ -17,7 +17,8 @@ const ROUND_DURATION = 30000;
 const INITIAL_CADENCE = 1000;
 const CADENCE_REDUCTION = 50;
 const CADENCE_FLOOR = 300;
-const TIMING_TOLERANCE_MS = 70;
+const MIN_TIMING_TOLERANCE_MS = 70;
+const LINE_CONTACT_HALF_NORM = 0.054;
 const TRAVEL_CYCLES = 3;        // blob takes 3 cadence-cycles to reach line
 const TARGET_LINE_Y = 0.48;     // normalized y-position of target line (halfway up screen)
 const BLOB_COLORS = ['red', 'yellow', 'blue'];
@@ -104,6 +105,10 @@ function blobY(blob, gameClockMs) {
   return Math.min(elapsed / blob.travelMs, 1.5); // clamp at 1.5 for past-line
 }
 
+function getBlobContactHalfMs(blob) {
+  return Math.max(MIN_TIMING_TOLERANCE_MS, Math.round(blob.travelMs * LINE_CONTACT_HALF_NORM));
+}
+
 // ─── Core tick ───────────────────────────────────────
 function tick(state, dt) {
   if (state.mode !== 'playing') return state;
@@ -156,7 +161,8 @@ function tick(state, dt) {
   // ─── Bonk detection: bottom blob past tolerance window ───
   // Bonk never ends the round — only the time check at top of tick does that.
   if (bottom) {
-    const pastTolerance = s.gameClockMs > bottom.targetTimeMs + TIMING_TOLERANCE_MS;
+    const contactHalfMs = getBlobContactHalfMs(bottom);
+    const pastTolerance = s.gameClockMs > bottom.targetTimeMs + contactHalfMs;
     if (pastTolerance) {
       s.headBonks++;
       s.cadenceMs = INITIAL_CADENCE;
@@ -239,7 +245,8 @@ function handleShot(state, color) {
   s.lastShotDeltaMs = Math.round(deltaMs);
 
   const colorMatch = bottom.color === color;
-  const inTolerance = Math.abs(deltaMs) <= TIMING_TOLERANCE_MS;
+  const contactHalfMs = getBlobContactHalfMs(bottom);
+  const inTolerance = Math.abs(deltaMs) <= contactHalfMs;
 
   if (colorMatch && inTolerance) {
     // ─── HIT ───
@@ -313,19 +320,20 @@ export default function useMiniPumpGame() {
         petPose: s.petPose,
         petExpression: s.petExpression,
         targetLineY: TARGET_LINE_Y,
-        timingToleranceMs: TIMING_TOLERANCE_MS,
+        timingToleranceMs: bottom ? getBlobContactHalfMs(bottom) : MIN_TIMING_TOLERANCE_MS,
         bottomBlob: bottom ? {
           color: bottom.color,
           centerY: bottomCenterY,
           targetTimeMs: Math.round(bottom.targetTimeMs),
-          bonkTimeMs: Math.round(bottom.targetTimeMs + TIMING_TOLERANCE_MS),
+          contactWindowMs: getBlobContactHalfMs(bottom),
+          bonkTimeMs: Math.round(bottom.targetTimeMs + getBlobContactHalfMs(bottom)),
         } : null,
         stackLength: s.stack.length,
         lastShotDeltaMs: s.lastShotDeltaMs,
         lastJudgement: s.lastJudgement,
         lastJudgementReason: s.lastJudgementReason,
         activeLaser: s.activeLaser ? { color: s.activeLaser.color, progress: s.activeLaser.progress.toFixed(2) } : null,
-        note: 'y=0 top, y=1.0 target line. Shoot when bottomBlob.centerY~=1.0. Tolerance ±70ms from targetTimeMs.',
+        note: 'y=0 top, y=1.0 target line. A hit counts any time the blob still overlaps the target line; bonk happens once it fully clears the line.',
       }, null, 2);
     };
     return () => { delete window.advanceTime; delete window.render_game_to_text; };
@@ -423,7 +431,7 @@ export default function useMiniPumpGame() {
 }
 
 // Export for canvas renderer
-export { blobY, TARGET_LINE_Y, TIMING_TOLERANCE_MS };
+export { blobY, TARGET_LINE_Y };
 export {
   createInitialState as createMiniPumpInitialState,
   spawnBlob as spawnMiniPumpBlob,

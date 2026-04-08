@@ -1075,6 +1075,8 @@ export default function PetPage() {
         onClose={() => setMiniPumpOpen(false)}
         character={pet?.character || 'dojocat'}
         onComplete={handleMiniPumpComplete}
+        stats={miniPumpStats}
+        leaderboard={miniPumpLeaderboard}
       />
 
       {/* Pet Invaders game modal */}
@@ -1083,6 +1085,8 @@ export default function PetPage() {
         onClose={() => setPetInvadersOpen(false)}
         character={pet?.character || 'dojocat'}
         onComplete={handlePetInvadersComplete}
+        stats={petInvadersStats}
+        leaderboard={petInvadersLeaderboard}
       />
     </div>
   );
