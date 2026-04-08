@@ -166,6 +166,8 @@ export default function PetPage() {
   const [leaderboard, setLeaderboard] = useState(null);
   const [activeToyVisual, setActiveToyVisual] = useState(null);
   const [socialFeed, setSocialFeed] = useState(null);
+  const [shareStatus, setShareStatus] = useState(''); // '' | 'capturing' | 'done'
+  const habitatRef = useRef(null);
 
   const loadPet = useCallback(async () => {
     try {
@@ -318,6 +320,14 @@ export default function PetPage() {
           _tapIndex[charKey] = idx + 1;
         }
         setPet(r.pet);
+        // Tap warnings
+        if (r.tap_warning === 'diminished') {
+          showFeedback('Taps fading \u2014 try other interactions');
+        } else if (r.tap_warning === 'annoyed') {
+          showFeedback('\u26A0\uFE0F Pet is annoyed by over-tapping!');
+        } else if (r.stat_changes?.length) {
+          showFeedback(r.stat_changes.join('  '));
+        }
         if (r.reaction || fallback?.reaction) setPetReaction(r.reaction || fallback?.reaction || '');
         if (r.expression || fallback?.expression) setPetExpression(r.expression || fallback?.expression || '');
         setSpeechText(r.speech || fallback?.speech || randomMsg(r.pet?.mood || pet?.mood));
@@ -366,6 +376,16 @@ export default function PetPage() {
     }
   };
 
+  // Activity-specific extended animations — hold pose longer, use activity-unique reaction
+  const ACTIVITY_ANIM = {
+    train: { reaction: 'kata', expression: 'proud', duration: 2000 },
+    play:  { reaction: 'hop', expression: 'grin', duration: 1800 },
+    groom: { reaction: 'bless', expression: 'soft', duration: 2200 },
+    rest:  { reaction: 'sway', expression: 'soft', duration: 2400 },
+    spar:  { reaction: 'dart', expression: 'excited', duration: 1800 },
+    explore: { reaction: 'swish', expression: 'sparkle', duration: 2000 },
+  };
+
   const handleActivity = async (activityId) => {
     if (activityBusy) return;
     playPetActivity();
@@ -375,7 +395,15 @@ export default function PetPage() {
       if (r.rare) playPetRare();
       setPet(r.pet);
       showFeedback(r.stat_changes?.length ? r.stat_changes.join('  ') : `${r.activity || activityId} complete`);
-      triggerPetResponse(r.speech, r.reaction, r.expression, 1500, r.rare);
+      // Use activity-specific animation with longer duration so the user can see the difference
+      const anim = ACTIVITY_ANIM[activityId] || {};
+      triggerPetResponse(
+        r.speech,
+        r.reaction || anim.reaction || '',
+        r.expression || anim.expression || '',
+        anim.duration || 1500,
+        r.rare,
+      );
     } catch (e) {
       showFeedback(e?.message || 'Activity failed');
     } finally {
@@ -477,6 +505,46 @@ export default function PetPage() {
     }
   };
 
+  // ─── Share pet as image ─────────────────────────────
+  const handleSharePet = async () => {
+    const node = habitatRef.current;
+    if (!node || shareStatus === 'capturing') return;
+    setShareStatus('capturing');
+    try {
+      await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const { toPng } = await import('html-to-image');
+      const dataUrl = await toPng(node, {
+        backgroundColor: '#070b14',
+        pixelRatio: 2,
+        cacheBust: true,
+        filter: (el) => {
+          // Exclude share button itself
+          if (el?.dataset?.shareExclude) return false;
+          return true;
+        },
+      });
+      const blob = await fetch(dataUrl).then(r => r.blob());
+      const charName = pet?.character || 'pet';
+      const file = new File([blob], `shinsa-pet-${charName}.png`, { type: 'image/png' });
+      const canShare = typeof navigator?.share === 'function' && typeof navigator?.canShare === 'function' && navigator.canShare({ files: [file] });
+      if (canShare) {
+        await navigator.share({ files: [file], title: `My ${charName} \u2014 Pump Shinsa`, text: 'Check out my pet companion!' });
+      } else {
+        // Fallback: download
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = file.name;
+        a.click();
+        URL.revokeObjectURL(a.href);
+      }
+      setShareStatus('done');
+      setTimeout(() => setShareStatus(''), 2000);
+    } catch (e) {
+      console.error('Share failed', e);
+      setShareStatus('');
+    }
+  };
+
   // ─── Gates ──────────────────────────────────────────
   if (!user) return <div className="max-w-lg mx-auto p-6 text-center"><h1 className="text-2xl font-bold mb-4">My Pet</h1><p className="text-gray-400">Log in to adopt a pet!</p></div>;
   if (loading) return <div className="max-w-lg mx-auto p-6 flex items-center justify-center min-h-[50vh]"><div className="w-12 h-12 border-2 border-white/10 border-t-white/60 rounded-full animate-spin" /></div>;
@@ -561,13 +629,30 @@ export default function PetPage() {
 
       {/* Pet habitat */}
       <div className="sticky top-0 z-[60] -mx-2 mb-4 px-2 pt-1 pb-3 bg-gradient-to-b from-[#070b14] via-[#070b14]/95 to-transparent backdrop-blur-sm">
-        <div className={`relative rounded-[1.6rem] border border-white/[0.06] overflow-hidden bg-gradient-to-b shadow-[0_18px_45px_rgba(0,0,0,0.28)] ${CHARACTER_BG[pet.character] || ''}`}>
+        <div ref={habitatRef} className={`relative rounded-[1.6rem] border border-white/[0.06] overflow-hidden bg-gradient-to-b shadow-[0_18px_45px_rgba(0,0,0,0.28)] ${CHARACTER_BG[pet.character] || ''}`}>
           <HabitatBackdrop backgroundId={pet.habitat?.active_background} />
           <HabitatFloorDisplay floorId={pet.habitat?.active_floor} />
           <HabitatWallDisplay wallId={pet.habitat?.active_wall} />
           <HabitatParticles character={pet.character} mood={pet.mood} />
           <HabitatPropDisplay propId={pet.habitat?.active_prop} />
-          <div className="absolute top-3 right-3 z-10"><WeightBadge state={pet.weight_state} /></div>
+          <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5">
+            <button
+              data-share-exclude="true"
+              onClick={handleSharePet}
+              disabled={shareStatus === 'capturing'}
+              className="flex items-center justify-center w-7 h-7 rounded-lg bg-black/40 border border-white/10 text-white/60 hover:text-white hover:bg-black/60 transition-all active:scale-90 disabled:opacity-50"
+              title="Share pet as image"
+            >
+              {shareStatus === 'capturing' ? (
+                <span className="text-[10px] animate-spin">\u23F3</span>
+              ) : shareStatus === 'done' ? (
+                <span className="text-[10px] text-emerald-400">\u2713</span>
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5"><path d="M13 4.5a2.5 2.5 0 11.702 1.737L6.97 9.604a2.518 2.518 0 010 .792l6.733 3.367a2.5 2.5 0 11-.671 1.341l-6.733-3.367a2.5 2.5 0 110-3.474l6.733-3.367A2.52 2.52 0 0113 4.5z" /></svg>
+              )}
+            </button>
+            <WeightBadge state={pet.weight_state} />
+          </div>
           <div className="absolute top-3 left-3 z-10"><BondBadge rank={pet.bond_rank} /></div>
           {pet.form?.label ? (
             <div className="absolute left-1/2 top-10 z-10 -translate-x-1/2">
@@ -1145,6 +1230,7 @@ function FormBadge({ form }) {
     showcase: 'border-cyan-400/20 text-cyan-300',
     ascendant: 'border-amber-400/25 text-amber-300',
     beyond: 'border-purple-400/30 text-purple-300 animate-pulse',
+    mythic: 'border-rose-400/30 text-rose-200 animate-pulse',
   };
   return (
     <span className={`rounded-full border bg-black/40 backdrop-blur-sm px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${formStyles[form.id] || formStyles.fresh}`}>
@@ -1284,7 +1370,16 @@ function PetTab({ pet, shop, combo, economy, socialFeed, interactionBusy, activi
         <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
           <div className="flex items-center justify-between mb-2">
             <div className="text-xs text-gray-500">Interact</div>
-            <div className="text-[10px] text-gray-600 tabular-nums">{pet.interactions_today || 0} today</div>
+            <div className="flex items-center gap-2">
+              {pet.taps_today != null && (
+                <div className={`text-[10px] tabular-nums ${
+                  pet.taps_today >= (pet.tap_limit || 8) * 2 ? 'text-rose-400' : pet.taps_today >= (pet.tap_limit || 8) ? 'text-amber-400' : 'text-gray-600'
+                }`}>
+                  {pet.taps_today}/{pet.tap_limit || 8} taps
+                </div>
+              )}
+              <div className="text-[10px] text-gray-600 tabular-nums">{pet.interactions_today || 0} today</div>
+            </div>
           </div>
           <div className="flex flex-wrap gap-1.5">
             {PET_ACTIONS.map((action) => {
@@ -1310,25 +1405,46 @@ function PetTab({ pet, shop, combo, economy, socialFeed, interactionBusy, activi
           <div className="mt-3 grid grid-cols-2 gap-2">
             {(pet.activities || []).map((activity) => {
               const locked = activity.locked;
-              const costLabel = activity.energy < 0 ? `${Math.abs(activity.energy)} energy` : activity.energy > 0 ? `+${activity.energy} energy` : '';
+              const ACTIVITY_ICONS = { train: '\u{1F94B}', play: '\u{1F3AE}', groom: '\u{2728}', rest: '\u{1F4A4}', spar: '\u{1F94A}', explore: '\u{1FA7A}' };
               return (
                 <button
                   key={activity.id}
                   onClick={() => !locked && onActivity(activity.id)}
                   disabled={activityBusy || locked}
-                  className={`rounded-xl border px-3 py-2 text-left transition-all active:scale-[0.98] disabled:opacity-50 ${
+                  className={`rounded-xl border px-3 py-2.5 text-left transition-all active:scale-[0.98] disabled:opacity-50 ${
                     locked
                       ? 'border-white/[0.04] bg-white/[0.01] cursor-not-allowed'
                       : 'border-white/[0.06] bg-white/[0.02] hover:border-white/15'
                   }`}
                 >
                   <div className="flex items-center justify-between gap-1">
-                    <div className="text-[11px] font-semibold text-white/85">{activity.label}</div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm">{ACTIVITY_ICONS[activity.id] || '\u{1F3AF}'}</span>
+                      <span className="text-[11px] font-semibold text-white/85">{activity.label}</span>
+                    </div>
                     {locked && <span className="text-[9px] text-gray-600">&#128274;</span>}
                   </div>
-                  <div className="text-[10px] text-gray-500 mt-0.5">{activity.desc}</div>
                   {locked && activity.lock_reason && <div className="text-[9px] text-rose-300/60 mt-1">{activity.lock_reason}</div>}
-                  {!locked && costLabel && <div className="text-[9px] text-cyan-300/50 mt-1">{costLabel}</div>}
+                  {!locked && (
+                    <div className="mt-1.5 space-y-0.5">
+                      {/* Costs */}
+                      {activity.costs?.length > 0 && (
+                        <div className="flex flex-wrap gap-x-2 gap-y-0">
+                          {activity.costs.map((c, i) => (
+                            <span key={i} className="text-[9px] tabular-nums text-rose-300/70">{c.value} {c.stat}</span>
+                          ))}
+                        </div>
+                      )}
+                      {/* Gains */}
+                      {activity.gains?.length > 0 && (
+                        <div className="flex flex-wrap gap-x-2 gap-y-0">
+                          {activity.gains.map((g, i) => (
+                            <span key={i} className="text-[9px] tabular-nums text-emerald-300/70">+{g.value} {g.stat}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </button>
               );
             })}

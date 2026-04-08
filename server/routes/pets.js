@@ -308,7 +308,7 @@ const PET_ACTIVITIES = {
     energy: -4, happiness: 8, trust: 6, hype: 1, bond: 3, combo: 0, bond_tokens: 1, expression: 'soft', reaction: 'bless',
   },
   rest: {
-    id: 'rest', label: 'Rest', desc: 'Recovers energy and settles their mood.',
+    id: 'rest', label: 'Rest', desc: 'Recovers energy but makes them hungry. 5min cooldown.',
     energy: 22, happiness: 2, trust: 1, hype: -4, bond: 2, combo: 0, bond_tokens: 0, expression: 'soft', reaction: 'sway',
   },
   spar: {
@@ -734,7 +734,45 @@ const BOND_RANKS = [
   { threshold: 90, key: 'dojo-mascot', label: 'Dojo Mascot' },
   { threshold: 160, key: 'arena-spirit', label: 'Arena Spirit' },
   { threshold: 260, key: 'blessed-beast', label: 'Blessed Beast' },
+  { threshold: 400, key: 'legendary-bond', label: 'Legendary Bond' },
+  { threshold: 600, key: 'eternal-companion', label: 'Eternal Companion' },
+  { threshold: 900, key: 'mythic-guardian', label: 'Mythic Guardian' },
 ];
+
+// ─── Bond gain scaling ───────────────────────────────────────────
+// Bond gain diminishes as bond grows — each tier reduces effective gain
+// so maintaining a high bond requires consistent, diverse engagement.
+function scaleBondGain(rawGain, currentBond) {
+  if (currentBond < 100) return rawGain;
+  if (currentBond < 260) return Math.max(1, Math.round(rawGain * 0.75));
+  if (currentBond < 500) return Math.max(1, Math.round(rawGain * 0.5));
+  if (currentBond < 900) return Math.max(1, Math.round(rawGain * 0.3));
+  return Math.max(1, Math.round(rawGain * 0.15));
+}
+
+// ─── Tap diminishing returns ─────────────────────────────────────
+// First 8 taps per day: full rewards. 9-15: no bond gain. 16+: pet gets annoyed.
+const TAP_FULL_REWARD_LIMIT = 8;
+const TAP_NEUTRAL_LIMIT = 15;
+function getTapEffects(dailyTapCount) {
+  if (dailyTapCount < TAP_FULL_REWARD_LIMIT) {
+    return { bond: 1, trust: 1, happiness: 2, hype: 1, phase: 'full' };
+  }
+  if (dailyTapCount < TAP_NEUTRAL_LIMIT) {
+    return { bond: 0, trust: 0, happiness: 1, hype: 0, phase: 'diminished' };
+  }
+  // Pet gets annoyed — over-tapping
+  return { bond: 0, trust: -1, happiness: -1, hype: -1, phase: 'annoyed' };
+}
+
+// ─── Energy → Hunger conversion ──────────────────────────────────
+// For every point of energy spent, hunger drops proportionally
+// (burning energy makes you hungry!)
+const ENERGY_TO_HUNGER_RATIO = 0.2; // spend 10 energy → lose 2 hunger
+
+// ─── Rest cooldown ───────────────────────────────────────────────
+const REST_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes between rests
+const REST_HUNGER_COST = 4; // resting makes you hungrier
 
 // ─── Clothing ─────────────────────────────────────────────────────
 const CLOTHING = {
@@ -888,6 +926,10 @@ function ensurePetTable(db) {
   addCol('last_coach_priority', "TEXT NOT NULL DEFAULT ''");
   addCol('last_coach_at', "TEXT NOT NULL DEFAULT ''");
   addCol('coach_focus_count', "INTEGER NOT NULL DEFAULT 0");
+  // v3: tap limits, rest cooldown, daily tap tracking
+  addCol('daily_tap_count', "INTEGER NOT NULL DEFAULT 0");
+  addCol('daily_tap_key', "TEXT NOT NULL DEFAULT ''");
+  addCol('last_rest_at', "TEXT NOT NULL DEFAULT ''");
 }
 
 function ensurePetSocialTables(db) {
@@ -1272,6 +1314,15 @@ function buildMasteryProfile(pet, specialtyKey = '') {
 }
 
 function getPetForm(bond = 0, masteryXp = 0) {
+  if (bond >= 900 && masteryXp >= 600) {
+    return {
+      id: 'mythic',
+      label: 'Mythic Form',
+      aura: 'divine',
+      desc: 'An ancient companion of unfathomable depth and devotion.',
+      tier: 6,
+    };
+  }
   if (bond >= 500 && masteryXp >= 400) {
     return {
       id: 'beyond',
@@ -1782,6 +1833,11 @@ function formatPet(pet, isPublic = false, db = null) {
     last_fed_at: pet.last_fed_at || '',
     interactions_today: interactionsToday,
     interaction_count: pet.interaction_count || 0,
+    taps_today: pet.daily_tap_key === getUtcDayKey() ? (pet.daily_tap_count || 0) : 0,
+    tap_limit: TAP_FULL_REWARD_LIMIT,
+    rest_cooldown: pet.last_rest_at
+      ? Math.max(0, REST_COOLDOWN_MS - (Date.now() - new Date(pet.last_rest_at + 'Z').getTime()))
+      : 0,
     daily_streak: pet.daily_streak || 0,
     longest_streak: pet.longest_streak || 0,
     lifetime_feeds: pet.lifetime_feeds || pet.total_songs_fed || 0,
@@ -1791,12 +1847,36 @@ function formatPet(pet, isPublic = false, db = null) {
     activity_summary: activitySummary,
     activities: Object.values(PET_ACTIVITIES).map(a => ({
       ...a,
-      locked: !!(a.minTrust && trust < a.minTrust) || !!(a.minEnergy && energy < a.minEnergy),
+      locked: !!(a.minTrust && trust < a.minTrust) || !!(a.minEnergy && energy < a.minEnergy)
+        || (a.id === 'rest' && pet.last_rest_at && (Date.now() - new Date(pet.last_rest_at + 'Z').getTime()) < REST_COOLDOWN_MS),
       lock_reason: a.minTrust && trust < a.minTrust
         ? `Trust ${a.minTrust}+ needed`
         : a.minEnergy && energy < a.minEnergy
           ? `Energy ${a.minEnergy}+ needed`
-          : '',
+          : (a.id === 'rest' && pet.last_rest_at && (Date.now() - new Date(pet.last_rest_at + 'Z').getTime()) < REST_COOLDOWN_MS)
+            ? `Cooldown: ${Math.ceil((REST_COOLDOWN_MS - (Date.now() - new Date(pet.last_rest_at + 'Z').getTime())) / 1000)}s`
+            : '',
+      // Cost/gain breakdown for the UI
+      costs: (() => {
+        const c = [];
+        if (a.energy < 0) c.push({ stat: 'energy', value: a.energy });
+        const hDrain = a.id === 'rest' ? REST_HUNGER_COST : (a.energy < 0 ? Math.round(Math.abs(a.energy) * ENERGY_TO_HUNGER_RATIO) : 0);
+        if (hDrain > 0) c.push({ stat: 'hunger', value: -hDrain });
+        if (a.hype < 0) c.push({ stat: 'hype', value: a.hype });
+        return c;
+      })(),
+      gains: (() => {
+        const g = [];
+        if (a.energy > 0) g.push({ stat: 'energy', value: a.energy });
+        if (a.happiness > 0) g.push({ stat: 'happiness', value: a.happiness });
+        if (a.trust > 0) g.push({ stat: 'trust', value: a.trust });
+        if (a.bond > 0) g.push({ stat: 'bond', value: scaleBondGain(a.bond, bond) });
+        if (a.hype > 0) g.push({ stat: 'hype', value: a.hype });
+        if (a.combo > 0) g.push({ stat: 'combo', value: a.combo });
+        if (a.bond_tokens > 0) g.push({ stat: 'tokens', value: a.bond_tokens });
+        if (a.rare_shards > 0) g.push({ stat: 'shards', value: a.rare_shards });
+        return g;
+      })(),
     })),
     toys: PET_TOYS.map((toy) => ({
       ...toy,
@@ -2258,6 +2338,7 @@ router.post('/interact', requireAuth, (req, res) => {
   if (!pet) return res.status(404).json({ error: 'No pet adopted yet' });
 
   const actionId = String(req.body?.actionId || 'tap').trim();
+  const isTap = actionId === 'tap';
   const interaction = PET_INTERACTIONS[actionId] || PET_INTERACTIONS.tap;
 
   // Bond gate (e.g. perform requires bond ≥ 40)
@@ -2270,54 +2351,107 @@ router.post('/interact', requireAuth, (req, res) => {
   const currentEnergy = getStateValue(pet.energy || 65, pet.updated_at || pet.last_fed_at, ENERGY_DECAY_PER_HOUR);
   const currentHype = getStateValue(pet.hype || 25, pet.updated_at || pet.last_fed_at, HYPE_DECAY_PER_HOUR);
   const currentHappiness = computeDecayed(pet.happiness || 50, pet.last_fed_at, HAPPINESS_DECAY_PER_HOUR);
+  const currentHunger = computeDecayed(pet.fullness, pet.last_fed_at, HUNGER_DECAY_PER_HOUR);
 
   // Energy gate for costly interactions (perform costs energy)
   if (interaction.energy < 0 && currentEnergy < Math.abs(interaction.energy)) {
     return res.status(400).json({ error: `Not enough energy for ${interaction.label}` });
   }
 
+  // ─── Tap diminishing returns ───────────────────────────
+  const dailyTaps = (pet.daily_tap_key === todayKey ? (pet.daily_tap_count || 0) : 0);
+  let effectiveBond, effectiveTrust, effectiveHappy, effectiveHype, tapPhase;
+  if (isTap) {
+    const tapFx = getTapEffects(dailyTaps);
+    effectiveBond = tapFx.bond;
+    effectiveTrust = tapFx.trust;
+    effectiveHappy = tapFx.happiness;
+    effectiveHype = tapFx.hype;
+    tapPhase = tapFx.phase;
+  } else {
+    effectiveBond = interaction.bond || 0;
+    effectiveTrust = interaction.trust || 0;
+    effectiveHappy = interaction.happiness || 0;
+    effectiveHype = interaction.hype || 0;
+    tapPhase = 'full';
+  }
+
   // Streak tracking
   const streakInfo = updateStreak(db, pet);
 
-  const newEnergy = clamp(currentEnergy + (interaction.energy || 0), 0, MAX_STAT);
-  const newHype = clamp(currentHype + (interaction.hype || 0), 0, MAX_STAT);
-  const newHappiness = clamp(currentHappiness + (interaction.happiness || 0), 0, MAX_STAT);
-  const newTrust = clamp((pet.trust || 35) + (interaction.trust || 0), 0, MAX_STAT);
+  const energyCost = interaction.energy || 0;
+  const newEnergy = clamp(currentEnergy + energyCost, 0, MAX_STAT);
+  // Energy→hunger: spending energy makes pet hungrier
+  const hungerDrain = energyCost < 0 ? Math.round(Math.abs(energyCost) * ENERGY_TO_HUNGER_RATIO) : 0;
+  const newHunger = clamp(currentHunger - hungerDrain, 0, MAX_STAT);
+  const newHype = clamp(currentHype + effectiveHype, 0, MAX_STAT);
+  const newHappiness = clamp(currentHappiness + effectiveHappy, 0, MAX_STAT);
+  const newTrust = clamp((pet.trust || 35) + effectiveTrust, 0, MAX_STAT);
   const streakBondExtra = streakInfo.isNewDay ? streakInfo.streakBonus : 0;
-  const newBond = Math.max(0, (pet.bond || 0) + (interaction.bond || 0) + streakBondExtra);
-  const ctx = buildContextualSpeech(pet, { type: 'interact', actionId });
+  // Scale bond gain based on current bond level
+  const rawBondGain = effectiveBond + streakBondExtra;
+  const scaledBondGain = rawBondGain > 0 ? scaleBondGain(rawBondGain, pet.bond || 0) : rawBondGain;
+  const newBond = Math.max(0, (pet.bond || 0) + scaledBondGain);
+  const ctx = buildContextualSpeech(pet, { type: 'interact', actionId, tapPhase });
+
+  const newDailyTaps = isTap ? dailyTaps + 1 : dailyTaps;
 
   db.prepare(`
     UPDATE user_pets
     SET happiness = ?, energy = ?, hype = ?, trust = ?, bond = ?,
+        fullness = ?,
         interaction_count = interaction_count + 1,
         daily_interaction_count = ?,
         daily_interaction_key = ?,
+        daily_tap_count = ?,
+        daily_tap_key = ?,
         updated_at = datetime('now')
     WHERE user_id = ?
-  `).run(newHappiness, newEnergy, newHype, newTrust, newBond, currentDailyInteractions + 1, todayKey, req.user.id);
+  `).run(newHappiness, newEnergy, newHype, newTrust, newBond, newHunger, currentDailyInteractions + 1, todayKey, newDailyTaps, todayKey, req.user.id);
 
   const updated = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
   const changes = [];
-  if (interaction.bond) changes.push(`+${interaction.bond} bond`);
-  if (interaction.trust > 0) changes.push(`+${interaction.trust} trust`);
-  else if (interaction.trust < 0) changes.push(`${interaction.trust} trust`);
-  if (interaction.happiness > 0) changes.push(`+${interaction.happiness} happy`);
-  else if (interaction.happiness < 0) changes.push(`${interaction.happiness} happy`);
-  if (interaction.hype > 0) changes.push(`+${interaction.hype} hype`);
-  if (interaction.energy < 0) changes.push(`${interaction.energy} energy`);
-  else if (interaction.energy > 0) changes.push(`+${interaction.energy} energy`);
-  if (streakBondExtra) changes.push(`+${streakBondExtra} streak bonus`);
+  if (scaledBondGain > 0) changes.push(`+${scaledBondGain} bond`);
+  if (effectiveTrust > 0) changes.push(`+${effectiveTrust} trust`);
+  else if (effectiveTrust < 0) changes.push(`${effectiveTrust} trust`);
+  if (effectiveHappy > 0) changes.push(`+${effectiveHappy} happy`);
+  else if (effectiveHappy < 0) changes.push(`${effectiveHappy} happy`);
+  if (effectiveHype > 0) changes.push(`+${effectiveHype} hype`);
+  else if (effectiveHype < 0) changes.push(`${effectiveHype} hype`);
+  if (energyCost < 0) changes.push(`${energyCost} energy`);
+  else if (energyCost > 0) changes.push(`+${energyCost} energy`);
+  if (hungerDrain > 0) changes.push(`-${hungerDrain} hunger`);
+  if (streakBondExtra && scaledBondGain > effectiveBond) changes.push(`+${scaledBondGain - effectiveBond} streak`);
+
+  // Tap phase speech overrides
+  let speech = ctx.speech;
+  let tapWarning = null;
+  if (isTap && tapPhase === 'diminished') {
+    tapWarning = 'diminished';
+  } else if (isTap && tapPhase === 'annoyed') {
+    const annoyedLines = {
+      dojocat: ['Enough. I am not a drumpad.', 'Discipline means knowing when to stop.', 'My patience wears thin.'],
+      buu: ['Stop poking me!', 'Ugh, I need SPACE.', 'That stopped being fun ages ago.'],
+      devit: ['OI. Knock it off!', 'You are making me CRANKY.', 'Poke me ONE more time...'],
+      pixiu: ['The guardian grows weary of this.', 'Respect must have boundaries.', 'Even blessings have limits.'],
+    };
+    const charLines = annoyedLines[pet.character || 'dojocat'] || annoyedLines.dojocat;
+    speech = charLines[Math.floor(Math.random() * charLines.length)];
+    tapWarning = 'annoyed';
+  }
 
   res.json({
     pet: formatPet(updated, false, db),
-    speech: ctx.speech,
-    reaction: interaction.reaction,
-    expression: interaction.expression,
+    speech,
+    reaction: tapPhase === 'annoyed' ? 'mischief' : (interaction.reaction || ''),
+    expression: tapPhase === 'annoyed' ? 'smirk' : (interaction.expression || ''),
     action: actionId,
     rare: ctx.rare || false,
     mood_aware: ctx.mood_aware || false,
     stat_changes: changes,
+    tap_warning: tapWarning,
+    taps_today: isTap ? newDailyTaps : undefined,
+    tap_limit: isTap ? TAP_FULL_REWARD_LIMIT : undefined,
     streak: streakInfo.isNewDay ? { day: streakInfo.streak, bonus: streakBondExtra } : null,
   });
 });
@@ -2335,11 +2469,27 @@ router.post('/activities/:activityId', requireAuth, (req, res) => {
   const currentEnergy = getStateValue(pet.energy || 65, pet.updated_at || pet.last_fed_at, ENERGY_DECAY_PER_HOUR);
   const currentHype = getStateValue(pet.hype || 25, pet.updated_at || pet.last_fed_at, HYPE_DECAY_PER_HOUR);
   const currentHappiness = computeDecayed(pet.happiness || 50, pet.last_fed_at, HAPPINESS_DECAY_PER_HOUR);
+  const currentHunger = computeDecayed(pet.fullness, pet.last_fed_at, HUNGER_DECAY_PER_HOUR);
+
   if (activity.minEnergy && currentEnergy < activity.minEnergy) {
     return res.status(400).json({ error: `Needs at least ${activity.minEnergy} energy for ${activity.label}` });
   }
   if (activity.minTrust && (pet.trust || 35) < activity.minTrust) {
     return res.status(400).json({ error: `${activity.label} unlocks once trust reaches ${activity.minTrust}` });
+  }
+
+  // ─── Rest cooldown ─────────────────────────────────────
+  if (activity.id === 'rest') {
+    const lastRestAt = pet.last_rest_at;
+    if (lastRestAt) {
+      const elapsed = Date.now() - new Date(lastRestAt + 'Z').getTime();
+      if (elapsed < REST_COOLDOWN_MS) {
+        const remainSec = Math.ceil((REST_COOLDOWN_MS - elapsed) / 1000);
+        const mins = Math.floor(remainSec / 60);
+        const secs = remainSec % 60;
+        return res.status(400).json({ error: `Rest cooldown: ${mins}m ${secs}s remaining`, cooldown_remaining: remainSec });
+      }
+    }
   }
 
   // Streak tracking
@@ -2349,32 +2499,53 @@ router.post('/activities/:activityId', requireAuth, (req, res) => {
   const newHappiness = clamp(currentHappiness + activity.happiness, 0, MAX_STAT);
   const newTrust = clamp((pet.trust || 35) + activity.trust, 0, MAX_STAT);
   const newHype = clamp(currentHype + activity.hype, 0, MAX_STAT);
-  const newBond = Math.max(0, (pet.bond || 0) + activity.bond);
+
+  // Scale bond gain based on current bond level
+  const rawBond = activity.bond || 0;
+  const scaledBond = rawBond > 0 ? scaleBondGain(rawBond, pet.bond || 0) : rawBond;
+  const newBond = Math.max(0, (pet.bond || 0) + scaledBond);
   const newCombo = Math.max(0, (pet.combo_balance || 0) + (activity.combo || 0));
   const newBondTokens = Math.max(0, (pet.bond_tokens || 0) + (activity.bond_tokens || 0));
   const newRareShards = Math.max(0, (pet.rare_shards || 0) + (activity.rare_shards || 0));
   const masteryGain = getActivityMasteryGain(pet.active_training_path || 'consistency', activity.id);
+
+  // Energy→hunger: spending energy makes pet hungrier
+  let hungerDrain = 0;
+  if (activity.energy < 0) {
+    hungerDrain = Math.round(Math.abs(activity.energy) * ENERGY_TO_HUNGER_RATIO);
+  }
+  // Rest costs hunger too (sleeping makes you hungry)
+  if (activity.id === 'rest') {
+    hungerDrain = REST_HUNGER_COST;
+  }
+  const newHunger = clamp(currentHunger - hungerDrain, 0, MAX_STAT);
+
   const ctx = buildContextualSpeech(pet, { type: 'activity', activityId: activity.id });
 
+  const lastRestUpdate = activity.id === 'rest' ? toSqliteDateTime() : (pet.last_rest_at || '');
   db.prepare(`
     UPDATE user_pets
     SET happiness = ?, energy = ?, trust = ?, hype = ?, bond = ?,
         combo_balance = ?, bond_tokens = ?, rare_shards = ?,
+        fullness = ?,
         mastery_xp = mastery_xp + ?,
         lifetime_activities = lifetime_activities + 1,
+        last_rest_at = ?,
         updated_at = datetime('now')
     WHERE user_id = ?
-  `).run(newHappiness, newEnergy, newTrust, newHype, newBond, newCombo, newBondTokens, newRareShards, masteryGain, req.user.id);
+  `).run(newHappiness, newEnergy, newTrust, newHype, newBond, newCombo, newBondTokens, newRareShards, newHunger, masteryGain, lastRestUpdate, req.user.id);
 
   const updated = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
   const changes = [];
   if (activity.energy < 0) changes.push(`${activity.energy} energy`);
   else if (activity.energy > 0) changes.push(`+${activity.energy} energy`);
+  if (hungerDrain > 0) changes.push(`-${hungerDrain} hunger`);
   if (activity.happiness) changes.push(`+${activity.happiness} happy`);
   if (activity.trust) changes.push(`+${activity.trust} trust`);
-  if (activity.bond) changes.push(`+${activity.bond} bond`);
+  if (scaledBond > 0) changes.push(`+${scaledBond} bond`);
   if (activity.hype > 0) changes.push(`+${activity.hype} hype`);
   else if (activity.hype < 0) changes.push(`${activity.hype} hype`);
+  if (activity.combo) changes.push(`+${activity.combo} combo`);
   if (activity.bond_tokens) changes.push(`+${activity.bond_tokens} token`);
   if (masteryGain) changes.push(`+${masteryGain} mastery`);
 

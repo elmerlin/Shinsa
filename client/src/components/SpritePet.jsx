@@ -1760,10 +1760,25 @@ export default function SpritePet({
     devit:   ['rest', 'punch', 'rest', 'kick', 'rest', 'lunge', 'rest', 'guard', 'rest', 'wave'],
     pixiu:   ['rest', 'bless', 'rest', 'crane', 'rest', 'guard', 'rest', 'wave', 'rest', 'kick'],
   };
+  // Map reactions to actual pixel-art poses so each activity looks visibly different
+  const REACTION_POSE_MAP = {
+    kata: 'guard',     // Train — martial arts guard stance
+    hop: 'wave',       // Play — bouncy, arms up
+    bless: 'bless',    // Groom — gentle blessing pose
+    sway: 'rest',      // Rest — relaxed idle
+    dart: 'kick',      // Spar — aggressive kick
+    swish: 'lunge',    // Explore — forward-leaning lunge
+    proud: 'flex',     // Praise — flexing proudly
+    mischief: 'punch', // Tease — punchy attitude
+    nod: 'rest',       // Mission — calm nod
+    swagger: 'flex',
+    squish: 'rest',
+    wobble: 'wave',
+  };
   const posePool = IDLE_POSE_SEQUENCE[character] || IDLE_POSE_SEQUENCE.dojocat;
   const currentPose = (!hasReaction && !isEating && !isTricking)
     ? posePool[idleTick % posePool.length]
-    : 'rest';
+    : (REACTION_POSE_MAP[reaction] || REACTION_POSE_MAP[actionState] || 'rest');
   const blinkClass = blinkState ? 'sprite-blink' : '';
 
   // Memoize all grid computations
