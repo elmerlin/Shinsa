@@ -7,12 +7,14 @@ import {
   setPetColor, togglePetAvatar, demandTrick, performTrick,
   interactPet, doPetActivity, claimPetMission, buyPetToy, usePetToy,
   buyPetHabitatItem, equipPetHabitat, setPetTrainingPath, getPetLeaderboard,
-  getPetSocialFeed, renamePet,
+  getPetSocialFeed, renamePet, getMiniPumpStats, completeMiniPump,
 } from '../utils/api';
 import SpritePet, { renderPetToCanvas } from '../components/SpritePet';
 import PetCoachPanel from '../components/pet/PetCoachPanel';
 import PetToyOverlay from '../components/pet/PetToyOverlay';
 import PetMomentCard from '../components/pet/PetMomentCard';
+import MiniPumpLauncher from '../components/pet/minigames/MiniPumpLauncher';
+import MiniPumpModal from '../components/pet/minigames/MiniPumpModal';
 
 // ─── Sound ─────────────────────────────────────────────────────────
 let _audioCtx = null;
@@ -170,6 +172,8 @@ export default function PetPage() {
   const [editingName, setEditingName] = useState(false);
   const [nicknameInput, setNicknameInput] = useState('');
   const [renameBusy, setRenameBusy] = useState(false);
+  const [miniPumpOpen, setMiniPumpOpen] = useState(false);
+  const [miniPumpStats, setMiniPumpStats] = useState(null);
   const habitatRef = useRef(null);
 
   const loadPet = useCallback(async () => {
@@ -710,6 +714,21 @@ export default function PetPage() {
     finally { setRenameBusy(false); }
   };
 
+  // ─── Mini-Pump minigame ─────────────────────────────
+  const handleOpenMiniPump = () => {
+    setMiniPumpOpen(true);
+    if (!miniPumpStats) getMiniPumpStats().then(setMiniPumpStats).catch(() => {});
+  };
+  const handleMiniPumpComplete = async (results) => {
+    try {
+      const r = await completeMiniPump(results);
+      setMiniPumpStats(r);
+      // Refresh pet to reflect happiness/bond bump
+      const petData = await getMyPet();
+      if (petData?.pet) setPet(petData.pet);
+    } catch (e) { console.error('Mini-pump save failed', e); }
+  };
+
   // ─── Gates ──────────────────────────────────────────
   if (!user) return <div className="max-w-lg mx-auto p-6 text-center"><h1 className="text-2xl font-bold mb-4">My Pet</h1><p className="text-gray-400">Log in to adopt a pet!</p></div>;
   if (loading) return <div className="max-w-lg mx-auto p-6 flex items-center justify-center min-h-[50vh]"><div className="w-12 h-12 border-2 border-white/10 border-t-white/60 rounded-full animate-spin" /></div>;
@@ -976,6 +995,8 @@ export default function PetPage() {
                 onUseToy={handleUseToy}
                 onSetTrainingPath={handleSetTrainingPath}
                 onTabSwitch={setTab}
+                onMiniPump={handleOpenMiniPump}
+                miniPumpStats={miniPumpStats}
               />
             )}
             {tab === 'habitat' && (
@@ -1008,6 +1029,14 @@ export default function PetPage() {
           *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
         }
       `}</style>
+
+      {/* Mini-Pump game modal */}
+      <MiniPumpModal
+        open={miniPumpOpen}
+        onClose={() => setMiniPumpOpen(false)}
+        character={pet?.character || 'dojocat'}
+        onComplete={handleMiniPumpComplete}
+      />
     </div>
   );
 }
@@ -1523,7 +1552,7 @@ function CollapsibleSection({ title, icon, defaultOpen = true, count, children }
 }
 
 // ─── Pet tab ──────────────────────────────────────────
-function PetTab({ pet, shop, combo, economy, socialFeed, interactionBusy, activityBusy, missionBusyId, toyBusy, trainingBusy, onAction, onActivity, onClaimMission, onBuyToy, onUseToy, onSetTrainingPath, onTabSwitch }) {
+function PetTab({ pet, shop, combo, economy, socialFeed, interactionBusy, activityBusy, missionBusyId, toyBusy, trainingBusy, onAction, onActivity, onClaimMission, onBuyToy, onUseToy, onSetTrainingPath, onTabSwitch, onMiniPump, miniPumpStats }) {
   const REACTION_ICONS = { cheer: '📣', wow: '🤩', flex: '💪', heart: '💗' };
   const claimableMissions = (pet.missions || []).filter(m => m.complete && !m.claimed).length;
   return (
@@ -1558,6 +1587,10 @@ function PetTab({ pet, shop, combo, economy, socialFeed, interactionBusy, activi
 
       {/* ── Section 1: Play & Care (open) ── */}
       <CollapsibleSection title="Play & Care" icon="🎮" defaultOpen={true}>
+        {/* Mini-Pump launcher */}
+        <div className="mb-3">
+          <MiniPumpLauncher onPlay={onMiniPump} stats={miniPumpStats} />
+        </div>
         <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
           <div className="flex items-center justify-between mb-2">
             <div className="text-xs text-gray-500">Interact</div>

@@ -3011,6 +3011,96 @@ router.get('/social/feed-summary', requireAuth, (req, res) => {
   });
 });
 
+// ─── Mini-Pump Minigame ──────────────────────────────────────
+
+function ensureMinigameTable(db) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS pet_minigame_stats (
+      user_id TEXT NOT NULL,
+      game_id TEXT NOT NULL,
+      personal_best INTEGER NOT NULL DEFAULT 0,
+      best_streak INTEGER NOT NULL DEFAULT 0,
+      rounds_played INTEGER NOT NULL DEFAULT 0,
+      fastest_cadence INTEGER NOT NULL DEFAULT 1000,
+      last_played_at TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (user_id, game_id)
+    )
+  `);
+}
+
+// GET /api/pets/minigames/mini-pump — get stats
+router.get('/minigames/mini-pump', requireAuth, (req, res) => {
+  const db = getDb();
+  ensureMinigameTable(db);
+  const row = db.prepare('SELECT * FROM pet_minigame_stats WHERE user_id = ? AND game_id = ?')
+    .get(req.user.id, 'mini-pump');
+  res.json({
+    personalBest: row?.personal_best || 0,
+    bestStreak: row?.best_streak || 0,
+    roundsPlayed: row?.rounds_played || 0,
+    fastestCadence: row?.fastest_cadence || 1000,
+    lastPlayedAt: row?.last_played_at || '',
+  });
+});
+
+// POST /api/pets/minigames/mini-pump/complete — save round results
+router.post('/minigames/mini-pump/complete', requireAuth, (req, res) => {
+  const db = getDb();
+  ensureMinigameTable(db);
+  ensurePetTable(db);
+
+  const { score = 0, hits = 0, misses = 0, headBonks = 0, bestStreak = 0, fastestCadenceMs = 1000 } = req.body || {};
+  const safeScore = Math.max(0, Math.min(999, Math.floor(Number(score) || 0)));
+  const safeStreak = Math.max(0, Math.min(999, Math.floor(Number(bestStreak) || 0)));
+  const safeCadence = Math.max(100, Math.min(1000, Math.floor(Number(fastestCadenceMs) || 1000)));
+
+  // Upsert stats
+  const existing = db.prepare('SELECT * FROM pet_minigame_stats WHERE user_id = ? AND game_id = ?')
+    .get(req.user.id, 'mini-pump');
+
+  if (existing) {
+    db.prepare(`
+      UPDATE pet_minigame_stats SET
+        personal_best = MAX(personal_best, ?),
+        best_streak = MAX(best_streak, ?),
+        fastest_cadence = MIN(fastest_cadence, ?),
+        rounds_played = rounds_played + 1,
+        last_played_at = datetime('now')
+      WHERE user_id = ? AND game_id = ?
+    `).run(safeScore, safeStreak, safeCadence, req.user.id, 'mini-pump');
+  } else {
+    db.prepare(`
+      INSERT INTO pet_minigame_stats (user_id, game_id, personal_best, best_streak, fastest_cadence, rounds_played, last_played_at)
+      VALUES (?, 'mini-pump', ?, ?, ?, 1, datetime('now'))
+    `).run(req.user.id, safeScore, safeStreak, safeCadence);
+  }
+
+  // Tiny pet reward — small happiness + bond bump (capped to prevent farming)
+  const pet = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
+  let petReward = null;
+  if (pet) {
+    const happyBump = Math.min(3, Math.max(1, Math.floor(safeScore / 5)));
+    const bondBump = Math.min(2, Math.max(0, Math.floor(safeScore / 8)));
+    const newHappiness = Math.min(100, (pet.happiness || 50) + happyBump);
+    const newBond = (pet.bond || 0) + bondBump;
+    db.prepare('UPDATE user_pets SET happiness = ?, bond = ?, updated_at = datetime(\'now\') WHERE user_id = ?')
+      .run(newHappiness, newBond, req.user.id);
+    petReward = { happiness: happyBump, bond: bondBump };
+  }
+
+  const updated = db.prepare('SELECT * FROM pet_minigame_stats WHERE user_id = ? AND game_id = ?')
+    .get(req.user.id, 'mini-pump');
+
+  res.json({
+    personalBest: updated?.personal_best || 0,
+    bestStreak: updated?.best_streak || 0,
+    roundsPlayed: updated?.rounds_played || 0,
+    fastestCadence: updated?.fastest_cadence || 1000,
+    petReward,
+  });
+});
+
 module.exports = router;
 module.exports.VALID_CHARACTERS = VALID_CHARACTERS;
 
