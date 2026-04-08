@@ -3101,6 +3101,100 @@ router.post('/minigames/mini-pump/complete', requireAuth, (req, res) => {
   });
 });
 
+// ─── Pet Invaders Minigame ──────────────────────────────────────
+
+function ensureInvadersTable(db) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS pet_invaders_stats (
+      user_id TEXT NOT NULL,
+      high_score INTEGER NOT NULL DEFAULT 0,
+      best_wave INTEGER NOT NULL DEFAULT 0,
+      bosses_defeated INTEGER NOT NULL DEFAULT 0,
+      total_kills INTEGER NOT NULL DEFAULT 0,
+      total_runs INTEGER NOT NULL DEFAULT 0,
+      last_played_at TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (user_id)
+    )
+  `);
+}
+
+// GET /api/pets/minigames/pet-invaders — get stats
+router.get('/minigames/pet-invaders', requireAuth, (req, res) => {
+  const db = getDb();
+  ensureInvadersTable(db);
+  const row = db.prepare('SELECT * FROM pet_invaders_stats WHERE user_id = ?')
+    .get(req.user.id);
+  res.json({
+    highScore: row?.high_score || 0,
+    bestWave: row?.best_wave || 0,
+    bossesDefeated: row?.bosses_defeated || 0,
+    totalKills: row?.total_kills || 0,
+    totalRuns: row?.total_runs || 0,
+    lastPlayedAt: row?.last_played_at || '',
+  });
+});
+
+// POST /api/pets/minigames/pet-invaders/complete — save round results
+router.post('/minigames/pet-invaders/complete', requireAuth, (req, res) => {
+  const db = getDb();
+  ensureInvadersTable(db);
+  ensurePetTable(db);
+
+  const { score = 0, kills = 0, bossesDefeated = 0, bestWave = 1 } = req.body || {};
+  const safeScore = Math.max(0, Math.min(99999, Math.floor(Number(score) || 0)));
+  const safeKills = Math.max(0, Math.min(9999, Math.floor(Number(kills) || 0)));
+  const safeBosses = Math.max(0, Math.min(999, Math.floor(Number(bossesDefeated) || 0)));
+  const safeWave = Math.max(1, Math.min(999, Math.floor(Number(bestWave) || 1)));
+
+  // Upsert stats
+  const existing = db.prepare('SELECT * FROM pet_invaders_stats WHERE user_id = ?')
+    .get(req.user.id);
+
+  if (existing) {
+    db.prepare(`
+      UPDATE pet_invaders_stats SET
+        high_score = MAX(high_score, ?),
+        best_wave = MAX(best_wave, ?),
+        bosses_defeated = bosses_defeated + ?,
+        total_kills = total_kills + ?,
+        total_runs = total_runs + 1,
+        last_played_at = datetime('now')
+      WHERE user_id = ?
+    `).run(safeScore, safeWave, safeBosses, safeKills, req.user.id);
+  } else {
+    db.prepare(`
+      INSERT INTO pet_invaders_stats (user_id, high_score, best_wave, bosses_defeated, total_kills, total_runs, last_played_at)
+      VALUES (?, ?, ?, ?, ?, 1, datetime('now'))
+    `).run(req.user.id, safeScore, safeWave, safeBosses, safeKills);
+  }
+
+  // Tiny pet reward — small happiness + bond bump (capped to prevent farming)
+  const pet = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
+  let petReward = null;
+  if (pet) {
+    const happyBump = Math.min(3, Math.max(1, Math.floor(safeScore / 50)));
+    const bondBump = Math.min(2, Math.max(0, Math.floor(safeScore / 100)));
+    const newHappiness = Math.min(100, (pet.happiness || 50) + happyBump);
+    const newBond = (pet.bond || 0) + bondBump;
+    db.prepare('UPDATE user_pets SET happiness = ?, bond = ?, updated_at = datetime(\'now\') WHERE user_id = ?')
+      .run(newHappiness, newBond, req.user.id);
+    petReward = { happiness: happyBump, bond: bondBump };
+  }
+
+  const updated = db.prepare('SELECT * FROM pet_invaders_stats WHERE user_id = ?')
+    .get(req.user.id);
+
+  res.json({
+    highScore: updated?.high_score || 0,
+    bestWave: updated?.best_wave || 0,
+    bossesDefeated: updated?.bosses_defeated || 0,
+    totalKills: updated?.total_kills || 0,
+    totalRuns: updated?.total_runs || 0,
+    petReward,
+  });
+});
+
 module.exports = router;
 module.exports.VALID_CHARACTERS = VALID_CHARACTERS;
 

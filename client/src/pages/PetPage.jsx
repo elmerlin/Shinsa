@@ -8,6 +8,7 @@ import {
   interactPet, doPetActivity, claimPetMission, buyPetToy, usePetToy,
   buyPetHabitatItem, equipPetHabitat, setPetTrainingPath, getPetLeaderboard,
   getPetSocialFeed, renamePet, getMiniPumpStats, completeMiniPump,
+  getPetInvadersStats, completePetInvaders,
 } from '../utils/api';
 import SpritePet, { renderPetToCanvas } from '../components/SpritePet';
 import PetCoachPanel from '../components/pet/PetCoachPanel';
@@ -15,6 +16,8 @@ import PetToyOverlay from '../components/pet/PetToyOverlay';
 import PetMomentCard from '../components/pet/PetMomentCard';
 import MiniPumpLauncher from '../components/pet/minigames/MiniPumpLauncher';
 import MiniPumpModal from '../components/pet/minigames/MiniPumpModal';
+import PetInvadersLauncher from '../components/pet/minigames/PetInvadersLauncher';
+import PetInvadersModal from '../components/pet/minigames/PetInvadersModal';
 
 // ─── Sound ─────────────────────────────────────────────────────────
 let _audioCtx = null;
@@ -174,6 +177,8 @@ export default function PetPage() {
   const [renameBusy, setRenameBusy] = useState(false);
   const [miniPumpOpen, setMiniPumpOpen] = useState(false);
   const [miniPumpStats, setMiniPumpStats] = useState(null);
+  const [petInvadersOpen, setPetInvadersOpen] = useState(false);
+  const [petInvadersStats, setPetInvadersStats] = useState(null);
   const habitatRef = useRef(null);
 
   const loadPet = useCallback(async () => {
@@ -729,6 +734,20 @@ export default function PetPage() {
     } catch (e) { console.error('Mini-pump save failed', e); }
   };
 
+  // ─── Pet Invaders minigame ─────────────────────────
+  const handleOpenPetInvaders = () => {
+    setPetInvadersOpen(true);
+    if (!petInvadersStats) getPetInvadersStats().then(setPetInvadersStats).catch(() => {});
+  };
+  const handlePetInvadersComplete = async (results) => {
+    try {
+      const r = await completePetInvaders(results);
+      setPetInvadersStats(r);
+      const petData = await getMyPet();
+      if (petData?.pet) setPet(petData.pet);
+    } catch (e) { console.error('Pet-invaders save failed', e); }
+  };
+
   // ─── Gates ──────────────────────────────────────────
   if (!user) return <div className="max-w-lg mx-auto p-6 text-center"><h1 className="text-2xl font-bold mb-4">My Pet</h1><p className="text-gray-400">Log in to adopt a pet!</p></div>;
   if (loading) return <div className="max-w-lg mx-auto p-6 flex items-center justify-center min-h-[50vh]"><div className="w-12 h-12 border-2 border-white/10 border-t-white/60 rounded-full animate-spin" /></div>;
@@ -997,6 +1016,8 @@ export default function PetPage() {
                 onTabSwitch={setTab}
                 onMiniPump={handleOpenMiniPump}
                 miniPumpStats={miniPumpStats}
+                onPetInvaders={handleOpenPetInvaders}
+                petInvadersStats={petInvadersStats}
               />
             )}
             {tab === 'habitat' && (
@@ -1036,6 +1057,14 @@ export default function PetPage() {
         onClose={() => setMiniPumpOpen(false)}
         character={pet?.character || 'dojocat'}
         onComplete={handleMiniPumpComplete}
+      />
+
+      {/* Pet Invaders game modal */}
+      <PetInvadersModal
+        open={petInvadersOpen}
+        onClose={() => setPetInvadersOpen(false)}
+        character={pet?.character || 'dojocat'}
+        onComplete={handlePetInvadersComplete}
       />
     </div>
   );
@@ -1552,7 +1581,7 @@ function CollapsibleSection({ title, icon, defaultOpen = true, count, children }
 }
 
 // ─── Pet tab ──────────────────────────────────────────
-function PetTab({ pet, shop, combo, economy, socialFeed, interactionBusy, activityBusy, missionBusyId, toyBusy, trainingBusy, onAction, onActivity, onClaimMission, onBuyToy, onUseToy, onSetTrainingPath, onTabSwitch, onMiniPump, miniPumpStats }) {
+function PetTab({ pet, shop, combo, economy, socialFeed, interactionBusy, activityBusy, missionBusyId, toyBusy, trainingBusy, onAction, onActivity, onClaimMission, onBuyToy, onUseToy, onSetTrainingPath, onTabSwitch, onMiniPump, miniPumpStats, onPetInvaders, petInvadersStats }) {
   const REACTION_ICONS = { cheer: '📣', wow: '🤩', flex: '💪', heart: '💗' };
   const claimableMissions = (pet.missions || []).filter(m => m.complete && !m.claimed).length;
   return (
@@ -1587,9 +1616,10 @@ function PetTab({ pet, shop, combo, economy, socialFeed, interactionBusy, activi
 
       {/* ── Section 1: Play & Care (open) ── */}
       <CollapsibleSection title="Play & Care" icon="🎮" defaultOpen={true}>
-        {/* Mini-Pump launcher */}
-        <div className="mb-3">
+        {/* Minigame launchers */}
+        <div className="space-y-2 mb-3">
           <MiniPumpLauncher onPlay={onMiniPump} stats={miniPumpStats} />
+          <PetInvadersLauncher onPlay={onPetInvaders} stats={petInvadersStats} />
         </div>
         <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
           <div className="flex items-center justify-between mb-2">
