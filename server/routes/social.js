@@ -660,6 +660,19 @@ function enrichSessionShareRow(db, userId, createdAt, row) {
 
   if (!lookup && !replay) return row;
 
+  const preferredReplayEmbedUrl = String(lookup?.replay_embed_url || '').trim()
+    || String(row.replay_embed_url || '').trim()
+    || replay?.replay_embed_url
+    || '';
+  const preferredReplayVideoId = preferredReplayEmbedUrl
+    ? (
+        String(lookup?.replay_video_id || '').trim()
+        || String(row.replay_video_id || '').trim()
+        || replay?.replay_video_id
+        || extractYoutubeVideoId(preferredReplayEmbedUrl)
+      )
+    : '';
+
   return {
     ...row,
     perfect: toInt(row.perfect) || toInt(lookup?.perfect),
@@ -671,16 +684,12 @@ function enrichSessionShareRow(db, userId, createdAt, row) {
     over_top100_rank: toInt(row.over_top100_rank) || toInt(lookup?.over_top100_rank),
     jacket_url: row.jacket_url || lookup?.background_url || '',
     date_played: row.date_played || lookup?.date_played || '',
-    replay_embed_url: String(row.replay_embed_url || '').trim()
-      || String(lookup?.replay_embed_url || '').trim()
-      || replay?.replay_embed_url
-      || '',
-    replay_video_id: String(row.replay_video_id || '').trim()
-      || String(lookup?.replay_video_id || '').trim()
-      || replay?.replay_video_id
-      || '',
-    replay_start_seconds: toInt(row.replay_start_seconds) || toInt(lookup?.replay_start_seconds),
-    replay_end_seconds: toInt(row.replay_end_seconds) || toInt(lookup?.replay_end_seconds),
+    replay_embed_url: preferredReplayEmbedUrl,
+    replay_video_id: preferredReplayVideoId,
+    replay_start_seconds: toInt(lookup?.replay_start_seconds)
+      || toInt(row.replay_start_seconds),
+    replay_end_seconds: toInt(lookup?.replay_end_seconds)
+      || toInt(row.replay_end_seconds),
     machine_name: row.machine_name || lookup?.machine_name || '',
     play_id: row.play_id || lookup?.play_id || null,
   };
