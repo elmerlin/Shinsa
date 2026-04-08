@@ -4083,6 +4083,10 @@ module.exports.feedPetForUser = function feedPetForUser(userId, playsOrCount) {
       const score = parseInt(play.score, 10) || 0;
       const rawGrade = normalizeGrade(play.grade) || (score > 0 ? gradeFromScore(score) : 'F');
       const level = parseInt(play.level, 10) || 0;
+
+      // Skip non-clears (stage breaks / fails) — no pet rewards for failing a song
+      if (rawGrade === 'F' || score <= 0) continue;
+
       const isReplay = !!(String(play.replay_embed_url || '').trim() || String(play.replay_video_id || '').trim());
       const isDouble = String(play.mode || '').startsWith('Double');
       const reward = GRADE_SYNC_REWARD_TABLE[rawGrade] || GRADE_SYNC_REWARD_TABLE.F;
