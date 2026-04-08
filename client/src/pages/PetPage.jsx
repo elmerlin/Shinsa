@@ -9,7 +9,7 @@ import {
   buyPetHabitatItem, equipPetHabitat, setPetTrainingPath, getPetLeaderboard,
   getPetSocialFeed,
 } from '../utils/api';
-import SpritePet from '../components/SpritePet';
+import SpritePet, { renderPetToCanvas } from '../components/SpritePet';
 import PetCoachPanel from '../components/pet/PetCoachPanel';
 import PetToyOverlay from '../components/pet/PetToyOverlay';
 import PetMomentCard from '../components/pet/PetMomentCard';
@@ -505,32 +505,123 @@ export default function PetPage() {
     }
   };
 
-  // ─── Share pet as image ─────────────────────────────
+  // ─── Share pet as image — canvas-rendered social card ─
   const handleSharePet = async () => {
-    const node = habitatRef.current;
-    if (!node || shareStatus === 'capturing') return;
+    if (!pet || shareStatus === 'capturing') return;
     setShareStatus('capturing');
     try {
-      await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-      const { toPng } = await import('html-to-image');
-      const dataUrl = await toPng(node, {
-        backgroundColor: '#070b14',
-        pixelRatio: 2,
-        cacheBust: true,
-        filter: (el) => {
-          // Exclude share button itself
-          if (el?.dataset?.shareExclude) return false;
-          return true;
-        },
+      const W = 600, H = 800;
+      const canvas = document.createElement('canvas');
+      canvas.width = W;
+      canvas.height = H;
+      const ctx = canvas.getContext('2d');
+
+      // ─── Background gradient ───
+      const BG_COLORS = {
+        dojocat: ['#0a1628', '#0f2845'],
+        buu: ['#1a0a28', '#2d0f45'],
+        devit: ['#280a0a', '#451515'],
+        pixiu: ['#1a1a0a', '#2d3015'],
+      };
+      const [c1, c2] = BG_COLORS[pet.character] || BG_COLORS.dojocat;
+      const grad = ctx.createLinearGradient(0, 0, 0, H);
+      grad.addColorStop(0, c1);
+      grad.addColorStop(1, c2);
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, W, H);
+
+      // ─── Decorative habitat circle behind pet ───
+      const ACCENT = { dojocat: '#1a3a5c', buu: '#3a1a5c', devit: '#5c1a1a', pixiu: '#3a3a1a' };
+      ctx.beginPath();
+      ctx.arc(W / 2, 360, 160, 0, Math.PI * 2);
+      ctx.fillStyle = ACCENT[pet.character] || ACCENT.dojocat;
+      ctx.globalAlpha = 0.4;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+
+      // ─── Floor line ───
+      ctx.beginPath();
+      ctx.moveTo(80, 520);
+      ctx.lineTo(520, 520);
+      ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // ─── Render pet at center ───
+      const pixelSize = 5;
+      const petW = 60 * pixelSize;  // 60 grid width
+      const petX = (W - petW) / 2;
+      const petY = 200;
+      renderPetToCanvas(ctx, {
+        character: pet.character,
+        weightState: pet.weight_state,
+        mood: pet.mood,
+        pose: 'wave',
+        equippedHat: pet.equipped_hat,
+        equippedBelt: pet.equipped_belt,
+        equippedShoes: pet.equipped_shoes,
+        equippedTop: pet.equipped_top,
+        hatColor: pet.hat_color,
+        beltColor: pet.belt_color,
+        shoesColor: pet.shoes_color,
+        topColor: pet.top_color,
+        x: petX,
+        y: petY,
+        pixelSize,
       });
-      const blob = await fetch(dataUrl).then(r => r.blob());
-      const charName = pet?.character || 'pet';
-      const file = new File([blob], `shinsa-pet-${charName}.png`, { type: 'image/png' });
+
+      // ─── Bond rank badge ───
+      const rankLabel = pet.bond_rank?.label || 'Training Partner';
+      ctx.textAlign = 'center';
+      ctx.font = 'bold 13px system-ui, -apple-system, sans-serif';
+      ctx.fillStyle = 'rgba(120,200,255,0.7)';
+      ctx.fillText(rankLabel.toUpperCase(), W / 2, 560);
+
+      // ─── Form badge ───
+      if (pet.form?.label) {
+        ctx.font = 'bold 11px system-ui, -apple-system, sans-serif';
+        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        ctx.fillText(pet.form.label, W / 2, 578);
+      }
+
+      // ─── Stats row ───
+      const stats = [
+        { label: 'BOND', value: String(pet.bond || 0), color: '#67d4ff' },
+        { label: 'TRUST', value: String(Math.round(pet.trust || 0)), color: '#6ee7b7' },
+        { label: 'STREAK', value: `${pet.daily_streak || 0}d`, color: '#fbbf24' },
+      ];
+      const statY = 620;
+      const statSpacing = 140;
+      const statStart = (W - statSpacing * (stats.length - 1)) / 2;
+      stats.forEach((s, i) => {
+        const sx = statStart + i * statSpacing;
+        ctx.font = 'bold 28px system-ui, -apple-system, sans-serif';
+        ctx.fillStyle = s.color;
+        ctx.fillText(s.value, sx, statY);
+        ctx.font = '600 10px system-ui, -apple-system, sans-serif';
+        ctx.fillStyle = 'rgba(255,255,255,0.35)';
+        ctx.fillText(s.label, sx, statY + 18);
+      });
+
+      // ─── Character name ───
+      const charNames = { dojocat: 'DOJOCAT', buu: 'BUU', devit: 'DEVIT', pixiu: 'PIXIU' };
+      ctx.font = 'bold 32px system-ui, -apple-system, sans-serif';
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.fillText(charNames[pet.character] || pet.character.toUpperCase(), W / 2, 690);
+
+      // ─── Branding ───
+      ctx.font = 'bold 12px system-ui, -apple-system, sans-serif';
+      ctx.fillStyle = 'rgba(255,255,255,0.25)';
+      ctx.fillText('PUMP SHINSA', W / 2, 760);
+
+      // ─── Export ───
+      const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+      const charName = pet.character || 'pet';
+      const file = new File([blob], `shinsa-${charName}.png`, { type: 'image/png' });
       const canShare = typeof navigator?.share === 'function' && typeof navigator?.canShare === 'function' && navigator.canShare({ files: [file] });
       if (canShare) {
         await navigator.share({ files: [file], title: `My ${charName} \u2014 Pump Shinsa`, text: 'Check out my pet companion!' });
       } else {
-        // Fallback: download
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
         a.download = file.name;

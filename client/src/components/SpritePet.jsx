@@ -1462,125 +1462,7 @@ const PIXEL_ART_STYLES = `
     height: 1em;
     overflow: visible;
   }
-  @keyframes petBreathe {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-0.4em); }
-  }
-  @keyframes dojoIdle {
-    0%, 100% { transform: translateY(0) rotate(0deg) scale(1, 1); }
-    12% { transform: translateY(-0.25em) rotate(-1.5deg) scale(1.01, 0.99); }
-    28% { transform: translateY(-0.05em) rotate(0.5deg) scale(1, 1); }
-    42% { transform: translateY(0.04em) rotate(0deg) scale(0.99, 1.01); }
-    58% { transform: translateY(-0.4em) rotate(1deg) scale(1.01, 0.99); }
-    75% { transform: translateY(-0.12em) rotate(-0.5deg) scale(1, 1); }
-    88% { transform: translateY(0.02em) rotate(0deg) scale(1, 1.01); }
-  }
-  @keyframes buuIdle {
-    0%, 100% { transform: translateY(0) scale(1, 1) rotate(0deg); }
-    10% { transform: translateY(-0.12em) scale(1.04, 0.96) rotate(-1deg); }
-    22% { transform: translateY(0.04em) scale(0.97, 1.03) rotate(0.5deg); }
-    36% { transform: translateY(-0.28em) scale(1.02, 0.98) rotate(0deg); }
-    50% { transform: translateY(0em) scale(0.98, 1.02) rotate(-0.5deg); }
-    65% { transform: translateY(-0.18em) scale(1.05, 0.96) rotate(1deg); }
-    80% { transform: translateY(-0.04em) scale(1, 1) rotate(0deg); }
-    90% { transform: translateY(0.03em) scale(0.99, 1.01) rotate(0deg); }
-  }
-  @keyframes devitIdle {
-    0%, 100% { transform: translateY(0) rotate(0deg) scale(1); }
-    8% { transform: translateY(-0.55em) rotate(-2deg) scale(1.02); }
-    18% { transform: translateY(-0.08em) rotate(1.5deg) scale(0.99); }
-    30% { transform: translateY(-0.35em) rotate(-1deg) scale(1.01); }
-    44% { transform: translateY(0.05em) rotate(2deg) scale(0.98); }
-    58% { transform: translateY(-0.65em) rotate(-2.5deg) scale(1.03); }
-    72% { transform: translateY(-0.12em) rotate(1deg) scale(1); }
-    85% { transform: translateY(-0.4em) rotate(-0.5deg) scale(1.01); }
-  }
-  @keyframes pixiuIdle {
-    0%, 100% { transform: translateY(0) translateX(0) rotate(0deg) scale(1); }
-    15% { transform: translateY(-0.18em) translateX(0.08em) rotate(0.5deg) scale(1.01, 0.99); }
-    32% { transform: translateY(-0.04em) translateX(-0.04em) rotate(-0.5deg) scale(1, 1); }
-    48% { transform: translateY(-0.32em) translateX(0.12em) rotate(1deg) scale(1.01, 0.99); }
-    62% { transform: translateY(-0.08em) translateX(-0.08em) rotate(-0.3deg) scale(1, 1); }
-    78% { transform: translateY(-0.2em) translateX(0.05em) rotate(0.3deg) scale(1, 1.01); }
-    90% { transform: translateY(-0.04em) translateX(-0.02em) rotate(0deg) scale(1, 1); }
-  }
-  @keyframes petBounce {
-    0%, 100% { transform: translateY(0) scaleY(1); }
-    25% { transform: translateY(-1.5em) scaleY(1.05); }
-    50% { transform: translateY(0) scaleY(0.92); }
-    75% { transform: translateY(-0.5em) scaleY(1); }
-  }
-  @keyframes petSpin {
-    0% { transform: rotate(0deg); }
-    25% { transform: rotate(10deg) translateY(-1em); }
-    50% { transform: rotate(0deg) translateY(-2em); }
-    75% { transform: rotate(-10deg) translateY(-1em); }
-    100% { transform: rotate(0deg); }
-  }
-  @keyframes petKata {
-    0% { transform: translateY(0) rotate(0deg) scale(1); }
-    30% { transform: translateY(-0.8em) rotate(-4deg) scale(1.04); }
-    60% { transform: translateY(-0.2em) rotate(4deg) scale(1.01); }
-    100% { transform: translateY(0) rotate(0deg) scale(1); }
-  }
-  @keyframes petProud {
-    0%, 100% { transform: translateY(0) scale(1); }
-    35% { transform: translateY(-0.55em) scale(1.04, 1.02); }
-    70% { transform: translateY(-0.15em) scale(1.01); }
-  }
-  @keyframes petSwish {
-    0%, 100% { transform: translateX(0) rotate(0deg); }
-    35% { transform: translateX(-0.35em) rotate(-3deg); }
-    65% { transform: translateX(0.35em) rotate(3deg); }
-  }
-  @keyframes petBuuSquish {
-    0%, 100% { transform: translateY(0) scale(1, 1); }
-    30% { transform: translateY(0.15em) scale(1.08, 0.92); }
-    65% { transform: translateY(-0.3em) scale(0.96, 1.04); }
-  }
-  @keyframes petBuuWobble {
-    0%, 100% { transform: translateY(0) rotate(0deg); }
-    25% { transform: translateY(-0.2em) rotate(-4deg); }
-    50% { transform: translateY(0.05em) rotate(4deg); }
-    75% { transform: translateY(-0.15em) rotate(-2deg); }
-  }
-  @keyframes petSwagger {
-    0%, 100% { transform: translateX(0) scale(1); }
-    35% { transform: translateX(-0.45em) scale(1.03); }
-    70% { transform: translateX(0.45em) scale(1.03); }
-  }
-  @keyframes petDevitHop {
-    0%, 100% { transform: translateY(0) rotate(0deg); }
-    30% { transform: translateY(-1.15em) rotate(-6deg); }
-    60% { transform: translateY(-0.15em) rotate(6deg); }
-  }
-  @keyframes petDart {
-    0%, 100% { transform: translateX(0) rotate(0deg); }
-    30% { transform: translateX(-0.8em) rotate(-5deg); }
-    55% { transform: translateX(0.8em) rotate(5deg); }
-    75% { transform: translateX(-0.2em) rotate(-2deg); }
-  }
-  @keyframes petMischief {
-    0%, 100% { transform: translateY(0) rotate(0deg); }
-    20% { transform: translateY(-0.3em) rotate(-5deg); }
-    45% { transform: translateY(-0.15em) rotate(5deg); }
-    70% { transform: translateY(-0.35em) rotate(-3deg); }
-  }
-  @keyframes petPixiuBless {
-    0%, 100% { transform: translateY(0) rotate(0deg); }
-    35% { transform: translateY(-0.55em) rotate(-2deg); }
-    70% { transform: translateY(-0.15em) rotate(2deg); }
-  }
-  @keyframes petSway {
-    0%, 100% { transform: translateX(0) rotate(0deg); }
-    35% { transform: translateX(-0.3em) rotate(-2deg); }
-    70% { transform: translateX(0.3em) rotate(2deg); }
-  }
-  @keyframes petNod {
-    0%, 100% { transform: translateY(0) scaleY(1); }
-    35% { transform: translateY(0.15em) scaleY(0.98); }
-    65% { transform: translateY(-0.25em) scaleY(1.02); }
-  }
+  /* All movement is frame-based pixel animation — no CSS transform bobbing */
   @keyframes tailWag {
     0%, 100% { transform: scaleX(1); }
     50% { transform: scaleX(-1); }
@@ -1591,83 +1473,11 @@ const PIXEL_ART_STYLES = `
     65% { transform: translate(-1.4em, 3.8em) scale(1); opacity: 1; }
     100% { transform: translate(0.1em, 2.6em) scale(0.25); opacity: 0; }
   }
-  .pet-breathe { animation: petBreathe 3s ease-in-out infinite; }
-  .pet-eating { animation: petBounce 0.6s ease-in-out infinite; }
-  .pet-tricking { animation: petSpin 1s ease-in-out infinite; }
   .pet-tail { animation: tailWag 2s ease-in-out infinite; }
-  .pet-idle-dojocat { animation: dojoIdle 3.4s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
-  .pet-idle-buu { animation: buuIdle 3.1s cubic-bezier(0.25, 1, 0.5, 1) infinite; }
-  .pet-idle-devit { animation: devitIdle 2.7s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
-  .pet-idle-pixiu { animation: pixiuIdle 3.8s cubic-bezier(0.25, 1, 0.5, 1) infinite; }
-  .pet-react-dojocat, .pet-react-kata { animation: petKata 700ms cubic-bezier(0.22, 1, 0.36, 1); }
-  .pet-react-proud { animation: petProud 760ms cubic-bezier(0.22, 1, 0.36, 1); }
-  .pet-react-swish { animation: petSwish 720ms cubic-bezier(0.22, 1, 0.36, 1); }
-  .pet-react-buu, .pet-react-squish { animation: petBuuSquish 700ms cubic-bezier(0.22, 1, 0.36, 1); }
-  .pet-react-wobble { animation: petBuuWobble 760ms cubic-bezier(0.22, 1, 0.36, 1); }
-  .pet-react-swagger { animation: petSwagger 720ms cubic-bezier(0.22, 1, 0.36, 1); }
-  .pet-react-devit, .pet-react-hop { animation: petDevitHop 650ms cubic-bezier(0.22, 1, 0.36, 1); }
-  .pet-react-dart { animation: petDart 620ms cubic-bezier(0.22, 1, 0.36, 1); }
-  .pet-react-mischief { animation: petMischief 720ms cubic-bezier(0.22, 1, 0.36, 1); }
-  .pet-react-pixiu, .pet-react-bless { animation: petPixiuBless 800ms cubic-bezier(0.22, 1, 0.36, 1); }
-  .pet-react-sway { animation: petSway 820ms cubic-bezier(0.22, 1, 0.36, 1); }
-  .pet-react-nod { animation: petNod 640ms cubic-bezier(0.22, 1, 0.36, 1); }
   .pet-food {
     animation: petFoodTravel 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
     transform-origin: center center;
   }
-  /* ── Idle variant animations (intermittent, character-specific) ── */
-  /* ── Subtle idle ── */
-  @keyframes sprite-idle-nod { 0%,100% { transform: translateY(0); } 40% { transform: translateY(1px); } }
-  @keyframes sprite-idle-stance { 0%,100% { transform: rotate(0); } 30% { transform: rotate(0.5deg); } 70% { transform: rotate(-0.3deg); } }
-  @keyframes sprite-idle-whisker { 0%,100% { transform: scaleX(1); } 50% { transform: scaleX(1.003); } }
-  @keyframes sprite-idle-wobble { 0%,100% { transform: rotate(0); } 25% { transform: rotate(1.5deg); } 75% { transform: rotate(-1.5deg); } }
-  @keyframes sprite-idle-bounce { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
-  @keyframes sprite-idle-sway { 0%,100% { transform: translateX(0); } 50% { transform: translateX(1.5px); } }
-  @keyframes sprite-idle-twitch { 0%,50%,100% { transform: translateX(0); } 25% { transform: translateX(-1px); } 75% { transform: translateX(1px); } }
-  @keyframes sprite-idle-shimmy { 0%,100% { transform: rotate(0); } 20% { transform: rotate(1deg); } 40% { transform: rotate(-1deg); } 60% { transform: rotate(0.5deg); } }
-  @keyframes sprite-idle-hop { 0%,100% { transform: translateY(0); } 40% { transform: translateY(-3px); } }
-  @keyframes sprite-idle-float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
-  @keyframes sprite-idle-glow { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.05); } }
-  /* ── Active idle — martial arts, stretching, looking ── */
-  @keyframes sprite-idle-kick { 0%,100% { transform: rotate(0) translateY(0); } 20% { transform: rotate(-3deg) translateY(-1px); } 35% { transform: rotate(6deg) translateY(-4px); } 55% { transform: rotate(4deg) translateY(-2px); } 75% { transform: rotate(0) translateY(0); } }
-  @keyframes sprite-idle-punch { 0%,100% { transform: translateX(0) scaleX(1); } 15% { transform: translateX(-2px) scaleX(0.97); } 30% { transform: translateX(5px) scaleX(1.04); } 50% { transform: translateX(3px) scaleX(1.02); } 70% { transform: translateX(0) scaleX(1); } }
-  @keyframes sprite-idle-crane { 0%,100% { transform: translateY(0) rotate(0); } 25% { transform: translateY(-5px) rotate(-1deg); } 50% { transform: translateY(-5px) rotate(0.5deg); } 80% { transform: translateY(-2px) rotate(0); } }
-  @keyframes sprite-idle-stretch { 0%,100% { transform: scaleY(1) translateY(0); } 30% { transform: scaleY(1.06) translateY(-3px); } 60% { transform: scaleY(1.04) translateY(-2px); } }
-  @keyframes sprite-idle-look { 0%,100% { transform: scaleX(1) translateX(0); } 25% { transform: scaleX(-1) translateX(0); } 60% { transform: scaleX(-1) translateX(0); } 75% { transform: scaleX(1) translateX(0); } }
-  @keyframes sprite-idle-jump { 0%,100% { transform: translateY(0); } 20% { transform: translateY(2px); } 40% { transform: translateY(-8px); } 55% { transform: translateY(-6px); } 70% { transform: translateY(1px); } 85% { transform: translateY(0); } }
-  @keyframes sprite-idle-kata { 0%,100% { transform: rotate(0) translateX(0); } 15% { transform: rotate(3deg) translateX(2px); } 30% { transform: rotate(-4deg) translateX(-3px); } 50% { transform: rotate(2deg) translateX(1px); } 70% { transform: rotate(0); } }
-  @keyframes sprite-idle-flex { 0%,100% { transform: scaleX(1) scaleY(1); } 25% { transform: scaleX(1.05) scaleY(0.97); } 50% { transform: scaleX(1.07) scaleY(0.95); } 75% { transform: scaleX(1.03) scaleY(0.98); } }
-  @keyframes sprite-idle-spin { 0% { transform: scaleX(1); } 25% { transform: scaleX(0.15); } 50% { transform: scaleX(-1); } 75% { transform: scaleX(-0.15); } 100% { transform: scaleX(1); } }
-  @keyframes sprite-idle-dart { 0%,100% { transform: translateX(0); } 15% { transform: translateX(-6px); } 30% { transform: translateX(6px); } 50% { transform: translateX(-3px); } 65% { transform: translateX(3px); } 80% { transform: translateX(0); } }
-  @keyframes sprite-idle-mischief { 0%,100% { transform: rotate(0) translateY(0); } 20% { transform: rotate(-2deg) translateY(-1px); } 40% { transform: rotate(3deg) translateY(-3px); } 55% { transform: rotate(-1deg) translateY(-1px); } 75% { transform: rotate(1deg); } }
-  @keyframes sprite-idle-swing { 0%,100% { transform: rotate(0); } 20% { transform: rotate(5deg); } 40% { transform: rotate(-5deg); } 60% { transform: rotate(3deg); } 80% { transform: rotate(-2deg); } }
-  @keyframes sprite-idle-bless { 0%,100% { transform: translateY(0) scale(1); filter: brightness(1); } 30% { transform: translateY(-3px) scale(1.02); filter: brightness(1.08); } 60% { transform: translateY(-2px) scale(1.01); filter: brightness(1.04); } }
-  /* ── Subtle idle classes ── */
-  .idle-nod { animation: sprite-idle-nod 2s ease-in-out; }
-  .idle-stance { animation: sprite-idle-stance 1.8s ease-in-out; }
-  .idle-whisker { animation: sprite-idle-whisker 1.5s ease-in-out; }
-  .idle-wobble { animation: sprite-idle-wobble 2s ease-in-out; }
-  .idle-bounce { animation: sprite-idle-bounce 1.6s ease-in-out; }
-  .idle-sway { animation: sprite-idle-sway 2.2s ease-in-out; }
-  .idle-twitch { animation: sprite-idle-twitch 0.8s ease-in-out; }
-  .idle-shimmy { animation: sprite-idle-shimmy 1.4s ease-in-out; }
-  .idle-hop { animation: sprite-idle-hop 1s ease-in-out; }
-  .idle-float { animation: sprite-idle-float 2.5s ease-in-out; }
-  .idle-glow { animation: sprite-idle-glow 2s ease-in-out; }
-  /* ── Active idle classes ── */
-  .idle-kick { animation: sprite-idle-kick 1.2s cubic-bezier(0.4,0,0.2,1); }
-  .idle-punch { animation: sprite-idle-punch 0.9s cubic-bezier(0.4,0,0.2,1); }
-  .idle-crane { animation: sprite-idle-crane 2.5s ease-in-out; }
-  .idle-stretch { animation: sprite-idle-stretch 2s ease-in-out; }
-  .idle-look { animation: sprite-idle-look 2.2s ease-in-out; }
-  .idle-jump { animation: sprite-idle-jump 1s cubic-bezier(0.4,0,0.2,1); }
-  .idle-kata { animation: sprite-idle-kata 1.6s cubic-bezier(0.4,0,0.2,1); }
-  .idle-flex { animation: sprite-idle-flex 1.8s ease-in-out; }
-  .idle-spin { animation: sprite-idle-spin 1.4s ease-in-out; }
-  .idle-dart { animation: sprite-idle-dart 1.2s cubic-bezier(0.4,0,0.2,1); }
-  .idle-mischief { animation: sprite-idle-mischief 1.5s ease-in-out; }
-  .idle-swing { animation: sprite-idle-swing 1.6s ease-in-out; }
-  .idle-bless { animation: sprite-idle-bless 2.2s ease-in-out; }
   .sprite-blink { opacity: 0.92; transition: opacity 0.15s ease; }
   @media (prefers-reduced-motion: reduce) {
     .pixel-pet-wrap *, .pixel-pet-wrap { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
@@ -1696,7 +1506,89 @@ function PixelLayer({ shadow, className = '', style = {} }) {
 
 
 // ═══════════════════════════════════════════════════════════════
-// 10. MAIN COMPONENT
+// 10. CANVAS RENDERER — for share/export (draws pet to a Canvas)
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Renders the pet as pixel art onto a Canvas context.
+ * Used for social sharing — produces a clean raster image.
+ */
+export function renderPetToCanvas(ctx, opts = {}) {
+  const {
+    character = 'dojocat',
+    weightState = 'normal',
+    mood = 'happy',
+    expression = '',
+    pose = 'rest',
+    equippedHat = '',
+    equippedBelt = '',
+    equippedShoes = '',
+    equippedTop = '',
+    hatColor = '',
+    beltColor = '',
+    shoesColor = '',
+    topColor = '',
+    x = 0,
+    y = 0,
+    pixelSize = 4,
+  } = opts;
+
+  const palette = PALETTES[character] || PALETTES.dojocat;
+  const iconicLook = DEFAULT_ICONIC_LOOKS[character] || null;
+
+  function drawGrid(grid, colorMap) {
+    for (let gy = 0; gy < grid.length; gy++) {
+      for (let gx = 0; gx < grid[0].length; gx++) {
+        const k = grid[gy][gx];
+        if (k && colorMap[k]) {
+          ctx.fillStyle = colorMap[k];
+          ctx.fillRect(x + gx * pixelSize, y + gy * pixelSize, pixelSize, pixelSize);
+        }
+      }
+    }
+  }
+
+  // Shadow
+  const shadowGrid = createGrid(GW, GH);
+  const { w, legTop } = getBodyMetrics(weightState);
+  fillEllipse(shadowGrid, CX, legTop + 7, Math.floor(w.bodyRx * 0.7), 2, 'X');
+  drawGrid(shadowGrid, { X: 'rgba(0,0,0,0.15)' });
+
+  // Tail
+  drawGrid(outlineGrid(buildTail(character, weightState)), palette);
+
+  // Body
+  drawGrid(outlineGrid(buildBase(character, weightState, pose)), palette);
+
+  // Clothing (bottom layers)
+  const defaultTop = equippedTop ? null : iconicLook?.top;
+  const defaultBelt = equippedBelt ? null : iconicLook?.belt;
+  if (defaultTop) drawGrid(outlineGrid(buildTop(defaultTop.id, defaultTop.color, weightState)), getClothingColorMap(defaultTop.color));
+  if (equippedTop) drawGrid(outlineGrid(buildTop(equippedTop, topColor, weightState)), getClothingColorMap(topColor));
+  if (defaultBelt) drawGrid(outlineGrid(buildBelt(defaultBelt.id, defaultBelt.color, weightState)), getClothingColorMap(defaultBelt.color));
+  if (equippedBelt) drawGrid(outlineGrid(buildBelt(equippedBelt, beltColor, weightState)), getClothingColorMap(beltColor));
+  if (equippedShoes) drawGrid(outlineGrid(buildShoes(equippedShoes, shoesColor, weightState)), getClothingColorMap(shoesColor));
+
+  // Head
+  drawGrid(outlineGrid(buildHead(character)), palette);
+
+  // Arms
+  drawGrid(outlineGrid(buildArms(character, weightState, pose)), palette);
+
+  // Features
+  drawGrid(outlineGrid(buildFeatures(character)), palette);
+
+  // Hat
+  const defaultHat = equippedHat ? null : iconicLook?.hat;
+  if (defaultHat) drawGrid(outlineGrid(buildHat(defaultHat.id, defaultHat.color, character)), getClothingColorMap(defaultHat.color));
+  if (equippedHat) drawGrid(outlineGrid(buildHat(equippedHat, hatColor, character)), getClothingColorMap(hatColor));
+
+  // Face
+  drawGrid(buildFace(character, mood, expression), palette);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 11. MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════
 
 export default function SpritePet({
@@ -1727,31 +1619,44 @@ export default function SpritePet({
   const hasReaction = (!!reaction || !!actionState) && !isEating && !isTricking;
   const renderedAspect = GH / GW;
 
-  // ─── Idle animation system ──────────────────────────
+  // ─── Frame-based animation system ──────────────────────────
+  // ALL movement is pixel-art pose changes, no CSS transforms
   const [idleTick, setIdleTick] = React.useState(0);
+  const [reactionFrame, setReactionFrame] = React.useState(0);
   const [blinkState, setBlinkState] = React.useState(false);
 
+  // Idle: change pose every 3-5 seconds (ambient shifting)
   React.useEffect(() => {
-    // Respect reduced motion
     if (typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
     if (hasReaction || isEating || isTricking) return;
 
-    // Blink every 3-6 seconds
     const blinkInterval = setInterval(() => {
       setBlinkState(true);
       setTimeout(() => setBlinkState(false), 150);
     }, 3000 + Math.random() * 3000);
 
-    // Idle tick for subtle motion every 4-8 seconds
     const idleInterval = setInterval(() => {
       setIdleTick(t => t + 1);
-    }, 4000 + Math.random() * 4000);
+    }, 3000 + Math.random() * 2000);
 
     return () => {
       clearInterval(blinkInterval);
       clearInterval(idleInterval);
     };
   }, [hasReaction, isEating, isTricking]);
+
+  // Reactions: rapid pose cycling (frame-based animation at ~250ms per frame)
+  React.useEffect(() => {
+    if (!hasReaction) { setReactionFrame(0); return; }
+    if (typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+
+    setReactionFrame(0);
+    const frameInterval = setInterval(() => {
+      setReactionFrame(f => f + 1);
+    }, 250);
+
+    return () => clearInterval(frameInterval);
+  }, [hasReaction, reaction, actionState]);
 
   // Character idle poses — actual pixel-frame animation via arm/leg changes
   const IDLE_POSE_SEQUENCE = {
@@ -1760,25 +1665,32 @@ export default function SpritePet({
     devit:   ['rest', 'punch', 'rest', 'kick', 'rest', 'lunge', 'rest', 'guard', 'rest', 'wave'],
     pixiu:   ['rest', 'bless', 'rest', 'crane', 'rest', 'guard', 'rest', 'wave', 'rest', 'kick'],
   };
-  // Map reactions to actual pixel-art poses so each activity looks visibly different
-  const REACTION_POSE_MAP = {
-    kata: 'guard',     // Train — martial arts guard stance
-    hop: 'wave',       // Play — bouncy, arms up
-    bless: 'bless',    // Groom — gentle blessing pose
-    sway: 'rest',      // Rest — relaxed idle
-    dart: 'kick',      // Spar — aggressive kick
-    swish: 'lunge',    // Explore — forward-leaning lunge
-    proud: 'flex',     // Praise — flexing proudly
-    mischief: 'punch', // Tease — punchy attitude
-    nod: 'rest',       // Mission — calm nod
-    swagger: 'flex',
-    squish: 'rest',
-    wobble: 'wave',
+  // Multi-frame pose sequences per reaction — each is a sequence of pixel-art
+  // poses cycled at 250ms intervals, so the pet visibly animates its body
+  const REACTION_FRAMES = {
+    kata:     ['rest', 'guard', 'punch', 'kick', 'guard', 'rest'],     // Train: martial combo
+    hop:      ['rest', 'wave', 'rest', 'wave', 'flex', 'rest'],        // Play: bouncy fun
+    bless:    ['rest', 'bless', 'crane', 'bless', 'rest'],             // Groom: graceful care
+    sway:     ['rest', 'rest', 'rest', 'rest'],                        // Rest: minimal, peaceful
+    dart:     ['rest', 'lunge', 'kick', 'punch', 'lunge', 'rest'],     // Spar: aggressive combo
+    swish:    ['rest', 'lunge', 'crane', 'lunge', 'rest'],             // Explore: scanning
+    proud:    ['rest', 'flex', 'flex', 'rest'],                        // Praise: puff up
+    mischief: ['rest', 'punch', 'kick', 'punch', 'rest'],             // Tease: wild swings
+    nod:      ['rest', 'rest', 'rest'],                                // Mission: calm nod
+    swagger:  ['rest', 'flex', 'wave', 'flex', 'rest'],
+    squish:   ['rest', 'rest', 'wave', 'rest'],
+    wobble:   ['rest', 'wave', 'rest', 'wave', 'rest'],
+    feeding:  ['rest', 'rest', 'rest'],                                // Eating
   };
   const posePool = IDLE_POSE_SEQUENCE[character] || IDLE_POSE_SEQUENCE.dojocat;
-  const currentPose = (!hasReaction && !isEating && !isTricking)
-    ? posePool[idleTick % posePool.length]
-    : (REACTION_POSE_MAP[reaction] || REACTION_POSE_MAP[actionState] || 'rest');
+  let currentPose;
+  if (hasReaction || isEating || isTricking) {
+    const reactionKey = reaction || actionState || (isEating ? 'feeding' : 'nod');
+    const frames = REACTION_FRAMES[reactionKey] || REACTION_FRAMES.nod;
+    currentPose = frames[Math.min(reactionFrame, frames.length - 1)];
+  } else {
+    currentPose = posePool[idleTick % posePool.length];
+  }
   const blinkClass = blinkState ? 'sprite-blink' : '';
 
   // Memoize all grid computations
@@ -1867,22 +1779,8 @@ export default function SpritePet({
     return { baseShadow, headShadow, armsShadow, featShadow, faceShadow, tailShadow, groundShadow, hatShadow, topShadow, beltShadow2, shoesShadow, foodShadow };
   }, [character, weightState, mood, expression, equippedHat, equippedBelt, equippedShoes, equippedTop, hatColor, beltColor, shoesColor, topColor, foodId, iconicLook, palette, currentPose]);
 
-  const idleClass = `pet-idle-${character}`;
-  const reactionClass = hasReaction
-    ? (
-      ['dojocat', 'buu', 'devit', 'pixiu'].includes(character)
-        ? `pet-react-${reaction}`
-        : ''
-    )
-    : '';
-  const animClass = isTricking
-    ? 'pet-tricking'
-    : isEating
-      ? 'pet-eating'
-      : hasReaction
-        ? reactionClass
-        : idleClass;
-  // Idle variant classes removed — animation now happens via pixel-frame pose changes
+  // No CSS animation classes — all motion is frame-based pixel pose changes
+  const animClass = '';
 
   return (
     <div
