@@ -499,7 +499,7 @@ function findSongPreviewRowByTitle(db, query) {
       artist,
       mode,
       level,
-      COALESCE(NULLIF(jacket_url, ''), NULLIF(background_url, ''), '') AS artwork_url
+      COALESCE(NULLIF(jacket_url, ''), '') AS artwork_url
     FROM songs
     WHERE lower(title) = lower(?)
     ORDER BY
@@ -521,7 +521,7 @@ function findSongPreviewRowByTitle(db, query) {
       artist,
       mode,
       level,
-      COALESCE(NULLIF(jacket_url, ''), NULLIF(background_url, ''), '') AS artwork_url
+      COALESCE(NULLIF(jacket_url, ''), '') AS artwork_url
     FROM songs
     WHERE lower(title) LIKE lower(?)
     ORDER BY
@@ -2590,7 +2590,7 @@ function registerSharePreviewRoutes(app, { clientBuildDir }) {
         artist,
         mode,
         level,
-        COALESCE(NULLIF(jacket_url, ''), NULLIF(background_url, ''), '') AS artwork_url
+        COALESCE(NULLIF(jacket_url, ''), '') AS artwork_url
       FROM songs
       WHERE id = ?
       LIMIT 1
