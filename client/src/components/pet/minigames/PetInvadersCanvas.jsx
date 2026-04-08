@@ -134,30 +134,30 @@ export default function PetInvadersCanvas({ game, character, onStart, reducedMot
 
     // ─── Mode-specific ───
     if (state.mode === 'idle') {
-      drawPlayerPet(ctx, w / 2, h * PLAYER_Y, Math.max(32, h / 12.5), character, false);
+      drawPlayerPet(ctx, w / 2, h * PLAYER_Y, Math.max(36, h / 9.8), character, false);
       drawStartScreen(ctx, w, h);
       return;
     }
     if (state.mode === 'countdown') {
-      drawPlayerPet(ctx, w / 2, h * PLAYER_Y, Math.max(32, h / 12.5), character, false);
+      drawPlayerPet(ctx, w / 2, h * PLAYER_Y, Math.max(36, h / 9.8), character, false);
       drawCountdown(ctx, w, h, state.countdownValue);
       return;
     }
 
     // ─── Playing / wave_clear / boss_warning / game_over ───
-    const petSize = Math.max(32, h / 12.5);
+    const petSize = Math.max(36, h / 9.8);
 
     // Enemies
     state.enemies.forEach(enemy => {
       const ex = enemy.x * w, ey = enemy.y * h;
-      const eSize = w * 0.06 * (1 + Math.min(enemy.maxHp - 1, 3) * 0.12);
+      const eSize = w * 0.072 * (1 + Math.min(enemy.maxHp - 1, 3) * 0.12);
       drawEnemy(ctx, ex, ey, eSize, enemy.type, enemy.animFrame, enemy.hp, enemy.maxHp);
     });
 
     // Bosses
     state.bosses.forEach(boss => {
       const bx = boss.x * w, by = boss.y * h;
-      const bSize = w * 0.15;
+      const bSize = w * 0.18;
       drawBoss(ctx, bx, by, bSize, boss.type, boss.animFrame, boss.hp, boss.maxHp);
     });
 
@@ -229,7 +229,7 @@ export default function PetInvadersCanvas({ game, character, onStart, reducedMot
     };
   }, [resize]);
 
-  // Touch input — tap left = move left, tap right = move right, tap same = stop
+  // Touch input — hold to keep moving, tap for a small nudge until release
   const handleTouchStart = useCallback((e) => {
     const state = game.getState();
     if (state.mode !== 'playing' && state.mode !== 'wave_clear' && state.mode !== 'boss_warning') return;
@@ -239,8 +239,12 @@ export default function PetInvadersCanvas({ game, character, onStart, reducedMot
     const touch = e.touches ? e.touches[0] : e;
     const relX = (touch.clientX - rect.left) / rect.width;
     const dir = relX < 0.5 ? -1 : 1;
-    game.setTouchDir(dir); // toggle: same dir = stop
+    game.setTouchDir(dir);
   }, [game, onStart]);
+
+  const handleTouchEnd = useCallback(() => {
+    game.setTouchDir(0);
+  }, [game]);
 
   // Keyboard
   useEffect(() => {
@@ -273,7 +277,11 @@ export default function PetInvadersCanvas({ game, character, onStart, reducedMot
         ref={canvasRef}
         className="absolute inset-0 w-full h-full"
         onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchEnd}
         onClick={handleTouchStart}
+        onMouseUp={handleTouchEnd}
+        onMouseLeave={handleTouchEnd}
         style={{ touchAction: 'none' }}
       />
     </div>

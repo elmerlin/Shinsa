@@ -59,15 +59,6 @@ export default function PetInvadersLauncher({ onPlay, stats, cost, comboBalance 
         </div>
       </div>
 
-      <div className="mt-3 rounded-lg border border-white/[0.05] bg-black/20 px-2.5 py-2">
-        <div className="flex items-center justify-between">
-          <span className="text-[9px] font-black tracking-[0.2em] uppercase text-emerald-200/80">Inside The Game</span>
-          <span className="text-[9px] text-gray-600">Leaderboard + replay</span>
-        </div>
-        <p className="mt-1 text-[10px] text-gray-500">
-          Open Pet Invaders to see the live community board and start another run from the game screen.
-        </p>
-      </div>
     </button>
   );
 }

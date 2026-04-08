@@ -743,15 +743,8 @@ export default function usePetInvadersGame() {
     }, 800);
   }, [startLoop, stopLoop]);
 
-  // Toggle-style touch: tap same direction = stop
   const setTouchDir = useCallback((dir) => {
-    const current = stateRef.current.touchDir;
-    if (dir === current) {
-      // Tapping same direction = stop
-      stateRef.current = { ...stateRef.current, touchDir: 0 };
-    } else {
-      stateRef.current = { ...stateRef.current, touchDir: dir };
-    }
+    stateRef.current = { ...stateRef.current, touchDir: dir };
   }, []);
 
   const setMoveDir = useCallback((dir) => {

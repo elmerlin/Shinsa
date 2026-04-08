@@ -5,7 +5,7 @@
  * tiered projectiles, power-ups with heal, explosions, HUD.
  */
 
-import { CHAR_COLORS } from './miniPumpSprites';
+import { CHAR_COLORS, drawPet as drawMiniPumpPet } from './miniPumpSprites';
 
 // ─── Color palettes ─────────────────────────────────
 const ENEMY_COLORS = {
@@ -64,149 +64,52 @@ function drawPixelMap(ctx, cx, cy, ps, map, palette) {
   }
 }
 
-// ─── Player Spaceship + Character Head ───────────────
-// 16x20 pixel ship with character head visible in cockpit
-
-const SHIP_MAP = [
-  '       HH       ',
-  '      HHHH      ',
-  '      HHHH      ',
-  '     HHHHHH     ',
-  '     HHHHHH     ',
-  '    ..CCCC..    ',
-  '   .ssCCCCss.   ',
-  '  .ssssssssss.  ',
-  ' .ssSSSSSSSss.  ',
-  ' wSSSSSSSSSSSSw ',
-  'wwSSSSSSSSSSSSww',
-  'wWSSSSSSSSSSSSWw',
-  ' WSSSSSSSSSSSSW ',
-  ' WWSSSSSSSSSWW  ',
-  '  WWWWWWWWWWWW  ',
-  '   WWeeeeeWW    ',
-  '    WeeEeeW     ',
-  '     eEEEe      ',
-];
-
-function getCharHeadPalette(character) {
-  const cc = CHAR_COLORS[character] || CHAR_COLORS.dojocat;
-  return {
-    // Head pixels
-    'H': cc.body, 'h': cc.dark, 'E': cc.eye,
-    'N': cc.nose || cc.accent || cc.dark,
-    'L': cc.light || cc.body, 'A': cc.accent || cc.dark,
-    'B': cc.belly || cc.light || '#ffffff',
-  };
-}
-
-// Character-specific head maps (8x6 pixel heads that sit on top of ship)
-const CHAR_HEADS = {
-  dojocat: [
-    ' hhAAhh ',
-    'hAWWWWAh',
-    'BBBBBBBB',
-    'BBEWWEBB',
-    'BBBNNBBB',
-    'BB_BB_BB',
-    ' BBBBBB ',
-  ],
-  buu: [
-    '  TTT   ',
-    '  TTTA  ',
-    'BBBBBBBB',
-    'BBEWWEBB',
-    'BBBBBBBB',
-    'BBB__BBB',
-    ' BBBBBB ',
-  ],
-  devit: [
-    'AA    AA',
-    ' ABBBBA ',
-    'BBBBBBBB',
-    'BBEhhEBB',
-    'BBBNNBBB',
-    'BB_BB_BB',
-    ' BBBBBB ',
-  ],
-  pixiu: [
-    ' AAAAAA ',
-    'ABBBBBBA',
-    'BBBBBBBB',
-    'BBEWWEBB',
-    'BBBNNBBB',
-    'hB_BB_Bh',
-    ' BBBBBB ',
-  ],
-};
-
-function buildShipPalette(character) {
-  const headP = getCharHeadPalette(character);
-  return {
-    ...headP,
-    's': SHIP_COLORS.hull, 'S': SHIP_COLORS.hullLight, '.': SHIP_COLORS.hullDark,
-    'C': SHIP_COLORS.cockpit, 'c': SHIP_COLORS.cockpitGlow,
-    'w': SHIP_COLORS.wing, 'W': SHIP_COLORS.wingTip,
-    'e': SHIP_COLORS.engine, 'G': SHIP_COLORS.engineGlow,
-    't': SHIP_COLORS.trim, '_': '#444444',
-  };
-}
-
-// Build the full ship map with character head inserted
-function buildShipWithHead(character) {
-  const headMap = CHAR_HEADS[character] || CHAR_HEADS.dojocat;
-  // Replace generic 'H' rows in ship map with character head
-  const fullMap = [...SHIP_MAP];
-  // Head occupies rows 0-6 (top of ship)
-  const headStart = 0;
-  for (let r = 0; r < headMap.length && r + headStart < fullMap.length; r++) {
-    const headRow = headMap[r];
-    const shipRow = fullMap[r + headStart];
-    // Center head in ship row
-    const padL = Math.floor((shipRow.length - headRow.length) / 2);
-    let merged = '';
-    for (let c = 0; c < shipRow.length; c++) {
-      const hc = c - padL;
-      if (hc >= 0 && hc < headRow.length && headRow[hc] !== ' ') {
-        merged += headRow[hc];
-      } else {
-        merged += shipRow[c];
-      }
-    }
-    fullMap[r + headStart] = merged;
-  }
-  return fullMap;
-}
-
 export function drawPlayerPet(ctx, x, y, size, character, firing) {
-  const ps = Math.max(1, Math.round(size / 16));
-  const shipMap = buildShipWithHead(character);
-  const palette = buildShipPalette(character);
+  const ps = Math.max(1, Math.round(size / 18));
+  const boardY = y + 10 * ps;
+  ctx.save();
+  ctx.globalAlpha = 0.34;
+  drawPixelEllipse(ctx, x, boardY + 4 * ps, 11, 3, ps, '#000000');
+  ctx.restore();
 
-  drawPixelMap(ctx, x, y, ps, shipMap, palette);
+  drawMiniPumpPet(
+    ctx,
+    x,
+    y - 2 * ps,
+    ps,
+    character,
+    firing ? 'laser_fire' : 'ready',
+    firing ? 'focused' : 'normal',
+  );
 
-  // Engine flame animation
-  if (firing) {
-    const flameColors = ['#ff4400', '#ff8844', '#ffcc66', '#ffffff'];
-    const fh = ps * 2;
-    const fw = ps * 3;
-    const fy = y + (shipMap.length * ps) / 2;
-    for (let i = 0; i < 3; i++) {
-      const fx = x - fw / 2 + i * ps;
-      const color = flameColors[Math.floor(Math.random() * flameColors.length)];
-      px(ctx, fx, fy, ps, color);
-      px(ctx, fx, fy + ps, ps, flameColors[Math.floor(Math.random() * 2)]);
+  ctx.fillStyle = SHIP_COLORS.hullDark;
+  ctx.fillRect(x - 9 * ps, boardY - ps, 18 * ps, 3 * ps);
+  ctx.fillStyle = SHIP_COLORS.hullLight;
+  ctx.fillRect(x - 7 * ps, boardY - 2 * ps, 14 * ps, 2 * ps);
+  ctx.fillStyle = SHIP_COLORS.trim;
+  ctx.fillRect(x - 5 * ps, boardY - 3 * ps, 10 * ps, ps);
+  ctx.fillStyle = SHIP_COLORS.cockpitGlow;
+  ctx.fillRect(x - 2 * ps, boardY - 3 * ps, 4 * ps, ps);
+
+  const engineColors = firing
+    ? ['#ff5522', '#ff9944', '#ffd37a']
+    : ['#ff7744', '#ffaa66'];
+  [-5, 0, 5].forEach((offset, index) => {
+    const flameLen = firing ? 3 + (index % 2) : 2;
+    for (let i = 0; i < flameLen; i++) {
+      ctx.fillStyle = engineColors[Math.min(i, engineColors.length - 1)];
+      px(ctx, x + offset * ps - ps / 2, boardY + (2 + i) * ps, ps, ctx.fillStyle);
     }
-  }
+  });
 
-  // Muzzle flash when firing
   if (firing) {
     ctx.save();
     ctx.shadowColor = '#88eeff';
-    ctx.shadowBlur = 6;
+    ctx.shadowBlur = 8;
     ctx.fillStyle = '#ffffff';
-    const muzzleY = y - (shipMap.length * ps) / 2 - ps;
-    px(ctx, x - ps / 2, muzzleY, ps, '#ffffff');
-    px(ctx, x - ps / 2, muzzleY - ps, ps, '#88eeff');
+    ctx.fillRect(x - ps, y - 18 * ps, 2 * ps, 3 * ps);
+    ctx.fillStyle = '#88eeff';
+    ctx.fillRect(x - ps / 2, y - 21 * ps, ps, 3 * ps);
     ctx.restore();
   }
 }
@@ -323,77 +226,74 @@ export function drawEnemy(ctx, x, y, size, type, animFrame, hp, maxHp) {
 // Bosses are 14x14+ pixel grids, much larger on screen
 
 const BOSS_LABUBU_MAP = [
-  '  ee      ee   ',
-  ' eeAA    AAee  ',
-  ' eAAAA  AAAAe  ',
-  '  .BBBBBBBB.   ',
-  ' .BBBBBBBBBB.  ',
-  ' .BBBWEEPBBB.  ',
-  ' .BBBBBBBBBB.  ',
-  ' .BBB____BBB.  ',
-  '  .BBAAAABB.   ',
-  '   .BBBBBB.    ',
-  '   .BB..BB.    ',
-  '    B.  .B     ',
+  '    ee    ee      ',
+  '   eeAeeeeAee     ',
+  '    .BBBBBBBB.    ',
+  '   .BBLLLLLLBB.   ',
+  '   .BBW.EE.WBB.   ',
+  '   .BBBBBBBBBB.   ',
+  '   .BBB_AA_BBB.   ',
+  '   .BBBB__BBBB.   ',
+  '    .BBBBBBBB.    ',
+  '     .BB..BB.     ',
+  '     .B....B.     ',
 ];
 
 const BOSS_BUU_MAP = [
-  '      TT        ',
-  '     TTTT       ',
-  '    TTAAAT      ',
-  '   .TTAAAT.     ',
-  '   .BBBBBB.     ',
-  '  .BBBBBBBB.    ',
-  ' .BBBWEEPBBB.   ',
-  ' .BBBBBBBBBB.   ',
-  ' .BBBBNNBBBB.   ',
-  '  .BBB__BBB.    ',
-  '   .BBBBBB.     ',
-  '   .BB..BB.     ',
+  '        TT        ',
+  '       TTTT       ',
+  '      TTAAAT      ',
+  '     .TBBBBT.     ',
+  '    .BBBBBBBB.    ',
+  '   .BBLLLLLLBB.   ',
+  '   .BBW.EE.WBB.   ',
+  '   .BBBBNNBBBB.   ',
+  '   .BBBB__BBBB.   ',
+  '    .BBBBBBBB.    ',
+  '     .BB..BB.     ',
+  '     .B....B.     ',
 ];
 
 const BOSS_DOJOCAT_MAP = [
-  '   eeAAee       ',
-  '  eeAWWAee      ',
-  '   eWWWWWe      ',
-  '   .BBBBBB.     ',
-  '  .BBBBBBBB.    ',
-  ' .BBBWEEPBBB.   ',
-  ' .BBBBBBBBBB.   ',
-  ' .BBBBNNBBBB.   ',
-  '  .BBB__BBB.    ',
-  '   .BLLLLB.     ',
-  '    .BBBB.      ',
-  '   .BB..BB.     ',
+  '    eeAAeAAee     ',
+  '    eAABBBBAe     ',
+  '     .ABBBBA.     ',
+  '    .BBBBBBBB.    ',
+  '   .BBLLLLLLBB.   ',
+  '   .BBW.EE.WBB.   ',
+  '   .BBBBNNBBBB.   ',
+  '   .BBBB__BBBB.   ',
+  '    .BLLLLLLB.    ',
+  '     .BBBBBB.     ',
+  '     .BB..BB.     ',
 ];
 
 const BOSS_PIXIU_MAP = [
-  '    MMMMMM      ',
-  '   MMBBBBMM     ',
-  '  .BBBBBBBB.    ',
-  ' .BBBWEEPBBB.   ',
-  ' .BBBBBBBBBB.   ',
-  ' .BBBBNNBBBB.   ',
-  '  hBBLBBLBBh    ',
-  '   .BBBBBB.     ',
-  '  h.MBBBBM.h    ',
-  '   .BB..BB.     ',
-  '    B.  .B      ',
+  '      MMMM        ',
+  '    MMMBBBBMMM    ',
+  '   .MBBBBBBBBM.   ',
+  '   .BBLLLLLLBB.   ',
+  '   .BBW.EE.WBB.   ',
+  '   .BBBBNNBBBB.   ',
+  '   hBBMBBBBMBBh   ',
+  '    .BBBB__BB.    ',
+  '     .MBBBBM.     ',
+  '     .BB..BB.     ',
+  '      B.  .B      ',
 ];
 
 const BOSS_VEGETACAT_MAP = [
-  '     HHHH       ',
-  '   HHHHHHH      ',
-  '  HHHHHHHHH     ',
-  '   .BBBBBB.     ',
-  '  .BBBBBBBB.    ',
-  ' .BBBPEEWBBB.   ',
-  ' .BBBBBBBBBB.   ',
-  ' .RBBBNNBBBR.   ',
-  '  .RBB__BBR.    ',
-  '   .RBBBBR.     ',
-  '    .BBBB.      ',
-  '   .BB..BB.     ',
+  '      HHHH        ',
+  '    HHHHHHHH      ',
+  '   HHHHAAHHHH     ',
+  '     .BBBBBB.     ',
+  '    .BBBBBBBB.    ',
+  '   .BBLLLLLLBB.   ',
+  '   .BBW.EE.WBB.   ',
+  '   .RBBBNNBBBR.   ',
+  '   .RBBB__BBR.    ',
+  '    .RBBBBBBR.    ',
+  '     .RB..BR.     ',
 ];
 
 function getBossPalette(type) {

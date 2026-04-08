@@ -7,15 +7,13 @@
 
 import React, { useRef, useEffect, useCallback } from 'react';
 import {
-  drawPet, drawBlobCreature, drawPad, drawLaser, drawTargetLine,
+  drawPet, drawBlobCreature, drawLaser, drawTargetLine,
   drawExplosion, drawMissFizz, drawBonkFX, drawJudgementFX, drawHUD,
 } from './miniPumpSprites';
 import { blobY, TARGET_LINE_Y } from './useMiniPumpGame';
 
 // Layout fractions
 const PET_Y = 0.78;
-const PAD_Y = 0.88;
-const PAD_H_FRAC = 0.08;
 const PLAYFIELD_TOP = 0.06;
 const BLOB_WIDTH_FRAC = 0.25;   // blob width as fraction of canvas width
 const BLOB_HEIGHT_FRAC = 0.045; // blob height as fraction of canvas height
@@ -216,18 +214,6 @@ export default function MiniPumpCanvas({ game, character, onStart, onShoot, redu
 
     // Pet
     drawPet(ctx, w / 2, petYPx - 10, petPS, character, state.petPose, state.petExpression);
-
-    // Pads
-    if (state.mode === 'playing') {
-      const padY = h * PAD_Y, padH = h * PAD_H_FRAC;
-      const padW = (w - 48) / 3, padGap = 8;
-      const totalPadW = padW * 3 + padGap * 2, padStartX = (w - totalPadW) / 2;
-      ['red', 'yellow', 'blue'].forEach((color, i) => {
-        const px = padStartX + i * (padW + padGap);
-        const isActive = state.petPose === `step_${color}` || state.petPose === 'laser_fire';
-        drawPad(ctx, px, padY, padW, padH, color, isActive && state.activeLaser?.color === color);
-      });
-    }
 
     // Explosions
     state.explosions.forEach(e => {

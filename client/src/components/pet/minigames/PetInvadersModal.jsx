@@ -138,14 +138,18 @@ export default function PetInvadersModal({ open, onClose, character, onComplete,
 // ─── Touch control bar ──────────────────────────────
 function GameControls({ game, mode, onStart, stats, leaderboard }) {
   if (mode === 'playing' || mode === 'wave_clear' || mode === 'boss_warning') {
-    const handleLeft = () => game.setTouchDir(-1);
-    const handleRight = () => game.setTouchDir(1);
+    const startMove = (dir) => game.setTouchDir(dir);
+    const stopMove = () => game.setTouchDir(0);
 
     return (
       <div className="flex gap-2 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-black/60 border-t border-white/[0.04] shrink-0">
         <button
-          onTouchStart={(e) => { e.preventDefault(); handleLeft(); }}
-          onMouseDown={() => handleLeft()}
+          onTouchStart={(e) => { e.preventDefault(); startMove(-1); }}
+          onTouchEnd={stopMove}
+          onTouchCancel={stopMove}
+          onMouseDown={() => startMove(-1)}
+          onMouseUp={stopMove}
+          onMouseLeave={stopMove}
           className="flex-1 h-14 rounded-xl border-2 bg-cyan-500/20 border-cyan-500/40 active:bg-cyan-500/50 text-cyan-400 font-black text-lg transition-transform active:scale-95 select-none touch-none flex items-center justify-center"
         >
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-6 h-6">
@@ -153,15 +157,12 @@ function GameControls({ game, mode, onStart, stats, leaderboard }) {
           </svg>
         </button>
         <button
-          onTouchStart={(e) => { e.preventDefault(); game.setMoveDir(0); }}
-          onMouseDown={() => game.setMoveDir(0)}
-          className="w-14 h-14 rounded-xl border-2 bg-white/10 border-white/20 active:bg-white/20 text-white/60 font-black text-xs transition-transform active:scale-95 select-none touch-none flex items-center justify-center"
-        >
-          STOP
-        </button>
-        <button
-          onTouchStart={(e) => { e.preventDefault(); handleRight(); }}
-          onMouseDown={() => handleRight()}
+          onTouchStart={(e) => { e.preventDefault(); startMove(1); }}
+          onTouchEnd={stopMove}
+          onTouchCancel={stopMove}
+          onMouseDown={() => startMove(1)}
+          onMouseUp={stopMove}
+          onMouseLeave={stopMove}
           className="flex-1 h-14 rounded-xl border-2 bg-cyan-500/20 border-cyan-500/40 active:bg-cyan-500/50 text-cyan-400 font-black text-lg transition-transform active:scale-95 select-none touch-none flex items-center justify-center"
         >
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-6 h-6">
