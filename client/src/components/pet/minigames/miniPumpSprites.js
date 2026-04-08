@@ -392,22 +392,36 @@ export function drawBonkFX(ctx, x, y, progress) {
 // ─── HUD ─────────────────────────────────────────────
 export function drawHUD(ctx, canvasW, time, score, streak, cadence) {
   ctx.save();
+
+  // Time bar
   const barY = 8, barH = 6, barW = canvasW - 24, barX = 12;
   ctx.fillStyle = 'rgba(255,255,255,0.06)';
   ctx.beginPath(); ctx.roundRect(barX, barY, barW, barH, 3); ctx.fill();
   const pct = Math.max(0, time / 30000);
-  ctx.fillStyle = pct > 0.3 ? '#4488ff' : pct > 0.1 ? '#ffcc22' : '#ff4455';
+  const barColor = pct > 0.3 ? '#4488ff' : pct > 0.1 ? '#ffcc22' : '#ff4455';
+  ctx.fillStyle = barColor;
   ctx.beginPath(); ctx.roundRect(barX, barY, barW * pct, barH, 3); ctx.fill();
+
+  // Countdown clock (seconds remaining)
+  const secs = Math.ceil(time / 1000);
+  ctx.fillStyle = pct > 0.3 ? 'rgba(255,255,255,0.85)' : barColor;
+  ctx.font = 'bold 18px system-ui, -apple-system, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(String(secs), canvasW / 2, 32);
+  ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.font = '600 8px system-ui';
+  ctx.fillText('SEC', canvasW / 2, 42);
+
+  // Score (left)
   ctx.fillStyle = '#ffffff'; ctx.font = 'bold 22px system-ui, -apple-system, sans-serif';
-  ctx.textAlign = 'left'; ctx.fillText(String(score), 14, 36);
-  ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.font = '600 10px system-ui'; ctx.fillText('SCORE', 14, 48);
+  ctx.textAlign = 'left'; ctx.fillText(String(score), 14, 34);
+  ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.font = '600 10px system-ui'; ctx.fillText('SCORE', 14, 46);
+
+  // Streak (right)
   if (streak > 1) {
     ctx.fillStyle = '#ffcc22'; ctx.font = 'bold 14px system-ui'; ctx.textAlign = 'right';
-    ctx.fillText(`${streak}x`, canvasW - 14, 36);
-    ctx.fillStyle = 'rgba(255,204,34,0.5)'; ctx.font = '600 9px system-ui'; ctx.fillText('STREAK', canvasW - 14, 47);
+    ctx.fillText(`${streak}x`, canvasW - 14, 34);
+    ctx.fillStyle = 'rgba(255,204,34,0.5)'; ctx.font = '600 9px system-ui'; ctx.fillText('STREAK', canvasW - 14, 44);
   }
-  // Cadence indicator
-  ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.font = '600 9px system-ui';
-  ctx.textAlign = 'center'; ctx.fillText(`${cadence}ms`, canvasW / 2, 48);
+
   ctx.restore();
 }

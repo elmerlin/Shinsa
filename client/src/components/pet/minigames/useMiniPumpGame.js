@@ -20,7 +20,7 @@ const CADENCE_FLOOR = 300;
 const BONK_TIME_PENALTY = 1000;
 const TIMING_TOLERANCE_MS = 35;
 const TRAVEL_CYCLES = 3;        // blob takes 3 cadence-cycles to reach line
-const TARGET_LINE_Y = 0.68;     // normalized y-position of target line
+const TARGET_LINE_Y = 0.48;     // normalized y-position of target line (halfway up screen)
 const BLOB_COLORS = ['red', 'yellow', 'blue'];
 
 // ─── Initial state ───────────────────────────────────
@@ -123,8 +123,16 @@ function tick(state, dt) {
     return s;
   }
 
-  // ─── Cadence clock + bass ───
+  // ─── Cadence clock + percussion ───
+  const prevClock = s.cadenceClock;
   s.cadenceClock += dt;
+
+  // Hi-hat on quarter beats (25%, 50%, 75% through cycle)
+  const q1 = s.cadenceMs * 0.25, q2 = s.cadenceMs * 0.5, q3 = s.cadenceMs * 0.75;
+  if (prevClock < q1 && s.cadenceClock >= q1) audio.playHiHat();
+  if (prevClock < q2 && s.cadenceClock >= q2) audio.playHiHat();
+  if (prevClock < q3 && s.cadenceClock >= q3) audio.playRimClick();
+
   if (s.cadenceClock >= s.cadenceMs) {
     s.cadenceClock -= s.cadenceMs;
     audio.playBass();
@@ -147,6 +155,7 @@ function tick(state, dt) {
   }
 
   // ─── Bonk detection: bottom blob past tolerance window ───
+  // Bonk never ends the round — only the time check at top of tick does that.
   if (bottom) {
     const pastTolerance = s.gameClockMs > bottom.targetTimeMs + TIMING_TOLERANCE_MS;
     if (pastTolerance) {
@@ -159,20 +168,11 @@ function tick(state, dt) {
       s.petExpression = 'stunned';
       s.poseTimer = 500;
       s.bonkFX = [...s.bonkFX, { x: 0.5, y: TARGET_LINE_Y, progress: 0 }];
-      s.judgementFX = [...s.judgementFX, { text: 'BONK!', color: '#ff4455', progress: 0 }];
+      s.judgementFX = [...s.judgementFX, { text: 'BONK! -1s', color: '#ff4455', progress: 0 }];
       s.lineFlash = { color: '#ff4455', progress: 0 };
-      s.stack = s.stack.slice(1);
+      s.stack = s.stack.slice(1); // remove bonked blob, stack continues
       s.snareFiredForBlob = null;
       audio.playBonk();
-
-      if (s.timeRemainingMs <= 0) {
-        s.timeRemainingMs = 0;
-        s.mode = 'round_end';
-        s.petPose = 'results_tired';
-        s.petExpression = 'stunned';
-        audio.playRoundEnd();
-        return s;
-      }
     }
   }
 

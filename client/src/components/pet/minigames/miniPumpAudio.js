@@ -93,6 +93,18 @@ export function playSnare() {
   synth(280, 140, 'triangle', 0.06, 0.07);
 }
 
+/** Hi-hat — light tick on quarter beats */
+export function playHiHat() {
+  noise(0.03, 0.04);
+  synth(8000, 4000, 'square', 0.02, 0.03);
+}
+
+/** Rim click — subtle accent on 3/4 beat */
+export function playRimClick() {
+  synth(1200, 800, 'triangle', 0.03, 0.04);
+  noise(0.02, 0.025);
+}
+
 // ─── Game FX ─��───────────────────────────────────────
 /** Laser shot fired */
 export function playShot(color) {
