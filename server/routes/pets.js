@@ -720,6 +720,10 @@ const MASTERY_RANKS = [
   { threshold: 120, label: 'Specialist' },
   { threshold: 240, label: 'Elite' },
   { threshold: 420, label: 'Master' },
+  { threshold: 700, label: 'Grandmaster' },
+  { threshold: 1050, label: 'Sage' },
+  { threshold: 1500, label: 'Transcendent' },
+  { threshold: 2100, label: 'Eternal' },
 ];
 
 const HABITAT_ITEMS = {
@@ -776,6 +780,9 @@ const BOND_RANKS = [
   { threshold: 400, key: 'legendary-bond', label: 'Legendary Bond' },
   { threshold: 600, key: 'eternal-companion', label: 'Eternal Companion' },
   { threshold: 900, key: 'mythic-guardian', label: 'Mythic Guardian' },
+  { threshold: 1300, key: 'celestial-warden', label: 'Celestial Warden' },
+  { threshold: 1800, key: 'astral-sovereign', label: 'Astral Sovereign' },
+  { threshold: 2500, key: 'primordial-spirit', label: 'Primordial Spirit' },
 ];
 
 // ─── Bond gain scaling ───────────────────────────────────────────
@@ -786,7 +793,9 @@ function scaleBondGain(rawGain, currentBond) {
   if (currentBond < 260) return Math.max(1, Math.round(rawGain * 0.75));
   if (currentBond < 500) return Math.max(1, Math.round(rawGain * 0.5));
   if (currentBond < 900) return Math.max(1, Math.round(rawGain * 0.3));
-  return Math.max(1, Math.round(rawGain * 0.15));
+  if (currentBond < 1300) return Math.max(1, Math.round(rawGain * 0.15));
+  if (currentBond < 1800) return Math.max(1, Math.round(rawGain * 0.10));
+  return Math.max(1, Math.round(rawGain * 0.07));
 }
 
 // ─── Tap diminishing returns ─────────────────────────────────────
@@ -1526,6 +1535,33 @@ function buildMasteryProfile(pet, specialtyKey = '') {
 }
 
 function getPetForm(bond = 0, masteryXp = 0) {
+  if (bond >= 2500 && masteryXp >= 1800) {
+    return {
+      id: 'primordial',
+      label: 'Primordial Form',
+      aura: 'primordial',
+      desc: 'The first form. The last form. A companion that simply IS.',
+      tier: 9,
+    };
+  }
+  if (bond >= 1800 && masteryXp >= 1200) {
+    return {
+      id: 'astral',
+      label: 'Astral Form',
+      aura: 'astral',
+      desc: 'A being of pure rhythm and light, beyond mortal understanding.',
+      tier: 8,
+    };
+  }
+  if (bond >= 1300 && masteryXp >= 850) {
+    return {
+      id: 'celestial',
+      label: 'Celestial Form',
+      aura: 'celestial',
+      desc: 'A companion that channels the stars themselves.',
+      tier: 7,
+    };
+  }
   if (bond >= 900 && masteryXp >= 600) {
     return {
       id: 'mythic',

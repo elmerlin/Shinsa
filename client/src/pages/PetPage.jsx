@@ -10,6 +10,7 @@ import {
   getPetSocialFeed, renamePet, getMiniPumpStats, getMiniPumpLeaderboard, completeMiniPump,
   getPetInvadersStats, getPetInvadersLeaderboard, completePetInvaders, getMinigameCosts,
   completeCurrentPetRequest, dismissCurrentPetRequest,
+  searchUsers, getOrCreateDirectConversation,
 } from '../utils/api';
 import SpritePet, { renderPetToCanvas } from '../components/SpritePet';
 import PetCoachPanel from '../components/pet/PetCoachPanel';
@@ -173,6 +174,13 @@ export default function PetPage() {
   const [activeToyVisual, setActiveToyVisual] = useState(null);
   const [socialFeed, setSocialFeed] = useState(null);
   const [shareStatus, setShareStatus] = useState(''); // '' | 'capturing' | 'done'
+  const [shareMenuOpen, setShareMenuOpen] = useState(false);
+  const [shareDmOpen, setShareDmOpen] = useState(false);
+  const [shareDmQuery, setShareDmQuery] = useState('');
+  const [shareDmResults, setShareDmResults] = useState([]);
+  const [shareDmSending, setShareDmSending] = useState('');
+  const [shareDmSent, setShareDmSent] = useState([]);
+  const [rankInfoModal, setRankInfoModal] = useState(null); // { type: 'bond'|'form', data }
   const [editingName, setEditingName] = useState(false);
   const [nicknameInput, setNicknameInput] = useState('');
   const [renameBusy, setRenameBusy] = useState(false);
@@ -576,8 +584,8 @@ export default function PetPage() {
     }
   };
 
-  // ─── Share pet as image — captures habitat + pet ─
-  const handleSharePet = async () => {
+  // ─── Generate pet share image (returns data URL or null) ─
+  const generateShareImage = async () => {
     if (!pet || shareStatus === 'capturing') return;
     setShareStatus('capturing');
     try {
@@ -640,11 +648,11 @@ export default function PetPage() {
         ctx.fillRect(0, 0, W, H);
       }
 
-      // ─── Render pet at center ───
+      // ─── Render pet at center (pushed down to avoid speech bubble overlap) ───
       const pixelSize = 5;
       const petW = 60 * pixelSize;
       const petX = (W - petW) / 2;
-      const petY = habitatImg ? 80 : 200;
+      const petY = habitatImg ? 160 : 240;
       renderPetToCanvas(ctx, {
         character: pet.character,
         weightState: pet.weight_state,
@@ -711,55 +719,86 @@ export default function PetPage() {
 
       // ─── Export ───
       const dataUrl = canvas.toDataURL('image/png');
+      return dataUrl;
+    } catch (e) {
+      console.error('Share image generation failed', e);
+      return null;
+    }
+  };
+
+  function dataUrlToBlob(url) {
+    const [hdr, data] = url.split(',');
+    const mime = hdr.match(/:(.*?);/)[1];
+    const bin = atob(data);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new Blob([bytes], { type: mime });
+  }
+
+  const handleShareSaveImage = async () => {
+    if (!pet || shareStatus === 'capturing') return;
+    setShareStatus('capturing');
+    setShareMenuOpen(false);
+    try {
+      const dataUrl = await generateShareImage();
+      if (!dataUrl) { setShareStatus(''); alert('Could not generate share image.'); return; }
       const charName = pet.character || 'pet';
-
-      // Convert data URL to blob synchronously (no fetch required)
-      function dataUrlToBlob(url) {
-        const [hdr, data] = url.split(',');
-        const mime = hdr.match(/:(.*?);/)[1];
-        const bin = atob(data);
-        const bytes = new Uint8Array(bin.length);
-        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-        return new Blob([bytes], { type: mime });
-      }
-
+      const displayName = pet.nickname || (pet.character || 'pet').toUpperCase();
       const blob = dataUrlToBlob(dataUrl);
       const file = new File([blob], `shinsa-${charName}.png`, { type: 'image/png' });
-
-      // Try native share API (works on mobile)
       if (typeof navigator?.share === 'function') {
         try {
           await navigator.share({ files: [file], title: `${displayName} \u2014 Pump Shinsa` });
-          setShareStatus('done');
-          setTimeout(() => setShareStatus(''), 2000);
-          return;
+          setShareStatus('done'); setTimeout(() => setShareStatus(''), 2000); return;
         } catch (shareErr) {
-          if (shareErr?.name === 'AbortError') {
-            setShareStatus('done');
-            setTimeout(() => setShareStatus(''), 2000);
-            return;
-          }
-          // Fall through to download
+          if (shareErr?.name === 'AbortError') { setShareStatus('done'); setTimeout(() => setShareStatus(''), 2000); return; }
         }
       }
-
-      // Fallback: download via blob URL
       const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = blobUrl;
-      a.download = `shinsa-${charName}.png`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      const a = document.createElement('a'); a.href = blobUrl; a.download = `shinsa-${charName}.png`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
+      setShareStatus('done'); setTimeout(() => setShareStatus(''), 2000);
+    } catch (e) { console.error('Share failed', e); setShareStatus(''); alert('Could not generate share image.'); }
+  };
 
-      setShareStatus('done');
-      setTimeout(() => setShareStatus(''), 2000);
-    } catch (e) {
-      console.error('Share failed', e);
-      setShareStatus('');
-      alert('Could not generate share image. Please try again.');
-    }
+  const handleShareToDmOpen = () => {
+    setShareMenuOpen(false);
+    setShareDmQuery('');
+    setShareDmResults([]);
+    setShareDmSent([]);
+    setShareDmOpen(true);
+  };
+
+  const handleShareDmSearch = async (q) => {
+    setShareDmQuery(q);
+    if (q.trim().length < 2) { setShareDmResults([]); return; }
+    try {
+      const res = await searchUsers(q.trim());
+      setShareDmResults((res.users || []).filter(u => u.id !== user?.id).slice(0, 8));
+    } catch { setShareDmResults([]); }
+  };
+
+  const handleShareDmSend = async (targetUser) => {
+    if (shareDmSending || shareDmSent.includes(targetUser.id)) return;
+    setShareDmSending(targetUser.id);
+    try {
+      const dataUrl = await generateShareImage();
+      if (!dataUrl) { setShareDmSending(''); return; }
+      const displayName = pet.nickname || (pet.character || 'pet').toUpperCase();
+      await getOrCreateDirectConversation(targetUser.id, {
+        content: `Check out my pet ${displayName}!`,
+        link_share: {
+          kind: 'link',
+          path: '/pet',
+          title: `${displayName} — Lv.${pet.level || 1}`,
+          subtitle: `${pet.bond_rank?.label || 'Training Partner'} • ${pet.form?.label || 'Fresh Form'}`,
+          previewImage: dataUrl,
+        },
+      });
+      setShareDmSent(prev => [...prev, targetUser.id]);
+    } catch (e) { console.error('DM share failed', e); }
+    finally { setShareDmSending(''); }
   };
 
   // ─── Rename pet ─────────────────────────────────────────
@@ -858,6 +897,59 @@ export default function PetPage() {
   const trust = wellbeing.trust ?? pet.trust ?? 35;
   const momentum = wellbeing.momentum ?? pet.momentum ?? pet.hype ?? 25;
   const moodState = pet.mood_state || wellbeing.mood_state || 'stable';
+
+  const BOND_RANK_TABLE = [
+    { threshold: 0, label: 'Training Partner', desc: 'Your first bond rank — you\'re just starting to build a relationship with your companion.' },
+    { threshold: 40, label: 'Pad Gremlin', desc: 'Your pet has claimed a spot on the pad and refuses to leave. You\'re becoming familiar.' },
+    { threshold: 90, label: 'Dojo Mascot', desc: 'Your companion is known around the dojo. A real presence in the scene.' },
+    { threshold: 160, label: 'Arena Spirit', desc: 'The crowd feels your pet\'s energy. A bond forged through shared intensity.' },
+    { threshold: 260, label: 'Blessed Beast', desc: 'A bond this deep brings blessings. Your companion radiates rare energy.' },
+    { threshold: 400, label: 'Legendary Bond', desc: 'Few reach this depth. Your companion has become part of your legend.' },
+    { threshold: 600, label: 'Eternal Companion', desc: 'An unbreakable bond. This companion has been through everything with you.' },
+    { threshold: 900, label: 'Mythic Guardian', desc: 'The highest known bond. Your companion has transcended the mortal dojo.' },
+    { threshold: 1300, label: 'Celestial Warden', desc: 'A guardian between realms. Your bond resonates across dimensions.' },
+    { threshold: 1800, label: 'Astral Sovereign', desc: 'Sovereign of the stars. Your companion\'s presence warps reality itself.' },
+    { threshold: 2500, label: 'Primordial Spirit', desc: 'A bond older than the dojo itself. Your companion remembers the first beat.' },
+  ];
+  const FORM_TABLE = [
+    { id: 'fresh', label: 'Fresh Form', bond: 0, mastery: 0, desc: 'A young companion still finding its rhythm.', aura: 'calm' },
+    { id: 'trusted', label: 'Trusted Form', bond: 90, mastery: 45, desc: 'A companion visibly shaped by routine and trust.', aura: 'bonded' },
+    { id: 'showcase', label: 'Showcase Form', bond: 190, mastery: 120, desc: 'A polished companion that turns heads.', aura: 'spotlight' },
+    { id: 'ascendant', label: 'Ascendant Form', bond: 320, mastery: 220, desc: 'A scene-defining companion presence.', aura: 'legend' },
+    { id: 'beyond', label: 'Beyond Form', bond: 500, mastery: 400, desc: 'A companion that has surpassed all known limits.', aura: 'transcendent' },
+    { id: 'mythic', label: 'Mythic Form', bond: 900, mastery: 600, desc: 'An ancient companion of unfathomable depth and devotion.', aura: 'divine' },
+    { id: 'celestial', label: 'Celestial Form', bond: 1300, mastery: 850, desc: 'A companion that channels the stars themselves.', aura: 'celestial' },
+    { id: 'astral', label: 'Astral Form', bond: 1800, mastery: 1200, desc: 'A being of pure rhythm and light, beyond mortal understanding.', aura: 'astral' },
+    { id: 'primordial', label: 'Primordial Form', bond: 2500, mastery: 1800, desc: 'The first form. The last form. A companion that simply IS.', aura: 'primordial' },
+  ];
+
+  function getBondRankInfo(currentRank, currentBond) {
+    const currentIdx = BOND_RANK_TABLE.findIndex(r => r.label === currentRank?.label);
+    const nextRank = BOND_RANK_TABLE[currentIdx + 1];
+    return {
+      title: currentRank?.label || 'Training Partner',
+      desc: BOND_RANK_TABLE[currentIdx]?.desc || 'Build bond by playing songs, feeding, and interacting with your pet.',
+      requirements: nextRank ? [
+        { label: 'Bond needed', value: `${nextRank.threshold}`, met: currentBond >= nextRank.threshold },
+      ] : null,
+      currentTier: nextRank ? `${currentBond} / ${nextRank.threshold} bond to ${nextRank.label}` : 'Max bond rank reached!',
+    };
+  }
+
+  function getFormInfo(currentForm, currentBond, currentMastery) {
+    const currentIdx = FORM_TABLE.findIndex(f => f.id === currentForm?.id);
+    const nextForm = FORM_TABLE[currentIdx + 1];
+    return {
+      title: currentForm?.label || 'Fresh Form',
+      desc: FORM_TABLE[currentIdx]?.desc || 'Forms evolve as your bond and mastery grow.',
+      requirements: nextForm ? [
+        { label: 'Bond needed', value: `${nextForm.bond}`, met: currentBond >= nextForm.bond },
+        { label: 'Mastery XP needed', value: `${nextForm.mastery}`, met: currentMastery >= nextForm.mastery },
+      ] : null,
+      currentTier: nextForm ? `Next: ${nextForm.label}` : 'Ultimate form achieved!',
+    };
+  }
+
   const charName = characters.find(c => c.id === pet.character)?.name || pet.character;
   const nextTrick = pet.next_trick;
   const pendingTrickObj = pet.tricks?.find(t => t.id === pet.pending_trick);
@@ -906,17 +998,35 @@ export default function PetPage() {
                 <path d="M12 12.75a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9Zm0 2.25c-4.83 0-8.75 2.46-8.75 5.5 0 .41.34.75.75.75h16a.75.75 0 0 0 .75-.75c0-3.04-3.92-5.5-8.75-5.5Z" />
               </svg>
             </HeaderIconButton>
-            <HeaderIconButton
-              label={shareStatus === 'capturing' ? 'Saving pet card' : shareStatus === 'done' ? 'Pet card saved' : 'Share pet'}
-              title={shareStatus === 'capturing' ? 'Saving pet card' : shareStatus === 'done' ? 'Pet card saved' : 'Share pet'}
-              active={shareStatus === 'done'}
-              disabled={shareStatus === 'capturing'}
-              onClick={handleSharePet}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
-                <path d="M15.75 8.25a3 3 0 1 0-2.82-3.99l-4.71 2.36a3 3 0 0 0 0 2.76l4.71 2.36a3 3 0 1 0 .67-1.34l-4.71-2.36a3.02 3.02 0 0 0 0-.72l4.71-2.36a3 3 0 0 0 2.15.93Z" />
-              </svg>
-            </HeaderIconButton>
+            <div className="relative">
+              <HeaderIconButton
+                label={shareStatus === 'capturing' ? 'Saving...' : shareStatus === 'done' ? 'Shared!' : 'Share pet'}
+                title="Share pet"
+                active={shareStatus === 'done' || shareMenuOpen}
+                disabled={shareStatus === 'capturing'}
+                onClick={() => setShareMenuOpen(v => !v)}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
+                  <path d="M15.75 8.25a3 3 0 1 0-2.82-3.99l-4.71 2.36a3 3 0 0 0 0 2.76l4.71 2.36a3 3 0 1 0 .67-1.34l-4.71-2.36a3.02 3.02 0 0 0 0-.72l4.71-2.36a3 3 0 0 0 2.15.93Z" />
+                </svg>
+              </HeaderIconButton>
+              {shareMenuOpen && (
+                <>
+                  <div className="fixed inset-0 z-[70]" onClick={() => setShareMenuOpen(false)} />
+                  <div className="absolute right-0 top-full mt-1.5 z-[71] w-48 rounded-xl border border-white/[0.08] bg-[#0e1420]/95 backdrop-blur-xl shadow-[0_12px_40px_rgba(0,0,0,0.5)] overflow-hidden animate-[slideDown_150ms_ease-out]">
+                    <button onClick={handleShareToDmOpen} className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[13px] text-gray-200 hover:bg-white/[0.06] transition-colors">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-cyan-400 shrink-0"><path d="M3.505 2.365A41.369 41.369 0 0 1 9 2c1.863 0 3.697.124 5.495.365 1.247.167 2.18 1.108 2.435 2.268a4.45 4.45 0 0 0-.577-.069 43.141 43.141 0 0 0-4.706 0C9.229 4.696 7.5 6.727 7.5 8.998v2.24c0 1.413.67 2.735 1.76 3.562l-2.98 2.98A.75.75 0 0 1 5 17.25v-3.443c-.501-.14-.97-.357-1.388-.642A4.216 4.216 0 0 1 2 10.085V5.075c0-1.419 1.076-2.565 2.505-2.71ZM15.989 5.07A41.197 41.197 0 0 0 11.647 4.8c-1.562.085-2.897 1.7-2.897 3.198v2.24c0 1.272.816 2.67 2.897 2.962.683.096 1.38.158 2.084.184l2.549 2.549a.75.75 0 0 0 1.28-.531v-2.903a3.466 3.466 0 0 0 .56-.542c.593-.737.93-1.652.93-2.72V8.998c0-2.27-1.728-3.843-4.06-3.928Z" /></svg>
+                      Send to DM
+                    </button>
+                    <div className="h-px bg-white/[0.04]" />
+                    <button onClick={handleShareSaveImage} className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[13px] text-gray-200 hover:bg-white/[0.06] transition-colors">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-amber-400 shrink-0"><path d="M13.75 7h-3v5.296l1.943-2.048a.75.75 0 0 1 1.114 1.004l-3.25 3.5a.75.75 0 0 1-1.114 0l-3.25-3.5a.75.75 0 1 1 1.114-1.004L9.25 12.296V7H5.75a.75.75 0 0 1 0-1.5h8a.75.75 0 0 1 0 1.5ZM5 15.25a.75.75 0 0 1 .75-.75h8.5a.75.75 0 0 1 0 1.5h-8.5a.75.75 0 0 1-.75-.75Z" /></svg>
+                      Save image
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
             <HeaderIconButton
               label="Switch companion"
               title="Switch companion"
@@ -955,10 +1065,16 @@ export default function PetPage() {
           <div className="absolute top-3 right-3 z-10">
             <WeightBadge state={pet.weight_state} />
           </div>
-          <div data-share-exclude="true" className="absolute top-3 left-3 z-10"><BondBadge rank={pet.bond_rank} /></div>
+          <div data-share-exclude="true" className="absolute top-3 left-3 z-10">
+            <button onClick={() => setRankInfoModal(getBondRankInfo(pet.bond_rank, bond))} className="cursor-pointer">
+              <BondBadge rank={pet.bond_rank} />
+            </button>
+          </div>
           {pet.form?.label ? (
             <div data-share-exclude="true" className="absolute left-1/2 top-10 z-10 -translate-x-1/2">
-              <FormBadge form={pet.form} />
+              <button onClick={() => setRankInfoModal(getFormInfo(pet.form, bond, pet.mastery?.mastery_xp || 0))} className="cursor-pointer">
+                <FormBadge form={pet.form} />
+              </button>
             </div>
           ) : null}
           <div data-share-exclude="true" className={`relative z-10 flex flex-col items-center justify-end px-4 pt-16 pb-3 min-h-[290px] sm:min-h-[310px] ${petTapped ? 'animate-[wiggle_400ms_ease]' : ''}`}>
@@ -1002,7 +1118,7 @@ export default function PetPage() {
           </div>
           {/* Demand banner */}
           {pet.pending_trick && (
-            <div className="relative z-10 mx-4 mb-4">
+            <div data-share-exclude="true" className="relative z-10 mx-4 mb-4">
               <button onClick={() => handlePerformTrick(pet.pending_trick)} className="w-full group">
                 <div className="relative rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 flex items-center gap-2 hover:border-amber-500/30 active:scale-[0.98] transition-all">
                   <span className="text-lg">🎯</span>
@@ -1178,6 +1294,87 @@ export default function PetPage() {
         stats={petInvadersStats}
         leaderboard={petInvadersLeaderboard}
       />
+
+      {/* Share to DM modal */}
+      {shareDmOpen && (
+        <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center" onClick={() => setShareDmOpen(false)}>
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div className="relative z-10 w-full max-w-sm mx-auto mb-0 sm:mb-0 rounded-t-2xl sm:rounded-2xl border border-white/[0.08] bg-[#0c1018] shadow-[0_-12px_50px_rgba(0,0,0,0.5)] overflow-hidden animate-[slideUp_200ms_ease-out]" onClick={e => e.stopPropagation()}>
+            <div className="px-4 pt-4 pb-2 flex items-center justify-between">
+              <h3 className="text-sm font-bold text-white">Send pet card to...</h3>
+              <button onClick={() => setShareDmOpen(false)} className="text-gray-500 hover:text-white text-lg leading-none">&times;</button>
+            </div>
+            <div className="px-4 pb-2">
+              <input
+                type="text"
+                value={shareDmQuery}
+                onChange={e => handleShareDmSearch(e.target.value)}
+                placeholder="Search players..."
+                className="w-full bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 outline-none focus:border-cyan-400/30"
+                autoFocus
+              />
+            </div>
+            <div className="max-h-64 overflow-y-auto px-2 pb-4">
+              {shareDmResults.length === 0 && shareDmQuery.length >= 2 && (
+                <div className="text-center text-xs text-gray-500 py-6">No players found</div>
+              )}
+              {shareDmResults.map(u => {
+                const sent = shareDmSent.includes(u.id);
+                const sending = shareDmSending === u.id;
+                return (
+                  <button key={u.id} onClick={() => handleShareDmSend(u)}
+                    disabled={sent || sending}
+                    className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg hover:bg-white/[0.04] active:bg-white/[0.06] transition-colors disabled:opacity-60">
+                    <div className="w-8 h-8 rounded-full bg-white/[0.06] border border-white/[0.08] overflow-hidden shrink-0">
+                      {u.avatar ? <img src={u.avatar} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-[10px] font-bold text-gray-500">{(u.username || '?')[0].toUpperCase()}</div>}
+                    </div>
+                    <span className="flex-1 text-left text-sm text-white truncate">{u.username}</span>
+                    {sent ? (
+                      <span className="text-[10px] font-bold text-emerald-400">Sent</span>
+                    ) : sending ? (
+                      <span className="w-4 h-4 border-2 border-white/10 border-t-cyan-400 rounded-full animate-spin" />
+                    ) : (
+                      <span className="text-[10px] font-bold text-cyan-400">Send</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rank / Form info modal */}
+      {rankInfoModal && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center" onClick={() => setRankInfoModal(null)}>
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div className="relative z-10 w-full max-w-xs mx-4 rounded-2xl border border-white/[0.08] bg-[#0c1018] shadow-[0_12px_50px_rgba(0,0,0,0.5)] overflow-hidden animate-[slideDown_200ms_ease-out]" onClick={e => e.stopPropagation()}>
+            <div className="px-5 pt-5 pb-1 flex items-center justify-between">
+              <h3 className="text-sm font-bold text-white">{rankInfoModal.title}</h3>
+              <button onClick={() => setRankInfoModal(null)} className="text-gray-500 hover:text-white text-lg leading-none">&times;</button>
+            </div>
+            <div className="px-5 pb-5 space-y-3">
+              <p className="text-xs text-gray-400 leading-relaxed">{rankInfoModal.desc}</p>
+              {rankInfoModal.requirements && (
+                <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">
+                  <div className="text-[10px] uppercase tracking-wider text-white/40 mb-1.5">Requirements</div>
+                  {rankInfoModal.requirements.map((r, i) => (
+                    <div key={i} className="flex items-center justify-between text-xs py-0.5">
+                      <span className="text-gray-400">{r.label}</span>
+                      <span className={`font-semibold ${r.met ? 'text-emerald-400' : 'text-gray-500'}`}>{r.value} {r.met ? '✓' : ''}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {rankInfoModal.currentTier && (
+                <div className="text-center text-[10px] text-white/30 pt-1">
+                  Current: <span className="text-white/60 font-semibold">{rankInfoModal.currentTier}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1607,6 +1804,9 @@ function FormBadge({ form }) {
     ascendant: 'border-amber-400/25 text-amber-300 shadow-[0_0_16px_rgba(245,158,11,0.15)]',
     beyond: 'border-purple-400/30 text-purple-300 shadow-[0_0_20px_rgba(168,85,247,0.18)] animate-pulse',
     mythic: 'border-rose-400/30 text-rose-200 shadow-[0_0_24px_rgba(244,63,94,0.20)] animate-pulse',
+    celestial: 'border-sky-300/30 text-sky-200 shadow-[0_0_28px_rgba(56,189,248,0.22)] animate-pulse',
+    astral: 'border-indigo-300/35 text-indigo-200 shadow-[0_0_32px_rgba(129,140,248,0.25)] animate-pulse',
+    primordial: 'border-yellow-200/40 text-yellow-100 shadow-[0_0_36px_rgba(253,224,71,0.28)] animate-pulse',
   };
   return (
     <span className={`rounded-full border bg-black/40 backdrop-blur-sm px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider transition-all ${formStyles[form.id] || formStyles.fresh}`}>
