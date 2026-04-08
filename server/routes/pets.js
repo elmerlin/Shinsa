@@ -3044,6 +3044,75 @@ router.get('/minigames/mini-pump', requireAuth, (req, res) => {
   });
 });
 
+// GET /api/pets/minigames/mini-pump/leaderboard — community bests
+router.get('/minigames/mini-pump/leaderboard', requireAuth, (req, res) => {
+  const db = getDb();
+  ensureMinigameTable(db);
+  ensurePetTable(db);
+
+  const rawLimit = Number(req.query.limit || 10);
+  const limit = Math.max(3, Math.min(25, Math.floor(rawLimit) || 10));
+
+  const rows = db.prepare(`
+    SELECT
+      s.user_id,
+      s.personal_best,
+      s.best_streak,
+      s.rounds_played,
+      s.fastest_cadence,
+      s.last_played_at,
+      u.username,
+      p.character,
+      p.nickname,
+      p.bond,
+      p.mastery_xp,
+      p.fullness,
+      p.happiness,
+      p.last_fed_at,
+      p.equipped_hat,
+      p.equipped_top,
+      p.hat_color,
+      p.top_color
+    FROM pet_minigame_stats s
+    JOIN users u ON u.id = s.user_id
+    LEFT JOIN user_pets p ON p.user_id = s.user_id
+    WHERE s.game_id = 'mini-pump'
+    ORDER BY s.personal_best DESC, s.best_streak DESC, s.fastest_cadence ASC, s.rounds_played DESC, s.last_played_at DESC
+    LIMIT ?
+  `).all(limit);
+
+  const leaderboard = rows.map((row, index) => {
+    const bond = row.bond || 0;
+    const masteryXp = row.mastery_xp || 0;
+    return {
+      rank: index + 1,
+      user_id: row.user_id,
+      username: row.username || 'Unknown',
+      character: row.character || 'dojocat',
+      nickname: row.nickname || '',
+      personal_best: row.personal_best || 0,
+      best_streak: row.best_streak || 0,
+      rounds_played: row.rounds_played || 0,
+      fastest_cadence: row.fastest_cadence || 1000,
+      last_played_at: row.last_played_at || '',
+      form: getPetForm(bond, masteryXp),
+      bond_rank: getBondRank(bond),
+      equipped_hat: row.equipped_hat || '',
+      equipped_top: row.equipped_top || '',
+      hat_color: row.hat_color || '',
+      top_color: row.top_color || '',
+      weight_state: getWeightState(computeDecayed(row.fullness, row.last_fed_at, HUNGER_DECAY_PER_HOUR)),
+      mood: getMood(
+        computeDecayed(row.fullness, row.last_fed_at, HUNGER_DECAY_PER_HOUR),
+        computeDecayed(row.happiness || 50, row.last_fed_at, HAPPINESS_DECAY_PER_HOUR),
+      ),
+      is_me: row.user_id === req.user.id,
+    };
+  });
+
+  res.json({ leaderboard });
+});
+
 // POST /api/pets/minigames/mini-pump/complete — save round results
 router.post('/minigames/mini-pump/complete', requireAuth, (req, res) => {
   const db = getDb();

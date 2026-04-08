@@ -7,7 +7,7 @@ import {
   setPetColor, togglePetAvatar, demandTrick, performTrick,
   interactPet, doPetActivity, claimPetMission, buyPetToy, usePetToy,
   buyPetHabitatItem, equipPetHabitat, setPetTrainingPath, getPetLeaderboard,
-  getPetSocialFeed, renamePet, getMiniPumpStats, completeMiniPump,
+  getPetSocialFeed, renamePet, getMiniPumpStats, getMiniPumpLeaderboard, completeMiniPump,
   getPetInvadersStats, completePetInvaders,
 } from '../utils/api';
 import SpritePet, { renderPetToCanvas } from '../components/SpritePet';
@@ -177,6 +177,7 @@ export default function PetPage() {
   const [renameBusy, setRenameBusy] = useState(false);
   const [miniPumpOpen, setMiniPumpOpen] = useState(false);
   const [miniPumpStats, setMiniPumpStats] = useState(null);
+  const [miniPumpLeaderboard, setMiniPumpLeaderboard] = useState(null);
   const [petInvadersOpen, setPetInvadersOpen] = useState(false);
   const [petInvadersStats, setPetInvadersStats] = useState(null);
   const habitatRef = useRef(null);
@@ -203,7 +204,12 @@ export default function PetPage() {
   }, []);
 
   useEffect(() => {
-    if (user) { loadPet(); loadShop(); getPetSocialFeed().then(setSocialFeed).catch(() => {}); }
+    if (user) {
+      loadPet();
+      loadShop();
+      getPetSocialFeed().then(setSocialFeed).catch(() => {});
+      getMiniPumpLeaderboard().then((r) => setMiniPumpLeaderboard(r.leaderboard || [])).catch(() => {});
+    }
     else setLoading(false);
   }, [user, loadPet, loadShop]);
 
@@ -723,11 +729,13 @@ export default function PetPage() {
   const handleOpenMiniPump = () => {
     setMiniPumpOpen(true);
     if (!miniPumpStats) getMiniPumpStats().then(setMiniPumpStats).catch(() => {});
+    if (!miniPumpLeaderboard) getMiniPumpLeaderboard().then((r) => setMiniPumpLeaderboard(r.leaderboard || [])).catch(() => {});
   };
   const handleMiniPumpComplete = async (results) => {
     try {
       const r = await completeMiniPump(results);
       setMiniPumpStats(r);
+      getMiniPumpLeaderboard().then((lb) => setMiniPumpLeaderboard(lb.leaderboard || [])).catch(() => {});
       // Refresh pet to reflect happiness/bond bump
       const petData = await getMyPet();
       if (petData?.pet) setPet(petData.pet);
@@ -1016,6 +1024,7 @@ export default function PetPage() {
                 onTabSwitch={setTab}
                 onMiniPump={handleOpenMiniPump}
                 miniPumpStats={miniPumpStats}
+                miniPumpLeaderboard={miniPumpLeaderboard}
                 onPetInvaders={handleOpenPetInvaders}
                 petInvadersStats={petInvadersStats}
               />
@@ -1581,7 +1590,7 @@ function CollapsibleSection({ title, icon, defaultOpen = true, count, children }
 }
 
 // ─── Pet tab ──────────────────────────────────────────
-function PetTab({ pet, shop, combo, economy, socialFeed, interactionBusy, activityBusy, missionBusyId, toyBusy, trainingBusy, onAction, onActivity, onClaimMission, onBuyToy, onUseToy, onSetTrainingPath, onTabSwitch, onMiniPump, miniPumpStats, onPetInvaders, petInvadersStats }) {
+function PetTab({ pet, shop, combo, economy, socialFeed, interactionBusy, activityBusy, missionBusyId, toyBusy, trainingBusy, onAction, onActivity, onClaimMission, onBuyToy, onUseToy, onSetTrainingPath, onTabSwitch, onMiniPump, miniPumpStats, miniPumpLeaderboard, onPetInvaders, petInvadersStats }) {
   const REACTION_ICONS = { cheer: '📣', wow: '🤩', flex: '💪', heart: '💗' };
   const claimableMissions = (pet.missions || []).filter(m => m.complete && !m.claimed).length;
   return (
@@ -1618,7 +1627,7 @@ function PetTab({ pet, shop, combo, economy, socialFeed, interactionBusy, activi
       <CollapsibleSection title="Play & Care" icon="🎮" defaultOpen={true}>
         {/* Minigame launchers */}
         <div className="space-y-2 mb-3">
-          <MiniPumpLauncher onPlay={onMiniPump} stats={miniPumpStats} />
+          <MiniPumpLauncher onPlay={onMiniPump} stats={miniPumpStats} leaderboard={miniPumpLeaderboard} />
           <PetInvadersLauncher onPlay={onPetInvaders} stats={petInvadersStats} />
         </div>
         <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">

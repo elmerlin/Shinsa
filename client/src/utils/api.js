@@ -1464,6 +1464,7 @@ export const sendPetGift = (targetUserId, giftType, giftId, message) => request(
 export const getPetSocialFeed = () => request('/pets/social/feed-summary');
 export const ackCoach = (priority) => request('/pets/coach-ack', { method: 'POST', body: JSON.stringify({ priority }) });
 export const getMiniPumpStats = () => request('/pets/minigames/mini-pump');
+export const getMiniPumpLeaderboard = (limit = 10) => request(`/pets/minigames/mini-pump/leaderboard?limit=${encodeURIComponent(limit)}`);
 export const completeMiniPump = (results) => request('/pets/minigames/mini-pump/complete', { method: 'POST', body: JSON.stringify(results) });
 export const getPetInvadersStats = () => request('/pets/minigames/pet-invaders');
 export const completePetInvaders = (results) => request('/pets/minigames/pet-invaders/complete', { method: 'POST', body: JSON.stringify(results) });

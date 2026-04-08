@@ -1,6 +1,6 @@
 /**
  * Mini-Pump Game State Machine v2
- * Timing-based target-line judgement (±35ms tolerance)
+ * Timing-based target-line judgement (±70ms tolerance)
  *
  * Each blob has a computed targetTimeMs — the exact game-clock moment
  * its center reaches the target line. Shots are judged against this.
@@ -17,7 +17,7 @@ const ROUND_DURATION = 30000;
 const INITIAL_CADENCE = 1000;
 const CADENCE_REDUCTION = 50;
 const CADENCE_FLOOR = 300;
-const TIMING_TOLERANCE_MS = 35;
+const TIMING_TOLERANCE_MS = 70;
 const TRAVEL_CYCLES = 3;        // blob takes 3 cadence-cycles to reach line
 const TARGET_LINE_Y = 0.48;     // normalized y-position of target line (halfway up screen)
 const BLOB_COLORS = ['red', 'yellow', 'blue'];
@@ -325,7 +325,7 @@ export default function useMiniPumpGame() {
         lastJudgement: s.lastJudgement,
         lastJudgementReason: s.lastJudgementReason,
         activeLaser: s.activeLaser ? { color: s.activeLaser.color, progress: s.activeLaser.progress.toFixed(2) } : null,
-        note: 'y=0 top, y=1.0 target line. Shoot when bottomBlob.centerY~=1.0. Tolerance ±35ms from targetTimeMs.',
+        note: 'y=0 top, y=1.0 target line. Shoot when bottomBlob.centerY~=1.0. Tolerance ±70ms from targetTimeMs.',
       }, null, 2);
     };
     return () => { delete window.advanceTime; delete window.render_game_to_text; };
