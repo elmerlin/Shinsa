@@ -3110,6 +3110,7 @@ router.post('/interact', requireAuth, (req, res) => {
         daily_tap_count = ?,
         daily_tap_key = ?,
         last_meaningful_care_at = datetime('now'),
+        last_fed_at = datetime('now'),
         updated_at = datetime('now')
     WHERE user_id = ?
   `).run(newHappiness, newEnergy, newHype, newTrust, newBond, newHunger, currentDailyInteractions + 1, todayKey, newDailyTaps, todayKey, req.user.id);
@@ -3245,6 +3246,7 @@ router.post('/activities/:activityId', requireAuth, (req, res) => {
         lifetime_activities = lifetime_activities + 1,
         last_rest_at = ?,
         last_meaningful_care_at = datetime('now'),
+        last_fed_at = datetime('now'),
         updated_at = datetime('now')
     WHERE user_id = ?
   `).run(newHappiness, newEnergy, newTrust, newHype, newBond, newCombo, newBondTokens, newRareShards, newHunger, masteryGain, lastRestUpdate, req.user.id);
@@ -3847,7 +3849,7 @@ router.post('/minigames/mini-pump/complete', requireAuth, (req, res) => {
     const comboDeduct = Math.min(cost.combo || 0, pet.combo_balance || 0);
 
     db.prepare(`UPDATE user_pets SET fullness = ?, happiness = ?, energy = ?, hype = ?, bond = ?,
-      combo_balance = combo_balance - ?, updated_at = datetime('now')
+      combo_balance = combo_balance - ?, last_fed_at = datetime('now'), updated_at = datetime('now')
       WHERE user_id = ?`).run(newHunger, newHappiness, newEnergy, newHype, newBond, comboDeduct, req.user.id);
     petReward = { happiness: happyBump + (cost.happiness || 0), bond: bondBump, momentum: cost.hype || 0 };
     costApplied = { combo: comboDeduct, energy: cost.energy || 0, hunger: cost.hunger || 0, momentum: cost.hype || 0 };
@@ -3957,7 +3959,7 @@ router.post('/minigames/pet-invaders/complete', requireAuth, (req, res) => {
     const comboDeduct = Math.min(cost.combo || 0, pet.combo_balance || 0);
 
     db.prepare(`UPDATE user_pets SET fullness = ?, happiness = ?, energy = ?, hype = ?, bond = ?,
-      combo_balance = combo_balance - ?, updated_at = datetime('now')
+      combo_balance = combo_balance - ?, last_fed_at = datetime('now'), updated_at = datetime('now')
       WHERE user_id = ?`).run(newHunger, newHappiness, newEnergy, newHype, newBond, comboDeduct, req.user.id);
     petReward = { happiness: happyBump + (cost.happiness || 0), bond: bondBump, momentum: cost.hype || 0 };
     costApplied = { combo: comboDeduct, energy: cost.energy || 0, hunger: cost.hunger || 0, momentum: cost.hype || 0 };
@@ -4148,6 +4150,7 @@ module.exports.feedPetForUser = function feedPetForUser(userId, playsOrCount) {
           experience = experience + ?, combo_balance = combo_balance + ?,
           mastery_xp = mastery_xp + ?,
           highest_level = MAX(highest_level, ?),
+          last_fed_at = datetime('now'),
           last_pump_play_at = datetime('now'), updated_at = datetime('now'),
           last_trick_performed = pending_trick, last_trick_at = datetime('now'),
           pending_trick = '', trick_demand_level = 0, trick_demand_grade = '', trick_demand_expires = ''
@@ -4161,6 +4164,7 @@ module.exports.feedPetForUser = function feedPetForUser(userId, playsOrCount) {
           experience = experience + ?, combo_balance = combo_balance + ?,
           mastery_xp = mastery_xp + ?,
           highest_level = MAX(highest_level, ?),
+          last_fed_at = datetime('now'),
           last_pump_play_at = datetime('now'), updated_at = datetime('now')
       WHERE user_id = ?
     `).run(newHunger, newHappiness, songCount, newEnergy, newHype, newBond, newTrust, totalXp, totalCombo, totalMastery, highestLevel, userId);
