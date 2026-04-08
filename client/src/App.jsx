@@ -11,6 +11,7 @@ import { getCountryFlag } from './utils/countryFlags';
 import { getProfilePath } from './utils/profile';
 import { useI18n } from './i18n/TranslationContext';
 import FloatingPetCompanion from './components/pet/FloatingPetCompanion';
+import PetOnboardingModal from './components/pet/PetOnboardingModal';
 
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const TournamentSetup = lazy(() => import('./pages/TournamentSetup'));
@@ -1560,6 +1561,9 @@ export default function App() {
           onCheckout={handleDojoCheckout}
         />
       )}
+
+      {/* Pet onboarding modal — shown once per user */}
+      {user && !isChromeless && <PetOnboardingModal onNavigateToPet={() => navigate('/pet')} />}
 
       {/* Footer — hidden on mobile when logged in (bottom nav takes its place) */}
       {!isChromeless ? (

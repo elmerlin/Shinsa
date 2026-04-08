@@ -1025,31 +1025,25 @@ export default function PetPage() {
         </div>
       )}
 
-      <div className="mt-4 space-y-3">
-        <div className="grid grid-cols-2 gap-3">
-          <VitalBar label="Hunger" value={hunger} color="orange" emphasis="primary" />
-          <VitalBar label="Energy" value={energy} color="cyan" emphasis="primary" />
-          <VitalBar label="Trust" value={trust} color="emerald" />
-          <VitalBar label="Momentum" value={momentum} color="violet" />
-        </div>
-        <div className="grid grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-          <BondMeter bond={bond} bondRank={pet.bond_rank} />
-          <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-3">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <div className="text-[10px] uppercase tracking-[0.16em] text-white/45">Mood</div>
-                <div className="mt-1"><MoodBadge moodState={moodState} /></div>
-              </div>
-              <div className="text-right">
-                <div className="text-[10px] uppercase tracking-[0.16em] text-white/45">Wellbeing</div>
-                <div className="mt-1 text-lg font-black text-white/90">{Math.round((pet.reward_multiplier || 1) * 100)}%</div>
-              </div>
-            </div>
-            <div className="mt-3">
-              <NeedsPanel needs={needs} />
+      <div className="mt-3 space-y-2.5">
+        <div className="rounded-2xl border border-white/[0.06] bg-white/[0.025] px-3.5 py-3 space-y-2.5">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+            <VitalBar label="Hunger" value={hunger} color="orange" />
+            <VitalBar label="Energy" value={energy} color="cyan" />
+            <VitalBar label="Trust" value={trust} color="emerald" />
+            <VitalBar label="Momentum" value={momentum} color="violet" />
+          </div>
+          <div className="flex items-center gap-3 pt-1 border-t border-white/[0.04]">
+            <MoodBadge moodState={moodState} />
+            <div className="flex-1" />
+            <div className="text-right">
+              <div className="text-[9px] uppercase tracking-[0.12em] text-white/40">Wellbeing</div>
+              <div className="text-sm font-black text-white/85 tabular-nums">{Math.round((pet.reward_multiplier || 1) * 100)}%</div>
             </div>
           </div>
+          {needs.length > 0 && <NeedsPanel needs={needs} />}
         </div>
+        <BondMeter bond={bond} bondRank={pet.bond_rank} />
       </div>
 
           {/* XP to next trick */}
@@ -1662,7 +1656,7 @@ function getVitalBand(value) {
   return { label: 'Thriving', tone: 'high' };
 }
 
-function VitalBar({ label, value, color, emphasis = 'secondary' }) {
+function VitalBar({ label, value, color }) {
   const hues = {
     orange: { lo: '0', hi: '35' },
     cyan: { lo: '185', hi: '200' },
@@ -1671,33 +1665,14 @@ function VitalBar({ label, value, color, emphasis = 'secondary' }) {
   };
   const h = hues[color] || hues.orange;
   const hue = value <= 30 ? h.lo : h.hi;
-  const band = getVitalBand(value);
-  const isCritical = band.tone === 'critical';
-  const isHigh = band.tone === 'high';
-  const bandTone = {
-    critical: 'text-rose-300',
-    low: 'text-amber-300',
-    stable: 'text-cyan-100/75',
-    high: 'text-emerald-300',
-  };
+  const isCritical = value < 20;
   return (
-    <div className={`rounded-2xl border p-3 transition-all duration-500 ${
-      emphasis === 'primary' ? 'border-white/[0.08] bg-white/[0.04]' : 'border-white/[0.05] bg-white/[0.025]'
-    } ${isCritical ? 'vital-critical border-rose-500/15' : ''} ${isHigh ? 'border-emerald-500/10' : ''}`}
-    style={isCritical ? { '--breathe-color': 'rgba(244,63,94,0.08)' } : isHigh ? { '--breathe-color': 'rgba(52,211,153,0.06)' } : undefined}>
-      <div className="mb-2 flex items-center justify-between gap-3">
-        <div>
-          <div className="text-[10px] uppercase tracking-[0.16em] text-white/45">{label}</div>
-          <div className={`mt-1 text-2xl font-black tabular-nums transition-colors duration-500 ${isCritical ? 'text-rose-200' : 'text-white/90'}`}>{value}%</div>
-        </div>
-        <div className={`text-[10px] font-semibold uppercase tracking-[0.14em] ${bandTone[band.tone] || 'text-white/60'}`}>
-          {band.label}
-        </div>
+    <div className={`transition-all duration-500 ${isCritical ? 'vital-critical' : ''}`}>
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <span className="text-[10px] uppercase tracking-[0.12em] text-white/45">{label}</span>
+        <span className={`text-[11px] font-bold tabular-nums transition-colors duration-500 ${isCritical ? 'text-rose-300' : 'text-white/80'}`}>{value}%</span>
       </div>
-      <div className="relative h-2.5 w-full overflow-hidden rounded-full border border-white/[0.04] bg-white/[0.04]">
-        <div className="absolute inset-y-0 left-[20%] w-px bg-white/10" />
-        <div className="absolute inset-y-0 left-[40%] w-px bg-white/10" />
-        <div className="absolute inset-y-0 left-[70%] w-px bg-white/10" />
+      <div className="relative h-1.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
         <div className="vital-bar-fill relative h-full rounded-full transition-all duration-700" style={{ width: `${value}%`, background: `linear-gradient(90deg, hsl(${hue}, 70%, 35%), hsl(${hue}, 70%, 50%))` }}>
           <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent rounded-full" />
         </div>
