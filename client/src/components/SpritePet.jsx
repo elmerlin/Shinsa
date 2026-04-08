@@ -98,6 +98,23 @@ function outlineGrid(g, outlineKey = 'K') {
   return outlined;
 }
 
+function shiftGrid(g, dx, dy) {
+  if (!dx && !dy) return g;
+  const shifted = createGrid(g[0].length, g.length);
+  for (let y = 0; y < g.length; y++) {
+    for (let x = 0; x < g[0].length; x++) {
+      if (g[y][x]) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (ny >= 0 && ny < g.length && nx >= 0 && nx < g[0].length) {
+          shifted[ny][nx] = g[y][x];
+        }
+      }
+    }
+  }
+  return shifted;
+}
+
 // Convert grid to box-shadow CSS string
 function gridToShadow(grid, colorMap) {
   const shadows = [];
@@ -239,7 +256,29 @@ function buildBase(character, weightState, pose = 'rest') {
   // ── Legs — pose-dependent ──
   const footW = w.limbW + 2 + (w.bellyDroop > 2 ? 1 : 0);
 
-  if (pose === 'kick') {
+  if (pose === 'waddle_l') {
+    // Left foot lifted (waddle frame 1) — duck walk
+    fillRect(g, CX - legSpread - w.limbW + 1, legTop, w.limbW, legHeight - 2, 'D');
+    // Left foot raised
+    fillRect(g, CX - legSpread - w.limbW - 1, legTop + legHeight - 3, footW, 2, 'D');
+    // Right foot planted
+    fillRect(g, CX + legSpread, legTop, w.limbW, legHeight, 'D');
+    fillRect(g, CX + legSpread - 1, legTop + legHeight - 1, footW, 2, 'D');
+  } else if (pose === 'waddle_r') {
+    // Right foot lifted (waddle frame 2)
+    fillRect(g, CX - legSpread - w.limbW + 1, legTop, w.limbW, legHeight, 'D');
+    fillRect(g, CX - legSpread - w.limbW - 1, legTop + legHeight - 1, footW, 2, 'D');
+    // Right foot raised
+    fillRect(g, CX + legSpread, legTop, w.limbW, legHeight - 2, 'D');
+    fillRect(g, CX + legSpread - 1, legTop + legHeight - 3, footW, 2, 'D');
+  } else if (pose === 'stomp') {
+    // Right foot raised high, about to stomp
+    fillRect(g, CX - legSpread - w.limbW + 1, legTop, w.limbW, legHeight, 'D');
+    fillRect(g, CX - legSpread - w.limbW - 1, legTop + legHeight - 1, footW, 2, 'D');
+    // Right leg raised high
+    fillRect(g, CX + legSpread, legTop - 2, w.limbW, legHeight - 3, 'D');
+    fillRect(g, CX + legSpread - 1, legTop - 2, footW, 2, 'D');
+  } else if (pose === 'kick') {
     // Left leg normal, right leg raised outward
     fillRect(g, CX - legSpread - w.limbW + 1, legTop, w.limbW, legHeight, 'D');
     fillRect(g, CX - legSpread - w.limbW - 1, legTop + legHeight - 1, footW, 2, 'D');
@@ -356,6 +395,23 @@ function buildArms(character, weightState, pose = 'rest') {
     fillEllipse(g, rx, armY - w.armLen, 2, w.armLen, 'B');
     setPixel(g, lx, armY - w.armLen * 2, 'D');
     setPixel(g, rx, armY - w.armLen * 2, 'D');
+  } else if (pose === 'punch_forward') {
+    // Both fists punching toward viewer — foreshortened arms with prominent fists
+    // Short arm stubs angled inward
+    fillEllipse(g, CX - 5, armY - 1, 3, 2, 'B');
+    fillEllipse(g, CX + 5, armY - 1, 3, 2, 'B');
+    // Fists — larger circles representing foreshortened punch
+    fillCircle(g, CX - 5, armY - 1, 3, 'D');
+    fillCircle(g, CX + 5, armY - 1, 3, 'D');
+    // Highlight on fists
+    setPixel(g, CX - 6, armY - 2, 'L');
+    setPixel(g, CX + 4, armY - 2, 'L');
+  } else if (pose === 'stomp') {
+    // Arms raised for stomp emphasis
+    fillEllipse(g, lx - 1, armY - 4, 2, w.armLen, 'B');
+    fillEllipse(g, rx + 1, armY - 4, 2, w.armLen, 'B');
+    setPixel(g, lx - 1, armY - 4 - w.armLen, 'D');
+    setPixel(g, rx + 1, armY - 4 - w.armLen, 'D');
   } else {
     // Default: arms at sides
     fillEllipse(g, lx, armY, 2, w.armLen, 'B');
@@ -367,7 +423,7 @@ function buildArms(character, weightState, pose = 'rest') {
   return g;
 }
 
-function buildFeatures(character) {
+function buildFeatures(character, featureFrame = 0) {
   const g = createGrid(GW, GH);
   const hcy = HEAD_CY;
 
@@ -387,21 +443,24 @@ function buildFeatures(character) {
       break;
     }
     case 'buu': {
-      // Very prominent thick head tentacle (Majin Buu's iconic antenna)
-      // Wide base emerging from top of head
+      // Animated head tentacle — sways based on featureFrame
+      const sway = featureFrame % 3; // 0, 1, 2
+      const tipDx = sway === 0 ? 0 : sway === 1 ? 2 : -2;
+      const tipDy = sway === 0 ? 0 : sway === 1 ? -1 : 1;
+      // Wide base emerging from top of head (stays fixed)
       fillEllipse(g, CX + 2, hcy - HEAD_RY + 5, 5, 4, 'P');
       // Thick curved body — 7 parallel lines for real width
       for (let t = -3; t <= 3; t++) {
         // Rise up from head
         fillLine(g, CX + 2 + t, hcy - HEAD_RY + 2, CX + 8 + t, hcy - HEAD_RY - 2, 'P');
-        // Curve over to the right
-        fillLine(g, CX + 8 + t, hcy - HEAD_RY - 2, CX + 12 + Math.min(t, 1), hcy - HEAD_RY + 1, 'P');
-        // Droop down slightly at the end
-        fillLine(g, CX + 12 + Math.min(t, 1), hcy - HEAD_RY + 1, CX + 14 + Math.min(t, 0), hcy - HEAD_RY + 4, 'P');
+        // Curve over to the right — tip sways
+        fillLine(g, CX + 8 + t, hcy - HEAD_RY - 2, CX + 12 + Math.min(t, 1) + tipDx, hcy - HEAD_RY + 1 + tipDy, 'P');
+        // Droop down slightly at the end — sway continues
+        fillLine(g, CX + 12 + Math.min(t, 1) + tipDx, hcy - HEAD_RY + 1 + tipDy, CX + 14 + Math.min(t, 0) + tipDx, hcy - HEAD_RY + 4 + tipDy, 'P');
       }
-      // Bulbous tip at the end of droop
-      fillCircle(g, CX + 14, hcy - HEAD_RY + 5, 3, 'P');
-      fillCircle(g, CX + 13, hcy - HEAD_RY + 4, 2, 'P');
+      // Bulbous tip — sways with tentacle
+      fillCircle(g, CX + 14 + tipDx, hcy - HEAD_RY + 5 + tipDy, 3, 'P');
+      fillCircle(g, CX + 13 + tipDx, hcy - HEAD_RY + 4 + tipDy, 2, 'P');
       // (blush drawn on face layer to avoid dark outline)
       break;
     }
@@ -429,29 +488,37 @@ function buildFeatures(character) {
   return g;
 }
 
-function buildTail(character, weightState) {
+function buildTail(character, weightState, tailFrame = 0) {
   const g = createGrid(GW, GH);
   const { w, bodyCy } = getBodyMetrics(weightState);
+  // Tail starts at body edge — firmly attached
+  const tx = CX + w.bodyRx - 2;
 
   if (character === 'devit') {
-    // Devil tail - curvy line extending right
-    const tx = CX + w.bodyRx;
-    fillLine(g, tx, bodyCy + 1, tx + 3, bodyCy - 1, 'T');
-    fillLine(g, tx + 3, bodyCy - 1, tx + 5, bodyCy + 1, 'T');
-    // Tail tip (pointy)
-    setPixel(g, tx + 5, bodyCy, 'T');
-    setPixel(g, tx + 6, bodyCy, 'T');
+    // Devil tail — short zigzag with pointy tip
+    const flip = tailFrame % 2 === 0 ? -1 : 1;
+    fillLine(g, tx, bodyCy + 1, tx + 2, bodyCy + flip, 'T');
+    fillLine(g, tx + 2, bodyCy + flip, tx + 4, bodyCy - flip, 'T');
+    // Pointy tip
+    setPixel(g, tx + 4, bodyCy - flip, 'T');
+    setPixel(g, tx + 5, bodyCy - flip, 'T');
   } else if (character === 'dojocat') {
-    // Cat tail curving up
-    const tx = CX + w.bodyRx;
-    fillLine(g, tx, bodyCy + 2, tx + 2, bodyCy, 'T');
-    fillLine(g, tx + 2, bodyCy, tx + 4, bodyCy - 2, 'T');
-    setPixel(g, tx + 4, bodyCy - 3, 'B');
+    // Cat tail — short, curved, attached to body
+    const flip = tailFrame % 2 === 0 ? 0 : 2;
+    // Base connects to body
+    setPixel(g, tx, bodyCy, 'B');
+    setPixel(g, tx + 1, bodyCy, 'B');
+    fillLine(g, tx + 1, bodyCy, tx + 3, bodyCy - 2 + flip, 'B');
+    setPixel(g, tx + 3, bodyCy - 3 + flip, 'D');
   } else if (character === 'pixiu') {
-    // Fluffy tail
-    const tx = CX + w.bodyRx;
-    fillLine(g, tx, bodyCy + 1, tx + 2, bodyCy - 1, 'D');
-    fillCircle(g, tx + 3, bodyCy - 2, 2, 'P');
+    // Fluffy ceremonial tail — short, poofy, attached
+    const flip = tailFrame % 2 === 0 ? 0 : 1;
+    // Base connected to body
+    setPixel(g, tx, bodyCy, 'D');
+    setPixel(g, tx + 1, bodyCy - 1, 'D');
+    // Poof — small, close to body
+    fillCircle(g, tx + 2, bodyCy - 2 + flip, 2, 'P');
+    setPixel(g, tx + 3, bodyCy - 3 + flip, 'D');
   }
   return g;
 }
@@ -1463,17 +1530,12 @@ const PIXEL_ART_STYLES = `
     overflow: visible;
   }
   /* All movement is frame-based pixel animation — no CSS transform bobbing */
-  @keyframes tailWag {
-    0%, 100% { transform: scaleX(1); }
-    50% { transform: scaleX(-1); }
-  }
   @keyframes petFoodTravel {
     0% { transform: translate(-6em, 9em) scale(0.7); opacity: 0; }
     15% { opacity: 1; }
     65% { transform: translate(-1.4em, 3.8em) scale(1); opacity: 1; }
     100% { transform: translate(0.1em, 2.6em) scale(0.25); opacity: 0; }
   }
-  .pet-tail { animation: tailWag 2s ease-in-out infinite; }
   .pet-food {
     animation: petFoodTravel 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
     transform-origin: center center;
@@ -1488,7 +1550,33 @@ const PIXEL_ART_STYLES = `
 
 
 // ═══════════════════════════════════════════════════════════════
-// 9. PIXEL LAYER COMPONENT
+// 9. POSE HELPERS — separate body pose from head movement
+// ═══════════════════════════════════════════════════════════════
+
+// Poses that only move the head (body stays in rest)
+function getBodyPose(pose) {
+  if (pose === 'head_bob_l' || pose === 'head_bob_r' ||
+      pose === 'head_nod_down' || pose === 'head_nod_up') return 'rest';
+  return pose;
+}
+
+// Head pixel offsets for poses that involve head movement [dx, dy]
+function getHeadOffset(pose) {
+  switch (pose) {
+    case 'waddle_l':     return [-1, 0];
+    case 'waddle_r':     return [1, 0];
+    case 'stomp':        return [0, 2];
+    case 'head_bob_l':   return [-2, 0];
+    case 'head_bob_r':   return [2, 0];
+    case 'head_nod_down': return [0, 2];
+    case 'head_nod_up':  return [0, -1];
+    default:             return [0, 0];
+  }
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// 10. PIXEL LAYER COMPONENT
 // ═══════════════════════════════════════════════════════════════
 
 function PixelLayer({ shadow, className = '', style = {} }) {
@@ -1548,17 +1636,20 @@ export function renderPetToCanvas(ctx, opts = {}) {
     }
   }
 
+  const bodyPose = getBodyPose(pose);
+  const [headDx, headDy] = getHeadOffset(pose);
+
   // Shadow
   const shadowGrid = createGrid(GW, GH);
   const { w, legTop } = getBodyMetrics(weightState);
   fillEllipse(shadowGrid, CX, legTop + 7, Math.floor(w.bodyRx * 0.7), 2, 'X');
   drawGrid(shadowGrid, { X: 'rgba(0,0,0,0.15)' });
 
-  // Tail
-  drawGrid(outlineGrid(buildTail(character, weightState)), palette);
+  // Tail (frame-based wiggle)
+  drawGrid(outlineGrid(buildTail(character, weightState, 0)), palette);
 
   // Body
-  drawGrid(outlineGrid(buildBase(character, weightState, pose)), palette);
+  drawGrid(outlineGrid(buildBase(character, weightState, bodyPose)), palette);
 
   // Clothing (bottom layers)
   const defaultTop = equippedTop ? null : iconicLook?.top;
@@ -1569,22 +1660,22 @@ export function renderPetToCanvas(ctx, opts = {}) {
   if (equippedBelt) drawGrid(outlineGrid(buildBelt(equippedBelt, beltColor, weightState)), getClothingColorMap(beltColor));
   if (equippedShoes) drawGrid(outlineGrid(buildShoes(equippedShoes, shoesColor, weightState)), getClothingColorMap(shoesColor));
 
-  // Head
-  drawGrid(outlineGrid(buildHead(character)), palette);
+  // Head (shifted with pose)
+  drawGrid(shiftGrid(outlineGrid(buildHead(character)), headDx, headDy), palette);
 
   // Arms
-  drawGrid(outlineGrid(buildArms(character, weightState, pose)), palette);
+  drawGrid(outlineGrid(buildArms(character, weightState, bodyPose)), palette);
 
-  // Features
-  drawGrid(outlineGrid(buildFeatures(character)), palette);
+  // Features (shifted with head)
+  drawGrid(shiftGrid(outlineGrid(buildFeatures(character, 0)), headDx, headDy), palette);
 
-  // Hat
+  // Hat (shifted with head)
   const defaultHat = equippedHat ? null : iconicLook?.hat;
-  if (defaultHat) drawGrid(outlineGrid(buildHat(defaultHat.id, defaultHat.color, character)), getClothingColorMap(defaultHat.color));
-  if (equippedHat) drawGrid(outlineGrid(buildHat(equippedHat, hatColor, character)), getClothingColorMap(hatColor));
+  if (defaultHat) drawGrid(shiftGrid(outlineGrid(buildHat(defaultHat.id, defaultHat.color, character)), headDx, headDy), getClothingColorMap(defaultHat.color));
+  if (equippedHat) drawGrid(shiftGrid(outlineGrid(buildHat(equippedHat, hatColor, character)), headDx, headDy), getClothingColorMap(hatColor));
 
-  // Face
-  drawGrid(buildFace(character, mood, expression), palette);
+  // Face (shifted with head)
+  drawGrid(shiftGrid(buildFace(character, mood, expression), headDx, headDy), palette);
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1624,8 +1715,9 @@ export default function SpritePet({
   const [idleTick, setIdleTick] = React.useState(0);
   const [reactionFrame, setReactionFrame] = React.useState(0);
   const [blinkState, setBlinkState] = React.useState(false);
+  const [tailFrame, setTailFrame] = React.useState(0);
 
-  // Idle: change pose every 3-5 seconds (ambient shifting)
+  // Idle: change pose every 3-5 seconds, tail wags every 700ms
   React.useEffect(() => {
     if (typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
     if (hasReaction || isEating || isTricking) return;
@@ -1639,9 +1731,14 @@ export default function SpritePet({
       setIdleTick(t => t + 1);
     }, 3000 + Math.random() * 2000);
 
+    const tailInterval = setInterval(() => {
+      setTailFrame(t => t + 1);
+    }, 700);
+
     return () => {
       clearInterval(blinkInterval);
       clearInterval(idleInterval);
+      clearInterval(tailInterval);
     };
   }, [hasReaction, isEating, isTricking]);
 
@@ -1655,32 +1752,41 @@ export default function SpritePet({
       setReactionFrame(f => f + 1);
     }, 250);
 
-    return () => clearInterval(frameInterval);
+    // Tail still wags during reactions
+    const tailInterval = setInterval(() => {
+      setTailFrame(t => t + 1);
+    }, 700);
+
+    return () => {
+      clearInterval(frameInterval);
+      clearInterval(tailInterval);
+    };
   }, [hasReaction, reaction, actionState]);
 
-  // Character idle poses — actual pixel-frame animation via arm/leg changes
+  // Character idle poses — now includes waddle, head bob/nod, stomp, punch
   const IDLE_POSE_SEQUENCE = {
-    dojocat: ['rest', 'guard', 'rest', 'punch', 'rest', 'kick', 'rest', 'crane', 'rest', 'lunge'],
-    buu:     ['rest', 'wave', 'rest', 'flex', 'rest', 'punch', 'rest', 'bless', 'rest', 'guard'],
-    devit:   ['rest', 'punch', 'rest', 'kick', 'rest', 'lunge', 'rest', 'guard', 'rest', 'wave'],
-    pixiu:   ['rest', 'bless', 'rest', 'crane', 'rest', 'guard', 'rest', 'wave', 'rest', 'kick'],
+    dojocat: ['rest', 'guard', 'rest', 'waddle_l', 'waddle_r', 'waddle_l', 'waddle_r', 'rest', 'head_bob_l', 'head_bob_r', 'rest', 'punch', 'rest', 'kick', 'rest', 'stomp', 'rest', 'crane', 'rest', 'head_nod_down', 'head_nod_up', 'rest', 'lunge', 'rest'],
+    buu:     ['rest', 'wave', 'rest', 'waddle_l', 'waddle_r', 'rest', 'head_bob_l', 'head_bob_r', 'rest', 'flex', 'rest', 'punch', 'rest', 'head_nod_down', 'head_nod_up', 'rest', 'bless', 'rest', 'punch_forward', 'rest', 'guard', 'rest'],
+    devit:   ['rest', 'punch', 'rest', 'waddle_l', 'waddle_r', 'waddle_l', 'waddle_r', 'rest', 'kick', 'rest', 'head_bob_l', 'head_bob_r', 'rest', 'stomp', 'rest', 'lunge', 'rest', 'head_nod_down', 'head_nod_up', 'rest', 'guard', 'rest', 'punch_forward', 'rest', 'wave', 'rest'],
+    pixiu:   ['rest', 'bless', 'rest', 'waddle_l', 'waddle_r', 'rest', 'head_bob_l', 'head_bob_r', 'rest', 'crane', 'rest', 'head_nod_down', 'head_nod_up', 'rest', 'guard', 'rest', 'wave', 'rest', 'stomp', 'rest', 'kick', 'rest'],
   };
   // Multi-frame pose sequences per reaction — each is a sequence of pixel-art
   // poses cycled at 250ms intervals, so the pet visibly animates its body
   const REACTION_FRAMES = {
-    kata:     ['rest', 'guard', 'punch', 'kick', 'guard', 'rest'],     // Train: martial combo
-    hop:      ['rest', 'wave', 'rest', 'wave', 'flex', 'rest'],        // Play: bouncy fun
-    bless:    ['rest', 'bless', 'crane', 'bless', 'rest'],             // Groom: graceful care
-    sway:     ['rest', 'rest', 'rest', 'rest'],                        // Rest: minimal, peaceful
-    dart:     ['rest', 'lunge', 'kick', 'punch', 'lunge', 'rest'],     // Spar: aggressive combo
-    swish:    ['rest', 'lunge', 'crane', 'lunge', 'rest'],             // Explore: scanning
-    proud:    ['rest', 'flex', 'flex', 'rest'],                        // Praise: puff up
-    mischief: ['rest', 'punch', 'kick', 'punch', 'rest'],             // Tease: wild swings
-    nod:      ['rest', 'rest', 'rest'],                                // Mission: calm nod
-    swagger:  ['rest', 'flex', 'wave', 'flex', 'rest'],
-    squish:   ['rest', 'rest', 'wave', 'rest'],
-    wobble:   ['rest', 'wave', 'rest', 'wave', 'rest'],
-    feeding:  ['rest', 'rest', 'rest'],                                // Eating
+    kata:     ['rest', 'guard', 'punch', 'kick', 'stomp', 'guard', 'rest'],          // Train: martial combo
+    hop:      ['rest', 'waddle_l', 'waddle_r', 'waddle_l', 'wave', 'flex', 'rest'],  // Play: waddle + fun
+    bless:    ['rest', 'bless', 'crane', 'head_nod_down', 'head_nod_up', 'bless', 'rest'],  // Groom: graceful
+    sway:     ['rest', 'head_bob_l', 'head_bob_r', 'rest'],                          // Rest: gentle head sway
+    dart:     ['rest', 'lunge', 'kick', 'punch_forward', 'punch', 'lunge', 'rest'],  // Spar: aggressive
+    swish:    ['rest', 'lunge', 'head_bob_l', 'crane', 'head_bob_r', 'lunge', 'rest'],  // Explore: scanning
+    proud:    ['rest', 'flex', 'head_nod_up', 'flex', 'rest'],                       // Praise: puff up
+    mischief: ['rest', 'punch', 'kick', 'stomp', 'punch', 'rest'],                   // Tease: wild
+    nod:      ['rest', 'head_nod_down', 'head_nod_up', 'rest'],                      // Mission: calm nod
+    swagger:  ['rest', 'flex', 'waddle_l', 'waddle_r', 'flex', 'rest'],              // Swagger: flex + waddle
+    squish:   ['rest', 'head_nod_down', 'rest', 'wave', 'rest'],
+    wobble:   ['rest', 'waddle_l', 'waddle_r', 'waddle_l', 'waddle_r', 'rest'],
+    feeding:  ['rest', 'head_nod_down', 'rest'],                                     // Eating: chomping
+    stomp_react: ['rest', 'stomp', 'stomp', 'rest'],                                 // Stomp reaction
   };
   const posePool = IDLE_POSE_SEQUENCE[character] || IDLE_POSE_SEQUENCE.dojocat;
   let currentPose;
@@ -1692,6 +1798,11 @@ export default function SpritePet({
     currentPose = posePool[idleTick % posePool.length];
   }
   const blinkClass = blinkState ? 'sprite-blink' : '';
+
+  // Derive body pose and head offset from the composite current pose
+  const bodyPose = getBodyPose(currentPose);
+  const [headDx, headDy] = getHeadOffset(currentPose);
+  const featureFrame = tailFrame; // Buu tentacle sways with tail frame
 
   // Memoize all grid computations
   const layers = useMemo(() => {
@@ -1711,28 +1822,28 @@ export default function SpritePet({
     // Clothing layers
     let hatShadow = '', topShadow = '', beltShadow2 = '', shoesShadow = '', foodShadow = '';
 
-    // Base body (no head — head is a separate layer above clothing)
-    const baseGrid = outlineGrid(buildBase(character, weightState, currentPose));
+    // Base body — uses bodyPose (head_* poses → rest)
+    const baseGrid = outlineGrid(buildBase(character, weightState, bodyPose));
     baseShadow = composeShadow(baseGrid, palette);
 
-    // Head (separate layer — rendered above clothing, below features)
-    const headGrid = outlineGrid(buildHead(character));
+    // Head — shifted with headDx/headDy for bob/nod poses
+    const headGrid = shiftGrid(outlineGrid(buildHead(character)), headDx, headDy);
     headShadow = composeShadow(headGrid, palette);
 
-    // Arms — pose-dependent pixel frames
-    const armsGrid = outlineGrid(buildArms(character, weightState, currentPose));
+    // Arms — pose-dependent pixel frames (uses bodyPose)
+    const armsGrid = outlineGrid(buildArms(character, weightState, bodyPose));
     armsShadow = composeShadow(armsGrid, palette);
 
-    // Character features (ears, horns, etc)
-    const featGrid = outlineGrid(buildFeatures(character));
+    // Character features (ears, horns, tentacle) — shifted with head, animated with featureFrame
+    const featGrid = shiftGrid(outlineGrid(buildFeatures(character, featureFrame)), headDx, headDy);
     featShadow = composeShadow(featGrid, palette);
 
-    // Face / expression
-    const faceGrid = buildFace(character, mood, expression);
+    // Face / expression — shifted with head
+    const faceGrid = shiftGrid(buildFace(character, mood, expression), headDx, headDy);
     faceShadow = composeShadow(faceGrid, palette);
 
-    // Tail
-    const tailGrid = outlineGrid(buildTail(character, weightState));
+    // Tail — frame-based wiggle animation
+    const tailGrid = outlineGrid(buildTail(character, weightState, tailFrame));
     tailShadow = composeShadow(tailGrid, palette);
 
     const defaultHat = equippedHat ? null : iconicLook?.hat;
@@ -1740,7 +1851,8 @@ export default function SpritePet({
     const defaultBelt = equippedBelt ? null : iconicLook?.belt;
 
     if (defaultHat) {
-      const hg = outlineGrid(buildHat(defaultHat.id, defaultHat.color, character));
+      // Hat shifts with head
+      const hg = shiftGrid(outlineGrid(buildHat(defaultHat.id, defaultHat.color, character)), headDx, headDy);
       hatShadow = gridToShadow(hg, getClothingColorMap(defaultHat.color));
     }
     if (defaultTop) {
@@ -1752,7 +1864,7 @@ export default function SpritePet({
       beltShadow2 = gridToShadow(bg, getClothingColorMap(defaultBelt.color));
     }
     if (equippedHat) {
-      const hg = outlineGrid(buildHat(equippedHat, hatColor, character));
+      const hg = shiftGrid(outlineGrid(buildHat(equippedHat, hatColor, character)), headDx, headDy);
       hatShadow = gridToShadow(hg, getClothingColorMap(hatColor));
     }
     if (equippedTop) {
@@ -1777,10 +1889,7 @@ export default function SpritePet({
     }
 
     return { baseShadow, headShadow, armsShadow, featShadow, faceShadow, tailShadow, groundShadow, hatShadow, topShadow, beltShadow2, shoesShadow, foodShadow };
-  }, [character, weightState, mood, expression, equippedHat, equippedBelt, equippedShoes, equippedTop, hatColor, beltColor, shoesColor, topColor, foodId, iconicLook, palette, currentPose]);
-
-  // No CSS animation classes — all motion is frame-based pixel pose changes
-  const animClass = '';
+  }, [character, weightState, mood, expression, equippedHat, equippedBelt, equippedShoes, equippedTop, hatColor, beltColor, shoesColor, topColor, foodId, iconicLook, palette, bodyPose, headDx, headDy, tailFrame, featureFrame]);
 
   return (
     <div
@@ -1799,9 +1908,9 @@ export default function SpritePet({
       <PixelLayer shadow={layers.groundShadow} />
 
       {/* Animated group */}
-      <div className={`${animClass} ${blinkClass}`} style={{ position: 'absolute', inset: 0 }}>
-        {/* Tail */}
-        <PixelLayer shadow={layers.tailShadow} className="pet-tail" />
+      <div className={blinkClass} style={{ position: 'absolute', inset: 0 }}>
+        {/* Tail — frame-based pixel animation */}
+        <PixelLayer shadow={layers.tailShadow} />
 
         {/* Base body */}
         <PixelLayer shadow={layers.baseShadow} />
@@ -1830,6 +1939,27 @@ export default function SpritePet({
         {/* Hat (on top of everything) */}
         {layers.hatShadow && <PixelLayer shadow={layers.hatShadow} />}
       </div>
+
+      {/* STOMP! action text */}
+      {currentPose === 'stomp' && (
+        <div style={{
+          position: 'absolute',
+          top: `${size * 0.02}px`,
+          left: '50%',
+          transform: 'translateX(-50%) rotate(-8deg)',
+          fontFamily: 'monospace',
+          fontWeight: 900,
+          fontSize: `${Math.max(10, size / 8)}px`,
+          color: '#ff4444',
+          textShadow: '2px 2px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000',
+          whiteSpace: 'nowrap',
+          pointerEvents: 'none',
+          zIndex: 10,
+          letterSpacing: '2px',
+        }}>
+          STOMP!
+        </div>
+      )}
 
       {layers.foodShadow && (
         <PixelLayer
