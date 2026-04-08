@@ -1457,6 +1457,7 @@ export const usePetToy = (toyId) => request(`/pets/toys/${toyId}/use`, { method:
 export const claimPetMission = (missionId) => request(`/pets/missions/${missionId}/claim`, { method: 'POST' });
 export const demandTrick = (trickId) => request(`/pets/tricks/${trickId}/demand`, { method: 'POST' });
 export const performTrick = (trickId) => request(`/pets/tricks/${trickId}/perform`, { method: 'POST' });
+export const renamePet = (nickname) => request('/pets/rename', { method: 'POST', body: JSON.stringify({ nickname }) });
 export const getPetLeaderboard = () => request('/pets/leaderboard');
 export const reactToPet = (targetUserId, reactionType) => request('/pets/social/react', { method: 'POST', body: JSON.stringify({ targetUserId, reactionType }) });
 export const sendPetGift = (targetUserId, giftType, giftId, message) => request('/pets/social/gift', { method: 'POST', body: JSON.stringify({ targetUserId, giftType, giftId, message }) });

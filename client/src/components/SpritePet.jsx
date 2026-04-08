@@ -435,11 +435,11 @@ function buildFeatures(character, featureFrame = 0) {
       // Inner ear pink
       fillTriangle(g, CX - 10, hcy - 3, CX - 14, hcy - HEAD_RY, CX - 7, hcy - HEAD_RY + 4, 'P');
       fillTriangle(g, CX + 10, hcy - 3, CX + 14, hcy - HEAD_RY, CX + 7, hcy - HEAD_RY + 4, 'P');
-      // Whisker lines from cheeks (not triangles)
-      fillLine(g, CX - 8, hcy + 6, CX - 19, hcy + 4, 'R');
-      fillLine(g, CX - 8, hcy + 8, CX - 19, hcy + 8, 'R');
-      fillLine(g, CX + 8, hcy + 6, CX + 19, hcy + 4, 'R');
-      fillLine(g, CX + 8, hcy + 8, CX + 19, hcy + 8, 'R');
+      // Thin whisker dots from cheeks — spaced pixels for delicate look
+      setPixel(g, CX - 10, hcy + 6, 'R'); setPixel(g, CX - 13, hcy + 5, 'R'); setPixel(g, CX - 16, hcy + 4, 'R');
+      setPixel(g, CX - 10, hcy + 8, 'R'); setPixel(g, CX - 13, hcy + 8, 'R'); setPixel(g, CX - 16, hcy + 8, 'R');
+      setPixel(g, CX + 10, hcy + 6, 'R'); setPixel(g, CX + 13, hcy + 5, 'R'); setPixel(g, CX + 16, hcy + 4, 'R');
+      setPixel(g, CX + 10, hcy + 8, 'R'); setPixel(g, CX + 13, hcy + 8, 'R'); setPixel(g, CX + 16, hcy + 8, 'R');
       break;
     }
     case 'buu': {

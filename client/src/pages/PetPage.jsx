@@ -7,7 +7,7 @@ import {
   setPetColor, togglePetAvatar, demandTrick, performTrick,
   interactPet, doPetActivity, claimPetMission, buyPetToy, usePetToy,
   buyPetHabitatItem, equipPetHabitat, setPetTrainingPath, getPetLeaderboard,
-  getPetSocialFeed,
+  getPetSocialFeed, renamePet,
 } from '../utils/api';
 import SpritePet, { renderPetToCanvas } from '../components/SpritePet';
 import PetCoachPanel from '../components/pet/PetCoachPanel';
@@ -167,6 +167,9 @@ export default function PetPage() {
   const [activeToyVisual, setActiveToyVisual] = useState(null);
   const [socialFeed, setSocialFeed] = useState(null);
   const [shareStatus, setShareStatus] = useState(''); // '' | 'capturing' | 'done'
+  const [editingName, setEditingName] = useState(false);
+  const [nicknameInput, setNicknameInput] = useState('');
+  const [renameBusy, setRenameBusy] = useState(false);
   const habitatRef = useRef(null);
 
   const loadPet = useCallback(async () => {
@@ -505,7 +508,7 @@ export default function PetPage() {
     }
   };
 
-  // ─── Share pet as image — canvas-rendered social card ─
+  // ─── Share pet as image — captures habitat + pet ─
   const handleSharePet = async () => {
     if (!pet || shareStatus === 'capturing') return;
     setShareStatus('capturing');
@@ -516,42 +519,64 @@ export default function PetPage() {
       canvas.height = H;
       const ctx = canvas.getContext('2d');
 
-      // ─── Background gradient ───
-      const BG_COLORS = {
-        dojocat: ['#0a1628', '#0f2845'],
-        buu: ['#1a0a28', '#2d0f45'],
-        devit: ['#280a0a', '#451515'],
-        pixiu: ['#1a1a0a', '#2d3015'],
-      };
-      const [c1, c2] = BG_COLORS[pet.character] || BG_COLORS.dojocat;
-      const grad = ctx.createLinearGradient(0, 0, 0, H);
-      grad.addColorStop(0, c1);
-      grad.addColorStop(1, c2);
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, W, H);
+      // ─── Capture habitat background (walls, floor, props) via html-to-image ───
+      const habitatEl = habitatRef.current;
+      let habitatImg = null;
+      if (habitatEl) {
+        try {
+          // Hide UI overlays and pet sprite — keep habitat scenery
+          const excludeEls = habitatEl.querySelectorAll('[data-share-exclude], .pixel-pet-wrap');
+          excludeEls.forEach(el => { el.dataset._prevVis = el.style.visibility; el.style.visibility = 'hidden'; });
+          const { toPng } = await import('html-to-image');
+          const habitatDataUrl = await toPng(habitatEl, { cacheBust: true, pixelRatio: 2, backgroundColor: null });
+          // Restore visibility
+          excludeEls.forEach(el => { el.style.visibility = el.dataset._prevVis || ''; delete el.dataset._prevVis; });
+          // Load as Image for canvas drawing
+          habitatImg = await new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => resolve(img);
+            img.onerror = () => resolve(null);
+            img.src = habitatDataUrl;
+          });
+        } catch (captureErr) {
+          console.warn('Habitat capture failed, using fallback', captureErr);
+          // Restore visibility on error
+          const excludeEls = habitatEl?.querySelectorAll('[data-share-exclude], .pixel-pet-wrap');
+          excludeEls?.forEach(el => { el.style.visibility = el.dataset._prevVis || ''; delete el.dataset._prevVis; });
+        }
+      }
 
-      // ─── Decorative habitat circle behind pet ───
-      const ACCENT = { dojocat: '#1a3a5c', buu: '#3a1a5c', devit: '#5c1a1a', pixiu: '#3a3a1a' };
-      ctx.beginPath();
-      ctx.arc(W / 2, 360, 160, 0, Math.PI * 2);
-      ctx.fillStyle = ACCENT[pet.character] || ACCENT.dojocat;
-      ctx.globalAlpha = 0.4;
-      ctx.fill();
-      ctx.globalAlpha = 1;
-
-      // ─── Floor line ───
-      ctx.beginPath();
-      ctx.moveTo(80, 520);
-      ctx.lineTo(520, 520);
-      ctx.strokeStyle = 'rgba(255,255,255,0.06)';
-      ctx.lineWidth = 1;
-      ctx.stroke();
+      // ─── Draw background ───
+      if (habitatImg) {
+        // Draw captured habitat as the top portion of the card
+        const hAspect = habitatImg.width / habitatImg.height;
+        const drawH = Math.min(W / hAspect, 520);
+        ctx.drawImage(habitatImg, 0, 0, W, drawH);
+        // Darken bottom fade for text readability
+        const fade = ctx.createLinearGradient(0, drawH - 100, 0, drawH);
+        fade.addColorStop(0, 'rgba(7,11,20,0)');
+        fade.addColorStop(1, 'rgba(7,11,20,1)');
+        ctx.fillStyle = fade;
+        ctx.fillRect(0, drawH - 100, W, 100);
+        // Fill below habitat
+        ctx.fillStyle = '#070b14';
+        ctx.fillRect(0, drawH, W, H - drawH);
+      } else {
+        // Fallback gradient background
+        const BG_COLORS = { dojocat: ['#0a1628', '#0f2845'], buu: ['#1a0a28', '#2d0f45'], devit: ['#280a0a', '#451515'], pixiu: ['#1a1a0a', '#2d3015'] };
+        const [c1, c2] = BG_COLORS[pet.character] || BG_COLORS.dojocat;
+        const grad = ctx.createLinearGradient(0, 0, 0, H);
+        grad.addColorStop(0, c1);
+        grad.addColorStop(1, c2);
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, W, H);
+      }
 
       // ─── Render pet at center ───
       const pixelSize = 5;
-      const petW = 60 * pixelSize;  // 60 grid width
+      const petW = 60 * pixelSize;
       const petX = (W - petW) / 2;
-      const petY = 200;
+      const petY = habitatImg ? 80 : 200;
       renderPetToCanvas(ctx, {
         character: pet.character,
         weightState: pet.weight_state,
@@ -570,95 +595,119 @@ export default function PetPage() {
         pixelSize,
       });
 
-      // ─── Bond rank badge ───
-      const rankLabel = pet.bond_rank?.label || 'Training Partner';
+      // ─── Pet name ───
+      const displayName = pet.nickname || (pet.character || 'pet').toUpperCase();
       ctx.textAlign = 'center';
-      ctx.font = 'bold 13px system-ui, -apple-system, sans-serif';
+      ctx.font = 'bold 28px system-ui, -apple-system, sans-serif';
+      ctx.fillStyle = 'rgba(255,255,255,0.9)';
+      ctx.fillText(displayName, W / 2, 560);
+
+      // ─── Level + Bond rank ───
+      ctx.font = 'bold 14px system-ui, -apple-system, sans-serif';
+      ctx.fillStyle = '#fbbf24';
+      ctx.fillText(`Lv.${pet.level || 1}`, W / 2 - 60, 585);
       ctx.fillStyle = 'rgba(120,200,255,0.7)';
-      ctx.fillText(rankLabel.toUpperCase(), W / 2, 560);
+      ctx.fillText(pet.bond_rank?.label?.toUpperCase() || 'TRAINING PARTNER', W / 2 + 30, 585);
+
+      // ─── Stats row ───
+      const stats = [
+        { label: 'XP', value: String(pet.experience || 0), color: '#a78bfa' },
+        { label: 'BOND', value: String(pet.bond || 0), color: '#67d4ff' },
+        { label: 'TRUST', value: String(Math.round(pet.trust || 0)), color: '#6ee7b7' },
+        { label: 'STREAK', value: `${pet.daily_streak || 0}d`, color: '#fbbf24' },
+      ];
+      const statY = 640;
+      const statSpacing = 130;
+      const statStart = (W - statSpacing * (stats.length - 1)) / 2;
+      stats.forEach((s, i) => {
+        const sx = statStart + i * statSpacing;
+        ctx.font = 'bold 24px system-ui, -apple-system, sans-serif';
+        ctx.fillStyle = s.color;
+        ctx.fillText(s.value, sx, statY);
+        ctx.font = '600 10px system-ui, -apple-system, sans-serif';
+        ctx.fillStyle = 'rgba(255,255,255,0.35)';
+        ctx.fillText(s.label, sx, statY + 16);
+      });
 
       // ─── Form badge ───
       if (pet.form?.label) {
         ctx.font = 'bold 11px system-ui, -apple-system, sans-serif';
         ctx.fillStyle = 'rgba(255,255,255,0.4)';
-        ctx.fillText(pet.form.label, W / 2, 578);
+        ctx.fillText(pet.form.label, W / 2, 700);
       }
-
-      // ─── Stats row ───
-      const stats = [
-        { label: 'BOND', value: String(pet.bond || 0), color: '#67d4ff' },
-        { label: 'TRUST', value: String(Math.round(pet.trust || 0)), color: '#6ee7b7' },
-        { label: 'STREAK', value: `${pet.daily_streak || 0}d`, color: '#fbbf24' },
-      ];
-      const statY = 620;
-      const statSpacing = 140;
-      const statStart = (W - statSpacing * (stats.length - 1)) / 2;
-      stats.forEach((s, i) => {
-        const sx = statStart + i * statSpacing;
-        ctx.font = 'bold 28px system-ui, -apple-system, sans-serif';
-        ctx.fillStyle = s.color;
-        ctx.fillText(s.value, sx, statY);
-        ctx.font = '600 10px system-ui, -apple-system, sans-serif';
-        ctx.fillStyle = 'rgba(255,255,255,0.35)';
-        ctx.fillText(s.label, sx, statY + 18);
-      });
-
-      // ─── Character name ───
-      const charNames = { dojocat: 'DOJOCAT', buu: 'BUU', devit: 'DEVIT', pixiu: 'PIXIU' };
-      ctx.font = 'bold 32px system-ui, -apple-system, sans-serif';
-      ctx.fillStyle = 'rgba(255,255,255,0.85)';
-      ctx.fillText(charNames[pet.character] || pet.character.toUpperCase(), W / 2, 690);
 
       // ─── Branding ───
       ctx.font = 'bold 12px system-ui, -apple-system, sans-serif';
       ctx.fillStyle = 'rgba(255,255,255,0.25)';
       ctx.fillText('PUMP SHINSA', W / 2, 760);
 
-      // ─── Export — synchronous data URL to preserve user gesture ───
+      // ─── Export ───
       const dataUrl = canvas.toDataURL('image/png');
       const charName = pet.character || 'pet';
 
-      // Try native share API (works on mobile with file support)
+      // Convert data URL to blob synchronously (no fetch required)
+      function dataUrlToBlob(url) {
+        const [hdr, data] = url.split(',');
+        const mime = hdr.match(/:(.*?);/)[1];
+        const bin = atob(data);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        return new Blob([bytes], { type: mime });
+      }
+
+      const blob = dataUrlToBlob(dataUrl);
+      const file = new File([blob], `shinsa-${charName}.png`, { type: 'image/png' });
+
+      // Try native share API (works on mobile)
       if (typeof navigator?.share === 'function') {
         try {
-          const res = await fetch(dataUrl);
-          const blob = await res.blob();
-          const file = new File([blob], `shinsa-${charName}.png`, { type: 'image/png' });
-          await navigator.share({
-            files: [file],
-            title: `My ${charName} \u2014 Pump Shinsa`,
-            text: 'Check out my pet companion!',
-          });
+          await navigator.share({ files: [file], title: `${displayName} \u2014 Pump Shinsa` });
           setShareStatus('done');
           setTimeout(() => setShareStatus(''), 2000);
           return;
         } catch (shareErr) {
-          // User cancelled share sheet — still show success since image was generated
           if (shareErr?.name === 'AbortError') {
             setShareStatus('done');
             setTimeout(() => setShareStatus(''), 2000);
             return;
           }
-          // Share API failed (e.g. no file support) — fall through to download
+          // Fall through to download
         }
       }
 
-      // Fallback: trigger download via link (synchronous, keeps user gesture)
+      // Fallback: download via blob URL
+      const blobUrl = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = dataUrl;
+      a.href = blobUrl;
       a.download = `shinsa-${charName}.png`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
 
       setShareStatus('done');
       setTimeout(() => setShareStatus(''), 2000);
     } catch (e) {
       console.error('Share failed', e);
-      // Show error feedback instead of silently failing
       setShareStatus('');
       alert('Could not generate share image. Please try again.');
     }
+  };
+
+  // ─── Rename pet ─────────────────────────────────────────
+  const handleStartRename = () => {
+    setNicknameInput(pet?.nickname || '');
+    setEditingName(true);
+  };
+  const handleSaveNickname = async () => {
+    if (renameBusy) return;
+    setRenameBusy(true);
+    try {
+      const res = await renamePet(nicknameInput.trim());
+      setPet(res.pet);
+      setEditingName(false);
+    } catch (e) { console.error('Rename failed', e); }
+    finally { setRenameBusy(false); }
   };
 
   // ─── Gates ──────────────────────────────────────────
@@ -713,7 +762,29 @@ export default function PetPage() {
       <div className="mb-2 rounded-[1.25rem] border border-white/[0.06] bg-white/[0.025] px-3.5 py-2 shadow-[0_10px_30px_rgba(0,0,0,0.18)]">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <h1 className="text-lg font-black tracking-tight text-white">My {charName}</h1>
+            {editingName ? (
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="text"
+                  value={nicknameInput}
+                  onChange={e => setNicknameInput(e.target.value.substring(0, 20))}
+                  onKeyDown={e => { if (e.key === 'Enter') handleSaveNickname(); if (e.key === 'Escape') setEditingName(false); }}
+                  className="w-full max-w-[160px] bg-white/10 border border-white/20 rounded-lg px-2 py-0.5 text-sm font-bold text-white outline-none focus:border-cyan-400/50"
+                  placeholder={charName}
+                  autoFocus
+                  maxLength={20}
+                />
+                <button onClick={handleSaveNickname} disabled={renameBusy} className="text-[10px] text-emerald-400 font-bold hover:text-emerald-300">Save</button>
+                <button onClick={() => setEditingName(false)} className="text-[10px] text-gray-500 hover:text-gray-300">&times;</button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5">
+                <h1 className="text-lg font-black tracking-tight text-white">{pet.nickname || `My ${charName}`}</h1>
+                <button onClick={handleStartRename} className="text-gray-500 hover:text-white transition-colors" title="Rename pet">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3"><path d="M13.5 3.3a1.1 1.1 0 00-1.6 0L4.6 10.6l-.6 2 2-.6L13.5 4.8a1.1 1.1 0 000-1.5zM3 13h10v1H3v-1z" /></svg>
+                </button>
+              </div>
+            )}
             <p className="text-[11px] text-cyan-100/80">{pet.identity_title || 'Training Partner'}</p>
           </div>
           <div className="flex gap-1.5 shrink-0">
@@ -734,6 +805,14 @@ export default function PetPage() {
               Switch
             </button>
           </div>
+        </div>
+        {/* Level + XP progress bar */}
+        <div className="mt-1.5 flex items-center gap-2">
+          <span className="text-[11px] font-black text-amber-400">Lv.{pet.level || 1}</span>
+          <div className="flex-1 h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
+            <div className="h-full rounded-full bg-gradient-to-r from-amber-500 to-yellow-400 transition-all duration-500" style={{ width: `${Math.round((pet.level_progress || 0) * 100)}%` }} />
+          </div>
+          <span className="text-[9px] text-gray-500">{(pet.current_level_xp || 0).toLocaleString()}/{(pet.next_level_xp || 100).toLocaleString()} XP</span>
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-1.5">
           <HeaderPill label="XP" value={experience.toLocaleString()} tone="slate" />
@@ -769,13 +848,13 @@ export default function PetPage() {
             </button>
             <WeightBadge state={pet.weight_state} />
           </div>
-          <div className="absolute top-3 left-3 z-10"><BondBadge rank={pet.bond_rank} /></div>
+          <div data-share-exclude="true" className="absolute top-3 left-3 z-10"><BondBadge rank={pet.bond_rank} /></div>
           {pet.form?.label ? (
-            <div className="absolute left-1/2 top-10 z-10 -translate-x-1/2">
+            <div data-share-exclude="true" className="absolute left-1/2 top-10 z-10 -translate-x-1/2">
               <FormBadge form={pet.form} />
             </div>
           ) : null}
-          <div className={`relative z-10 flex flex-col items-center justify-end px-4 pt-16 pb-3 min-h-[290px] sm:min-h-[310px] ${petTapped ? 'animate-[wiggle_400ms_ease]' : ''}`}>
+          <div data-share-exclude="true" className={`relative z-10 flex flex-col items-center justify-end px-4 pt-16 pb-3 min-h-[290px] sm:min-h-[310px] ${petTapped ? 'animate-[wiggle_400ms_ease]' : ''}`}>
             {/* Speech bubble — single instance, above pet */}
             <div className="mb-2 relative max-w-[240px]">
               <div className={`backdrop-blur-sm border rounded-xl px-3 py-1.5 text-[13px] text-center italic transition-all duration-500 ${

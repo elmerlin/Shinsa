@@ -73,6 +73,24 @@ function levelComboBonus(level) {
   return 0;
 }
 
+// XP thresholds per level — increases by 15 per level, caps at level 100
+function xpForNextLevel(level) {
+  if (level < 1) return 100;
+  const increase = Math.min(level - 1, 98) * 15;
+  return 100 + increase;
+}
+
+function getLevelFromXp(totalXp) {
+  let remaining = totalXp || 0;
+  let level = 1;
+  while (remaining >= xpForNextLevel(level)) {
+    remaining -= xpForNextLevel(level);
+    level++;
+  }
+  const needed = xpForNextLevel(level);
+  return { level, currentLevelXp: remaining, nextLevelXp: needed, progress: needed > 0 ? remaining / needed : 0 };
+}
+
 // ─── Pet Food ─────────────────────────────────────────────────────
 const PET_FOODS = [
   { id: 'pump-chow', name: 'Pump Chow', cost: 22, hunger: 7, happiness: 1, emoji: '🥩', desc: 'Basic upkeep kibble for hungry stompers' },
@@ -930,6 +948,7 @@ function ensurePetTable(db) {
   addCol('daily_tap_count', "INTEGER NOT NULL DEFAULT 0");
   addCol('daily_tap_key', "TEXT NOT NULL DEFAULT ''");
   addCol('last_rest_at', "TEXT NOT NULL DEFAULT ''");
+  addCol('nickname', "TEXT NOT NULL DEFAULT ''");
 }
 
 function ensurePetSocialTables(db) {
@@ -1717,6 +1736,7 @@ function formatPet(pet, isPublic = false, db = null) {
   const energy = getStateValue(pet.energy || 65, pet.updated_at || pet.last_fed_at, ENERGY_DECAY_PER_HOUR);
   const hype = getStateValue(pet.hype || 25, pet.updated_at || pet.last_fed_at, HYPE_DECAY_PER_HOUR);
   const xp = pet.experience || 0;
+  const levelInfo = getLevelFromXp(xp);
   const character = pet.character || 'dojocat';
   const charTricks = TRICKS[character] || [];
   const nextTrick = getNextTrick(character, xp);
@@ -1761,6 +1781,11 @@ function formatPet(pet, isPublic = false, db = null) {
     hype,
     total_songs_fed: pet.total_songs_fed,
     experience: xp,
+    level: levelInfo.level,
+    level_progress: levelInfo.progress,
+    current_level_xp: levelInfo.currentLevelXp,
+    next_level_xp: levelInfo.nextLevelXp,
+    nickname: pet.nickname || '',
     highest_level: pet.highest_level || 0,
     equipped_hat: pet.equipped_hat || '',
     equipped_belt: pet.equipped_belt || '',
@@ -1977,6 +2002,22 @@ router.post('/adopt', requireAuth, (req, res) => {
   }
   const pet = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
   res.json({ pet: formatPet(pet, false, db) });
+});
+
+// ── Rename pet ─────────────────────────────────────────────
+router.post('/rename', requireAuth, (req, res) => {
+  const db = getDb();
+  ensurePetTable(db);
+  const pet = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
+  if (!pet) return res.status(404).json({ error: 'No pet found' });
+
+  let { nickname } = req.body;
+  if (typeof nickname !== 'string') return res.status(400).json({ error: 'Nickname must be a string' });
+  nickname = nickname.trim().substring(0, 20); // Max 20 chars
+
+  db.prepare('UPDATE user_pets SET nickname = ?, updated_at = datetime(\'now\') WHERE user_id = ?').run(nickname, req.user.id);
+  const updated = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
+  res.json({ pet: formatPet(updated, false, db) });
 });
 
 // GET /api/pets/shop — food + clothing catalog
