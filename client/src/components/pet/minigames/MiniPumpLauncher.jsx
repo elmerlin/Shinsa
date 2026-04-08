@@ -5,10 +5,12 @@
 import React from 'react';
 import SpritePet from '../../SpritePet';
 
-export default function MiniPumpLauncher({ onPlay, stats, leaderboard }) {
+export default function MiniPumpLauncher({ onPlay, stats, leaderboard, cost, comboBalance }) {
   const personalBest = stats?.personalBest ?? 0;
   const roundsPlayed = stats?.roundsPlayed ?? 0;
   const topEntries = Array.isArray(leaderboard) ? leaderboard.slice(0, 3) : [];
+  const comboCost = cost?.combo || 0;
+  const canAfford = (comboBalance ?? Infinity) >= comboCost;
 
   return (
     <button
@@ -34,12 +36,19 @@ export default function MiniPumpLauncher({ onPlay, stats, leaderboard }) {
           <p className="text-[10px] text-gray-500 mt-0.5 truncate">
             Match falling blobs — your pet fires the laser!
           </p>
-          {roundsPlayed > 0 && (
-            <div className="flex items-center gap-2 mt-1">
-              <span className="text-[9px] text-amber-400/80 font-semibold">Best: {personalBest}</span>
-              <span className="text-[9px] text-gray-600">{roundsPlayed} rounds</span>
-            </div>
-          )}
+          <div className="flex items-center gap-2 mt-1">
+            {roundsPlayed > 0 && (
+              <>
+                <span className="text-[9px] text-amber-400/80 font-semibold">Best: {personalBest}</span>
+                <span className="text-[9px] text-gray-600">{roundsPlayed} rounds</span>
+              </>
+            )}
+            {comboCost > 0 && (
+              <span className={`text-[9px] font-semibold ${canAfford ? 'text-amber-400/60' : 'text-rose-400/80'}`}>
+                {comboCost}c
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Play arrow */}
@@ -84,7 +93,7 @@ export default function MiniPumpLauncher({ onPlay, stats, leaderboard }) {
                     {entry.nickname ? <span className="text-gray-500"> · {entry.nickname}</span> : null}
                   </div>
                   <div className="text-[9px] text-gray-500 truncate">
-                    {entry.form || 'Companion'} · best streak {entry.best_streak || 0}
+                    {entry.form?.label || 'Companion'} · best streak {entry.best_streak || 0}
                   </div>
                 </div>
                 <div className="text-right shrink-0">

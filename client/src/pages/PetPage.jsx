@@ -8,7 +8,7 @@ import {
   interactPet, doPetActivity, claimPetMission, buyPetToy, usePetToy,
   buyPetHabitatItem, equipPetHabitat, setPetTrainingPath, getPetLeaderboard,
   getPetSocialFeed, renamePet, getMiniPumpStats, getMiniPumpLeaderboard, completeMiniPump,
-  getPetInvadersStats, completePetInvaders,
+  getPetInvadersStats, getPetInvadersLeaderboard, completePetInvaders, getMinigameCosts,
 } from '../utils/api';
 import SpritePet, { renderPetToCanvas } from '../components/SpritePet';
 import PetCoachPanel from '../components/pet/PetCoachPanel';
@@ -180,6 +180,8 @@ export default function PetPage() {
   const [miniPumpLeaderboard, setMiniPumpLeaderboard] = useState(null);
   const [petInvadersOpen, setPetInvadersOpen] = useState(false);
   const [petInvadersStats, setPetInvadersStats] = useState(null);
+  const [petInvadersLeaderboard, setPetInvadersLeaderboard] = useState(null);
+  const [minigameCosts, setMinigameCosts] = useState(null);
   const habitatRef = useRef(null);
 
   const loadPet = useCallback(async () => {
@@ -190,6 +192,8 @@ export default function PetPage() {
       setCharacters(charRes.characters || []);
       if (!petRes.pet) setShowSelect(true);
       if (petRes.pet) setSpeechText(petRes.pet.time_greeting || randomMsg(petRes.pet.mood));
+      // Load minigame costs lazily
+      if (!minigameCosts) getMinigameCosts().then(setMinigameCosts).catch(() => {});
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
   }, []);
@@ -746,11 +750,13 @@ export default function PetPage() {
   const handleOpenPetInvaders = () => {
     setPetInvadersOpen(true);
     if (!petInvadersStats) getPetInvadersStats().then(setPetInvadersStats).catch(() => {});
+    if (!petInvadersLeaderboard) getPetInvadersLeaderboard().then((r) => setPetInvadersLeaderboard(r.leaderboard || [])).catch(() => {});
   };
   const handlePetInvadersComplete = async (results) => {
     try {
       const r = await completePetInvaders(results);
       setPetInvadersStats(r);
+      getPetInvadersLeaderboard().then((lb) => setPetInvadersLeaderboard(lb.leaderboard || [])).catch(() => {});
       const petData = await getMyPet();
       if (petData?.pet) setPet(petData.pet);
     } catch (e) { console.error('Pet-invaders save failed', e); }
@@ -1027,6 +1033,9 @@ export default function PetPage() {
                 miniPumpLeaderboard={miniPumpLeaderboard}
                 onPetInvaders={handleOpenPetInvaders}
                 petInvadersStats={petInvadersStats}
+                petInvadersLeaderboard={petInvadersLeaderboard}
+                minigameCosts={minigameCosts}
+                comboBalance={combo_balance}
               />
             )}
             {tab === 'habitat' && (
@@ -1590,7 +1599,7 @@ function CollapsibleSection({ title, icon, defaultOpen = true, count, children }
 }
 
 // ─── Pet tab ──────────────────────────────────────────
-function PetTab({ pet, shop, combo, economy, socialFeed, interactionBusy, activityBusy, missionBusyId, toyBusy, trainingBusy, onAction, onActivity, onClaimMission, onBuyToy, onUseToy, onSetTrainingPath, onTabSwitch, onMiniPump, miniPumpStats, miniPumpLeaderboard, onPetInvaders, petInvadersStats }) {
+function PetTab({ pet, shop, combo, economy, socialFeed, interactionBusy, activityBusy, missionBusyId, toyBusy, trainingBusy, onAction, onActivity, onClaimMission, onBuyToy, onUseToy, onSetTrainingPath, onTabSwitch, onMiniPump, miniPumpStats, miniPumpLeaderboard, onPetInvaders, petInvadersStats, petInvadersLeaderboard, minigameCosts, comboBalance }) {
   const REACTION_ICONS = { cheer: '📣', wow: '🤩', flex: '💪', heart: '💗' };
   const claimableMissions = (pet.missions || []).filter(m => m.complete && !m.claimed).length;
   return (
@@ -1627,8 +1636,8 @@ function PetTab({ pet, shop, combo, economy, socialFeed, interactionBusy, activi
       <CollapsibleSection title="Play & Care" icon="🎮" defaultOpen={true}>
         {/* Minigame launchers */}
         <div className="space-y-2 mb-3">
-          <MiniPumpLauncher onPlay={onMiniPump} stats={miniPumpStats} leaderboard={miniPumpLeaderboard} />
-          <PetInvadersLauncher onPlay={onPetInvaders} stats={petInvadersStats} />
+          <MiniPumpLauncher onPlay={onMiniPump} stats={miniPumpStats} leaderboard={miniPumpLeaderboard} cost={minigameCosts?.['mini-pump']} comboBalance={comboBalance} />
+          <PetInvadersLauncher onPlay={onPetInvaders} stats={petInvadersStats} leaderboard={petInvadersLeaderboard} cost={minigameCosts?.['pet-invaders']} comboBalance={comboBalance} />
         </div>
         <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
           <div className="flex items-center justify-between mb-2">

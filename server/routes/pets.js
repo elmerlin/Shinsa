@@ -26,6 +26,12 @@ const PET_ECONOMY = {
   },
   sinks: ['Food upkeep', 'Clothing & accessories', 'Habitat decorations', 'Toys & play items', 'Gifts to friends'],
 };
+// Minigame play costs
+const MINIGAME_COST = {
+  'mini-pump': { combo: 5, energy: -4, hunger: -3, happiness: 3, hype: 2 },
+  'pet-invaders': { combo: 8, energy: -6, hunger: -4, happiness: 4, hype: 3 },
+};
+
 const GRADE_ORDER = ['F', 'D', 'C', 'B', 'A', 'A+', 'AA', 'AA+', 'AAA', 'AAA+', 'S', 'S+', 'SS', 'SS+', 'SSS', 'SSS+'];
 const GRADE_INDEX = Object.fromEntries(GRADE_ORDER.map((grade, index) => [grade, index]));
 
@@ -3145,17 +3151,33 @@ router.post('/minigames/mini-pump/complete', requireAuth, (req, res) => {
     `).run(req.user.id, safeScore, safeStreak, safeCadence);
   }
 
-  // Tiny pet reward — small happiness + bond bump (capped to prevent farming)
+  // Play cost + reward
   const pet = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
   let petReward = null;
+  let costApplied = null;
   if (pet) {
+    const cost = MINIGAME_COST['mini-pump'];
+    const curHunger = computeDecayed(pet.fullness, pet.last_fed_at, HUNGER_DECAY_PER_HOUR);
+    const curHappiness = computeDecayed(pet.happiness || 50, pet.last_fed_at, HAPPINESS_DECAY_PER_HOUR);
+    const curEnergy = getStateValue(pet.energy || 65, pet.updated_at || pet.last_fed_at, ENERGY_DECAY_PER_HOUR);
+    const curHype = getStateValue(pet.hype || 25, pet.updated_at || pet.last_fed_at, HYPE_DECAY_PER_HOUR);
+
+    // Score-based reward on top of base cost effects
     const happyBump = Math.min(3, Math.max(1, Math.floor(safeScore / 5)));
     const bondBump = Math.min(2, Math.max(0, Math.floor(safeScore / 8)));
-    const newHappiness = Math.min(100, (pet.happiness || 50) + happyBump);
-    const newBond = (pet.bond || 0) + bondBump;
-    db.prepare('UPDATE user_pets SET happiness = ?, bond = ?, updated_at = datetime(\'now\') WHERE user_id = ?')
-      .run(newHappiness, newBond, req.user.id);
-    petReward = { happiness: happyBump, bond: bondBump };
+
+    const newHunger = clamp(curHunger + (cost.hunger || 0), 0, MAX_STAT);
+    const newHappiness = clamp(curHappiness + (cost.happiness || 0) + happyBump, 0, MAX_STAT);
+    const newEnergy = clamp(curEnergy + (cost.energy || 0), 0, MAX_STAT);
+    const newHype = clamp(curHype + (cost.hype || 0), 0, MAX_STAT);
+    const newBond = Math.max(0, (pet.bond || 0) + bondBump);
+    const comboDeduct = Math.min(cost.combo || 0, pet.combo_balance || 0);
+
+    db.prepare(`UPDATE user_pets SET fullness = ?, happiness = ?, energy = ?, hype = ?, bond = ?,
+      combo_balance = combo_balance - ?, updated_at = datetime('now'), last_fed_at = datetime('now')
+      WHERE user_id = ?`).run(newHunger, newHappiness, newEnergy, newHype, newBond, comboDeduct, req.user.id);
+    petReward = { happiness: happyBump + (cost.happiness || 0), bond: bondBump };
+    costApplied = { combo: comboDeduct, energy: cost.energy || 0, hunger: cost.hunger || 0 };
   }
 
   const updated = db.prepare('SELECT * FROM pet_minigame_stats WHERE user_id = ? AND game_id = ?')
@@ -3167,6 +3189,7 @@ router.post('/minigames/mini-pump/complete', requireAuth, (req, res) => {
     roundsPlayed: updated?.rounds_played || 0,
     fastestCadence: updated?.fastest_cadence || 1000,
     petReward,
+    costApplied,
   });
 });
 
@@ -3238,17 +3261,32 @@ router.post('/minigames/pet-invaders/complete', requireAuth, (req, res) => {
     `).run(req.user.id, safeScore, safeWave, safeBosses, safeKills);
   }
 
-  // Tiny pet reward — small happiness + bond bump (capped to prevent farming)
+  // Play cost + reward
   const pet = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
   let petReward = null;
+  let costApplied = null;
   if (pet) {
-    const happyBump = Math.min(3, Math.max(1, Math.floor(safeScore / 50)));
-    const bondBump = Math.min(2, Math.max(0, Math.floor(safeScore / 100)));
-    const newHappiness = Math.min(100, (pet.happiness || 50) + happyBump);
-    const newBond = (pet.bond || 0) + bondBump;
-    db.prepare('UPDATE user_pets SET happiness = ?, bond = ?, updated_at = datetime(\'now\') WHERE user_id = ?')
-      .run(newHappiness, newBond, req.user.id);
-    petReward = { happiness: happyBump, bond: bondBump };
+    const cost = MINIGAME_COST['pet-invaders'];
+    const curHunger = computeDecayed(pet.fullness, pet.last_fed_at, HUNGER_DECAY_PER_HOUR);
+    const curHappiness = computeDecayed(pet.happiness || 50, pet.last_fed_at, HAPPINESS_DECAY_PER_HOUR);
+    const curEnergy = getStateValue(pet.energy || 65, pet.updated_at || pet.last_fed_at, ENERGY_DECAY_PER_HOUR);
+    const curHype = getStateValue(pet.hype || 25, pet.updated_at || pet.last_fed_at, HYPE_DECAY_PER_HOUR);
+
+    const happyBump = Math.min(4, Math.max(1, Math.floor(safeScore / 50)));
+    const bondBump = Math.min(3, Math.max(0, Math.floor(safeScore / 100)));
+
+    const newHunger = clamp(curHunger + (cost.hunger || 0), 0, MAX_STAT);
+    const newHappiness = clamp(curHappiness + (cost.happiness || 0) + happyBump, 0, MAX_STAT);
+    const newEnergy = clamp(curEnergy + (cost.energy || 0), 0, MAX_STAT);
+    const newHype = clamp(curHype + (cost.hype || 0), 0, MAX_STAT);
+    const newBond = Math.max(0, (pet.bond || 0) + bondBump);
+    const comboDeduct = Math.min(cost.combo || 0, pet.combo_balance || 0);
+
+    db.prepare(`UPDATE user_pets SET fullness = ?, happiness = ?, energy = ?, hype = ?, bond = ?,
+      combo_balance = combo_balance - ?, updated_at = datetime('now'), last_fed_at = datetime('now')
+      WHERE user_id = ?`).run(newHunger, newHappiness, newEnergy, newHype, newBond, comboDeduct, req.user.id);
+    petReward = { happiness: happyBump + (cost.happiness || 0), bond: bondBump };
+    costApplied = { combo: comboDeduct, energy: cost.energy || 0, hunger: cost.hunger || 0 };
   }
 
   const updated = db.prepare('SELECT * FROM pet_invaders_stats WHERE user_id = ?')
@@ -3261,7 +3299,83 @@ router.post('/minigames/pet-invaders/complete', requireAuth, (req, res) => {
     totalKills: updated?.total_kills || 0,
     totalRuns: updated?.total_runs || 0,
     petReward,
+    costApplied,
   });
+});
+
+// GET /api/pets/minigames/pet-invaders/leaderboard — community bests
+router.get('/minigames/pet-invaders/leaderboard', requireAuth, (req, res) => {
+  const db = getDb();
+  ensureInvadersTable(db);
+  ensurePetTable(db);
+
+  const rawLimit = Number(req.query.limit || 10);
+  const limit = Math.max(3, Math.min(25, Math.floor(rawLimit) || 10));
+
+  const rows = db.prepare(`
+    SELECT
+      s.user_id,
+      s.high_score,
+      s.best_wave,
+      s.bosses_defeated,
+      s.total_kills,
+      s.total_runs,
+      s.last_played_at,
+      u.username,
+      p.character,
+      p.nickname,
+      p.bond,
+      p.mastery_xp,
+      p.fullness,
+      p.happiness,
+      p.last_fed_at,
+      p.equipped_hat,
+      p.equipped_top,
+      p.hat_color,
+      p.top_color
+    FROM pet_invaders_stats s
+    JOIN users u ON u.id = s.user_id
+    LEFT JOIN user_pets p ON p.user_id = s.user_id
+    WHERE s.high_score > 0
+    ORDER BY s.high_score DESC, s.best_wave DESC, s.bosses_defeated DESC, s.total_kills DESC
+    LIMIT ?
+  `).all(limit);
+
+  const leaderboard = rows.map((row, index) => {
+    const bond = row.bond || 0;
+    const masteryXp = row.mastery_xp || 0;
+    return {
+      rank: index + 1,
+      user_id: row.user_id,
+      username: row.username || 'Unknown',
+      character: row.character || 'dojocat',
+      nickname: row.nickname || '',
+      high_score: row.high_score || 0,
+      best_wave: row.best_wave || 0,
+      bosses_defeated: row.bosses_defeated || 0,
+      total_kills: row.total_kills || 0,
+      total_runs: row.total_runs || 0,
+      form: getPetForm(bond, masteryXp),
+      bond_rank: getBondRank(bond),
+      equipped_hat: row.equipped_hat || '',
+      equipped_top: row.equipped_top || '',
+      hat_color: row.hat_color || '',
+      top_color: row.top_color || '',
+      weight_state: getWeightState(computeDecayed(row.fullness, row.last_fed_at, HUNGER_DECAY_PER_HOUR)),
+      mood: getMood(
+        computeDecayed(row.fullness, row.last_fed_at, HUNGER_DECAY_PER_HOUR),
+        computeDecayed(row.happiness || 50, row.last_fed_at, HAPPINESS_DECAY_PER_HOUR),
+      ),
+      is_me: row.user_id === req.user.id,
+    };
+  });
+
+  res.json({ leaderboard });
+});
+
+// GET /api/pets/minigames/cost — return play costs for UI display
+router.get('/minigames/cost', requireAuth, (_req, res) => {
+  res.json(MINIGAME_COST);
 });
 
 module.exports = router;
