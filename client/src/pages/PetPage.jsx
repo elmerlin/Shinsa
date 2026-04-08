@@ -614,25 +614,50 @@ export default function PetPage() {
       ctx.fillStyle = 'rgba(255,255,255,0.25)';
       ctx.fillText('PUMP SHINSA', W / 2, 760);
 
-      // ─── Export ───
-      const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+      // ─── Export — synchronous data URL to preserve user gesture ───
+      const dataUrl = canvas.toDataURL('image/png');
       const charName = pet.character || 'pet';
-      const file = new File([blob], `shinsa-${charName}.png`, { type: 'image/png' });
-      const canShare = typeof navigator?.share === 'function' && typeof navigator?.canShare === 'function' && navigator.canShare({ files: [file] });
-      if (canShare) {
-        await navigator.share({ files: [file], title: `My ${charName} \u2014 Pump Shinsa`, text: 'Check out my pet companion!' });
-      } else {
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = file.name;
-        a.click();
-        URL.revokeObjectURL(a.href);
+
+      // Try native share API (works on mobile with file support)
+      if (typeof navigator?.share === 'function') {
+        try {
+          const res = await fetch(dataUrl);
+          const blob = await res.blob();
+          const file = new File([blob], `shinsa-${charName}.png`, { type: 'image/png' });
+          await navigator.share({
+            files: [file],
+            title: `My ${charName} \u2014 Pump Shinsa`,
+            text: 'Check out my pet companion!',
+          });
+          setShareStatus('done');
+          setTimeout(() => setShareStatus(''), 2000);
+          return;
+        } catch (shareErr) {
+          // User cancelled share sheet — still show success since image was generated
+          if (shareErr?.name === 'AbortError') {
+            setShareStatus('done');
+            setTimeout(() => setShareStatus(''), 2000);
+            return;
+          }
+          // Share API failed (e.g. no file support) — fall through to download
+        }
       }
+
+      // Fallback: trigger download via link (synchronous, keeps user gesture)
+      const a = document.createElement('a');
+      a.href = dataUrl;
+      a.download = `shinsa-${charName}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+
       setShareStatus('done');
       setTimeout(() => setShareStatus(''), 2000);
     } catch (e) {
       console.error('Share failed', e);
+      // Show error feedback instead of silently failing
       setShareStatus('');
+      alert('Could not generate share image. Please try again.');
     }
   };
 
