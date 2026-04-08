@@ -9,6 +9,12 @@ import MiniPumpCanvas from './MiniPumpCanvas';
 import { isMuted, setMuted as setAudioMuted } from './miniPumpAudio';
 import SpritePet from '../../SpritePet';
 
+function getFormLabel(form) {
+  if (typeof form === 'string') return form;
+  if (form && typeof form === 'object') return form.label || form.name || 'Companion';
+  return 'Companion';
+}
+
 export default function MiniPumpModal({ open, onClose, character, onComplete, stats, leaderboard }) {
   const game = useMiniPumpGame();
   const [muted, setMutedState] = useState(isMuted());
@@ -219,7 +225,7 @@ function GameButtons({ game, mode, onShoot, onStart, stats, leaderboard }) {
                   {entry.username}
                   {entry.nickname ? <span className="text-gray-500"> · {entry.nickname}</span> : null}
                 </div>
-                <div className="truncate text-[9px] text-gray-500">{entry.form || 'Companion'} · streak {entry.best_streak || 0}</div>
+                <div className="truncate text-[9px] text-gray-500">{getFormLabel(entry.form)} · streak {entry.best_streak || 0}</div>
               </div>
               <div className="text-right shrink-0">
                 <div className="text-[12px] font-black tabular-nums text-cyan-200">{entry.personal_best}</div>

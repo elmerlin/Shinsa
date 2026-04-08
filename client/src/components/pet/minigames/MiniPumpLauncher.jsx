@@ -3,12 +3,10 @@
  */
 
 import React from 'react';
-import SpritePet from '../../SpritePet';
 
-export default function MiniPumpLauncher({ onPlay, stats, leaderboard, cost, comboBalance }) {
+export default function MiniPumpLauncher({ onPlay, stats, cost, comboBalance }) {
   const personalBest = stats?.personalBest ?? 0;
   const roundsPlayed = stats?.roundsPlayed ?? 0;
-  const topEntries = Array.isArray(leaderboard) ? leaderboard.slice(0, 3) : [];
   const comboCost = cost?.combo || 0;
   const canAfford = (comboBalance ?? Infinity) >= comboCost;
 
@@ -60,52 +58,13 @@ export default function MiniPumpLauncher({ onPlay, stats, leaderboard, cost, com
       </div>
 
       <div className="mt-3 rounded-lg border border-white/[0.05] bg-black/20 px-2.5 py-2">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-[9px] font-black tracking-[0.2em] uppercase text-cyan-200/80">Top Mini-Pump Runs</span>
-          <span className="text-[9px] text-gray-600">Players + pets</span>
+        <div className="flex items-center justify-between">
+          <span className="text-[9px] font-black tracking-[0.2em] uppercase text-cyan-200/80">Inside The Game</span>
+          <span className="text-[9px] text-gray-600">Leaderboard + replay</span>
         </div>
-
-        {topEntries.length > 0 ? (
-          <div className="space-y-1.5">
-            {topEntries.map((entry) => (
-              <div
-                key={`${entry.user_id || entry.username}-${entry.rank}`}
-                className={`flex items-center gap-2 rounded-md px-1.5 py-1 ${entry.is_me ? 'bg-cyan-400/[0.08]' : 'bg-white/[0.025]'}`}
-              >
-                <div className={`w-5 text-[10px] font-black tabular-nums ${entry.rank === 1 ? 'text-amber-300' : entry.rank === 2 ? 'text-slate-300' : 'text-orange-300'}`}>
-                  #{entry.rank}
-                </div>
-                <div className="shrink-0 rounded-md border border-white/[0.05] bg-white/[0.03] px-1 py-0.5">
-                  <SpritePet
-                    character={entry.character}
-                    weightState={entry.weight_state || 'normal'}
-                    mood={entry.mood || 'happy'}
-                    hat={entry.equipped_hat || ''}
-                    top={entry.equipped_top || ''}
-                    hatColor={entry.hat_color || ''}
-                    topColor={entry.top_color || ''}
-                    size={24}
-                  />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-[10px] font-semibold text-white/90">
-                    {entry.username}
-                    {entry.nickname ? <span className="text-gray-500"> · {entry.nickname}</span> : null}
-                  </div>
-                  <div className="text-[9px] text-gray-500 truncate">
-                    {entry.form?.label || 'Companion'} · best streak {entry.best_streak || 0}
-                  </div>
-                </div>
-                <div className="text-right shrink-0">
-                  <div className="text-[11px] font-black tabular-nums text-cyan-200">{entry.personal_best}</div>
-                  <div className="text-[9px] tabular-nums text-gray-600">{entry.fastest_cadence || 1000}ms</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="text-[10px] text-gray-500">Loading community runs...</div>
-        )}
+        <p className="mt-1 text-[10px] text-gray-500">
+          Open Mini-Pump to see the live community board and start a fresh run from the game screen.
+        </p>
       </div>
     </button>
   );

@@ -1640,8 +1640,8 @@ function PetTab({ pet, shop, combo, economy, socialFeed, interactionBusy, activi
       <CollapsibleSection title="Play & Care" icon="🎮" defaultOpen={true}>
         {/* Minigame launchers */}
         <div className="space-y-2 mb-3">
-          <MiniPumpLauncher onPlay={onMiniPump} stats={miniPumpStats} leaderboard={miniPumpLeaderboard} cost={minigameCosts?.['mini-pump']} comboBalance={comboBalance} />
-          <PetInvadersLauncher onPlay={onPetInvaders} stats={petInvadersStats} leaderboard={petInvadersLeaderboard} cost={minigameCosts?.['pet-invaders']} comboBalance={comboBalance} />
+          <MiniPumpLauncher onPlay={onMiniPump} stats={miniPumpStats} cost={minigameCosts?.['mini-pump']} comboBalance={comboBalance} />
+          <PetInvadersLauncher onPlay={onPetInvaders} stats={petInvadersStats} cost={minigameCosts?.['pet-invaders']} comboBalance={comboBalance} />
         </div>
         <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
           <div className="flex items-center justify-between mb-2">

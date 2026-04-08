@@ -143,6 +143,7 @@ export default function MiniPumpCanvas({ game, character, onStart, onShoot, redu
   const containerRef = useRef(null);
   const dprRef = useRef(1);
   const sizeRef = useRef({ w: 0, h: 0 });
+  const renderRef = useRef(null);
 
   const resize = useCallback(() => {
     const canvas = canvasRef.current, container = containerRef.current;
@@ -155,13 +156,8 @@ export default function MiniPumpCanvas({ game, character, onStart, onShoot, redu
     canvas.width = w * dpr; canvas.height = h * dpr;
     canvas.style.width = `${w}px`; canvas.style.height = `${h}px`;
     canvas.getContext('2d').setTransform(dpr, 0, 0, dpr, 0, 0);
-  }, []);
-
-  useEffect(() => {
-    resize();
-    window.addEventListener('resize', resize);
-    return () => window.removeEventListener('resize', resize);
-  }, [resize]);
+    renderRef.current?.(game.getState());
+  }, [game]);
 
   const render = useCallback((state) => {
     const canvas = canvasRef.current; if (!canvas) return;
@@ -266,9 +262,23 @@ export default function MiniPumpCanvas({ game, character, onStart, onShoot, redu
   }, [character, reducedMotion]);
 
   useEffect(() => {
+    renderRef.current = render;
     game.setOnRender(render);
     render(game.getState());
   }, [game, render]);
+
+  useEffect(() => {
+    resize();
+    window.addEventListener('resize', resize);
+    const observer = typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(() => resize())
+      : null;
+    if (observer && containerRef.current) observer.observe(containerRef.current);
+    return () => {
+      window.removeEventListener('resize', resize);
+      observer?.disconnect();
+    };
+  }, [resize]);
 
   // Touch input
   const handleTouch = useCallback((e) => {
