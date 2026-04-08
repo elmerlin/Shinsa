@@ -2671,6 +2671,7 @@ async function syncRecentlyPlayedForUser(user, options = {}) {
   let upscoreRowsWithGains = [];
   let clearRowsWithGains = [];
   const touchedPlayDataLevels = new Set();
+  const newPlaysForPet = [];
   let pumbilityGains = {
     upscores: [],
     clears: [],
@@ -2746,6 +2747,8 @@ async function syncRecentlyPlayedForUser(user, options = {}) {
           plate,
           overTop100Rank
         );
+        // Track genuinely new plays for pet feeding
+        newPlaysForPet.push({ score, grade, level, mode });
       } else {
         updateRecent.run(
           machineName,
@@ -2905,15 +2908,10 @@ async function syncRecentlyPlayedForUser(user, options = {}) {
   });
   txn();
 
-  // Feed the user's emoji pet based on songs played (with score data for quality-based feeding)
-  if (plays.length > 0) {
+  // Feed the user's emoji pet based on NEW songs only (not re-synced plays)
+  if (newPlaysForPet.length > 0) {
     try {
-      const petPlays = plays.map(p => ({
-        score: parseInt(p.score, 10) || 0,
-        grade: p.grade || '',
-        level: parseInt(p.level, 10) || 0,
-      }));
-      feedPetForUser(userId, petPlays);
+      feedPetForUser(userId, newPlaysForPet);
     } catch (petErr) {
       // Non-critical — don't fail the sync
     }
