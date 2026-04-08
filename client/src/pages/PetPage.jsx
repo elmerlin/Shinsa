@@ -826,8 +826,9 @@ export default function PetPage() {
         <div className="grid grid-cols-2 gap-4">
           {characters.map((c) => (
             <button key={c.id} onClick={() => handleAdopt(c.id)} disabled={adopting}
-              className="group relative rounded-2xl border border-white/[0.06] p-5 text-left bg-white/[0.02] hover:border-white/20 active:scale-[0.97] transition-all duration-300 disabled:opacity-50">
-              <div className="flex justify-center mb-3">
+              className="group relative rounded-2xl border border-white/[0.06] p-5 text-left bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.04] hover:shadow-[0_8px_32px_rgba(0,0,0,0.2)] active:scale-[0.97] transition-all duration-300 disabled:opacity-50"
+              style={{ animation: `pop-in 400ms ease-out backwards`, animationDelay: `${150}ms` }}>
+              <div className="flex justify-center mb-3 transition-transform duration-300 group-hover:scale-105 group-hover:-translate-y-1">
                 <SpritePet character={c.id} weightState="normal" mood="happy" size={90} />
               </div>
               <div className="font-bold text-lg">{c.name}</div>
@@ -945,7 +946,7 @@ export default function PetPage() {
 
       {/* Pet habitat */}
       <div className="sticky top-0 z-[60] -mx-2 mb-4 px-2 pt-1 pb-3 bg-gradient-to-b from-[#070b14] via-[#070b14]/95 to-transparent backdrop-blur-sm">
-        <div ref={habitatRef} className={`relative rounded-[1.6rem] border border-white/[0.06] overflow-hidden bg-gradient-to-b shadow-[0_18px_45px_rgba(0,0,0,0.28)] ${CHARACTER_BG[pet.character] || ''}`}>
+        <div ref={habitatRef} className={`habitat-wrap relative rounded-[1.6rem] border border-white/[0.06] overflow-hidden bg-gradient-to-b shadow-[0_18px_45px_rgba(0,0,0,0.28)] ${CHARACTER_BG[pet.character] || ''}`}>
           <HabitatBackdrop backgroundId={pet.habitat?.active_background} />
           <HabitatFloorDisplay floorId={pet.habitat?.active_floor} />
           <HabitatWallDisplay wallId={pet.habitat?.active_wall} />
@@ -963,9 +964,9 @@ export default function PetPage() {
           <div data-share-exclude="true" className={`relative z-10 flex flex-col items-center justify-end px-4 pt-16 pb-3 min-h-[290px] sm:min-h-[310px] ${petTapped ? 'animate-[wiggle_400ms_ease]' : ''}`}>
             {/* Speech bubble — single instance, above pet */}
             <div className="mb-2 relative max-w-[240px]">
-              <div className={`backdrop-blur-sm border rounded-xl px-3 py-1.5 text-[13px] text-center italic transition-all duration-500 ${
+              <div className={`backdrop-blur-sm border rounded-xl px-3 py-1.5 text-[13px] text-center italic transition-all duration-500 animate-[speech-float_300ms_ease-out] ${
                 rareSpeech
-                  ? 'bg-amber-500/[0.08] border-amber-400/20 text-amber-200'
+                  ? 'bg-amber-500/[0.08] border-amber-400/20 text-amber-200 shadow-[0_0_16px_rgba(245,158,11,0.12)]'
                   : 'bg-white/[0.06] border-white/[0.08] text-gray-300'
               }`}>
                 {rareSpeech && <span className="text-amber-400 mr-1 animate-pulse">&#10022;</span>}
@@ -1019,7 +1020,7 @@ export default function PetPage() {
 
       {/* Feedback toast */}
       {feedbackMsg && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-black/90 border border-white/10 rounded-xl px-4 py-2 text-sm text-white font-semibold shadow-xl animate-[slideDown_200ms_ease-out]">
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-black/90 border border-white/10 rounded-xl px-4 py-2 text-sm text-white font-semibold shadow-[0_8px_32px_rgba(0,0,0,0.4)] animate-[slideDown_250ms_cubic-bezier(0.34,1.56,0.64,1)] backdrop-blur-md">
           {feedbackMsg}
         </div>
       )}
@@ -1073,10 +1074,10 @@ export default function PetPage() {
           </div>
 
           {/* Tab bar */}
-          <div className="mt-4 flex rounded-xl border border-white/[0.06] overflow-hidden">
+          <div className="mt-4 flex rounded-xl border border-white/[0.06] overflow-hidden bg-white/[0.01]">
             {TABS.map(t => (
               <button key={t} onClick={() => { setTab(t); if (t === 'food' || t === 'clothing' || t === 'habitat') loadShop(); if (t === 'ranks' && !leaderboard) getPetLeaderboard().then(r => setLeaderboard(r.leaderboard)).catch(() => {}); }}
-                className={`flex-1 py-2 text-[10px] sm:text-xs font-semibold capitalize transition-all ${tab === t ? 'bg-white/[0.08] text-white' : 'text-gray-500 hover:text-white/70'}`}>
+                className={`flex-1 py-2 text-[10px] sm:text-xs font-semibold capitalize transition-all duration-200 relative ${tab === t ? 'bg-white/[0.08] text-white shadow-[inset_0_-2px_0_rgba(34,211,238,0.4)]' : 'text-gray-500 hover:text-white/70 hover:bg-white/[0.03]'}`}>
                 {t === 'food' ? '🍖 Food' : t === 'clothing' ? '👒 Gear' : t === 'tricks' ? '⭐ Tricks' : t === 'habitat' ? '🏠 Room' : t === 'ranks' ? '🏆 Ranks' : '🐾 Pet'}
               </button>
             ))}
@@ -1144,8 +1145,23 @@ export default function PetPage() {
         @keyframes unlock-pop { 0% { transform: scale(0.8); opacity: 0; } 50% { transform: scale(1.05); } 100% { transform: scale(1); opacity: 1; } }
         @keyframes shimmer { 0% { background-position: -200% center; } 100% { background-position: 200% center; } }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes breathe { 0%,100% { box-shadow: 0 0 0 0 transparent; } 50% { box-shadow: 0 0 18px 2px var(--breathe-color, rgba(34,211,238,0.12)); } }
+        @keyframes bar-shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(200%); } }
+        @keyframes critical-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.7; } }
+        @keyframes pop-in { 0% { transform: scale(0.85); opacity: 0; } 60% { transform: scale(1.04); } 100% { transform: scale(1); opacity: 1; } }
+        @keyframes glow-ring { 0%,100% { box-shadow: 0 0 0 0 transparent; } 50% { box-shadow: 0 0 0 3px var(--ring-color, rgba(255,255,255,0.08)); } }
+        @keyframes speech-float { 0% { transform: translateY(3px); opacity: 0; } 100% { transform: translateY(0); opacity: 1; } }
+        @keyframes habitat-breathe { 0%,100% { opacity: 0.85; } 50% { opacity: 1; } }
+        .vital-bar-fill { position: relative; overflow: hidden; }
+        .vital-bar-fill::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent); animation: bar-shimmer 2.5s ease-in-out infinite; }
+        .vital-critical { animation: critical-pulse 1.5s ease-in-out infinite; }
+        .action-btn { transition: all 200ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+        .action-btn:hover { transform: translateY(-1px); }
+        .action-btn:active { transform: translateY(0) scale(0.97); }
+        .habitat-wrap { animation: habitat-breathe 6s ease-in-out infinite; }
         @media (prefers-reduced-motion: reduce) {
           *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+          .vital-bar-fill::after { animation: none; }
         }
       `}</style>
 
@@ -1178,17 +1194,32 @@ function HabitatParticles({ character, mood }) {
   const accents = { dojocat: '#f5a623', buu: '#c98bbd', devit: '#e53935', pixiu: '#ffd54f' };
   const color = accents[character] || '#fff';
   const happy = ['happy', 'content', 'stuffed'].includes(mood);
+  const particleCount = happy ? 7 : 3;
+  // Use deterministic pseudo-random values based on index for stable renders
+  const particles = Array.from({ length: particleCount }, (_, i) => ({
+    size: 2 + ((i * 7 + 3) % 4),
+    left: 8 + ((i * 31 + 11) % 84),
+    bottom: ((i * 17 + 5) % 35),
+    delay: ((i * 13 + 2) % 40) / 10,
+    duration: 4 + ((i * 19 + 7) % 5),
+  }));
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none">
-      {Array.from({ length: happy ? 5 : 2 }, (_, i) => (
+      {particles.map((p, i) => (
         <div key={i} className="absolute rounded-full" style={{
-          width: 2 + Math.random() * 3, height: 2 + Math.random() * 3, background: color,
-          left: `${10 + Math.random() * 80}%`, bottom: `${Math.random() * 30}%`, opacity: 0.15,
-          animation: `float-up ${4 + Math.random() * 4}s ease-out ${Math.random() * 4}s infinite`,
+          width: p.size, height: p.size, background: color,
+          left: `${p.left}%`, bottom: `${p.bottom}%`, opacity: happy ? 0.2 : 0.12,
+          animation: `float-up ${p.duration}s ease-out ${p.delay}s infinite`,
         }} />
       ))}
+      {/* Central ambient glow */}
       <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full" style={{
-        width: 180, height: 180, background: `radial-gradient(circle, ${color}08 0%, transparent 70%)`, animation: 'pulse-glow 4s ease-in-out infinite',
+        width: 200, height: 200, background: `radial-gradient(circle, ${color}0a 0%, transparent 70%)`, animation: 'pulse-glow 4s ease-in-out infinite',
+      }} />
+      {/* Secondary offset glow for depth */}
+      <div className="absolute rounded-full" style={{
+        width: 120, height: 120, left: '25%', top: '40%',
+        background: `radial-gradient(circle, ${color}06 0%, transparent 70%)`, animation: 'pulse-glow 5s ease-in-out 1.5s infinite',
       }} />
     </div>
   );
@@ -1577,14 +1608,14 @@ function FormBadge({ form }) {
   if (!form) return null;
   const formStyles = {
     fresh: 'border-white/[0.08] text-gray-400',
-    trusted: 'border-emerald-400/20 text-emerald-300',
-    showcase: 'border-cyan-400/20 text-cyan-300',
-    ascendant: 'border-amber-400/25 text-amber-300',
-    beyond: 'border-purple-400/30 text-purple-300 animate-pulse',
-    mythic: 'border-rose-400/30 text-rose-200 animate-pulse',
+    trusted: 'border-emerald-400/20 text-emerald-300 shadow-[0_0_8px_rgba(52,211,153,0.10)]',
+    showcase: 'border-cyan-400/20 text-cyan-300 shadow-[0_0_12px_rgba(34,211,238,0.12)]',
+    ascendant: 'border-amber-400/25 text-amber-300 shadow-[0_0_16px_rgba(245,158,11,0.15)]',
+    beyond: 'border-purple-400/30 text-purple-300 shadow-[0_0_20px_rgba(168,85,247,0.18)] animate-pulse',
+    mythic: 'border-rose-400/30 text-rose-200 shadow-[0_0_24px_rgba(244,63,94,0.20)] animate-pulse',
   };
   return (
-    <span className={`rounded-full border bg-black/40 backdrop-blur-sm px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${formStyles[form.id] || formStyles.fresh}`}>
+    <span className={`rounded-full border bg-black/40 backdrop-blur-sm px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider transition-all ${formStyles[form.id] || formStyles.fresh}`}>
       {form.label}
     </span>
   );
@@ -1598,10 +1629,10 @@ function HeaderIconButton({ label, title, active = false, disabled = false, onCl
       title={title || label}
       aria-label={label}
       disabled={disabled}
-      className={`flex h-11 w-11 items-center justify-center rounded-2xl border transition-all disabled:opacity-50 ${
+      className={`action-btn flex h-11 w-11 items-center justify-center rounded-2xl border disabled:opacity-50 ${
         active
           ? 'border-amber-400/25 bg-amber-500/[0.10] text-amber-200 shadow-[0_0_20px_rgba(245,158,11,0.12)]'
-          : 'border-white/[0.08] bg-white/[0.03] text-gray-300 hover:border-white/15 hover:text-white'
+          : 'border-white/[0.08] bg-white/[0.03] text-gray-300 hover:border-white/15 hover:text-white hover:shadow-[0_0_16px_rgba(255,255,255,0.04)]'
       }`}
     >
       {children}
@@ -1641,6 +1672,8 @@ function VitalBar({ label, value, color, emphasis = 'secondary' }) {
   const h = hues[color] || hues.orange;
   const hue = value <= 30 ? h.lo : h.hi;
   const band = getVitalBand(value);
+  const isCritical = band.tone === 'critical';
+  const isHigh = band.tone === 'high';
   const bandTone = {
     critical: 'text-rose-300',
     low: 'text-amber-300',
@@ -1648,11 +1681,14 @@ function VitalBar({ label, value, color, emphasis = 'secondary' }) {
     high: 'text-emerald-300',
   };
   return (
-    <div className={`rounded-2xl border p-3 ${emphasis === 'primary' ? 'border-white/[0.08] bg-white/[0.04]' : 'border-white/[0.05] bg-white/[0.025]'}`}>
+    <div className={`rounded-2xl border p-3 transition-all duration-500 ${
+      emphasis === 'primary' ? 'border-white/[0.08] bg-white/[0.04]' : 'border-white/[0.05] bg-white/[0.025]'
+    } ${isCritical ? 'vital-critical border-rose-500/15' : ''} ${isHigh ? 'border-emerald-500/10' : ''}`}
+    style={isCritical ? { '--breathe-color': 'rgba(244,63,94,0.08)' } : isHigh ? { '--breathe-color': 'rgba(52,211,153,0.06)' } : undefined}>
       <div className="mb-2 flex items-center justify-between gap-3">
         <div>
           <div className="text-[10px] uppercase tracking-[0.16em] text-white/45">{label}</div>
-          <div className="mt-1 text-2xl font-black tabular-nums text-white/90">{value}%</div>
+          <div className={`mt-1 text-2xl font-black tabular-nums transition-colors duration-500 ${isCritical ? 'text-rose-200' : 'text-white/90'}`}>{value}%</div>
         </div>
         <div className={`text-[10px] font-semibold uppercase tracking-[0.14em] ${bandTone[band.tone] || 'text-white/60'}`}>
           {band.label}
@@ -1662,7 +1698,7 @@ function VitalBar({ label, value, color, emphasis = 'secondary' }) {
         <div className="absolute inset-y-0 left-[20%] w-px bg-white/10" />
         <div className="absolute inset-y-0 left-[40%] w-px bg-white/10" />
         <div className="absolute inset-y-0 left-[70%] w-px bg-white/10" />
-        <div className="relative h-full rounded-full transition-all duration-700" style={{ width: `${value}%`, background: `linear-gradient(90deg, hsl(${hue}, 70%, 35%), hsl(${hue}, 70%, 50%))` }}>
+        <div className="vital-bar-fill relative h-full rounded-full transition-all duration-700" style={{ width: `${value}%`, background: `linear-gradient(90deg, hsl(${hue}, 70%, 35%), hsl(${hue}, 70%, 50%))` }}>
           <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent rounded-full" />
         </div>
       </div>
@@ -1677,7 +1713,7 @@ function BondMeter({ bond, bondRank }) {
     ? Math.min(100, ((bond - currentThreshold) / (nextThreshold - currentThreshold)) * 100)
     : 100;
   return (
-    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-3">
+    <div className="rounded-2xl border border-cyan-400/10 bg-white/[0.03] p-3" style={{ '--breathe-color': 'rgba(34,211,238,0.06)', animation: 'breathe 4s ease-in-out infinite' }}>
       <div className="mb-2 flex items-center justify-between gap-3">
         <div>
           <div className="text-[10px] uppercase tracking-[0.16em] text-white/45">Bond</div>
@@ -1689,12 +1725,12 @@ function BondMeter({ bond, bondRank }) {
         </div>
       </div>
       <div className="w-full h-2.5 bg-white/[0.04] rounded-full overflow-hidden border border-white/[0.04]">
-        <div className="h-full rounded-full bg-gradient-to-r from-sky-700 to-cyan-300 transition-all duration-700 relative" style={{ width: `${currentProgress}%` }}>
+        <div className="vital-bar-fill h-full rounded-full bg-gradient-to-r from-sky-700 to-cyan-300 transition-all duration-700 relative" style={{ width: `${currentProgress}%` }}>
           <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent rounded-full" />
         </div>
       </div>
       <div className="mt-2 text-[10px] text-cyan-100/70 px-0.5">
-        {bondRank?.next_label ? `${bondRank.label} -> ${bondRank.next_label}` : bondRank?.label || 'Training Partner'}
+        {bondRank?.next_label ? `${bondRank.label} \u2192 ${bondRank.next_label}` : bondRank?.label || 'Training Partner'}
       </div>
     </div>
   );
@@ -1702,13 +1738,17 @@ function BondMeter({ bond, bondRank }) {
 
 function MoodBadge({ moodState }) {
   const tones = {
-    thriving: 'border-emerald-400/20 bg-emerald-500/[0.10] text-emerald-200',
+    thriving: 'border-emerald-400/20 bg-emerald-500/[0.10] text-emerald-200 shadow-[0_0_12px_rgba(52,211,153,0.10)]',
     stable: 'border-cyan-400/15 bg-cyan-500/[0.08] text-cyan-100',
-    restless: 'border-amber-400/20 bg-amber-500/[0.10] text-amber-200',
-    neglected: 'border-rose-400/20 bg-rose-500/[0.10] text-rose-200',
+    restless: 'border-amber-400/20 bg-amber-500/[0.10] text-amber-200 shadow-[0_0_12px_rgba(245,158,11,0.10)]',
+    neglected: 'border-rose-400/20 bg-rose-500/[0.10] text-rose-200 shadow-[0_0_12px_rgba(244,63,94,0.12)]',
   };
+  const ringColors = { thriving: 'rgba(52,211,153,0.12)', neglected: 'rgba(244,63,94,0.10)' };
   return (
-    <span className={`inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${tones[moodState] || tones.stable}`}>
+    <span
+      className={`inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] transition-all duration-500 ${tones[moodState] || tones.stable}`}
+      style={ringColors[moodState] ? { '--ring-color': ringColors[moodState], animation: 'glow-ring 3s ease-in-out infinite' } : undefined}
+    >
       {moodState}
     </span>
   );
@@ -1720,11 +1760,11 @@ function NeedsPanel({ needs = [] }) {
       <div className="text-[10px] uppercase tracking-[0.16em] text-white/45">Needs now</div>
       <div className="flex flex-wrap gap-2">
         {needs.slice(0, 3).map((need) => (
-          <div key={need.id} className={`rounded-xl border px-2.5 py-2 text-[11px] ${
+          <div key={need.id} className={`rounded-xl border px-2.5 py-2 text-[11px] transition-all duration-300 ${
             need.priority === 'critical'
-              ? 'border-rose-400/15 bg-rose-500/[0.08] text-rose-100'
+              ? 'border-rose-400/15 bg-rose-500/[0.08] text-rose-100 shadow-[0_0_12px_rgba(244,63,94,0.08)] vital-critical'
               : need.priority === 'high'
-                ? 'border-amber-400/15 bg-amber-500/[0.08] text-amber-100'
+                ? 'border-amber-400/15 bg-amber-500/[0.08] text-amber-100 shadow-[0_0_8px_rgba(245,158,11,0.06)]'
                 : 'border-white/[0.06] bg-white/[0.03] text-gray-200'
           }`}>
             <div className="font-semibold">{need.label}</div>
@@ -1802,11 +1842,11 @@ function PetTab({ pet, shop, combo, economy, socialFeed, interactionBusy, activi
       </div>
 
       {currentRequest ? (
-        <div className={`rounded-xl border p-3 ${
+        <div className={`rounded-xl border p-3 transition-all duration-500 ${
           currentRequest.complete
-            ? 'border-emerald-400/20 bg-emerald-500/[0.08]'
+            ? 'border-emerald-400/20 bg-emerald-500/[0.08] shadow-[0_0_20px_rgba(52,211,153,0.08)]'
             : 'border-cyan-400/15 bg-cyan-500/[0.06]'
-        }`}>
+        }`} style={currentRequest.complete ? { animation: 'pop-in 400ms ease-out' } : undefined}>
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="text-[10px] uppercase tracking-[0.16em] text-white/45">Current request</div>
@@ -1827,7 +1867,7 @@ function PetTab({ pet, shop, combo, economy, socialFeed, interactionBusy, activi
                 type="button"
                 onClick={onClaimCurrentRequest}
                 disabled={requestBusy}
-                className="rounded-lg border border-emerald-400/20 bg-emerald-500/[0.12] px-3 py-2 text-[11px] font-semibold text-emerald-100 transition-all hover:bg-emerald-500/[0.16] disabled:opacity-50"
+                className="action-btn rounded-lg border border-emerald-400/20 bg-emerald-500/[0.12] px-3 py-2 text-[11px] font-semibold text-emerald-100 hover:bg-emerald-500/[0.18] hover:shadow-[0_0_16px_rgba(52,211,153,0.15)] disabled:opacity-50"
               >
                 Claim rewards
               </button>
@@ -1854,13 +1894,13 @@ function PetTab({ pet, shop, combo, economy, socialFeed, interactionBusy, activi
       ) : null}
 
       {/* ── Guide link ── */}
-      <Link to="/pet/guide" className="flex items-center gap-2 rounded-xl border border-cyan-400/10 bg-cyan-500/[0.04] px-3 py-2 hover:bg-cyan-500/[0.06] hover:border-cyan-400/15 transition-all group">
+      <Link to="/pet/guide" className="action-btn flex items-center gap-2 rounded-xl border border-cyan-400/10 bg-cyan-500/[0.04] px-3 py-2 hover:bg-cyan-500/[0.06] hover:border-cyan-400/15 hover:shadow-[0_0_20px_rgba(34,211,238,0.06)] group">
         <span className="text-sm">📖</span>
         <div className="flex-1 min-w-0">
           <div className="text-[11px] font-semibold text-cyan-200 group-hover:text-cyan-100 transition-colors">Pet Companion Guide</div>
           <div className="text-[10px] text-gray-500">Play Pump, earn Combo and Momentum, then care for your companion</div>
         </div>
-        <span className="text-[10px] text-gray-600 group-hover:text-gray-400 transition-colors">→</span>
+        <span className="text-[10px] text-gray-600 group-hover:text-gray-400 transition-all group-hover:translate-x-0.5">&rarr;</span>
       </Link>
 
       {/* ── Section 1: Play & Care (open) ── */}
@@ -1892,10 +1932,10 @@ function PetTab({ pet, shop, combo, economy, socialFeed, interactionBusy, activi
                   key={action.id}
                   onClick={() => !locked && onAction(action.id)}
                   disabled={interactionBusy || locked}
-                  className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-semibold transition-all active:scale-[0.97] disabled:opacity-50 ${
+                  className={`action-btn flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-semibold disabled:opacity-50 ${
                     locked
                       ? 'border-white/[0.04] bg-white/[0.01] text-gray-600 cursor-not-allowed'
-                      : 'border-white/[0.08] bg-white/[0.03] text-white/80 hover:border-white/15 hover:bg-white/[0.05]'
+                      : 'border-white/[0.08] bg-white/[0.03] text-white/80 hover:border-white/15 hover:bg-white/[0.05] hover:shadow-[0_0_12px_rgba(255,255,255,0.04)]'
                   }`}
                 >
                   <span className="text-sm">{action.icon}</span>
@@ -1914,10 +1954,10 @@ function PetTab({ pet, shop, combo, economy, socialFeed, interactionBusy, activi
                   key={activity.id}
                   onClick={() => !locked && onActivity(activity.id)}
                   disabled={activityBusy || locked}
-                  className={`rounded-xl border px-3 py-2.5 text-left transition-all active:scale-[0.98] disabled:opacity-50 ${
+                  className={`action-btn rounded-xl border px-3 py-2.5 text-left disabled:opacity-50 ${
                     locked
                       ? 'border-white/[0.04] bg-white/[0.01] cursor-not-allowed'
-                      : 'border-white/[0.06] bg-white/[0.02] hover:border-white/15'
+                      : 'border-white/[0.06] bg-white/[0.02] hover:border-white/15 hover:shadow-[0_4px_16px_rgba(0,0,0,0.15)]'
                   }`}
                 >
                   <div className="flex items-center justify-between gap-1">
