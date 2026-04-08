@@ -9,7 +9,7 @@
  * Bass fires on cycle start. Snare fires when bottom blob reaches line.
  */
 
-import { useCallback, useRef, useEffect } from 'react';
+import { useCallback, useRef, useEffect, useMemo } from 'react';
 import * as audio from './miniPumpAudio';
 
 // ─── Constants ───────────────────────────────────────
@@ -17,7 +17,6 @@ const ROUND_DURATION = 30000;
 const INITIAL_CADENCE = 1000;
 const CADENCE_REDUCTION = 50;
 const CADENCE_FLOOR = 300;
-const BONK_TIME_PENALTY = 1000;
 const TIMING_TOLERANCE_MS = 35;
 const TRAVEL_CYCLES = 3;        // blob takes 3 cadence-cycles to reach line
 const TARGET_LINE_Y = 0.48;     // normalized y-position of target line (halfway up screen)
@@ -113,7 +112,7 @@ function tick(state, dt) {
   s.gameClockMs += dt;
 
   // ─── Time remaining ───
-  s.timeRemainingMs -= dt;
+  s.timeRemainingMs = Math.max(0, ROUND_DURATION - s.gameClockMs);
   if (s.timeRemainingMs <= 0) {
     s.timeRemainingMs = 0;
     s.mode = 'round_end';
@@ -160,7 +159,6 @@ function tick(state, dt) {
     const pastTolerance = s.gameClockMs > bottom.targetTimeMs + TIMING_TOLERANCE_MS;
     if (pastTolerance) {
       s.headBonks++;
-      s.timeRemainingMs = Math.max(0, s.timeRemainingMs - BONK_TIME_PENALTY);
       s.cadenceMs = INITIAL_CADENCE;
       s.cadenceClock = 0;
       s.streak = 0;
@@ -168,7 +166,7 @@ function tick(state, dt) {
       s.petExpression = 'stunned';
       s.poseTimer = 500;
       s.bonkFX = [...s.bonkFX, { x: 0.5, y: TARGET_LINE_Y, progress: 0 }];
-      s.judgementFX = [...s.judgementFX, { text: 'BONK! -1s', color: '#ff4455', progress: 0 }];
+      s.judgementFX = [...s.judgementFX, { text: 'BONK!', color: '#ff4455', progress: 0 }];
       s.lineFlash = { color: '#ff4455', progress: 0 };
       s.stack = s.stack.slice(1); // remove bonked blob, stack continues
       s.snareFiredForBlob = null;
@@ -347,6 +345,7 @@ export default function useMiniPumpGame() {
   }, []);
 
   const startLoop = useCallback(() => {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
     lastTimeRef.current = null;
     rafRef.current = requestAnimationFrame(loop);
   }, [loop]);
@@ -357,6 +356,11 @@ export default function useMiniPumpGame() {
   }, []);
 
   const startGame = useCallback(() => {
+    stopLoop();
+    if (countdownTimerRef.current) {
+      clearInterval(countdownTimerRef.current);
+      countdownTimerRef.current = null;
+    }
     audio.startAudio();
     stateRef.current = { ...createInitialState(), mode: 'countdown', countdownValue: 3 };
 
@@ -381,11 +385,12 @@ export default function useMiniPumpGame() {
           petExpression: 'focused',
         };
         stateRef.current = spawnBlob(stateRef.current);
+        onRenderRef.current?.(stateRef.current);
         audio.playBass();
         startLoop();
       }
     }, 800);
-  }, [startLoop]);
+  }, [startLoop, stopLoop]);
 
   const shoot = useCallback((color) => {
     if (!BLOB_COLORS.includes(color)) return;
@@ -407,8 +412,21 @@ export default function useMiniPumpGame() {
     return () => { stopLoop(); if (countdownTimerRef.current) clearInterval(countdownTimerRef.current); };
   }, [stopLoop]);
 
-  return { startGame, shoot, reset, getState, setOnRender, stopLoop };
+  return useMemo(() => ({
+    startGame,
+    shoot,
+    reset,
+    getState,
+    setOnRender,
+    stopLoop,
+  }), [startGame, shoot, reset, getState, setOnRender, stopLoop]);
 }
 
 // Export for canvas renderer
 export { blobY, TARGET_LINE_Y, TIMING_TOLERANCE_MS };
+export {
+  createInitialState as createMiniPumpInitialState,
+  spawnBlob as spawnMiniPumpBlob,
+  tick as tickMiniPumpGame,
+  handleShot as handleMiniPumpShot,
+};
