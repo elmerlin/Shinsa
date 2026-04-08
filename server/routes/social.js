@@ -639,17 +639,24 @@ function enrichSessionShareRow(db, userId, createdAt, row) {
     score: row.score,
   });
 
-  const replay = String(row.replay_embed_url || '').trim()
+  const rowReplay = String(row.replay_embed_url || '').trim()
     ? {
         replay_embed_url: String(row.replay_embed_url || '').trim(),
         replay_video_id: String(row.replay_video_id || '').trim() || extractYoutubeVideoId(row.replay_embed_url),
       }
-    : findSessionReplayLink(db, {
-        userId,
-        songTitle: row.song_title,
-        mode: row.mode,
-        level: row.level,
-      });
+    : null;
+  const fallbackReplay = findSessionReplayLink(db, {
+    userId,
+    songTitle: row.song_title,
+    mode: row.mode,
+    level: row.level,
+  });
+  const replay = String(lookup?.replay_embed_url || '').trim()
+    ? {
+        replay_embed_url: String(lookup.replay_embed_url || '').trim(),
+        replay_video_id: String(lookup.replay_video_id || '').trim() || extractYoutubeVideoId(lookup.replay_embed_url),
+      }
+    : rowReplay || fallbackReplay;
 
   if (!lookup && !replay) return row;
 
@@ -2309,7 +2316,7 @@ router.get('/plays/lookup', optionalAuth, (req, res) => {
   }
   const play = db.prepare(`
     SELECT rp.*, u.username, u.avatar, u.avatar_v, u.skill_title, u.nationality,
-           COALESCE(NULLIF(yt.session_youtube_url, ''), rp.replay_embed_url, '') AS resolved_replay_url,
+           COALESCE(NULLIF(rp.replay_embed_url, ''), NULLIF(yt.session_youtube_url, ''), '') AS resolved_replay_url,
            (SELECT COUNT(*) FROM play_comments WHERE play_id = rp.id) as comment_count
     FROM user_recently_played rp
     JOIN users u ON rp.user_id = u.id

@@ -38,10 +38,12 @@ import { parseGrade } from '../utils/grades';
 import ScoreSnapshotCard from '../components/ScoreSnapshotCard';
 import ItemCommentSection from '../components/ItemCommentSection';
 import { StoryShareModal, buildStoryDraft, ScoreCardImageShareButton, ScoreCardShareButton } from '../components/ScoreSnapshotModal';
+import YouTubeReplayModal from '../components/YouTubeReplayModal';
 import SendToDirectMessageButton from '../components/SendToDirectMessageButton';
 import WeeklyChallengePersonalCard from '../components/WeeklyChallengePersonalCard';
 import PlateBadge from '../components/ui/plate-badge';
 import { buildScoreSnapshotLinkShare } from '../utils/directMessageShares';
+import { buildReplayModalTitle } from '../utils/replayTitle';
 import SpritePet from '../components/SpritePet';
 import PetModal from '../components/PetModal';
 import PetPresenceChip from '../components/pet/PetPresenceChip';
@@ -1060,6 +1062,7 @@ export default function ProfilePage() {
   const [selectedAchievementBadge, setSelectedAchievementBadge] = useState(null);
   const [selectedOverviewDateKey, setSelectedOverviewDateKey] = useState('');
   const [selectedPlay, setSelectedPlay] = useState(null);
+  const [selectedPlayReplayOpen, setSelectedPlayReplayOpen] = useState(false);
   const [scoreCardStyle, setScoreCardStyle] = useState(() => localStorage.getItem(SCORE_CARD_STYLE_KEY) || 'classic');
   const [classicStoryOpen, setClassicStoryOpen] = useState(false);
   const [classicStoryCaption, setClassicStoryCaption] = useState('');
@@ -1072,6 +1075,7 @@ export default function ProfilePage() {
     setClassicStorySubmitting(false);
     setClassicStoryError('');
     setClassicStorySuccess(false);
+    setSelectedPlayReplayOpen(false);
   }, [selectedPlay]);
   const [jacketLookup, setJacketLookup] = useState({});
   const [chartKeyMap, setChartKeyMap] = useState({});
@@ -4500,6 +4504,14 @@ export default function ProfilePage() {
         const playChartId = chartKeyMap?.[playChartKey] || chartKeyMap?.[modalNorm];
         const playChartLink = playChartId ? `/songs/chart/${playChartId}` : `/songs?q=${encodeURIComponent(p.song_title || '')}`;
         const playSharePath = p.id ? `/play/${encodeURIComponent(String(p.id))}` : playChartLink;
+        const replayUrl = String(
+          p?.replayUrl
+          || p?.replay_url
+          || p?.replayEmbedUrl
+          || p?.replay_embed_url
+          || ''
+        ).trim();
+        const replayTitle = buildReplayModalTitle(p);
 
         const dmLinkShare = buildScoreSnapshotLinkShare({
           kind: 'score_snapshot',
@@ -4620,6 +4632,9 @@ export default function ProfilePage() {
                     avatarUrl={profile?.avatar ? getAvatarUrl(profile.avatar) : ''}
                     skillTitle={profile?.skill_title || ''}
                     roleLabel={profile?.role_label || ''}
+                    replayUrl={replayUrl}
+                    replayTitle={replayTitle}
+                    onOpenReplay={replayUrl ? () => setSelectedPlayReplayOpen(true) : null}
                   />
                   {selectedPlay?.id && (
                     <div className="mt-2 px-3 pb-3">
@@ -4670,6 +4685,17 @@ export default function ProfilePage() {
                   />
                 );
               })()}
+              {selectedPlayReplayOpen && replayUrl ? (
+                <YouTubeReplayModal
+                  url={replayUrl}
+                  title={replayTitle}
+                  onClose={() => setSelectedPlayReplayOpen(false)}
+                  commentThread={p?.id ? {
+                    itemId: p.id,
+                    ownerId: p.user_id || '',
+                  } : null}
+                />
+              ) : null}
             </>
           );
         }
@@ -4734,6 +4760,19 @@ export default function ProfilePage() {
                         />
                       </>
                     )}
+                    {replayUrl ? (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedPlayReplayOpen(true)}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-sky-400/35 bg-sky-500/10 text-sky-200 transition-colors hover:border-sky-300/45 hover:bg-sky-500/18 hover:text-white"
+                        aria-label={replayTitle || 'Open replay clip'}
+                        title={replayTitle || 'Open replay clip'}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.546 12 3.546 12 3.546s-7.505 0-9.377.504A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.504 9.376.504 9.376.504s7.505 0 9.377-.504a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
+                        </svg>
+                      </button>
+                    ) : null}
                     <ScoreCardImageShareButton
                       score={{ ...p, username: profile?.username || '' }}
                       jacketUrl={modalBg}
@@ -4854,11 +4893,22 @@ export default function ProfilePage() {
                     }
                   }}
                 />
-              );
-            })()}
-          </>
-        );
-      })()}
+                );
+              })()}
+              {selectedPlayReplayOpen && replayUrl ? (
+                <YouTubeReplayModal
+                  url={replayUrl}
+                  title={replayTitle}
+                  onClose={() => setSelectedPlayReplayOpen(false)}
+                  commentThread={p?.id ? {
+                    itemId: p.id,
+                    ownerId: p.user_id || '',
+                  } : null}
+                />
+              ) : null}
+            </>
+          );
+        })()}
 
       {/* Scouting Card Modal */}
       {showScoutingCardModal && (

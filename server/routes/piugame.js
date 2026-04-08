@@ -2827,7 +2827,7 @@ async function syncRecentlyPlayedForUser(user, options = {}) {
         // Look up replay data from the recently played row
         const rpRow = db.prepare(`
           SELECT rp.replay_embed_url, rp.replay_video_id, rp.replay_start_seconds, rp.replay_end_seconds,
-                 COALESCE(NULLIF(yt.session_youtube_url, ''), rp.replay_embed_url, '') AS yt_replay_url
+                 COALESCE(NULLIF(rp.replay_embed_url, ''), NULLIF(yt.session_youtube_url, ''), '') AS yt_replay_url
           FROM user_recently_played rp
           LEFT JOIN songs chart ON chart.title = rp.song_title AND chart.mode = rp.mode AND chart.level = rp.level
           LEFT JOIN user_chart_youtube_links yt ON yt.user_id = rp.user_id AND yt.chart_id = chart.id
@@ -2851,7 +2851,7 @@ async function syncRecentlyPlayedForUser(user, options = {}) {
           good,
           bad,
           miss,
-          replay_embed_url: rpRow?.yt_replay_url || rpRow?.replay_embed_url || '',
+          replay_embed_url: rpRow?.yt_replay_url || '',
           replay_video_id: rpRow?.replay_video_id || '',
           replay_start_seconds: rpRow?.replay_start_seconds || 0,
           replay_end_seconds: rpRow?.replay_end_seconds || 0,
@@ -4463,7 +4463,7 @@ router.get('/recently-played/:userId', (req, res) => {
       COALESCE(s.make, '') AS shoe_make,
       COALESCE(s.model, '') AS shoe_model,
       COALESCE(s.colorway, '') AS shoe_colorway,
-      COALESCE(NULLIF(yt.session_youtube_url, ''), p.replay_embed_url, '') AS replay_embed_url
+      COALESCE(NULLIF(p.replay_embed_url, ''), NULLIF(yt.session_youtube_url, ''), '') AS replay_embed_url
     FROM user_recently_played p
     LEFT JOIN user_shoes s ON s.id = p.shoe_id
     LEFT JOIN songs chart ON chart.title = p.song_title AND chart.mode = p.mode AND chart.level = p.level
