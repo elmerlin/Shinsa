@@ -336,7 +336,7 @@ function aggregateWeeklyResults(db, weekId) {
 
   // Fetch all plays in the week window
   const plays = db.prepare(`
-    SELECT rp.*, u.username, u.avatar, u.nationality, u.skill_title, u.skill_level
+    SELECT rp.*, u.username, u.nationality, u.skill_title, u.skill_level
     FROM user_recently_played rp
     JOIN users u ON rp.user_id = u.id
     WHERE COALESCE(NULLIF(rp.played_at_utc, ''), rp.date_played) >= ?
@@ -412,12 +412,33 @@ function aggregateWeeklyResults(db, weekId) {
       userProfiles.set(play.user_id, {
         user_id: play.user_id,
         username: play.username,
-        avatar: play.avatar,
+        avatar: '',
         nationality: play.nationality,
         skill_title: play.skill_title,
         skill_level: play.skill_level,
         skill_family: deriveSkillFamily(play.skill_title),
       });
+    }
+  }
+
+  const userIdsNeedingProfiles = Array.from(userProfiles.keys());
+  if (userIdsNeedingProfiles.length > 0) {
+    const placeholders = userIdsNeedingProfiles.map(() => '?').join(', ');
+    const userRows = db.prepare(`
+      SELECT id, avatar, username, nationality, skill_title, skill_level
+      FROM users
+      WHERE id IN (${placeholders})
+    `).all(...userIdsNeedingProfiles);
+
+    for (const row of userRows) {
+      const existing = userProfiles.get(row.id);
+      if (!existing) continue;
+      existing.avatar = row.avatar || '';
+      existing.username = row.username || existing.username;
+      existing.nationality = row.nationality || existing.nationality;
+      existing.skill_title = row.skill_title || existing.skill_title;
+      existing.skill_level = row.skill_level ?? existing.skill_level;
+      existing.skill_family = deriveSkillFamily(existing.skill_title);
     }
   }
 
@@ -493,17 +514,20 @@ function aggregateWeeklyResults(db, weekId) {
     });
 
     if (chartResults[chartId]) {
-      chartResults[chartId].top3 = entries.slice(0, 3).map((e, i) => ({
+      chartResults[chartId].top3 = entries.slice(0, 3).map((e, i) => {
+        const snap = snapshots[e.userId] || {};
+        return {
         rank: i + 1,
         user_id: e.userId,
-        username: e.play.username,
-        avatar: e.play.avatar,
-        nationality: e.play.nationality,
+        username: snap.username_snapshot || e.play.username,
+        avatar: snap.avatar_snapshot || normalizeUserAvatarForList(e.play.avatar, e.userId, 64),
+        nationality: snap.nationality_snapshot || e.play.nationality,
         score: e.play.score,
         grade: e.resolvedGrade,
         rating_points: e.ratingPoints,
         plate: e.play.plate || '',
-      }));
+        };
+      });
       chartResults[chartId].participantCount = entries.length;
       chartResults[chartId].clearCount = entries.length;
     }
@@ -566,10 +590,10 @@ function buildLeaderboard(userTotals, scopeMode = 'both', skillFamily = 'all', s
   for (const [userId, totals] of Object.entries(userTotals)) {
     const scope = totals[scopeMode] || totals.both;
     if (!scope || scope.clears === 0) continue;
+    const snap = snapshots?.[userId] || null;
 
     // Family filter
     if (skillFamily !== 'all' && snapshots) {
-      const snap = snapshots[userId];
       const family = (snap?.skill_family_snapshot || totals.profile?.skill_family || '').toLowerCase();
       if (skillFamily === 'expert') {
         if (family !== 'expert' && family !== 'master') continue;
@@ -580,10 +604,10 @@ function buildLeaderboard(userTotals, scopeMode = 'both', skillFamily = 'all', s
 
     entries.push({
       user_id: userId,
-      username: totals.profile?.username || '',
-      avatar: totals.profile?.avatar || '',
-      nationality: totals.profile?.nationality || '',
-      skill_title: totals.profile?.skill_title || '',
+      username: snap?.username_snapshot || totals.profile?.username || '',
+      avatar: snap?.avatar_snapshot || normalizeUserAvatarForList(totals.profile?.avatar, userId, 64),
+      nationality: snap?.nationality_snapshot || totals.profile?.nationality || '',
+      skill_title: snap?.skill_title_snapshot || totals.profile?.skill_title || '',
       skill_family: totals.profile?.skill_family || '',
       points: scope.points,
       clears: scope.clears,
