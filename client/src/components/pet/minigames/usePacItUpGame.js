@@ -13,12 +13,12 @@ import {
 
 // ─── Constants ───────────────────────────────────────────────────
 
-const PLAYER_SPEED   = 4.2;  // tiles/sec
-const GHOST_BASE     = 3.4;
+const PLAYER_SPEED   = 3.8;  // tiles/sec
+const GHOST_BASE     = 3.1;
 const GHOST_TIER_INC = 0.15;
-const GHOST_MAX      = 4.2;
-const GHOST_FRIGHT   = 2.6;
-const GHOST_RETURN   = 4.6;
+const GHOST_MAX      = 3.9;
+const GHOST_FRIGHT   = 2.4;
+const GHOST_RETURN   = 4.2;
 
 const FRIGHT_BASE    = 8000;
 const FRIGHT_TIER    = 400;

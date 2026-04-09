@@ -1,48 +1,249 @@
-// ─── Pac It Up! sprite drawing (pixel-art, canvas only) ──────────
-import { CHAR_COLORS } from './miniPumpSprites';
+import { CHAR_COLORS, drawPet as drawMiniPumpPet } from './miniPumpSprites';
 export { CHAR_COLORS };
 
-// ─── Palettes ────────────────────────────────────────────────────
-
 export const GHOST_COLORS = {
-  tempo: { body: '#ee3333', dark: '#aa1111', eye: '#ffffff', pupil: '#222244', skirt: '#cc2222', fright: '#2244ff', frightBlink: '#ffffff' },
-  glint: { body: '#ff88bb', dark: '#cc5588', eye: '#ffffff', pupil: '#222244', skirt: '#ee6699', fright: '#2244ff', frightBlink: '#ffffff' },
-  drift: { body: '#44ddee', dark: '#22aabb', eye: '#ffffff', pupil: '#222244', skirt: '#33ccdd', fright: '#2244ff', frightBlink: '#ffffff' },
-  ember: { body: '#ffaa33', dark: '#cc7711', eye: '#ffffff', pupil: '#222244', skirt: '#ee9922', fright: '#2244ff', frightBlink: '#ffffff' },
+  tempo: { body: '#ee5f7a', dark: '#8e1e34', eye: '#ffffff', pupil: '#1f2f5a', fright: '#335dff', frightBlink: '#ffffff' },
+  glint: { body: '#ff97cf', dark: '#a64b7a', eye: '#ffffff', pupil: '#1f2f5a', fright: '#335dff', frightBlink: '#ffffff' },
+  drift: { body: '#57d6e8', dark: '#1d8295', eye: '#ffffff', pupil: '#1f2f5a', fright: '#335dff', frightBlink: '#ffffff' },
+  ember: { body: '#ffb14b', dark: '#b4661d', eye: '#ffffff', pupil: '#1f2f5a', fright: '#335dff', frightBlink: '#ffffff' },
 };
 export const GHOST_NAMES = ['tempo', 'glint', 'drift', 'ember'];
 
 export const WALL_THEMES = {
-  dojo:   { fill: '#1a2844', border: '#3366aa', glow: 'rgba(50,100,180,0.15)' },
-  snack:  { fill: '#2a1a30', border: '#8855aa', glow: 'rgba(130,80,170,0.15)' },
-  shrine: { fill: '#1a2a1a', border: '#44aa66', glow: 'rgba(60,160,90,0.15)' },
+  dojo:   { fill: '#1a2844', border: '#3366aa' },
+  snack:  { fill: '#2a1a30', border: '#8855aa' },
+  shrine: { fill: '#1a2a1a', border: '#44aa66' },
 };
 
-export const STOMP_COLORS = { fill: '#ffcc22', glow: 'rgba(255,204,34,0.4)', core: '#ffe866' };
-export const POWER_COLORS = { fill: '#ff4466', glow: 'rgba(255,68,102,0.5)', core: '#ff8899', ring: '#ff2244' };
-export const MINE_COLORS  = { fill: '#555555', spike: '#ff3333', core: '#222222', warn: '#ff6644' };
-export const SHIELD_COLORS = { fill: '#44ccff', glow: 'rgba(68,204,255,0.5)', ring: '#88eeff' };
+const STOMP_PALETTE = {
+  O: '#9b5d09',
+  Y: '#ffcc22',
+  C: '#ffe97d',
+};
 
-// ─── Pixel helpers ───────────────────────────────────────────────
+const POWER_PALETTE = {
+  O: '#89173a',
+  P: '#ff4f8f',
+  C: '#ffd0e0',
+  R: '#ff7aa8',
+};
+
+const MINE_PALETTE = {
+  S: '#ff5555',
+  M: '#676767',
+  D: '#323232',
+  C: '#111111',
+};
+
+const SHIELD_PALETTE = {
+  O: '#1a5c7c',
+  B: '#4ecbff',
+  W: '#d7f7ff',
+};
+
+const STOMP_FRAMES = [
+  [
+    '   OYO   ',
+    '  OYYYO  ',
+    ' OYYYYYO ',
+    'OYYYCYYYO',
+    ' OYYYYYO ',
+    '  OYYYO  ',
+    '   OYO   ',
+  ],
+  [
+    '  O Y O  ',
+    ' OYYYYYO ',
+    ' OYYYYYO ',
+    'OYYYCYYYO',
+    ' OYYYYYO ',
+    ' OYYYYYO ',
+    '  O Y O  ',
+  ],
+];
+
+const POWER_FRAMES = [
+  [
+    '   ROR   ',
+    '  RPPPR  ',
+    ' RPPCPPR ',
+    'OPPCCCPPO',
+    ' RPPCPPR ',
+    '  RPPPR  ',
+    '   ROR   ',
+  ],
+  [
+    '  R O R  ',
+    ' RPPPPPR ',
+    'OPPCCCPPO',
+    'RPCCCCCPR',
+    'OPPCCCPPO',
+    ' RPPPPPR ',
+    '  R O R  ',
+  ],
+];
+
+const MINE_FRAMES = [
+  [
+    '   S S   ',
+    '  SMMMS  ',
+    ' SMMCMMS ',
+    'SMMCDC MMS'.replace(/ /g, ''),
+    ' SMMCMMS ',
+    '  SMMMS  ',
+    '   S S   ',
+  ],
+  [
+    '    S    ',
+    '  SMMS   ',
+    ' SMMCMMS ',
+    'SMMCDCMM S'.replace(/ /g, ''),
+    ' SMMCMMS ',
+    '   SMMS  ',
+    '    S    ',
+  ],
+].map((frame) => frame.map((row) => row.padEnd(9, ' ')));
+
+const SHIELD_FRAMES = [
+  [
+    '   OBO   ',
+    '  OBBBO  ',
+    ' OBBWBBO ',
+    ' OBBW B O'.replace(/ /g, ''),
+    '  OBBBO  ',
+    '   OBO   ',
+  ],
+  [
+    '   OWO   ',
+    '  OBBBO  ',
+    ' OBBW B O'.replace(/ /g, ''),
+    ' OBBWBBO ',
+    '  OBBBO  ',
+    '   OWO   ',
+  ],
+].map((frame) => frame.map((row) => row.padEnd(7, ' ')));
+
+const GHOST_BASE_FRAME_A = [
+  '  BBBBBB  ',
+  ' BBBBBBBB ',
+  'BBBBBBBBBB',
+  'BBWWBBWWBB',
+  'BBWWBBWWBB',
+  'BBBBBBBBBB',
+  'BBDDDDDDBB',
+  'B B BBB B ',
+  'BB  BB  BB',
+];
+
+const GHOST_BASE_FRAME_B = [
+  '  BBBBBB  ',
+  ' BBBBBBBB ',
+  'BBBBBBBBBB',
+  'BBWWBBWWBB',
+  'BBWWBBWWBB',
+  'BBBBBBBBBB',
+  'BBDDDDDDBB',
+  ' BB BBB BB',
+  'B  B  B  B',
+];
+
+const GHOST_FRIGHT_FRAME_A = [
+  '  BBBBBB  ',
+  ' BBBBBBBB ',
+  'BBBBBBBBBB',
+  'BBWWBBWWBB',
+  'BBWWBBWWBB',
+  'BBBBBBBBBB',
+  'BBWWWWWWBB',
+  'B B WW B B',
+  'BB  WW  BB',
+];
+
+const GHOST_FRIGHT_FRAME_B = [
+  '  BBBBBB  ',
+  ' BBBBBBBB ',
+  'BBBBBBBBBB',
+  'BBWWBBWWBB',
+  'BBWWBBWWBB',
+  'BBBBBBBBBB',
+  'BBWWWWWWBB',
+  ' BB WW BB ',
+  'B  W  W  B',
+];
+
+const GHOST_EYES_FRAME = [
+  ' WW    WW ',
+  'WWWW  WWWW',
+  ' WWP  PWW ',
+  '  WW  WW  ',
+];
 
 function px(ctx, x, y, s, color) {
   ctx.fillStyle = color;
   ctx.fillRect(Math.round(x), Math.round(y), s, s);
 }
 
-function drawPixelCircle(ctx, cx, cy, r, ps, color) {
-  for (let dy = -r; dy <= r; dy++) {
-    for (let dx = -r; dx <= r; dx++) {
-      if (dx * dx + dy * dy <= r * r) {
-        px(ctx, cx + dx * ps, cy + dy * ps, ps, color);
-      }
+function drawPixelMap(ctx, cx, cy, ps, map, palette) {
+  const rows = map.length;
+  const cols = Math.max(...map.map((row) => row.length));
+  const ox = Math.round(cx - (cols * ps) / 2);
+  const oy = Math.round(cy - (rows * ps) / 2);
+
+  for (let rowIndex = 0; rowIndex < rows; rowIndex++) {
+    const row = map[rowIndex];
+    for (let colIndex = 0; colIndex < row.length; colIndex++) {
+      const cell = row[colIndex];
+      if (cell === ' ') continue;
+      const color = palette[cell];
+      if (!color) continue;
+      px(ctx, ox + colIndex * ps, oy + rowIndex * ps, ps, color);
     }
   }
+
+  return { ox, oy, cols, rows };
 }
 
-// ─── Wall drawing ────────────────────────────────────────────────
+function getGhostFrame(animFrame) {
+  return Math.floor(animFrame / 10) % 2 === 0 ? GHOST_BASE_FRAME_A : GHOST_BASE_FRAME_B;
+}
 
-export function drawWalls(ctx, grid, tileSize, theme, animFrame) {
+function getFrightFrame(animFrame) {
+  return Math.floor(animFrame / 10) % 2 === 0 ? GHOST_FRIGHT_FRAME_A : GHOST_FRIGHT_FRAME_B;
+}
+
+function drawGhostPupils(ctx, frameInfo, ps, dir, pupilColor) {
+  const xOffset = dir === 'left' ? -ps : dir === 'right' ? ps : 0;
+  const yOffset = dir === 'up' ? -ps : dir === 'down' ? ps : 0;
+  const leftEyeX = frameInfo.ox + 2 * ps;
+  const rightEyeX = frameInfo.ox + 6 * ps;
+  const eyeY = frameInfo.oy + 3 * ps;
+
+  px(ctx, leftEyeX + xOffset, eyeY + yOffset, ps, pupilColor);
+  px(ctx, rightEyeX + xOffset, eyeY + yOffset, ps, pupilColor);
+}
+
+function drawShieldAura(ctx, cx, cy, ps, animFrame) {
+  const orbit = Math.floor(animFrame / 8) % 4;
+  const sparkPalette = { B: '#5edbff', W: '#d9f9ff' };
+  const sparkFrame = [
+    ' W ',
+    'WBW',
+    ' W ',
+  ];
+  const offsets = [
+    { x: 0, y: -9 * ps },
+    { x: 9 * ps, y: 0 },
+    { x: 0, y: 9 * ps },
+    { x: -9 * ps, y: 0 },
+  ];
+
+  offsets.forEach((offset, index) => {
+    const active = index === orbit || index === (orbit + 2) % offsets.length;
+    drawPixelMap(ctx, cx + offset.x, cy + offset.y, ps, sparkFrame, active ? sparkPalette : { B: '#224e61', W: '#5a8294' });
+  });
+}
+
+export function drawWalls(ctx, grid, tileSize, theme) {
   const colors = WALL_THEMES[theme] || WALL_THEMES.dojo;
   const rows = grid.length;
   const cols = grid[0].length;
@@ -56,9 +257,8 @@ export function drawWalls(ctx, grid, tileSize, theme, animFrame) {
       ctx.fillStyle = colors.fill;
       ctx.fillRect(px0, py0, tileSize, tileSize);
 
-      // Draw border edges where adjacent to non-wall
-      ctx.fillStyle = colors.border;
       const bw = Math.max(1, tileSize * 0.15);
+      ctx.fillStyle = colors.border;
       if (y === 0 || grid[y - 1]?.[x] !== 'wall') ctx.fillRect(px0, py0, tileSize, bw);
       if (y === rows - 1 || grid[y + 1]?.[x] !== 'wall') ctx.fillRect(px0, py0 + tileSize - bw, tileSize, bw);
       if (x === 0 || grid[y][x - 1] !== 'wall') ctx.fillRect(px0, py0, bw, tileSize);
@@ -67,292 +267,94 @@ export function drawWalls(ctx, grid, tileSize, theme, animFrame) {
   }
 }
 
-// ─── Stomp (center-panel style) ──────────────────────────────────
-
 export function drawStomp(ctx, cx, cy, size, animFrame) {
-  const r = size * 0.3;
-  const pulse = 1 + Math.sin(animFrame * 0.08) * 0.1;
-
-  // Glow
-  ctx.fillStyle = STOMP_COLORS.glow;
-  ctx.beginPath();
-  ctx.arc(cx, cy, r * pulse * 1.6, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Core diamond shape (pad-like)
-  const s = r * pulse;
-  ctx.fillStyle = STOMP_COLORS.fill;
-  ctx.beginPath();
-  ctx.moveTo(cx, cy - s);
-  ctx.lineTo(cx + s * 0.7, cy);
-  ctx.lineTo(cx, cy + s);
-  ctx.lineTo(cx - s * 0.7, cy);
-  ctx.closePath();
-  ctx.fill();
-
-  // Inner highlight
-  ctx.fillStyle = STOMP_COLORS.core;
-  ctx.beginPath();
-  ctx.arc(cx, cy, r * 0.3, 0, Math.PI * 2);
-  ctx.fill();
+  const ps = Math.max(1, Math.floor(size / 10));
+  const frame = STOMP_FRAMES[Math.floor(animFrame / 8) % STOMP_FRAMES.length];
+  drawPixelMap(ctx, cx, cy, ps, frame, STOMP_PALETTE);
 }
-
-// ─── Power stomp ─────────────────────────────────────────────────
 
 export function drawPowerStomp(ctx, cx, cy, size, animFrame) {
-  const r = size * 0.4;
-  const pulse = 1 + Math.sin(animFrame * 0.12) * 0.2;
-
-  // Outer ring glow
-  ctx.strokeStyle = POWER_COLORS.ring;
-  ctx.lineWidth = Math.max(1, size * 0.06);
-  ctx.beginPath();
-  ctx.arc(cx, cy, r * pulse * 1.3, 0, Math.PI * 2);
-  ctx.stroke();
-
-  // Glow
-  ctx.fillStyle = POWER_COLORS.glow;
-  ctx.beginPath();
-  ctx.arc(cx, cy, r * pulse * 1.5, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Core (larger diamond)
-  const s = r * pulse;
-  ctx.fillStyle = POWER_COLORS.fill;
-  ctx.beginPath();
-  ctx.moveTo(cx, cy - s);
-  ctx.lineTo(cx + s * 0.8, cy);
-  ctx.lineTo(cx, cy + s);
-  ctx.lineTo(cx - s * 0.8, cy);
-  ctx.closePath();
-  ctx.fill();
-
-  // Inner
-  ctx.fillStyle = POWER_COLORS.core;
-  ctx.beginPath();
-  ctx.arc(cx, cy, r * 0.35, 0, Math.PI * 2);
-  ctx.fill();
+  const ps = Math.max(1, Math.floor(size / 10));
+  const frame = POWER_FRAMES[Math.floor(animFrame / 8) % POWER_FRAMES.length];
+  drawPixelMap(ctx, cx, cy, ps, frame, POWER_PALETTE);
 }
-
-// ─── Mine ────────────────────────────────────────────────────────
 
 export function drawMine(ctx, cx, cy, size, animFrame) {
-  const r = size * 0.3;
-  const wobble = Math.sin(animFrame * 0.06) * 0.5;
-
-  // Warning glow
-  ctx.fillStyle = MINE_COLORS.warn;
-  ctx.globalAlpha = 0.15 + Math.sin(animFrame * 0.1) * 0.1;
-  ctx.beginPath();
-  ctx.arc(cx, cy, r * 1.8, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.globalAlpha = 1;
-
-  // Body
-  ctx.fillStyle = MINE_COLORS.fill;
-  ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Spikes
-  ctx.fillStyle = MINE_COLORS.spike;
-  for (let i = 0; i < 6; i++) {
-    const angle = (i / 6) * Math.PI * 2 + wobble;
-    const sx = cx + Math.cos(angle) * r * 1.3;
-    const sy = cy + Math.sin(angle) * r * 1.3;
-    ctx.beginPath();
-    ctx.arc(sx, sy, r * 0.25, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  // Core
-  ctx.fillStyle = MINE_COLORS.core;
-  ctx.beginPath();
-  ctx.arc(cx, cy, r * 0.4, 0, Math.PI * 2);
-  ctx.fill();
-
-  // X mark
-  ctx.strokeStyle = MINE_COLORS.spike;
-  ctx.lineWidth = Math.max(1, size * 0.05);
-  const xs = r * 0.25;
-  ctx.beginPath();
-  ctx.moveTo(cx - xs, cy - xs); ctx.lineTo(cx + xs, cy + xs);
-  ctx.moveTo(cx + xs, cy - xs); ctx.lineTo(cx - xs, cy + xs);
-  ctx.stroke();
+  const ps = Math.max(1, Math.floor(size / 10));
+  const frame = MINE_FRAMES[Math.floor(animFrame / 10) % MINE_FRAMES.length];
+  drawPixelMap(ctx, cx, cy, ps, frame, MINE_PALETTE);
 }
-
-// ─── Shield pickup ───────────────────────────────────────────────
 
 export function drawShieldPickup(ctx, cx, cy, size, animFrame) {
-  const r = size * 0.35;
-  const pulse = 1 + Math.sin(animFrame * 0.1) * 0.15;
-  const float = Math.sin(animFrame * 0.06) * size * 0.08;
-
-  ctx.fillStyle = SHIELD_COLORS.glow;
-  ctx.beginPath();
-  ctx.arc(cx, cy + float, r * pulse * 1.5, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Shield shape
-  ctx.fillStyle = SHIELD_COLORS.fill;
-  ctx.beginPath();
-  ctx.moveTo(cx, cy + float - r * pulse);
-  ctx.quadraticCurveTo(cx + r * pulse, cy + float - r * 0.3, cx + r * pulse * 0.7, cy + float + r * 0.6);
-  ctx.lineTo(cx, cy + float + r * pulse);
-  ctx.lineTo(cx - r * pulse * 0.7, cy + float + r * 0.6);
-  ctx.quadraticCurveTo(cx - r * pulse, cy + float - r * 0.3, cx, cy + float - r * pulse);
-  ctx.fill();
-
-  ctx.strokeStyle = SHIELD_COLORS.ring;
-  ctx.lineWidth = Math.max(1, size * 0.04);
-  ctx.stroke();
+  const ps = Math.max(1, Math.floor(size / 9));
+  const frame = SHIELD_FRAMES[Math.floor(animFrame / 10) % SHIELD_FRAMES.length];
+  drawPixelMap(ctx, cx, cy, ps, frame, SHIELD_PALETTE);
 }
 
-// ─── Ghost ───────────────────────────────────────────────────────
-
-export function drawGhost(ctx, cx, cy, size, ghostName, state, dir, animFrame, reducedMotion) {
+export function drawGhost(ctx, cx, cy, size, ghostName, state, dir, animFrame) {
   const colors = GHOST_COLORS[ghostName] || GHOST_COLORS.tempo;
-  const r = size * 0.4;
   const ps = Math.max(1, Math.floor(size / 12));
 
-  const isFrightened = state === 'frightened';
-  const isReturning = state === 'returning';
-  const isBlinking = isFrightened && (animFrame % 20 < 10);
-
-  if (isReturning) {
-    // Just eyes
-    drawGhostEyes(ctx, cx, cy - r * 0.2, r, dir, '#ffffff', '#222244');
+  if (state === 'returning') {
+    drawPixelMap(ctx, cx, cy, ps, GHOST_EYES_FRAME, {
+      W: '#ffffff',
+      P: colors.pupil,
+    });
     return;
   }
 
-  const bodyColor = isFrightened ? (isBlinking ? colors.frightBlink : colors.fright) : colors.body;
-  const darkColor = isFrightened ? '#1122aa' : colors.dark;
+  const frightened = state === 'frightened';
+  const blink = frightened && Math.floor(animFrame / 12) % 2 === 1;
+  const palette = {
+    B: frightened ? (blink ? colors.frightBlink : colors.fright) : colors.body,
+    D: frightened ? '#1834a8' : colors.dark,
+    W: '#ffffff',
+  };
 
-  // Body (rounded top, wavy bottom)
-  ctx.fillStyle = bodyColor;
-  ctx.beginPath();
-  ctx.arc(cx, cy - r * 0.15, r, Math.PI, 0, false);
-  ctx.lineTo(cx + r, cy + r * 0.7);
+  const frame = frightened ? getFrightFrame(animFrame) : getGhostFrame(animFrame);
+  const frameInfo = drawPixelMap(ctx, cx, cy, ps, frame, palette);
 
-  // Wavy skirt
-  const segments = 4;
-  const segW = (r * 2) / segments;
-  const waveAmp = r * 0.15;
-  const waveOff = reducedMotion ? 0 : (animFrame * 0.15);
-  for (let i = segments; i >= 0; i--) {
-    const sx = cx - r + i * segW;
-    const sy = cy + r * 0.7 + Math.sin(waveOff + i * 1.5) * waveAmp;
-    ctx.lineTo(sx, sy);
-  }
-  ctx.closePath();
-  ctx.fill();
-
-  // Eyes
-  if (isFrightened) {
-    // Frightened face: wavy mouth + simple eyes
-    const eyeR = r * 0.15;
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath();
-    ctx.arc(cx - r * 0.25, cy - r * 0.2, eyeR, 0, Math.PI * 2);
-    ctx.arc(cx + r * 0.25, cy - r * 0.2, eyeR, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Wavy mouth
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = Math.max(1, ps);
-    ctx.beginPath();
-    for (let i = 0; i <= 4; i++) {
-      const mx = cx - r * 0.35 + (r * 0.7 / 4) * i;
-      const my = cy + r * 0.2 + (i % 2 === 0 ? -ps : ps);
-      i === 0 ? ctx.moveTo(mx, my) : ctx.lineTo(mx, my);
-    }
-    ctx.stroke();
-  } else {
-    drawGhostEyes(ctx, cx, cy - r * 0.2, r, dir, colors.eye, colors.pupil);
+  if (!frightened) {
+    drawGhostPupils(ctx, frameInfo, ps, dir, colors.pupil);
   }
 }
-
-function drawGhostEyes(ctx, cx, cy, r, dir, eyeColor, pupilColor) {
-  const eyeR = r * 0.22;
-  const pupilR = r * 0.11;
-  const eyeSpacing = r * 0.35;
-  const dx = { up: 0, down: 0, left: -pupilR * 0.6, right: pupilR * 0.6 };
-  const dy = { up: -pupilR * 0.6, down: pupilR * 0.6, left: 0, right: 0 };
-  const pd = dx[dir] || 0;
-  const pdy = dy[dir] || 0;
-
-  for (const side of [-1, 1]) {
-    ctx.fillStyle = eyeColor;
-    ctx.beginPath();
-    ctx.arc(cx + side * eyeSpacing, cy, eyeR, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = pupilColor;
-    ctx.beginPath();
-    ctx.arc(cx + side * eyeSpacing + pd, cy + pdy, pupilR, 0, Math.PI * 2);
-    ctx.fill();
-  }
-}
-
-// ─── Player pet ──────────────────────────────────────────────────
 
 export function drawPlayerPet(ctx, cx, cy, size, character, dir, animFrame, invuln, shieldActive, reducedMotion) {
-  const c = CHAR_COLORS[character] || CHAR_COLORS.dojocat;
-  const ps = Math.max(1, Math.floor(size / 12));
-  const r = size * 0.38;
+  if (invuln && !reducedMotion && Math.floor(animFrame / 4) % 2 === 0) return;
 
-  // Invulnerability blink
-  if (invuln && !reducedMotion && animFrame % 8 < 4) return;
+  const ps = Math.max(1, Math.round(size / 22));
+  const stepFrame = Math.floor(animFrame / 6) % 2 === 0;
+  const pose = reducedMotion
+    ? 'ready'
+    : dir === 'left'
+      ? (stepFrame ? 'step_red' : 'ready')
+      : dir === 'right'
+        ? (stepFrame ? 'step_blue' : 'ready')
+        : (stepFrame ? 'step_yellow' : 'ready');
 
-  // Shield aura
   if (shieldActive) {
-    ctx.strokeStyle = SHIELD_COLORS.ring;
-    ctx.lineWidth = Math.max(1, ps * 1.5);
-    ctx.globalAlpha = 0.5 + Math.sin(animFrame * 0.15) * 0.2;
-    ctx.beginPath();
-    ctx.arc(cx, cy, r * 1.4, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.globalAlpha = 1;
+    drawShieldAura(ctx, cx, cy - 2 * ps, ps, animFrame);
   }
 
-  // Body
-  drawPixelCircle(ctx, cx, cy, Math.round(r / ps), ps, c.body);
+  drawMiniPumpPet(
+    ctx,
+    cx,
+    cy + 2 * ps,
+    ps,
+    character,
+    pose,
+    dir === 'up' ? 'focused' : 'normal',
+  );
 
-  // Darker bottom half
-  drawPixelCircle(ctx, cx, cy + ps * 2, Math.round(r / ps) - 1, ps, c.dark);
-  drawPixelCircle(ctx, cx, cy, Math.round(r / ps) - 1, ps, c.body);
-
-  // Belly
-  drawPixelCircle(ctx, cx, cy + ps, Math.round(r / ps * 0.5), ps, c.belly || c.light);
-
-  // Face direction offset
-  const fdx = dir === 'left' ? -ps : dir === 'right' ? ps : 0;
-  const fdy = dir === 'up' ? -ps : dir === 'down' ? ps : 0;
-
-  // Eyes
-  const eyeSpacing = ps * 2.5;
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(cx - eyeSpacing + fdx - ps, cy - ps * 2 + fdy, ps * 2, ps * 2);
-  ctx.fillRect(cx + eyeSpacing + fdx - ps, cy - ps * 2 + fdy, ps * 2, ps * 2);
-
-  // Pupils
-  ctx.fillStyle = c.eye || '#2d2d2d';
-  const pOff = dir === 'left' ? -ps * 0.5 : dir === 'right' ? ps * 0.5 : 0;
-  const pyOff = dir === 'up' ? -ps * 0.5 : dir === 'down' ? ps * 0.5 : 0;
-  ctx.fillRect(cx - eyeSpacing + fdx + pOff, cy - ps * 1.5 + fdy + pyOff, ps, ps);
-  ctx.fillRect(cx + eyeSpacing + fdx + pOff, cy - ps * 1.5 + fdy + pyOff, ps, ps);
-
-  // Nose
-  px(ctx, cx + fdx - ps * 0.5, cy + fdy, ps, c.nose || c.accent || c.dark);
-
-  // Mouth (open when moving)
-  if (dir !== 'up' && dir !== 'down') {
-    const mouthX = dir === 'left' ? cx - r * 0.6 : dir === 'right' ? cx + r * 0.3 : cx - ps;
-    ctx.fillStyle = c.outline || '#151515';
-    ctx.fillRect(mouthX, cy + ps * 1.5 + fdy, ps * 2, ps);
-  }
+  const accentColor = (CHAR_COLORS[character] || CHAR_COLORS.dojocat).accent || '#f6a3ae';
+  const facingMarker = {
+    up: { x: 0, y: -9 * ps },
+    down: { x: 0, y: 8 * ps },
+    left: { x: -10 * ps, y: 0 },
+    right: { x: 10 * ps, y: 0 },
+  }[dir] || { x: 0, y: 0 };
+  drawPixelMap(ctx, cx + facingMarker.x, cy + facingMarker.y, ps, [' A ', 'AAA', ' A '], { A: accentColor });
 }
-
-// ─── FX ──────────────────────────────────────────────────────────
 
 export function drawScorePopup(ctx, cx, cy, text, age, color) {
   const alpha = Math.max(0, 1 - age / 800);
@@ -379,56 +381,40 @@ export function drawCameraShake(ctx, intensity, reducedMotion) {
   return { x, y };
 }
 
-// ─── HUD ─────────────────────────────────────────────────────────
-
 export function drawHUD(ctx, w, h, state) {
   const pad = 6;
   ctx.font = 'bold 11px monospace';
   ctx.textBaseline = 'top';
 
-  // Score (top-left)
   ctx.fillStyle = '#ffffff';
   ctx.textAlign = 'left';
   ctx.fillText(`SCORE ${state.score}`, pad, pad);
 
-  // Stage (top-center)
   ctx.textAlign = 'center';
   ctx.fillText(`STAGE ${state.stage}`, w / 2, pad);
 
-  // Combo (top-right)
   ctx.textAlign = 'right';
   if (state.combo > 0) {
     ctx.fillStyle = '#ffcc22';
     ctx.fillText(`COMBO ×${state.combo}`, w - pad, pad);
   }
 
-  // Lives (bottom-left)
-  ctx.textAlign = 'left';
-  const heartSize = 8;
+  const heartPalette = { R: '#ff4f6c', H: '#ff90aa' };
   for (let i = 0; i < state.lives; i++) {
-    const hx = pad + i * (heartSize + 4);
-    const hy = h - pad - heartSize;
-    ctx.fillStyle = '#ff4466';
-    ctx.beginPath();
-    ctx.arc(hx + heartSize * 0.3, hy + heartSize * 0.3, heartSize * 0.3, 0, Math.PI * 2);
-    ctx.arc(hx + heartSize * 0.7, hy + heartSize * 0.3, heartSize * 0.3, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(hx, hy + heartSize * 0.45);
-    ctx.lineTo(hx + heartSize * 0.5, hy + heartSize);
-    ctx.lineTo(hx + heartSize, hy + heartSize * 0.45);
-    ctx.fill();
+    drawPixelMap(ctx, pad + 7 + i * 14, h - 11, 2, [
+      ' RR RR ',
+      'RRRRRRR',
+      'RRRRRRR',
+      ' RRRRR ',
+      '  RRR  ',
+      '   R   ',
+    ], heartPalette);
   }
 
-  // Shield indicator (bottom-right)
   if (state.shieldCharges > 0) {
-    ctx.fillStyle = SHIELD_COLORS.fill;
-    ctx.textAlign = 'right';
-    ctx.fillText('🛡', w - pad, h - pad - 12);
+    drawPixelMap(ctx, w - 18, h - 14, 2, SHIELD_FRAMES[0], SHIELD_PALETTE);
   }
 }
-
-// ─── Banners ─────────────────────────────────────────────────────
 
 export function drawCountdown(ctx, w, h, value) {
   ctx.fillStyle = 'rgba(0,0,0,0.6)';
@@ -481,8 +467,8 @@ export function drawResultsOverlay(ctx, w, h, state) {
     `Stomps: ${state.stompsCollected}`,
     `Ghosts Eaten: ${state.ghostsEaten}`,
   ];
-  lines.forEach((line, i) => {
-    ctx.fillText(line, w / 2, h * 0.48 + i * 18);
+  lines.forEach((line, index) => {
+    ctx.fillText(line, w / 2, h * 0.48 + index * 18);
   });
 
   ctx.fillStyle = '#888888';
@@ -490,11 +476,7 @@ export function drawResultsOverlay(ctx, w, h, state) {
   ctx.fillText('Tap or press Enter to continue', w / 2, h * 0.82);
 }
 
-// ─── Background / Decor ─────────────────────────────────────────
-
-export function drawBackground(ctx, w, h, theme) {
-  const colors = WALL_THEMES[theme] || WALL_THEMES.dojo;
-  // Dark gradient
+export function drawBackground(ctx, w, h) {
   const grad = ctx.createLinearGradient(0, 0, 0, h);
   grad.addColorStop(0, '#0a0a14');
   grad.addColorStop(1, '#0d0d1a');
@@ -502,7 +484,7 @@ export function drawBackground(ctx, w, h, theme) {
   ctx.fillRect(0, 0, w, h);
 }
 
-export function drawDecor(ctx, decor, tileSize, animFrame) {
+export function drawDecor(ctx, decor, tileSize) {
   if (!decor) return;
   for (const d of decor) {
     const dx = d.x * tileSize;
@@ -524,13 +506,10 @@ export function drawDecor(ctx, decor, tileSize, animFrame) {
   }
 }
 
-// ─── Ghost house door ────────────────────────────────────────────
-
 export function drawGhostHouseDoor(ctx, x, y, tileSize, animFrame) {
   ctx.fillStyle = '#554433';
   const dh = tileSize * 0.3;
   ctx.fillRect(x * tileSize, y * tileSize + tileSize - dh, tileSize, dh);
-  // Subtle pulsing line
   ctx.strokeStyle = `rgba(255,200,100,${0.3 + Math.sin(animFrame * 0.05) * 0.15})`;
   ctx.lineWidth = 1;
   ctx.beginPath();

@@ -126,17 +126,17 @@ export default function PacItUpModal({ open, onClose, character, onComplete, sta
 
 function GameControls({ mode, isPlaying, isCoarse, game, onStart, stats, leaderboard, character }) {
   if (isPlaying && isCoarse) {
-    // Mobile D-pad
     return (
-      <div className="px-4 py-3 bg-black/40 border-t border-white/[0.06]">
-        <div className="flex flex-col items-center gap-1">
-          <DpadButton dir="up" label="▲" game={game} />
-          <div className="flex gap-8">
-            <DpadButton dir="left" label="◀" game={game} />
-            <DpadButton dir="right" label="▶" game={game} />
-          </div>
-          <DpadButton dir="down" label="▼" game={game} />
+      <div className="px-4 py-3 pb-[max(0.9rem,env(safe-area-inset-bottom))] bg-black/50 border-t border-white/[0.06]">
+        <div className="mx-auto grid w-[232px] grid-cols-3 gap-3">
+          <div />
+          <DpadButton dir="up" label="up" game={game} />
+          <div />
+          <DpadButton dir="left" label="left" game={game} />
+          <DpadButton dir="down" label="down" game={game} />
+          <DpadButton dir="right" label="right" game={game} />
         </div>
+        <div className="mt-2 text-center text-[10px] text-gray-500">Hold to steer</div>
       </div>
     );
   }
@@ -149,42 +149,36 @@ function GameControls({ mode, isPlaying, isCoarse, game, onStart, stats, leaderb
     );
   }
 
-  // Idle / game_over — start button + stats + leaderboard
   return (
-    <div className="px-4 py-3 bg-black/40 border-t border-white/[0.06] max-h-[45vh] overflow-y-auto">
+    <div className="bg-black/70 border-t border-white/[0.06] shrink-0 px-3 py-3 pb-[max(0.9rem,env(safe-area-inset-bottom))]">
       <button
         onClick={onStart}
-        className="w-full py-2.5 rounded-lg bg-teal-600 hover:bg-teal-500 text-white text-sm font-semibold mb-3 transition-colors"
+        className="w-full h-12 rounded-xl border border-teal-400/30 bg-teal-500/15 text-teal-100 font-black tracking-wide hover:bg-teal-500/20 active:scale-[0.99] transition-all"
       >
-        {mode === 'game_over' ? 'Play Again' : 'Start Game'}
+        {mode === 'game_over' ? 'Play Again' : 'Start Pac It Up'}
       </button>
 
-      {/* Personal stats */}
-      {stats && (
-        <div className="grid grid-cols-4 gap-2 mb-3">
-          <StatBox label="Best" value={stats.highScore || 0} />
-          <StatBox label="Stage" value={stats.bestStage || 0} />
-          <StatBox label="Combo" value={stats.longestCombo || 0} />
-          <StatBox label="Runs" value={stats.totalRuns || 0} />
-        </div>
-      )}
+      {(stats || (leaderboard && leaderboard.length > 0)) && (
+        <div className="mt-3 rounded-xl border border-white/[0.05] bg-white/[0.03] p-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-[10px] font-black tracking-[0.2em] uppercase text-teal-200/80">Community Board</div>
+              <div className="text-[10px] text-gray-500 mt-0.5">Best maze runs from players and their pets</div>
+            </div>
+            <div className="text-right">
+              <div className="text-[10px] text-gray-500">Your best</div>
+              <div className="text-sm font-black tabular-nums text-white">{stats?.highScore ?? 0}</div>
+              <div className="text-[10px] text-gray-600">Stage {stats?.bestStage ?? 0} · {stats?.totalRuns ?? 0} runs</div>
+            </div>
+          </div>
 
-      {/* Leaderboard */}
-      {leaderboard && leaderboard.length > 0 && (
-        <div className="mt-2">
-          <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-1.5">Community Best</div>
-          <div className="space-y-1">
-            {leaderboard.slice(0, 5).map((entry) => (
-              <div
-                key={entry.user_id}
-                className={`flex items-center gap-2 px-2 py-1 rounded-md text-[11px] ${
-                  entry.is_me ? 'bg-teal-900/30 border border-teal-500/20' : 'bg-white/[0.02]'
-                }`}
-              >
-                <span className="w-5 text-gray-500 text-right">#{entry.rank}</span>
-                <span className="w-6 h-6 flex-shrink-0">
+          <div className="mt-3 space-y-2">
+            {Array.isArray(leaderboard) && leaderboard.length > 0 ? leaderboard.slice(0, 5).map((entry) => (
+              <div key={`${entry.user_id || entry.username}-${entry.rank}`} className={`flex items-center gap-2 rounded-lg px-2 py-1.5 ${entry.is_me ? 'bg-teal-400/[0.08]' : 'bg-black/20'}`}>
+                <div className={`w-6 text-[10px] font-black tabular-nums ${entry.rank === 1 ? 'text-amber-300' : entry.rank === 2 ? 'text-slate-300' : 'text-orange-300'}`}>#{entry.rank}</div>
+                <div className="rounded-md border border-white/[0.06] bg-white/[0.03] px-1 py-0.5 shrink-0">
                   <SpritePet
-                    character={entry.character || 'dojocat'}
+                    character={entry.character || character || 'dojocat'}
                     size={24}
                     form={entry.form}
                     equippedHat={entry.equipped_hat}
@@ -195,14 +189,21 @@ function GameControls({ mode, isPlaying, isCoarse, game, onStart, stats, leaderb
                     mood={entry.mood}
                     inline
                   />
-                </span>
-                <span className="flex-1 truncate text-gray-300">
-                  {entry.nickname || entry.username || 'Unknown'}
-                </span>
-                <span className="text-gray-500">Stg {entry.best_stage || 0}</span>
-                <span className="text-white font-semibold tabular-nums">{entry.high_score || 0}</span>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[11px] font-semibold text-white/90">
+                    {entry.nickname || entry.username || 'Unknown'}
+                  </div>
+                  <div className="truncate text-[9px] text-gray-500">Stage {entry.best_stage || 0} · combo {entry.longest_combo || 0}</div>
+                </div>
+                <div className="text-right shrink-0">
+                  <div className="text-[12px] font-black tabular-nums text-teal-200">{entry.high_score || 0}</div>
+                  <div className="text-[9px] text-gray-600 tabular-nums">{entry.ghosts_eaten || 0} ghosts</div>
+                </div>
               </div>
-            ))}
+            )) : (
+              <div className="text-[10px] text-gray-500">Loading leaderboard...</div>
+            )}
           </div>
         </div>
       )}
@@ -211,25 +212,37 @@ function GameControls({ mode, isPlaying, isCoarse, game, onStart, stats, leaderb
 }
 
 function DpadButton({ dir, label, game }) {
+  const stop = useCallback((e) => {
+    e?.preventDefault?.();
+    game.setTouchPadDir(null);
+  }, [game]);
+
+  const start = useCallback((e) => {
+    e?.preventDefault?.();
+    game.setTouchPadDir(dir);
+  }, [dir, game]);
+
+  const icons = {
+    up: 'M10 4.5l5.5 6h-3.5v5h-4v-5H4.5l5.5-6z',
+    down: 'M10 15.5l-5.5-6H8v-5h4v5h3.5l-5.5 6z',
+    left: 'M4.5 10l6-5.5v3.5h5v4h-5v3.5L4.5 10z',
+    right: 'M15.5 10l-6 5.5v-3.5h-5v-4h5V4.5l6 5.5z',
+  };
+
   return (
     <button
-      onTouchStart={(e) => { e.preventDefault(); game.setTouchPadDir(dir); }}
-      onTouchEnd={(e) => { e.preventDefault(); game.setTouchPadDir(null); }}
-      onMouseDown={() => game.setTouchPadDir(dir)}
-      onMouseUp={() => game.setTouchPadDir(null)}
-      className="w-12 h-12 rounded-lg bg-white/[0.08] border border-white/[0.1] text-white/60 text-lg
-                 active:bg-white/[0.15] active:scale-95 transition-all flex items-center justify-center select-none"
+      onContextMenu={(e) => e.preventDefault()}
+      onTouchStart={start}
+      onTouchEnd={stop}
+      onTouchCancel={stop}
+      onMouseDown={start}
+      onMouseUp={stop}
+      onMouseLeave={stop}
+      className="h-16 w-16 rounded-2xl border-2 bg-teal-500/18 border-teal-400/35 active:bg-teal-500/35 active:scale-95 transition-all flex items-center justify-center select-none touch-none shadow-[0_0_0_1px_rgba(255,255,255,0.04)_inset]"
     >
-      {label}
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-8 w-8 text-teal-100">
+        <path d={icons[label]} />
+      </svg>
     </button>
-  );
-}
-
-function StatBox({ label, value }) {
-  return (
-    <div className="bg-white/[0.03] rounded-md p-1.5 text-center">
-      <div className="text-[10px] text-gray-500">{label}</div>
-      <div className="text-xs text-white font-semibold tabular-nums">{value}</div>
-    </div>
   );
 }
