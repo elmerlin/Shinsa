@@ -1,4 +1,4 @@
-import { useRef, useCallback, useEffect } from 'react';
+import { useRef, useCallback, useEffect, useMemo } from 'react';
 import {
   PAC_IT_UP_MAZES, COLS, ROWS,
   getMazeForStage, buildTileGrid, countCollectibles,
@@ -558,6 +558,7 @@ export default function usePacItUpGame() {
     state.countdownValue = 3;
     setupStage(state);
     stateRef.current = state;
+    onRenderRef.current?.(stateRef.current);
 
     playCountdown(false);
     countdownRef.current = setInterval(() => {
@@ -619,5 +620,14 @@ export default function usePacItUpGame() {
     };
   }, [stopLoop]);
 
-  return { startGame, queueDirection, setTouchPadDir, setKeyDown, reset, getState, setOnRender, stopLoop };
+  return useMemo(() => ({
+    startGame,
+    queueDirection,
+    setTouchPadDir,
+    setKeyDown,
+    reset,
+    getState,
+    setOnRender,
+    stopLoop,
+  }), [startGame, queueDirection, setTouchPadDir, setKeyDown, reset, getState, setOnRender, stopLoop]);
 }

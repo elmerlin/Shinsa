@@ -11,7 +11,7 @@ import {
   getPetInvadersStats, getPetInvadersLeaderboard, completePetInvaders,
   getPacItUpStats, getPacItUpLeaderboard, completePacItUp, getMinigameCosts,
   completeCurrentPetRequest, dismissCurrentPetRequest,
-  searchUsers, getOrCreateDirectConversation,
+  getOrCreateDirectConversation,
 } from '../utils/api';
 import SpritePet, { renderPetToCanvas } from '../components/SpritePet';
 import PetCoachPanel from '../components/pet/PetCoachPanel';
@@ -23,6 +23,7 @@ import PetInvadersLauncher from '../components/pet/minigames/PetInvadersLauncher
 import PetInvadersModal from '../components/pet/minigames/PetInvadersModal';
 import PacItUpLauncher from '../components/pet/minigames/PacItUpLauncher';
 import PacItUpModal from '../components/pet/minigames/PacItUpModal';
+import UserPickerDialog from '../components/UserPickerDialog';
 
 // ─── Sound ─────────────────────────────────────────────────────────
 let _audioCtx = null;
@@ -179,10 +180,7 @@ export default function PetPage() {
   const [shareStatus, setShareStatus] = useState(''); // '' | 'capturing' | 'done'
   const [shareMenuOpen, setShareMenuOpen] = useState(false);
   const [shareDmOpen, setShareDmOpen] = useState(false);
-  const [shareDmQuery, setShareDmQuery] = useState('');
-  const [shareDmResults, setShareDmResults] = useState([]);
-  const [shareDmSending, setShareDmSending] = useState('');
-  const [shareDmSent, setShareDmSent] = useState([]);
+  const [shareDmSentResults, setShareDmSentResults] = useState(null);
   const [rankInfoModal, setRankInfoModal] = useState(null); // { type: 'bond'|'form', data }
   const [editingName, setEditingName] = useState(false);
   const [nicknameInput, setNicknameInput] = useState('');
@@ -770,27 +768,22 @@ export default function PetPage() {
 
   const handleShareToDmOpen = () => {
     setShareMenuOpen(false);
-    setShareDmQuery('');
-    setShareDmResults([]);
-    setShareDmSent([]);
+    setShareDmSentResults(null);
     setShareDmOpen(true);
   };
 
-  const handleShareDmSearch = async (q) => {
-    setShareDmQuery(q);
-    if (q.trim().length < 2) { setShareDmResults([]); return; }
-    try {
-      const res = await searchUsers(q.trim());
-      setShareDmResults((res.users || []).filter(u => u.id !== user?.id).slice(0, 8));
-    } catch { setShareDmResults([]); }
+  const handleShareDmClose = () => {
+    setShareDmOpen(false);
+    setShareDmSentResults(null);
   };
 
   const handleShareDmSend = async (targetUser) => {
-    if (shareDmSending || shareDmSent.includes(targetUser.id)) return;
-    setShareDmSending(targetUser.id);
     try {
       const dataUrl = await generateShareImage();
-      if (!dataUrl) { setShareDmSending(''); return; }
+      if (!dataUrl) {
+        setShareStatus('');
+        throw new Error('Could not generate pet card.');
+      }
       const displayName = pet.nickname || (pet.character || 'pet').toUpperCase();
       await getOrCreateDirectConversation(targetUser.id, {
         content: `Check out my pet ${displayName}!`,
@@ -802,9 +795,14 @@ export default function PetPage() {
           previewImage: dataUrl,
         },
       });
-      setShareDmSent(prev => [...prev, targetUser.id]);
-    } catch (e) { console.error('DM share failed', e); }
-    finally { setShareDmSending(''); }
+      setShareDmSentResults({ users: [targetUser], squads: [] });
+      setShareStatus('done');
+      setTimeout(() => setShareStatus(''), 2000);
+    } catch (e) {
+      console.error('DM share failed', e);
+      setShareStatus('');
+      throw e instanceof Error ? e : new Error('Could not send pet card.');
+    }
   };
 
   // ─── Rename pet ─────────────────────────────────────────
@@ -1338,54 +1336,20 @@ export default function PetPage() {
         leaderboard={pacItUpLeaderboard}
       />
 
-      {/* Share to DM modal */}
-      {shareDmOpen && (
-        <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center" onClick={() => setShareDmOpen(false)}>
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-          <div className="relative z-10 w-full max-w-sm mx-auto mb-0 sm:mb-0 rounded-t-2xl sm:rounded-2xl border border-white/[0.08] bg-[#0c1018] shadow-[0_-12px_50px_rgba(0,0,0,0.5)] overflow-hidden animate-[slideUp_200ms_ease-out]" onClick={e => e.stopPropagation()}>
-            <div className="px-4 pt-4 pb-2 flex items-center justify-between">
-              <h3 className="text-sm font-bold text-white">Send pet card to...</h3>
-              <button onClick={() => setShareDmOpen(false)} className="text-gray-500 hover:text-white text-lg leading-none">&times;</button>
-            </div>
-            <div className="px-4 pb-2">
-              <input
-                type="text"
-                value={shareDmQuery}
-                onChange={e => handleShareDmSearch(e.target.value)}
-                placeholder="Search players..."
-                className="w-full bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 outline-none focus:border-cyan-400/30"
-                autoFocus
-              />
-            </div>
-            <div className="max-h-64 overflow-y-auto px-2 pb-4">
-              {shareDmResults.length === 0 && shareDmQuery.length >= 2 && (
-                <div className="text-center text-xs text-gray-500 py-6">No players found</div>
-              )}
-              {shareDmResults.map(u => {
-                const sent = shareDmSent.includes(u.id);
-                const sending = shareDmSending === u.id;
-                return (
-                  <button key={u.id} onClick={() => handleShareDmSend(u)}
-                    disabled={sent || sending}
-                    className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg hover:bg-white/[0.04] active:bg-white/[0.06] transition-colors disabled:opacity-60">
-                    <div className="w-8 h-8 rounded-full bg-white/[0.06] border border-white/[0.08] overflow-hidden shrink-0">
-                      {u.avatar ? <img src={u.avatar} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-[10px] font-bold text-gray-500">{(u.username || '?')[0].toUpperCase()}</div>}
-                    </div>
-                    <span className="flex-1 text-left text-sm text-white truncate">{u.username}</span>
-                    {sent ? (
-                      <span className="text-[10px] font-bold text-emerald-400">Sent</span>
-                    ) : sending ? (
-                      <span className="w-4 h-4 border-2 border-white/10 border-t-cyan-400 rounded-full animate-spin" />
-                    ) : (
-                      <span className="text-[10px] font-bold text-cyan-400">Send</span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
+      <UserPickerDialog
+        open={shareDmOpen}
+        title="Send pet card"
+        description={pet ? `Share ${pet.nickname || (pet.character || 'pet').toUpperCase()} with a player.` : ''}
+        eyebrowLabel="Direct Messages"
+        selectLabel="Send"
+        submitLabel="Send"
+        searchPlaceholder="Search players"
+        onClose={handleShareDmClose}
+        onSelect={handleShareDmSend}
+        excludeUserIds={[user?.id].filter(Boolean)}
+        multiSelect={false}
+        sentResults={shareDmSentResults}
+      />
 
       {/* Rank / Form info modal */}
       {rankInfoModal && (
