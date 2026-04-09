@@ -6,6 +6,8 @@ const { getDb } = require('../db/schema');
 const { optionalAuth, requireAuth, isAdminUser } = require('./auth');
 const { normalizeUserAvatarForList } = require('../lib/avatarProxy');
 const { buildPlayerScoutingCard } = require('../lib/playerScoutingCard');
+const { computeAllProfiles, QUERY_BUFFER_DAYS } = require('../lib/trainingLoad');
+const { buildTrainingGapPayload } = require('../lib/trainingGap');
 const {
   normalizeSongName, parseSongFlags, resolveKnownSongVariantTitle,
   hasShortCutSuffix, normalizeShortCutSuffix, normalizeMode,
@@ -710,11 +712,26 @@ function queryUserBestScores(db, userId) {
 function queryUserRecentScores(db, userId) {
   if (!userId) return [];
   return db.prepare(`
-    SELECT id, user_id, song_title, mode, level, score, grade, plate, background_url, date_played,
+    SELECT id, user_id, song_title, mode, level, score, grade, plate, background_url, date_played, played_at_utc,
            perfect, great, good, bad, miss, max_combo, over_top100_rank
     FROM user_recently_played
     WHERE user_id = ?
   `).all(userId);
+}
+
+function queryUserTrainingRecentPlays(db, userId) {
+  if (!userId) return [];
+  return db.prepare(`
+    SELECT level, score, grade, mode, played_at_utc, date_played, song_title, background_url
+    FROM user_recently_played
+    WHERE user_id = ?
+      AND (
+        played_at_utc >= datetime('now', '-' || ? || ' days')
+        OR (played_at_utc IS NULL AND date_played != '' AND date_played >= date('now', '-' || ? || ' days'))
+        OR (played_at_utc = '' AND date_played != '' AND date_played >= date('now', '-' || ? || ' days'))
+      )
+    ORDER BY COALESCE(NULLIF(played_at_utc, ''), date_played) ASC, id ASC
+  `).all(userId, QUERY_BUFFER_DAYS, QUERY_BUFFER_DAYS, QUERY_BUFFER_DAYS);
 }
 
 function queryUserPumbilityScores(db, userId) {
@@ -1068,6 +1085,65 @@ function getUserAnalytics(db, userId, aliases, songCatalog) {
     passBestByChart: passBest,
     analytics: formatAnalytics(userId, profile, syncRow, songCatalog, bestByChart, passBest),
   };
+}
+
+function normalizeTrainingGapMode(modeRaw) {
+  const normalized = String(modeRaw || '').trim().toLowerCase();
+  if (normalized === 'single' || normalized === 'singles') {
+    return { routeMode: 'single', chartMode: 'Single' };
+  }
+  if (normalized === 'double' || normalized === 'doubles') {
+    return { routeMode: 'double', chartMode: 'Double' };
+  }
+  return null;
+}
+
+function buildTrainingGapResponse(db, userId, options = {}) {
+  const modeInfo = normalizeTrainingGapMode(options.mode);
+  if (!modeInfo) {
+    return { status: 400, body: { error: 'mode is required (single or double)' } };
+  }
+
+  const user = db.prepare('SELECT id, timezone FROM users WHERE id = ?').get(userId) || null;
+  if (!user) {
+    return { status: 404, body: { error: 'User not found' } };
+  }
+
+  const aliases = loadSongAliases();
+  const songCatalog = getSongCatalog(db, aliases, [modeInfo.chartMode]);
+  const trainingRecentPlays = queryUserTrainingRecentPlays(db, userId);
+  const sync = db.prepare(
+    'SELECT last_recently_played_sync FROM user_piugame_sync WHERE user_id = ?'
+  ).get(userId);
+  const profiles = computeAllProfiles(trainingRecentPlays, String(user.timezone || ''), (sync && sync.last_recently_played_sync) || null);
+  const profile = modeInfo.routeMode === 'single' ? profiles.single : profiles.double;
+
+  const { bestByChart } = buildUserBestByChartMap({
+    bestScores: queryUserBestScores(db, userId),
+    recentScores: queryUserRecentScores(db, userId),
+    pumbilityScores: queryUserPumbilityScores(db, userId),
+    aliases,
+    validChartKeys: songCatalog.chartsByKey,
+  });
+
+  const requestedLevel = parseLevelQuery(options.level);
+  const requestedChartId = parseInt(options.chartId, 10) || null;
+  const payload = buildTrainingGapPayload({
+    mode: modeInfo.chartMode,
+    requestedLevel,
+    requestedChartId,
+    profile,
+    songCatalog,
+    bestByChart,
+  });
+
+  payload.profile = {
+    ...(payload.profile || {}),
+    sync_stale: !!profiles.sync_stale,
+    last_synced_at: profiles.last_synced_at || null,
+  };
+
+  return { status: 200, body: payload };
 }
 
 function formatIdentityModeLevel(mode, level) {
@@ -3198,6 +3274,20 @@ router.get('/analytics/user/:userId', (req, res) => {
   res.json(result.analytics);
 });
 
+// GET /api/songs/analytics/training-gap/:userId — chart-level pass-gap coaching model
+router.get('/analytics/training-gap/:userId', (req, res) => {
+  const db = getDb();
+  const userId = String(req.params.userId || '').trim();
+  if (!userId) return res.status(400).json({ error: 'User ID is required' });
+
+  const result = buildTrainingGapResponse(db, userId, {
+    mode: req.query.mode,
+    level: req.query.level,
+    chartId: req.query.chart_id,
+  });
+  return res.status(result.status).json(result.body);
+});
+
 // GET /api/songs/analytics/identity/:userId — player identity summary for profile overview
 router.get('/analytics/identity/:userId', (req, res) => {
   const db = getDb();
@@ -5231,5 +5321,15 @@ router.get('/analytics/fantasy-pool', (req, res) => {
     songs: buildFantasySongPool(songCatalog),
   });
 });
+
+router._test = {
+  buildTrainingGapResponse,
+  normalizeTrainingGapMode,
+  resetCaches() {
+    cachedSongAliases = null;
+    cachedSongCatalogByModes = new Map();
+    cachedSongCatalogVersion = '';
+  },
+};
 
 module.exports = router;

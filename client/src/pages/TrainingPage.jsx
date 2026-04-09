@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getPiugameTrainingLoad, getPiugameTrainingPopulation } from '../utils/api';
+import TrainingAnalyticsTab from '../components/training/TrainingAnalyticsTab';
 import {
   ResponsiveContainer,
   AreaChart,
@@ -17,6 +18,10 @@ import {
 
 const MODE_LABELS = { overall: 'Overall', single: 'Singles', double: 'Doubles' };
 const MODE_KEYS = ['overall', 'single', 'double'];
+const TRAINING_PAGE_TABS = [
+  { key: 'load', label: 'Load' },
+  { key: 'analytics', label: 'Analytics' },
+];
 
 const ZONE_CONFIG = {
   Overclocked: { gradient: ['#F97316', '#EF4444'], pulse: true, icon: '⚡', desc: 'Playing significantly above your baseline. Risk of burnout — consider scaling back.' },
@@ -2029,6 +2034,7 @@ export default function TrainingPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [mode, setMode] = useState('overall');
+  const [pageTab, setPageTab] = useState('load');
   const [showTrainingBasicsHelp, setShowTrainingBasicsHelp] = useState(false);
   const [showPassCeilingHelp, setShowPassCeilingHelp] = useState(false);
   const [showStatusHelp, setShowStatusHelp] = useState(false);
@@ -2099,9 +2105,11 @@ export default function TrainingPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="font-display text-2xl sm:text-3xl font-bold tracking-wide">Training</h1>
-          <p className="mt-0.5 text-[10px] text-gray-500 whitespace-nowrap">Tracked Training Load</p>
+          <p className="mt-0.5 text-[10px] text-gray-500 whitespace-nowrap">
+            {pageTab === 'analytics' ? 'Coach Lab diagnostics' : 'Tracked Training Load'}
+          </p>
         </div>
-        {data && (
+        {user && (
           <div className="flex gap-1 bg-piu-card/50 rounded-xl p-1 border border-piu-border/30">
             {MODE_KEYS.map((key) => (
               <ModeTab
@@ -2116,11 +2124,23 @@ export default function TrainingPage() {
         )}
       </div>
 
-      {error && (
+      <div className="flex gap-1 rounded-xl border border-piu-border/30 bg-piu-card/50 p-1">
+        {TRAINING_PAGE_TABS.map((tab) => (
+          <ModeTab
+            key={tab.key}
+            active={pageTab === tab.key}
+            label={tab.label}
+            onClick={() => setPageTab(tab.key)}
+            color={modeColor}
+          />
+        ))}
+      </div>
+
+      {pageTab === 'load' && error && (
         <div className="card border-red-500/40 bg-red-500/10 text-red-200 text-sm px-4 py-3">{error}</div>
       )}
 
-      {loading && (
+      {pageTab === 'load' && loading && (
         <div className="space-y-4">
           {[1, 2, 3].map((i) => (
             <div key={i} className="card h-32 animate-pulse bg-piu-dark/50" />
@@ -2128,7 +2148,7 @@ export default function TrainingPage() {
         </div>
       )}
 
-      {data && !loading && (
+      {pageTab === 'load' && data && !loading && (
         <>
           {/* Sync Warning */}
           <SyncWarning syncStale={data.sync_stale} lastSyncedAt={data.last_synced_at} />
@@ -2293,6 +2313,15 @@ export default function TrainingPage() {
           />
         </>
       )}
+
+      {pageTab === 'analytics' ? (
+        <TrainingAnalyticsTab
+          userId={user.id}
+          mode={mode}
+          syncStale={!!data?.sync_stale}
+          lastSyncedAt={data?.last_synced_at || ''}
+        />
+      ) : null}
     </div>
   );
 }

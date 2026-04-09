@@ -202,6 +202,14 @@ export const getSkillBreakdown = (userId, params = {}) => {
   const qs = new URLSearchParams(params).toString();
   return request(`/songs/analytics/skill-breakdown/${userId}${qs ? `?${qs}` : ''}`);
 };
+export const getTrainingGapAnalytics = (userId, params = {}) => {
+  const qs = new URLSearchParams();
+  if (params.mode) qs.set('mode', String(params.mode));
+  if (params.level != null) qs.set('level', String(params.level));
+  if (params.chart_id != null) qs.set('chart_id', String(params.chart_id));
+  const query = qs.toString();
+  return request(`/songs/analytics/training-gap/${userId}${query ? `?${query}` : ''}`);
+};
 export const getUserRankings = (userId, params = {}) => {
   const qs = new URLSearchParams(params).toString();
   return request(`/songs/analytics/rankings/${userId}${qs ? `?${qs}` : ''}`);
