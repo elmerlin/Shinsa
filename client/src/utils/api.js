@@ -1209,6 +1209,14 @@ export const cloneList = (listId, name) => request(`/songs/lists/${listId}/clone
 export const reorderListItems = (listId, itemIds) => request(`/songs/lists/${listId}/reorder`, { method: 'PUT', body: JSON.stringify({ itemIds }) });
 export const bulkAddListItems = (listId, items) => request(`/songs/lists/${listId}/bulk-items`, { method: 'POST', body: JSON.stringify({ items }) });
 
+// Shared lists
+export const shareList = (listId, conversationId) => request(`/songs/lists/${listId}/share`, { method: 'POST', body: JSON.stringify({ conversationId }) });
+export const getSharedLists = () => request('/songs/lists/shared');
+export const getSharedListDetail = (sharedListId) => request(`/songs/lists/shared/${sharedListId}`);
+export const joinSharedList = (sharedListId) => request(`/songs/lists/shared/${sharedListId}/join`, { method: 'POST' });
+export const leaveSharedList = (sharedListId) => request(`/songs/lists/shared/${sharedListId}/leave`, { method: 'DELETE' });
+export const getSharedListsByConversation = (conversationId) => request(`/songs/lists/shared/by-conversation/${encodeURIComponent(conversationId)}`);
+
 // Song Recommendations
 export const getSongRecommendations = (data) => request('/songs/recommendations', { method: 'POST', body: JSON.stringify(data) });
 export const getTrainingRecommendations = (options = {}) => {

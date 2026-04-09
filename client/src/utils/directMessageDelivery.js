@@ -44,7 +44,7 @@ export async function sendPayloadToConversation(conversation, payload = {}) {
   }
 
   const data = { ...(payload || {}) };
-  if (!data.content && !data.session_share && !data.challenge_card && !data.link_share) {
+  if (!data.content && !data.session_share && !data.challenge_card && !data.link_share && !data.list_share) {
     throw new Error('Nothing to send.');
   }
 

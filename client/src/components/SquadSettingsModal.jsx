@@ -7,7 +7,10 @@ import {
   updateMessageSquad,
   updateMessageSquadNotifications,
   setMessageConversationTheme,
+  getSharedListsByConversation,
+  joinSharedList,
 } from '../utils/api';
+import SharedListDetailModal from './SharedListDetailModal';
 import ThemePicker from './ChatThemes';
 import { parseYouTubeUrl } from '../utils/youtube';
 import { parseGrade } from '../utils/grades';
@@ -28,6 +31,7 @@ const TAB_OPTIONS = [
 ];
 const SETTINGS_TABS = [
   { key: 'members', label: 'Members' },
+  { key: 'lists', label: 'Lists' },
   { key: 'theme', label: 'Theme' },
   { key: 'notifications', label: 'Notifications' },
   { key: 'activity', label: 'Activity' },
@@ -259,6 +263,10 @@ export default function SquadSettingsModal({
   const [updatingNotifications, setUpdatingNotifications] = useState(false);
   const [actingMemberId, setActingMemberId] = useState('');
   const [savingTheme, setSavingTheme] = useState(false);
+  const [sharedLists, setSharedLists] = useState([]);
+  const [loadingSharedLists, setLoadingSharedLists] = useState(false);
+  const [sharedListDetailId, setSharedListDetailId] = useState(null);
+  const [joiningListId, setJoiningListId] = useState(null);
 
   const conversationId = String(conversation?.id || '').trim();
 
@@ -297,6 +305,25 @@ export default function SquadSettingsModal({
     setAvatarDrawerOpen(false);
     loadDetail();
   }, [conversationId, loadDetail, open]);
+
+  useEffect(() => {
+    if (!open || !conversationId || settingsTab !== 'lists') return;
+    setLoadingSharedLists(true);
+    getSharedListsByConversation(conversationId)
+      .then(res => setSharedLists(res?.sharedLists || []))
+      .catch(() => setSharedLists([]))
+      .finally(() => setLoadingSharedLists(false));
+  }, [open, conversationId, settingsTab]);
+
+  const handleJoinList = async (sharedListId) => {
+    setJoiningListId(sharedListId);
+    try {
+      await joinSharedList(sharedListId);
+      const res = await getSharedListsByConversation(conversationId);
+      setSharedLists(res?.sharedLists || []);
+    } catch { /* ignore */ }
+    setJoiningListId(null);
+  };
 
   const viewerMembership = detail?.viewer_membership || conversation?.squad || null;
   const viewerRole = String(viewerMembership?.role || viewerMembership?.viewer_role || conversation?.squad?.viewer_role || 'member').trim();
@@ -601,6 +628,62 @@ export default function SquadSettingsModal({
                     })}
                   </div>
                 </section>
+              </div>
+            ) : settingsTab === 'lists' ? (
+              <div className="space-y-3">
+                {loadingSharedLists ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-600 border-t-violet-400" />
+                  </div>
+                ) : sharedLists.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-sm text-gray-500">No lists shared to this squad yet.</p>
+                    <p className="mt-1 text-xs text-gray-600">Share a list from your Lists page to see it here.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {sharedLists.map(sl => {
+                      const pct = sl.itemCount > 0 ? 0 : 0;
+                      return (
+                        <div
+                          key={sl.id}
+                          className="rounded-xl border border-piu-border/50 bg-piu-dark/40 p-3 cursor-pointer hover:border-violet-400/30 hover:bg-piu-dark/60 transition-all"
+                          onClick={() => setSharedListDetailId(sl.id)}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="text-sm font-display font-bold text-white truncate">{sl.name}</p>
+                              <p className="mt-0.5 text-[10px] text-gray-400">
+                                {sl.owner?.username ? `by ${sl.owner.username}` : 'Shared list'}
+                                {' · '}{sl.itemCount} song{sl.itemCount !== 1 ? 's' : ''}
+                                {' · '}{sl.memberCount} member{sl.memberCount !== 1 ? 's' : ''}
+                              </p>
+                            </div>
+                            {!sl.isMember ? (
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); handleJoinList(sl.id); }}
+                                disabled={joiningListId === sl.id}
+                                className="shrink-0 rounded-lg border border-cyan-400/25 bg-cyan-500/12 px-3 py-1.5 text-[10px] font-display font-bold text-cyan-100 transition-colors hover:border-cyan-400/40"
+                              >
+                                {joiningListId === sl.id ? '...' : 'Join'}
+                              </button>
+                            ) : (
+                              <span className="shrink-0 rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2 py-0.5 text-[9px] font-display font-bold text-emerald-300">
+                                Joined
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                <SharedListDetailModal
+                  sharedListId={sharedListDetailId}
+                  open={!!sharedListDetailId}
+                  onClose={() => setSharedListDetailId(null)}
+                />
               </div>
             ) : settingsTab === 'theme' ? (
               <div className="space-y-3">

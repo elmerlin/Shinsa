@@ -58,6 +58,8 @@ import InboxHighlightsStrip, {
 } from '../components/InboxHighlightsStrip';
 import ScoreSnapshotCard from '../components/ScoreSnapshotCard';
 import SessionShareCard from '../components/SessionShareCard';
+import SharedListCard from '../components/SharedListCard';
+import SharedListDetailModal from '../components/SharedListDetailModal';
 import SquadComposerModal from '../components/SquadComposerModal';
 import MentionSuggestionsPanel from '../components/MentionSuggestionsPanel';
 import SquadSettingsModal from '../components/SquadSettingsModal';
@@ -1379,6 +1381,9 @@ function getMessageLabel(message) {
   if (message.message_type === 'link_share') {
     return 'Shared link';
   }
+  if (message.message_type === 'list_share') {
+    return 'Shared list';
+  }
   if (message.message_type === 'stomp') {
     return 'Stomp';
   }
@@ -1471,6 +1476,10 @@ function buildReplyPreviewText(message) {
 
   if (message.note_thread?.noteText) {
     return compactReplyPreviewText(message.note_thread.noteText);
+  }
+
+  if (message.list_share?.listName) {
+    return compactReplyPreviewText(message.list_share.listName);
   }
 
   const messageLabel = getMessageLabel(message);
@@ -2173,6 +2182,7 @@ function MessageBubble({
   availableReactions = DEFAULT_QUICK_REACTION_KEYS,
   defaultReaction = 'pump',
   onReact = null,
+  onOpenSharedList = null,
   isNewlyRendered = false,
   isGrouped = false,
 }) {
@@ -2183,7 +2193,8 @@ function MessageBubble({
   const hasShare = !!message?.share;
   const hasLinkShare = !!message?.link_share;
   const hasChallengeCard = !!message?.challenge_card;
-  const hasRichAttachment = hasShare || hasLinkShare || hasChallengeCard;
+  const hasListShare = !!message?.list_share;
+  const hasRichAttachment = hasShare || hasLinkShare || hasChallengeCard || hasListShare;
   const coarsePointerDevice = isCoarsePointerDevice();
   const alignmentClass = isOwn ? 'items-end' : 'items-start';
   const themedOwnBg = chatTheme ? `${chatTheme.ownBubbleBorder} ${chatTheme.ownBubbleBg}` : 'border-cyan-400/20 bg-cyan-500/10';
@@ -2196,7 +2207,7 @@ function MessageBubble({
   const noteThread = message?.note_thread || null;
   const replyTo = message?.reply_to || null;
   const hasLongUnbrokenToken = /\S{24,}/.test(String(message?.content || ''));
-  const inlineYouTubeUrl = !hasShare && !hasLinkShare && !hasChallengeCard
+  const inlineYouTubeUrl = !hasShare && !hasLinkShare && !hasChallengeCard && !hasListShare
     ? extractFirstYouTubeUrl(message?.content || '')
     : '';
   const suppressRawUrlContent = !!inlineYouTubeUrl && isStandaloneUrlMessage(message?.content || '', inlineYouTubeUrl);
@@ -2884,6 +2895,11 @@ function MessageBubble({
             />
           </div>
         ) : null}
+        {hasListShare ? (
+          <div className={hasContent || hasShare || hasLinkShare || hasChallengeCard ? 'mt-3' : ''}>
+            <SharedListCard listShare={message.list_share} onOpenDetail={onOpenSharedList} />
+          </div>
+        ) : null}
         </div>
       </div>
       {reactionItems.length > 0 ? (
@@ -3262,6 +3278,7 @@ function ConversationView({
   availableReactions,
   onReact,
   onUnsend = null,
+  onOpenSharedList = null,
   readReceipts = [],
   onNudge,
   nudging = false,
@@ -3509,6 +3526,7 @@ function ConversationView({
                       defaultReaction={defaultReaction}
                       availableReactions={availableReactions}
                       onReact={onReact}
+                      onOpenSharedList={onOpenSharedList}
                     />
                     {readers?.length > 0 && (isSquad || message.is_own) ? (
                       <div className={`flex ${message.is_own ? 'justify-end' : 'justify-start'} px-3 -mt-1.5`}>
@@ -3694,6 +3712,7 @@ export default function MessagesPage() {
   const [archivedStories, setArchivedStories] = useState([]);
   const [storyArchiveError, setStoryArchiveError] = useState('');
   const [chatSettingsOpen, setChatSettingsOpen] = useState(false);
+  const [sharedListDetailId, setSharedListDetailId] = useState(null);
   const [openLinksExternally, setOpenLinksExternally] = useState(() => {
     if (typeof window === 'undefined') return true;
     return localStorage.getItem(MESSAGE_LINK_PREFERENCE_KEY) !== 'internal';
@@ -5208,6 +5227,7 @@ export default function MessagesPage() {
           sending={sending}
           onOpenThread={handleOpenMessageThread}
           onOpenLink={handleOpenChatLink}
+          onOpenSharedList={(id) => setSharedListDetailId(id)}
           onOpenSquadSettings={() => setSquadSettingsOpen(true)}
           onOpenPersonSettings={() => setPersonSettingsOpen(true)}
           onPinConversation={handlePinConversation}
@@ -5267,6 +5287,12 @@ export default function MessagesPage() {
         onClose={() => setSquadSettingsOpen(false)}
         onConversationUpdated={handleSquadConversationUpdated}
         onOpenLink={handleOpenChatLink}
+      />
+
+      <SharedListDetailModal
+        sharedListId={sharedListDetailId}
+        open={!!sharedListDetailId}
+        onClose={() => setSharedListDetailId(null)}
       />
 
       <ConversationSettingsModal

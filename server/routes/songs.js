@@ -2875,6 +2875,235 @@ router.post('/lists/:listId/bulk-items', requireAuth, (req, res) => {
   res.json({ added });
 });
 
+// POST /api/songs/lists/:listId/share — share a list to a conversation
+router.post('/lists/:listId/share', requireAuth, (req, res) => {
+  const db = getDb();
+  const listId = parseInt(req.params.listId, 10);
+  const userId = req.user.id;
+  const conversationId = String(req.body.conversationId || '').trim();
+
+  const list = db.prepare('SELECT * FROM user_lists WHERE id = ? AND user_id = ?').get(listId, userId);
+  if (!list) return res.status(404).json({ error: 'List not found' });
+
+  // Check if already shared to this conversation
+  const existing = conversationId
+    ? db.prepare('SELECT id FROM shared_lists WHERE list_id = ? AND conversation_id = ?').get(listId, conversationId)
+    : null;
+  if (existing) {
+    return res.json({ sharedList: { id: existing.id, listId, conversationId } });
+  }
+
+  const result = db.prepare(`
+    INSERT INTO shared_lists (list_id, shared_by_user_id, conversation_id)
+    VALUES (?, ?, ?)
+  `).run(listId, userId, conversationId);
+
+  // Auto-join the sharer
+  db.prepare('INSERT OR IGNORE INTO shared_list_members (shared_list_id, user_id) VALUES (?, ?)').run(result.lastInsertRowid, userId);
+
+  res.json({ sharedList: { id: result.lastInsertRowid, listId, conversationId } });
+});
+
+// GET /api/songs/lists/shared — all shared lists the user is a member of
+router.get('/lists/shared', requireAuth, (req, res) => {
+  const db = getDb();
+  const userId = req.user.id;
+  const aliases = loadSongAliases();
+
+  const rows = db.prepare(`
+    SELECT sl.*, ul.name AS list_name, ul.user_id AS owner_user_id,
+           u.username AS owner_username, u.avatar AS owner_avatar, u.avatar_v AS owner_avatar_v,
+           slm.joined_at
+    FROM shared_list_members slm
+    JOIN shared_lists sl ON slm.shared_list_id = sl.id
+    JOIN user_lists ul ON sl.list_id = ul.id
+    JOIN users u ON ul.user_id = u.id
+    WHERE slm.user_id = ?
+    ORDER BY sl.created_at DESC
+  `).all(userId);
+
+  const sharedLists = rows.map(r => {
+    const memberCount = db.prepare('SELECT COUNT(*) AS c FROM shared_list_members WHERE shared_list_id = ?').get(r.id)?.c || 0;
+    const itemCount = db.prepare('SELECT COUNT(*) AS c FROM user_list_items WHERE list_id = ?').get(r.list_id)?.c || 0;
+    return {
+      id: r.id,
+      listId: r.list_id,
+      name: r.list_name,
+      conversationId: r.conversation_id,
+      owner: {
+        id: r.owner_user_id,
+        username: r.owner_username,
+        avatar: normalizeUserAvatarForList(r.owner_avatar, r.owner_user_id, 40, r.owner_avatar_v),
+      },
+      memberCount,
+      itemCount,
+      joinedAt: r.joined_at,
+      createdAt: r.created_at,
+    };
+  });
+
+  res.json({ sharedLists });
+});
+
+// GET /api/songs/lists/shared/by-conversation/:conversationId — shared lists for a squad conversation
+router.get('/lists/shared/by-conversation/:conversationId', requireAuth, (req, res) => {
+  const db = getDb();
+  const conversationId = String(req.params.conversationId || '').trim();
+  if (!conversationId) return res.json({ sharedLists: [] });
+
+  const rows = db.prepare(`
+    SELECT sl.*, ul.name AS list_name, ul.user_id AS owner_user_id,
+           u.username AS owner_username, u.avatar AS owner_avatar, u.avatar_v AS owner_avatar_v
+    FROM shared_lists sl
+    JOIN user_lists ul ON sl.list_id = ul.id
+    JOIN users u ON ul.user_id = u.id
+    WHERE sl.conversation_id = ?
+    ORDER BY sl.created_at DESC
+  `).all(conversationId);
+
+  const sharedLists = rows.map(r => {
+    const memberCount = db.prepare('SELECT COUNT(*) AS c FROM shared_list_members WHERE shared_list_id = ?').get(r.id)?.c || 0;
+    const itemCount = db.prepare('SELECT COUNT(*) AS c FROM user_list_items WHERE list_id = ?').get(r.list_id)?.c || 0;
+    const isMember = !!db.prepare('SELECT 1 FROM shared_list_members WHERE shared_list_id = ? AND user_id = ?').get(r.id, req.user.id);
+    return {
+      id: r.id,
+      listId: r.list_id,
+      name: r.list_name,
+      conversationId: r.conversation_id,
+      owner: {
+        id: r.owner_user_id,
+        username: r.owner_username,
+        avatar: normalizeUserAvatarForList(r.owner_avatar, r.owner_user_id, 40, r.owner_avatar_v),
+      },
+      memberCount,
+      itemCount,
+      isMember,
+      createdAt: r.created_at,
+    };
+  });
+
+  res.json({ sharedLists });
+});
+
+// GET /api/songs/lists/shared/:sharedListId — full shared list detail with multi-user progress
+router.get('/lists/shared/:sharedListId', requireAuth, (req, res) => {
+  const db = getDb();
+  const sharedListId = parseInt(req.params.sharedListId, 10);
+  const userId = req.user.id;
+  const aliases = loadSongAliases();
+
+  const shared = db.prepare(`
+    SELECT sl.*, ul.name AS list_name, ul.user_id AS owner_user_id,
+           u.username AS owner_username, u.avatar AS owner_avatar, u.avatar_v AS owner_avatar_v
+    FROM shared_lists sl
+    JOIN user_lists ul ON sl.list_id = ul.id
+    JOIN users u ON ul.user_id = u.id
+    WHERE sl.id = ?
+  `).get(sharedListId);
+  if (!shared) return res.status(404).json({ error: 'Shared list not found' });
+
+  // Verify user is a member
+  const isMember = db.prepare('SELECT 1 FROM shared_list_members WHERE shared_list_id = ? AND user_id = ?').get(sharedListId, userId);
+  // Allow non-members to view (they can join), but members get full progress
+
+  const items = db.prepare('SELECT * FROM user_list_items WHERE list_id = ? ORDER BY sort_order ASC, id ASC').all(shared.list_id);
+  const members = db.prepare(`
+    SELECT slm.user_id, slm.joined_at, u.username, u.avatar, u.avatar_v
+    FROM shared_list_members slm
+    JOIN users u ON slm.user_id = u.id
+    WHERE slm.shared_list_id = ?
+    ORDER BY slm.joined_at ASC
+  `).all(sharedListId);
+
+  // Compute progress for each member
+  const memberProgress = members.map(m => {
+    const plays = db.prepare('SELECT song_title, mode, level, score, grade, date_played FROM user_recently_played WHERE user_id = ?').all(m.user_id);
+    const itemResults = items.map(item => {
+      const chartKey = makeChartKey(item.song_title, item.mode, item.level, aliases);
+      let attempts = 0;
+      let passesSinceAdded = 0;
+      let bestScore = 0;
+      let bestGrade = '';
+      if (chartKey && item.added_at) {
+        for (const play of plays) {
+          if (makeChartKey(play.song_title, play.mode, play.level, aliases) !== chartKey) continue;
+          if (parseDateMs(play.date_played) < item.added_at) continue;
+          attempts++;
+          const score = parseInt(play.score, 10) || 0;
+          if (score > bestScore) { bestScore = score; bestGrade = play.grade || ''; }
+          if (isPassRecord(play)) passesSinceAdded++;
+        }
+      }
+      return { itemId: item.id, chartId: item.chart_id, attempts, passesSinceAdded, bestScore, bestGrade };
+    });
+    const completed = itemResults.filter(r => r.passesSinceAdded > 0).length;
+    return {
+      userId: m.user_id,
+      username: m.username,
+      avatar: normalizeUserAvatarForList(m.avatar, m.user_id, 40, m.avatar_v),
+      joinedAt: m.joined_at,
+      completed,
+      total: items.length,
+      items: itemResults,
+    };
+  });
+
+  const normalizedItems = items.map(item => ({
+    id: item.id,
+    chartId: item.chart_id,
+    songTitle: item.song_title,
+    artist: item.artist,
+    mode: item.mode,
+    level: item.level,
+    jacketUrl: item.jacket_url,
+    originalScore: item.original_score,
+    originalGrade: item.original_grade,
+    hadPass: !!item.had_pass,
+    target: item.target,
+    addedAt: item.added_at,
+    sortOrder: item.sort_order || 0,
+  }));
+
+  res.json({
+    id: shared.id,
+    listId: shared.list_id,
+    name: shared.list_name,
+    conversationId: shared.conversation_id,
+    owner: {
+      id: shared.owner_user_id,
+      username: shared.owner_username,
+      avatar: normalizeUserAvatarForList(shared.owner_avatar, shared.owner_user_id, 56, shared.owner_avatar_v),
+    },
+    isMember: !!isMember,
+    createdAt: shared.created_at,
+    items: normalizedItems,
+    members: memberProgress,
+  });
+});
+
+// POST /api/songs/lists/shared/:sharedListId/join — join a shared list
+router.post('/lists/shared/:sharedListId/join', requireAuth, (req, res) => {
+  const db = getDb();
+  const sharedListId = parseInt(req.params.sharedListId, 10);
+  const userId = req.user.id;
+
+  const shared = db.prepare('SELECT id FROM shared_lists WHERE id = ?').get(sharedListId);
+  if (!shared) return res.status(404).json({ error: 'Shared list not found' });
+
+  db.prepare('INSERT OR IGNORE INTO shared_list_members (shared_list_id, user_id) VALUES (?, ?)').run(sharedListId, userId);
+  res.json({ joined: true });
+});
+
+// DELETE /api/songs/lists/shared/:sharedListId/leave — leave a shared list
+router.delete('/lists/shared/:sharedListId/leave', requireAuth, (req, res) => {
+  const db = getDb();
+  const sharedListId = parseInt(req.params.sharedListId, 10);
+  const userId = req.user.id;
+
+  db.prepare('DELETE FROM shared_list_members WHERE shared_list_id = ? AND user_id = ?').run(sharedListId, userId);
+  res.json({ left: true });
+});
+
 // GET /api/songs/chart/:chartId/history — historical scores on a chart (includes fails)
 router.get('/chart/:chartId/history', optionalAuth, (req, res) => {
   const db = getDb();

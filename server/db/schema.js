@@ -3983,6 +3983,25 @@ function initializeDb() {
     throw new Error(`[Schema] FATAL: System user '${SYSTEM_USER_ID}' could not be created. Summary posts will fail.`);
   }
 
+  // Shared lists
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS shared_lists (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      list_id INTEGER NOT NULL REFERENCES user_lists(id) ON DELETE CASCADE,
+      shared_by_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      conversation_id TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS shared_list_members (
+      shared_list_id INTEGER NOT NULL REFERENCES shared_lists(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      joined_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (shared_list_id, user_id)
+    )
+  `);
+
   ensureBuiltInAchievementSeries(db);
   bootstrapChangelogEntriesIfEmpty();
 }

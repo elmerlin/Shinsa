@@ -13,6 +13,7 @@ import {
   reorderListItems,
   bulkAddListItems,
 } from '../utils/api';
+import ShareListButton from '../components/ShareListButton';
 
 const LEGACY_LISTS_STORAGE_KEY = 'shinsa_lists';
 const LEGACY_LISTS_MIGRATION_KEY = 'shinsa_lists_migrated_to_server_v1';
@@ -995,6 +996,8 @@ function ListDetail({ list, library, libraryMap, stats, onAddChart, onBulkAdd, o
             <button onClick={handleExport} className="text-[11px] text-gray-500 hover:text-white transition-colors" title="Copy list summary to clipboard">
               Export
             </button>
+            <span className="text-gray-700">|</span>
+            <ShareListButton list={list} />
             {suggestions.length > 0 && (
               <>
                 <span className="text-gray-700">|</span>

@@ -7,6 +7,7 @@ import UserPickerDialog from './UserPickerDialog';
 export default function SendToDirectMessageButton({
   share,
   linkShare,
+  listShare,
   challengeCard,
   challengeOptions = null,
   messageData = null,
@@ -44,9 +45,11 @@ export default function SendToDirectMessageButton({
       nextPayload.challenge_card = selectedChallengeCard || challengeCard;
     } else if (linkShare) {
       nextPayload.link_share = linkShare;
+    } else if (listShare) {
+      nextPayload.list_share = listShare;
     }
     return Object.keys(nextPayload).length > 0 ? nextPayload : null;
-  }, [challengeCard, content, linkShare, messageData, selectedChallengeCard, share]);
+  }, [challengeCard, content, linkShare, listShare, messageData, selectedChallengeCard, share]);
 
   const hasChallengePickerFlow = selectableChallengeOptions.length > 0;
   if (!user || (!payload && !hasChallengePickerFlow)) return null;
