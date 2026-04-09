@@ -4,7 +4,7 @@ import { shareList } from '../utils/api';
 import { sendDirectPayloadToRecipients, sendPayloadToConversation } from '../utils/directMessageDelivery';
 import UserPickerDialog from './UserPickerDialog';
 
-export default function ShareListButton({ list, className = '' }) {
+export default function ShareListButton({ list, className = '', onShared }) {
   const { user } = useAuth();
   const [pickerOpen, setPickerOpen] = useState(false);
   const [sentResults, setSentResults] = useState(null);
@@ -25,6 +25,15 @@ export default function ShareListButton({ list, className = '' }) {
     },
   });
 
+  const notifyShared = (sharedListId, conversationId = '') => {
+    if (!sharedListId || typeof onShared !== 'function') return;
+    onShared({
+      listId: list.id,
+      sharedListId,
+      conversationId,
+    });
+  };
+
   const handleSubmit = async (selectedUsers, selectedSquads) => {
     setSending(true);
     try {
@@ -38,6 +47,7 @@ export default function ShareListButton({ list, className = '' }) {
         const sharedListId = shareRes?.sharedList?.id;
         if (sharedListId) {
           await sendDirectPayloadToRecipients(users, buildPayload(sharedListId));
+          notifyShared(sharedListId);
         }
       }
 
@@ -48,6 +58,7 @@ export default function ShareListButton({ list, className = '' }) {
         const sharedListId = shareRes?.sharedList?.id;
         if (sharedListId) {
           await sendPayloadToConversation(squad, buildPayload(sharedListId));
+          notifyShared(sharedListId, convId);
         }
       }
 
@@ -66,6 +77,7 @@ export default function ShareListButton({ list, className = '' }) {
       const sharedListId = shareRes?.sharedList?.id;
       if (sharedListId) {
         await sendDirectPayloadToRecipients([selectedUser], buildPayload(sharedListId));
+        notifyShared(sharedListId);
       }
       setSentResults({ users: [selectedUser], squads: [] });
     } catch (err) {
@@ -83,6 +95,7 @@ export default function ShareListButton({ list, className = '' }) {
       const sharedListId = shareRes?.sharedList?.id;
       if (sharedListId) {
         await sendPayloadToConversation(conversation, buildPayload(sharedListId));
+        notifyShared(sharedListId, convId);
       }
       setSentResults({ users: [], squads: [conversation] });
     } catch (err) {

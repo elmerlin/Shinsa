@@ -12,8 +12,10 @@ import {
   cloneList,
   reorderListItems,
   bulkAddListItems,
+  getSharedLists,
 } from '../utils/api';
 import ShareListButton from '../components/ShareListButton';
+import SharedListDetailModal from '../components/SharedListDetailModal';
 
 const LEGACY_LISTS_STORAGE_KEY = 'shinsa_lists';
 const LEGACY_LISTS_MIGRATION_KEY = 'shinsa_lists_migrated_to_server_v1';
@@ -295,11 +297,13 @@ export default function ListsPage() {
   const { user } = useAuth();
 
   const [lists, setLists] = useState([]);
+  const [sharedLists, setSharedLists] = useState([]);
   const [library, setLibrary] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expandedListId, setExpandedListId] = useState(() => {
     try { return JSON.parse(sessionStorage.getItem('lists_expanded_id')); } catch { return null; }
   });
+  const [sharedListDetailId, setSharedListDetailId] = useState(null);
   const [newListName, setNewListName] = useState('');
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [undoState, setUndoState] = useState(null); // { listId, item, timerId }
@@ -314,19 +318,43 @@ export default function ListsPage() {
     }
   }, [expandedListId]);
 
+  const loadSharedLists = useCallback(async () => {
+    if (!user?.id) {
+      setSharedLists([]);
+      return [];
+    }
+
+    try {
+      const sharedData = await getSharedLists();
+      const nextSharedLists = Array.isArray(sharedData?.sharedLists) ? sharedData.sharedLists : [];
+      setSharedLists(nextSharedLists);
+      return nextSharedLists;
+    } catch {
+      setSharedLists([]);
+      return [];
+    }
+  }, [user?.id]);
+
   // Load song library + server-backed lists in parallel
   const loadData = useCallback(async () => {
-    if (!user?.id) { setLoading(false); return; }
+    if (!user?.id) {
+      setLoading(false);
+      setSharedLists([]);
+      return;
+    }
     setLoading(true);
     try {
-      const [libraryData, listsData] = await Promise.all([
+      const [libraryData, listsData, sharedData] = await Promise.all([
         getSongLibrary({ user_id: user.id }),
         getUserLists(),
+        getSharedLists(),
       ]);
       setMigrationNotice('');
       setLibrary(Array.isArray(libraryData?.songs) ? libraryData.songs : []);
       const serverLists = Array.isArray(listsData?.lists) ? listsData.lists : [];
+      const nextSharedLists = Array.isArray(sharedData?.sharedLists) ? sharedData.sharedLists : [];
       setLists(serverLists);
+      setSharedLists(nextSharedLists);
 
       // One-time migration path for pre-server localStorage lists.
       const migration = await migrateLegacyListsToServer(serverLists);
@@ -338,6 +366,7 @@ export default function ListsPage() {
     } catch {
       setLibrary([]);
       setLists([]);
+      setSharedLists([]);
     } finally {
       setLoading(false);
     }
@@ -568,8 +597,12 @@ export default function ListsPage() {
 
   const handleRefreshLists = async () => {
     try {
-      const listsData = await getUserLists();
+      const [listsData, sharedData] = await Promise.all([
+        getUserLists(),
+        getSharedLists(),
+      ]);
       setLists(Array.isArray(listsData?.lists) ? listsData.lists : []);
+      setSharedLists(Array.isArray(sharedData?.sharedLists) ? sharedData.sharedLists : []);
     } catch { /* ignore */ }
   };
 
@@ -665,8 +698,47 @@ export default function ListsPage() {
         </div>
       )}
 
+      {sharedLists.length > 0 && (
+        <div className="space-y-3">
+          <div>
+            <h2 className="text-xs font-display font-bold tracking-[0.22em] text-cyan-300">SHARED LISTS</h2>
+            <p className="mt-1 text-xs text-gray-500">Lists you have joined or shared. Open one to see shared progress and members.</p>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            {sharedLists.map((sharedList) => (
+              <button
+                key={sharedList.id}
+                type="button"
+                onClick={() => setSharedListDetailId(sharedList.id)}
+                className="w-full rounded-2xl border border-cyan-400/18 bg-[linear-gradient(180deg,rgba(13,20,39,0.96)_0%,rgba(8,12,26,0.98)_100%)] px-4 py-3 text-left shadow-[0_14px_30px_rgba(0,0,0,0.18)] transition-all hover:border-cyan-300/35 hover:bg-piu-dark/80"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[9px] font-display font-bold uppercase tracking-[0.22em] text-cyan-200/80">
+                      {sharedList.owner?.username ? `${sharedList.owner.username}'s shared list` : 'Shared list'}
+                    </p>
+                    <h3 className="mt-1 text-lg font-display font-black text-white truncate">{sharedList.name}</h3>
+                    <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-gray-400">
+                      <span>{sharedList.itemCount} song{sharedList.itemCount !== 1 ? 's' : ''}</span>
+                      <span>{sharedList.memberCount} member{sharedList.memberCount !== 1 ? 's' : ''}</span>
+                    </div>
+                  </div>
+                  <span className="shrink-0 rounded-full border border-cyan-300/18 bg-cyan-500/10 px-2.5 py-1 text-[9px] font-display font-bold uppercase tracking-[0.16em] text-cyan-100">
+                    Joined
+                  </span>
+                </div>
+                <div className="mt-3 flex items-center justify-between text-[10px]">
+                  <span className="text-gray-500">Shared view</span>
+                  <span className="font-display font-bold text-cyan-300">Open</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* List Cards */}
-      {lists.length === 0 && !showCreateForm && (
+      {lists.length === 0 && sharedLists.length === 0 && !showCreateForm && (
         <div className="text-center py-12">
           <svg xmlns="http://www.w3.org/2000/svg" className="w-12 h-12 mx-auto text-gray-600 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
@@ -766,12 +838,23 @@ export default function ListsPage() {
                   onReorder={(ids) => handleReorder(list.id, ids)}
                   onBumpAllTargets={(suggestions) => handleBumpAllTargets(list.id, suggestions)}
                   onExport={() => exportList(list, libraryMap)}
+                  onShared={loadSharedLists}
                 />
               )}
             </div>
           );
         })}
       </div>
+
+      <SharedListDetailModal
+        sharedListId={sharedListDetailId}
+        open={!!sharedListDetailId}
+        onClose={() => {
+          setSharedListDetailId(null);
+          loadSharedLists();
+        }}
+        onMembershipChange={loadSharedLists}
+      />
     </div>
   );
 }
@@ -797,7 +880,7 @@ function exportList(list, libraryMap) {
 }
 
 // ─── List Detail (Expanded View) ───────────────────────────────────
-function ListDetail({ list, library, libraryMap, stats, onAddChart, onBulkAdd, onRemoveChart, onSetTarget, onDelete, onRename, onClone, onReorder, onBumpAllTargets, onExport }) {
+function ListDetail({ list, library, libraryMap, stats, onAddChart, onBulkAdd, onRemoveChart, onSetTarget, onDelete, onRename, onClone, onReorder, onBumpAllTargets, onExport, onShared }) {
   const [search, setSearch] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [suggestionsMaxHeight, setSuggestionsMaxHeight] = useState(320);
@@ -997,7 +1080,7 @@ function ListDetail({ list, library, libraryMap, stats, onAddChart, onBulkAdd, o
               Export
             </button>
             <span className="text-gray-700">|</span>
-            <ShareListButton list={list} />
+            <ShareListButton list={list} onShared={onShared} />
             {suggestions.length > 0 && (
               <>
                 <span className="text-gray-700">|</span>

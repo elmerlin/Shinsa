@@ -72,7 +72,7 @@ function SharedListItemRow({ item, memberResults, selectedMemberId }) {
 
   // When a specific member is selected, show their result
   const itemResult = selectedResult?.items?.find(r => r.itemId === item.id);
-  const hasPassed = itemResult ? itemResult.passesSinceAdded > 0 : false;
+  const isComplete = itemResult ? !!itemResult.isComplete : false;
   const bestScore = itemResult?.bestScore || 0;
   const bestGrade = bestScore > 0 ? gradeFromScore(bestScore) : null;
   const attempts = itemResult?.attempts || 0;
@@ -81,7 +81,7 @@ function SharedListItemRow({ item, memberResults, selectedMemberId }) {
   const membersCleared = !selectedMemberId
     ? memberResults.filter(m => {
         const r = m.items?.find(i => i.itemId === item.id);
-        return r && r.passesSinceAdded > 0;
+        return r && r.isComplete;
       }).length
     : 0;
   const totalMembers = memberResults.length;
@@ -92,10 +92,16 @@ function SharedListItemRow({ item, memberResults, selectedMemberId }) {
 
   return (
     <div className={`flex items-center gap-2.5 rounded-xl border px-2.5 py-2 transition-colors ${
-      hasPassed ? 'border-emerald-400/18 bg-emerald-500/5' : 'border-piu-border/40 bg-piu-dark/30'
+      isComplete ? 'border-emerald-400/18 bg-emerald-500/5' : 'border-piu-border/40 bg-piu-dark/30'
     }`}>
-      <div className="shrink-0 w-10 h-10 rounded-lg overflow-hidden bg-piu-dark/60">
-        <PiuChartJacket songTitle={item.songTitle} mode={item.mode} level={item.level} size={40} />
+      <div className="shrink-0">
+        <PiuChartJacket
+          title={item.songTitle}
+          mode={item.mode}
+          level={item.level}
+          jacketUrl={item.jacketUrl}
+          size="sm"
+        />
       </div>
       <div className="min-w-0 flex-1">
         <p className="text-sm font-display font-bold text-white truncate leading-tight">{item.songTitle}</p>
@@ -107,12 +113,16 @@ function SharedListItemRow({ item, memberResults, selectedMemberId }) {
       </div>
       <div className="shrink-0 text-right">
         {selectedMemberId ? (
-          hasPassed ? (
+          bestScore > 0 ? (
             <div>
               {bestGrade && (
                 <span className={`text-sm font-display font-black ${bestGrade.color}`}>{bestGrade.grade}</span>
               )}
-              <p className="text-[9px] text-gray-500">{attempts} attempt{attempts !== 1 ? 's' : ''}</p>
+              <p className="text-[9px] text-gray-500">
+                {attempts > 0
+                  ? `${attempts} attempt${attempts !== 1 ? 's' : ''}`
+                  : (isComplete ? 'Clear recorded' : 'Best recorded')}
+              </p>
             </div>
           ) : (
             <span className="text-[10px] text-gray-600">
@@ -135,7 +145,7 @@ function SharedListItemRow({ item, memberResults, selectedMemberId }) {
   );
 }
 
-export default function SharedListDetailModal({ sharedListId, open, onClose }) {
+export default function SharedListDetailModal({ sharedListId, open, onClose, onMembershipChange }) {
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedMemberId, setSelectedMemberId] = useState(null);
@@ -159,6 +169,9 @@ export default function SharedListDetailModal({ sharedListId, open, onClose }) {
       await joinSharedList(sharedListId);
       const d = await getSharedListDetail(sharedListId);
       setDetail(d);
+      if (typeof onMembershipChange === 'function') {
+        await onMembershipChange({ sharedListId, isMember: true, detail: d });
+      }
     } catch { /* ignore */ }
     setActionLoading(false);
   };
@@ -169,6 +182,9 @@ export default function SharedListDetailModal({ sharedListId, open, onClose }) {
       await leaveSharedList(sharedListId);
       const d = await getSharedListDetail(sharedListId);
       setDetail(d);
+      if (typeof onMembershipChange === 'function') {
+        await onMembershipChange({ sharedListId, isMember: false, detail: d });
+      }
     } catch { /* ignore */ }
     setActionLoading(false);
   };

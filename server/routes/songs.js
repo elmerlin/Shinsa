@@ -428,6 +428,26 @@ function parseDateMs(value) {
   return 0;
 }
 
+function getTrackedListTargetMinScore(target) {
+  const normalized = String(target || 'PASS').trim().toUpperCase();
+  if (!normalized || normalized === 'PASS') return 0;
+  const threshold = SCORE_TO_GRADE.find((entry) => entry.grade === normalized);
+  return threshold ? threshold.min : 0;
+}
+
+function isTrackedListItemComplete(item, bestRecord, passesSinceAdded = 0) {
+  const target = String(item?.target || 'PASS').trim().toUpperCase() || 'PASS';
+  if (target === 'PASS') {
+    if (!bestRecord?.is_pass) return false;
+    return item?.had_pass ? passesSinceAdded > 0 : true;
+  }
+
+  const targetMinScore = getTrackedListTargetMinScore(target);
+  if (targetMinScore <= 0) return false;
+  const bestScore = parseInt(bestRecord?.score, 10) || 0;
+  return bestScore >= targetMinScore;
+}
+
 function compareRecords(a, b) {
   if (!a) return b || null;
   if (!b) return a || null;
@@ -3015,28 +3035,60 @@ router.get('/lists/shared/:sharedListId', requireAuth, (req, res) => {
     ORDER BY slm.joined_at ASC
   `).all(sharedListId);
 
+  const itemChartKeys = new Map(
+    items.map((item) => [item.id, makeChartKey(item.song_title, item.mode, item.level, aliases)])
+  );
+  const validChartKeys = new Set(Array.from(itemChartKeys.values()).filter(Boolean));
+
   // Compute progress for each member
   const memberProgress = members.map(m => {
-    const plays = db.prepare('SELECT song_title, mode, level, score, grade, date_played FROM user_recently_played WHERE user_id = ?').all(m.user_id);
+    const recentScores = queryUserRecentScores(db, m.user_id);
+    const bestByChart = buildUserBestByChartMap({
+      bestScores: queryUserBestScores(db, m.user_id),
+      recentScores,
+      pumbilityScores: queryUserPumbilityScores(db, m.user_id),
+      aliases,
+      validChartKeys,
+    }).bestByChart;
+
+    const recentScoresByChartKey = new Map();
+    for (const play of recentScores) {
+      const key = makeChartKey(play.song_title, play.mode, play.level, aliases);
+      if (!key || !validChartKeys.has(key)) continue;
+      if (!recentScoresByChartKey.has(key)) recentScoresByChartKey.set(key, []);
+      recentScoresByChartKey.get(key).push(play);
+    }
+
     const itemResults = items.map(item => {
-      const chartKey = makeChartKey(item.song_title, item.mode, item.level, aliases);
+      const chartKey = itemChartKeys.get(item.id);
+      const best = chartKey ? (bestByChart.get(chartKey) || null) : null;
+      const relevantPlays = chartKey ? (recentScoresByChartKey.get(chartKey) || []) : [];
       let attempts = 0;
       let passesSinceAdded = 0;
-      let bestScore = 0;
-      let bestGrade = '';
       if (chartKey && item.added_at) {
-        for (const play of plays) {
-          if (makeChartKey(play.song_title, play.mode, play.level, aliases) !== chartKey) continue;
+        for (const play of relevantPlays) {
           if (parseDateMs(play.date_played) < item.added_at) continue;
           attempts++;
-          const score = parseInt(play.score, 10) || 0;
-          if (score > bestScore) { bestScore = score; bestGrade = play.grade || ''; }
           if (isPassRecord(play)) passesSinceAdded++;
         }
       }
-      return { itemId: item.id, chartId: item.chart_id, attempts, passesSinceAdded, bestScore, bestGrade };
+
+      const bestScore = parseInt(best?.score, 10) || 0;
+      const bestGrade = best?.grade || '';
+      const isComplete = isTrackedListItemComplete(item, best, passesSinceAdded);
+
+      return {
+        itemId: item.id,
+        chartId: item.chart_id,
+        attempts,
+        passesSinceAdded,
+        bestScore,
+        bestGrade,
+        isPass: !!best?.is_pass,
+        isComplete,
+      };
     });
-    const completed = itemResults.filter(r => r.passesSinceAdded > 0).length;
+    const completed = itemResults.filter(r => r.isComplete).length;
     return {
       userId: m.user_id,
       username: m.username,
