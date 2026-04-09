@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { getSharedListDetail, joinSharedList, leaveSharedList } from '../utils/api';
-import { useAuth } from '../contexts/AuthContext';
 import PiuChartJacket from './PiuChartJacket';
 
 const GRADE_THRESHOLDS = [
@@ -137,7 +136,6 @@ function SharedListItemRow({ item, memberResults, selectedMemberId }) {
 }
 
 export default function SharedListDetailModal({ sharedListId, open, onClose }) {
-  const { user } = useAuth();
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedMemberId, setSelectedMemberId] = useState(null);
@@ -175,8 +173,6 @@ export default function SharedListDetailModal({ sharedListId, open, onClose }) {
     setActionLoading(false);
   };
 
-  if (!open) return null;
-
   const isMember = detail?.isMember ?? false;
   const items = detail?.items || [];
   const members = detail?.members || [];
@@ -193,6 +189,8 @@ export default function SharedListDetailModal({ sharedListId, open, onClose }) {
   const selectedMember = selectedMemberId
     ? members.find(m => m.userId === selectedMemberId)
     : null;
+
+  if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center bg-black/85 backdrop-blur-sm px-0 sm:px-4" onClick={onClose}>
