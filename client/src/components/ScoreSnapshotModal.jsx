@@ -29,6 +29,27 @@ function formatChartLine(songTitle, mode, level) {
   return parts.filter(Boolean).join(' • ');
 }
 
+function resolveScoreSharePath({
+  playId,
+  score = null,
+  chartLink = '',
+  linkShare = null,
+}) {
+  const explicitPlayId = String(playId || '').trim();
+  if (explicitPlayId) return `/play/${encodeURIComponent(explicitPlayId)}`;
+
+  const scorePlayId = String(score?.play_id || score?.playId || '').trim();
+  if (scorePlayId) return `/play/${encodeURIComponent(scorePlayId)}`;
+
+  const linkSharePath = String(linkShare?.path || '').trim();
+  if (linkSharePath.startsWith('/play/')) return linkSharePath;
+
+  const directChartLink = String(chartLink || '').trim();
+  if (directChartLink.startsWith('/play/')) return directChartLink;
+
+  return linkSharePath || directChartLink || '';
+}
+
 async function sharePath(path, { title = '', text = '' } = {}) {
   const trimmedPath = String(path || '').trim();
   if (!trimmedPath || typeof window === 'undefined') return false;
@@ -211,21 +232,28 @@ export function ScoreCardImageShareButton({
   );
 }
 
-export function buildStoryDraft(score, jacketUrl = '', chartLink = '', linkShare = null) {
+export function buildStoryDraft(score, jacketUrl = '', chartLink = '', linkShare = null, playId = '') {
   const snapshot = buildScoreSnapshotShareData(score, jacketUrl, linkShare);
   const playerName = snapshot.playerName || 'Player';
   const chartLine = formatChartLine(snapshot.song_title, snapshot.mode, snapshot.level);
   const isUpscore = snapshot.old_score > 0;
   const title = String(linkShare?.title || `${playerName}'s ${isUpscore ? 'upscore' : 'score'}`).trim();
   const subtitle = String(linkShare?.subtitle || chartLine).trim();
+  const linkPath = resolveScoreSharePath({
+    playId,
+    score,
+    chartLink,
+    linkShare,
+  });
+  const opensPlay = linkPath.startsWith('/play/');
 
   return {
     storyType: 'score_snapshot',
     title,
     subtitle,
-    linkPath: String(linkShare?.path || chartLink || '').trim(),
+    linkPath,
     linkUrl: String(linkShare?.url || '').trim(),
-    linkLabel: String(linkShare?.buttonLabel || (chartLink ? 'Open chart' : 'Open score')).trim(),
+    linkLabel: String(linkShare?.buttonLabel || (opensPlay ? 'Open score' : (linkPath ? 'Open chart' : 'Open score'))).trim(),
     snapshot,
   };
 }
@@ -343,8 +371,8 @@ export default function ScoreSnapshotModal({
   const [replayOpen, setReplayOpen] = useState(false);
 
   const storyDraft = useMemo(
-    () => (score ? buildStoryDraft(score, jacketUrl, chartLink, directMessageLinkShare) : null),
-    [chartLink, directMessageLinkShare, jacketUrl, score],
+    () => (score ? buildStoryDraft(score, jacketUrl, chartLink, directMessageLinkShare, playId) : null),
+    [chartLink, directMessageLinkShare, jacketUrl, playId, score],
   );
 
   const scoreKey = score
@@ -372,9 +400,12 @@ export default function ScoreSnapshotModal({
     || ''
   ).trim();
   const replayTitle = buildReplayModalTitle(score);
-  const sharePathValue = playId
-    ? `/play/${encodeURIComponent(String(playId))}`
-    : (String(chartLink || directMessageLinkShare?.path || '').trim() || '');
+  const sharePathValue = resolveScoreSharePath({
+    playId,
+    score,
+    chartLink,
+    linkShare: directMessageLinkShare,
+  });
   const shareTitle = storyDraft?.title || 'Shinsa score';
   const shareText = storyDraft?.subtitle || formatChartLine(score?.song_title || score?.songTitle, score?.mode, score?.level);
 

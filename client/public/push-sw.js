@@ -1,4 +1,4 @@
-self.__APP_VERSION__ = '2026-03-06-notification-badge-fix';
+self.__APP_VERSION__ = '2026-04-09-play-link-share-fix';
 const STATIC_CACHE = `shinsa-static-${self.__APP_VERSION__}`;
 const RUNTIME_CACHE = `shinsa-runtime-${self.__APP_VERSION__}`;
 const OFFLINE_URL = '/offline.html';

@@ -391,10 +391,17 @@ export function buildScoreSnapshotLinkShare({
       ? 'score_snapshot'
       : 'upscore';
   const id = String(sourceId || '').trim();
-  const resolvedPath = String(path || (id ? `/${normalizedKind}/${id}` : '')).trim();
+  const row = score && typeof score === 'object' ? score : {};
+  const rowPlayId = normalizedKind === 'score_snapshot'
+    ? String(row.play_id || row.playId || '').trim()
+    : '';
+  const resolvedPath = String(
+    rowPlayId
+      ? `/play/${encodeURIComponent(rowPlayId)}`
+      : (path || (id ? `/${normalizedKind}/${id}` : ''))
+  ).trim();
   if (!resolvedPath) return null;
 
-  const row = score && typeof score === 'object' ? score : {};
   const authorName = String(username || row.username || row.playerName || 'Player').trim() || 'Player';
   const songTitle = String(row.song_title || row.songTitle || '').trim();
   const mode = String(row.mode || '').trim();
