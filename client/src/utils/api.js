@@ -1488,4 +1488,7 @@ export const completeMiniPump = (results) => request('/pets/minigames/mini-pump/
 export const getPetInvadersStats = () => request('/pets/minigames/pet-invaders');
 export const getPetInvadersLeaderboard = (limit = 10) => request(`/pets/minigames/pet-invaders/leaderboard?limit=${encodeURIComponent(limit)}`);
 export const completePetInvaders = (results) => request('/pets/minigames/pet-invaders/complete', { method: 'POST', body: JSON.stringify(results) });
+export const getPacItUpStats = () => request('/pets/minigames/pac-it-up');
+export const getPacItUpLeaderboard = (limit = 10) => request(`/pets/minigames/pac-it-up/leaderboard?limit=${encodeURIComponent(limit)}`);
+export const completePacItUp = (results) => request('/pets/minigames/pac-it-up/complete', { method: 'POST', body: JSON.stringify(results) });
 export const getMinigameCosts = () => request('/pets/minigames/cost');

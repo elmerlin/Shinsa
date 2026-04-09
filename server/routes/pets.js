@@ -44,6 +44,7 @@ const PET_ECONOMY = {
 const MINIGAME_COST = {
   'mini-pump': { combo: 5, energy: -4, hunger: -3, happiness: 2, hype: 4 },
   'pet-invaders': { combo: 8, energy: -6, hunger: -4, happiness: 2, hype: 6 },
+  'pac-it-up': { combo: 6, energy: -5, hunger: -4, happiness: 2, hype: 5 },
 };
 
 const GRADE_ORDER = ['F', 'D', 'C', 'B', 'A', 'A+', 'AA', 'AA+', 'AAA', 'AAA+', 'S', 'S+', 'SS', 'SS+', 'SSS', 'SSS+'];
@@ -4030,6 +4031,193 @@ router.get('/minigames/pet-invaders/leaderboard', requireAuth, (req, res) => {
       best_wave: row.best_wave || 0,
       bosses_defeated: row.bosses_defeated || 0,
       total_kills: row.total_kills || 0,
+      total_runs: row.total_runs || 0,
+      form: getPetForm(bond, masteryXp),
+      bond_rank: getBondRank(bond),
+      equipped_hat: row.equipped_hat || '',
+      equipped_top: row.equipped_top || '',
+      hat_color: row.hat_color || '',
+      top_color: row.top_color || '',
+      weight_state: getWeightState(computeDecayed(row.fullness, row.last_fed_at, HUNGER_DECAY_PER_HOUR)),
+      mood: getMood(
+        computeDecayed(row.fullness, row.last_fed_at, HUNGER_DECAY_PER_HOUR),
+        computeDecayed(row.happiness || 50, row.last_fed_at, HAPPINESS_DECAY_PER_HOUR),
+      ),
+      is_me: row.user_id === req.user.id,
+    };
+  });
+
+  res.json({ leaderboard });
+});
+
+// ─── Pac It Up Minigame ─────────────────────────────────────────
+
+function ensurePacItUpTable(db) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS pet_pac_it_up_stats (
+      user_id TEXT NOT NULL,
+      high_score INTEGER NOT NULL DEFAULT 0,
+      best_stage INTEGER NOT NULL DEFAULT 0,
+      longest_combo INTEGER NOT NULL DEFAULT 0,
+      total_stomps INTEGER NOT NULL DEFAULT 0,
+      ghosts_eaten INTEGER NOT NULL DEFAULT 0,
+      total_runs INTEGER NOT NULL DEFAULT 0,
+      last_played_at TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (user_id)
+    )
+  `);
+}
+
+// GET /api/pets/minigames/pac-it-up — personal stats
+router.get('/minigames/pac-it-up', requireAuth, (req, res) => {
+  const db = getDb();
+  ensurePacItUpTable(db);
+  const row = db.prepare('SELECT * FROM pet_pac_it_up_stats WHERE user_id = ?')
+    .get(req.user.id);
+  res.json({
+    highScore: row?.high_score || 0,
+    bestStage: row?.best_stage || 0,
+    longestCombo: row?.longest_combo || 0,
+    totalStomps: row?.total_stomps || 0,
+    ghostsEaten: row?.ghosts_eaten || 0,
+    totalRuns: row?.total_runs || 0,
+    lastPlayedAt: row?.last_played_at || '',
+  });
+});
+
+// POST /api/pets/minigames/pac-it-up/complete — save run results
+router.post('/minigames/pac-it-up/complete', requireAuth, (req, res) => {
+  const db = getDb();
+  ensurePacItUpTable(db);
+  ensurePetTable(db);
+
+  const { score = 0, stageReached = 1, longestCombo = 0, stompsCollected = 0, ghostsEaten = 0, livesRemaining = 0 } = req.body || {};
+  const safeScore  = Math.max(0, Math.min(999999, Math.floor(Number(score) || 0)));
+  const safeStage  = Math.max(1, Math.min(999, Math.floor(Number(stageReached) || 1)));
+  const safeCombo  = Math.max(0, Math.min(9999, Math.floor(Number(longestCombo) || 0)));
+  const safeStomps = Math.max(0, Math.min(99999, Math.floor(Number(stompsCollected) || 0)));
+  const safeGhosts = Math.max(0, Math.min(9999, Math.floor(Number(ghostsEaten) || 0)));
+  const safeLives  = Math.max(0, Math.min(3, Math.floor(Number(livesRemaining) || 0)));
+
+  // Upsert stats
+  const existing = db.prepare('SELECT * FROM pet_pac_it_up_stats WHERE user_id = ?')
+    .get(req.user.id);
+
+  if (existing) {
+    db.prepare(`
+      UPDATE pet_pac_it_up_stats SET
+        high_score = MAX(high_score, ?),
+        best_stage = MAX(best_stage, ?),
+        longest_combo = MAX(longest_combo, ?),
+        total_stomps = total_stomps + ?,
+        ghosts_eaten = ghosts_eaten + ?,
+        total_runs = total_runs + 1,
+        last_played_at = datetime('now')
+      WHERE user_id = ?
+    `).run(safeScore, safeStage, safeCombo, safeStomps, safeGhosts, req.user.id);
+  } else {
+    db.prepare(`
+      INSERT INTO pet_pac_it_up_stats (user_id, high_score, best_stage, longest_combo, total_stomps, ghosts_eaten, total_runs, last_played_at)
+      VALUES (?, ?, ?, ?, ?, ?, 1, datetime('now'))
+    `).run(req.user.id, safeScore, safeStage, safeCombo, safeStomps, safeGhosts);
+  }
+
+  // Play cost + reward
+  const pet = db.prepare('SELECT * FROM user_pets WHERE user_id = ?').get(req.user.id);
+  let petReward = null;
+  let costApplied = null;
+  if (pet) {
+    const cost = MINIGAME_COST['pac-it-up'];
+    const vitals = buildPetVitalsSnapshot(pet);
+    const curHunger = vitals.hunger;
+    const curHappiness = vitals.happiness;
+    const curEnergy = vitals.energy;
+    const curHype = vitals.momentum;
+
+    const happyBump = Math.min(4, Math.max(1, Math.floor(safeScore / 1200)));
+    const bondBump  = Math.min(3, Math.max(0, Math.floor(safeStage / 2)));
+
+    const newHunger    = clamp(curHunger + (cost.hunger || 0), 0, MAX_STAT);
+    const newHappiness = clamp(curHappiness + (cost.happiness || 0) + happyBump, 0, MAX_STAT);
+    const newEnergy    = clamp(curEnergy + (cost.energy || 0), 0, MAX_STAT);
+    const newHype      = clamp(curHype + (cost.hype || 0), 0, MAX_STAT);
+    const newBond      = Math.max(0, (pet.bond || 0) + bondBump);
+    const comboDeduct  = Math.min(cost.combo || 0, pet.combo_balance || 0);
+
+    db.prepare(`UPDATE user_pets SET fullness = ?, happiness = ?, energy = ?, hype = ?, bond = ?,
+      combo_balance = combo_balance - ?, last_fed_at = datetime('now'), updated_at = datetime('now')
+      WHERE user_id = ?`).run(newHunger, newHappiness, newEnergy, newHype, newBond, comboDeduct, req.user.id);
+    petReward = { happiness: happyBump + (cost.happiness || 0), bond: bondBump, momentum: cost.hype || 0 };
+    costApplied = { combo: comboDeduct, energy: cost.energy || 0, hunger: cost.hunger || 0, momentum: cost.hype || 0 };
+  }
+
+  const updated = db.prepare('SELECT * FROM pet_pac_it_up_stats WHERE user_id = ?')
+    .get(req.user.id);
+
+  res.json({
+    highScore: updated?.high_score || 0,
+    bestStage: updated?.best_stage || 0,
+    longestCombo: updated?.longest_combo || 0,
+    totalStomps: updated?.total_stomps || 0,
+    ghostsEaten: updated?.ghosts_eaten || 0,
+    totalRuns: updated?.total_runs || 0,
+    petReward,
+    costApplied,
+  });
+});
+
+// GET /api/pets/minigames/pac-it-up/leaderboard — community bests
+router.get('/minigames/pac-it-up/leaderboard', requireAuth, (req, res) => {
+  const db = getDb();
+  ensurePacItUpTable(db);
+  ensurePetTable(db);
+
+  const rawLimit = Number(req.query.limit || 10);
+  const limit = Math.max(3, Math.min(25, Math.floor(rawLimit) || 10));
+
+  const rows = db.prepare(`
+    SELECT
+      s.user_id,
+      s.high_score,
+      s.best_stage,
+      s.longest_combo,
+      s.ghosts_eaten,
+      s.total_runs,
+      s.last_played_at,
+      u.username,
+      p.character,
+      p.nickname,
+      p.bond,
+      p.mastery_xp,
+      p.fullness,
+      p.happiness,
+      p.last_fed_at,
+      p.equipped_hat,
+      p.equipped_top,
+      p.hat_color,
+      p.top_color
+    FROM pet_pac_it_up_stats s
+    JOIN users u ON u.id = s.user_id
+    LEFT JOIN user_pets p ON p.user_id = s.user_id
+    WHERE s.high_score > 0
+    ORDER BY s.high_score DESC, s.best_stage DESC, s.longest_combo DESC, s.ghosts_eaten DESC, s.last_played_at DESC
+    LIMIT ?
+  `).all(limit);
+
+  const leaderboard = rows.map((row, index) => {
+    const bond = row.bond || 0;
+    const masteryXp = row.mastery_xp || 0;
+    return {
+      rank: index + 1,
+      user_id: row.user_id,
+      username: row.username || 'Unknown',
+      character: row.character || 'dojocat',
+      nickname: row.nickname || '',
+      high_score: row.high_score || 0,
+      best_stage: row.best_stage || 0,
+      longest_combo: row.longest_combo || 0,
+      ghosts_eaten: row.ghosts_eaten || 0,
       total_runs: row.total_runs || 0,
       form: getPetForm(bond, masteryXp),
       bond_rank: getBondRank(bond),

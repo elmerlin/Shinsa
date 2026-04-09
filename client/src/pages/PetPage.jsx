@@ -8,7 +8,8 @@ import {
   interactPet, doPetActivity, claimPetMission, buyPetToy, usePetToy,
   buyPetHabitatItem, equipPetHabitat, setPetTrainingPath, getPetLeaderboard,
   getPetSocialFeed, renamePet, getMiniPumpStats, getMiniPumpLeaderboard, completeMiniPump,
-  getPetInvadersStats, getPetInvadersLeaderboard, completePetInvaders, getMinigameCosts,
+  getPetInvadersStats, getPetInvadersLeaderboard, completePetInvaders,
+  getPacItUpStats, getPacItUpLeaderboard, completePacItUp, getMinigameCosts,
   completeCurrentPetRequest, dismissCurrentPetRequest,
   searchUsers, getOrCreateDirectConversation,
 } from '../utils/api';
@@ -20,6 +21,8 @@ import MiniPumpLauncher from '../components/pet/minigames/MiniPumpLauncher';
 import MiniPumpModal from '../components/pet/minigames/MiniPumpModal';
 import PetInvadersLauncher from '../components/pet/minigames/PetInvadersLauncher';
 import PetInvadersModal from '../components/pet/minigames/PetInvadersModal';
+import PacItUpLauncher from '../components/pet/minigames/PacItUpLauncher';
+import PacItUpModal from '../components/pet/minigames/PacItUpModal';
 
 // ─── Sound ─────────────────────────────────────────────────────────
 let _audioCtx = null;
@@ -190,6 +193,9 @@ export default function PetPage() {
   const [petInvadersOpen, setPetInvadersOpen] = useState(false);
   const [petInvadersStats, setPetInvadersStats] = useState(null);
   const [petInvadersLeaderboard, setPetInvadersLeaderboard] = useState(null);
+  const [pacItUpOpen, setPacItUpOpen] = useState(false);
+  const [pacItUpStats, setPacItUpStats] = useState(null);
+  const [pacItUpLeaderboard, setPacItUpLeaderboard] = useState(null);
   const [minigameCosts, setMinigameCosts] = useState(null);
   const [requestBusy, setRequestBusy] = useState(false);
   const habitatRef = useRef(null);
@@ -850,6 +856,22 @@ export default function PetPage() {
     } catch (e) { console.error('Pet-invaders save failed', e); }
   };
 
+  // ─── Pac It Up minigame ───────────────────────────
+  const handleOpenPacItUp = () => {
+    setPacItUpOpen(true);
+    if (!pacItUpStats) getPacItUpStats().then(setPacItUpStats).catch(() => {});
+    if (!pacItUpLeaderboard) getPacItUpLeaderboard().then((r) => setPacItUpLeaderboard(r.leaderboard || [])).catch(() => {});
+  };
+  const handlePacItUpComplete = async (results) => {
+    try {
+      const r = await completePacItUp(results);
+      setPacItUpStats(r);
+      getPacItUpLeaderboard().then((lb) => setPacItUpLeaderboard(lb.leaderboard || [])).catch(() => {});
+      const petData = await getMyPet();
+      if (petData?.pet) setPet(petData.pet);
+    } catch (e) { console.error('Pac-it-up save failed', e); }
+  };
+
   // ─── Gates ──────────────────────────────────────────
   if (!user) return <div className="max-w-lg mx-auto p-6 text-center"><h1 className="text-2xl font-bold mb-4">My Pet</h1><p className="text-gray-400">Log in to adopt a pet!</p></div>;
   if (loading) return <div className="max-w-lg mx-auto p-6 flex items-center justify-center min-h-[50vh]"><div className="w-12 h-12 border-2 border-white/10 border-t-white/60 rounded-full animate-spin" /></div>;
@@ -1228,6 +1250,9 @@ export default function PetPage() {
                 onPetInvaders={handleOpenPetInvaders}
                 petInvadersStats={petInvadersStats}
                 petInvadersLeaderboard={petInvadersLeaderboard}
+                onPacItUp={handleOpenPacItUp}
+                pacItUpStats={pacItUpStats}
+                pacItUpLeaderboard={pacItUpLeaderboard}
                 minigameCosts={minigameCosts}
                 comboBalance={combo_balance}
                 currentRequest={currentRequest}
@@ -1301,6 +1326,16 @@ export default function PetPage() {
         onComplete={handlePetInvadersComplete}
         stats={petInvadersStats}
         leaderboard={petInvadersLeaderboard}
+      />
+
+      {/* Pac It Up game modal */}
+      <PacItUpModal
+        open={pacItUpOpen}
+        onClose={() => setPacItUpOpen(false)}
+        character={pet?.character || 'dojocat'}
+        onComplete={handlePacItUpComplete}
+        stats={pacItUpStats}
+        leaderboard={pacItUpLeaderboard}
       />
 
       {/* Share to DM modal */}
@@ -1992,7 +2027,7 @@ function CollapsibleSection({ title, icon, defaultOpen = true, count, children }
 }
 
 // ─── Pet tab ──────────────────────────────────────────
-function PetTab({ pet, shop, combo, economy, socialFeed, interactionBusy, activityBusy, missionBusyId, toyBusy, trainingBusy, onAction, onActivity, onClaimMission, onBuyToy, onUseToy, onSetTrainingPath, onTabSwitch, onMiniPump, miniPumpStats, miniPumpLeaderboard, onPetInvaders, petInvadersStats, petInvadersLeaderboard, minigameCosts, comboBalance, currentRequest, requestBusy, onClaimCurrentRequest, onDismissCurrentRequest, onRequestCta }) {
+function PetTab({ pet, shop, combo, economy, socialFeed, interactionBusy, activityBusy, missionBusyId, toyBusy, trainingBusy, onAction, onActivity, onClaimMission, onBuyToy, onUseToy, onSetTrainingPath, onTabSwitch, onMiniPump, miniPumpStats, miniPumpLeaderboard, onPetInvaders, petInvadersStats, petInvadersLeaderboard, onPacItUp, pacItUpStats, pacItUpLeaderboard, minigameCosts, comboBalance, currentRequest, requestBusy, onClaimCurrentRequest, onDismissCurrentRequest, onRequestCta }) {
   const REACTION_ICONS = { cheer: '📣', wow: '🤩', flex: '💪', heart: '💗' };
   const claimableMissions = (pet.missions || []).filter(m => m.complete && !m.claimed).length;
   const needs = Array.isArray(pet.needs) ? pet.needs : [];
@@ -2096,6 +2131,7 @@ function PetTab({ pet, shop, combo, economy, socialFeed, interactionBusy, activi
         <div className="space-y-2 mb-3">
           <MiniPumpLauncher onPlay={onMiniPump} stats={miniPumpStats} cost={minigameCosts?.['mini-pump']} comboBalance={comboBalance} />
           <PetInvadersLauncher onPlay={onPetInvaders} stats={petInvadersStats} cost={minigameCosts?.['pet-invaders']} comboBalance={comboBalance} />
+          <PacItUpLauncher onPlay={onPacItUp} stats={pacItUpStats} cost={minigameCosts?.['pac-it-up']} comboBalance={comboBalance} />
         </div>
         <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
           <div className="flex items-center justify-between mb-2">
