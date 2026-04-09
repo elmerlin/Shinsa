@@ -429,7 +429,7 @@ export function buildScoreSnapshotLinkShare({
       ? 'Open upscore'
       : normalizedKind === 'clear'
         ? 'Open clear'
-        : 'Open chart',
+        : 'Open score',
     songTitle,
     mode,
     level,
