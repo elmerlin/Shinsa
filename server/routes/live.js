@@ -156,10 +156,21 @@ const invalidateRecentActivityCache = socialRoutes.invalidateRecentActivityCache
 const voteCloseTimers = new Map();
 const liveSyncTimers = new Map();
 const liveSyncInFlight = new Set();
+const liveReplayBackfillTimers = new Map();
 const livePresenceBroadcastState = new Map();
 const livePlayOutcomeCache = new Map();
 let cachedSongAliases = null;
 let cachedSongDurations = null;
+const LIVE_REPLAY_BACKFILL_RETRY_DELAYS_MS = String(
+  process.env.LIVE_REPLAY_BACKFILL_RETRY_DELAYS_MS || '120000,600000,1800000'
+)
+  .split(',')
+  .map((value) => parseInt(String(value || '').trim(), 10))
+  .filter((value) => Number.isInteger(value) && value > 0);
+const LIVE_REPLAY_BACKFILL_LOOKBACK_HOURS = Math.max(
+  1,
+  parseInt(process.env.LIVE_REPLAY_BACKFILL_LOOKBACK_HOURS, 10) || 12
+);
 
 function getOptionalAuthUserId(req) {
   const token = String(req.headers?.authorization || '').replace(/^Bearer\s+/i, '').trim();
@@ -1296,6 +1307,16 @@ function clearLiveSyncTimer(liveSessionId) {
   liveSyncInFlight.delete(key);
 }
 
+function clearLiveReplayBackfillTimer(liveSessionId) {
+  const key = String(liveSessionId || '').trim();
+  if (!key) return;
+  const state = liveReplayBackfillTimers.get(key);
+  if (state?.timeout) {
+    clearTimeout(state.timeout);
+  }
+  liveReplayBackfillTimers.delete(key);
+}
+
 function ensureLiveSyncTimer(db, sessionOrId) {
   const session = typeof sessionOrId === 'string'
     ? getLiveSession(db, sessionOrId)
@@ -1354,6 +1375,107 @@ function ensureLiveSyncTimer(db, sessionOrId) {
 
   liveSyncTimers.set(key, state);
   scheduleNextSync();
+}
+
+function isReplayEligibleOutcomeRow(row) {
+  if (!row || String(row?.entry_type || 'song_clear') === 'title_unlock') return false;
+  const score = Object.prototype.hasOwnProperty.call(row, 'new_score')
+    ? toInt(row?.new_score)
+    : toInt(row?.score);
+  if (score <= 0) return false;
+  const grade = normalizeGrade(
+    Object.prototype.hasOwnProperty.call(row, 'new_grade')
+      ? row?.new_grade
+      : row?.grade
+  );
+  return grade !== 'F';
+}
+
+function getReplayEligibleBufferedRows(db, liveSessionId) {
+  const bufferedUpscores = parseBufferedRows(db, liveSessionId, 'live_session_buffered_upscores', { includeFinalized: true });
+  const bufferedClears = parseBufferedRows(db, liveSessionId, 'live_session_buffered_clears', { includeFinalized: true });
+  return [
+    ...bufferedUpscores,
+    ...bufferedClears,
+  ].filter(isReplayEligibleOutcomeRow);
+}
+
+function sessionNeedsReplayBackfill(db, liveSessionId) {
+  const session = typeof liveSessionId === 'string'
+    ? getLiveSession(db, liveSessionId)
+    : liveSessionId;
+  if (!session || String(session.status || '').trim() !== 'ended') return false;
+  if (!getLiveSessionYoutubeVideoId(session)) return false;
+  const eligibleRows = getReplayEligibleBufferedRows(db, session.id);
+  if (eligibleRows.length === 0) return false;
+  return eligibleRows.some((row) => !String(row?.replay_embed_url || '').trim());
+}
+
+function scheduleLiveReplayBackfill(liveSessionId, options = {}) {
+  const key = String(liveSessionId || '').trim();
+  if (!key) return;
+  if (liveReplayBackfillTimers.has(key)) return;
+
+  const configuredDelays = Array.isArray(options.delays) && options.delays.length > 0
+    ? options.delays
+        .map((value) => toInt(value))
+        .filter((value) => value > 0)
+    : LIVE_REPLAY_BACKFILL_RETRY_DELAYS_MS;
+  if (!configuredDelays.length) return;
+
+  const state = {
+    timeout: null,
+    attemptIndex: Math.max(0, toInt(options.attemptIndex)),
+    delays: configuredDelays,
+  };
+
+  const scheduleAttempt = () => {
+    if (liveReplayBackfillTimers.get(key) !== state) return;
+    const delay = state.delays[state.attemptIndex];
+    if (!delay) {
+      clearLiveReplayBackfillTimer(key);
+      return;
+    }
+
+    state.timeout = setTimeout(async () => {
+      if (liveReplayBackfillTimers.get(key) !== state) return;
+
+      try {
+        const db = getDb();
+        const session = getLiveSession(db, key);
+        if (!session || String(session.status || '').trim() !== 'ended') {
+          clearLiveReplayBackfillTimer(key);
+          return;
+        }
+        if (!sessionNeedsReplayBackfill(db, session)) {
+          clearLiveReplayBackfillTimer(key);
+          return;
+        }
+
+        const result = await backfillLiveSessionReplayData(db, key);
+        if (!result?.skipped && toInt(result?.replay_count) > 0) {
+          clearLiveReplayBackfillTimer(key);
+          return;
+        }
+      } catch (err) {
+        console.warn(`Deferred live replay backfill failed for ${key}: ${err.message}`);
+      }
+
+      state.attemptIndex += 1;
+      if (state.attemptIndex >= state.delays.length) {
+        clearLiveReplayBackfillTimer(key);
+        return;
+      }
+      scheduleAttempt();
+    }, delay);
+
+    if (typeof state.timeout?.unref === 'function') {
+      state.timeout.unref();
+    }
+  };
+
+  liveReplayBackfillTimers.set(key, state);
+  scheduleAttempt();
 }
 
 function normalizeRequestStatus(status, fulfilled = false) {
@@ -5390,7 +5512,7 @@ router.post('/sessions/:id/end', requireAuth, async (req, res) => {
 
     if (replayOutcomeRows.length > 0) {
       try {
-        const replayVideoId = getLiveSessionYoutubeVideoId(session);
+        const replayVideoId = getLiveSessionYoutubeVideoId(finalizedSession);
         if (replayVideoId) {
           let replayVideo = null;
           try {
@@ -5403,7 +5525,7 @@ router.post('/sessions/:id/end', requireAuth, async (req, res) => {
           if (!replayVideo || isReplayEligibleYoutubeVideo(replayVideo)) {
             const replayPlays = getSessionPlaysWithDurations(db, session.id);
             if (replayPlays.length > 0) {
-              replayLookup = buildSessionReplayLookup(session, replayPlays, replayVideo, replayVideoId);
+              replayLookup = buildSessionReplayLookup(finalizedSession, replayPlays, replayVideo, replayVideoId);
             }
           }
         }
@@ -5414,6 +5536,11 @@ router.post('/sessions/:id/end', requireAuth, async (req, res) => {
       bufferedUpscores = attachReplayMetadataToRows(bufferedUpscores, replayLookup);
       bufferedClears = attachReplayMetadataToRows(bufferedClears, replayLookup);
     }
+    const replayBackfillNeeded = replayOutcomeRows.length > 0
+      && [
+        ...bufferedUpscores,
+        ...bufferedClears,
+      ].some((row) => isReplayEligibleOutcomeRow(row) && !String(row?.replay_embed_url || '').trim());
 
     const playGroups = new Map();
     for (const play of plays) {
@@ -5490,6 +5617,9 @@ router.post('/sessions/:id/end', requireAuth, async (req, res) => {
     });
     txn();
     clearLiveSessionRuntimeState(db, session.id);
+    if (replayBackfillNeeded) {
+      scheduleLiveReplayBackfill(session.id);
+    }
 
     const anyPostCreated = participantResults.some((result) =>
       result.upscore_post_id
@@ -5606,6 +5736,30 @@ function scheduleActiveLiveSessionSyncs() {
   }
 }
 
+function scheduleRecentReplayBackfills() {
+  const db = getDb();
+  const cutoff = formatSqliteDateTime(
+    new Date(Date.now() - (LIVE_REPLAY_BACKFILL_LOOKBACK_HOURS * 60 * 60 * 1000))
+  );
+  const rows = db.prepare(`
+    SELECT id
+    FROM live_sessions
+    WHERE status = 'ended'
+      AND datetime(COALESCE(NULLIF(ended_at, ''), updated_at, created_at)) >= datetime(?)
+    ORDER BY datetime(COALESCE(NULLIF(ended_at, ''), updated_at, created_at)) DESC, id DESC
+    LIMIT 100
+  `).all(cutoff);
+
+  rows.forEach((row, index) => {
+    if (!sessionNeedsReplayBackfill(db, row.id)) return;
+    const initialDelay = Math.min(LIVE_REPLAY_BACKFILL_RETRY_DELAYS_MS[0] || 120000, 30000) + (index * 2000);
+    const laterDelays = LIVE_REPLAY_BACKFILL_RETRY_DELAYS_MS.slice(1);
+    scheduleLiveReplayBackfill(row.id, {
+      delays: [initialDelay, ...laterDelays],
+    });
+  });
+}
+
 try {
   scheduleActiveVoteClosures();
 } catch (err) {
@@ -5616,6 +5770,12 @@ try {
   scheduleActiveLiveSessionSyncs();
 } catch (err) {
   console.error('Live sync timer initialization error:', err.message);
+}
+
+try {
+  scheduleRecentReplayBackfills();
+} catch (err) {
+  console.error('Live replay backfill initialization error:', err.message);
 }
 
 router.backfillLiveSessionReplayData = backfillLiveSessionReplayData;
