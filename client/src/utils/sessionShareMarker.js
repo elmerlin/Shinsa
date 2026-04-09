@@ -36,6 +36,8 @@ function sanitizeRows(rows) {
     grade: String(row?.grade || ''),
     rating_points: toInt(row?.rating_points),
     over_top100_rank: toInt(row?.over_top100_rank),
+    chart_id: toInt(row?.chart_id),
+    chart_path: String(row?.chart_path || ''),
     jacket_url: String(row?.jacket_url || ''),
     replay_embed_url: String(row?.replay_embed_url || ''),
     replay_video_id: String(row?.replay_video_id || ''),
@@ -48,7 +50,12 @@ function sanitizeRows(rows) {
     miss: toInt(row?.miss),
     max_combo: toInt(row?.max_combo),
     date_played: String(row?.date_played || ''),
+    played_at_utc: String(row?.played_at_utc || ''),
     weekly_challenge_week_key: String(row?.weekly_challenge_week_key || ''),
+    play_id: toInt(row?.play_id),
+    user_id: String(row?.user_id || ''),
+    machine_name: String(row?.machine_name || ''),
+    plate: String(row?.plate || ''),
   }));
 }
 
