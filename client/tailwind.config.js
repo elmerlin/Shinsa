@@ -37,6 +37,9 @@ export default {
         'shuffle-card': 'shuffleCard 0.4s ease-in-out infinite alternate',
         'scale-in': 'scaleIn 0.6s ease-out',
         'expand-width': 'expandWidth 0.6s ease-out',
+        'coach-enter': 'coachEnter 0.55s cubic-bezier(0.16,1,0.3,1) both',
+        'coach-pulse': 'coachPulse 2.5s ease-in-out infinite',
+        'coach-bar': 'coachBarFill 0.8s cubic-bezier(0.16,1,0.3,1) both',
       },
       keyframes: {
         cardFlip: {
@@ -107,6 +110,23 @@ export default {
         expandWidth: {
           '0%': { width: '0' },
           '100%': { width: '6rem' },
+        },
+        coachEnter: {
+          '0%': { opacity: '0', transform: 'translateY(16px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        coachPulse: {
+          '0%, 100%': { opacity: '0.6' },
+          '50%': { opacity: '1' },
+        },
+        coachBarFill: {
+          '0%': { transform: 'scaleX(0)' },
+          '100%': { transform: 'scaleX(1)' },
+        },
+        coachDotPop: {
+          '0%': { transform: 'translate(-50%,-50%) scale(0)', opacity: '0' },
+          '60%': { transform: 'translate(-50%,-50%) scale(1.3)' },
+          '100%': { transform: 'translate(-50%,-50%) scale(1)', opacity: '1' },
         },
       },
     },
