@@ -1491,4 +1491,7 @@ export const completePetInvaders = (results) => request('/pets/minigames/pet-inv
 export const getPacItUpStats = () => request('/pets/minigames/pac-it-up');
 export const getPacItUpLeaderboard = (limit = 10) => request(`/pets/minigames/pac-it-up/leaderboard?limit=${encodeURIComponent(limit)}`);
 export const completePacItUp = (results) => request('/pets/minigames/pac-it-up/complete', { method: 'POST', body: JSON.stringify(results) });
+export const getPetBattleStats = () => request('/pets/minigames/pet-battle');
+export const getPetBattleLeaderboard = (limit = 10) => request(`/pets/minigames/pet-battle/leaderboard?limit=${encodeURIComponent(limit)}`);
+export const completePetBattle = (results) => request('/pets/minigames/pet-battle/complete', { method: 'POST', body: JSON.stringify(results) });
 export const getMinigameCosts = () => request('/pets/minigames/cost');
