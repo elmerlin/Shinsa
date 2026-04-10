@@ -33,6 +33,7 @@ const petRoutes = require('./routes/pets');
 const petWorldRoutes = require('./routes/petWorld');
 const petBomberRoutes = require('./routes/petBomber');
 const petBomberWs = require('./lib/petBomber/ws');
+const petWorldWs = require('./lib/petWorld/ws');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -204,3 +205,6 @@ server.timeout = 300000;
 
 // Attach Pet Bomber WebSocket server
 petBomberWs.attachToServer(server);
+
+// Attach Pet World co-presence WebSocket server
+petWorldWs.attachToServer(server);

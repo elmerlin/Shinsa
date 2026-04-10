@@ -7,8 +7,8 @@ import {
   createPetWorldTrade,
   acceptPetWorldTrade,
   declinePetWorldTrade,
-  postPetWorldPresence,
 } from '../utils/api';
+import usePetWorldPresence from '../hooks/usePetWorldPresence';
 import PetWorldHUD from '../components/petWorld/PetWorldHUD';
 import PetWorldCanvas from '../components/petWorld/PetWorldCanvas';
 import PetWorldBuildingInfo from '../components/petWorld/PetWorldBuildingInfo';
@@ -84,14 +84,8 @@ export default function PetWorldVisitPage() {
     return () => window.clearTimeout(showToast._timer);
   }, [loadVisit, showToast]);
 
-  /* Presence heartbeat: POST every 2 minutes to host's presence endpoint */
-  useEffect(() => {
-    if (!userId) return;
-    const tick = () => postPetWorldPresence(userId).catch(() => {});
-    tick();
-    const id = setInterval(tick, 2 * 60 * 1000);
-    return () => clearInterval(id);
-  }, [userId]);
+  /* Real-time co-presence via WebSocket (falls back to HTTP heartbeat) */
+  const { visitors: wsVisitors, connected: wsConnected } = usePetWorldPresence(userId);
 
   const handleOfferTrade = async ({ offerResource, offerAmount, requestResource, requestAmount }) => {
     try {
@@ -146,7 +140,7 @@ export default function PetWorldVisitPage() {
   const world = bundle?.world;
   const buildings = bundle?.buildings || [];
   const canTrade = !!myBundle?.world?.has_market;
-  const visitorsOnline = bundle?.visitors_online ?? null;
+  const visitorsOnline = wsVisitors.length || (bundle?.visitors_online?.length ?? null);
 
   /* ── World not found ─────────────────────────────────────────── */
   if (!world) {
