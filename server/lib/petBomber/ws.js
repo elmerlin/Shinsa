@@ -46,6 +46,10 @@ room.setTickCallback((roomId, snapshot, gridChanges) => {
   broadcastToRoom(roomId, { type: 'tick', snapshot, gridChanges });
 });
 
+room.setRoundStartCallback((roomId, roomSnapshot) => {
+  broadcastToRoom(roomId, { type: 'round_start', room: roomSnapshot });
+});
+
 room.setRoundEndCallback((roomId, winner, roundWins) => {
   broadcastToRoom(roomId, { type: 'round_end', winner, roundWins });
 });
@@ -67,32 +71,34 @@ function handleMessage(userId, data) {
         return;
       }
       const client = clients.get(userId);
-      if (client) client.roomId = result.roomId;
-      sendToClient(userId, { type: 'room_created', room: result });
+      if (client) client.roomId = result.id;
+      sendToClient(userId, { type: 'room_created', room: room.getRoomSnapshot(result) });
       break;
     }
 
     case 'join_room': {
       const result = room.joinSeat(data.roomId, userId, data.character);
-      if (!result) {
-        sendToClient(userId, { type: 'error', message: 'Failed to join room' });
+      if (!result || !result.success) {
+        sendToClient(userId, { type: 'error', message: result?.error || 'Failed to join room' });
         return;
       }
       const client = clients.get(userId);
       if (client) client.roomId = data.roomId;
-      broadcastToRoom(data.roomId, { type: 'player_joined', userId, character: data.character, room: result });
+      const roomObj = room.getRoom(data.roomId);
+      broadcastToRoom(data.roomId, { type: 'player_joined', userId, character: data.character, room: roomObj ? room.getRoomSnapshot(roomObj) : null });
       break;
     }
 
     case 'spectate': {
       const result = room.joinSpectator(data.roomId, userId);
-      if (!result) {
+      if (!result || !result.success) {
         sendToClient(userId, { type: 'error', message: 'Failed to spectate room' });
         return;
       }
       const client = clients.get(userId);
       if (client) client.roomId = data.roomId;
-      sendToClient(userId, { type: 'room_state', room: result });
+      const roomObj = room.getRoom(data.roomId);
+      sendToClient(userId, { type: 'room_state', room: roomObj ? room.getRoomSnapshot(roomObj) : null });
       break;
     }
 
@@ -100,9 +106,10 @@ function handleMessage(userId, data) {
       const client = clients.get(userId);
       const roomId = data.roomId || (client && client.roomId);
       if (!roomId) return;
-      const result = room.leaveSeat(roomId, userId);
+      room.leaveSeat(roomId, userId);
       if (client) client.roomId = null;
-      broadcastToRoom(roomId, { type: 'player_left', userId, room: result });
+      const roomObj = room.getRoom(roomId);
+      broadcastToRoom(roomId, { type: 'player_left', userId, room: roomObj ? room.getRoomSnapshot(roomObj) : null });
       break;
     }
 
@@ -111,11 +118,13 @@ function handleMessage(userId, data) {
       const roomId = data.roomId || (client && client.roomId);
       if (!roomId) return;
       const result = room.startMatch(roomId, userId, data.botMode);
-      if (!result) {
-        sendToClient(userId, { type: 'error', message: 'Failed to start match' });
+      if (!result || !result.success) {
+        sendToClient(userId, { type: 'error', message: result?.error || 'Failed to start match' });
         return;
       }
-      broadcastToRoom(roomId, { type: 'round_start', room: result });
+      // round_start is broadcast via roundStartCallback when the round actually begins
+      const roomObj = room.getRoom(roomId);
+      broadcastToRoom(roomId, { type: 'countdown', room: roomObj ? room.getRoomSnapshot(roomObj) : null });
       break;
     }
 
@@ -150,7 +159,9 @@ function handleMessage(userId, data) {
       if (!roomId) return;
       const result = room.handleRematch(roomId, userId);
       if (result && result.started) {
-        broadcastToRoom(roomId, { type: 'round_start', room: result });
+        // round_start will be broadcast via roundStartCallback when countdown finishes
+        const roomObj = room.getRoom(roomId);
+        broadcastToRoom(roomId, { type: 'countdown', room: roomObj ? room.getRoomSnapshot(roomObj) : null });
       } else {
         broadcastToRoom(roomId, { type: 'rematch_vote', userId, room: result });
       }
@@ -246,6 +257,11 @@ function attachToServer(httpServer) {
       handleDisconnect(userId);
     });
   });
+
+  // Periodic cleanup of stale rooms (every 5 minutes)
+  setInterval(() => {
+    room.cleanupStaleRooms();
+  }, 5 * 60 * 1000);
 
   return wss;
 }

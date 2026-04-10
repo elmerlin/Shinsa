@@ -8,10 +8,12 @@ const rooms = new Map();
 
 // ─── Callbacks ───────────────────────────────────────────────────
 let tickCallback = null;
+let roundStartCallback = null;
 let roundEndCallback = null;
 let matchEndCallback = null;
 
 function setTickCallback(fn) { tickCallback = fn; }
+function setRoundStartCallback(fn) { roundStartCallback = fn; }
 function setRoundEndCallback(fn) { roundEndCallback = fn; }
 function setMatchEndCallback(fn) { matchEndCallback = fn; }
 
@@ -107,9 +109,9 @@ function joinSeat(roomId, userId, character) {
   if (!room) return { success: false, error: 'Room not found' };
   if (room.match.status !== 'waiting') return { success: false, error: 'Match in progress' };
 
-  // Check if user already in a seat
+  // If user is already in a seat, return success (idempotent)
   const existingIdx = room.seats.findIndex(s => s && s.userId === userId);
-  if (existingIdx !== -1) return { success: false, error: 'Already in a seat' };
+  if (existingIdx !== -1) return { success: true, seat: existingIdx };
 
   // Find first empty seat
   const emptyIdx = room.seats.findIndex(s => s === null);
@@ -213,6 +215,9 @@ function startMatch(roomId, hostId, botMode) {
     }
   }
 
+  // Store bot mode for rematch
+  room.botMode = botMode || null;
+
   // Reset match state
   room.match.roundWins = [0, 0, 0, 0];
   room.match.currentRound = 0;
@@ -260,6 +265,11 @@ function startRound(roomId) {
   // Pending human inputs keyed by userId
   room._pendingInputs = new Map();
 
+  // Notify round start with grid data
+  if (roundStartCallback) {
+    roundStartCallback(room.id, getRoomSnapshot(room));
+  }
+
   // Start tick loop
   const tickMs = 1000 / (sim.TICK_RATE || 20);
   room.match.tickInterval = setInterval(() => {
@@ -271,39 +281,42 @@ function tickLoop(room) {
   const state = room.match.simulation;
   if (!state) return;
 
-  // Collect bot inputs
-  const allInputs = {};
+  // Collect inputs as a Map (sim.tick iterates with for...of)
+  const allInputs = new Map();
   for (let i = 0; i < 4; i++) {
     const seat = room.seats[i];
     if (!seat) continue;
 
     if (seat.isBot) {
-      // Find the bot's player in simulation state
-      const botPlayer = state.players.find(p => p.id === seat.userId);
+      // state.players is a Map, so use .get()
+      const botPlayer = state.players.get(seat.userId);
       if (botPlayer && botPlayer.alive) {
-        allInputs[seat.userId] = bot.getInput(state, botPlayer);
+        allInputs.set(seat.userId, bot.getInput(state, botPlayer));
       }
     } else {
       // Merge pending human input
-      const humanInput = room._pendingInputs.get(seat.userId);
+      const humanInput = room._pendingInputs ? room._pendingInputs.get(seat.userId) : null;
       if (humanInput) {
-        allInputs[seat.userId] = humanInput;
+        allInputs.set(seat.userId, humanInput);
         room._pendingInputs.delete(seat.userId);
       }
     }
   }
 
-  // Advance simulation
-  const result = sim.tick(state, allInputs);
+  // Advance simulation — tick() returns an array of grid changes
+  const gridChanges = sim.tick(state, allInputs);
+
+  // Build compact snapshot
+  const snapshot = sim.getSnapshot(state);
 
   // Notify via callback
   if (tickCallback) {
-    tickCallback(room.id, result.snapshot, result.gridChanges);
+    tickCallback(room.id, snapshot, gridChanges);
   }
 
   // Check round over
-  if (result.isRoundOver) {
-    handleRoundEnd(room, result.winnerSeat);
+  if (sim.isRoundOver(state)) {
+    handleRoundEnd(room, sim.getRoundWinner(state));
   }
 }
 
@@ -480,6 +493,21 @@ function addChat(roomId, userId, text) {
   return message;
 }
 
+// ─── Room snapshot (serializable for WS broadcast) ──────────────
+function getRoomSnapshot(room) {
+  return {
+    id: room.id,
+    hostId: room.hostId,
+    seats: room.seats,
+    status: room.match.status,
+    roundWins: [...room.match.roundWins],
+    currentRound: room.match.currentRound,
+    round: room.match.simulation ? {
+      grid: room.match.simulation.grid,
+    } : null,
+  };
+}
+
 // ─── Cleanup ─────────────────────────────────────────────────────
 function cleanupStaleRooms() {
   const now = Date.now();
@@ -504,17 +532,17 @@ function handleRematch(roomId, userId) {
   room.rematchVotes.add(userId);
 
   // Count seated human players
-  const humanSeats = room.seats.filter(s => s.userId && !s.isBot);
+  const humanSeats = room.seats.filter(s => s && s.userId && !s.isBot);
   const threshold = Math.max(1, humanSeats.length);
 
   if (room.rematchVotes.size >= threshold) {
     room.rematchVotes = new Set();
-    room.status = 'waiting';
-    room.roundWins = [0, 0, 0, 0];
-    room.round = null;
+    // Reset match state
+    stopMatch(roomId);
+    room.match.status = 'waiting';
     room.lastActivity = Date.now();
     const result = startMatch(roomId, room.hostId, room.botMode);
-    if (result) {
+    if (result && result.success) {
       result.started = true;
       return result;
     }
@@ -527,6 +555,7 @@ function handleRematch(roomId, userId) {
 module.exports = {
   createRoom,
   getRoom,
+  getRoomSnapshot,
   listPublicRooms,
   joinSeat,
   leaveSeat,
@@ -542,6 +571,7 @@ module.exports = {
   handleRematch,
   cleanupStaleRooms,
   setTickCallback,
+  setRoundStartCallback,
   setRoundEndCallback,
   setMatchEndCallback,
 };

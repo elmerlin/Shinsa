@@ -172,6 +172,7 @@ export default function PetBomberRoom() {
 
       case 'room_created':
       case 'room_state':
+      case 'countdown':
         updateRoom(data.room);
         break;
 
