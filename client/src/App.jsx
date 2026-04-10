@@ -1097,7 +1097,8 @@ export default function App() {
   const isHome = location.pathname === '/';
   const isLiveOverlay = /^\/live\/[^/]+\/overlay(?:\/|$)/.test(location.pathname);
   const isTournamentChromeless = /^\/tournament\/[^/]+\/(overlay|embed)(?:\/|$)/.test(location.pathname);
-  const isChromeless = isLiveOverlay || isTournamentChromeless;
+  const isPetBomberFullscreen = /^\/pet\/bomber\/[^/]+(?:\/|$)/.test(location.pathname);
+  const isChromeless = isLiveOverlay || isTournamentChromeless || isPetBomberFullscreen;
   const isMessagesInboxRoute = /^\/messages\/?$/.test(location.pathname);
   const isMessagesConversationRoute = /^\/messages\/[^/]+(?:\/|$)/.test(location.pathname);
   const hideMobileHeader = isMessagesInboxRoute || isMessagesConversationRoute;

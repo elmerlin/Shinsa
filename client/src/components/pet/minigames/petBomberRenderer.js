@@ -67,10 +67,10 @@ export default class PetBomberRenderer {
     this._scene = new THREE.Scene();
     this._scene.fog = new THREE.FogExp2(0x0a0c14, 0.035);
 
-    // Camera: perspective looking down at ~55 degrees
+    // Camera: orthographic framing so the full arena stays visible on tall mobile screens.
     const aspect = w / h;
-    this._camera = new THREE.PerspectiveCamera(40, aspect, 0.5, 100);
-    this._positionCamera();
+    this._camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 100);
+    this._updateCameraFraming(aspect);
 
     // Lighting
     const ambient = new THREE.AmbientLight(0x8899bb, 0.6);
@@ -86,11 +86,28 @@ export default class PetBomberRenderer {
     this._scene.add(point);
   }
 
-  _positionCamera() {
+  _updateCameraFraming(aspect = 1) {
     const cx = (COLS - 1) / 2;
     const cz = (ROWS - 1) / 2;
-    this._camera.position.set(cx, 18, cz + 4);
+    const boardWidth = COLS + 1.5;
+    const boardHeight = ROWS + 1.5;
+    const boardAspect = boardWidth / boardHeight;
+
+    let frustumWidth = boardWidth;
+    let frustumHeight = boardHeight;
+    if (aspect > boardAspect) {
+      frustumWidth = frustumHeight * aspect;
+    } else {
+      frustumHeight = frustumWidth / Math.max(aspect, 0.01);
+    }
+
+    this._camera.left = -frustumWidth / 2;
+    this._camera.right = frustumWidth / 2;
+    this._camera.top = frustumHeight / 2;
+    this._camera.bottom = -frustumHeight / 2;
+    this._camera.position.set(cx, 18, cz + 6);
     this._camera.lookAt(cx, 0, cz);
+    this._camera.updateProjectionMatrix();
   }
 
   // ── Shared geometry & materials (pooled) ────────────────────────
@@ -313,8 +330,7 @@ export default class PetBomberRenderer {
     const w = this._container.clientWidth || 400;
     const h = this._container.clientHeight || 300;
     this._renderer.setSize(w, h);
-    this._camera.aspect = w / h;
-    this._camera.updateProjectionMatrix();
+    this._updateCameraFraming(w / h);
   }
 
   setGrid(grid) {
