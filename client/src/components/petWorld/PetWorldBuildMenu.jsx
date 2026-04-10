@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { getBuildingUi } from './petWorldBuildings';
+import { RESOURCE_ICONS as RES_ICONS } from './petWorldUtils';
 
 const CATEGORIES = ['All', 'Food', 'Wood', 'Stone', 'Cloth', 'Gold', 'Housing', 'Support', 'Storage', 'Cosmetic', 'Trade'];
 
@@ -9,8 +10,6 @@ const FLOWER_VARIANTS = [
   { id: 'blue', label: 'Blue', color: '#4080e0' },
   { id: 'red', label: 'Red', color: '#e04040' },
 ];
-
-const RES_ICONS = { food: '\uD83C\uDF3E', wood: '\uD83E\uDEB5', stone: '\uD83E\uDEA8', cloth: '\uD83E\uDDF5', gold: '\uD83E\uDE99' };
 
 function MaterialPills({ materials = {} }) {
   const entries = Object.entries(materials).filter(([, v]) => v > 0);

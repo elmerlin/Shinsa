@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { getBuildingUi } from './petWorldBuildings';
-
-const RES_ICONS = { food: '\uD83C\uDF3E', wood: '\uD83E\uDEB5', stone: '\uD83E\uDEA8', cloth: '\uD83E\uDDF5', gold: '\uD83E\uDE99' };
+import { RESOURCE_ICONS as RES_ICONS, productionRate, formatMaterials, buildTimeRemaining } from './petWorldUtils';
 
 function Btn({ children, onClick, disabled, tone = 'default', className = '' }) {
   const tones = {
@@ -30,27 +29,7 @@ function StatCell({ label, children }) {
   );
 }
 
-function productionRate(building) {
-  if (!building.production) return null;
-  const [res, base] = Object.entries(building.production)[0] || [];
-  if (!res) return null;
-  const rate = base * (building.level || 1) * Math.max(building.workers || 0, 0.25);
-  return { resource: res, rate: Math.round(rate * 100) / 100 };
-}
-
-function formatMaterials(mats = {}) {
-  return Object.entries(mats)
-    .filter(([, v]) => v > 0)
-    .map(([k, v]) => `${v} ${RES_ICONS[k] || k}`)
-    .join(' + ');
-}
-
-function buildTimeRemaining(building) {
-  if (building.state !== 'building' || !building.build_finish_at) return null;
-  const remaining = Math.max(0, new Date(building.build_finish_at).getTime() - Date.now());
-  const mins = Math.ceil(remaining / 60000);
-  return mins;
-}
+// productionRate, formatMaterials, buildTimeRemaining imported from petWorldUtils
 
 export default function PetWorldBuildingInfo({
   building,
