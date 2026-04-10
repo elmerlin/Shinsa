@@ -203,18 +203,17 @@ export function generateWaveEnemies(stage, wave, globalWave) {
   return enemies;
 }
 
-function getCombatGap(attacker, target, direction) {
+function getCombatGap(attacker, target) {
   const bodyGap = ((attacker.size || 8) + (target.size || 8)) * 0.42;
-  const distance = direction > 0 ? target.x - attacker.x : attacker.x - target.x;
-  return distance - bodyGap;
+  return Math.abs(attacker.x - target.x) - bodyGap;
 }
 
-function findClosestTarget(attacker, targets, direction) {
+function findClosestTarget(attacker, targets) {
   let best = null;
   let bestDistance = Infinity;
   targets.forEach((target) => {
     if (target.hp <= 0) return;
-    const distance = getCombatGap(attacker, target, direction);
+    const distance = getCombatGap(attacker, target);
     if (distance < -1.2 || distance > attacker.range) return;
     if (distance < bestDistance) {
       best = target;
@@ -349,7 +348,7 @@ function updateUnits(state, dt, playerUnits, enemyUnits) {
   playerUnits.forEach((unit) => {
     unit.attackTimer = Math.max(0, unit.attackTimer - dt);
     unit.attackFlash = Math.max(0, unit.attackFlash - dt);
-    const target = findClosestTarget(unit, enemyUnits, 1);
+    const target = findClosestTarget(unit, enemyUnits);
     const canHitBase = state.enemyBaseHp > 0 && ENEMY_BASE_X - unit.x <= Math.max(BASE_CONTACT_RANGE, unit.range);
 
     if (target) {
@@ -369,7 +368,7 @@ function updateUnits(state, dt, playerUnits, enemyUnits) {
   enemyUnits.forEach((unit) => {
     unit.attackTimer = Math.max(0, unit.attackTimer - dt);
     unit.attackFlash = Math.max(0, unit.attackFlash - dt);
-    const target = findClosestTarget(unit, playerUnits, -1);
+    const target = findClosestTarget(unit, playerUnits);
     const canHitBase = state.playerBaseHp > 0 && unit.x - PLAYER_BASE_X <= Math.max(BASE_CONTACT_RANGE, unit.range);
 
     if (target) {
