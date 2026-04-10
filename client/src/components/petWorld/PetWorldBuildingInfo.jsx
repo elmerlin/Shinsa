@@ -13,18 +13,18 @@ function Btn({ children, onClick, disabled, tone = 'default', className = '' }) 
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`rounded-xl border px-3 py-2 text-xs font-semibold transition-all disabled:cursor-not-allowed disabled:opacity-40 ${tones[tone] || tones.default} ${className}`}
+      className={`rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition-all disabled:cursor-not-allowed disabled:opacity-40 ${tones[tone] || tones.default} ${className}`}
     >
       {children}
     </button>
   );
 }
 
-function StatCell({ label, children }) {
+function Stat({ label, children }) {
   return (
-    <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] px-3 py-2">
-      <div className="text-[10px] uppercase tracking-[0.14em] text-white/40">{label}</div>
-      <div className="mt-0.5 font-bold text-sm text-white/85">{children}</div>
+    <div className="rounded-lg border border-white/[0.05] bg-white/[0.025] px-2 py-1.5">
+      <div className="text-[8px] uppercase tracking-[0.12em] text-white/35">{label}</div>
+      <div className="mt-px font-bold text-[12px] text-white/80">{children}</div>
     </div>
   );
 }
@@ -91,66 +91,58 @@ export default function PetWorldBuildingInfo({
   }
 
   return (
-    <aside className="rounded-[1.3rem] border border-white/[0.07] bg-[linear-gradient(180deg,rgba(14,18,28,0.96),rgba(9,12,18,0.94))] p-4 shadow-[0_14px_30px_rgba(0,0,0,0.24)]">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-start gap-3 min-w-0">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.05] text-xl">
-            {ui.icon}
+    <div>
+      {/* Header row */}
+      <div className="flex items-center gap-2.5">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/8 bg-white/[0.04] text-lg">
+          {ui.icon}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <h3 className="truncate text-sm font-black text-white">{building.name}</h3>
+            <span className="shrink-0 rounded bg-white/[0.07] px-1 py-px text-[9px] font-bold text-white/50">Lv.{level}</span>
           </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h3 className="truncate text-lg font-black text-white">{building.name}</h3>
-              <span className="shrink-0 rounded-lg bg-white/[0.08] px-1.5 py-0.5 text-[10px] font-bold text-white/60">
-                Lv.{level}
-              </span>
-            </div>
-            <div className="mt-0.5 flex items-center gap-2 text-[11px] text-white/40">
-              <span>{ui.category}</span>
-              <span className="rounded bg-white/[0.06] px-1 py-0.5 text-[8px] uppercase tracking-[0.1em]">Tier {building.tier || buildingDef?.tier || 1}</span>
-            </div>
+          <div className="flex items-center gap-1.5 text-[10px] text-white/35">
+            <span>{ui.category}</span>
+            <span className="rounded bg-white/[0.05] px-1 py-px text-[7px] uppercase tracking-[0.08em]">T{building.tier || buildingDef?.tier || 1}</span>
           </div>
         </div>
-        {onClose && (
-          <button type="button" onClick={onClose} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/10 text-sm text-white/60 hover:border-white/20 hover:text-white">&times;</button>
-        )}
       </div>
 
       {/* Readonly visitor note */}
       {readonly && ownerName && (
-        <div className="mt-3 rounded-xl border border-white/[0.06] bg-white/[0.03] px-3 py-2 text-xs text-white/50">
+        <div className="mt-2 rounded-lg border border-white/[0.05] bg-white/[0.025] px-2.5 py-1.5 text-[11px] text-white/45">
           This is {ownerName}&apos;s building
         </div>
       )}
 
       {/* Stats grid */}
-      <div className="mt-3 grid grid-cols-2 gap-1.5 text-sm text-white/80">
+      <div className="mt-2 grid grid-cols-3 gap-1">
         {prod && (
-          <StatCell label="Output">
+          <Stat label="Output">
             {RES_ICONS[prod.resource] || prod.resource} {prod.rate}/hr
-          </StatCell>
+          </Stat>
         )}
-        <StatCell label="Workers">
+        <Stat label="Workers">
           {building.workers}/{building.max_workers}
-        </StatCell>
-        <StatCell label="Footprint">
+        </Stat>
+        <Stat label="Size">
           {building.width}&times;{building.height}
-        </StatCell>
-        <StatCell label="State">
+        </Stat>
+        <Stat label="State">
           {isBuilding ? (
-            <div>
-              <span className="text-amber-300">Building</span>
-              {minsLeft != null && <span className="ml-1 text-white/45">{minsLeft}m left</span>}
-            </div>
+            <span className="text-amber-300">
+              Building{minsLeft != null && <span className="ml-0.5 text-white/40 text-[10px]">{minsLeft}m</span>}
+            </span>
           ) : (
             <span className="text-emerald-300">Built</span>
           )}
-        </StatCell>
+        </Stat>
       </div>
 
       {/* Building progress bar */}
       {isBuilding && minsLeft != null && buildingDef?.buildMinutes && (
-        <div className="mt-2 h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
+        <div className="mt-1.5 h-1 rounded-full bg-white/[0.06] overflow-hidden">
           <div
             className="h-full rounded-full bg-amber-400/60 transition-all"
             style={{ width: `${Math.max(2, Math.min(100, ((buildingDef.buildMinutes - minsLeft) / buildingDef.buildMinutes) * 100))}%` }}
@@ -160,118 +152,93 @@ export default function PetWorldBuildingInfo({
 
       {/* Special building abilities */}
       {building.type === 'watchtower' && (
-        <div className="mt-3 rounded-xl border border-amber-400/10 bg-amber-500/[0.06] px-3 py-2 text-xs text-amber-200/80">
-          <div className="font-bold text-amber-200">Wildlife Defense</div>
-          <div className="mt-0.5 text-[10px] text-white/50">
-            Enables hunting encounters. Higher level = better success rate.
-            Hunt success: {Math.min(95, 60 + (level - 1) * 15)}%
-          </div>
+        <div className="mt-2 rounded-lg border border-amber-400/8 bg-amber-500/[0.05] px-2 py-1.5 text-[10px] text-amber-200/75">
+          <span className="font-bold">Wildlife Defense</span> -- Hunt success: {Math.min(95, 60 + (level - 1) * 15)}%
         </div>
       )}
       {building.type === 'shrine' && (
-        <div className="mt-3 rounded-xl border border-violet-400/10 bg-violet-500/[0.06] px-3 py-2 text-xs text-violet-200/80">
-          <div className="font-bold text-violet-200">Breeding Boost</div>
-          <div className="mt-0.5 text-[10px] text-white/50">Reduces breeding check interval from 24h to 16h.</div>
+        <div className="mt-2 rounded-lg border border-violet-400/8 bg-violet-500/[0.05] px-2 py-1.5 text-[10px] text-violet-200/75">
+          <span className="font-bold">Breeding Boost</span> -- Reduces interval from 24h to 16h.
         </div>
       )}
       {building.type === 'market' && (
-        <div className="mt-3 rounded-xl border border-cyan-400/10 bg-cyan-500/[0.06] px-3 py-2 text-xs text-cyan-200/80">
-          <div className="font-bold text-cyan-200">Trading Unlocked</div>
-          <div className="mt-0.5 text-[10px] text-white/50">Both players need a Market to trade resources.</div>
+        <div className="mt-2 rounded-lg border border-cyan-400/8 bg-cyan-500/[0.05] px-2 py-1.5 text-[10px] text-cyan-200/75">
+          <span className="font-bold">Trading Unlocked</span> -- Both players need a Market.
         </div>
       )}
       {building.type === 'trading_post' && (
-        <div className="mt-3 rounded-xl border border-yellow-400/10 bg-yellow-500/[0.06] px-3 py-2 text-xs text-yellow-200/80">
-          <div className="font-bold text-yellow-200">Combo Converter</div>
-          <div className="mt-0.5 text-[10px] text-white/50">Converts your accumulated combos into gold each sim tick. Workers increase throughput.</div>
+        <div className="mt-2 rounded-lg border border-yellow-400/8 bg-yellow-500/[0.05] px-2 py-1.5 text-[10px] text-yellow-200/75">
+          <span className="font-bold">Combo Converter</span> -- Converts combos into gold each tick.
         </div>
       )}
 
       {/* Production projections */}
-      {prod && !readonly && (
-        <div className="mt-3 space-y-1">
+      {prod && !readonly && (nextWorkerProd || (nextLevelProd && level < maxLevel)) && (
+        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-white/35">
           {nextWorkerProd && (
-            <div className="text-[11px] text-white/40">
-              <span className="text-emerald-300/70">+{Math.round((nextWorkerProd.rate - prod.rate) * 100) / 100}/hr</span> with 1 more worker
-            </div>
+            <span><span className="text-emerald-300/60">+{Math.round((nextWorkerProd.rate - prod.rate) * 100) / 100}/hr</span> w/ +1 worker</span>
           )}
           {nextLevelProd && level < maxLevel && (
-            <div className="text-[11px] text-white/40">
-              Lv.{level + 1}: <span className="text-white/60">{nextLevelProd.rate}/hr {RES_ICONS[nextLevelProd.resource] || nextLevelProd.resource}</span>
-            </div>
+            <span>Lv.{level + 1}: <span className="text-white/50">{nextLevelProd.rate}/hr</span></span>
           )}
         </div>
       )}
 
-      {/* Worker assignment */}
-      {!readonly && building.max_workers > 0 && (
-        <div className="mt-3">
-          <div className="mb-1.5 text-[10px] uppercase tracking-[0.14em] text-white/40">Assign Workers</div>
-          <div className="flex items-center gap-1.5">
-            <Btn
-              onClick={() => onSetWorkers?.(Math.max(0, building.workers - 1))}
-              disabled={building.workers <= 0}
-            >
-              &minus;
-            </Btn>
-            <span className="w-10 text-center text-sm font-bold text-white">{building.workers}</span>
-            <Btn
-              onClick={() => onSetWorkers?.(building.workers + 1)}
-              disabled={building.workers >= building.max_workers || building.workers >= (world?.available_workers || 0) + building.workers}
-            >
-              +
-            </Btn>
-            <span className="ml-1 text-[10px] text-white/35">/ {building.max_workers} max</span>
-          </div>
-        </div>
-      )}
-
-      {/* Upgrade section */}
+      {/* Worker assignment + Upgrade + Demolish -- compact action row */}
       {!readonly && (
-        <div className="mt-3">
+        <div className="mt-2.5 flex flex-wrap items-center gap-1.5 border-t border-white/[0.05] pt-2.5">
+          {/* Worker controls inline */}
+          {building.max_workers > 0 && (
+            <div className="flex items-center gap-1 mr-auto">
+              <Btn
+                onClick={() => onSetWorkers?.(Math.max(0, building.workers - 1))}
+                disabled={building.workers <= 0}
+              >
+                &minus;
+              </Btn>
+              <span className="w-6 text-center text-[11px] font-bold text-white tabular-nums">{building.workers}</span>
+              <Btn
+                onClick={() => onSetWorkers?.(building.workers + 1)}
+                disabled={building.workers >= building.max_workers || building.workers >= (world?.available_workers || 0) + building.workers}
+              >
+                +
+              </Btn>
+              <span className="text-[8px] text-white/30">/{building.max_workers}</span>
+            </div>
+          )}
           <Btn
             onClick={onUpgrade}
             disabled={!canUpgrade}
             tone="good"
-            className="w-full"
           >
-            {level >= maxLevel ? 'Max Level' : `Upgrade to Level ${level + 1}`}
+            {level >= maxLevel ? 'Max' : `Upgrade`}
           </Btn>
-          {upgradeCost && level < maxLevel && (
-            <div className="mt-1.5 text-[10px] text-white/40">
-              Cost: {upgradeCost.comboCost || 0}c{upgradeCost.materials ? ` + ${formatMaterials(upgradeCost.materials)}` : ''}
-            </div>
-          )}
-          {upgradeCost && nextLevelProd && prod && level < maxLevel && (
-            <div className="mt-0.5 text-[10px] text-emerald-300/50">
-              +{Math.round((nextLevelProd.rate - prod.rate) * 100) / 100} {prod.resource}/hr, +{upgradeCost.workerSlots || 1} worker slot
-            </div>
-          )}
-          {!canUpgrade && level < maxLevel && !isBuilding && (
-            <div className="mt-1 text-[10px] text-rose-300/60">Not enough resources to upgrade</div>
-          )}
-        </div>
-      )}
-
-      {/* Demolish section */}
-      {!readonly && (
-        <div className="mt-3 border-t border-white/[0.06] pt-3">
           <Btn
             onClick={handleDemolish}
             tone="danger"
-            className={confirmDemolish ? 'w-full animate-pulse' : 'w-full'}
+            className={confirmDemolish ? 'animate-pulse' : ''}
           >
-            {confirmDemolish ? 'Are you sure? Click to confirm' : 'Demolish'}
+            {confirmDemolish ? 'Confirm?' : 'Demolish'}
           </Btn>
+        </div>
+      )}
+
+      {/* Cost / refund hints */}
+      {!readonly && (
+        <div className="mt-1 flex flex-wrap gap-x-3 text-[9px] text-white/30">
+          {upgradeCost && level < maxLevel && (
+            <span>Upgrade: {upgradeCost.comboCost || 0}c{upgradeCost.materials ? ` + ${formatMaterials(upgradeCost.materials)}` : ''}</span>
+          )}
+          {!canUpgrade && level < maxLevel && !isBuilding && (
+            <span className="text-rose-300/50">Not enough resources</span>
+          )}
           {isStarter ? (
-            <div className="mt-1 text-[10px] text-white/35">Starter building -- no refund</div>
+            <span>Starter -- no refund</span>
           ) : refundCombo > 0 || Object.values(refundMats).some((v) => v > 0) ? (
-            <div className="mt-1 text-[10px] text-white/35">
-              Refund: {refundCombo}c{Object.keys(refundMats).length ? ` + ${formatMaterials(refundMats)}` : ''}
-            </div>
+            <span>Refund: {refundCombo}c{Object.keys(refundMats).length ? ` + ${formatMaterials(refundMats)}` : ''}</span>
           ) : null}
         </div>
       )}
-    </aside>
+    </div>
   );
 }

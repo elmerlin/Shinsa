@@ -24,6 +24,7 @@ import PetWorldBuildMenu from '../components/petWorld/PetWorldBuildMenu';
 import PetWorldBuildingInfo from '../components/petWorld/PetWorldBuildingInfo';
 import PetWorldCreateModal from '../components/petWorld/PetWorldCreateModal';
 import PetWorldTradeModal from '../components/petWorld/PetWorldTradeModal';
+import { getBuildingUi } from '../components/petWorld/petWorldBuildings';
 import { playBuildSound, playClearSound, playExpandSound, playUpgradeSound, playErrorSound, playHuntStrikeSound, playHuntSuccessSound, playHuntEscapeSound, playEncounterAlertSound } from '../components/petWorld/petWorldAudio';
 import usePetWorldPresence from '../hooks/usePetWorldPresence';
 
@@ -954,8 +955,9 @@ export default function PetWorldPage() {
   const handleSelectTile = useCallback((tile) => {
     setSelectedTile(tile);
     setSelectedBuilding(null);
-    setActiveSheet('inspect');
-  }, []);
+    // Only open inspect if not in placement mode
+    if (!pendingBuildType) setActiveSheet('inspect');
+  }, [pendingBuildType]);
 
   /* ── Loading ─────────────────────────────────────────────────── */
   if (loading) {
@@ -1000,6 +1002,11 @@ export default function PetWorldPage() {
     );
   }
 
+  /* ── Derive the selected building's catalog entry for the placement tray ── */
+  const pendingBuildDef = pendingBuildType
+    ? catalog.find((b) => b.id === pendingBuildType)
+    : null;
+
   /* ── Full-screen game mode ───────────────────────────────────── */
   return (
     <div
@@ -1011,8 +1018,11 @@ export default function PetWorldPage() {
         padding: 'env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)',
       }}
     >
+      {/* Atmospheric radial gradient */}
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(34,80,110,0.24),transparent_34%),linear-gradient(180deg,rgba(7,18,26,0.18),rgba(3,6,10,0.92))]" />
       <Toast message={toast} />
+
+      {/* Canvas */}
       <div className="absolute inset-0">
         <PetWorldCanvas
           world={world}
@@ -1025,351 +1035,424 @@ export default function PetWorldPage() {
           onPlaceBuilding={handlePlaceBuilding}
         />
       </div>
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-20 h-48 bg-gradient-to-b from-[#03070d]/95 via-[#06101a]/55 to-transparent" />
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-56 bg-gradient-to-t from-[#03070d] via-[#03070d]/72 to-transparent" />
 
-      <div className="absolute inset-x-0 top-0 z-40 px-3 pb-3 pt-2" style={{ paddingTop: 'max(10px, env(safe-area-inset-top))' }}>
-        <div className="flex items-start gap-2">
-          <Link
-            to="/pet"
-            className="pointer-events-auto inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-black/35 text-white/70 backdrop-blur-sm transition-colors hover:bg-black/55 hover:text-white"
-            aria-label="Back to pet"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
-              <path fillRule="evenodd" d="M17 10a.75.75 0 01-.75.75H5.612l4.158 3.96a.75.75 0 11-1.04 1.08l-5.5-5.25a.75.75 0 010-1.08l5.5-5.25a.75.75 0 111.04 1.08L5.612 9.25H16.25A.75.75 0 0117 10z" clipRule="evenodd" />
-            </svg>
-          </Link>
+      {/* Reduced gradient overlays */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-20 h-24 bg-gradient-to-b from-[#03070d]/90 to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-32 bg-gradient-to-t from-[#03070d]/80 to-transparent" />
 
-          <div className="min-w-0 flex-1">
-            <div className="rounded-[1.2rem] border border-white/10 bg-black/28 px-3 py-2.5 backdrop-blur-sm shadow-[0_12px_24px_rgba(0,0,0,0.2)]">
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="text-[10px] uppercase tracking-[0.22em] text-cyan-200/55">
-                    {pendingBuildType ? 'Build mode' : activeSheet === 'inspect' ? 'Inspecting' : 'Explore mode'}
-                  </div>
-                  <div className="truncate text-sm font-black text-white">Pet World</div>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  {encounters.length > 0 ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setActiveSheet(null);
-                        setActiveEncounter(encounters[0]);
-                        playEncounterAlertSound();
-                      }}
-                      className="pointer-events-auto inline-flex items-center gap-1 rounded-full border border-amber-300/15 bg-amber-400/10 px-2.5 py-1.5 text-[10px] font-semibold text-amber-100 transition-colors hover:bg-amber-400/18"
-                    >
-                      <span className="h-1.5 w-1.5 rounded-full bg-amber-300 animate-pulse" />
-                      {encounters.length} encounter{encounters.length !== 1 ? 's' : ''}
-                    </button>
-                  ) : null}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPendingBuildType('');
-                      setPendingBuildVariant(null);
-                      setVillageTab('overview');
-                      setActiveSheet((sheet) => (sheet === 'village' ? null : 'village'));
-                    }}
-                    className="pointer-events-auto inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-black/35 text-white/70 backdrop-blur-sm transition-colors hover:bg-black/55 hover:text-white"
-                    aria-label="Village tools"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
-                      <path d="M10 3a1.5 1.5 0 100 3 1.5 1.5 0 000-3zM10 8.5a1.5 1.5 0 100 3 1.5 1.5 0 000-3zM10 14a1.5 1.5 0 100 3 1.5 1.5 0 000-3z" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-              <div className="mt-2">
-                <PetWorldHUD world={world} activeEvents={activeEvents} />
-              </div>
-            </div>
-          </div>
+      {/* ═══ TOP HUD STRIP ═══ */}
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 z-40 flex items-center gap-2 px-2.5 py-1.5"
+        style={{ paddingTop: 'max(8px, env(safe-area-inset-top))', maxHeight: 52 }}
+      >
+        {/* Back button */}
+        <Link
+          to="/pet"
+          className="pointer-events-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/8 bg-black/40 text-white/65 backdrop-blur-md transition-colors hover:bg-black/60 hover:text-white"
+          aria-label="Back to pet"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
+            <path fillRule="evenodd" d="M17 10a.75.75 0 01-.75.75H5.612l4.158 3.96a.75.75 0 11-1.04 1.08l-5.5-5.25a.75.75 0 010-1.08l5.5-5.25a.75.75 0 111.04 1.08L5.612 9.25H16.25A.75.75 0 0117 10z" clipRule="evenodd" />
+          </svg>
+        </Link>
+
+        {/* Resource pills row */}
+        <div className="min-w-0 flex-1">
+          <PetWorldHUD world={world} activeEvents={activeEvents} />
         </div>
-      </div>
 
-      <div className="absolute bottom-4 left-3 z-40 max-w-[14rem] rounded-full border border-white/10 bg-black/32 px-3 py-2 text-[10px] text-white/65 backdrop-blur-sm shadow-[0_12px_24px_rgba(0,0,0,0.2)]">
-        {pendingBuildType
-          ? 'Tap a clear tile to place. Drag to browse the village.'
-          : selectedBuilding
-            ? 'Building selected. Open the info sheet to manage it.'
-            : selectedTile
-              ? inspectedObstacle
-                ? 'Tile selected. You can clear this obstacle from the sheet.'
-                : 'Tile selected. Open the sheet for details.'
-              : 'Drag to pan, pinch to zoom, tap the world to inspect.'}
-      </div>
+        {/* Encounter badge */}
+        {encounters.length > 0 && (
+          <button
+            type="button"
+            onClick={() => {
+              setActiveSheet(null);
+              setActiveEncounter(encounters[0]);
+              playEncounterAlertSound();
+            }}
+            className="pointer-events-auto flex h-9 items-center gap-1 rounded-full border border-amber-300/12 bg-black/40 px-2 text-[10px] font-semibold text-amber-200 backdrop-blur-md transition-colors hover:bg-amber-400/15"
+          >
+            <span className="h-1.5 w-1.5 rounded-full bg-amber-300 animate-pulse" />
+            {encounters.length}
+          </button>
+        )}
 
-      <div className="absolute bottom-4 right-3 z-40 flex items-center gap-2" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+        {/* Menu dots -- opens village tools */}
         <button
           type="button"
           onClick={() => {
             setPendingBuildType('');
             setPendingBuildVariant(null);
             setVillageTab('overview');
-            setActiveSheet((sheet) => (sheet === 'village' ? null : 'village'));
+            setActiveSheet((s) => (s === 'village' ? null : 'village'));
           }}
-          className={`inline-flex items-center gap-2 rounded-full border px-4 py-3 text-xs font-semibold backdrop-blur-sm transition-all ${
-            activeSheet === 'village'
-              ? 'border-cyan-300/25 bg-cyan-400/14 text-cyan-50'
-              : 'border-white/10 bg-black/38 text-white/75 hover:bg-black/52 hover:text-white'
-          }`}
+          className="pointer-events-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/8 bg-black/40 text-white/60 backdrop-blur-md transition-colors hover:bg-black/60 hover:text-white"
+          aria-label="Village tools"
         >
-          Village
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            if (activeSheet === 'build') {
-              setPendingBuildType('');
-              setPendingBuildVariant(null);
-              setActiveSheet(null);
-              return;
-            }
-            setSelectedBuilding(null);
-            setSelectedTile(null);
-            setActiveSheet('build');
-          }}
-          className={`inline-flex items-center gap-2 rounded-full border px-4 py-3 text-xs font-semibold backdrop-blur-sm transition-all ${
-            activeSheet === 'build'
-              ? 'border-emerald-300/25 bg-emerald-400/16 text-emerald-50'
-              : 'border-white/10 bg-black/38 text-white/75 hover:bg-black/52 hover:text-white'
-          }`}
-        >
-          {pendingBuildType ? 'Cancel Build' : 'Build'}
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
+            <path d="M10 3a1.5 1.5 0 100 3 1.5 1.5 0 000-3zM10 8.5a1.5 1.5 0 100 3 1.5 1.5 0 000-3zM10 14a1.5 1.5 0 100 3 1.5 1.5 0 000-3z" />
+          </svg>
         </button>
       </div>
 
-      {activeSheet && (
-        <div className="absolute inset-x-0 bottom-0 z-50 px-3 pb-3" style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
-          <div className="mx-auto w-full max-w-2xl overflow-hidden rounded-[1.5rem] border border-white/10 bg-[linear-gradient(180deg,rgba(9,15,22,0.97),rgba(6,10,15,0.96))] shadow-[0_-18px_40px_rgba(0,0,0,0.38)] backdrop-blur-xl">
-            <div className="flex items-center justify-between border-b border-white/8 px-4 py-3">
-              <div>
-                <div className="text-[10px] uppercase tracking-[0.2em] text-white/35">
-                  {activeSheet === 'build' ? 'Construction' : activeSheet === 'inspect' ? 'Details' : 'Village'}
+      {/* ═══ BUILD FAB (bottom-right) ═══ */}
+      {activeSheet !== 'build' && activeSheet !== 'placement' && (
+        <div className="absolute bottom-5 right-3 z-40" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+          <button
+            type="button"
+            onClick={() => {
+              if (pendingBuildType) {
+                // Cancel placement
+                setPendingBuildType('');
+                setPendingBuildVariant(null);
+                setActiveSheet(null);
+                return;
+              }
+              setSelectedBuilding(null);
+              setSelectedTile(null);
+              setActiveSheet('build');
+            }}
+            className={`pointer-events-auto flex h-14 w-14 items-center justify-center rounded-full border shadow-[0_6px_20px_rgba(0,0,0,0.4)] backdrop-blur-md transition-all duration-200 ease-out active:scale-95 ${
+              pendingBuildType
+                ? 'border-rose-400/25 bg-rose-500/20 text-rose-200 hover:bg-rose-500/30'
+                : 'border-emerald-400/20 bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25'
+            }`}
+            aria-label={pendingBuildType ? 'Cancel build' : 'Build'}
+          >
+            {pendingBuildType ? (
+              /* X icon for cancel */
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5">
+                <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+              </svg>
+            ) : (
+              /* Wrench icon for build */
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5">
+                <path fillRule="evenodd" d="M14.5 10a4.5 4.5 0 004.284-5.882c-.105-.324-.51-.391-.752-.15L15.34 6.66a.454.454 0 01-.493.101 3.046 3.046 0 01-1.61-1.61.454.454 0 01.1-.492l2.693-2.693c.242-.242.174-.647-.15-.752a4.5 4.5 0 00-5.873 4.575c.055.873-.128 1.808-.8 2.368l-7.23 6.024a2.724 2.724 0 103.837 3.837l6.024-7.23c.56-.672 1.495-.855 2.368-.8.096.007.193.01.291.01zM5 16a1 1 0 11-2 0 1 1 0 012 0z" clipRule="evenodd" />
+              </svg>
+            )}
+          </button>
+        </div>
+      )}
+
+      {/* ═══ PLACEMENT TRAY (when building selected from catalog) ═══ */}
+      {pendingBuildType && activeSheet !== 'build' && (
+        <div
+          className="absolute inset-x-0 bottom-0 z-50 transition-all duration-200 ease-out"
+          style={{ paddingBottom: 'max(8px, env(safe-area-inset-bottom))' }}
+        >
+          <div className="mx-auto flex max-w-md items-center gap-2 rounded-2xl border border-white/8 bg-black/85 px-3 py-2.5 shadow-[0_-8px_24px_rgba(0,0,0,0.3)] backdrop-blur-xl mx-3">
+            {pendingBuildDef && (
+              <>
+                <span className="text-lg shrink-0">{getBuildingUi(pendingBuildDef.id).icon}</span>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[12px] font-bold text-white">{pendingBuildDef.name}</div>
+                  <div className="text-[10px] text-white/40">{pendingBuildDef.comboCost}c -- Tap tile to place</div>
                 </div>
-                <div className="text-sm font-black text-white">
-                  {activeSheet === 'build'
-                    ? pendingBuildType ? 'Choose a placement' : 'Choose a building'
-                    : activeSheet === 'inspect'
-                      ? selectedBuilding ? selectedBuilding.name : 'Selected tile'
-                      : villageTab === 'overview' ? 'Village Tools' : villageTab === 'visitors' ? 'Visitors' : 'Leaderboard'}
-                </div>
-              </div>
+              </>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setActiveSheet('build');
+              }}
+              className="pointer-events-auto shrink-0 rounded-lg border border-white/10 bg-white/[0.06] px-2.5 py-1.5 text-[10px] font-semibold text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+            >
+              Change
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setPendingBuildType('');
+                setPendingBuildVariant(null);
+                setActiveSheet(null);
+              }}
+              className="pointer-events-auto shrink-0 rounded-lg border border-rose-400/15 bg-rose-500/10 px-2.5 py-1.5 text-[10px] font-semibold text-rose-200/70 transition-colors hover:bg-rose-500/20 hover:text-rose-100"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ BUILD CATALOG SHEET ═══ */}
+      {activeSheet === 'build' && (
+        <div
+          className="absolute inset-x-0 bottom-0 z-50 px-3 pb-3 transition-all duration-200 ease-out"
+          style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}
+        >
+          <div className="mx-auto w-full max-w-2xl overflow-hidden rounded-2xl border border-white/8 bg-black/85 shadow-[0_-12px_32px_rgba(0,0,0,0.35)] backdrop-blur-xl">
+            {/* Drag handle */}
+            <div className="flex justify-center pt-2 pb-1">
+              <div className="h-1 w-8 rounded-full bg-white/15" />
+            </div>
+            {/* Sheet header */}
+            <div className="flex items-center justify-between px-3.5 pb-2">
+              <h2 className="text-[13px] font-black text-white">Build</h2>
               <button
                 type="button"
                 onClick={() => {
                   setActiveSheet(null);
-                  if (activeSheet === 'build') {
-                    setPendingBuildType('');
-                    setPendingBuildVariant(null);
-                  }
+                  setPendingBuildType('');
+                  setPendingBuildVariant(null);
                 }}
-                className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 text-sm text-white/60 transition-colors hover:border-white/20 hover:text-white"
-                aria-label="Close panel"
+                className="flex h-7 w-7 items-center justify-center rounded-full border border-white/8 text-[11px] text-white/50 transition-colors hover:border-white/15 hover:text-white"
+                aria-label="Close build menu"
+              >
+                &times;
+              </button>
+            </div>
+            <div className="max-h-[38vh] overflow-y-auto px-3 pb-3" style={{ overscrollBehavior: 'contain' }}>
+              <PetWorldBuildMenu
+                open
+                buildings={catalog}
+                world={world}
+                selectedType={pendingBuildType}
+                selectedVariant={pendingBuildVariant}
+                onSelect={(type, variant) => {
+                  setPendingBuildType(type);
+                  setPendingBuildVariant(variant || null);
+                  setSelectedBuilding(null);
+                  setSelectedTile(null);
+                  // Auto-switch to placement mode
+                  setActiveSheet(null);
+                  showToast('Tap a tile to place this building');
+                }}
+                onClose={() => {
+                  setPendingBuildType('');
+                  setPendingBuildVariant(null);
+                  setActiveSheet(null);
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ INSPECT SHEET ═══ */}
+      {activeSheet === 'inspect' && (
+        <div
+          className="absolute inset-x-0 bottom-0 z-50 px-3 pb-3 transition-all duration-200 ease-out"
+          style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}
+        >
+          <div className="mx-auto w-full max-w-2xl overflow-hidden rounded-2xl border border-white/8 bg-black/85 shadow-[0_-12px_32px_rgba(0,0,0,0.35)] backdrop-blur-xl">
+            {/* Drag handle */}
+            <div className="flex justify-center pt-2 pb-1">
+              <div className="h-1 w-8 rounded-full bg-white/15" />
+            </div>
+            {/* Close */}
+            <div className="flex items-center justify-between px-3.5 pb-1">
+              <span className="text-[9px] uppercase tracking-[0.16em] text-white/30">
+                {selectedBuilding ? 'Building' : 'Tile'}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedBuilding(null);
+                  setSelectedTile(null);
+                  setActiveSheet(null);
+                }}
+                className="flex h-7 w-7 items-center justify-center rounded-full border border-white/8 text-[11px] text-white/50 transition-colors hover:border-white/15 hover:text-white"
+                aria-label="Close inspect"
+              >
+                &times;
+              </button>
+            </div>
+            <div className="max-h-[35vh] overflow-y-auto px-3.5 pb-3" style={{ overscrollBehavior: 'contain' }}>
+              {selectedBuilding ? (
+                <PetWorldBuildingInfo
+                  building={selectedBuilding}
+                  world={world}
+                  onClose={() => {
+                    setSelectedBuilding(null);
+                    setActiveSheet(null);
+                  }}
+                  onDemolish={handleDemolish}
+                  onUpgrade={handleUpgrade}
+                  onSetWorkers={handleSetWorkers}
+                />
+              ) : selectedTile ? (
+                <div>
+                  <div className="flex items-center gap-2">
+                    <div className="text-lg font-black text-white">{selectedTile.x}, {selectedTile.y}</div>
+                    <span className="text-[11px] text-white/45 capitalize">{selectedTile.tile?.t || 'empty ground'}</span>
+                  </div>
+                  <div className="mt-1.5 text-[11px] text-white/50 leading-relaxed">
+                    {inspectedObstacle
+                      ? 'This obstacle blocks construction. Clear it to open the area.'
+                      : 'Open ground. Use the Build button to place something here.'}
+                  </div>
+                  {inspectedObstacle && (
+                    <button
+                      type="button"
+                      onClick={() => handleClearTile(selectedTile)}
+                      className="mt-2 rounded-lg border border-amber-300/15 bg-amber-400/10 px-3 py-1.5 text-[11px] font-semibold text-amber-100 transition-colors hover:bg-amber-400/18"
+                    >
+                      Clear obstacle
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="py-4 text-center text-[11px] text-white/35">Select a building or tile to inspect it.</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ VILLAGE TOOLS MODAL (full-screen overlay) ═══ */}
+      {activeSheet === 'village' && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center transition-all duration-200 ease-out">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setActiveSheet(null)}
+          />
+          {/* Centered card */}
+          <div className="relative mx-4 w-full max-w-md max-h-[80vh] overflow-hidden rounded-2xl border border-white/8 bg-[#0a0f16]/95 shadow-[0_20px_50px_rgba(0,0,0,0.5)] backdrop-blur-xl">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-3">
+              <h2 className="text-sm font-black text-white">Village Tools</h2>
+              <button
+                type="button"
+                onClick={() => setActiveSheet(null)}
+                className="flex h-7 w-7 items-center justify-center rounded-full border border-white/8 text-[11px] text-white/50 transition-colors hover:border-white/15 hover:text-white"
+                aria-label="Close village tools"
               >
                 &times;
               </button>
             </div>
 
-            {activeSheet === 'build' ? (
-              <div className="max-h-[54vh] overflow-y-auto p-3">
-                <PetWorldBuildMenu
-                  open
-                  buildings={catalog}
-                  world={world}
-                  selectedType={pendingBuildType}
-                  selectedVariant={pendingBuildVariant}
-                  onSelect={(type, variant) => {
-                    setPendingBuildType(type);
-                    setPendingBuildVariant(variant || null);
-                    setSelectedBuilding(null);
-                    setSelectedTile(null);
-                    showToast('Tap a tile to place this building');
-                  }}
-                  onClose={() => {
-                    setPendingBuildType('');
-                    setPendingBuildVariant(null);
-                    setActiveSheet(null);
-                  }}
-                />
-              </div>
-            ) : null}
+            {/* Tab pills */}
+            <div className="flex gap-1 px-4 pt-3">
+              {[
+                ['overview', 'Overview'],
+                ['visitors', `Visitors${wsVisitors.length ? ` (${wsVisitors.length})` : ''}`],
+                ['leaderboard', 'Leaderboard'],
+              ].map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setVillageTab(id)}
+                  className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold transition-colors ${
+                    villageTab === id
+                      ? 'border-cyan-300/15 bg-cyan-400/12 text-cyan-50'
+                      : 'border-white/8 bg-white/[0.03] text-white/50 hover:bg-white/[0.06] hover:text-white/70'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
 
-            {activeSheet === 'inspect' ? (
-              <div className="max-h-[58vh] overflow-y-auto p-3">
-                {selectedBuilding ? (
-                  <PetWorldBuildingInfo
-                    building={selectedBuilding}
-                    world={world}
-                    onClose={() => {
-                      setSelectedBuilding(null);
-                      setActiveSheet(null);
-                    }}
-                    onDemolish={handleDemolish}
-                    onUpgrade={handleUpgrade}
-                    onSetWorkers={handleSetWorkers}
-                  />
-                ) : selectedTile ? (
-                  <div className="rounded-[1.3rem] border border-white/7 bg-[linear-gradient(180deg,rgba(14,18,28,0.96),rgba(9,12,18,0.94))] p-4 shadow-[0_14px_30px_rgba(0,0,0,0.24)]">
-                    <div className="text-[10px] uppercase tracking-[0.18em] text-white/35">Selected Tile</div>
-                    <div className="mt-1 text-xl font-black text-white">{selectedTile.x}, {selectedTile.y}</div>
-                    <div className="mt-1 text-sm text-white/55 capitalize">{selectedTile.tile?.t || 'empty ground'}</div>
-                    <div className="mt-3 rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-3 text-sm text-white/60">
-                      {inspectedObstacle
-                        ? 'This obstacle is blocking the space. Clear it to open the area for future construction.'
-                        : pendingBuildType
-                          ? 'You are currently in build mode. Pick a clear placement tile when you are ready.'
-                          : 'This tile is open ground. Use Build when you want to place something here.'}
+            {/* Tab content */}
+            <div className="overflow-y-auto px-4 py-3" style={{ maxHeight: 'calc(80vh - 7rem)', overscrollBehavior: 'contain' }}>
+              {villageTab === 'overview' && (
+                <div className="space-y-2.5">
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <div className="rounded-xl border border-white/[0.06] bg-white/[0.025] p-2.5">
+                      <div className="text-[9px] uppercase tracking-[0.14em] text-white/30">Village Mood</div>
+                      <div className="mt-0.5 text-lg font-black text-white">{Math.round(world.happiness || 0)}</div>
+                      <div className="mt-0.5 text-[10px] text-white/35">Keep high for breeding.</div>
                     </div>
-                    {inspectedObstacle ? (
-                      <button
-                        type="button"
-                        onClick={() => handleClearTile(selectedTile)}
-                        className="mt-3 inline-flex rounded-xl border border-amber-300/18 bg-amber-400/12 px-3 py-2 text-sm font-semibold text-amber-100 transition-colors hover:bg-amber-400/20"
-                      >
-                        Clear obstacle
-                      </button>
-                    ) : null}
+                    <div className="rounded-xl border border-white/[0.06] bg-white/[0.025] p-2.5">
+                      <div className="text-[9px] uppercase tracking-[0.14em] text-white/30">Online Now</div>
+                      <div className="mt-0.5 text-lg font-black text-white">{wsVisitors.length}</div>
+                      <div className="mt-0.5 text-[10px] text-white/35">Friends visiting now.</div>
+                    </div>
                   </div>
-                ) : (
-                  <div className="px-4 py-8 text-center text-sm text-white/45">Select a building or tile to inspect it.</div>
-                )}
-              </div>
-            ) : null}
-
-            {activeSheet === 'village' ? (
-              <div className="max-h-[58vh] overflow-y-auto p-3">
-                <div className="mb-3 flex flex-wrap gap-1.5">
-                  {[
-                    ['overview', 'Overview'],
-                    ['visitors', `Visitors${wsVisitors.length ? ` (${wsVisitors.length})` : ''}`],
-                    ['leaderboard', 'Leaderboard'],
-                  ].map(([id, label]) => (
+                  <div className="rounded-xl border border-white/[0.06] bg-white/[0.025] p-2.5">
+                    <div className="text-[9px] uppercase tracking-[0.14em] text-white/30">Expand Village</div>
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      <ExpandButtons onExpand={handleExpand} />
+                    </div>
+                    <div className="mt-1.5 text-[10px] text-white/35">Grow toward resources to shape your village.</div>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
                     <button
-                      key={id}
                       type="button"
-                      onClick={() => setVillageTab(id)}
-                      className={`rounded-full border px-3 py-1.5 text-[11px] font-semibold transition-colors ${
-                        villageTab === id
-                          ? 'border-cyan-300/18 bg-cyan-400/14 text-cyan-50'
-                          : 'border-white/10 bg-white/[0.03] text-white/60 hover:bg-white/[0.06] hover:text-white/80'
-                      }`}
+                      onClick={() => { setActiveSheet(null); setShowTrades(true); }}
+                      className="rounded-lg border border-white/8 bg-white/[0.04] px-3 py-2 text-[11px] font-semibold text-white/65 transition-colors hover:bg-white/[0.08] hover:text-white"
                     >
-                      {label}
+                      Open Trades
                     </button>
-                  ))}
-                </div>
-
-                {villageTab === 'overview' ? (
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-3">
-                        <div className="text-[10px] uppercase tracking-[0.18em] text-white/35">Village Mood</div>
-                        <div className="mt-1 text-lg font-black text-white">{Math.round(world.happiness || 0)}</div>
-                        <div className="mt-1 text-xs text-white/45">Keep happiness high to support breeding.</div>
-                      </div>
-                      <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-3">
-                        <div className="text-[10px] uppercase tracking-[0.18em] text-white/35">Visitors Online</div>
-                        <div className="mt-1 text-lg font-black text-white">{wsVisitors.length}</div>
-                        <div className="mt-1 text-xs text-white/45">Friends browsing your village right now.</div>
-                      </div>
-                    </div>
-                    <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-3">
-                      <div className="text-[10px] uppercase tracking-[0.18em] text-white/35">Expand Village</div>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        <ExpandButtons onExpand={handleExpand} />
-                      </div>
-                      <div className="mt-2 text-xs text-white/45">Grow toward water, forest, or stone-rich ground to shape your village.</div>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
+                    {encounters.length > 0 && (
                       <button
                         type="button"
-                        onClick={() => setShowTrades(true)}
-                        className="inline-flex rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2 text-sm font-semibold text-white/75 transition-colors hover:bg-white/[0.09] hover:text-white"
+                        onClick={() => {
+                          setActiveSheet(null);
+                          setActiveEncounter(encounters[0]);
+                          playEncounterAlertSound();
+                        }}
+                        className="rounded-lg border border-amber-300/12 bg-amber-400/8 px-3 py-2 text-[11px] font-semibold text-amber-100 transition-colors hover:bg-amber-400/15"
                       >
-                        Open trades
+                        Hunt Encounter
                       </button>
-                      {encounters.length > 0 ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setActiveSheet(null);
-                            setActiveEncounter(encounters[0]);
-                            playEncounterAlertSound();
-                          }}
-                          className="inline-flex rounded-xl border border-amber-300/18 bg-amber-400/12 px-3 py-2 text-sm font-semibold text-amber-100 transition-colors hover:bg-amber-400/20"
-                        >
-                          Hunt encounter
-                        </button>
-                      ) : null}
-                    </div>
+                    )}
                   </div>
-                ) : null}
+                </div>
+              )}
 
-                {villageTab === 'visitors' ? (
-                  <div className="space-y-2">
-                    {wsVisitors.length > 0 ? (
-                      <div className="rounded-2xl border border-emerald-300/12 bg-emerald-400/[0.06] p-3">
-                        <div className="text-[10px] uppercase tracking-[0.18em] text-emerald-200/55">Online now</div>
-                        <div className="mt-2 space-y-1.5">
-                          {wsVisitors.map((visitor) => (
-                            <Link
-                              key={visitor.user_id}
-                              to={`/pet/world/${visitor.user_id}`}
-                              className="flex items-center justify-between rounded-xl border border-emerald-300/10 bg-black/20 px-3 py-2 text-sm text-emerald-100/85"
-                            >
-                              <span>{visitor.username || 'Unknown visitor'}</span>
-                              <span className="text-[10px] uppercase tracking-[0.16em] text-emerald-200/45">Visiting</span>
-                            </Link>
-                          ))}
-                        </div>
-                      </div>
-                    ) : null}
-                    <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-3">
-                      <div className="text-[10px] uppercase tracking-[0.18em] text-white/35">Recent visitors</div>
-                      <div className="mt-2 space-y-1.5">
-                        {visitors.length > 0 ? visitors.map((visitor, index) => (
+              {villageTab === 'visitors' && (
+                <div className="space-y-2">
+                  {wsVisitors.length > 0 && (
+                    <div className="rounded-xl border border-emerald-300/10 bg-emerald-400/[0.04] p-2.5">
+                      <div className="text-[9px] uppercase tracking-[0.14em] text-emerald-200/50">Online now</div>
+                      <div className="mt-1.5 space-y-1">
+                        {wsVisitors.map((visitor) => (
                           <Link
-                            key={visitor.user_id || index}
+                            key={visitor.user_id}
                             to={`/pet/world/${visitor.user_id}`}
-                            className="flex items-center justify-between rounded-xl border border-white/8 bg-black/20 px-3 py-2 text-sm text-white/75"
+                            className="flex items-center justify-between rounded-lg border border-emerald-300/8 bg-black/20 px-2.5 py-1.5 text-[11px] text-emerald-100/80"
                           >
-                            <span className="truncate">{visitor.username || 'Unknown visitor'}</span>
-                            <span className="ml-2 shrink-0 text-[10px] uppercase tracking-[0.16em] text-white/35">
-                              {visitor.visited_at ? timeAgo(visitor.visited_at) : ''}
-                            </span>
+                            <span>{visitor.username || 'Unknown visitor'}</span>
+                            <span className="text-[9px] uppercase text-emerald-200/40">Visiting</span>
                           </Link>
-                        )) : (
-                          <div className="rounded-xl border border-dashed border-white/10 px-3 py-4 text-sm text-white/40">
-                            No visitors yet. Share your village once it starts to grow.
-                          </div>
-                        )}
+                        ))}
                       </div>
                     </div>
-                  </div>
-                ) : null}
-
-                {villageTab === 'leaderboard' ? (
-                  <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-3">
-                    <div className="text-[10px] uppercase tracking-[0.18em] text-white/35">Top villages</div>
-                    <div className="mt-2 space-y-1.5">
-                      {leaderboard.slice(0, 8).map((entry) => (
+                  )}
+                  <div className="rounded-xl border border-white/[0.06] bg-white/[0.025] p-2.5">
+                    <div className="text-[9px] uppercase tracking-[0.14em] text-white/30">Recent visitors</div>
+                    <div className="mt-1.5 space-y-1">
+                      {visitors.length > 0 ? visitors.map((visitor, index) => (
                         <Link
-                          key={entry.user_id}
-                          to={`/pet/world/${entry.user_id}`}
-                          className="flex items-center justify-between rounded-xl border border-white/8 bg-black/20 px-3 py-2 text-sm text-white/75"
+                          key={visitor.user_id || index}
+                          to={`/pet/world/${visitor.user_id}`}
+                          className="flex items-center justify-between rounded-lg border border-white/[0.06] bg-black/20 px-2.5 py-1.5 text-[11px] text-white/65"
                         >
-                          <span className="truncate">#{entry.rank} {entry.username || 'Unknown'}</span>
-                          <span className="ml-2 shrink-0 font-mono text-cyan-100/80">{entry.population}</span>
+                          <span className="truncate">{visitor.username || 'Unknown visitor'}</span>
+                          <span className="ml-2 shrink-0 text-[9px] text-white/30">
+                            {visitor.visited_at ? timeAgo(visitor.visited_at) : ''}
+                          </span>
                         </Link>
-                      ))}
+                      )) : (
+                        <div className="rounded-lg border border-dashed border-white/8 px-3 py-3 text-[11px] text-white/35">
+                          No visitors yet. Share your village once it grows.
+                        </div>
+                      )}
                     </div>
                   </div>
-                ) : null}
-              </div>
-            ) : null}
+                </div>
+              )}
+
+              {villageTab === 'leaderboard' && (
+                <div className="rounded-xl border border-white/[0.06] bg-white/[0.025] p-2.5">
+                  <div className="text-[9px] uppercase tracking-[0.14em] text-white/30">Top villages</div>
+                  <div className="mt-1.5 space-y-1">
+                    {leaderboard.slice(0, 8).map((entry) => (
+                      <Link
+                        key={entry.user_id}
+                        to={`/pet/world/${entry.user_id}`}
+                        className="flex items-center justify-between rounded-lg border border-white/[0.06] bg-black/20 px-2.5 py-1.5 text-[11px] text-white/65"
+                      >
+                        <span className="truncate">#{entry.rank} {entry.username || 'Unknown'}</span>
+                        <span className="ml-2 shrink-0 font-mono text-cyan-100/70">{entry.population}</span>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

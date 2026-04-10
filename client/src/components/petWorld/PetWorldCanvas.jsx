@@ -1,12 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { drawTile, drawBuildingSprite, drawConstructionOverlay, drawSelectionOutline, drawGhostFootprint, drawPetWander } from './petWorldSprites';
 import { getBuildingSize } from './petWorldBuildings';
+import { getBiomeUi } from './petWorldTiles';
 
 const BASE_TILE_SIZE = 32;
-const ZOOM_MIN = 0.5;
-const ZOOM_MAX = 2.0;
+const FIXED_ZOOM = 1.4;
 const DRAG_THRESHOLD = 8;
 const LONG_PRESS_MS = 300;
+const MINIMAP_W = 120;
+const MINIMAP_H = 80;
+const MINIMAP_PADDING = 8;
+const LERP_SPEED = 0.15;
 
 function getBuildingMap(buildings = []) {
   return new Map(buildings.map((building) => [building.id, building]));
@@ -110,18 +114,18 @@ export default function PetWorldCanvas({
   const containerRef = useRef(null);
   const canvasRef = useRef(null);
   const pointerRef = useRef(null);
-  const pinchRef = useRef(null);
   const animationFrameRef = useRef(0);
   const animatingRef = useRef(false);
-  const idleTimerRef = useRef(null);
   const timeRef = useRef(0);
-  const [camera, setCamera] = useState({ x: 0, y: 0, zoom: 1 });
+  const cameraTargetRef = useRef(null); // for smooth camera easing
+  const [camera, setCamera] = useState({ x: 0, y: 0 });
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [hoverTile, setHoverTile] = useState(null);
+  const [minimapVisible, setMinimapVisible] = useState(true);
   const buildingMap = useMemo(() => getBuildingMap(buildings), [buildings]);
   const petPlacements = useMemo(() => buildPetPlacements(world), [world]);
 
-  const tileSize = BASE_TILE_SIZE * camera.zoom;
+  const tileSize = BASE_TILE_SIZE * FIXED_ZOOM;
 
   // --- resize observer ---
   useEffect(() => {
@@ -134,15 +138,82 @@ export default function PetWorldCanvas({
     return () => observer.disconnect();
   }, []);
 
-  // --- center camera on load ---
+  // --- center camera on load with smooth easing target ---
   useEffect(() => {
     if (!world?.grid) return;
-    const ts = BASE_TILE_SIZE * camera.zoom;
+    const ts = BASE_TILE_SIZE * FIXED_ZOOM;
     const cx = (world.grid.w * ts) / 2 - size.width / 2;
     const cy = (world.grid.h * ts) / 2 - size.height / 2;
-    const clamped = clampCamera(cx, cy, camera.zoom, world.grid.w, world.grid.h, size.width, size.height);
-    setCamera((prev) => ({ ...prev, x: clamped.x, y: clamped.y }));
+    const clamped = clampCamera(cx, cy, FIXED_ZOOM, world.grid.w, world.grid.h, size.width, size.height);
+    cameraTargetRef.current = { x: clamped.x, y: clamped.y };
+    setCamera({ x: clamped.x, y: clamped.y });
   }, [world?.grid?.w, world?.grid?.h, size.width, size.height]);
+
+  // --- minimap rendering helper ---
+  const drawMinimap = useCallback((ctx, viewW, viewH) => {
+    if (!minimapVisible || !world?.grid) return;
+    const grid = world.grid;
+    const biomeUi = getBiomeUi(world.biome);
+
+    // minimap position: bottom-left
+    const mx = MINIMAP_PADDING;
+    const my = viewH - MINIMAP_H - MINIMAP_PADDING;
+
+    // backdrop
+    ctx.save();
+    ctx.beginPath();
+    ctx.roundRect(mx - 2, my - 2, MINIMAP_W + 4, MINIMAP_H + 4, 6);
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.restore();
+
+    // clip to minimap area
+    ctx.save();
+    ctx.beginPath();
+    ctx.roundRect(mx, my, MINIMAP_W, MINIMAP_H, 4);
+    ctx.clip();
+
+    // draw tile dots
+    const dotW = MINIMAP_W / grid.w;
+    const dotH = MINIMAP_H / grid.h;
+    for (let ty = 0; ty < grid.h; ty++) {
+      for (let tx = 0; tx < grid.w; tx++) {
+        const tile = grid.tiles[ty]?.[tx];
+        if (!tile) continue;
+        const dx = mx + tx * dotW;
+        const dy = my + ty * dotH;
+        let color;
+        if (tile.b != null) {
+          color = '#ffffff'; // building: bright dot
+        } else if (tile.t === 'water') {
+          color = biomeUi.water;
+        } else if (tile.t === 'tree' || tile.t === 'bush') {
+          color = biomeUi.tree;
+        } else if (tile.t === 'rock') {
+          color = biomeUi.rock;
+        } else {
+          color = biomeUi.ground[1] || biomeUi.ground[0];
+        }
+        ctx.fillStyle = color;
+        ctx.fillRect(dx, dy, Math.max(1, dotW), Math.max(1, dotH));
+      }
+    }
+
+    // viewport rectangle
+    const ts = BASE_TILE_SIZE * FIXED_ZOOM;
+    const vpX = mx + (camera.x / (grid.w * ts)) * MINIMAP_W;
+    const vpY = my + (camera.y / (grid.h * ts)) * MINIMAP_H;
+    const vpW = (viewW / (grid.w * ts)) * MINIMAP_W;
+    const vpH = (viewH / (grid.h * ts)) * MINIMAP_H;
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(vpX, vpY, Math.min(vpW, MINIMAP_W - (vpX - mx)), Math.min(vpH, MINIMAP_H - (vpY - my)));
+
+    ctx.restore();
+  }, [world, camera.x, camera.y, minimapVisible]);
 
   // --- main render ---
   const render = useCallback((timestamp) => {
@@ -150,6 +221,23 @@ export default function PetWorldCanvas({
     if (!canvas || !world?.grid || !size.width || !size.height) return;
     const time = timestamp || performance.now();
     timeRef.current = time;
+
+    // Camera easing: lerp toward target
+    const target = cameraTargetRef.current;
+    if (target) {
+      const dx = target.x - camera.x;
+      const dy = target.y - camera.y;
+      if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) {
+        setCamera((prev) => ({
+          x: prev.x + (target.x - prev.x) * LERP_SPEED,
+          y: prev.y + (target.y - prev.y) * LERP_SPEED,
+        }));
+      } else {
+        // close enough, snap
+        cameraTargetRef.current = null;
+        setCamera({ x: target.x, y: target.y });
+      }
+    }
 
     const dpr = Math.min(window.devicePixelRatio || 1, 3);
     const cw = Math.round(size.width * dpr);
@@ -183,6 +271,21 @@ export default function PetWorldCanvas({
       }
     }
 
+    // atmospheric depth: distant tiles (top of grid) slightly hazier
+    if (endY > startY) {
+      const hazeH = Math.min(size.height * 0.3, (endY - startY) * tileSize * 0.2);
+      const topScreenY = startY * tileSize - camera.y;
+      if (topScreenY < size.height * 0.4) {
+        ctx.save();
+        const hazeGrad = ctx.createLinearGradient(0, Math.max(0, topScreenY), 0, Math.max(0, topScreenY) + hazeH);
+        hazeGrad.addColorStop(0, 'rgba(7,18,26,0.15)');
+        hazeGrad.addColorStop(1, 'rgba(7,18,26,0)');
+        ctx.fillStyle = hazeGrad;
+        ctx.fillRect(0, Math.max(0, topScreenY), size.width, hazeH);
+        ctx.restore();
+      }
+    }
+
     // buildings
     buildings.forEach((building) => {
       const screenX = building.grid_x * tileSize - camera.x;
@@ -192,7 +295,7 @@ export default function PetWorldCanvas({
       if (screenX + width < 0 || screenY + height < 0 || screenX > size.width || screenY > size.height) return;
       drawBuildingSprite(ctx, world.biome, building, screenX, screenY, tileSize, selectedBuildingId === building.id);
       if (building.state !== 'built') drawConstructionOverlay(ctx, building, screenX, screenY, tileSize, time);
-      if (selectedBuildingId === building.id) drawSelectionOutline(ctx, screenX, screenY, width, height);
+      if (selectedBuildingId === building.id) drawSelectionOutline(ctx, screenX, screenY, width, height, 'rgba(80,220,255,0.95)', time);
     });
 
     // pet wandering
@@ -207,7 +310,7 @@ export default function PetWorldCanvas({
     // selection outline on selected tile
     if (selectedTile && selectedTile.x >= 0 && selectedTile.y >= 0) {
       const color = pendingBuildType ? 'rgba(110,231,183,0.9)' : 'rgba(80,220,255,0.95)';
-      drawSelectionOutline(ctx, selectedTile.x * tileSize - camera.x, selectedTile.y * tileSize - camera.y, tileSize, tileSize, color);
+      drawSelectionOutline(ctx, selectedTile.x * tileSize - camera.x, selectedTile.y * tileSize - camera.y, tileSize, tileSize, color, time);
     }
 
     // ghost footprint for pending build
@@ -217,53 +320,47 @@ export default function PetWorldCanvas({
       const gx = ghostTile.x;
       const gy = ghostTile.y;
       const valid = isPlacementValid(world.grid, gx, gy, bSize.width, bSize.height, pendingBuildType);
-      drawGhostFootprint(ctx, gx * tileSize - camera.x, gy * tileSize - camera.y, tileSize, bSize.width, bSize.height, valid);
+      drawGhostFootprint(ctx, gx * tileSize - camera.x, gy * tileSize - camera.y, tileSize, bSize.width, bSize.height, valid, time);
     }
 
+    // subtle vignette
     const vignette = ctx.createRadialGradient(
       size.width * 0.5,
       size.height * 0.48,
-      Math.min(size.width, size.height) * 0.14,
+      Math.min(size.width, size.height) * 0.25,
       size.width * 0.5,
       size.height * 0.5,
       Math.max(size.width, size.height) * 0.72,
     );
     vignette.addColorStop(0, 'rgba(0,0,0,0)');
-    vignette.addColorStop(1, 'rgba(3,7,12,0.42)');
+    vignette.addColorStop(1, 'rgba(3,7,12,0.25)');
     ctx.fillStyle = vignette;
     ctx.fillRect(0, 0, size.width, size.height);
 
-    // continue animation loop if animating
+    // minimap overlay
+    drawMinimap(ctx, size.width, size.height);
+
+    // continue animation loop (always running for water/trees/pets)
     if (animatingRef.current) {
       animationFrameRef.current = requestAnimationFrame(render);
     }
-  }, [world, buildings, size.width, size.height, camera.x, camera.y, camera.zoom, tileSize, selectedBuildingId, selectedTile, pendingBuildType, petPlacements, hoverTile]);
+  }, [world, buildings, size.width, size.height, camera.x, camera.y, tileSize, selectedBuildingId, selectedTile, pendingBuildType, petPlacements, hoverTile, drawMinimap]);
 
-  // --- animation control ---
+  // --- animation control: always running ---
   const startAnimating = useCallback(() => {
     if (animatingRef.current) return;
     animatingRef.current = true;
-    clearTimeout(idleTimerRef.current);
     animationFrameRef.current = requestAnimationFrame(render);
   }, [render]);
 
-  const scheduleIdle = useCallback(() => {
-    clearTimeout(idleTimerRef.current);
-    idleTimerRef.current = setTimeout(() => {
-      animatingRef.current = false;
-    }, 3000); // stop loop 3s after last interaction
-  }, []);
-
-  // start animation on mount, schedule idle
+  // start animation on mount -- NO idle timeout, runs continuously
   useEffect(() => {
     startAnimating();
-    scheduleIdle();
     return () => {
       cancelAnimationFrame(animationFrameRef.current);
-      clearTimeout(idleTimerRef.current);
       animatingRef.current = false;
     };
-  }, [startAnimating, scheduleIdle]);
+  }, [startAnimating]);
 
   // re-render when deps change (single frame if idle)
   useEffect(() => {
@@ -284,10 +381,36 @@ export default function PetWorldCanvas({
     return { x: tileX, y: tileY, tile: world.grid.tiles[tileY]?.[tileX] || null };
   }, [world, camera.x, camera.y, tileSize]);
 
+  // --- minimap tap handler ---
+  const handleMinimapTap = useCallback((clientX, clientY) => {
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect || !world?.grid) return false;
+    const localX = clientX - rect.left;
+    const localY = clientY - rect.top;
+    const mx = MINIMAP_PADDING;
+    const my = size.height - MINIMAP_H - MINIMAP_PADDING;
+    // check if tap is inside minimap bounds
+    if (localX >= mx && localX <= mx + MINIMAP_W && localY >= my && localY <= my + MINIMAP_H) {
+      // convert minimap position to camera position
+      const fracX = (localX - mx) / MINIMAP_W;
+      const fracY = (localY - my) / MINIMAP_H;
+      const ts = BASE_TILE_SIZE * FIXED_ZOOM;
+      const targetX = fracX * world.grid.w * ts - size.width / 2;
+      const targetY = fracY * world.grid.h * ts - size.height / 2;
+      const clamped = clampCamera(targetX, targetY, FIXED_ZOOM, world.grid.w, world.grid.h, size.width, size.height);
+      // set easing target instead of jumping
+      cameraTargetRef.current = { x: clamped.x, y: clamped.y };
+      return true;
+    }
+    return false;
+  }, [world, size.width, size.height]);
+
   // --- pointer handlers ---
   const handlePointerDown = (event) => {
-    // ignore if pinch is active
-    if (pinchRef.current) return;
+    // check minimap tap first
+    if (minimapVisible && handleMinimapTap(event.clientX, event.clientY)) {
+      return;
+    }
     pointerRef.current = {
       id: event.pointerId,
       startX: event.clientX,
@@ -298,7 +421,6 @@ export default function PetWorldCanvas({
       dragging: false,
     };
     event.currentTarget.setPointerCapture?.(event.pointerId);
-    startAnimating();
   };
 
   const handlePointerMove = (event) => {
@@ -308,11 +430,13 @@ export default function PetWorldCanvas({
     const dy = event.clientY - pointer.startY;
     if (Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD) {
       pointer.dragging = true;
-      setCamera((prev) => {
+      // direct touch-drag: no easing, moves immediately
+      cameraTargetRef.current = null;
+      setCamera(() => {
         const grid = world?.grid;
-        if (!grid) return { ...prev, x: Math.max(0, pointer.cameraX - dx), y: Math.max(0, pointer.cameraY - dy) };
-        const clamped = clampCamera(pointer.cameraX - dx, pointer.cameraY - dy, prev.zoom, grid.w, grid.h, size.width, size.height);
-        return { ...prev, ...clamped };
+        if (!grid) return { x: Math.max(0, pointer.cameraX - dx), y: Math.max(0, pointer.cameraY - dy) };
+        const clamped = clampCamera(pointer.cameraX - dx, pointer.cameraY - dy, FIXED_ZOOM, grid.w, grid.h, size.width, size.height);
+        return clamped;
       });
     }
     // update hover tile for ghost preview
@@ -342,55 +466,6 @@ export default function PetWorldCanvas({
       }
     }
     pointerRef.current = null;
-    scheduleIdle();
-  };
-
-  // --- touch pinch-zoom ---
-  const handleTouchStart = (event) => {
-    if (event.touches.length === 2) {
-      event.preventDefault();
-      const t0 = event.touches[0];
-      const t1 = event.touches[1];
-      const dist = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
-      const midX = (t0.clientX + t1.clientX) / 2;
-      const midY = (t0.clientY + t1.clientY) / 2;
-      pinchRef.current = { startDist: dist, startZoom: camera.zoom, midX, midY };
-      // cancel any single-pointer drag
-      pointerRef.current = null;
-      startAnimating();
-    }
-  };
-
-  const handleTouchMove = (event) => {
-    if (event.touches.length === 2 && pinchRef.current) {
-      event.preventDefault();
-      const t0 = event.touches[0];
-      const t1 = event.touches[1];
-      const dist = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
-      const ratio = dist / pinchRef.current.startDist;
-      const newZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, pinchRef.current.startZoom * ratio));
-      const rect = canvasRef.current?.getBoundingClientRect();
-      if (rect && world?.grid) {
-        const midX = (t0.clientX + t1.clientX) / 2 - rect.left;
-        const midY = (t0.clientY + t1.clientY) / 2 - rect.top;
-        // keep world point under pinch midpoint stable
-        const worldX = (camera.x + midX) / (BASE_TILE_SIZE * camera.zoom);
-        const worldY = (camera.y + midY) / (BASE_TILE_SIZE * camera.zoom);
-        const newCx = worldX * BASE_TILE_SIZE * newZoom - midX;
-        const newCy = worldY * BASE_TILE_SIZE * newZoom - midY;
-        const clamped = clampCamera(newCx, newCy, newZoom, world.grid.w, world.grid.h, size.width, size.height);
-        setCamera({ x: clamped.x, y: clamped.y, zoom: newZoom });
-      } else {
-        setCamera((prev) => ({ ...prev, zoom: newZoom }));
-      }
-    }
-  };
-
-  const handleTouchEnd = (event) => {
-    if (event.touches.length < 2) {
-      pinchRef.current = null;
-      scheduleIdle();
-    }
   };
 
   // --- mouse move for ghost preview ---
@@ -401,26 +476,6 @@ export default function PetWorldCanvas({
     }
   };
 
-  // --- zoom buttons ---
-  const adjustZoom = useCallback((delta) => {
-    setCamera((prev) => {
-      const newZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, prev.zoom + delta));
-      const grid = world?.grid;
-      if (!grid) return { ...prev, zoom: newZoom };
-      // keep center stable
-      const centerX = prev.x + size.width / 2;
-      const centerY = prev.y + size.height / 2;
-      const worldX = centerX / (BASE_TILE_SIZE * prev.zoom);
-      const worldY = centerY / (BASE_TILE_SIZE * prev.zoom);
-      const newCx = worldX * BASE_TILE_SIZE * newZoom - size.width / 2;
-      const newCy = worldY * BASE_TILE_SIZE * newZoom - size.height / 2;
-      const clamped = clampCamera(newCx, newCy, newZoom, grid.w, grid.h, size.width, size.height);
-      return { x: clamped.x, y: clamped.y, zoom: newZoom };
-    });
-    startAnimating();
-    scheduleIdle();
-  }, [world?.grid, size.width, size.height, startAnimating, scheduleIdle]);
-
   if (!world?.grid) return null;
 
   return (
@@ -430,13 +485,11 @@ export default function PetWorldCanvas({
         className="relative h-full min-h-0 w-full select-none touch-none"
         style={{ WebkitTouchCallout: 'none', overscrollBehavior: 'none' }}
         onContextMenu={(event) => event.preventDefault()}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
       >
         <canvas
           ref={canvasRef}
           className="h-full w-full"
+          style={{ willChange: 'transform' }}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
@@ -446,22 +499,15 @@ export default function PetWorldCanvas({
         <div className="pointer-events-none absolute left-3 top-3 rounded-full border border-white/10 bg-black/35 px-3 py-1.5 text-[10px] uppercase tracking-[0.18em] text-white/55 backdrop-blur-sm">
           {readonly ? 'Visit snapshot' : pendingBuildType ? 'Tap a tile to place' : 'Drag to pan'}
         </div>
-        <div className="absolute bottom-3 right-3 flex gap-2">
-          <button
-            type="button"
-            onClick={() => adjustZoom(-0.15)}
-            className="rounded-full border border-white/10 bg-black/40 px-3 py-2 text-sm font-bold text-white/75 backdrop-blur-sm hover:bg-black/55"
-          >
-            −
-          </button>
-          <button
-            type="button"
-            onClick={() => adjustZoom(0.15)}
-            className="rounded-full border border-white/10 bg-black/40 px-3 py-2 text-sm font-bold text-white/75 backdrop-blur-sm hover:bg-black/55"
-          >
-            +
-          </button>
-        </div>
+        {/* Minimap toggle button */}
+        <button
+          type="button"
+          onClick={() => setMinimapVisible((v) => !v)}
+          className="absolute bottom-3 right-3 rounded-full border border-white/10 bg-black/40 px-3 py-2 text-xs text-white/75 backdrop-blur-sm hover:bg-black/55"
+          aria-label={minimapVisible ? 'Hide minimap' : 'Show minimap'}
+        >
+          {minimapVisible ? '\u25A3' : '\u25A2'}
+        </button>
       </div>
     </div>
   );

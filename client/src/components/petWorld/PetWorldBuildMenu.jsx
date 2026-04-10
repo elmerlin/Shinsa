@@ -11,14 +11,14 @@ const FLOWER_VARIANTS = [
   { id: 'red', label: 'Red', color: '#e04040' },
 ];
 
-function MaterialPills({ materials = {} }) {
-  const entries = Object.entries(materials).filter(([, v]) => v > 0);
-  if (!entries.length) return null;
+function CostLine({ comboCost, materials = {} }) {
+  const mats = Object.entries(materials).filter(([, v]) => v > 0);
   return (
-    <span className="flex flex-wrap gap-1">
-      {entries.map(([key, amt]) => (
-        <span key={key} className="inline-flex items-center gap-0.5 rounded-full bg-white/[0.06] px-1.5 py-0.5 text-[10px] text-white/55">
-          {amt} {RES_ICONS[key] || key}
+    <span className="flex flex-wrap items-center gap-0.5 text-[9px] text-white/50">
+      <span className="font-semibold">{comboCost}c</span>
+      {mats.map(([key, amt]) => (
+        <span key={key} className="inline-flex items-center gap-px rounded bg-white/[0.06] px-1 py-px">
+          {amt}{RES_ICONS[key] || key}
         </span>
       ))}
     </span>
@@ -57,27 +57,18 @@ export default function PetWorldBuildMenu({
       });
 
   return (
-    <div className="rounded-[1.3rem] border border-white/[0.07] bg-[linear-gradient(180deg,rgba(14,18,28,0.98),rgba(9,12,18,0.96))] p-3 shadow-[0_18px_40px_rgba(0,0,0,0.28)]">
-      {/* Header */}
-      <div className="mb-2 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-base">🏗️</span>
-          <h2 className="text-base font-black text-white">Build</h2>
-        </div>
-        <button type="button" onClick={onClose} className="flex h-7 w-7 items-center justify-center rounded-full border border-white/10 text-sm text-white/60 hover:border-white/20 hover:text-white">&times;</button>
-      </div>
-
-      {/* Category tabs */}
-      <div className="mb-2 flex gap-1 overflow-x-auto scrollbar-none">
+    <div>
+      {/* Category pills -- horizontal scroll */}
+      <div className="mb-2 flex gap-1 overflow-x-auto scrollbar-none" style={{ overscrollBehavior: 'contain' }}>
         {CATEGORIES.map((c) => (
           <button
             key={c}
             type="button"
             onClick={() => setCat(c)}
-            className={`shrink-0 rounded-lg px-2.5 py-1 text-[10px] font-semibold transition-all ${
+            className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold transition-all ${
               cat === c
-                ? 'bg-white/[0.12] text-white'
-                : 'text-white/40 hover:bg-white/[0.05] hover:text-white/60'
+                ? 'bg-white/[0.14] text-white'
+                : 'text-white/35 hover:bg-white/[0.06] hover:text-white/55'
             }`}
           >
             {c}
@@ -85,8 +76,11 @@ export default function PetWorldBuildMenu({
         ))}
       </div>
 
-      {/* Grid */}
-      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 overflow-y-auto" style={{ maxHeight: '20rem' }}>
+      {/* Dense 2-col grid */}
+      <div
+        className="grid grid-cols-2 gap-1.5 overflow-y-auto"
+        style={{ maxHeight: 'calc(38vh - 4rem)', overscrollBehavior: 'contain' }}
+      >
         {filtered.map((building) => {
           const ui = getBuildingUi(building.id);
           const locked = (world?.population || 0) < (building.tierUnlockPopulation || 0);
@@ -98,49 +92,41 @@ export default function PetWorldBuildMenu({
               onClick={() => !locked && onSelect(building.id)}
               className={`relative rounded-xl border text-left transition-all ${
                 selected
-                  ? 'border-emerald-300/40 bg-emerald-500/[0.14] shadow-[0_0_12px_rgba(16,185,129,0.15)]'
+                  ? 'border-emerald-300/30 bg-emerald-500/[0.12] ring-1 ring-emerald-400/20'
                   : locked
-                    ? 'border-white/[0.04] bg-white/[0.02]'
-                    : 'border-white/[0.07] bg-white/[0.04] hover:border-white/16 hover:bg-white/[0.06]'
+                    ? 'border-white/[0.03] bg-white/[0.02]'
+                    : 'border-white/[0.06] bg-white/[0.03] hover:border-white/12 hover:bg-white/[0.05]'
               }`}
             >
-              {/* Color bar header */}
-              <div className={`flex items-center justify-between rounded-t-xl px-2.5 py-1.5 ${locked ? 'bg-white/[0.02]' : 'bg-white/[0.04]'}`}>
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <span className="text-sm">{ui.icon}</span>
-                  <span className={`truncate text-xs font-bold ${locked ? 'text-white/30' : 'text-white/90'}`}>{building.name}</span>
+              <div className="flex items-center gap-1.5 px-2 py-1.5">
+                <span className="text-sm shrink-0">{ui.icon}</span>
+                <div className="min-w-0 flex-1">
+                  <div className={`truncate text-[11px] font-bold leading-tight ${locked ? 'text-white/25' : 'text-white/85'}`}>
+                    {building.name}
+                  </div>
+                  <div className={`mt-0.5 truncate text-[9px] font-medium leading-tight ${locked ? 'text-white/20' : 'text-white/50'}`}>
+                    {keyStat(building)}
+                  </div>
                 </div>
-                <span className="shrink-0 rounded bg-white/[0.06] px-1 py-0.5 text-[8px] uppercase tracking-[0.1em] text-white/45">
-                  T{building.tier}
-                </span>
+                <span className="shrink-0 text-[7px] uppercase tracking-wide text-white/30">T{building.tier}</span>
               </div>
 
-              {/* Body */}
-              <div className={`px-2.5 pb-2 pt-1.5 ${locked ? 'opacity-35' : ''}`}>
-                {/* Cost line */}
-                <div className="flex flex-wrap items-center gap-1 text-[10px] text-white/55">
-                  <span className="font-semibold">{building.comboCost}c</span>
-                  <MaterialPills materials={building.materials} />
-                </div>
-                {/* Key stat */}
-                <div className="mt-1 truncate text-[10px] font-medium text-white/65">{keyStat(building)}</div>
-                {/* Size + build time */}
-                <div className="mt-1 flex items-center gap-2 text-[9px] text-white/35">
-                  <span>{building.width}&times;{building.height}</span>
-                  <span>{building.buildMinutes ? `${building.buildMinutes}m` : 'Instant'}</span>
-                </div>
+              {/* Cost + size row */}
+              <div className={`flex items-center justify-between px-2 pb-1.5 ${locked ? 'opacity-30' : ''}`}>
+                <CostLine comboCost={building.comboCost} materials={building.materials} />
+                <span className="text-[8px] text-white/25">{building.width}&times;{building.height}</span>
               </div>
 
-              {/* Flower variant selector */}
+              {/* Flower variant picker */}
               {selected && building.id === 'flower_bed' && (
-                <div className="px-2.5 pb-2 flex items-center gap-1">
-                  <span className="text-[9px] text-white/40 mr-1">Color:</span>
+                <div className="px-2 pb-1.5 flex items-center gap-1">
+                  <span className="text-[8px] text-white/35 mr-0.5">Color:</span>
                   {FLOWER_VARIANTS.map((v) => (
                     <button
                       key={v.id}
                       type="button"
                       onClick={(e) => { e.stopPropagation(); onSelect(building.id, v.id); }}
-                      className={`w-4 h-4 rounded-full border-2 transition-all ${
+                      className={`w-3.5 h-3.5 rounded-full border-2 transition-all ${
                         selectedVariant === v.id ? 'border-white scale-110' : 'border-white/20 hover:border-white/50'
                       }`}
                       style={{ backgroundColor: v.color }}
@@ -152,9 +138,8 @@ export default function PetWorldBuildMenu({
 
               {/* Locked overlay */}
               {locked && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center rounded-xl bg-black/40">
-                  <span className="text-base">🔒</span>
-                  <span className="mt-0.5 text-[9px] font-semibold text-white/50">Need {building.tierUnlockPopulation} pop</span>
+                <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/50">
+                  <span className="text-[9px] font-semibold text-white/40">Need {building.tierUnlockPopulation} pop</span>
                 </div>
               )}
             </button>
