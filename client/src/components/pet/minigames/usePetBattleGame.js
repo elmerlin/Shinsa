@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import * as audio from './petBattleAudio';
 
-export const VIEWPORT_WIDTH = 100;
-export const WORLD_WIDTH = 300;
-export const PLAYER_BASE_X = 12;
-export const ENEMY_BASE_X = WORLD_WIDTH - 12;
+export const VIEWPORT_WIDTH = 88;
+export const WORLD_WIDTH = 240;
+export const PLAYER_BASE_X = 14;
+export const ENEMY_BASE_X = WORLD_WIDTH - 14;
 
 const FIXED_DT = 1000 / 60;
 const PLAYER_BASE_HP = 1000;
@@ -12,16 +12,16 @@ const AURA_MAX = 500;
 const AURA_BASE_RATE = 14;
 const MAX_AURA_LEVEL = 8;
 const STAGE_CLEAR_MS = 1700;
-const WAVE_GAP_MS = 1200;
+const WAVE_GAP_MS = 700;
 const PROJECTILE_SPEED = 44;
-const CAMERA_LERP = 0.08;
+const CAMERA_LERP = 0.12;
 const BASE_CONTACT_RANGE = 8;
 
 export const ARCHETYPES = {
-  meatshield: { key: 'meatshield', label: 'Frontliner', cost: 50, hp: 80, damage: 10, moveSpeed: 14.4, range: 8, cooldownMs: 2000, attackMs: 650, projectile: false, size: 7.5 },
-  brawler: { key: 'brawler', label: 'Brawler', cost: 150, hp: 250, damage: 35, moveSpeed: 9.6, range: 10, cooldownMs: 5000, attackMs: 900, projectile: false, size: 9.5 },
-  ranged: { key: 'ranged', label: 'Ranged', cost: 250, hp: 120, damage: 50, moveSpeed: 7.2, range: 28, cooldownMs: 8000, attackMs: 1200, projectile: true, size: 8.5 },
-  tank: { key: 'tank', label: 'Tank', cost: 500, hp: 600, damage: 80, moveSpeed: 4.8, range: 12, cooldownMs: 15000, attackMs: 1500, projectile: false, aoe: 12, size: 12 },
+  meatshield: { key: 'meatshield', label: 'Frontliner', cost: 50, hp: 95, damage: 12, moveSpeed: 15.2, range: 8, cooldownMs: 1200, attackMs: 620, projectile: false, size: 8 },
+  brawler: { key: 'brawler', label: 'Brawler', cost: 150, hp: 285, damage: 40, moveSpeed: 10.8, range: 10, cooldownMs: 2800, attackMs: 820, projectile: false, size: 10.5 },
+  ranged: { key: 'ranged', label: 'Ranged', cost: 250, hp: 145, damage: 55, moveSpeed: 7.6, range: 34, cooldownMs: 4500, attackMs: 1050, projectile: true, size: 9.5 },
+  tank: { key: 'tank', label: 'Tank', cost: 500, hp: 760, damage: 92, moveSpeed: 5.8, range: 14, cooldownMs: 8000, attackMs: 1320, projectile: false, aoe: 14, size: 14 },
 };
 
 export const PET_UNIT_NAMES = {
@@ -32,11 +32,11 @@ export const PET_UNIT_NAMES = {
 };
 
 export const ENEMY_TYPES = {
-  basic: { key: 'basic', hp: 60, damage: 8, moveSpeed: 10.8, range: 8, score: 10, bounty: 15, attackMs: 700, size: 7 },
-  bruiser: { key: 'bruiser', hp: 200, damage: 25, moveSpeed: 7.2, range: 10, score: 25, bounty: 30, attackMs: 950, size: 9.5 },
-  sniper: { key: 'sniper', hp: 80, damage: 45, moveSpeed: 4.8, range: 28, score: 30, bounty: 35, attackMs: 1300, projectile: true, size: 8.5 },
-  tank: { key: 'tank', hp: 500, damage: 60, moveSpeed: 3.6, range: 12, score: 50, bounty: 50, attackMs: 1500, aoe: 12, size: 11 },
-  boss: { key: 'boss', hp: 1500, damage: 100, moveSpeed: 2.4, range: 14, score: 200, bounty: 100, attackMs: 1750, aoe: 16, size: 14 },
+  basic: { key: 'basic', hp: 60, damage: 8, moveSpeed: 11.6, range: 8, score: 10, bounty: 15, attackMs: 700, size: 8 },
+  bruiser: { key: 'bruiser', hp: 200, damage: 25, moveSpeed: 8.1, range: 10, score: 25, bounty: 30, attackMs: 930, size: 10.5 },
+  sniper: { key: 'sniper', hp: 80, damage: 45, moveSpeed: 5.4, range: 30, score: 30, bounty: 35, attackMs: 1220, projectile: true, size: 9.5 },
+  tank: { key: 'tank', hp: 500, damage: 60, moveSpeed: 4.1, range: 13, score: 50, bounty: 50, attackMs: 1440, aoe: 13, size: 12.5 },
+  boss: { key: 'boss', hp: 1500, damage: 100, moveSpeed: 2.8, range: 16, score: 200, bounty: 100, attackMs: 1680, aoe: 18, size: 16 },
 };
 
 function getWaveCount(stage) {
@@ -85,6 +85,7 @@ function createInitialState() {
     modeTimer: 0,
     outcome: '',
     victory: false,
+    battlefieldGround: 0,
     _nextId: 1,
   };
 }
@@ -112,12 +113,14 @@ function stageOutcomeScore(stage) {
 function createPlayerUnit(state, typeKey) {
   const template = ARCHETYPES[typeKey];
   const names = PET_UNIT_NAMES[state.character] || PET_UNIT_NAMES.dojocat;
+  const lane = state._nextId % 3;
+  const spawnOffset = (state.unitsSpawned % 3) * 1.8;
   return {
     id: state._nextId++,
     team: 'player',
     type: typeKey,
     name: names[typeKey] || template.label,
-    x: PLAYER_BASE_X + 8,
+    x: PLAYER_BASE_X + 10 + spawnOffset,
     hp: template.hp,
     maxHp: template.hp,
     damage: template.damage,
@@ -130,6 +133,7 @@ function createPlayerUnit(state, typeKey) {
     aoe: template.aoe || 0,
     size: template.size,
     attackFlash: 0,
+    renderLane: lane,
   };
 }
 
@@ -137,11 +141,12 @@ function createEnemyUnit(state, typeKey) {
   const template = ENEMY_TYPES[typeKey];
   const scale = enemyScale(state.stage);
   const hp = Math.round(template.hp * scale);
+  const lane = state._nextId % 3;
   return {
     id: state._nextId++,
     team: 'enemy',
     type: typeKey,
-    x: ENEMY_BASE_X - 10,
+    x: ENEMY_BASE_X - 12 - (lane * 1.6),
     hp,
     maxHp: hp,
     damage: Math.round(template.damage * Math.min(2.2, 1 + (state.stage - 1) * 0.12)),
@@ -155,6 +160,7 @@ function createEnemyUnit(state, typeKey) {
     score: template.score,
     bounty: template.bounty,
     attackFlash: 0,
+    renderLane: lane,
   };
 }
 
@@ -164,7 +170,7 @@ export function generateWaveEnemies(stage, wave, globalWave) {
     return [{ delayMs: 500, type: 'boss' }];
   }
 
-  const count = 4 + stage + wave;
+  const count = 5 + stage + wave;
   const pool = ['basic'];
   if (stage >= 2 || wave >= 2) pool.push('bruiser');
   if (stage >= 3) pool.push('sniper');
@@ -174,11 +180,47 @@ export function generateWaveEnemies(stage, wave, globalWave) {
     let type = pool[Math.floor(Math.random() * pool.length)];
     if (i === count - 1 && stage >= 4 && wave === getWaveCount(stage)) type = 'tank';
     enemies.push({
-      delayMs: 450 + i * Math.max(220, 650 - stage * 25),
+      delayMs: 300 + i * Math.max(150, 420 - stage * 18),
       type,
     });
   }
   return enemies;
+}
+
+function findClosestTarget(attacker, targets, direction) {
+  let best = null;
+  let bestDistance = Infinity;
+  targets.forEach((target) => {
+    if (target.hp <= 0) return;
+    const distance = direction > 0 ? target.x - attacker.x : attacker.x - target.x;
+    if (distance < 0 || distance > attacker.range) return;
+    if (distance < bestDistance) {
+      best = target;
+      bestDistance = distance;
+    }
+  });
+  return best;
+}
+
+function applyFormationSpacing(units, direction) {
+  const ordered = [...units].sort((a, b) => a.x - b.x);
+  const spacing = 3.8;
+  if (direction > 0) {
+    for (let index = 1; index < ordered.length; index++) {
+      const leader = ordered[index - 1];
+      const follower = ordered[index];
+      const maxX = leader.x - spacing;
+      if (follower.x > maxX) follower.x = maxX;
+    }
+    return;
+  }
+
+  for (let index = ordered.length - 2; index >= 0; index--) {
+    const leader = ordered[index + 1];
+    const follower = ordered[index];
+    const minX = leader.x + spacing;
+    if (follower.x < minX) follower.x = minX;
+  }
 }
 
 function queueWave(state) {
@@ -276,7 +318,7 @@ function updateUnits(state, dt, playerUnits, enemyUnits) {
   playerUnits.forEach((unit) => {
     unit.attackTimer = Math.max(0, unit.attackTimer - dt);
     unit.attackFlash = Math.max(0, unit.attackFlash - dt);
-    const target = enemyUnits.find((enemy) => enemy.hp > 0 && enemy.x >= unit.x && enemy.x - unit.x <= unit.range);
+    const target = findClosestTarget(unit, enemyUnits, 1);
     const canHitBase = state.enemyBaseHp > 0 && ENEMY_BASE_X - unit.x <= Math.max(BASE_CONTACT_RANGE, unit.range);
     if (target) {
       if (unit.attackTimer <= 0) attackUnit(state, unit, target, false);
@@ -286,11 +328,12 @@ function updateUnits(state, dt, playerUnits, enemyUnits) {
       unit.x = Math.min(ENEMY_BASE_X - 4, unit.x + unit.moveSpeed * dtSec);
     }
   });
+  applyFormationSpacing(playerUnits, 1);
 
   enemyUnits.forEach((unit) => {
     unit.attackTimer = Math.max(0, unit.attackTimer - dt);
     unit.attackFlash = Math.max(0, unit.attackFlash - dt);
-    const target = playerUnits.find((ally) => ally.hp > 0 && ally.x <= unit.x && unit.x - ally.x <= unit.range);
+    const target = findClosestTarget(unit, playerUnits, -1);
     const canHitBase = state.playerBaseHp > 0 && unit.x - PLAYER_BASE_X <= Math.max(BASE_CONTACT_RANGE, unit.range);
     if (target) {
       if (unit.attackTimer <= 0) attackUnit(state, unit, target, false);
@@ -300,6 +343,7 @@ function updateUnits(state, dt, playerUnits, enemyUnits) {
       unit.x = Math.max(PLAYER_BASE_X + 4, unit.x - unit.moveSpeed * dtSec);
     }
   });
+  applyFormationSpacing(enemyUnits, -1);
 }
 
 function updateProjectiles(state, dt) {
@@ -360,8 +404,7 @@ function updateFx(state, dt) {
 
 function updateCamera(state) {
   const playerFront = state.playerUnits.length ? Math.max(...state.playerUnits.map((unit) => unit.x)) : PLAYER_BASE_X + 12;
-  const enemyFront = state.enemyUnits.length ? Math.min(...state.enemyUnits.map((unit) => unit.x)) : ENEMY_BASE_X - 12;
-  const focus = clamp(((playerFront + enemyFront) / 2) - VIEWPORT_WIDTH / 2, 0, WORLD_WIDTH - VIEWPORT_WIDTH);
+  const focus = clamp(playerFront - VIEWPORT_WIDTH * 0.28, 0, WORLD_WIDTH - VIEWPORT_WIDTH);
   state.cameraX += (focus - state.cameraX) * CAMERA_LERP;
 }
 

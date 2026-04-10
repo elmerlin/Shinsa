@@ -15,8 +15,9 @@ import {
   drawStageClearBanner,
   drawStartScreen,
   drawDeathPoof,
+  getBattlefieldGroundY,
 } from './petBattleSprites';
-import { VIEWPORT_WIDTH, WORLD_WIDTH, ENEMY_BASE_X, PLAYER_BASE_X } from './usePetBattleGame';
+import { VIEWPORT_WIDTH, ENEMY_BASE_X, PLAYER_BASE_X } from './usePetBattleGame';
 
 export default function PetBattleCanvas({ game, character, reducedMotion }) {
   const canvasRef = useRef(null);
@@ -52,10 +53,10 @@ export default function PetBattleCanvas({ game, character, reducedMotion }) {
     ctx.clearRect(0, 0, w, h);
 
     drawBattlefield(ctx, w, h, state, reducedMotion);
-    const groundY = h * 0.82;
+    const groundY = getBattlefieldGroundY(h);
     const pxPerWorld = w / VIEWPORT_WIDTH;
     const worldToScreen = (worldX) => (worldX - state.cameraX) * pxPerWorld;
-    const scale = Math.max(2, Math.round(pxPerWorld / 7));
+    const scale = Math.max(3, Math.min(8, Math.round(Math.min(pxPerWorld * 0.95, h / 92))));
 
     const playerBaseX = worldToScreen(PLAYER_BASE_X);
     const enemyBaseX = worldToScreen(ENEMY_BASE_X);

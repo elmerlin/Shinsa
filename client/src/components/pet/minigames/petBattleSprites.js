@@ -2,12 +2,15 @@ import { CHAR_COLORS, drawPet } from './miniPumpSprites';
 
 const SMB_PALETTE = {
   sky: '#5C94FC',
+  skyDeep: '#3B67C7',
   cloud: '#FCFCFC',
   cloudShadow: '#BCBCBC',
   grass: '#00A800',
   grassDark: '#005800',
+  grassShadow: '#003d00',
   dirt: '#C84C0C',
   dirtDark: '#A02800',
+  dirtLight: '#df6d2d',
   brick: '#C84C0C',
   brickDark: '#7C2000',
   gold: '#FCB838',
@@ -110,6 +113,12 @@ const ENEMY_PALETTE = {
   t: '#7fb3ff',
 };
 
+const LANE_HEIGHT = 7;
+
+export function getBattlefieldGroundY(h) {
+  return Math.min(h * 0.72, h - 96);
+}
+
 function drawCloud(ctx, x, y, scale) {
   const ps = Math.max(2, Math.round(scale));
   drawPixelEllipse(ctx, x, y, 6, 3, ps, SMB_PALETTE.cloudShadow);
@@ -131,34 +140,44 @@ function drawHill(ctx, x, y, width, height) {
 }
 
 export function drawBattlefield(ctx, w, h, state, reducedMotion) {
-  const groundY = h * 0.82;
-  ctx.fillStyle = SMB_PALETTE.sky;
-  ctx.fillRect(0, 0, w, h);
+  const groundY = getBattlefieldGroundY(h);
+  const skyGrad = ctx.createLinearGradient(0, 0, 0, groundY);
+  skyGrad.addColorStop(0, '#739dff');
+  skyGrad.addColorStop(0.7, SMB_PALETTE.sky);
+  skyGrad.addColorStop(1, '#4e84ea');
+  ctx.fillStyle = skyGrad;
+  ctx.fillRect(0, 0, w, groundY + 20);
 
   const drift = reducedMotion ? 0 : (state.cameraX || 0) * 0.25;
   for (let i = -1; i < 4; i++) {
-    drawCloud(ctx, ((i * 190) - drift * 5) % (w + 260) - 80, 60 + (i % 2) * 26, 3);
+    drawCloud(ctx, ((i * 190) - drift * 5) % (w + 260) - 80, 54 + (i % 2) * 24, 4);
   }
 
   for (let i = -1; i < 4; i++) {
-    drawHill(ctx, i * 180 - drift * 2, groundY, 220, 90 - (i % 2) * 18);
+    drawHill(ctx, i * 180 - drift * 2, groundY, 220, 84 - (i % 2) * 14);
   }
 
-  ctx.fillStyle = SMB_PALETTE.grass;
-  ctx.fillRect(0, groundY, w, 12);
   ctx.fillStyle = SMB_PALETTE.grassDark;
-  ctx.fillRect(0, groundY + 10, w, 3);
-  ctx.fillStyle = SMB_PALETTE.dirt;
-  ctx.fillRect(0, groundY + 12, w, h - groundY - 12);
+  ctx.fillRect(0, groundY - 4, w, 18);
+  ctx.fillStyle = SMB_PALETTE.grass;
+  ctx.fillRect(0, groundY, w, 10);
+  ctx.fillStyle = '#29d129';
+  ctx.fillRect(0, groundY + 2, w, 2);
+  ctx.fillStyle = SMB_PALETTE.grassShadow;
+  ctx.fillRect(0, groundY + 10, w, 4);
+  ctx.fillStyle = SMB_PALETTE.dirtLight;
+  ctx.fillRect(0, groundY + 14, w, h - groundY - 14);
 
-  const brickW = 24;
-  const brickH = 14;
-  for (let y = groundY + 14; y < h; y += brickH) {
+  const brickW = 26;
+  const brickH = 16;
+  for (let y = groundY + 16; y < h; y += brickH) {
     for (let x = ((Math.floor(y / brickH) % 2) * (brickW / 2)) - brickW; x < w + brickW; x += brickW) {
-      ctx.fillStyle = SMB_PALETTE.dirtDark;
+      ctx.fillStyle = SMB_PALETTE.dirt;
       ctx.fillRect(x, y, brickW - 2, brickH - 2);
+      ctx.fillStyle = SMB_PALETTE.dirtDark;
+      ctx.fillRect(x + 2, y + brickH - 6, brickW - 8, 2);
       ctx.fillStyle = 'rgba(255,255,255,0.08)';
-      ctx.fillRect(x + 2, y + 2, brickW - 8, 2);
+      ctx.fillRect(x + 2, y + 2, brickW - 9, 2);
     }
   }
 }
@@ -223,36 +242,81 @@ function unitFrame(unit, animFrame) {
   return Math.floor(animFrame / 10) % 2 === 0 ? 'walk1' : 'walk2';
 }
 
-export function drawPlayerUnit(ctx, unit, x, groundY, scale, character, animFrame) {
-  const ps = Math.max(2, Math.round(scale));
-  if (unit.type === 'tank') {
-    ctx.save();
-    ctx.translate(x, groundY - 11 * ps);
-    drawPixelEllipse(ctx, 0, 9 * ps, 8, 4, ps, 'rgba(0,0,0,0.18)');
-    drawPet(ctx, 0, 0, Math.max(1, ps * 0.42), character, unit.attackFlash > 0 ? 'laser_fire' : 'ready', unit.attackFlash > 0 ? 'focused' : 'celebrate');
-    ctx.restore();
-  } else {
-    const frame = PLAYER_FRAMES[unit.type]?.[unitFrame(unit, animFrame)] || PLAYER_FRAMES.meatshield.walk1;
-    drawPixelMap(ctx, x - (frame[0].length * ps) / 2, groundY - frame.length * ps, ps, frame, playerPalette(character));
-  }
+function drawPlayerGear(ctx, x, y, ps, unit, character) {
+  const colors = CHAR_COLORS[character] || CHAR_COLORS.dojocat;
+  const dark = colors.dark || colors.outline;
+  const accent = colors.accent;
+  const light = colors.light;
 
-  const barW = Math.max(20, ps * 10);
+  if (unit.type === 'meatshield') {
+    ctx.fillStyle = accent;
+    ctx.fillRect(x - 6 * ps, y - 16 * ps, 12 * ps, 2 * ps);
+    ctx.fillStyle = light;
+    ctx.fillRect(x + 4 * ps, y - 16 * ps, 2 * ps, 4 * ps);
+  } else if (unit.type === 'brawler') {
+    ctx.fillStyle = accent;
+    ctx.fillRect(x - 11 * ps, y - 2 * ps, 3 * ps, 4 * ps);
+    ctx.fillRect(x + 8 * ps, y - 2 * ps, 3 * ps, 4 * ps);
+    ctx.fillStyle = dark;
+    ctx.fillRect(x - 10 * ps, y - 1 * ps, ps, 2 * ps);
+    ctx.fillRect(x + 9 * ps, y - 1 * ps, ps, 2 * ps);
+  } else if (unit.type === 'ranged') {
+    ctx.fillStyle = dark;
+    ctx.fillRect(x + 8 * ps, y - 15 * ps, ps, 13 * ps);
+    ctx.fillStyle = accent;
+    ctx.fillRect(x + 6 * ps, y - 14 * ps, 5 * ps, 2 * ps);
+    ctx.fillStyle = light;
+    ctx.fillRect(x + 5 * ps, y - 7 * ps, 7 * ps, 2 * ps);
+  } else if (unit.type === 'tank') {
+    ctx.fillStyle = dark;
+    ctx.fillRect(x - 11 * ps, y - 6 * ps, 22 * ps, 5 * ps);
+    ctx.fillRect(x - 12 * ps, y - 14 * ps, 5 * ps, 10 * ps);
+    ctx.fillRect(x + 7 * ps, y - 14 * ps, 5 * ps, 10 * ps);
+    ctx.fillStyle = accent;
+    ctx.fillRect(x - 10 * ps, y - 5 * ps, 20 * ps, 3 * ps);
+    ctx.fillRect(x - 9 * ps, y - 13 * ps, 3 * ps, 7 * ps);
+    ctx.fillRect(x + 6 * ps, y - 13 * ps, 3 * ps, 7 * ps);
+  }
+}
+
+export function drawPlayerUnit(ctx, unit, x, groundY, scale, character, animFrame) {
+  const laneLift = (unit.renderLane || 0) * LANE_HEIGHT;
+  const unitScaleMap = { meatshield: 0.48, brawler: 0.56, ranged: 0.53, tank: 0.72 };
+  const unitPs = Math.max(2, scale * (unitScaleMap[unit.type] || 0.5));
+  const baseY = groundY - laneLift - 15 * unitPs;
+
+  drawPet(
+    ctx,
+    x,
+    baseY,
+    unitPs,
+    character,
+    unit.attackFlash > 0 ? 'laser_fire' : (Math.floor(animFrame / 8) % 2 === 0 ? 'step_red' : 'step_blue'),
+    unit.attackFlash > 0 ? 'focused' : unit.type === 'tank' ? 'proud' : 'soft',
+  );
+  drawPlayerGear(ctx, x, groundY - laneLift - 1.5 * unitPs, unitPs, unit, character);
+
+  const barW = Math.max(24, unitPs * 18);
   ctx.fillStyle = 'rgba(0,0,0,0.4)';
-  ctx.fillRect(x - barW / 2, groundY - 28 * ps, barW, 3);
+  ctx.fillRect(x - barW / 2, groundY - laneLift - 33 * unitPs / 3, barW, 3);
   ctx.fillStyle = '#58e17c';
-  ctx.fillRect(x - barW / 2, groundY - 28 * ps, barW * (unit.hp / Math.max(1, unit.maxHp)), 3);
+  ctx.fillRect(x - barW / 2, groundY - laneLift - 33 * unitPs / 3, barW * (unit.hp / Math.max(1, unit.maxHp)), 3);
 }
 
 export function drawEnemyUnit(ctx, unit, x, groundY, scale, animFrame) {
-  const ps = Math.max(2, Math.round(scale));
+  const laneLift = (unit.renderLane || 0) * LANE_HEIGHT;
+  const ps = Math.max(2, Math.round(scale * 0.9));
   const frame = ENEMY_FRAMES[unit.type]?.[unitFrame(unit, animFrame)] || ENEMY_FRAMES.basic.walk1;
-  drawPixelMap(ctx, x - (frame[0].length * ps) / 2, groundY - frame.length * ps, ps, frame, ENEMY_PALETTE);
+  drawPixelEllipse(ctx, x, groundY - laneLift - 1, Math.max(4, ps * 2.8), 1, 1, 'rgba(0,0,0,0.14)');
+  drawPixelMap(ctx, x - (frame[0].length * ps) / 2, groundY - laneLift - frame.length * ps, ps, frame, ENEMY_PALETTE);
+  ctx.fillStyle = 'rgba(255,255,255,0.09)';
+  ctx.fillRect(x - frame[0].length * ps * 0.22, groundY - laneLift - frame.length * ps + ps * 1.4, frame[0].length * ps * 0.32, Math.max(2, ps));
 
   const barW = Math.max(18, ps * 9);
   ctx.fillStyle = 'rgba(0,0,0,0.45)';
-  ctx.fillRect(x - barW / 2, groundY - 24 * ps, barW, 3);
+  ctx.fillRect(x - barW / 2, groundY - laneLift - 24 * ps, barW, 3);
   ctx.fillStyle = '#ff8c7a';
-  ctx.fillRect(x - barW / 2, groundY - 24 * ps, barW * (unit.hp / Math.max(1, unit.maxHp)), 3);
+  ctx.fillRect(x - barW / 2, groundY - laneLift - 24 * ps, barW * (unit.hp / Math.max(1, unit.maxHp)), 3);
 }
 
 export function drawProjectile(ctx, projectile, x, y, scale, character) {
