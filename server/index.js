@@ -30,6 +30,7 @@ const youtubeRoutes = require('./routes/youtube');
 const i18nRoutes = require('./routes/i18n');
 const weeklyChallengeRoutes = require('./routes/weeklyChallenges');
 const petRoutes = require('./routes/pets');
+const petWorldRoutes = require('./routes/petWorld');
 const petBomberRoutes = require('./routes/petBomber');
 const petBomberWs = require('./lib/petBomber/ws');
 
@@ -95,6 +96,7 @@ app.use('/api/youtube', youtubeRoutes);
 app.use('/api/i18n', i18nRoutes);
 app.use('/api/weekly-challenges', weeklyChallengeRoutes);
 app.use('/api/pets', petRoutes);
+app.use('/api/pet-world', petWorldRoutes);
 app.use('/api/pet-bomber', petBomberRoutes);
 
 if (typeof piugameRoutes.startOverRankingNightlyScheduler === 'function') {

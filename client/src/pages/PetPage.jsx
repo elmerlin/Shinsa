@@ -29,6 +29,7 @@ import PetBattleLauncher from '../components/pet/minigames/PetBattleLauncher';
 import PetBattleModal from '../components/pet/minigames/PetBattleModal';
 import PetBomberLauncher from '../components/pet/minigames/PetBomberLauncher';
 import PetBomberModal from '../components/pet/minigames/PetBomberModal';
+import PetWorldLauncher from '../components/petWorld/PetWorldLauncher';
 import UserPickerDialog from '../components/UserPickerDialog';
 import { getProfilePath } from '../utils/profile';
 
@@ -2165,6 +2166,7 @@ function PetTab({ pet, shop, combo, economy, socialFeed, interactionBusy, activi
       <CollapsibleSection title="Play & Care" icon="🎮" defaultOpen={true}>
         {/* Minigame launchers */}
         <div className="space-y-2 mb-3">
+          <PetWorldLauncher />
           <MiniPumpLauncher onPlay={onMiniPump} stats={miniPumpStats} cost={minigameCosts?.['mini-pump']} comboBalance={comboBalance} />
           <PetInvadersLauncher onPlay={onPetInvaders} stats={petInvadersStats} cost={minigameCosts?.['pet-invaders']} comboBalance={comboBalance} />
           <PacItUpLauncher onPlay={onPacItUp} stats={pacItUpStats} cost={minigameCosts?.['pac-it-up']} comboBalance={comboBalance} />

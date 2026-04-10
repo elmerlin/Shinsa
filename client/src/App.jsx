@@ -70,6 +70,8 @@ const PrivacyPolicyPage = lazy(() => import('./pages/PrivacyPolicyPage'));
 const StoryArchivePage = lazy(() => import('./pages/StoryArchivePage'));
 const PetPage = lazy(() => import('./pages/PetPage'));
 const PetGuidePage = lazy(() => import('./pages/PetGuidePage'));
+const PetWorldPage = lazy(() => import('./pages/PetWorldPage'));
+const PetWorldVisitPage = lazy(() => import('./pages/PetWorldVisitPage'));
 const PetBomberRoom = lazy(() => import('./pages/PetBomberRoom'));
 const TranslationEditorDrawer = lazy(() => import('./components/TranslationEditorDrawer'));
 
@@ -1519,6 +1521,8 @@ export default function App() {
             <Route path="/head-to-head" element={<HeadToHeadPage />} />
             <Route path="/pet" element={<PetPage />} />
             <Route path="/pet/guide" element={<PetGuidePage />} />
+            <Route path="/pet/world" element={<PetWorldPage />} />
+            <Route path="/pet/world/:userId" element={<PetWorldVisitPage />} />
             <Route path="/pet/bomber/:roomId" element={<PetBomberRoom />} />
             <Route path="/fun" element={<FunPage />} />
             <Route path="/fantasy-match" element={<Navigate to="/fun?tab=fantasy" replace />} />

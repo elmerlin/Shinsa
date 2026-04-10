@@ -1504,3 +1504,24 @@ export const getPetBomberRooms = () => request('/pet-bomber/rooms');
 export const getPetBomberRoom = (roomId) => request(`/pet-bomber/rooms/${encodeURIComponent(roomId)}`);
 export const createPetBomberRoom = (character) => request('/pet-bomber/rooms', { method: 'POST', body: JSON.stringify({ character }) });
 export const completePetBomber = (results) => request('/pet-bomber/complete', { method: 'POST', body: JSON.stringify(results) });
+
+// Pet World
+export const getMyPetWorld = () => request('/pet-world/me');
+export const getVisitedPetWorld = (userId) => request(`/pet-world/visit/${encodeURIComponent(userId)}`);
+export const createPetWorld = (biome) => request('/pet-world/create', { method: 'POST', body: JSON.stringify({ biome }) });
+export const getPetWorldBuildings = () => request('/pet-world/buildings');
+export const buildPetWorldBuilding = ({ type, x, y }) => request('/pet-world/build', { method: 'POST', body: JSON.stringify({ type, x, y }) });
+export const demolishPetWorldBuilding = (buildingId) => request('/pet-world/demolish', { method: 'POST', body: JSON.stringify({ buildingId }) });
+export const upgradePetWorldBuilding = (buildingId) => request('/pet-world/upgrade', { method: 'POST', body: JSON.stringify({ buildingId }) });
+export const assignPetWorldWorkers = (buildingId, count) => request('/pet-world/assign-worker', { method: 'POST', body: JSON.stringify({ buildingId, count }) });
+export const expandPetWorld = (direction) => request('/pet-world/expand', { method: 'POST', body: JSON.stringify({ direction }) });
+export const clearPetWorldTile = (x, y) => request('/pet-world/clear-tile', { method: 'POST', body: JSON.stringify({ x, y }) });
+export const getPetWorldTrades = () => request('/pet-world/trades');
+export const createPetWorldTrade = ({ toUserId, offerResource, offerAmount, requestResource, requestAmount }) =>
+  request('/pet-world/trade/offer', {
+    method: 'POST',
+    body: JSON.stringify({ toUserId, offerResource, offerAmount, requestResource, requestAmount }),
+  });
+export const acceptPetWorldTrade = (id) => request(`/pet-world/trade/${encodeURIComponent(id)}/accept`, { method: 'POST' });
+export const declinePetWorldTrade = (id) => request(`/pet-world/trade/${encodeURIComponent(id)}/decline`, { method: 'POST' });
+export const getPetWorldLeaderboard = () => request('/pet-world/leaderboard');
