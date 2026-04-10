@@ -542,8 +542,8 @@ export default function PetBomberRoom() {
     const dx = clientX - cx;
     const dy = clientY - cy;
     const dist = Math.sqrt(dx * dx + dy * dy);
-    const maxDist = 42;
-    const deadZone = 14;
+    const maxDist = 54;
+    const deadZone = 18;
 
     // Clamp knob visual position
     const clamped = Math.min(dist, maxDist);
@@ -906,7 +906,7 @@ export default function PetBomberRoom() {
         )}
 
         {/* ── Chat overlay ─────────────────────────────── */}
-        <div className="absolute bottom-2 left-2 z-20 w-48 sm:w-56 pointer-events-none">
+        <div className={`absolute left-2 z-20 w-48 sm:w-56 pointer-events-none ${isMobile && phase === 'playing' ? 'bottom-36' : 'bottom-2'}`}>
           {/* Messages */}
           <div className="max-h-28 overflow-y-auto mb-1 space-y-0.5 scrollbar-none">
             {chatMessages.slice(-8).map((msg, i) => (
@@ -966,18 +966,18 @@ export default function PetBomberRoom() {
         {isMobile && phase === 'playing' && (
           <>
             {/* Direction controls — side configurable */}
-            <div className={`absolute bottom-6 z-20 pointer-events-auto ${controlSide === 'left' ? 'left-4' : 'right-4'}`}>
+            <div className={`absolute bottom-4 z-20 pointer-events-auto ${controlSide === 'left' ? 'left-3' : 'right-3'}`}>
               {controlType === 'dpad' ? (
                 /* ── D-Pad ── */
-                <div className="relative w-32 h-32">
+                <div className="relative w-44 h-44 rounded-[2rem] border border-white/10 bg-black/30 p-3 shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur-md">
                   {/* Up */}
                   <button
                     onTouchStart={handleDpadStart('up')}
                     onTouchEnd={handleDpadEnd()}
                     onTouchCancel={handleDpadEnd()}
-                    className="absolute top-0 left-1/2 -translate-x-1/2 w-11 h-11 rounded-lg bg-white/[0.08] border border-white/[0.12] active:bg-white/20 flex items-center justify-center transition-colors"
+                    className="absolute top-3 left-1/2 -translate-x-1/2 h-14 w-14 rounded-2xl border border-white/15 bg-white/[0.10] active:bg-white/25 flex items-center justify-center shadow-lg transition-colors"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 text-white/60">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-6 w-6 text-white/70">
                       <path fillRule="evenodd" d="M14.77 12.79a.75.75 0 01-1.06-.02L10 8.832 6.29 12.77a.75.75 0 11-1.08-1.04l4.25-4.5a.75.75 0 011.08 0l4.25 4.5a.75.75 0 01-.02 1.06z" clipRule="evenodd" />
                     </svg>
                   </button>
@@ -986,9 +986,9 @@ export default function PetBomberRoom() {
                     onTouchStart={handleDpadStart('down')}
                     onTouchEnd={handleDpadEnd()}
                     onTouchCancel={handleDpadEnd()}
-                    className="absolute bottom-0 left-1/2 -translate-x-1/2 w-11 h-11 rounded-lg bg-white/[0.08] border border-white/[0.12] active:bg-white/20 flex items-center justify-center transition-colors"
+                    className="absolute bottom-3 left-1/2 -translate-x-1/2 h-14 w-14 rounded-2xl border border-white/15 bg-white/[0.10] active:bg-white/25 flex items-center justify-center shadow-lg transition-colors"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 text-white/60">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-6 w-6 text-white/70">
                       <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
                     </svg>
                   </button>
@@ -997,9 +997,9 @@ export default function PetBomberRoom() {
                     onTouchStart={handleDpadStart('left')}
                     onTouchEnd={handleDpadEnd()}
                     onTouchCancel={handleDpadEnd()}
-                    className="absolute left-0 top-1/2 -translate-y-1/2 w-11 h-11 rounded-lg bg-white/[0.08] border border-white/[0.12] active:bg-white/20 flex items-center justify-center transition-colors"
+                    className="absolute left-3 top-1/2 h-14 w-14 -translate-y-1/2 rounded-2xl border border-white/15 bg-white/[0.10] active:bg-white/25 flex items-center justify-center shadow-lg transition-colors"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 text-white/60">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-6 w-6 text-white/70">
                       <path fillRule="evenodd" d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 11-1.04 1.08l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 011.06.02z" clipRule="evenodd" />
                     </svg>
                   </button>
@@ -1008,15 +1008,15 @@ export default function PetBomberRoom() {
                     onTouchStart={handleDpadStart('right')}
                     onTouchEnd={handleDpadEnd()}
                     onTouchCancel={handleDpadEnd()}
-                    className="absolute right-0 top-1/2 -translate-y-1/2 w-11 h-11 rounded-lg bg-white/[0.08] border border-white/[0.12] active:bg-white/20 flex items-center justify-center transition-colors"
+                    className="absolute right-3 top-1/2 h-14 w-14 -translate-y-1/2 rounded-2xl border border-white/15 bg-white/[0.10] active:bg-white/25 flex items-center justify-center shadow-lg transition-colors"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 text-white/60">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-6 w-6 text-white/70">
                       <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clipRule="evenodd" />
                     </svg>
                   </button>
                   {/* Center dot */}
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div className="w-3 h-3 rounded-full bg-white/[0.06] border border-white/[0.08]" />
+                    <div className="h-5 w-5 rounded-full border border-white/10 bg-white/[0.08] shadow-inner" />
                   </div>
                 </div>
               ) : (
@@ -1027,16 +1027,16 @@ export default function PetBomberRoom() {
                   onTouchEnd={handleJoystickEnd}
                   onTouchCancel={handleJoystickEnd}
                   style={{ touchAction: 'none' }}
-                  className="relative w-32 h-32 rounded-full bg-white/[0.05] border border-white/[0.1] flex items-center justify-center"
+                  className="relative h-44 w-44 rounded-[2rem] border border-white/10 bg-black/30 shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur-md flex items-center justify-center"
                 >
                   {/* Direction indicator marks */}
-                  <div className="absolute top-1.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-white/[0.15]" />
-                  <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-white/[0.15]" />
-                  <div className="absolute left-1.5 top-1/2 -translate-y-1/2 w-1 h-1 rounded-full bg-white/[0.15]" />
-                  <div className="absolute right-1.5 top-1/2 -translate-y-1/2 w-1 h-1 rounded-full bg-white/[0.15]" />
+                  <div className="absolute top-4 left-1/2 h-2 w-2 -translate-x-1/2 rounded-full bg-white/[0.15]" />
+                  <div className="absolute bottom-4 left-1/2 h-2 w-2 -translate-x-1/2 rounded-full bg-white/[0.15]" />
+                  <div className="absolute left-4 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-white/[0.15]" />
+                  <div className="absolute right-4 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-white/[0.15]" />
                   {/* Knob */}
                   <div
-                    className="w-14 h-14 rounded-full bg-white/[0.12] border-2 border-white/[0.18] shadow-lg"
+                    className="h-20 w-20 rounded-[1.75rem] border-2 border-white/[0.18] bg-white/[0.12] shadow-lg"
                     style={{
                       transform: `translate(${joystickOffset.x}px, ${joystickOffset.y}px)`,
                       transition: joystickTouchRef.current !== null ? 'none' : 'transform 0.15s ease-out',
@@ -1049,21 +1049,21 @@ export default function PetBomberRoom() {
             {/* Bomb button — opposite side */}
             <button
               onTouchStart={handleBombTouch}
-              className={`absolute bottom-10 z-20 w-16 h-16 rounded-full bg-rose-500/20 border-2 border-rose-400/30 active:bg-rose-500/40 flex items-center justify-center transition-colors pointer-events-auto ${
-                controlSide === 'left' ? 'right-6' : 'left-6'
+              className={`absolute bottom-7 z-20 flex h-24 w-24 items-center justify-center rounded-[2rem] border-2 border-rose-400/35 bg-black/30 shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur-md active:bg-rose-500/30 transition-colors pointer-events-auto ${
+                controlSide === 'left' ? 'right-4' : 'left-4'
               }`}
             >
-              <span className="text-2xl">💣</span>
+              <span className="text-4xl drop-shadow-[0_2px_6px_rgba(0,0,0,0.45)]">💣</span>
             </button>
 
             {/* Mobile chat toggle — near bomb button */}
             <button
               onClick={() => setChatOpen((v) => !v)}
-              className={`absolute bottom-10 z-20 w-10 h-10 rounded-full bg-white/[0.06] border border-white/[0.08] flex items-center justify-center pointer-events-auto ${
-                controlSide === 'left' ? 'right-24' : 'left-24'
+              className={`absolute bottom-12 z-20 flex h-12 w-12 items-center justify-center rounded-2xl border border-white/[0.08] bg-black/30 backdrop-blur-md pointer-events-auto ${
+                controlSide === 'left' ? 'right-28' : 'left-28'
               }`}
             >
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-white/40">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5 text-white/45">
                 <path fillRule="evenodd" d="M10 2c-2.236 0-4.43.18-6.57.524C1.993 2.755 1 4.014 1 5.426v5.148c0 1.413.993 2.67 2.43 2.902 1.168.188 2.352.327 3.55.414.28.02.521.18.642.413l1.713 3.293a.75.75 0 001.33 0l1.713-3.293a.783.783 0 01.642-.413 41.102 41.102 0 003.55-.414c1.437-.232 2.43-1.49 2.43-2.902V5.426c0-1.413-.993-2.67-2.43-2.902A41.289 41.289 0 0010 2zM6.75 6a.75.75 0 000 1.5h6.5a.75.75 0 000-1.5h-6.5zm0 2.5a.75.75 0 000 1.5h3.5a.75.75 0 000-1.5h-3.5z" clipRule="evenodd" />
               </svg>
             </button>
