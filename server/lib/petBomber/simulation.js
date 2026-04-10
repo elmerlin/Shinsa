@@ -228,6 +228,7 @@ function createRound(playerSeats) {
       character:     ps.character || null,
       isBot:         !!ps.isBot,
       passableBombs: new Set(),
+      moveCooldown:  0,
     });
   }
 
@@ -289,91 +290,26 @@ function canOccupy(state, player, cx, cy) {
   return true;
 }
 
-function moveTowards(value, target, maxDelta) {
-  if (Math.abs(target - value) <= maxDelta) return target;
-  return value + Math.sign(target - value) * maxDelta;
-}
-
-function snapTowardLane(value, maxDelta) {
-  const target = Math.round(value);
-  const snapped = moveTowards(value, target, maxDelta * LANE_SNAP_MULTIPLIER);
-  return Math.abs(snapped - target) <= LANE_SNAP_EPSILON ? target : snapped;
-}
-
-function laneAssistCandidates(value, maxDelta) {
-  const target = Math.round(value);
-  const candidates = [
-    value,
-    snapTowardLane(value, maxDelta),
-    moveTowards(value, target, maxDelta * LANE_SNAP_MULTIPLIER * 1.8),
-    target,
-  ];
-
-  const unique = [];
-  for (const candidate of candidates) {
-    const rounded = Math.round(candidate * 1000) / 1000;
-    if (!unique.some((existing) => Math.abs(existing - rounded) < 1e-6)) {
-      unique.push(rounded);
-    }
-  }
-  return unique;
-}
-
 function movePlayer(state, player, dir) {
   if (!player.alive) return;
   const v = DIR_VECS[dir];
   if (!v) return;
 
   player.dir = dir;
-  const speed = player.speed * DT;
-  let x = player.x;
-  let y = player.y;
+  if (player.moveCooldown > 0) return;
 
-  // Bomberman movement reads best when the player stays tightly centered on
-  // the perpendicular lane rather than drifting freely within a tile.
-  if (v.dx !== 0) {
-    const nx = x + v.dx * speed;
-    let moved = false;
-    for (const candidateY of laneAssistCandidates(y, speed)) {
-      if (!canOccupy(state, player, x, candidateY)) continue;
-      if (canOccupy(state, player, nx, candidateY)) {
-        x = nx;
-        y = candidateY;
-        moved = true;
-        break;
-      }
-    }
-    if (!moved) {
-      const alignedY = snapTowardLane(y, speed);
-      if (canOccupy(state, player, x, alignedY)) {
-        y = alignedY;
-      }
-    }
-  } else {
-    const ny = y + v.dy * speed;
-    let moved = false;
-    for (const candidateX of laneAssistCandidates(x, speed)) {
-      if (!canOccupy(state, player, candidateX, y)) continue;
-      if (canOccupy(state, player, candidateX, ny)) {
-        x = candidateX;
-        y = ny;
-        moved = true;
-        break;
-      }
-    }
-    if (!moved) {
-      const alignedX = snapTowardLane(x, speed);
-      if (canOccupy(state, player, alignedX, y)) {
-        x = alignedX;
-      }
-    }
-  }
+  const gx = toCell(player.x);
+  const gy = toCell(player.y);
+  const nx = gx + v.dx;
+  const ny = gy + v.dy;
 
-  player.x = x;
-  player.y = y;
+  if (isSolid(state, player, nx, ny)) return;
 
-  // Update passable-bomb set: once the player fully leaves a bomb's cell,
-  // the bomb becomes solid for them.
+  player.x = nx;
+  player.y = ny;
+  player.moveCooldown = 1 / Math.max(0.1, player.speed || BASE_SPEED);
+
+  // Once the player leaves a bomb's cell, it becomes solid for them again.
   for (const bombId of player.passableBombs) {
     const bomb = state.bombs.get(bombId);
     if (!bomb) {
@@ -382,12 +318,7 @@ function movePlayer(state, player, dir) {
     }
     const bgx = toCell(bomb.x);
     const bgy = toCell(bomb.y);
-    // Player's AABB no longer overlaps the bomb's cell?
-    const R = PLAYER_RADIUS;
-    if (player.x + R <= bgx - 0.5 ||
-        player.x - R >= bgx + 0.5 ||
-        player.y + R <= bgy - 0.5 ||
-        player.y - R >= bgy + 0.5) {
+    if (player.x !== bgx || player.y !== bgy) {
       player.passableBombs.delete(bombId);
     }
   }
@@ -733,6 +664,11 @@ function tick(state, inputs) {
   }
 
   // --- Process player inputs ---
+  for (const player of state.players.values()) {
+    if (!player.alive) continue;
+    player.moveCooldown = Math.max(0, (player.moveCooldown || 0) - DT);
+  }
+
   for (const [playerId, input] of inputs) {
     const player = state.players.get(playerId);
     if (!player || !player.alive) continue;
