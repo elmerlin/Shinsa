@@ -57,6 +57,7 @@ export default function PetBomberRoom() {
   const joinedRef = useRef(false);
   const autoStartedRef = useRef(false);
   const characterRef = useRef('dojocat');
+  const roomRef = useRef(null);
   const localSeatRef = useRef(-1);
   const roomIdRef = useRef(roomId);
 
@@ -103,6 +104,7 @@ export default function PetBomberRoom() {
   // ── Update room state helper ───────────────────────────────────
   const updateRoom = useCallback((roomData) => {
     if (!roomData) return;
+    roomRef.current = roomData;
     setRoom(roomData);
     // Find our seat
     if (user) {
@@ -271,11 +273,23 @@ export default function PetBomberRoom() {
         setMatchResult({ winner: data.winner, stats: data.stats });
         stopMusic();
         // Report to backend
+        {
+          const seatWins = Array.isArray(data.stats?.roundWins) ? data.stats.roundWins : [];
+          const roundsPlayed = data.stats?.rounds || seatWins.reduce((total, value) => total + (value || 0), 0);
+          const isHumanMatch = !(roomRef.current?.seats || []).some((seat) => seat && seat.isBot);
+          const didWin = data.winner === localSeatRef.current;
+          const localRoundsWon = localSeatRef.current >= 0 ? (seatWins[localSeatRef.current] || 0) : 0;
+
         completePetBomber({
           roomId: roomIdRef.current,
           winner: data.winner,
+          won: didWin,
+          isHumanMatch,
+          roundsWon: localRoundsWon,
+          roundsPlayed,
           stats: data.stats,
         }).catch(() => {});
+        }
         break;
 
       case 'chat':

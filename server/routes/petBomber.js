@@ -41,6 +41,50 @@ function ensureBomberTables(db) {
 
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
+function sumRoundWins(roundWins) {
+  if (!Array.isArray(roundWins)) return 0;
+  return roundWins.reduce((total, value) => total + (parseInt(value, 10) || 0), 0);
+}
+
+function normalizeCompletionPayload(userId, body) {
+  const payload = body || {};
+  const activeRoom = payload.roomId ? room.getRoom(payload.roomId) : null;
+  const userSeat = activeRoom?.seats?.find((seat) => seat && seat.userId === userId) || null;
+  const roundWins = payload.stats?.roundWins;
+
+  const won = typeof payload.won === 'boolean'
+    ? payload.won
+    : (typeof payload.winner === 'number' && userSeat ? payload.winner === userSeat.seat : false);
+
+  const isHumanMatch = typeof payload.isHumanMatch === 'boolean'
+    ? payload.isHumanMatch
+    : activeRoom
+      ? !activeRoom.seats.some((seat) => seat && seat.isBot)
+      : payload.botMode == null;
+
+  const roundsWon = clamp(
+    parseInt(payload.roundsWon, 10)
+      || (userSeat && Array.isArray(roundWins) ? (parseInt(roundWins[userSeat.seat], 10) || 0) : 0),
+    0,
+    99
+  );
+
+  const roundsPlayed = clamp(
+    parseInt(payload.roundsPlayed, 10)
+      || parseInt(payload.stats?.rounds, 10)
+      || sumRoundWins(roundWins),
+    0,
+    99
+  );
+
+  return {
+    won,
+    isHumanMatch,
+    roundsWon,
+    roundsPlayed,
+  };
+}
+
 // ─── GET /stats ──────────────────────────────────────────────────
 
 router.get('/stats', requireAuth, (req, res) => {
@@ -175,8 +219,8 @@ router.post('/complete', requireAuth, (req, res) => {
   const db = getDb();
   ensureBomberTables(db);
 
-  const { won, isHumanMatch, roundsWon, roundsPlayed } = req.body || {};
   const userId = req.user.id;
+  const { won, isHumanMatch, roundsWon, roundsPlayed } = normalizeCompletionPayload(userId, req.body);
 
   const result = recordMatchResult(
     userId,
