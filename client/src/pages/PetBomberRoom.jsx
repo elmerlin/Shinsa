@@ -3,6 +3,11 @@ import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { completePetBomber, getMyPet } from '../utils/api';
 import PetBomberRenderer from '../components/pet/minigames/petBomberRenderer';
+import {
+  startAudio, startMusic, stopMusic, setMuted as setAudioMuted, isMuted,
+  playBombPlace, playExplosion, playPickup, playKill, playDeath,
+  playCountdown, playRoundWin, playRoundLoss, playSuddenDeath,
+} from '../components/pet/minigames/petBomberAudio';
 
 const COLS = 13;
 const ROWS = 11;
@@ -35,6 +40,7 @@ export default function PetBomberRoom() {
   const [errorMsg, setErrorMsg] = useState('');
   const [rematchVotes, setRematchVotes] = useState(new Set());
   const [isMobile, setIsMobile] = useState(false);
+  const [muted, setMutedState] = useState(isMuted());
 
   // ── Refs (mutable game state, no re-renders) ───────────────────
   const wsRef = useRef(null);
@@ -202,6 +208,10 @@ export default function PetBomberRoom() {
           renderer.setGrid(data.room.round.grid);
           renderer.setLocalSeat(localSeatRef.current);
         }
+
+        // Start music on first round
+        startAudio();
+        startMusic();
         break;
       }
 
@@ -209,7 +219,20 @@ export default function PetBomberRoom() {
         const renderer = rendererRef.current;
         if (renderer) {
           if (data.snapshot) renderer.applySnapshot(data.snapshot);
-          if (data.gridChanges) renderer.applyGridChanges(data.gridChanges);
+          if (data.gridChanges) {
+            renderer.applyGridChanges(data.gridChanges);
+            // Trigger SFX for notable events
+            for (const change of data.gridChanges) {
+              if (change.type === 'bomb') playBombPlace();
+              else if (change.type === 'explosion') playExplosion();
+              else if (change.type === 'pickup') playPickup();
+              else if (change.type === 'kill') {
+                if (change.seat === localSeatRef.current) playDeath();
+                else playKill();
+              }
+              else if (change.type === 'sudden_death_start') playSuddenDeath();
+            }
+          }
         }
         break;
       }
@@ -217,11 +240,14 @@ export default function PetBomberRoom() {
       case 'round_end':
         setPhase('round_end');
         setRoundResult({ winner: data.winner, roundWins: data.roundWins });
+        if (data.winner === localSeatRef.current) playRoundWin();
+        else playRoundLoss();
         break;
 
       case 'match_end':
         setPhase('match_end');
         setMatchResult({ winner: data.winner, stats: data.stats });
+        stopMusic();
         // Report to backend
         completePetBomber({
           roomId: roomIdRef.current,
@@ -301,6 +327,8 @@ export default function PetBomberRoom() {
         rendererRef.current.dispose();
         rendererRef.current = null;
       }
+      // Stop music
+      stopMusic();
     };
   }, [roomId, connectWs, send]);
 
@@ -490,7 +518,13 @@ export default function PetBomberRoom() {
           )}
         </div>
 
-        <div className="w-10" />
+        <button
+          onClick={() => { const next = !muted; setMutedState(next); setAudioMuted(next); }}
+          className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-all"
+          title={muted ? 'Unmute' : 'Mute'}
+        >
+          {muted ? '🔇' : '🔊'}
+        </button>
       </div>
 
       {/* ── Game area ─────────────────────────────────── */}
