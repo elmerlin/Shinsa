@@ -1,439 +1,229 @@
-import * as THREE from 'three';
+/**
+ * Pet Bomber — Canvas 2D pixel-art renderer (SNES Bomberman style)
+ * Uses the same pet sprite system as Pet Battle / Pac It Up / Invaders.
+ */
+import { CHAR_COLORS, drawPet } from './miniPumpSprites';
 
-// ━━━ Constants ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// ─── Grid constants ──────────────────────────────────────────────
 const COLS = 13;
 const ROWS = 11;
 const CELL_EMPTY = 0;
 const CELL_HARD = 1;
 const CELL_SOFT = 2;
 
-const SEAT_COLORS = [0x4fc3f7, 0xf06292, 0x81c784, 0xffb74d];
-const DEAD_COLOR = 0x555555;
+// ─── SNES Bomberman palette ─────────────────────────────────────
+const GRASS_A = '#5da64e';
+const GRASS_B = '#529843';
+const HARD_BASE = '#62687a';
+const HARD_LIGHT = '#7a8298';
+const HARD_DARK = '#484e5c';
+const SOFT_BASE = '#c89464';
+const SOFT_LIGHT = '#daa878';
+const SOFT_DARK = '#a07444';
+const BORDER_DARK = '#383848';
+const BORDER_LIGHT = '#505068';
+const SUDDEN_DEATH_COLOR = '#8b2020';
 
-const ITEM_COLORS = {
-  extra_bomb: 0xff4444,
-  blast_up: 0xff8800,
-  speed_up: 0x00ddff,
-  kick: 0xffdd00,
-  pass: 0xaa44ff,
+const SEAT_COLORS = ['#60a5fa', '#f87171', '#34d399', '#fbbf24'];
+const SEAT_DARK   = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b'];
+
+const ITEM_PALETTE = {
+  extra_bomb: { bg: '#cc3333', fg: '#ff6666', label: '+B', shape: 'bomb' },
+  blast_up:   { bg: '#cc6600', fg: '#ffaa33', label: '+R', shape: 'flame' },
+  speed_up:   { bg: '#2288cc', fg: '#55ccff', label: 'SP', shape: 'bolt' },
+  kick:       { bg: '#ccaa00', fg: '#ffdd44', label: 'KI', shape: 'boot' },
+  pass:       { bg: '#7733bb', fg: '#bb77ff', label: 'PA', shape: 'ghost' },
 };
 
-const LERP_SPEED = 12; // units/sec for interpolation
+const LERP_SPEED = 14;
 
-// ━━━ PetBomberRenderer ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// ─── Helpers ─────────────────────────────────────────────────────
+function px(ctx, x, y, s, color) {
+  ctx.fillStyle = color;
+  ctx.fillRect(Math.round(x), Math.round(y), s, s);
+}
+
+function lerp(a, b, t) { return a + (b - a) * Math.min(t, 1); }
+
+// ─── Renderer ────────────────────────────────────────────────────
 export default class PetBomberRenderer {
-  constructor(containerEl, options = {}) {
+  constructor(containerEl) {
     this._container = containerEl;
     this._disposed = false;
     this._localSeat = -1;
-    this._clock = new THREE.Clock();
-    this._animFrame = 0;
-
-    // Grid state
     this._grid = null;
+    this._seatCharacters = {};
 
-    // Object pools
-    this._hardBlocks = [];
-    this._softBlocks = [];
-    this._players = [];
+    // Canvas
+    this._canvas = document.createElement('canvas');
+    this._canvas.style.display = 'block';
+    this._canvas.style.imageRendering = 'pixelated';
+    this._canvas.style.imageRendering = 'crisp-edges';
+    this._canvas.style.width = '100%';
+    this._canvas.style.height = '100%';
+    containerEl.appendChild(this._canvas);
+    this._ctx = this._canvas.getContext('2d');
+
+    // Layout (set by resize)
+    this._cs = 48; // cell size
+    this._ox = 0;  // grid offset x
+    this._oy = 0;  // grid offset y
+
+    // Dynamic state
+    this._players = Array.from({ length: 4 }, (_, i) => ({
+      x: [1, 11, 1, 11][i], y: [1, 1, 9, 9][i],
+      tx: [1, 11, 1, 11][i], ty: [1, 1, 9, 9][i],
+      dir: 'down', alive: true, visible: false,
+    }));
     this._bombs = new Map();
     this._explosions = new Map();
     this._items = new Map();
-    this._suddenDeathBlocks = [];
+    this._breakFX = []; // { x, y, t, max }
+    this._deathFX = []; // { x, y, t, seat }
+    this._suddenDeath = false;
+    this._timer = 90;
+    this._tick = 0;
 
-    // Snapshot state for interpolation
-    this._playerTargets = [{}, {}, {}, {}];
-    this._playerPositions = [{}, {}, {}, {}];
+    this._animTime = 0;
+    this._lastTime = performance.now();
+    this._rafId = 0;
 
-    this._initThree();
-    this._buildSharedGeometry();
-    this._buildScene();
-    this._buildPlayers();
+    this.resize();
     this._startLoop();
   }
 
-  // ── Three.js setup ──────────────────────────────────────────────
-  _initThree() {
-    const w = this._container.clientWidth || 400;
-    const h = this._container.clientHeight || 300;
-
-    this._renderer = new THREE.WebGLRenderer({ antialias: false, alpha: false });
-    this._renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this._renderer.setSize(w, h);
-    this._renderer.setClearColor(0x0a0c14, 1);
-    this._renderer.shadowMap.enabled = false;
-    this._container.appendChild(this._renderer.domElement);
-
-    this._scene = new THREE.Scene();
-    this._scene.fog = new THREE.FogExp2(0x0a0c14, 0.035);
-
-    // Camera: orthographic framing so the full arena stays visible on tall mobile screens.
-    const aspect = w / h;
-    this._camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 100);
-    this._updateCameraFraming(aspect);
-
-    // Lighting
-    const ambient = new THREE.AmbientLight(0x8899bb, 0.6);
-    this._scene.add(ambient);
-
-    const dir = new THREE.DirectionalLight(0xffffff, 0.8);
-    dir.position.set(6, 12, -4);
-    this._scene.add(dir);
-
-    // Subtle cyan point light for sci-fi feel
-    const point = new THREE.PointLight(0x22ccff, 0.3, 30);
-    point.position.set(COLS / 2, 5, ROWS / 2);
-    this._scene.add(point);
-  }
-
-  _updateCameraFraming(aspect = 1) {
-    const cx = (COLS - 1) / 2;
-    const cz = (ROWS - 1) / 2;
-    const boardWidth = COLS + 1.5;
-    const boardHeight = ROWS + 1.5;
-    const boardAspect = boardWidth / boardHeight;
-
-    let frustumWidth = boardWidth;
-    let frustumHeight = boardHeight;
-    if (aspect > boardAspect) {
-      frustumWidth = frustumHeight * aspect;
-    } else {
-      frustumHeight = frustumWidth / Math.max(aspect, 0.01);
-    }
-
-    this._camera.left = -frustumWidth / 2;
-    this._camera.right = frustumWidth / 2;
-    this._camera.top = frustumHeight / 2;
-    this._camera.bottom = -frustumHeight / 2;
-    this._camera.position.set(cx, 18, cz + 6);
-    this._camera.lookAt(cx, 0, cz);
-    this._camera.updateProjectionMatrix();
-  }
-
-  // ── Shared geometry & materials (pooled) ────────────────────────
-  _buildSharedGeometry() {
-    // Ground
-    this._groundGeo = new THREE.PlaneGeometry(COLS + 0.4, ROWS + 0.4);
-    this._groundMat = new THREE.MeshStandardMaterial({
-      color: 0x12151f,
-      roughness: 0.85,
-      metalness: 0.4,
-    });
-
-    // Grid lines
-    this._gridLinesMat = new THREE.LineBasicMaterial({ color: 0x1a3040, transparent: true, opacity: 0.6 });
-
-    // Hard block
-    this._hardGeo = new THREE.BoxGeometry(0.92, 1.1, 0.92);
-    this._hardMat = new THREE.MeshStandardMaterial({
-      color: 0x2a2a35,
-      roughness: 0.4,
-      metalness: 0.7,
-      emissive: 0xdd8800,
-      emissiveIntensity: 0.08,
-    });
-
-    // Soft block
-    this._softGeo = new THREE.BoxGeometry(0.88, 0.85, 0.88);
-    this._softMat = new THREE.MeshStandardMaterial({
-      color: 0x6633aa,
-      roughness: 0.3,
-      metalness: 0.2,
-      emissive: 0x8844cc,
-      emissiveIntensity: 0.15,
-      transparent: true,
-      opacity: 0.75,
-    });
-
-    // Bomb
-    this._bombGeo = new THREE.SphereGeometry(0.32, 12, 8);
-    this._bombMat = new THREE.MeshStandardMaterial({
-      color: 0x1a1a22,
-      roughness: 0.3,
-      metalness: 0.8,
-      emissive: 0xff3300,
-      emissiveIntensity: 0.2,
-    });
-    this._bombFuseGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.2, 4);
-    this._bombFuseMat = new THREE.MeshBasicMaterial({ color: 0xff6600 });
-
-    // Explosion segment
-    this._expGeo = new THREE.BoxGeometry(0.85, 0.5, 0.85);
-    this._expMat = new THREE.MeshStandardMaterial({
-      color: 0xffffff,
-      emissive: 0x44eeff,
-      emissiveIntensity: 1.0,
-      transparent: true,
-      opacity: 1.0,
-    });
-
-    // Item
-    this._itemGeo = new THREE.SphereGeometry(0.2, 8, 6);
-
-    // Player body (capsule-like: cylinder + spheres)
-    this._playerBodyGeo = new THREE.CylinderGeometry(0.28, 0.32, 0.58, 10);
-    this._playerHeadGeo = new THREE.SphereGeometry(0.28, 10, 8);
-    this._playerDirGeo = new THREE.ConeGeometry(0.1, 0.18, 4);
-    this._playerHaloGeo = new THREE.TorusGeometry(0.36, 0.05, 8, 18);
-    this._playerBeaconGeo = new THREE.SphereGeometry(0.12, 10, 8);
-
-    // Sudden death block (same shape as hard, different material)
-    this._sdMat = new THREE.MeshStandardMaterial({
-      color: 0x3a1010,
-      roughness: 0.4,
-      metalness: 0.6,
-      emissive: 0xff2200,
-      emissiveIntensity: 0.15,
-    });
-  }
-
-  // ── Build static scene ──────────────────────────────────────────
-  _buildScene() {
-    // Ground plane
-    const ground = new THREE.Mesh(this._groundGeo, this._groundMat);
-    ground.rotation.x = -Math.PI / 2;
-    ground.position.set((COLS - 1) / 2, -0.01, (ROWS - 1) / 2);
-    this._scene.add(ground);
-
-    // Neon grid lines
-    this._buildGridLines();
-
-    // Border glow strip
-    this._buildBorder();
-  }
-
-  _buildGridLines() {
-    const points = [];
-    // Vertical lines
-    for (let c = 0; c <= COLS; c++) {
-      points.push(new THREE.Vector3(c - 0.5, 0.005, -0.5));
-      points.push(new THREE.Vector3(c - 0.5, 0.005, ROWS - 0.5));
-    }
-    // Horizontal lines
-    for (let r = 0; r <= ROWS; r++) {
-      points.push(new THREE.Vector3(-0.5, 0.005, r - 0.5));
-      points.push(new THREE.Vector3(COLS - 0.5, 0.005, r - 0.5));
-    }
-    const geo = new THREE.BufferGeometry().setFromPoints(points);
-    const lines = new THREE.LineSegments(geo, this._gridLinesMat);
-    this._scene.add(lines);
-  }
-
-  _buildBorder() {
-    const mat = new THREE.MeshBasicMaterial({
-      color: 0x00ccff,
-      transparent: true,
-      opacity: 0.12,
-    });
-    const geo = new THREE.BoxGeometry(COLS + 0.8, 0.05, 0.15);
-
-    // Top and bottom
-    const top = new THREE.Mesh(geo, mat);
-    top.position.set((COLS - 1) / 2, 0.025, -0.7);
-    this._scene.add(top);
-
-    const bottom = new THREE.Mesh(geo, mat);
-    bottom.position.set((COLS - 1) / 2, 0.025, ROWS - 0.3);
-    this._scene.add(bottom);
-
-    const geoSide = new THREE.BoxGeometry(0.15, 0.05, ROWS + 0.8);
-    const left = new THREE.Mesh(geoSide, mat);
-    left.position.set(-0.7, 0.025, (ROWS - 1) / 2);
-    this._scene.add(left);
-
-    const right = new THREE.Mesh(geoSide, mat);
-    right.position.set(COLS - 0.3, 0.025, (ROWS - 1) / 2);
-    this._scene.add(right);
-  }
-
-  // ── Players ─────────────────────────────────────────────────────
-  _buildPlayers() {
-    for (let i = 0; i < 4; i++) {
-      const group = new THREE.Group();
-      group.visible = false;
-
-      const color = SEAT_COLORS[i];
-      const bodyMat = new THREE.MeshStandardMaterial({
-        color,
-        roughness: 0.5,
-        metalness: 0.3,
-        emissive: color,
-        emissiveIntensity: 0.1,
-      });
-
-      // Body
-      const body = new THREE.Mesh(this._playerBodyGeo, bodyMat);
-      body.position.y = 0.38;
-      group.add(body);
-
-      // Head
-      const head = new THREE.Mesh(this._playerHeadGeo, bodyMat);
-      head.position.y = 0.8;
-      group.add(head);
-
-      // Direction indicator
-      const dirMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-      const dir = new THREE.Mesh(this._playerDirGeo, dirMat);
-      dir.position.y = 0.8;
-      dir.position.z = -0.38;
-      dir.rotation.x = -Math.PI / 2;
-      group.add(dir);
-
-      const haloMat = new THREE.MeshBasicMaterial({
-        color,
-        transparent: true,
-        opacity: 0.95,
-      });
-      const halo = new THREE.Mesh(this._playerHaloGeo, haloMat);
-      halo.position.y = 0.08;
-      halo.rotation.x = Math.PI / 2;
-      group.add(halo);
-
-      const beaconMat = new THREE.MeshBasicMaterial({
-        color: 0xffffff,
-        transparent: true,
-        opacity: 0.95,
-      });
-      const beacon = new THREE.Mesh(this._playerBeaconGeo, beaconMat);
-      beacon.position.y = 1.35;
-      group.add(beacon);
-
-      this._scene.add(group);
-      this._players.push({
-        group,
-        bodyMat,
-        dirMesh: dir,
-        haloMat,
-        beacon,
-        beaconMat,
-        alive: true,
-        seat: i,
-      });
-
-      // Init positions
-      this._playerTargets[i] = { x: 0, z: 0, dir: 0 };
-      this._playerPositions[i] = { x: 0, z: 0 };
-    }
-  }
-
   // ── Public API ──────────────────────────────────────────────────
-  getCanvas() {
-    return this._renderer?.domElement ?? null;
+
+  getCanvas() { return this._canvas; }
+
+  setLocalSeat(seat) { this._localSeat = seat; }
+
+  setSeats(seats) {
+    this._seatCharacters = {};
+    if (!seats) return;
+    seats.forEach((s, i) => {
+      if (s && s.character) this._seatCharacters[i] = s.character;
+    });
   }
 
-  setLocalSeat(seat) {
-    this._localSeat = seat;
+  setGrid(grid) {
+    this._grid = grid ? grid.map(row => [...row]) : null;
+    // Reset dynamic state
+    this._bombs.clear();
+    this._explosions.clear();
+    this._items.clear();
+    this._breakFX = [];
+    this._deathFX = [];
+    // Reset players to spawn
+    for (let i = 0; i < 4; i++) {
+      const sx = [1, 11, 1, 11][i], sy = [1, 1, 9, 9][i];
+      this._players[i].x = sx;
+      this._players[i].y = sy;
+      this._players[i].tx = sx;
+      this._players[i].ty = sy;
+      this._players[i].dir = 'down';
+      this._players[i].alive = true;
+      this._players[i].visible = false;
+    }
   }
 
   resize() {
     if (this._disposed) return;
     const w = this._container.clientWidth || 400;
     const h = this._container.clientHeight || 300;
-    this._renderer.setSize(w, h);
-    this._updateCameraFraming(w / h);
+    this._canvas.width = w;
+    this._canvas.height = h;
+    // Fit grid in canvas with margins
+    const marginTop = 4;
+    const marginBot = 4;
+    const cw = Math.floor(w / COLS);
+    const ch = Math.floor((h - marginTop - marginBot) / ROWS);
+    this._cs = Math.max(16, Math.min(cw, ch));
+    const gridW = this._cs * COLS;
+    const gridH = this._cs * ROWS;
+    this._ox = Math.floor((w - gridW) / 2);
+    this._oy = Math.floor((h - gridH) / 2);
   }
 
-  setGrid(grid) {
-    this._grid = grid;
-    this._rebuildGrid();
-  }
-
-  applySnapshot(snapshot) {
-    if (!snapshot) return;
+  applySnapshot(snap) {
+    if (!snap) return;
+    this._tick = snap.t || 0;
+    this._timer = snap.tm != null ? snap.tm : 90;
+    this._suddenDeath = !!snap.sd;
 
     // Players
-    if (snapshot.p) {
-      for (const pd of snapshot.p) {
+    if (snap.p) {
+      for (const pd of snap.p) {
         const [seat, x, y, dir, alive] = pd;
         if (seat < 0 || seat >= 4) continue;
         const p = this._players[seat];
-        if (!p) continue;
-
-        p.group.visible = true;
-        this._playerTargets[seat].x = x;
-        this._playerTargets[seat].z = y;
-        this._playerTargets[seat].dir = dir;
-
-        if (!p.alive && alive) {
-          // Revived (shouldn't normally happen, but defensive)
-          p.alive = true;
-          this._setPlayerAlive(seat, true);
-        } else if (p.alive && !alive) {
+        p.tx = x;
+        p.ty = y;
+        p.dir = dir;
+        p.visible = true;
+        if (p.alive && !alive) {
           p.alive = false;
-          this._setPlayerAlive(seat, false);
+          this._deathFX.push({ x: p.x, y: p.y, t: 0, seat });
         }
+        if (!p.alive && alive) p.alive = true;
       }
     }
 
-    // Bombs
-    if (snapshot.b) {
-      const activeIds = new Set();
-      for (const bd of snapshot.b) {
+    // Bombs — sync with server
+    if (snap.b) {
+      const ids = new Set();
+      for (const bd of snap.b) {
         const [id, x, y, timer] = bd;
-        activeIds.add(id);
+        ids.add(id);
         if (!this._bombs.has(id)) {
-          this._createBomb(id, x, y, timer);
+          this._bombs.set(id, { x, y, timer, t: 0 });
         } else {
-          const bomb = this._bombs.get(id);
-          bomb.timer = timer;
+          const b = this._bombs.get(id);
+          b.x = x; b.y = y; b.timer = timer;
         }
       }
-      // Remove bombs no longer in snapshot
-      for (const [id, bomb] of this._bombs) {
-        if (!activeIds.has(id)) {
-          this._removeBomb(id);
-        }
+      for (const id of this._bombs.keys()) {
+        if (!ids.has(id)) this._bombs.delete(id);
       }
     } else {
-      // No bombs in snapshot, clear all
-      for (const [id] of this._bombs) {
-        this._removeBomb(id);
-      }
+      this._bombs.clear();
     }
 
     // Explosions
-    if (snapshot.e) {
-      const activeIds = new Set();
-      for (const ed of snapshot.e) {
+    if (snap.e) {
+      const ids = new Set();
+      for (const ed of snap.e) {
         const [id, cx, cy, up, right, down, left, timer] = ed;
-        activeIds.add(id);
+        ids.add(id);
         if (!this._explosions.has(id)) {
-          this._createExplosion(id, cx, cy, up, right, down, left, timer);
+          this._explosions.set(id, { cx, cy, up, right, down, left, timer, t: 0 });
         } else {
-          const exp = this._explosions.get(id);
-          exp.timer = timer;
+          const e = this._explosions.get(id);
+          e.timer = timer;
         }
       }
-      for (const [id] of this._explosions) {
-        if (!activeIds.has(id)) {
-          this._removeExplosion(id);
-        }
+      for (const id of this._explosions.keys()) {
+        if (!ids.has(id)) this._explosions.delete(id);
       }
     } else {
-      for (const [id] of this._explosions) {
-        this._removeExplosion(id);
-      }
+      this._explosions.clear();
     }
 
     // Items
-    if (snapshot.i) {
-      const activeIds = new Set();
-      for (const id of snapshot.i) {
+    if (snap.i) {
+      const ids = new Set();
+      for (const id of snap.i) {
         const [itemId, x, y, type] = id;
-        activeIds.add(itemId);
+        ids.add(itemId);
         if (!this._items.has(itemId)) {
-          this._createItem(itemId, x, y, type);
+          this._items.set(itemId, { x, y, type, t: 0 });
         }
       }
-      for (const [id] of this._items) {
-        if (!activeIds.has(id)) {
-          this._removeItem(id);
-        }
+      for (const id of this._items.keys()) {
+        if (!ids.has(id)) this._items.delete(id);
       }
     } else {
-      for (const [id] of this._items) {
-        this._removeItem(id);
-      }
+      this._items.clear();
     }
   }
 
@@ -442,38 +232,50 @@ export default class PetBomberRenderer {
     for (const ev of changes) {
       switch (ev.type) {
         case 'break':
-          this._breakSoftBlock(ev.x, ev.y);
+          if (this._grid && this._grid[ev.y]) {
+            this._grid[ev.y][ev.x] = CELL_EMPTY;
+          }
+          this._breakFX.push({ x: ev.x, y: ev.y, t: 0, max: 0.4 });
           break;
         case 'bomb':
           if (!this._bombs.has(ev.id)) {
-            this._createBomb(ev.id, ev.x, ev.y, 3);
+            this._bombs.set(ev.id, { x: ev.x, y: ev.y, timer: 2.5, t: 0 });
           }
           break;
         case 'explosion':
           if (!this._explosions.has(ev.id)) {
-            this._createExplosion(ev.id, ev.cx, ev.cy, ev.up, ev.right, ev.down, ev.left, 0.5);
+            this._explosions.set(ev.id, {
+              cx: ev.cx, cy: ev.cy,
+              up: ev.up, right: ev.right, down: ev.down, left: ev.left,
+              timer: 0.5, t: 0,
+            });
           }
           break;
         case 'item':
           if (!this._items.has(ev.id)) {
-            this._createItem(ev.id, ev.x, ev.y, ev.itemType);
+            this._items.set(ev.id, { x: ev.x, y: ev.y, type: ev.itemType, t: 0 });
           }
           break;
         case 'item_destroy':
         case 'pickup':
-          this._removeItem(ev.id);
+          this._items.delete(ev.id);
           break;
         case 'kill':
           if (ev.seat >= 0 && ev.seat < 4) {
-            this._players[ev.seat].alive = false;
-            this._setPlayerAlive(ev.seat, false);
+            const p = this._players[ev.seat];
+            if (p.alive) {
+              this._deathFX.push({ x: p.x, y: p.y, t: 0, seat: ev.seat });
+            }
+            p.alive = false;
           }
           break;
         case 'sudden_death':
-          this._addSuddenDeathBlock(ev.x, ev.y);
+          if (this._grid && this._grid[ev.y]) {
+            this._grid[ev.y][ev.x] = CELL_HARD;
+          }
           break;
         case 'sudden_death_start':
-          // Visual cue: flash the border or pulse - keep it simple
+          this._suddenDeath = true;
           break;
       }
     }
@@ -481,339 +283,555 @@ export default class PetBomberRenderer {
 
   dispose() {
     this._disposed = true;
-    if (this._animFrame) {
-      cancelAnimationFrame(this._animFrame);
-      this._animFrame = 0;
+    if (this._rafId) cancelAnimationFrame(this._rafId);
+    this._rafId = 0;
+    if (this._canvas.parentElement) {
+      this._canvas.parentElement.removeChild(this._canvas);
     }
-    // Clean up all meshes
-    this._scene.traverse((obj) => {
-      if (obj.geometry) obj.geometry.dispose();
-      if (obj.material) {
-        if (Array.isArray(obj.material)) {
-          obj.material.forEach((m) => m.dispose());
-        } else {
-          obj.material.dispose();
-        }
-      }
-    });
-    this._renderer.dispose();
-    if (this._renderer.domElement?.parentElement) {
-      this._renderer.domElement.parentElement.removeChild(this._renderer.domElement);
-    }
-    this._bombs.clear();
-    this._explosions.clear();
-    this._items.clear();
-  }
-
-  // ── Grid building ───────────────────────────────────────────────
-  _rebuildGrid() {
-    // Remove old blocks
-    for (const b of this._hardBlocks) this._scene.remove(b);
-    for (const b of this._softBlocks) this._scene.remove(b.mesh);
-    for (const b of this._suddenDeathBlocks) this._scene.remove(b);
-    this._hardBlocks = [];
-    this._softBlocks = [];
-    this._suddenDeathBlocks = [];
-
-    if (!this._grid) return;
-
-    for (let r = 0; r < this._grid.length; r++) {
-      for (let c = 0; c < this._grid[r].length; c++) {
-        const cell = this._grid[r][c];
-        if (cell === CELL_HARD) {
-          const mesh = new THREE.Mesh(this._hardGeo, this._hardMat);
-          mesh.position.set(c, 0.55, r);
-          this._scene.add(mesh);
-          this._hardBlocks.push(mesh);
-        } else if (cell === CELL_SOFT) {
-          const mesh = new THREE.Mesh(this._softGeo, this._softMat.clone());
-          mesh.position.set(c, 0.425, r);
-          this._scene.add(mesh);
-          this._softBlocks.push({ mesh, col: c, row: r, breaking: false, breakTimer: 0 });
-        }
-      }
-    }
-
-    // Initialize player positions to spawn corners
-    const spawns = [
-      { x: 1, z: 1 },
-      { x: COLS - 2, z: 1 },
-      { x: 1, z: ROWS - 2 },
-      { x: COLS - 2, z: ROWS - 2 },
-    ];
-    for (let i = 0; i < 4; i++) {
-      this._playerPositions[i] = { x: spawns[i].x, z: spawns[i].z };
-      this._playerTargets[i] = { x: spawns[i].x, z: spawns[i].z, dir: 0 };
-    }
-  }
-
-  _breakSoftBlock(col, row) {
-    const idx = this._softBlocks.findIndex((b) => b.col === col && b.row === row);
-    if (idx === -1) return;
-    const block = this._softBlocks[idx];
-    block.breaking = true;
-    block.breakTimer = 0.4; // animate for 0.4s then remove
-  }
-
-  _addSuddenDeathBlock(x, y) {
-    const mesh = new THREE.Mesh(this._hardGeo, this._sdMat);
-    mesh.position.set(x, 2.5, y); // start above, will drop
-    mesh.scale.set(1, 1, 1);
-    this._scene.add(mesh);
-    this._suddenDeathBlocks.push(mesh);
-    // Update grid state
-    if (this._grid && this._grid[y] !== undefined) {
-      this._grid[y][x] = CELL_HARD;
-    }
-  }
-
-  // ── Player helpers ──────────────────────────────────────────────
-  _setPlayerAlive(seat, alive) {
-    const p = this._players[seat];
-    if (!p) return;
-    if (alive) {
-      p.bodyMat.color.setHex(SEAT_COLORS[seat]);
-      p.bodyMat.emissive.setHex(SEAT_COLORS[seat]);
-      p.bodyMat.emissiveIntensity = 0.1;
-      p.haloMat.color.setHex(SEAT_COLORS[seat]);
-      p.haloMat.opacity = 0.95;
-      p.beacon.visible = true;
-      p.beaconMat.color.setHex(seat === this._localSeat ? 0xffffff : SEAT_COLORS[seat]);
-      p.beaconMat.opacity = seat === this._localSeat ? 1 : 0.9;
-      p.group.scale.set(1, 1, 1);
-    } else {
-      p.bodyMat.color.setHex(DEAD_COLOR);
-      p.bodyMat.emissive.setHex(0x000000);
-      p.bodyMat.emissiveIntensity = 0;
-      p.haloMat.color.setHex(DEAD_COLOR);
-      p.haloMat.opacity = 0.35;
-      p.beacon.visible = false;
-      p.group.scale.set(1, 0.3, 1); // flatten
-    }
-  }
-
-  _getDirectionRotation(dir) {
-    if (dir === 'up') return 0;
-    if (dir === 'right') return -Math.PI / 2;
-    if (dir === 'down') return Math.PI;
-    if (dir === 'left') return Math.PI / 2;
-
-    // dir: 0=up, 1=right, 2=down, 3=left
-    switch (dir) {
-      case 0: return 0;            // facing -Z (up on grid)
-      case 1: return -Math.PI / 2; // facing +X
-      case 2: return Math.PI;      // facing +Z
-      case 3: return Math.PI / 2;  // facing -X
-      default: return 0;
-    }
-  }
-
-  // ── Bomb management ─────────────────────────────────────────────
-  _createBomb(id, x, y, timer) {
-    const group = new THREE.Group();
-    const body = new THREE.Mesh(this._bombGeo, this._bombMat.clone());
-    body.position.y = 0.32;
-    group.add(body);
-
-    const fuse = new THREE.Mesh(this._bombFuseGeo, this._bombFuseMat);
-    fuse.position.y = 0.55;
-    group.add(fuse);
-
-    group.position.set(x, 0, y);
-    this._scene.add(group);
-    this._bombs.set(id, { group, body, timer, elapsed: 0 });
-  }
-
-  _removeBomb(id) {
-    const bomb = this._bombs.get(id);
-    if (!bomb) return;
-    this._scene.remove(bomb.group);
-    // Dispose cloned material
-    bomb.body.material.dispose();
-    this._bombs.delete(id);
-  }
-
-  // ── Explosion management ────────────────────────────────────────
-  _createExplosion(id, cx, cy, up, right, down, left, timer) {
-    const group = new THREE.Group();
-    const mat = this._expMat.clone();
-    const segments = [];
-
-    // Center
-    const center = new THREE.Mesh(this._expGeo, mat);
-    center.position.set(0, 0.25, 0);
-    group.add(center);
-    segments.push(center);
-
-    // Arms
-    const addArm = (dx, dz, len) => {
-      for (let i = 1; i <= len; i++) {
-        const seg = new THREE.Mesh(this._expGeo, mat);
-        seg.position.set(dx * i, 0.25, dz * i);
-        group.add(seg);
-        segments.push(seg);
-      }
-    };
-    addArm(0, -1, up);    // up = -Z
-    addArm(1, 0, right);  // right = +X
-    addArm(0, 1, down);   // down = +Z
-    addArm(-1, 0, left);  // left = -X
-
-    group.position.set(cx, 0, cy);
-    this._scene.add(group);
-    this._explosions.set(id, { group, mat, timer, maxTimer: timer, elapsed: 0, segments });
-  }
-
-  _removeExplosion(id) {
-    const exp = this._explosions.get(id);
-    if (!exp) return;
-    this._scene.remove(exp.group);
-    exp.mat.dispose();
-    this._explosions.delete(id);
-  }
-
-  // ── Item management ─────────────────────────────────────────────
-  _createItem(id, x, y, type) {
-    const color = ITEM_COLORS[type] || 0xffffff;
-    const mat = new THREE.MeshStandardMaterial({
-      color,
-      emissive: color,
-      emissiveIntensity: 0.5,
-      roughness: 0.3,
-      metalness: 0.2,
-    });
-    const mesh = new THREE.Mesh(this._itemGeo, mat);
-    mesh.position.set(x, 0.5, y);
-    this._scene.add(mesh);
-    this._items.set(id, { mesh, mat, type, elapsed: 0 });
-  }
-
-  _removeItem(id) {
-    const item = this._items.get(id);
-    if (!item) return;
-    this._scene.remove(item.mesh);
-    item.mat.dispose();
-    this._items.delete(id);
   }
 
   // ── Animation loop ──────────────────────────────────────────────
+
   _startLoop() {
-    const tick = () => {
+    const frame = (now) => {
       if (this._disposed) return;
-      this._animFrame = requestAnimationFrame(tick);
-      const dt = this._clock.getDelta();
-      const t = this._clock.elapsedTime;
-      this._updatePlayers(dt);
-      this._updateBombs(dt, t);
-      this._updateExplosions(dt);
-      this._updateItems(dt, t);
-      this._updateSoftBlocks(dt);
-      this._updateSuddenDeathBlocks(dt);
-      this._renderer.render(this._scene, this._camera);
+      this._rafId = requestAnimationFrame(frame);
+      const dt = Math.min((now - this._lastTime) / 1000, 0.1);
+      this._lastTime = now;
+      this._animTime += dt;
+      this._update(dt);
+      this._render();
     };
-    tick();
+    this._rafId = requestAnimationFrame(frame);
   }
 
-  _updatePlayers(dt) {
-    for (let i = 0; i < 4; i++) {
-      const p = this._players[i];
-      if (!p.group.visible) continue;
+  _update(dt) {
+    // Interpolate player positions
+    const lf = LERP_SPEED * dt;
+    for (const p of this._players) {
+      if (!p.visible) continue;
+      p.x = lerp(p.x, p.tx, lf);
+      p.y = lerp(p.y, p.ty, lf);
+    }
+    // Advance effect timers
+    for (const b of this._bombs.values()) b.t += dt;
+    for (const e of this._explosions.values()) e.t += dt;
+    for (const i of this._items.values()) i.t += dt;
+    this._breakFX = this._breakFX.filter(f => { f.t += dt; return f.t < f.max; });
+    this._deathFX = this._deathFX.filter(f => { f.t += dt; return f.t < 1.0; });
+  }
 
-      const target = this._playerTargets[i];
-      const pos = this._playerPositions[i];
+  // ── Main render ─────────────────────────────────────────────────
 
-      // Lerp position
-      const lerpFactor = Math.min(1, LERP_SPEED * dt);
-      pos.x += (target.x - pos.x) * lerpFactor;
-      pos.z += (target.z - pos.z) * lerpFactor;
+  _render() {
+    const ctx = this._ctx;
+    const w = this._canvas.width;
+    const h = this._canvas.height;
+    const cs = this._cs;
+    const ox = this._ox;
+    const oy = this._oy;
 
-      p.group.position.set(pos.x, 0, pos.z);
+    // Clear
+    ctx.fillStyle = '#2a2a3a';
+    ctx.fillRect(0, 0, w, h);
 
-      // Direction
-      const targetRot = this._getDirectionRotation(target.dir);
-      p.group.rotation.y = targetRot;
+    if (!this._grid) return;
 
-      // Small idle bob for alive players
-      if (p.alive) {
-        p.group.position.y = Math.sin(this._clock.elapsedTime * 3 + i) * 0.03;
-        p.beacon.position.y = 1.35 + Math.sin(this._clock.elapsedTime * 4 + i) * 0.08;
+    // ── Ground layer ──
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        const sx = ox + c * cs;
+        const sy = oy + r * cs;
+        const cell = this._grid[r][c];
+        if (cell === CELL_EMPTY) {
+          this._drawGrass(ctx, sx, sy, cs, c, r);
+        } else if (cell === CELL_HARD) {
+          this._drawHardBlock(ctx, sx, sy, cs);
+        } else if (cell === CELL_SOFT) {
+          this._drawGrass(ctx, sx, sy, cs, c, r);
+          this._drawSoftBlock(ctx, sx, sy, cs);
+        }
+      }
+    }
+
+    // ── Break effects ──
+    for (const fx of this._breakFX) {
+      const sx = ox + fx.x * cs;
+      const sy = oy + fx.y * cs;
+      const progress = fx.t / fx.max;
+      this._drawBreakEffect(ctx, sx, sy, cs, progress);
+    }
+
+    // ── Items (below players) ──
+    for (const item of this._items.values()) {
+      const sx = ox + item.x * cs;
+      const sy = oy + item.y * cs;
+      this._drawItem(ctx, sx, sy, cs, item.type, item.t);
+    }
+
+    // ── Bombs ──
+    for (const bomb of this._bombs.values()) {
+      const sx = ox + bomb.x * cs;
+      const sy = oy + bomb.y * cs;
+      this._drawBomb(ctx, sx, sy, cs, bomb.timer, bomb.t);
+    }
+
+    // ── Players (sorted by Y for overlap) ──
+    const sorted = this._players
+      .map((p, i) => ({ ...p, seat: i }))
+      .filter(p => p.visible)
+      .sort((a, b) => a.y - b.y);
+
+    for (const p of sorted) {
+      const sx = ox + p.x * cs;
+      const sy = oy + p.y * cs;
+      this._drawPlayer(ctx, sx, sy, cs, p.seat, p.dir, p.alive, p);
+    }
+
+    // ── Death effects ──
+    for (const fx of this._deathFX) {
+      const sx = ox + fx.x * cs;
+      const sy = oy + fx.y * cs;
+      this._drawDeathPoof(ctx, sx, sy, cs, fx.t);
+    }
+
+    // ── Explosions (on top) ──
+    for (const exp of this._explosions.values()) {
+      this._drawExplosion(ctx, ox, oy, cs, exp);
+    }
+
+    // ── Border ──
+    this._drawBorder(ctx, ox, oy, cs);
+
+    // ── HUD ──
+    this._drawHUD(ctx, w, h, ox, oy, cs);
+  }
+
+  // ── Tile drawing ────────────────────────────────────────────────
+
+  _drawGrass(ctx, x, y, cs, col, row) {
+    ctx.fillStyle = (col + row) % 2 === 0 ? GRASS_A : GRASS_B;
+    ctx.fillRect(x, y, cs, cs);
+    // Subtle pixel detail
+    const ps = Math.max(1, Math.floor(cs / 16));
+    if (ps >= 2) {
+      ctx.fillStyle = 'rgba(0,0,0,0.04)';
+      for (let dy = 0; dy < cs; dy += ps * 4) {
+        for (let dx = 0; dx < cs; dx += ps * 4) {
+          if ((Math.floor(dx / ps) + Math.floor(dy / ps)) % 3 === 0) {
+            ctx.fillRect(x + dx, y + dy, ps, ps);
+          }
+        }
       }
     }
   }
 
-  _updateBombs(dt, t) {
-    for (const [id, bomb] of this._bombs) {
-      bomb.elapsed += dt;
-      // Pulse scale based on timer urgency
-      const urgency = Math.max(0, 1 - bomb.timer / 3);
-      const pulse = 1 + Math.sin(t * (6 + urgency * 12)) * 0.08 * (1 + urgency);
-      bomb.group.scale.set(pulse, pulse, pulse);
+  _drawHardBlock(ctx, x, y, cs) {
+    const ps = Math.max(1, Math.floor(cs / 12));
+    // Base
+    ctx.fillStyle = HARD_BASE;
+    ctx.fillRect(x, y, cs, cs);
+    // Top bevel
+    ctx.fillStyle = HARD_LIGHT;
+    ctx.fillRect(x, y, cs, ps * 2);
+    ctx.fillRect(x, y, ps * 2, cs);
+    // Bottom bevel
+    ctx.fillStyle = HARD_DARK;
+    ctx.fillRect(x, y + cs - ps * 2, cs, ps * 2);
+    ctx.fillRect(x + cs - ps * 2, y, ps * 2, cs);
+    // Brick lines
+    ctx.fillStyle = HARD_DARK;
+    const halfH = Math.floor(cs / 2);
+    ctx.fillRect(x + ps * 2, y + halfH - 1, cs - ps * 4, Math.max(1, ps));
+    ctx.fillRect(x + Math.floor(cs / 3), y + ps * 2, Math.max(1, ps), halfH - ps * 3);
+    ctx.fillRect(x + Math.floor(cs * 2 / 3), y + halfH, Math.max(1, ps), halfH - ps * 3);
+  }
 
-      // Emissive intensity increases as timer decreases
-      const intensity = 0.2 + urgency * 0.8;
-      bomb.body.material.emissiveIntensity = intensity;
+  _drawSoftBlock(ctx, x, y, cs) {
+    const ps = Math.max(1, Math.floor(cs / 12));
+    const inset = ps;
+    // Base
+    ctx.fillStyle = SOFT_BASE;
+    ctx.fillRect(x + inset, y + inset, cs - inset * 2, cs - inset * 2);
+    // Top highlight
+    ctx.fillStyle = SOFT_LIGHT;
+    ctx.fillRect(x + inset, y + inset, cs - inset * 2, ps * 2);
+    ctx.fillRect(x + inset, y + inset, ps * 2, cs - inset * 2);
+    // Bottom shadow
+    ctx.fillStyle = SOFT_DARK;
+    ctx.fillRect(x + inset, y + cs - inset - ps * 2, cs - inset * 2, ps * 2);
+    ctx.fillRect(x + cs - inset - ps * 2, y + inset, ps * 2, cs - inset * 2);
+    // Cross-hatch
+    ctx.fillStyle = SOFT_DARK;
+    const mid = Math.floor(cs / 2);
+    ctx.fillRect(x + mid - 1, y + inset + ps * 2, Math.max(1, ps), cs - inset * 2 - ps * 4);
+    ctx.fillRect(x + inset + ps * 2, y + mid - 1, cs - inset * 2 - ps * 4, Math.max(1, ps));
+  }
+
+  _drawBreakEffect(ctx, x, y, cs, progress) {
+    const alpha = 1 - progress;
+    const scale = 1 - progress * 0.6;
+    const cx = x + cs / 2;
+    const cy = y + cs / 2;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(cx, cy);
+    ctx.scale(scale, scale);
+    // Shrinking soft block
+    const half = cs / 2;
+    ctx.fillStyle = SOFT_BASE;
+    ctx.fillRect(-half, -half, cs, cs);
+    ctx.restore();
+    // Debris particles
+    ctx.save();
+    ctx.globalAlpha = alpha * 0.8;
+    const ps = Math.max(2, cs / 8);
+    for (let i = 0; i < 6; i++) {
+      const angle = (i / 6) * Math.PI * 2 + progress * 2;
+      const dist = progress * cs * 0.8;
+      const px2 = cx + Math.cos(angle) * dist;
+      const py = cy + Math.sin(angle) * dist;
+      ctx.fillStyle = i % 2 === 0 ? SOFT_LIGHT : SOFT_DARK;
+      ctx.fillRect(px2 - ps / 2, py - ps / 2, ps, ps);
+    }
+    ctx.restore();
+  }
+
+  // ── Bomb drawing ────────────────────────────────────────────────
+
+  _drawBomb(ctx, x, y, cs, timer, elapsed) {
+    const cx = x + cs / 2;
+    const cy = y + cs / 2;
+    const r = cs * 0.32;
+    const urgency = Math.max(0, 1 - timer / 2.5);
+    const pulse = 1 + Math.sin(elapsed * (8 + urgency * 16)) * 0.06 * (1 + urgency);
+    const pr = r * pulse;
+
+    // Shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + r * 0.6, pr * 0.9, pr * 0.3, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Body
+    ctx.fillStyle = '#1a1a2e';
+    ctx.beginPath();
+    ctx.arc(cx, cy, pr, 0, Math.PI * 2);
+    ctx.fill();
+    // Highlight
+    ctx.fillStyle = '#3a3a5e';
+    ctx.beginPath();
+    ctx.arc(cx - pr * 0.25, cy - pr * 0.25, pr * 0.35, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Fuse
+    const fuseX = cx + pr * 0.3;
+    const fuseY = cy - pr * 0.8;
+    ctx.strokeStyle = '#886644';
+    ctx.lineWidth = Math.max(1, cs / 16);
+    ctx.beginPath();
+    ctx.moveTo(cx + pr * 0.1, cy - pr * 0.6);
+    ctx.quadraticCurveTo(fuseX + 2, fuseY + 4, fuseX, fuseY);
+    ctx.stroke();
+
+    // Spark
+    const sparkFlicker = Math.sin(elapsed * 20) > 0;
+    if (sparkFlicker) {
+      const sparkR = Math.max(2, cs / 10);
+      ctx.fillStyle = '#ffcc00';
+      ctx.beginPath();
+      ctx.arc(fuseX, fuseY - 1, sparkR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(fuseX, fuseY - 1, sparkR * 0.5, 0, Math.PI * 2);
+      ctx.fill();
     }
   }
 
-  _updateExplosions(dt) {
-    const toRemove = [];
-    for (const [id, exp] of this._explosions) {
-      exp.elapsed += dt;
-      // Fade out over the timer duration (estimate ~0.5s if timer is ticking down)
-      const life = Math.min(exp.elapsed / 0.5, 1);
-      const opacity = Math.max(0, 1 - life * 0.7);
-      exp.mat.opacity = opacity;
-      exp.mat.emissiveIntensity = (1 - life) * 1.5;
+  // ── Explosion drawing ───────────────────────────────────────────
 
-      // Scale up slightly at start
-      const scaleUp = life < 0.2 ? 0.8 + life * 5 * 0.2 : 1.0;
-      for (const seg of exp.segments) {
-        seg.scale.y = scaleUp * (1 - life * 0.3);
+  _drawExplosion(ctx, ox, oy, cs, exp) {
+    const life = Math.min(exp.t / 0.5, 1);
+    const alpha = life < 0.15 ? life / 0.15 : Math.max(0, 1 - (life - 0.15) / 0.85);
+    if (alpha <= 0) return;
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+
+    // Draw each cell of the explosion cross
+    const drawCell = (gx, gy, isEnd) => {
+      const sx = ox + gx * cs;
+      const sy = oy + gy * cs;
+      const inset = cs * 0.08;
+      const flicker = Math.sin(exp.t * 30 + gx * 3 + gy * 5) * 0.15;
+
+      // Outer glow
+      ctx.fillStyle = `rgba(255,100,0,${0.3 + flicker})`;
+      ctx.fillRect(sx - 2, sy - 2, cs + 4, cs + 4);
+
+      // Fire base
+      ctx.fillStyle = '#ff6600';
+      ctx.fillRect(sx + inset, sy + inset, cs - inset * 2, cs - inset * 2);
+
+      // Inner bright core
+      const innerInset = inset + cs * 0.12;
+      ctx.fillStyle = '#ffaa22';
+      ctx.fillRect(sx + innerInset, sy + innerInset, cs - innerInset * 2, cs - innerInset * 2);
+
+      // White-hot center
+      const coreInset = inset + cs * 0.22;
+      ctx.fillStyle = '#fff8dd';
+      ctx.fillRect(sx + coreInset, sy + coreInset, cs - coreInset * 2, cs - coreInset * 2);
+
+      // Pixel flame details at edges
+      const ps = Math.max(1, Math.floor(cs / 10));
+      ctx.fillStyle = '#ff3300';
+      if (isEnd) {
+        // Rounded end caps
+        for (let i = 0; i < 3; i++) {
+          const fx = sx + cs * 0.2 + Math.random() * cs * 0.6;
+          const fy = sy + cs * 0.2 + Math.random() * cs * 0.6;
+          ctx.fillRect(fx, fy, ps, ps);
+        }
       }
+    };
 
-      if (opacity <= 0.02) {
-        toRemove.push(id);
+    // Center
+    drawCell(exp.cx, exp.cy, false);
+
+    // Arms
+    const arms = [
+      { dx: 0, dy: -1, len: exp.up },
+      { dx: 0, dy: 1, len: exp.down },
+      { dx: -1, dy: 0, len: exp.left },
+      { dx: 1, dy: 0, len: exp.right },
+    ];
+    for (const arm of arms) {
+      for (let i = 1; i <= arm.len; i++) {
+        drawCell(exp.cx + arm.dx * i, exp.cy + arm.dy * i, i === arm.len);
       }
     }
-    for (const id of toRemove) {
-      this._removeExplosion(id);
+
+    ctx.restore();
+  }
+
+  // ── Item drawing ────────────────────────────────────────────────
+
+  _drawItem(ctx, x, y, cs, type, elapsed) {
+    const style = ITEM_PALETTE[type];
+    if (!style) return;
+
+    const cx = x + cs / 2;
+    const cy = y + cs / 2 + Math.sin(elapsed * 4) * cs * 0.06;
+    const r = cs * 0.28;
+
+    // Glow
+    ctx.save();
+    ctx.globalAlpha = 0.3 + Math.sin(elapsed * 3) * 0.1;
+    ctx.fillStyle = style.fg;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r * 1.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // Circle bg
+    ctx.fillStyle = style.bg;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Border
+    ctx.strokeStyle = style.fg;
+    ctx.lineWidth = Math.max(1, cs / 20);
+    ctx.stroke();
+
+    // Label
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `bold ${Math.max(8, Math.floor(cs * 0.26))}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(style.label, cx, cy + 1);
+  }
+
+  // ── Player drawing ──────────────────────────────────────────────
+
+  _drawPlayer(ctx, x, y, cs, seat, dir, alive, player) {
+    const cx = x + cs / 2;
+    const cy = y + cs * 0.35;
+    const character = this._seatCharacters[seat] || 'dojocat';
+    const ps = Math.max(1, Math.floor(cs / 22));
+
+    if (!alive) {
+      // Ghost / fallen
+      ctx.save();
+      ctx.globalAlpha = 0.35;
+      drawPet(ctx, cx, cy, ps * 0.7, character, 'bonk', 'stunned');
+      ctx.restore();
+      return;
+    }
+
+    // Walk animation
+    const dx = Math.abs(player.tx - player.x);
+    const dy = Math.abs(player.ty - player.y);
+    const isMoving = dx > 0.03 || dy > 0.03;
+    let pose = null;
+    if (isMoving) {
+      const phase = Math.floor(this._animTime * 8) % 4;
+      pose = [null, 'step_red', null, 'step_blue'][phase];
+    }
+
+    // Shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.18)';
+    ctx.beginPath();
+    ctx.ellipse(cx, y + cs * 0.85, cs * 0.3, cs * 0.1, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Seat color indicator ring on ground
+    ctx.strokeStyle = SEAT_DARK[seat];
+    ctx.lineWidth = Math.max(1, ps);
+    ctx.beginPath();
+    ctx.ellipse(cx, y + cs * 0.85, cs * 0.32, cs * 0.12, 0, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Draw the pet
+    drawPet(ctx, cx, cy, ps, character, pose, null);
+
+    // Local player indicator (small arrow above head)
+    if (seat === this._localSeat) {
+      const arrowY = cy - 22 * ps;
+      const bob = Math.sin(this._animTime * 4) * ps * 2;
+      ctx.fillStyle = SEAT_COLORS[seat];
+      ctx.beginPath();
+      ctx.moveTo(cx, arrowY + bob);
+      ctx.lineTo(cx - ps * 3, arrowY - ps * 4 + bob);
+      ctx.lineTo(cx + ps * 3, arrowY - ps * 4 + bob);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // Direction indicator (small dot in front of pet)
+    const dirOffsets = {
+      up: { dx: 0, dy: -cs * 0.45 },
+      down: { dx: 0, dy: cs * 0.45 },
+      left: { dx: -cs * 0.4, dy: 0 },
+      right: { dx: cs * 0.4, dy: 0 },
+    };
+    const doff = dirOffsets[dir];
+    if (doff && isMoving) {
+      ctx.fillStyle = SEAT_COLORS[seat];
+      ctx.globalAlpha = 0.5;
+      ctx.beginPath();
+      ctx.arc(cx + doff.dx, y + cs * 0.5 + doff.dy, ps * 1.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
     }
   }
 
-  _updateItems(dt, t) {
-    for (const [id, item] of this._items) {
-      item.elapsed += dt;
-      // Float and spin
-      item.mesh.position.y = 0.5 + Math.sin(t * 2 + id * 0.7) * 0.1;
-      item.mesh.rotation.y = t * 2;
+  // ── Death poof effect ───────────────────────────────────────────
+
+  _drawDeathPoof(ctx, x, y, cs, t) {
+    const progress = Math.min(t / 0.8, 1);
+    const alpha = 1 - progress;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    const cx = x + cs / 2;
+    const cy = y + cs / 2;
+    const ps = Math.max(2, cs / 8);
+
+    // Expanding cloud puffs
+    for (let i = 0; i < 8; i++) {
+      const angle = (i / 8) * Math.PI * 2;
+      const dist = progress * cs * 0.7;
+      const puffR = ps * (1.5 - progress);
+      const px2 = cx + Math.cos(angle) * dist;
+      const py = cy + Math.sin(angle) * dist;
+      ctx.fillStyle = i % 2 === 0 ? '#ffffff' : '#dddddd';
+      ctx.beginPath();
+      ctx.arc(px2, py, Math.max(1, puffR), 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Central flash
+    if (progress < 0.3) {
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(cx, cy, cs * 0.3 * (1 - progress / 0.3), 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
+  // ── Border ──────────────────────────────────────────────────────
+
+  _drawBorder(ctx, ox, oy, cs) {
+    const gw = cs * COLS;
+    const gh = cs * ROWS;
+    const bw = Math.max(2, Math.floor(cs / 8));
+
+    ctx.fillStyle = BORDER_DARK;
+    ctx.fillRect(ox - bw, oy - bw, gw + bw * 2, bw);       // top
+    ctx.fillRect(ox - bw, oy + gh, gw + bw * 2, bw);        // bottom
+    ctx.fillRect(ox - bw, oy, bw, gh);                       // left
+    ctx.fillRect(ox + gw, oy, bw, gh);                       // right
+
+    ctx.fillStyle = BORDER_LIGHT;
+    ctx.fillRect(ox - bw, oy - bw, gw + bw * 2, 1);         // top edge highlight
+    ctx.fillRect(ox - bw, oy - bw, 1, gh + bw * 2);         // left edge highlight
+
+    // Sudden death border glow
+    if (this._suddenDeath) {
+      const pulse = 0.3 + Math.sin(this._animTime * 4) * 0.2;
+      ctx.save();
+      ctx.globalAlpha = pulse;
+      ctx.strokeStyle = '#ff3300';
+      ctx.lineWidth = bw;
+      ctx.strokeRect(ox - bw / 2, oy - bw / 2, gw + bw, gh + bw);
+      ctx.restore();
     }
   }
 
-  _updateSoftBlocks(dt) {
-    const toRemove = [];
-    for (let i = this._softBlocks.length - 1; i >= 0; i--) {
-      const block = this._softBlocks[i];
-      if (!block.breaking) continue;
+  // ── HUD ─────────────────────────────────────────────────────────
 
-      block.breakTimer -= dt;
-      // Shrink and fade
-      const progress = 1 - Math.max(0, block.breakTimer / 0.4);
-      block.mesh.scale.set(1 - progress * 0.5, 1 - progress, 1 - progress * 0.5);
-      block.mesh.material.opacity = 0.75 * (1 - progress);
+  _drawHUD(ctx, w, h, ox, oy, cs) {
+    const gw = cs * COLS;
 
-      if (block.breakTimer <= 0) {
-        this._scene.remove(block.mesh);
-        block.mesh.material.dispose();
-        this._softBlocks.splice(i, 1);
-      }
-    }
-  }
+    // Timer bar above grid
+    const barY = oy - Math.max(16, Math.floor(cs / 3)) - 4;
+    const barH = Math.max(8, Math.floor(cs / 6));
+    const barW = gw;
+    const timeRatio = Math.max(0, this._timer / 90);
 
-  _updateSuddenDeathBlocks(dt) {
-    for (const mesh of this._suddenDeathBlocks) {
-      // Drop from above to y=0.55
-      if (mesh.position.y > 0.56) {
-        mesh.position.y = Math.max(0.55, mesh.position.y - dt * 8);
+    // Bar background
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    ctx.fillRect(ox, barY, barW, barH);
+
+    // Bar fill
+    const barColor = this._suddenDeath ? '#ff3300' : timeRatio > 0.25 ? '#44cc44' : '#ffaa00';
+    ctx.fillStyle = barColor;
+    ctx.fillRect(ox, barY, barW * timeRatio, barH);
+
+    // Timer text
+    const secs = Math.max(0, Math.ceil(this._timer));
+    const min = Math.floor(secs / 60);
+    const sec = secs % 60;
+    const timeStr = `${min}:${sec.toString().padStart(2, '0')}`;
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `bold ${Math.max(10, barH + 2)}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(timeStr, ox + barW / 2, barY - 2);
+
+    // "SUDDEN DEATH" flash
+    if (this._suddenDeath) {
+      const flash = Math.sin(this._animTime * 6) > 0;
+      if (flash) {
+        ctx.fillStyle = '#ff3300';
+        ctx.font = `bold ${Math.max(10, Math.floor(cs * 0.4))}px monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText('SUDDEN DEATH', ox + gw / 2, barY - Math.floor(cs * 0.5) - 4);
       }
     }
   }

@@ -211,7 +211,8 @@ function getInput(state, botPlayer) {
       if (Math.round(b.y) === br && Math.round(b.x) === bc) { bombHere = true; break; }
     }
     if (!bombHere) {
-      // Check if we can escape after placing
+      // Check if we can escape after placing — DON'T avoid danger cells
+      // because the bot needs to walk THROUGH the blast zone to escape it
       const fakeDanger = buildDangerMap(botGrid, {
         bombs: new Map([...state.bombs, ['fake', { x: bc, y: br, owner: botPlayer.id, timer: 0.5, blastRange: botPlayer.blastRange || 2 }]]),
         explosions: state.explosions,
@@ -220,7 +221,7 @@ function getInput(state, botPlayer) {
         botGrid,
         { r: br, c: bc },
         (r, c) => fakeDanger[r][c] === 0 && botGrid[r][c] !== HARD && botGrid[r][c] !== SOFT && botGrid[r][c] !== BOMB_CELL,
-        (r, c) => fakeDanger[r][c] === 1
+        null // allow traversing danger cells to find escape route
       );
       if (escPath && escPath.length > 0) {
         return { dir: escPath[0], bomb: true };

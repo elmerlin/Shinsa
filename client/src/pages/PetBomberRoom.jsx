@@ -216,6 +216,7 @@ export default function PetBomberRoom() {
         const renderer = rendererRef.current;
         if (renderer && data.room?.round?.grid) {
           renderer.setGrid(data.room.round.grid);
+          if (data.room.seats) renderer.setSeats(data.room.seats);
           renderer.setLocalSeat(localSeatRef.current);
           if (data.room.round.snapshot) {
             renderer.applySnapshot(data.room.round.snapshot);

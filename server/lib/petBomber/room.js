@@ -292,7 +292,11 @@ function tickLoop(room) {
       // state.players is a Map, so use .get()
       const botPlayer = state.players.get(seat.userId);
       if (botPlayer && botPlayer.alive) {
-        allInputs.set(seat.userId, bot.getInput(state, botPlayer));
+        try {
+          allInputs.set(seat.userId, bot.getInput(state, botPlayer));
+        } catch (e) {
+          console.error('[PetBomber] Bot AI error:', e.message);
+        }
       }
     } else {
       // Merge pending human input
