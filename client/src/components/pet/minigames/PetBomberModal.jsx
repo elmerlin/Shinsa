@@ -95,7 +95,7 @@ export default function PetBomberModal({ open, onClose, character }) {
   const lbEntries = (lbTab === 'human' ? humanLb : botLb) || [];
 
   return (
-    <div className="fixed inset-0 z-[200] flex flex-col bg-[#0d0e16]">
+    <div className="fixed inset-0 z-[200] flex flex-col bg-[#0d0e16] select-none" style={{ WebkitTouchCallout: 'none', overscrollBehavior: 'none' }} onContextMenu={(e) => e.preventDefault()}>
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 bg-black/40 border-b border-white/[0.06] shrink-0">
         <button onClick={onClose} className="flex items-center gap-1.5 text-gray-400 hover:text-white transition-colors text-sm">

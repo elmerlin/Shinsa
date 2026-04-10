@@ -231,6 +231,7 @@ export default function PetInvadersCanvas({ game, character, onStart, reducedMot
 
   // Touch input — hold to keep moving, tap for a small nudge until release
   const handleTouchStart = useCallback((e) => {
+    e.preventDefault();
     const state = game.getState();
     if (state.mode !== 'playing' && state.mode !== 'wave_clear' && state.mode !== 'boss_warning') return;
 

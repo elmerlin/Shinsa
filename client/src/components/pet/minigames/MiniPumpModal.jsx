@@ -97,7 +97,7 @@ export default function MiniPumpModal({ open, onClose, character, onComplete, st
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[200] flex flex-col overflow-hidden bg-[#06080f]">
+    <div className="fixed inset-0 z-[200] flex flex-col overflow-hidden bg-[#06080f] select-none" style={{ WebkitTouchCallout: 'none', overscrollBehavior: 'none' }} onContextMenu={(e) => e.preventDefault()}>
       {/* Top bar */}
       <div className="flex items-center justify-between px-3 py-2 bg-black/40 border-b border-white/[0.06] shrink-0">
         <button

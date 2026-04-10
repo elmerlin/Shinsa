@@ -209,6 +209,7 @@ export default function PacItUpCanvas({ game, character, reducedMotion }) {
 
   // ── Touch (swipe) ──────────────────────────────────
   const handleTouchStart = useCallback((e) => {
+    e.preventDefault();
     const t = e.touches[0];
     if (t) touchStartRef.current = { x: t.clientX, y: t.clientY };
   }, []);

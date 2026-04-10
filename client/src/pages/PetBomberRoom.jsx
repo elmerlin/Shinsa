@@ -616,7 +616,7 @@ export default function PetBomberRoom() {
 
   // ── Render ─────────────────────────────────────────────────────
   return (
-    <div className="fixed inset-0 bg-[#0d0e16] flex flex-col select-none" style={{ overscrollBehavior: 'none' }}>
+    <div className="fixed inset-0 bg-[#0d0e16] flex flex-col select-none" style={{ overscrollBehavior: 'none', WebkitTouchCallout: 'none' }} onContextMenu={(e) => e.preventDefault()}>
       {/* ── Header ────────────────────────────────────── */}
       <div className="flex items-center justify-between px-3 py-2 bg-black/50 border-b border-white/[0.06] shrink-0 z-20">
         <button

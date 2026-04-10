@@ -89,7 +89,7 @@ export default function PacItUpModal({ open, onClose, character, onComplete, sta
   const isCoarse = typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)')?.matches;
 
   return (
-    <div className="fixed inset-0 z-[200] flex flex-col overflow-hidden bg-[#0a0a14]">
+    <div className="fixed inset-0 z-[200] flex flex-col overflow-hidden bg-[#0a0a14] select-none" style={{ WebkitTouchCallout: 'none', overscrollBehavior: 'none' }} onContextMenu={(e) => e.preventDefault()}>
       {/* ── Top bar ── */}
       <div className="flex items-center justify-between px-3 py-2 bg-black/40 border-b border-white/[0.06]">
         <button onClick={handleClose} className="text-gray-400 hover:text-white text-xs flex items-center gap-1">

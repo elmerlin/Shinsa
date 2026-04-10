@@ -148,7 +148,7 @@ export default function PetBattleModal({ open, onClose, character, onComplete, s
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[200] flex flex-col overflow-hidden bg-[#0d0e16]">
+    <div className="fixed inset-0 z-[200] flex flex-col overflow-hidden bg-[#0d0e16] select-none" style={{ WebkitTouchCallout: 'none', overscrollBehavior: 'none' }} onContextMenu={(e) => e.preventDefault()}>
       <div className="flex items-center justify-between px-3 py-2 bg-black/40 border-b border-white/[0.06] shrink-0">
         <button
           onClick={handleClose}

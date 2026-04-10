@@ -268,6 +268,7 @@ export default function MiniPumpCanvas({ game, character, onStart, onShoot, redu
 
   // Touch input
   const handleTouch = useCallback((e) => {
+    e.preventDefault();
     const state = game.getState();
     if (state.mode !== 'playing') return;
     const canvas = canvasRef.current; if (!canvas) return;
