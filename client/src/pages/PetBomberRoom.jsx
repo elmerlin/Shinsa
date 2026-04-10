@@ -41,6 +41,10 @@ export default function PetBomberRoom() {
   const [rematchVotes, setRematchVotes] = useState(new Set());
   const [isMobile, setIsMobile] = useState(false);
   const [muted, setMutedState] = useState(isMuted());
+  const [controlSide, setControlSide] = useState(() => localStorage.getItem('petBomber_controlSide') || 'left');
+  const [controlType, setControlType] = useState(() => localStorage.getItem('petBomber_controlType') || 'dpad');
+  const [showSettings, setShowSettings] = useState(false);
+  const [joystickOffset, setJoystickOffset] = useState({ x: 0, y: 0 });
 
   // ── Refs (mutable game state, no re-renders) ───────────────────
   const wsRef = useRef(null);
@@ -60,6 +64,10 @@ export default function PetBomberRoom() {
   const dirStackRef = useRef([]); // stack of held direction keys
   const bombHeldRef = useRef(false);
   const dpadActiveRef = useRef(null); // currently touched dpad direction
+
+  // Joystick refs
+  const joystickTouchRef = useRef(null);
+  const joystickCenterRef = useRef({ x: 0, y: 0 });
 
   // ── Detect mobile ──────────────────────────────────────────────
   useEffect(() => {
@@ -477,6 +485,26 @@ export default function PetBomberRoom() {
     setChatInput('');
   }, [send, roomId, chatInput]);
 
+  // ── Prevent pull-to-refresh on mobile during gameplay ────────
+  useEffect(() => {
+    if (phase === 'playing' && isMobile) {
+      document.documentElement.style.overscrollBehavior = 'none';
+      document.body.style.overscrollBehavior = 'none';
+      return () => {
+        document.documentElement.style.overscrollBehavior = '';
+        document.body.style.overscrollBehavior = '';
+      };
+    }
+  }, [phase, isMobile]);
+
+  // ── Save control preferences ──────────────────────────────────
+  useEffect(() => {
+    localStorage.setItem('petBomber_controlSide', controlSide);
+  }, [controlSide]);
+  useEffect(() => {
+    localStorage.setItem('petBomber_controlType', controlType);
+  }, [controlType]);
+
   // ── D-pad touch handlers ───────────────────────────────────────
   const handleDpadStart = useCallback((dir) => (e) => {
     e.preventDefault();
@@ -491,6 +519,67 @@ export default function PetBomberRoom() {
   const handleBombTouch = useCallback((e) => {
     e.preventDefault();
     bombHeldRef.current = true;
+  }, []);
+
+  // ── Joystick touch handlers ────────────────────────────────────
+  const updateJoystickDir = useCallback((clientX, clientY) => {
+    const cx = joystickCenterRef.current.x;
+    const cy = joystickCenterRef.current.y;
+    const dx = clientX - cx;
+    const dy = clientY - cy;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const maxDist = 42;
+    const deadZone = 14;
+
+    // Clamp knob visual position
+    const clamped = Math.min(dist, maxDist);
+    const angle = Math.atan2(dy, dx);
+    setJoystickOffset({
+      x: Math.cos(angle) * clamped,
+      y: Math.sin(angle) * clamped,
+    });
+
+    if (dist < deadZone) {
+      dpadActiveRef.current = null;
+      return;
+    }
+
+    // Map angle to 4 cardinal directions
+    const deg = angle * (180 / Math.PI);
+    if (deg >= -45 && deg < 45) dpadActiveRef.current = 'right';
+    else if (deg >= 45 && deg < 135) dpadActiveRef.current = 'down';
+    else if (deg >= -135 && deg < -45) dpadActiveRef.current = 'up';
+    else dpadActiveRef.current = 'left';
+  }, []);
+
+  const handleJoystickStart = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const touch = e.touches[0];
+    joystickTouchRef.current = touch.identifier;
+    const rect = e.currentTarget.getBoundingClientRect();
+    joystickCenterRef.current = {
+      x: rect.left + rect.width / 2,
+      y: rect.top + rect.height / 2,
+    };
+    updateJoystickDir(touch.clientX, touch.clientY);
+  }, [updateJoystickDir]);
+
+  const handleJoystickMove = useCallback((e) => {
+    e.preventDefault();
+    for (let i = 0; i < e.touches.length; i++) {
+      if (e.touches[i].identifier === joystickTouchRef.current) {
+        updateJoystickDir(e.touches[i].clientX, e.touches[i].clientY);
+        break;
+      }
+    }
+  }, [updateJoystickDir]);
+
+  const handleJoystickEnd = useCallback((e) => {
+    e.preventDefault();
+    joystickTouchRef.current = null;
+    dpadActiveRef.current = null;
+    setJoystickOffset({ x: 0, y: 0 });
   }, []);
 
   // ── Derived state ──────────────────────────────────────────────
@@ -512,7 +601,7 @@ export default function PetBomberRoom() {
 
   // ── Render ─────────────────────────────────────────────────────
   return (
-    <div className="fixed inset-0 bg-[#0d0e16] flex flex-col select-none">
+    <div className="fixed inset-0 bg-[#0d0e16] flex flex-col select-none" style={{ overscrollBehavior: 'none' }}>
       {/* ── Header ────────────────────────────────────── */}
       <div className="flex items-center justify-between px-3 py-2 bg-black/50 border-b border-white/[0.06] shrink-0 z-20">
         <button
@@ -532,17 +621,85 @@ export default function PetBomberRoom() {
           )}
         </div>
 
-        <button
-          onClick={() => { const next = !muted; setMutedState(next); setAudioMuted(next); }}
-          className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-all"
-          title={muted ? 'Unmute' : 'Mute'}
-        >
-          {muted ? '🔇' : '🔊'}
-        </button>
+        <div className="flex items-center gap-1">
+          {/* Control settings (mobile only) */}
+          {isMobile && (
+            <button
+              onClick={() => setShowSettings(v => !v)}
+              className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all ${
+                showSettings ? 'text-violet-300 bg-violet-500/20' : 'text-gray-400 hover:text-white hover:bg-white/10'
+              }`}
+              title="Control settings"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                <path fillRule="evenodd" d="M7.84 1.804A1 1 0 018.82 1h2.36a1 1 0 01.98.804l.331 1.652a6.993 6.993 0 011.929 1.115l1.598-.54a1 1 0 011.186.447l1.18 2.044a1 1 0 01-.205 1.251l-1.267 1.113a7.047 7.047 0 010 2.228l1.267 1.113a1 1 0 01.206 1.25l-1.18 2.045a1 1 0 01-1.187.447l-1.598-.54a6.993 6.993 0 01-1.929 1.115l-.33 1.652a1 1 0 01-.98.804H8.82a1 1 0 01-.98-.804l-.331-1.652a6.993 6.993 0 01-1.929-1.115l-1.598.54a1 1 0 01-1.186-.447l-1.18-2.044a1 1 0 01.205-1.251l1.267-1.114a7.05 7.05 0 010-2.227L1.821 7.773a1 1 0 01-.206-1.25l1.18-2.045a1 1 0 011.187-.447l1.598.54A6.993 6.993 0 017.51 3.456l.33-1.652zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
+              </svg>
+            </button>
+          )}
+
+          <button
+            onClick={() => { const next = !muted; setMutedState(next); setAudioMuted(next); }}
+            className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-all"
+            title={muted ? 'Unmute' : 'Mute'}
+          >
+            {muted ? '🔇' : '🔊'}
+          </button>
+        </div>
       </div>
 
+      {/* ── Control settings dropdown ───────────────── */}
+      {showSettings && isMobile && (
+        <>
+          {/* Backdrop */}
+          <div className="fixed inset-0 z-30" onClick={() => setShowSettings(false)} />
+          <div className="absolute top-11 right-2 z-40 bg-[#181926] border border-white/[0.1] rounded-xl p-3 shadow-2xl w-44 space-y-3 animate-in fade-in slide-in-from-top-1 duration-150">
+            <div className="text-[10px] font-black text-white/40 uppercase tracking-[0.15em]">Controls</div>
+
+            {/* Side selection */}
+            <div className="space-y-1.5">
+              <div className="text-[10px] text-white/30 font-semibold">D-pad side</div>
+              <div className="flex gap-1">
+                {['left', 'right'].map(side => (
+                  <button
+                    key={side}
+                    onClick={() => { setControlSide(side); }}
+                    className={`flex-1 h-7 rounded-lg text-[10px] font-bold capitalize transition-all ${
+                      controlSide === side
+                        ? 'bg-violet-500/25 text-violet-200 border border-violet-400/30'
+                        : 'bg-white/[0.04] text-white/35 border border-white/[0.06] active:bg-white/[0.08]'
+                    }`}
+                  >
+                    {side}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Control type selection */}
+            <div className="space-y-1.5">
+              <div className="text-[10px] text-white/30 font-semibold">Input type</div>
+              <div className="flex gap-1">
+                {[['dpad', 'D-Pad'], ['joystick', 'Stick']].map(([val, label]) => (
+                  <button
+                    key={val}
+                    onClick={() => { setControlType(val); }}
+                    className={`flex-1 h-7 rounded-lg text-[10px] font-bold transition-all ${
+                      controlType === val
+                        ? 'bg-violet-500/25 text-violet-200 border border-violet-400/30'
+                        : 'bg-white/[0.04] text-white/35 border border-white/[0.06] active:bg-white/[0.08]'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
       {/* ── Game area ─────────────────────────────────── */}
-      <div ref={containerRef} className="flex-1 relative overflow-hidden">
+      <div ref={containerRef} className="flex-1 relative overflow-hidden" style={{ touchAction: isMobile ? 'none' : 'auto' }}>
 
         {/* ── Top HUD: scores + round ─────────────────── */}
         {phase === 'playing' && (
@@ -794,72 +951,103 @@ export default function PetBomberRoom() {
         {/* ── Touch controls (mobile) ──────────────────── */}
         {isMobile && phase === 'playing' && (
           <>
-            {/* D-pad - left side */}
-            <div className="absolute bottom-6 left-4 z-20 pointer-events-auto">
-              <div className="relative w-32 h-32">
-                {/* Up */}
-                <button
-                  onTouchStart={handleDpadStart('up')}
-                  onTouchEnd={handleDpadEnd()}
-                  onTouchCancel={handleDpadEnd()}
-                  className="absolute top-0 left-1/2 -translate-x-1/2 w-11 h-11 rounded-lg bg-white/[0.08] border border-white/[0.12] active:bg-white/20 flex items-center justify-center transition-colors"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 text-white/60">
-                    <path fillRule="evenodd" d="M14.77 12.79a.75.75 0 01-1.06-.02L10 8.832 6.29 12.77a.75.75 0 11-1.08-1.04l4.25-4.5a.75.75 0 011.08 0l4.25 4.5a.75.75 0 01-.02 1.06z" clipRule="evenodd" />
-                  </svg>
-                </button>
-                {/* Down */}
-                <button
-                  onTouchStart={handleDpadStart('down')}
-                  onTouchEnd={handleDpadEnd()}
-                  onTouchCancel={handleDpadEnd()}
-                  className="absolute bottom-0 left-1/2 -translate-x-1/2 w-11 h-11 rounded-lg bg-white/[0.08] border border-white/[0.12] active:bg-white/20 flex items-center justify-center transition-colors"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 text-white/60">
-                    <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
-                  </svg>
-                </button>
-                {/* Left */}
-                <button
-                  onTouchStart={handleDpadStart('left')}
-                  onTouchEnd={handleDpadEnd()}
-                  onTouchCancel={handleDpadEnd()}
-                  className="absolute left-0 top-1/2 -translate-y-1/2 w-11 h-11 rounded-lg bg-white/[0.08] border border-white/[0.12] active:bg-white/20 flex items-center justify-center transition-colors"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 text-white/60">
-                    <path fillRule="evenodd" d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 11-1.04 1.08l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 011.06.02z" clipRule="evenodd" />
-                  </svg>
-                </button>
-                {/* Right */}
-                <button
-                  onTouchStart={handleDpadStart('right')}
-                  onTouchEnd={handleDpadEnd()}
-                  onTouchCancel={handleDpadEnd()}
-                  className="absolute right-0 top-1/2 -translate-y-1/2 w-11 h-11 rounded-lg bg-white/[0.08] border border-white/[0.12] active:bg-white/20 flex items-center justify-center transition-colors"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 text-white/60">
-                    <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clipRule="evenodd" />
-                  </svg>
-                </button>
-                {/* Center dot */}
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className="w-3 h-3 rounded-full bg-white/[0.06] border border-white/[0.08]" />
+            {/* Direction controls — side configurable */}
+            <div className={`absolute bottom-6 z-20 pointer-events-auto ${controlSide === 'left' ? 'left-4' : 'right-4'}`}>
+              {controlType === 'dpad' ? (
+                /* ── D-Pad ── */
+                <div className="relative w-32 h-32">
+                  {/* Up */}
+                  <button
+                    onTouchStart={handleDpadStart('up')}
+                    onTouchEnd={handleDpadEnd()}
+                    onTouchCancel={handleDpadEnd()}
+                    className="absolute top-0 left-1/2 -translate-x-1/2 w-11 h-11 rounded-lg bg-white/[0.08] border border-white/[0.12] active:bg-white/20 flex items-center justify-center transition-colors"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 text-white/60">
+                      <path fillRule="evenodd" d="M14.77 12.79a.75.75 0 01-1.06-.02L10 8.832 6.29 12.77a.75.75 0 11-1.08-1.04l4.25-4.5a.75.75 0 011.08 0l4.25 4.5a.75.75 0 01-.02 1.06z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                  {/* Down */}
+                  <button
+                    onTouchStart={handleDpadStart('down')}
+                    onTouchEnd={handleDpadEnd()}
+                    onTouchCancel={handleDpadEnd()}
+                    className="absolute bottom-0 left-1/2 -translate-x-1/2 w-11 h-11 rounded-lg bg-white/[0.08] border border-white/[0.12] active:bg-white/20 flex items-center justify-center transition-colors"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 text-white/60">
+                      <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                  {/* Left */}
+                  <button
+                    onTouchStart={handleDpadStart('left')}
+                    onTouchEnd={handleDpadEnd()}
+                    onTouchCancel={handleDpadEnd()}
+                    className="absolute left-0 top-1/2 -translate-y-1/2 w-11 h-11 rounded-lg bg-white/[0.08] border border-white/[0.12] active:bg-white/20 flex items-center justify-center transition-colors"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 text-white/60">
+                      <path fillRule="evenodd" d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 11-1.04 1.08l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 011.06.02z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                  {/* Right */}
+                  <button
+                    onTouchStart={handleDpadStart('right')}
+                    onTouchEnd={handleDpadEnd()}
+                    onTouchCancel={handleDpadEnd()}
+                    className="absolute right-0 top-1/2 -translate-y-1/2 w-11 h-11 rounded-lg bg-white/[0.08] border border-white/[0.12] active:bg-white/20 flex items-center justify-center transition-colors"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 text-white/60">
+                      <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                  {/* Center dot */}
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="w-3 h-3 rounded-full bg-white/[0.06] border border-white/[0.08]" />
+                  </div>
                 </div>
-              </div>
+              ) : (
+                /* ── Virtual Joystick ── */
+                <div
+                  onTouchStart={handleJoystickStart}
+                  onTouchMove={handleJoystickMove}
+                  onTouchEnd={handleJoystickEnd}
+                  onTouchCancel={handleJoystickEnd}
+                  style={{ touchAction: 'none' }}
+                  className="relative w-32 h-32 rounded-full bg-white/[0.05] border border-white/[0.1] flex items-center justify-center"
+                >
+                  {/* Direction indicator marks */}
+                  <div className="absolute top-1.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-white/[0.15]" />
+                  <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-white/[0.15]" />
+                  <div className="absolute left-1.5 top-1/2 -translate-y-1/2 w-1 h-1 rounded-full bg-white/[0.15]" />
+                  <div className="absolute right-1.5 top-1/2 -translate-y-1/2 w-1 h-1 rounded-full bg-white/[0.15]" />
+                  {/* Knob */}
+                  <div
+                    className="w-14 h-14 rounded-full bg-white/[0.12] border-2 border-white/[0.18] shadow-lg"
+                    style={{
+                      transform: `translate(${joystickOffset.x}px, ${joystickOffset.y}px)`,
+                      transition: joystickTouchRef.current !== null ? 'none' : 'transform 0.15s ease-out',
+                    }}
+                  />
+                </div>
+              )}
             </div>
 
-            {/* Bomb button - right side */}
+            {/* Bomb button — opposite side */}
             <button
               onTouchStart={handleBombTouch}
-              className="absolute bottom-10 right-6 z-20 w-16 h-16 rounded-full bg-rose-500/20 border-2 border-rose-400/30 active:bg-rose-500/40 flex items-center justify-center transition-colors pointer-events-auto"
+              className={`absolute bottom-10 z-20 w-16 h-16 rounded-full bg-rose-500/20 border-2 border-rose-400/30 active:bg-rose-500/40 flex items-center justify-center transition-colors pointer-events-auto ${
+                controlSide === 'left' ? 'right-6' : 'left-6'
+              }`}
             >
               <span className="text-2xl">💣</span>
             </button>
 
-            {/* Mobile chat toggle */}
+            {/* Mobile chat toggle — near bomb button */}
             <button
               onClick={() => setChatOpen((v) => !v)}
-              className="absolute bottom-10 right-24 z-20 w-10 h-10 rounded-full bg-white/[0.06] border border-white/[0.08] flex items-center justify-center pointer-events-auto"
+              className={`absolute bottom-10 z-20 w-10 h-10 rounded-full bg-white/[0.06] border border-white/[0.08] flex items-center justify-center pointer-events-auto ${
+                controlSide === 'left' ? 'right-24' : 'left-24'
+              }`}
             >
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-white/40">
                 <path fillRule="evenodd" d="M10 2c-2.236 0-4.43.18-6.57.524C1.993 2.755 1 4.014 1 5.426v5.148c0 1.413.993 2.67 2.43 2.902 1.168.188 2.352.327 3.55.414.28.02.521.18.642.413l1.713 3.293a.75.75 0 001.33 0l1.713-3.293a.783.783 0 01.642-.413 41.102 41.102 0 003.55-.414c1.437-.232 2.43-1.49 2.43-2.902V5.426c0-1.413-.993-2.67-2.43-2.902A41.289 41.289 0 0010 2zM6.75 6a.75.75 0 000 1.5h6.5a.75.75 0 000-1.5h-6.5zm0 2.5a.75.75 0 000 1.5h3.5a.75.75 0 000-1.5h-3.5z" clipRule="evenodd" />
