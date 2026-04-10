@@ -700,40 +700,63 @@ export default function ListsPage() {
 
       {sharedLists.length > 0 && (
         <div className="space-y-3">
-          <div>
-            <h2 className="text-xs font-display font-bold tracking-[0.22em] text-cyan-300">SHARED LISTS</h2>
-            <p className="mt-1 text-xs text-gray-500">Lists you have joined or shared. Open one to see shared progress and members.</p>
-          </div>
-          <div className="grid gap-3 md:grid-cols-2">
-            {sharedLists.map((sharedList) => (
-              <button
-                key={sharedList.id}
-                type="button"
-                onClick={() => setSharedListDetailId(sharedList.id)}
-                className="w-full rounded-2xl border border-cyan-400/18 bg-[linear-gradient(180deg,rgba(13,20,39,0.96)_0%,rgba(8,12,26,0.98)_100%)] px-4 py-3 text-left shadow-[0_14px_30px_rgba(0,0,0,0.18)] transition-all hover:border-cyan-300/35 hover:bg-piu-dark/80"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-[9px] font-display font-bold uppercase tracking-[0.22em] text-cyan-200/80">
-                      {sharedList.owner?.username ? `${sharedList.owner.username}'s shared list` : 'Shared list'}
-                    </p>
-                    <h3 className="mt-1 text-lg font-display font-black text-white truncate">{sharedList.name}</h3>
-                    <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-gray-400">
-                      <span>{sharedList.itemCount} song{sharedList.itemCount !== 1 ? 's' : ''}</span>
-                      <span>{sharedList.memberCount} member{sharedList.memberCount !== 1 ? 's' : ''}</span>
-                    </div>
+          {sharedLists.map((sharedList) => (
+            <button
+              key={sharedList.id}
+              type="button"
+              onClick={() => setSharedListDetailId(sharedList.id)}
+              className="group relative w-full rounded-xl border border-piu-border/60 bg-piu-card/70 text-left px-4 py-3 transition-all hover:bg-piu-dark/30 hover:border-piu-border/80"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-display font-bold text-base truncate">{sharedList.name}</h3>
+                    <span className="shrink-0 inline-flex items-center gap-1 rounded-md bg-white/[0.04] border border-white/[0.06] px-1.5 py-0.5 text-[9px] font-display font-bold uppercase tracking-wider text-gray-400">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-2.5 h-2.5 text-gray-500">
+                        <path d="M15 8a7 7 0 1 1-14 0 7 7 0 0 1 14 0ZM5.5 6a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Zm5 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3ZM5 9.5a1 1 0 1 0-2 0v.5a4 4 0 0 0 4 4h2a4 4 0 0 0 4-4v-.5a1 1 0 1 0-2 0v.5a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-.5Z" />
+                      </svg>
+                      shared
+                    </span>
                   </div>
-                  <span className="shrink-0 rounded-full border border-cyan-300/18 bg-cyan-500/10 px-2.5 py-1 text-[9px] font-display font-bold uppercase tracking-[0.16em] text-cyan-100">
-                    Joined
-                  </span>
+                  <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1">
+                    <span className="text-[11px] text-gray-400">
+                      <span className="text-white font-bold">{sharedList.itemCount}</span> song{sharedList.itemCount !== 1 ? 's' : ''}
+                    </span>
+                    <span className="text-[11px] text-gray-400">
+                      <span className="text-white font-bold">{sharedList.memberCount}</span> member{sharedList.memberCount !== 1 ? 's' : ''}
+                    </span>
+                    {sharedList.owner?.username && (
+                      <span className="text-[11px] text-gray-500">
+                        by <span className="text-gray-300">{sharedList.owner.username}</span>
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <div className="mt-3 flex items-center justify-between text-[10px]">
-                  <span className="text-gray-500">Shared view</span>
-                  <span className="font-display font-bold text-cyan-300">Open</span>
+
+                <div className="shrink-0 flex items-center gap-2.5">
+                  {/* Owner avatar */}
+                  {sharedList.owner?.avatar ? (
+                    <img
+                      src={sharedList.owner.avatar}
+                      alt=""
+                      className="w-8 h-8 rounded-full border border-piu-border/50 object-cover opacity-70 group-hover:opacity-100 transition-opacity"
+                    />
+                  ) : (
+                    <div className="w-8 h-8 rounded-full border border-piu-border/50 bg-piu-dark flex items-center justify-center text-[10px] font-bold text-gray-500 opacity-70 group-hover:opacity-100 transition-opacity">
+                      {sharedList.owner?.username?.[0]?.toUpperCase() || '?'}
+                    </div>
+                  )}
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="w-4 h-4 text-gray-600 group-hover:text-gray-400 transition-colors"
+                    fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                  </svg>
                 </div>
-              </button>
-            ))}
-          </div>
+              </div>
+            </button>
+          ))}
         </div>
       )}
 
