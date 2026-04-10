@@ -113,10 +113,10 @@ const ENEMY_PALETTE = {
   t: '#7fb3ff',
 };
 
-const LANE_HEIGHT = 7;
+const LANE_HEIGHT = 5;
 
 export function getBattlefieldGroundY(h) {
-  return Math.min(h * 0.685, h - 126);
+  return Math.min(h * 0.742, h - 102);
 }
 
 function drawCloud(ctx, x, y, scale) {
@@ -203,7 +203,7 @@ export function drawBattlefield(ctx, w, h, state, reducedMotion) {
 
   const brickW = 26;
   const brickH = 16;
-  for (let y = groundY + 24; y < h; y += brickH) {
+  for (let y = groundY + 30; y < h; y += brickH) {
     for (let x = ((Math.floor(y / brickH) % 2) * (brickW / 2)) - brickW; x < w + brickW; x += brickW) {
       ctx.fillStyle = SMB_PALETTE.dirt;
       ctx.fillRect(x, y, brickW - 2, brickH - 2);
@@ -291,43 +291,85 @@ function drawPlayerGear(ctx, x, y, ps, unit, character) {
   const dark = colors.dark || colors.outline;
   const accent = colors.accent;
   const light = colors.light;
+  const cream = colors.belly || light;
 
   if (unit.type === 'meatshield') {
+    ctx.fillStyle = dark;
+    ctx.fillRect(x + 7 * ps, y - 16 * ps, 2 * ps, 18 * ps);
     ctx.fillStyle = accent;
     ctx.fillRect(x - 6 * ps, y - 16 * ps, 12 * ps, 2 * ps);
+    ctx.fillRect(x + 4 * ps, y - 13 * ps, 7 * ps, 3 * ps);
     ctx.fillStyle = light;
     ctx.fillRect(x + 4 * ps, y - 16 * ps, 2 * ps, 4 * ps);
-  } else if (unit.type === 'brawler') {
-    ctx.fillStyle = accent;
-    ctx.fillRect(x - 11 * ps, y - 2 * ps, 3 * ps, 4 * ps);
-    ctx.fillRect(x + 8 * ps, y - 2 * ps, 3 * ps, 4 * ps);
+    ctx.fillRect(x + 5 * ps, y - 7 * ps, 6 * ps, 5 * ps);
+    ctx.fillStyle = cream;
+    ctx.fillRect(x + 6 * ps, y - 11 * ps, 4 * ps, 2 * ps);
+    ctx.fillRect(x + 4 * ps, y - 6 * ps, 10 * ps, 3 * ps);
     ctx.fillStyle = dark;
-    ctx.fillRect(x - 10 * ps, y - 1 * ps, ps, 2 * ps);
-    ctx.fillRect(x + 9 * ps, y - 1 * ps, ps, 2 * ps);
+    ctx.fillRect(x - 7 * ps, y - 1 * ps, 2 * ps, 7 * ps);
+    ctx.fillRect(x - 9 * ps, y - 4 * ps, 7 * ps, 3 * ps);
+  } else if (unit.type === 'brawler') {
+    ctx.fillStyle = dark;
+    ctx.fillRect(x - 7 * ps, y - 12 * ps, 14 * ps, 3 * ps);
+    ctx.fillStyle = accent;
+    ctx.fillRect(x - 12 * ps, y - 3 * ps, 4 * ps, 5 * ps);
+    ctx.fillRect(x + 8 * ps, y - 3 * ps, 4 * ps, 5 * ps);
+    ctx.fillRect(x - 5 * ps, y - 10 * ps, 10 * ps, 4 * ps);
+    ctx.fillStyle = dark;
+    ctx.fillRect(x - 12 * ps, y - 2 * ps, ps, 2 * ps);
+    ctx.fillRect(x + 11 * ps, y - 2 * ps, ps, 2 * ps);
+    ctx.fillRect(x - 11 * ps, y - 8 * ps, 4 * ps, 2 * ps);
+    ctx.fillRect(x + 7 * ps, y - 8 * ps, 4 * ps, 2 * ps);
+    ctx.fillStyle = cream;
+    ctx.fillRect(x - 4 * ps, y - 9 * ps, 8 * ps, 2 * ps);
   } else if (unit.type === 'ranged') {
     ctx.fillStyle = dark;
-    ctx.fillRect(x + 8 * ps, y - 15 * ps, ps, 13 * ps);
+    ctx.fillRect(x - 2 * ps, y - 17 * ps, 4 * ps, 17 * ps);
+    ctx.fillRect(x + 2 * ps, y - 15 * ps, 10 * ps, 3 * ps);
     ctx.fillStyle = accent;
-    ctx.fillRect(x + 6 * ps, y - 14 * ps, 5 * ps, 2 * ps);
+    ctx.fillRect(x + 2 * ps, y - 14 * ps, 11 * ps, 2 * ps);
+    ctx.fillRect(x - 5 * ps, y - 8 * ps, 16 * ps, 2 * ps);
     ctx.fillStyle = light;
-    ctx.fillRect(x + 5 * ps, y - 7 * ps, 7 * ps, 2 * ps);
+    ctx.fillRect(x - 3 * ps, y - 11 * ps, 12 * ps, 2 * ps);
+    ctx.fillRect(x + 7 * ps, y - 17 * ps, 6 * ps, 5 * ps);
+    ctx.fillStyle = cream;
+    ctx.fillRect(x + 9 * ps, y - 15 * ps, 2 * ps, 3 * ps);
   } else if (unit.type === 'tank') {
     ctx.fillStyle = dark;
     ctx.fillRect(x - 11 * ps, y - 6 * ps, 22 * ps, 5 * ps);
     ctx.fillRect(x - 12 * ps, y - 14 * ps, 5 * ps, 10 * ps);
     ctx.fillRect(x + 7 * ps, y - 14 * ps, 5 * ps, 10 * ps);
+    ctx.fillRect(x - 15 * ps, y + 6 * ps, 8 * ps, 4 * ps);
+    ctx.fillRect(x + 7 * ps, y + 6 * ps, 8 * ps, 4 * ps);
+    ctx.fillRect(x - 6 * ps, y - 17 * ps, 12 * ps, 4 * ps);
     ctx.fillStyle = accent;
     ctx.fillRect(x - 10 * ps, y - 5 * ps, 20 * ps, 3 * ps);
     ctx.fillRect(x - 9 * ps, y - 13 * ps, 3 * ps, 7 * ps);
     ctx.fillRect(x + 6 * ps, y - 13 * ps, 3 * ps, 7 * ps);
+    ctx.fillRect(x - 13 * ps, y + 5 * ps, 5 * ps, 3 * ps);
+    ctx.fillRect(x + 8 * ps, y + 5 * ps, 5 * ps, 3 * ps);
+    ctx.fillStyle = cream;
+    ctx.fillRect(x - 3 * ps, y - 16 * ps, 6 * ps, 2 * ps);
+    ctx.fillRect(x - 6 * ps, y - 3 * ps, 12 * ps, 2 * ps);
   }
 }
 
 export function drawPlayerUnit(ctx, unit, x, groundY, scale, character, animFrame) {
   const laneLift = (unit.renderLane || 0) * LANE_HEIGHT;
-  const unitScaleMap = { meatshield: 0.48, brawler: 0.56, ranged: 0.53, tank: 0.72 };
+  const unitScaleMap = { meatshield: 0.5, brawler: 0.6, ranged: 0.58, tank: 0.76 };
   const unitPs = Math.max(2, scale * (unitScaleMap[unit.type] || 0.5));
   const baseY = groundY - laneLift - 15 * unitPs;
+  const unitAnim = animFrame + (unit.animOffset || 0);
+  const pose = unit.attackFlash > 0
+    ? 'laser_fire'
+    : (Math.floor(unitAnim / 8) % 2 === 0 ? 'step_red' : 'step_blue');
+  const expression = unit.attackFlash > 0
+    ? 'focused'
+    : unit.type === 'tank'
+      ? 'proud'
+      : unit.type === 'ranged'
+        ? 'focused'
+        : 'soft';
 
   drawPet(
     ctx,
@@ -335,10 +377,12 @@ export function drawPlayerUnit(ctx, unit, x, groundY, scale, character, animFram
     baseY,
     unitPs,
     character,
-    unit.attackFlash > 0 ? 'laser_fire' : (Math.floor(animFrame / 8) % 2 === 0 ? 'step_red' : 'step_blue'),
-    unit.attackFlash > 0 ? 'focused' : unit.type === 'tank' ? 'proud' : 'soft',
+    pose,
+    expression,
   );
   drawPlayerGear(ctx, x, groundY - laneLift - 1.5 * unitPs, unitPs, unit, character);
+  ctx.fillStyle = 'rgba(255,255,255,0.1)';
+  ctx.fillRect(x - 4 * unitPs, groundY - laneLift - 21 * unitPs, 8 * unitPs, unitPs);
 
   const barW = Math.max(24, unitPs * 18);
   ctx.fillStyle = 'rgba(0,0,0,0.4)';
@@ -350,7 +394,7 @@ export function drawPlayerUnit(ctx, unit, x, groundY, scale, character, animFram
 export function drawEnemyUnit(ctx, unit, x, groundY, scale, animFrame) {
   const laneLift = (unit.renderLane || 0) * LANE_HEIGHT;
   const ps = Math.max(2, Math.round(scale * 0.9));
-  const frame = ENEMY_FRAMES[unit.type]?.[unitFrame(unit, animFrame)] || ENEMY_FRAMES.basic.walk1;
+  const frame = ENEMY_FRAMES[unit.type]?.[unitFrame(unit, animFrame + (unit.animOffset || 0))] || ENEMY_FRAMES.basic.walk1;
   drawPixelEllipse(ctx, x, groundY - laneLift - 1, Math.max(4, ps * 2.8), 1, 1, 'rgba(0,0,0,0.14)');
   drawPixelMap(ctx, x - (frame[0].length * ps) / 2, groundY - laneLift - frame.length * ps, ps, frame, ENEMY_PALETTE);
   ctx.fillStyle = 'rgba(255,255,255,0.09)';

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import * as audio from './petBattleAudio';
 
-export const VIEWPORT_WIDTH = 88;
+export const VIEWPORT_WIDTH = 98;
 export const WORLD_WIDTH = 240;
 export const PLAYER_BASE_X = 14;
 export const ENEMY_BASE_X = WORLD_WIDTH - 14;
@@ -114,7 +114,7 @@ function createPlayerUnit(state, typeKey) {
   const template = ARCHETYPES[typeKey];
   const names = PET_UNIT_NAMES[state.character] || PET_UNIT_NAMES.dojocat;
   const lane = state._nextId % 3;
-  const spawnOffset = (state.unitsSpawned % 3) * 1.8;
+  const spawnOffset = (state.unitsSpawned % 3) * 1.1;
   return {
     id: state._nextId++,
     team: 'player',
@@ -127,13 +127,14 @@ function createPlayerUnit(state, typeKey) {
     moveSpeed: template.moveSpeed,
     range: template.range,
     attackMs: template.attackMs,
-    attackTimer: 250,
+    attackTimer: template.attackMs * (0.18 + Math.random() * 0.52),
     cooldownMs: template.cooldownMs,
     projectile: template.projectile,
     aoe: template.aoe || 0,
     size: template.size,
     attackFlash: 0,
     renderLane: lane,
+    animOffset: Math.random() * 36,
   };
 }
 
@@ -153,7 +154,7 @@ function createEnemyUnit(state, typeKey) {
     moveSpeed: template.moveSpeed,
     range: template.range,
     attackMs: template.attackMs,
-    attackTimer: 200,
+    attackTimer: template.attackMs * (0.16 + Math.random() * 0.48),
     projectile: template.projectile,
     aoe: template.aoe || 0,
     size: template.size,
@@ -161,6 +162,7 @@ function createEnemyUnit(state, typeKey) {
     bounty: template.bounty,
     attackFlash: 0,
     renderLane: lane,
+    animOffset: Math.random() * 36,
   };
 }
 
@@ -187,13 +189,19 @@ export function generateWaveEnemies(stage, wave, globalWave) {
   return enemies;
 }
 
+function getCombatGap(attacker, target, direction) {
+  const bodyGap = ((attacker.size || 8) + (target.size || 8)) * 0.42;
+  const distance = direction > 0 ? target.x - attacker.x : attacker.x - target.x;
+  return distance - bodyGap;
+}
+
 function findClosestTarget(attacker, targets, direction) {
   let best = null;
   let bestDistance = Infinity;
   targets.forEach((target) => {
     if (target.hp <= 0) return;
-    const distance = direction > 0 ? target.x - attacker.x : attacker.x - target.x;
-    if (distance < 0 || distance > attacker.range) return;
+    const distance = getCombatGap(attacker, target, direction);
+    if (distance < -1.2 || distance > attacker.range) return;
     if (distance < bestDistance) {
       best = target;
       bestDistance = distance;
@@ -204,11 +212,11 @@ function findClosestTarget(attacker, targets, direction) {
 
 function applyFormationSpacing(units, direction) {
   const ordered = [...units].sort((a, b) => direction > 0 ? b.x - a.x : a.x - b.x);
-  const spacing = 3.8;
   if (direction > 0) {
     for (let index = 1; index < ordered.length; index++) {
       const leader = ordered[index - 1];
       const follower = ordered[index];
+      const spacing = Math.max(1.1, Math.min(2.15, ((leader.size || 8) + (follower.size || 8)) * 0.085));
       const desiredX = leader.x - spacing;
       if (follower.x > desiredX) follower.x = desiredX;
     }
@@ -218,6 +226,7 @@ function applyFormationSpacing(units, direction) {
   for (let index = 1; index < ordered.length; index++) {
     const leader = ordered[index - 1];
     const follower = ordered[index];
+    const spacing = Math.max(1.1, Math.min(2.15, ((leader.size || 8) + (follower.size || 8)) * 0.085));
     const desiredX = leader.x + spacing;
     if (follower.x < desiredX) follower.x = desiredX;
   }
@@ -404,7 +413,11 @@ function updateFx(state, dt) {
 
 function updateCamera(state) {
   const playerFront = state.playerUnits.length ? Math.max(...state.playerUnits.map((unit) => unit.x)) : PLAYER_BASE_X + 12;
-  const focus = clamp(playerFront - VIEWPORT_WIDTH * 0.18, 0, WORLD_WIDTH - VIEWPORT_WIDTH);
+  const enemyFront = state.enemyUnits.length ? Math.min(...state.enemyUnits.map((unit) => unit.x)) : ENEMY_BASE_X - 12;
+  const fightCenter = state.enemyUnits.length
+    ? (playerFront + enemyFront) * 0.5
+    : Math.min(ENEMY_BASE_X - 8, playerFront + VIEWPORT_WIDTH * 0.2);
+  const focus = clamp(fightCenter - VIEWPORT_WIDTH * 0.5, 0, WORLD_WIDTH - VIEWPORT_WIDTH);
   state.cameraX += (focus - state.cameraX) * CAMERA_LERP;
 }
 

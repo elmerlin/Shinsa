@@ -56,7 +56,7 @@ export default function PetBattleCanvas({ game, character, reducedMotion }) {
     const groundY = getBattlefieldGroundY(h);
     const pxPerWorld = w / VIEWPORT_WIDTH;
     const worldToScreen = (worldX) => (worldX - state.cameraX) * pxPerWorld;
-    const scale = Math.max(3, Math.min(8, Math.round(Math.min(pxPerWorld * 0.95, h / 92))));
+    const scale = Math.max(4, Math.min(9, Math.round(Math.min(pxPerWorld * 1.12, h / 84))));
 
     const playerBaseX = worldToScreen(PLAYER_BASE_X);
     const enemyBaseX = worldToScreen(ENEMY_BASE_X);
@@ -70,7 +70,7 @@ export default function PetBattleCanvas({ game, character, reducedMotion }) {
 
     entities.forEach(({ team, unit }) => {
       const screenX = worldToScreen(unit.x);
-      if (screenX < -80 || screenX > w + 80) return;
+      if (screenX < -110 || screenX > w + 110) return;
       if (team === 'player') drawPlayerUnit(ctx, unit, screenX, groundY, scale, state.character || character || 'dojocat', state.animFrame);
       else drawEnemyUnit(ctx, unit, screenX, groundY, scale, state.animFrame);
     });
