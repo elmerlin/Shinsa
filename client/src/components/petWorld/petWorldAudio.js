@@ -237,3 +237,29 @@ export function playBreedSound() {
   tone(659, 666, 0.1, 'triangle', 0.03, 0.11);
   tone(784, 800, 0.14, 'triangle', 0.03, 0.22);
 }
+
+export function playHuntStrikeSound() {
+  // Quick sharp attack
+  tone(440, 220, 0.08, 'sawtooth', 0.04);
+  tone(660, 330, 0.06, 'sawtooth', 0.03, 0.04);
+}
+
+export function playHuntSuccessSound() {
+  // Victory fanfare (ascending)
+  tone(523, 530, 0.12, 'triangle', 0.04);
+  tone(659, 666, 0.12, 'triangle', 0.04, 0.10);
+  tone(784, 800, 0.12, 'triangle', 0.04, 0.20);
+  tone(1047, 1050, 0.18, 'triangle', 0.04, 0.30);
+}
+
+export function playHuntEscapeSound() {
+  // Descending disappointment
+  tone(440, 330, 0.12, 'triangle', 0.03);
+  tone(330, 260, 0.14, 'triangle', 0.03, 0.12);
+}
+
+export function playEncounterAlertSound() {
+  // Attention-grabbing double blip
+  tone(880, 900, 0.06, 'sine', 0.03);
+  tone(880, 900, 0.06, 'sine', 0.03, 0.12);
+}

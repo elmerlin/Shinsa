@@ -25,7 +25,7 @@ import PetWorldBuildMenu from '../components/petWorld/PetWorldBuildMenu';
 import PetWorldBuildingInfo from '../components/petWorld/PetWorldBuildingInfo';
 import PetWorldCreateModal from '../components/petWorld/PetWorldCreateModal';
 import PetWorldTradeModal from '../components/petWorld/PetWorldTradeModal';
-import { playBuildSound, playClearSound, playExpandSound, playUpgradeSound, playErrorSound } from '../components/petWorld/petWorldAudio';
+import { playBuildSound, playClearSound, playExpandSound, playUpgradeSound, playErrorSound, playHuntStrikeSound, playHuntSuccessSound, playHuntEscapeSound, playEncounterAlertSound } from '../components/petWorld/petWorldAudio';
 
 /* ─── Toast ─────────────────────────────────────────────────────── */
 function Toast({ message }) {
@@ -553,24 +553,25 @@ function EncounterModal({ encounter, onHunt, onDismiss, onClose, busy, buildings
     const bonus = getTimingBonus(ringProgress);
     setTimingBonus(bonus);
     setPhase('striking');
+    playHuntStrikeSound();
 
     try {
       const res = await onHunt(encounter.id, bonus);
       if (res && typeof res.success === 'boolean') {
         setResult(res);
         if (res.success) {
-          playUpgradeSound();
+          playHuntSuccessSound();
         } else {
-          playErrorSound();
+          playHuntEscapeSound();
         }
       } else {
         // Fallback if handler doesn't return result shape
         setResult({ success: true, rewards: {} });
-        playUpgradeSound();
+        playHuntSuccessSound();
       }
     } catch {
       setResult({ success: false, rewards: {} });
-      playErrorSound();
+      playHuntEscapeSound();
     }
     setPhase('result');
   };
@@ -1005,10 +1006,10 @@ export default function PetWorldPage() {
     }
   };
 
-  const handleHuntEncounter = useCallback(async (encounterId) => {
+  const handleHuntEncounter = useCallback(async (encounterId, timingBonus) => {
     setEncounterBusy(true);
     try {
-      const res = await huntPetWorldEncounter(encounterId);
+      const res = await huntPetWorldEncounter(encounterId, timingBonus);
       // Update bundle immediately if server returned one
       if (res.bundle) setBundle(res.bundle);
       // Remove from encounters list
@@ -1136,7 +1137,7 @@ export default function PetWorldPage() {
             {/* Encounters badge */}
             <button
               type="button"
-              onClick={() => encounters.length > 0 && setActiveEncounter(encounters[0])}
+              onClick={() => { if (encounters.length > 0) { setActiveEncounter(encounters[0]); playEncounterAlertSound(); } }}
               className="relative flex items-center justify-center w-7 h-7 rounded-lg border border-white/[0.08] bg-black/50 backdrop-blur-sm text-white/50 hover:text-white/90 hover:bg-white/10 transition-colors text-[11px]"
               aria-label="Encounters"
             >

@@ -1510,7 +1510,7 @@ export const getMyPetWorld = () => request('/pet-world/me');
 export const getVisitedPetWorld = (userId) => request(`/pet-world/visit/${encodeURIComponent(userId)}`);
 export const createPetWorld = (biome) => request('/pet-world/create', { method: 'POST', body: JSON.stringify({ biome }) });
 export const getPetWorldBuildings = () => request('/pet-world/buildings');
-export const buildPetWorldBuilding = ({ type, x, y }) => request('/pet-world/build', { method: 'POST', body: JSON.stringify({ type, x, y }) });
+export const buildPetWorldBuilding = ({ type, x, y, variant }) => request('/pet-world/build', { method: 'POST', body: JSON.stringify({ type, x, y, variant: variant || undefined }) });
 export const demolishPetWorldBuilding = (buildingId) => request('/pet-world/demolish', { method: 'POST', body: JSON.stringify({ buildingId }) });
 export const upgradePetWorldBuilding = (buildingId) => request('/pet-world/upgrade', { method: 'POST', body: JSON.stringify({ buildingId }) });
 export const assignPetWorldWorkers = (buildingId, count) => request('/pet-world/assign-worker', { method: 'POST', body: JSON.stringify({ buildingId, count }) });
@@ -1526,7 +1526,7 @@ export const acceptPetWorldTrade = (id) => request(`/pet-world/trade/${encodeURI
 export const declinePetWorldTrade = (id) => request(`/pet-world/trade/${encodeURIComponent(id)}/decline`, { method: 'POST' });
 export const getPetWorldLeaderboard = () => request('/pet-world/leaderboard');
 export const getPetWorldEncounters = () => request('/pet-world/encounters');
-export const huntPetWorldEncounter = (id) => request(`/pet-world/encounters/${encodeURIComponent(id)}/hunt`, { method: 'POST' });
+export const huntPetWorldEncounter = (id, timingBonus) => request(`/pet-world/encounters/${encodeURIComponent(id)}/hunt`, { method: 'POST', body: JSON.stringify({ timing_bonus: timingBonus ?? 1 }) });
 export const dismissPetWorldEncounter = (id) => request(`/pet-world/encounters/${encodeURIComponent(id)}/dismiss`, { method: 'POST' });
 export const getPetWorldVisitors = () => request('/pet-world/visitors');
 export const postPetWorldPresence = (userId) => request(`/pet-world/presence/${encodeURIComponent(userId)}`, { method: 'POST' });

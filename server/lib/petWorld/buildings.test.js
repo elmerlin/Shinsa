@@ -137,6 +137,54 @@ describe('getAllBuildingDefs', () => {
   });
 });
 
+describe('new buildings: flower_bed, watchtower, tavern', () => {
+  it('flower_bed is T1 cosmetic with happiness', () => {
+    const def = getBuildingDef('flower_bed');
+    assert.ok(def);
+    assert.equal(def.tier, 1);
+    assert.equal(def.category, 'cosmetic');
+    assert.equal(def.happiness, 2);
+    assert.equal(def.maxLevel, 1);
+    assert.equal(def.width, 1);
+    assert.equal(def.height, 1);
+    assert.equal(def.buildMinutes, 0);
+    assert.deepEqual(def.materials, {});
+  });
+  it('flower_bed cannot be upgraded past level 1', () => {
+    assert.equal(getUpgradeCost('flower_bed', 2), null);
+  });
+  it('watchtower is T3 support with wildlifeDefense', () => {
+    const def = getBuildingDef('watchtower');
+    assert.ok(def);
+    assert.equal(def.tier, 3);
+    assert.equal(def.category, 'support');
+    assert.equal(def.wildlifeDefense, true);
+    assert.equal(def.width, 1);
+    assert.equal(def.height, 1);
+    assert.ok(def.materials.wood > 0);
+    assert.ok(def.materials.stone > 0);
+  });
+  it('watchtower has worker slots', () => {
+    assert.ok(getWorkerCapacity('watchtower', 1) >= 0);
+  });
+  it('tavern is T2 support with high happiness', () => {
+    const def = getBuildingDef('tavern');
+    assert.ok(def);
+    assert.equal(def.tier, 2);
+    assert.equal(def.category, 'support');
+    assert.equal(def.happiness, 8);
+    assert.equal(def.width, 2);
+    assert.equal(def.height, 2);
+  });
+  it('all three appear in getAllBuildingDefs catalog', () => {
+    const catalog = getAllBuildingDefs();
+    const ids = catalog.map((b) => b.id);
+    assert.ok(ids.includes('flower_bed'));
+    assert.ok(ids.includes('watchtower'));
+    assert.ok(ids.includes('tavern'));
+  });
+});
+
 describe('tier unlock thresholds', () => {
   it('tier 1 unlocks at 0 pop', () => {
     assert.equal(TIER_UNLOCKS[1], 0);

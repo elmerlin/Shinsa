@@ -188,9 +188,10 @@ function ensurePetWorldTables(db) {
   `);
   db.exec('CREATE INDEX IF NOT EXISTS idx_pwe_user ON pet_world_encounters(user_id, status)');
   // Add variant column for cosmetic variety (flower colors, path styles)
-  try {
+  const buildingCols = db.prepare("PRAGMA table_info(pet_world_buildings)").all().map((r) => r.name);
+  if (!buildingCols.includes('variant')) {
     db.exec("ALTER TABLE pet_world_buildings ADD COLUMN variant TEXT DEFAULT NULL");
-  } catch (_) { /* column may already exist */ }
+  }
 }
 
 function ensureUserPetRow(db, userId) {
@@ -337,6 +338,7 @@ function runCatchup(db, userId, now = new Date()) {
   });
   delete simulation.world.biome_specialty;
   delete simulation.world._seasonalBonuses;
+  delete simulation.world._gridFeatures;
   simulation.world.grid_width = simulation.world.grid_width || parseGridData(simulation.world.grid_data).w;
   simulation.world.grid_height = simulation.world.grid_height || parseGridData(simulation.world.grid_data).h;
   saveWorld(db, simulation.world);
@@ -1055,8 +1057,11 @@ router.post('/encounters/:id/hunt', requireAuth, (req, res) => {
         .filter((b) => b.building_type === 'watchtower' && b.state === 'built')
         .map((b) => safeNumber(b.level, 1))
     );
-    // Success chance: 60% base + 15% per watchtower level
-    const successChance = Math.min(0.95, 0.6 + (watchtowerLevel - 1) * 0.15);
+    // Success chance: 60% base + 15% per watchtower level, scaled by timing bonus (0.1..1.0)
+    const rawTimingBonus = safeNumber(req.body?.timing_bonus, 1);
+    const timingBonus = Math.max(0.1, Math.min(1, rawTimingBonus));
+    const baseChance = Math.min(0.95, 0.6 + (watchtowerLevel - 1) * 0.15);
+    const successChance = baseChance * timingBonus;
     const success = Math.random() < successChance;
     const encounterDef = ENCOUNTER_TYPES.find((e) => e.type === encounter.encounter_type) || ENCOUNTER_TYPES[0];
     const rewards = {};
