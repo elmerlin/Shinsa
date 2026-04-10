@@ -300,6 +300,25 @@ function snapTowardLane(value, maxDelta) {
   return Math.abs(snapped - target) <= LANE_SNAP_EPSILON ? target : snapped;
 }
 
+function laneAssistCandidates(value, maxDelta) {
+  const target = Math.round(value);
+  const candidates = [
+    value,
+    snapTowardLane(value, maxDelta),
+    moveTowards(value, target, maxDelta * LANE_SNAP_MULTIPLIER * 1.8),
+    target,
+  ];
+
+  const unique = [];
+  for (const candidate of candidates) {
+    const rounded = Math.round(candidate * 1000) / 1000;
+    if (!unique.some((existing) => Math.abs(existing - rounded) < 1e-6)) {
+      unique.push(rounded);
+    }
+  }
+  return unique;
+}
+
 function movePlayer(state, player, dir) {
   if (!player.alive) return;
   const v = DIR_VECS[dir];
@@ -313,24 +332,40 @@ function movePlayer(state, player, dir) {
   // Bomberman movement reads best when the player stays tightly centered on
   // the perpendicular lane rather than drifting freely within a tile.
   if (v.dx !== 0) {
-    const alignedY = snapTowardLane(y, speed);
-    if (canOccupy(state, player, x, alignedY)) {
-      y = alignedY;
-    }
-
     const nx = x + v.dx * speed;
-    if (canOccupy(state, player, nx, y)) {
-      x = nx;
+    let moved = false;
+    for (const candidateY of laneAssistCandidates(y, speed)) {
+      if (!canOccupy(state, player, x, candidateY)) continue;
+      if (canOccupy(state, player, nx, candidateY)) {
+        x = nx;
+        y = candidateY;
+        moved = true;
+        break;
+      }
+    }
+    if (!moved) {
+      const alignedY = snapTowardLane(y, speed);
+      if (canOccupy(state, player, x, alignedY)) {
+        y = alignedY;
+      }
     }
   } else {
-    const alignedX = snapTowardLane(x, speed);
-    if (canOccupy(state, player, alignedX, y)) {
-      x = alignedX;
-    }
-
     const ny = y + v.dy * speed;
-    if (canOccupy(state, player, x, ny)) {
-      y = ny;
+    let moved = false;
+    for (const candidateX of laneAssistCandidates(x, speed)) {
+      if (!canOccupy(state, player, candidateX, y)) continue;
+      if (canOccupy(state, player, candidateX, ny)) {
+        x = candidateX;
+        y = ny;
+        moved = true;
+        break;
+      }
+    }
+    if (!moved) {
+      const alignedX = snapTowardLane(x, speed);
+      if (canOccupy(state, player, alignedX, y)) {
+        x = alignedX;
+      }
     }
   }
 
