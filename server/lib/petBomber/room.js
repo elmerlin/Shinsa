@@ -263,8 +263,10 @@ function startRound(roomId) {
   // Create new simulation state for the round
   room.match.simulation = sim.createRound(players);
 
-  // Pending human inputs keyed by userId
-  room._pendingInputs = new Map();
+  // Persistent held direction per human player (survives across ticks)
+  room._heldDirs = new Map();
+  // One-shot actions (bomb) consumed each tick
+  room._pendingBombs = new Set();
 
   // Notify round start with grid data
   if (roundStartCallback) {
@@ -289,7 +291,6 @@ function tickLoop(room) {
     if (!seat) continue;
 
     if (seat.isBot) {
-      // state.players is a Map, so use .get()
       const botPlayer = state.players.get(seat.userId);
       if (botPlayer && botPlayer.alive) {
         try {
@@ -299,11 +300,11 @@ function tickLoop(room) {
         }
       }
     } else {
-      // Merge pending human input
-      const humanInput = room._pendingInputs ? room._pendingInputs.get(seat.userId) : null;
-      if (humanInput) {
-        allInputs.set(seat.userId, humanInput);
-        room._pendingInputs.delete(seat.userId);
+      // Use persistent held direction + consume one-shot bomb
+      const dir = room._heldDirs ? room._heldDirs.get(seat.userId) : null;
+      const bomb = room._pendingBombs ? room._pendingBombs.delete(seat.userId) : false;
+      if (dir || bomb) {
+        allInputs.set(seat.userId, { dir: dir || null, bomb });
       }
     }
   }
@@ -401,7 +402,8 @@ function stopMatch(roomId) {
 
   room.match.simulation = null;
   room.match.status = 'waiting';
-  room._pendingInputs = null;
+  room._heldDirs = null;
+  room._pendingBombs = null;
 
   // Remove bots from seats
   for (let i = 0; i < 4; i++) {
@@ -415,13 +417,24 @@ function stopMatch(roomId) {
 function processInput(roomId, userId, input) {
   const room = rooms.get(roomId);
   if (!room || room.match.status !== 'playing') return;
-  if (!room._pendingInputs) return;
+  if (!room._heldDirs) return;
 
   // Only accept input from seated human players
   const seat = room.seats.find(s => s && s.userId === userId && !s.isBot);
   if (!seat) return;
 
-  room._pendingInputs.set(userId, input);
+  // Persist direction (survives across ticks until client sends a new one)
+  if (input.dir) {
+    room._heldDirs.set(userId, input.dir);
+  } else {
+    room._heldDirs.delete(userId);
+  }
+
+  // Queue bomb as one-shot
+  if (input.bomb) {
+    room._pendingBombs.add(userId);
+  }
+
   room.lastActivity = Date.now();
 }
 
@@ -442,6 +455,9 @@ function handleDisconnect(roomId, userId) {
     leaveSeat(roomId, userId);
     return;
   }
+
+  // Clear held direction for disconnected player
+  if (room._heldDirs) room._heldDirs.delete(userId);
 
   // Start grace period - convert to bot after timeout
   const timer = setTimeout(() => {
