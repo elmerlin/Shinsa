@@ -25,7 +25,7 @@ import PetWorldBuildMenu from '../components/petWorld/PetWorldBuildMenu';
 import PetWorldBuildingInfo from '../components/petWorld/PetWorldBuildingInfo';
 import PetWorldCreateModal from '../components/petWorld/PetWorldCreateModal';
 import PetWorldTradeModal from '../components/petWorld/PetWorldTradeModal';
-import { playBuildSound, playClearSound, playExpandSound } from '../components/petWorld/petWorldAudio';
+import { playBuildSound, playClearSound, playExpandSound, playUpgradeSound, playErrorSound } from '../components/petWorld/petWorldAudio';
 
 /* ─── Toast ─────────────────────────────────────────────────────── */
 function Toast({ message }) {
@@ -57,36 +57,626 @@ function SeasonalBanner({ events }) {
   );
 }
 
+/* ─── Encounter Scene Drawing Helpers ──────────────────────────── */
+
+function _epx(ctx, x, y, w, h, fill, alpha = 1) {
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = fill;
+  ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
+  ctx.globalAlpha = 1;
+}
+
+function _ecirc(ctx, cx, cy, r, fill, alpha = 1) {
+  ctx.globalAlpha = alpha;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fillStyle = fill;
+  ctx.fill();
+  ctx.globalAlpha = 1;
+}
+
+function _etri(ctx, x1, y1, x2, y2, x3, y3, fill) {
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.lineTo(x3, y3);
+  ctx.closePath();
+  ctx.fillStyle = fill;
+  ctx.fill();
+}
+
+/* Scene background: gradient sky, rolling hills, grass tufts, two trees */
+function drawEncounterBackground(ctx, w, h, time) {
+  // sky gradient
+  const skyGrad = ctx.createLinearGradient(0, 0, 0, h * 0.6);
+  skyGrad.addColorStop(0, '#1a2640');
+  skyGrad.addColorStop(1, '#2d4a3e');
+  ctx.fillStyle = skyGrad;
+  ctx.fillRect(0, 0, w, h);
+
+  // stars
+  const starSeed = [0.12, 0.28, 0.45, 0.62, 0.78, 0.91, 0.34, 0.56];
+  for (let i = 0; i < starSeed.length; i++) {
+    const sx = starSeed[i] * w;
+    const sy = (starSeed[(i + 3) % starSeed.length]) * h * 0.35;
+    const twinkle = 0.3 + 0.4 * Math.sin(time * 0.003 + i * 1.7);
+    _ecirc(ctx, sx, sy, 1, '#ffffff', twinkle);
+  }
+
+  // distant hills
+  ctx.fillStyle = '#1e3a2a';
+  ctx.beginPath();
+  ctx.moveTo(0, h * 0.55);
+  ctx.quadraticCurveTo(w * 0.25, h * 0.42, w * 0.5, h * 0.50);
+  ctx.quadraticCurveTo(w * 0.75, h * 0.58, w, h * 0.48);
+  ctx.lineTo(w, h);
+  ctx.lineTo(0, h);
+  ctx.closePath();
+  ctx.fill();
+
+  // ground
+  const groundGrad = ctx.createLinearGradient(0, h * 0.6, 0, h);
+  groundGrad.addColorStop(0, '#2a5e3a');
+  groundGrad.addColorStop(1, '#1d4a2c');
+  ctx.fillStyle = groundGrad;
+  ctx.fillRect(0, h * 0.6, w, h * 0.4);
+
+  // grass tufts
+  const grassColor = '#3a7a4a';
+  const grassHighlight = '#4a9a5a';
+  for (let i = 0; i < 12; i++) {
+    const gx = (i * 21 + 7) % w;
+    const gy = h * 0.62 + (i % 3) * 14;
+    const sway = Math.sin(time * 0.002 + i * 0.8) * 2;
+    _etri(ctx, gx, gy, gx + sway - 2, gy - 8, gx + sway + 2, gy - 6, grassColor);
+    _etri(ctx, gx + 5, gy, gx + 5 + sway - 1.5, gy - 6, gx + 5 + sway + 1.5, gy - 4, grassHighlight);
+  }
+
+  // left tree
+  const treeX = w * 0.08;
+  const treeY = h * 0.58;
+  const treeSway = Math.sin(time * 0.0015) * 1.5;
+  _epx(ctx, treeX + 4, treeY, 5, 18, '#3d2b1a');
+  _ecirc(ctx, treeX + 6 + treeSway, treeY - 4, 11, '#1e5030');
+  _ecirc(ctx, treeX + 3 + treeSway, treeY - 6, 7, '#2a6a3e', 0.8);
+
+  // right tree
+  const tree2X = w * 0.88;
+  const tree2Y = h * 0.56;
+  const tree2Sway = Math.sin(time * 0.0015 + 2) * 1.5;
+  _epx(ctx, tree2X + 3, tree2Y, 4, 16, '#3d2b1a');
+  _ecirc(ctx, tree2X + 5 + tree2Sway, tree2Y - 3, 9, '#1e5030');
+  _ecirc(ctx, tree2X + 2 + tree2Sway, tree2Y - 5, 6, '#2a6a3e', 0.8);
+}
+
+/* Animal sprite drawing: each gets a 2-frame idle animation */
+function drawAnimal(ctx, type, cx, cy, frame, fleeing, captured) {
+  const s = 3; // pixel scale
+  const f = frame % 2; // 0 or 1 for idle bob
+  const bob = f === 0 ? 0 : -s;
+
+  // fleeing: slide right and fade
+  let ox = 0;
+  let alpha = 1;
+  if (fleeing > 0) {
+    ox = fleeing * 80;
+    alpha = Math.max(0, 1 - fleeing);
+  }
+  if (captured > 0) {
+    alpha = Math.max(0, 1 - captured * 0.8);
+  }
+
+  ctx.globalAlpha = alpha;
+  const bx = cx + ox;
+  const by = cy + bob;
+
+  if (type === 'fox_raid' || type === 'fox') {
+    // body
+    _epx(ctx, bx - 6*s, by - 2*s, 12*s, 5*s, '#d4702a', alpha);
+    // head
+    _epx(ctx, bx + 5*s, by - 4*s, 5*s, 5*s, '#d4702a', alpha);
+    // ears
+    _etri(ctx, bx + 6*s, by - 4*s, bx + 7*s, by - 7*s, bx + 8*s, by - 4*s, '#d4702a');
+    _etri(ctx, bx + 8*s, by - 4*s, bx + 9*s, by - 7*s, bx + 10*s, by - 4*s, '#d4702a');
+    // ear insides
+    _etri(ctx, bx + 6.5*s, by - 4*s, bx + 7*s, by - 6*s, bx + 7.5*s, by - 4*s, '#e8a070');
+    _etri(ctx, bx + 8.5*s, by - 4*s, bx + 9*s, by - 6*s, bx + 9.5*s, by - 4*s, '#e8a070');
+    // white chest
+    _epx(ctx, bx - 2*s, by, 4*s, 3*s, '#f0e0d0', alpha);
+    // eye
+    _epx(ctx, bx + 8*s, by - 3*s, s, s, '#1a1a1a', alpha);
+    // nose
+    _epx(ctx, bx + 10*s, by - 2*s, s, s, '#1a1a1a', alpha);
+    // tail
+    _epx(ctx, bx - 9*s, by - 3*s, 4*s, 2*s, '#d4702a', alpha);
+    _epx(ctx, bx - 10*s, by - 4*s, 2*s, 2*s, '#f0e0d0', alpha);
+    // legs
+    const legShift = f === 0 ? 0 : s;
+    _epx(ctx, bx - 4*s, by + 3*s, 2*s, 3*s + legShift, '#b85a1e', alpha);
+    _epx(ctx, bx + 2*s, by + 3*s, 2*s, 3*s - legShift + s, '#b85a1e', alpha);
+  } else if (type === 'wolf_pack' || type === 'wolf') {
+    // body
+    _epx(ctx, bx - 7*s, by - 2*s, 14*s, 6*s, '#6e6e7a', alpha);
+    // head
+    _epx(ctx, bx + 6*s, by - 4*s, 6*s, 5*s, '#7a7a88', alpha);
+    // ears
+    _etri(ctx, bx + 7*s, by - 4*s, bx + 8*s, by - 8*s, bx + 9*s, by - 4*s, '#6e6e7a');
+    _etri(ctx, bx + 10*s, by - 4*s, bx + 11*s, by - 8*s, bx + 12*s, by - 4*s, '#6e6e7a');
+    // snout
+    _epx(ctx, bx + 11*s, by - 2*s, 3*s, 3*s, '#8a8a96', alpha);
+    // eye
+    _epx(ctx, bx + 9*s, by - 3*s, s, s, '#eeba30', alpha);
+    // nose
+    _epx(ctx, bx + 13*s, by - 1*s, s, s, '#1a1a1a', alpha);
+    // belly lighter
+    _epx(ctx, bx - 3*s, by + 1*s, 8*s, 3*s, '#8a8a96', alpha);
+    // tail
+    _epx(ctx, bx - 10*s, by - 4*s, 4*s, 2*s, '#5e5e6a', alpha);
+    _epx(ctx, bx - 11*s, by - 5*s, 2*s, 2*s, '#5e5e6a', alpha);
+    // legs
+    const legShift = f === 0 ? 0 : s;
+    _epx(ctx, bx - 5*s, by + 4*s, 2*s, 4*s + legShift, '#5e5e6a', alpha);
+    _epx(ctx, bx - 1*s, by + 4*s, 2*s, 4*s - legShift + s, '#5e5e6a', alpha);
+    _epx(ctx, bx + 3*s, by + 4*s, 2*s, 4*s + legShift, '#5e5e6a', alpha);
+  } else if (type === 'bear_sighting' || type === 'bear') {
+    // body (larger, rounder)
+    _epx(ctx, bx - 8*s, by - 4*s, 16*s, 10*s, '#5a3a20', alpha);
+    // head
+    _ecirc(ctx, bx + 7*s, by - 3*s, 4*s, '#6a4a2a', alpha);
+    // ears
+    _ecirc(ctx, bx + 5*s, by - 6*s, 2*s, '#5a3a20', alpha);
+    _ecirc(ctx, bx + 9*s, by - 6*s, 2*s, '#5a3a20', alpha);
+    _ecirc(ctx, bx + 5*s, by - 6*s, s, '#7a5a3a', alpha);
+    _ecirc(ctx, bx + 9*s, by - 6*s, s, '#7a5a3a', alpha);
+    // snout
+    _epx(ctx, bx + 9*s, by - 2*s, 3*s, 2*s, '#7a5a3a', alpha);
+    // eyes
+    _epx(ctx, bx + 6*s, by - 4*s, s, s, '#1a1a1a', alpha);
+    _epx(ctx, bx + 8*s, by - 4*s, s, s, '#1a1a1a', alpha);
+    // nose
+    _epx(ctx, bx + 10*s, by - 2*s, s, s, '#1a1a1a', alpha);
+    // belly
+    _epx(ctx, bx - 4*s, by + 1*s, 10*s, 5*s, '#7a5a3a', alpha);
+    // legs (stocky)
+    const legShift = f === 0 ? 0 : s;
+    _epx(ctx, bx - 6*s, by + 6*s, 3*s, 4*s + legShift, '#4a2a10', alpha);
+    _epx(ctx, bx, by + 6*s, 3*s, 4*s - legShift + s, '#4a2a10', alpha);
+    _epx(ctx, bx + 4*s, by + 6*s, 3*s, 4*s + legShift, '#4a2a10', alpha);
+  } else if (type === 'deer_herd' || type === 'deer') {
+    // body
+    _epx(ctx, bx - 6*s, by - 1*s, 12*s, 5*s, '#a07840', alpha);
+    // neck
+    _epx(ctx, bx + 5*s, by - 5*s, 3*s, 6*s, '#a07840', alpha);
+    // head
+    _epx(ctx, bx + 5*s, by - 7*s, 5*s, 4*s, '#b08850', alpha);
+    // antlers
+    _epx(ctx, bx + 5*s, by - 9*s, s, 3*s, '#8a6a3a', alpha);
+    _epx(ctx, bx + 4*s, by - 10*s, s, 2*s, '#8a6a3a', alpha);
+    _epx(ctx, bx + 6*s, by - 11*s, s, s, '#8a6a3a', alpha);
+    _epx(ctx, bx + 9*s, by - 9*s, s, 3*s, '#8a6a3a', alpha);
+    _epx(ctx, bx + 10*s, by - 10*s, s, 2*s, '#8a6a3a', alpha);
+    _epx(ctx, bx + 8*s, by - 11*s, s, s, '#8a6a3a', alpha);
+    // eye
+    _epx(ctx, bx + 8*s, by - 6*s, s, s, '#1a1a1a', alpha);
+    // white belly spots
+    _ecirc(ctx, bx - 2*s, by, 1.5*s, '#c0a060', alpha * 0.6);
+    _ecirc(ctx, bx + 1*s, by - 0.5*s, s, '#c0a060', alpha * 0.5);
+    // tail
+    _epx(ctx, bx - 7*s, by - 1*s, 2*s, 2*s, '#f0e0c0', alpha);
+    // legs (slender)
+    const legShift = f === 0 ? 0 : s;
+    _epx(ctx, bx - 4*s, by + 4*s, s * 1.5, 5*s + legShift, '#8a6830', alpha);
+    _epx(ctx, bx - 1*s, by + 4*s, s * 1.5, 5*s - legShift + s, '#8a6830', alpha);
+    _epx(ctx, bx + 2*s, by + 4*s, s * 1.5, 5*s + legShift, '#8a6830', alpha);
+    _epx(ctx, bx + 5*s, by + 4*s, s * 1.5, 5*s - legShift + s, '#8a6830', alpha);
+  } else {
+    // rare_bird / default bird
+    // body
+    _ecirc(ctx, bx, by, 4*s, '#3a8ad0', alpha);
+    // head
+    _ecirc(ctx, bx + 4*s, by - 2*s, 2.5*s, '#4a9ae0', alpha);
+    // eye
+    _epx(ctx, bx + 5*s, by - 3*s, s * 0.8, s * 0.8, '#1a1a1a', alpha);
+    // beak
+    _etri(ctx, bx + 6*s, by - 2*s, bx + 8.5*s, by - 1.5*s, bx + 6*s, by - s, '#e8a030');
+    // wing
+    const wingY = f === 0 ? by - 2*s : by - 3.5*s;
+    _etri(ctx, bx - s, by - s, bx - 4*s, wingY, bx + 2*s, by + s, '#2a6ab0');
+    // tail feathers
+    _etri(ctx, bx - 3*s, by, bx - 7*s, by - 2*s, bx - 5*s, by + s, '#2a6ab0');
+    _etri(ctx, bx - 3*s, by + s, bx - 7*s, by, bx - 5*s, by + 2*s, '#3070c0');
+    // tail plume highlights
+    _epx(ctx, bx - 6*s, by - s, s, s, '#e8d040', alpha * 0.8);
+    _epx(ctx, bx - 5*s, by + s, s * 0.8, s * 0.8, '#e84040', alpha * 0.7);
+    // legs
+    _epx(ctx, bx - s, by + 3*s, s * 0.7, 2*s, '#8a6830', alpha);
+    _epx(ctx, bx + s, by + 3*s, s * 0.7, 2*s, '#8a6830', alpha);
+  }
+  ctx.globalAlpha = 1;
+}
+
+/* Timing ring colors */
+function getRingColor(progress) {
+  // progress 0..1: 0=outer/red, approaching 1=green sweet spot, then back to red
+  // The "best" zone is 0.75..0.95
+  if (progress < 0.4) return '#ef4444'; // red
+  if (progress < 0.65) return '#f59e0b'; // amber
+  if (progress < 0.85) return '#22c55e'; // green (sweet spot)
+  return '#f59e0b'; // amber (past the sweet spot)
+}
+
+function getTimingBonus(progress) {
+  // 0.75..0.85 is the green zone center
+  const dist = Math.abs(progress - 0.8);
+  if (dist < 0.05) return 1.0;
+  if (dist < 0.15) return 0.7;
+  if (dist < 0.25) return 0.4;
+  return 0.1;
+}
+
+/* Resource label prettifier */
+const RESOURCE_ICONS = { food: 'Food', wood: 'Wood', stone: 'Stone', cloth: 'Cloth', gold: 'Gold' };
+
 /* ─── Encounter Modal ──────────────────────────────────────────── */
-function EncounterModal({ encounter, onHunt, onDismiss, busy }) {
+function EncounterModal({ encounter, onHunt, onDismiss, onClose, busy, buildings }) {
+  const canvasRef = useRef(null);
+  const animRef = useRef(null);
+  const startTimeRef = useRef(null);
+  const frameCountRef = useRef(0);
+  const [phase, setPhase] = useState('aim'); // 'aim' | 'striking' | 'result'
+  const [ringProgress, setRingProgress] = useState(0);
+  const [timingBonus, setTimingBonus] = useState(0);
+  const [result, setResult] = useState(null); // { success, rewards }
+  const [resultTimer, setResultTimer] = useState(0);
+  const resultStartRef = useRef(null);
+
+  // Derive watchtower success chance for display
+  const watchtowerLevel = useMemo(() => {
+    if (!buildings || buildings.length === 0) return 1;
+    const wts = buildings.filter((b) => b.type === 'watchtower' && b.state === 'built');
+    if (wts.length === 0) return 1;
+    return Math.max(...wts.map((b) => b.level || 1));
+  }, [buildings]);
+  const successChance = Math.min(95, 60 + (watchtowerLevel - 1) * 15);
+
+  // Reward preview from encounter DB record
+  const rewardPreview = useMemo(() => {
+    if (!encounter) return [];
+    const items = [];
+    if (encounter.reward_resource && encounter.reward_amount) {
+      items.push({ resource: encounter.reward_resource, amount: encounter.reward_amount });
+    }
+    return items;
+  }, [encounter]);
+
+  // Reset state when encounter changes
+  useEffect(() => {
+    setPhase('aim');
+    setRingProgress(0);
+    setTimingBonus(0);
+    setResult(null);
+    setResultTimer(0);
+    startTimeRef.current = null;
+    resultStartRef.current = null;
+  }, [encounter?.id]);
+
+  // Main canvas animation loop
+  useEffect(() => {
+    if (!encounter) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const W = 240;
+    const H = 160;
+
+    let running = true;
+    const animate = (ts) => {
+      if (!running) return;
+      if (!startTimeRef.current) startTimeRef.current = ts;
+      const elapsed = ts - startTimeRef.current;
+      frameCountRef.current = Math.floor(elapsed / 500); // ~2fps sprite frame
+
+      ctx.clearRect(0, 0, W, H);
+
+      // Draw background scene
+      drawEncounterBackground(ctx, W, H, elapsed);
+
+      // Determine animal position
+      const animalX = W * 0.48;
+      const animalY = H * 0.68;
+      const fleeVal = phase === 'result' && result && !result.success ? resultTimer : 0;
+      const captVal = phase === 'result' && result && result.success ? resultTimer : 0;
+
+      // Draw animal
+      drawAnimal(ctx, encounter.encounter_type, animalX, animalY, frameCountRef.current, fleeVal, captVal);
+
+      // Draw timing ring during aim phase
+      if (phase === 'aim') {
+        const RING_DURATION = 3000;
+        const cycleTime = elapsed % RING_DURATION;
+        const progress = cycleTime / RING_DURATION;
+        setRingProgress(progress);
+
+        const maxRadius = 34;
+        const minRadius = 8;
+        const currentRadius = maxRadius - (maxRadius - minRadius) * progress;
+        const color = getRingColor(progress);
+
+        // Outer static ring (target)
+        ctx.beginPath();
+        ctx.arc(animalX, animalY, minRadius + 2, 0, Math.PI * 2);
+        ctx.strokeStyle = '#22c55e';
+        ctx.lineWidth = 2;
+        ctx.globalAlpha = 0.4;
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+
+        // Green zone indicator ring
+        ctx.beginPath();
+        ctx.arc(animalX, animalY, minRadius + 5, 0, Math.PI * 2);
+        ctx.strokeStyle = '#22c55e';
+        ctx.lineWidth = 1;
+        ctx.globalAlpha = 0.2;
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+
+        // Shrinking ring
+        ctx.beginPath();
+        ctx.arc(animalX, animalY, currentRadius, 0, Math.PI * 2);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2.5;
+        ctx.globalAlpha = 0.85;
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+
+        // Crosshair lines
+        ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+        ctx.lineWidth = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(animalX - 40, animalY);
+        ctx.lineTo(animalX + 40, animalY);
+        ctx.moveTo(animalX, animalY - 40);
+        ctx.lineTo(animalX, animalY + 40);
+        ctx.stroke();
+      }
+
+      // Result phase: animate capture sparkles or escape dust
+      if (phase === 'result' && result) {
+        const t = resultTimer;
+        if (result.success) {
+          // Sparkle particles flying outward
+          for (let i = 0; i < 8; i++) {
+            const angle = (i / 8) * Math.PI * 2 + t * 2;
+            const dist = t * 40;
+            const sx = animalX + Math.cos(angle) * dist;
+            const sy = animalY + Math.sin(angle) * dist;
+            const sparkAlpha = Math.max(0, 1 - t);
+            const colors = ['#fbbf24', '#f59e0b', '#22c55e', '#60a5fa'];
+            _ecirc(ctx, sx, sy, 2 + (1 - t) * 2, colors[i % 4], sparkAlpha);
+          }
+          // "Captured!" text
+          if (t > 0.3) {
+            ctx.font = 'bold 14px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillStyle = '#22c55e';
+            ctx.globalAlpha = Math.min(1, (t - 0.3) * 3);
+            ctx.fillText('Captured!', W / 2, H * 0.35);
+            ctx.globalAlpha = 1;
+          }
+          // Reward fly-in
+          if (t > 0.5 && result.rewards) {
+            ctx.font = 'bold 11px monospace';
+            ctx.textAlign = 'center';
+            const entries = Object.entries(result.rewards);
+            entries.forEach(([res, amt], i) => {
+              const ry = H * 0.42 + i * 16;
+              const flyX = W / 2 + (1 - Math.min(1, (t - 0.5) * 4)) * 30;
+              ctx.globalAlpha = Math.min(1, (t - 0.5) * 3);
+              ctx.fillStyle = '#fbbf24';
+              ctx.fillText(`+${amt} ${RESOURCE_ICONS[res] || res}`, flyX, ry);
+              ctx.globalAlpha = 1;
+            });
+          }
+        } else {
+          // Escape dust cloud
+          for (let i = 0; i < 6; i++) {
+            const dx = animalX + t * 60 + i * 8;
+            const dy = animalY + Math.sin(i * 1.5) * 6;
+            const dustAlpha = Math.max(0, 0.6 - t * 0.5);
+            _ecirc(ctx, dx, dy, 3 + i * 0.8, '#a08860', dustAlpha);
+          }
+          // "Escaped..." text
+          if (t > 0.3) {
+            ctx.font = 'bold 14px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillStyle = '#ef4444';
+            ctx.globalAlpha = Math.min(1, (t - 0.3) * 3);
+            ctx.fillText('Escaped...', W / 2, H * 0.35);
+            ctx.globalAlpha = 1;
+          }
+          // Partial reward
+          if (t > 0.5 && result.rewards) {
+            ctx.font = 'bold 10px monospace';
+            ctx.textAlign = 'center';
+            const entries = Object.entries(result.rewards);
+            entries.forEach(([res, amt], i) => {
+              const ry = H * 0.42 + i * 14;
+              ctx.globalAlpha = Math.min(1, (t - 0.5) * 3);
+              ctx.fillStyle = '#f59e0b';
+              ctx.fillText(`+${amt} ${RESOURCE_ICONS[res] || res} (partial)`, W / 2, ry);
+              ctx.globalAlpha = 1;
+            });
+          }
+        }
+      }
+
+      animRef.current = requestAnimationFrame(animate);
+    };
+    animRef.current = requestAnimationFrame(animate);
+    return () => {
+      running = false;
+      if (animRef.current) cancelAnimationFrame(animRef.current);
+    };
+  }, [encounter, phase, result, resultTimer]);
+
+  // Result animation timer
+  useEffect(() => {
+    if (phase !== 'result' || !result) return;
+    resultStartRef.current = performance.now();
+    let running = true;
+    const tick = (ts) => {
+      if (!running) return;
+      const elapsed = (ts - resultStartRef.current) / 1500; // 1.5s duration
+      setResultTimer(Math.min(1, elapsed));
+      if (elapsed < 1) {
+        requestAnimationFrame(tick);
+      }
+    };
+    requestAnimationFrame(tick);
+    return () => { running = false; };
+  }, [phase, result]);
+
+  // Auto-close after result animation finishes
+  useEffect(() => {
+    if (phase === 'result' && resultTimer >= 1) {
+      const timer = setTimeout(() => {
+        onClose?.(result?.success ? 'Hunt successful!' : 'The creature escaped...');
+      }, 600);
+      return () => clearTimeout(timer);
+    }
+  }, [phase, resultTimer, result, onClose]);
+
   if (!encounter) return null;
+
+  const handleStrike = async () => {
+    if (phase !== 'aim' || busy) return;
+    const bonus = getTimingBonus(ringProgress);
+    setTimingBonus(bonus);
+    setPhase('striking');
+
+    try {
+      const res = await onHunt(encounter.id, bonus);
+      if (res && typeof res.success === 'boolean') {
+        setResult(res);
+        if (res.success) {
+          playUpgradeSound();
+        } else {
+          playErrorSound();
+        }
+      } else {
+        // Fallback if handler doesn't return result shape
+        setResult({ success: true, rewards: {} });
+        playUpgradeSound();
+      }
+    } catch {
+      setResult({ success: false, rewards: {} });
+      playErrorSound();
+    }
+    setPhase('result');
+  };
+
+  const handleDismiss = () => {
+    if (busy) return;
+    onDismiss(encounter.id);
+  };
+
+  const encounterName = encounter.encounter_name || encounter.name || 'Unknown creature';
+  const encounterDesc = encounter.description || 'A creature has appeared near your village.';
+
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="w-72 rounded-xl border border-white/[0.08] bg-slate-950/95 p-4 shadow-[0_20px_40px_rgba(0,0,0,0.4)]">
-        <div className="text-[9px] uppercase tracking-[0.16em] text-white/40">Encounter</div>
-        <div className="mt-2 text-base font-black text-white">{encounter.name || 'Unknown creature'}</div>
-        <p className="mt-1 text-[11px] text-white/60 leading-relaxed">
-          {encounter.description || 'A creature has appeared near your village.'}
-        </p>
-        <div className="mt-4 flex gap-2">
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => onHunt(encounter.id)}
-            className="flex-1 rounded-lg border border-rose-400/20 bg-rose-500/[0.12] px-3 py-2 text-[11px] font-semibold text-rose-100 hover:bg-rose-500/[0.22] transition-colors disabled:opacity-50"
-          >
-            Hunt
-          </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => onDismiss(encounter.id)}
-            className="flex-1 rounded-lg border border-white/[0.08] bg-white/[0.05] px-3 py-2 text-[11px] font-semibold text-white/70 hover:bg-white/10 transition-colors disabled:opacity-50"
-          >
-            Dismiss
-          </button>
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 backdrop-blur-sm">
+      <div
+        className="w-[280px] rounded-xl border border-white/[0.08] bg-slate-950/95 shadow-[0_20px_40px_rgba(0,0,0,0.5)] overflow-hidden"
+        style={{ animation: 'encounterSlideIn 0.25s ease-out' }}
+      >
+        {/* Canvas scene */}
+        <div className="relative">
+          <canvas
+            ref={canvasRef}
+            width={240}
+            height={160}
+            className="w-full h-auto bg-slate-900"
+            style={{ imageRendering: 'pixelated' }}
+          />
+          {/* Success chance badge */}
+          <div className="absolute top-1.5 right-1.5 rounded-md bg-black/60 backdrop-blur-sm px-1.5 py-0.5 border border-white/10">
+            <span className="text-[8px] uppercase tracking-wider text-white/50">chance </span>
+            <span className="text-[10px] font-bold text-emerald-400">{successChance}%</span>
+          </div>
+          {/* Timing quality indicator during aim */}
+          {phase === 'aim' && (
+            <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 rounded-md bg-black/60 backdrop-blur-sm px-2 py-0.5 border border-white/10">
+              <span className="text-[8px] font-bold" style={{ color: getRingColor(ringProgress) }}>
+                {ringProgress < 0.4 ? 'Wait...' : ringProgress < 0.65 ? 'Almost...' : ringProgress < 0.85 ? 'NOW!' : 'Hmm...'}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Info section */}
+        <div className="px-3 pt-2.5 pb-1.5">
+          <div className="text-[9px] uppercase tracking-[0.16em] text-white/40">Encounter</div>
+          <div className="mt-1 text-[13px] font-black text-white leading-tight">{encounterName}</div>
+          <p className="mt-0.5 text-[10px] text-white/50 leading-relaxed">{encounterDesc}</p>
+
+          {/* Reward preview */}
+          {rewardPreview.length > 0 && (
+            <div className="mt-1.5 flex items-center gap-2">
+              <span className="text-[8px] uppercase tracking-wider text-white/30">Reward</span>
+              {rewardPreview.map((r) => (
+                <span key={r.resource} className="text-[10px] font-semibold text-amber-300/80">
+                  +{r.amount} {RESOURCE_ICONS[r.resource] || r.resource}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Action buttons */}
+        <div className="px-3 pb-3 pt-1.5">
+          {phase === 'aim' && (
+            <>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={handleStrike}
+                className="w-full rounded-lg border border-rose-400/25 bg-rose-500/[0.15] px-3 py-2.5 text-[12px] font-bold text-rose-100 hover:bg-rose-500/[0.28] active:scale-[0.97] transition-all disabled:opacity-50"
+              >
+                Strike!
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={handleDismiss}
+                className="w-full mt-1.5 rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 py-1.5 text-[10px] font-semibold text-white/40 hover:bg-white/[0.08] hover:text-white/60 transition-colors disabled:opacity-50"
+              >
+                Dismiss
+              </button>
+            </>
+          )}
+          {phase === 'striking' && (
+            <div className="flex items-center justify-center py-3">
+              <div className="w-4 h-4 rounded-full border-2 border-rose-400/60 border-t-transparent animate-spin" />
+              <span className="ml-2 text-[11px] text-white/50">Hunting...</span>
+            </div>
+          )}
+          {phase === 'result' && (
+            <div className="text-center py-1">
+              <span className="text-[10px] text-white/30">
+                {result?.success ? 'Hunt successful' : 'The creature fled'}
+              </span>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Inline animation keyframes */}
+      <style>{`
+        @keyframes encounterSlideIn {
+          from { opacity: 0; transform: translateY(12px) scale(0.97); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+      `}</style>
     </div>
   );
 }
@@ -224,6 +814,7 @@ export default function PetWorldPage() {
   const [selectedBiome, setSelectedBiome] = useState('grasslands');
   const [buildDrawerOpen, setBuildDrawerOpen] = useState(false);
   const [pendingBuildType, setPendingBuildType] = useState('');
+  const [pendingBuildVariant, setPendingBuildVariant] = useState(null);
   const [selectedBuilding, setSelectedBuilding] = useState(null);
   const [selectedTile, setSelectedTile] = useState(null);
   const [showTrades, setShowTrades] = useState(false);
@@ -322,10 +913,11 @@ export default function PetWorldPage() {
   const handlePlaceBuilding = async (x, y) => {
     if (!pendingBuildType) return;
     try {
-      const next = await buildPetWorldBuilding({ type: pendingBuildType, x, y });
+      const next = await buildPetWorldBuilding({ type: pendingBuildType, x, y, variant: pendingBuildVariant });
       playBuildSound();
       setBundle(next);
       setPendingBuildType('');
+      setPendingBuildVariant(null);
       setBuildDrawerOpen(false);
       setSelectedTile(null);
       showToast('Building placed');
@@ -413,20 +1005,28 @@ export default function PetWorldPage() {
     }
   };
 
-  const handleHuntEncounter = async (encounterId) => {
+  const handleHuntEncounter = useCallback(async (encounterId) => {
     setEncounterBusy(true);
     try {
-      await huntPetWorldEncounter(encounterId);
+      const res = await huntPetWorldEncounter(encounterId);
+      // Update bundle immediately if server returned one
+      if (res.bundle) setBundle(res.bundle);
+      // Remove from encounters list
       setEncounters((prev) => prev.filter((e) => e.id !== encounterId));
-      setActiveEncounter(null);
-      showToast('Encounter hunted');
-      loadAll();
+      return { success: !!res.success, rewards: res.rewards || {} };
     } catch (error) {
       showToast(error.message || 'Could not hunt encounter');
+      return { success: false, rewards: {} };
     } finally {
       setEncounterBusy(false);
     }
-  };
+  }, [showToast]);
+
+  const handleEncounterClose = useCallback((message) => {
+    setActiveEncounter(null);
+    if (message) showToast(message);
+    loadAll();
+  }, [showToast, loadAll]);
 
   const handleDismissEncounter = async (encounterId) => {
     setEncounterBusy(true);
@@ -659,8 +1259,10 @@ export default function PetWorldPage() {
             buildings={catalog}
             world={world}
             selectedType={pendingBuildType}
-            onSelect={(type) => {
+            selectedVariant={pendingBuildVariant}
+            onSelect={(type, variant) => {
               setPendingBuildType(type);
+              setPendingBuildVariant(variant || null);
               setSelectedBuilding(null);
               showToast('Tap a tile to place this building');
             }}
@@ -683,7 +1285,9 @@ export default function PetWorldPage() {
         encounter={activeEncounter}
         onHunt={handleHuntEncounter}
         onDismiss={handleDismissEncounter}
+        onClose={handleEncounterClose}
         busy={encounterBusy}
+        buildings={buildings}
       />
     </div>
   );
