@@ -16,7 +16,7 @@ function stagesClearedForDisplay(state) {
 }
 
 function ControlButton({ label, name, cost, cooldown, disabled, accentClass, onClick }) {
-  const cooldownPct = cooldown > 0 ? Math.min(1, cooldown.remaining / Math.max(1, cooldown.total)) : 0;
+  const cooldownPct = cooldown?.remaining > 0 ? Math.min(1, cooldown.remaining / Math.max(1, cooldown.total)) : 0;
   return (
     <button
       onClick={onClick}
@@ -119,6 +119,22 @@ export default function PetBattleModal({ open, onClose, character, onComplete, s
     setUiState(game.getState());
   }, [character, game]);
 
+  const syncUiState = useCallback(() => {
+    const state = game.getState();
+    setMode(state.mode);
+    setUiState({ ...state, cooldowns: { ...state.cooldowns } });
+  }, [game]);
+
+  const handleSpawn = useCallback((typeKey) => {
+    game.spawnUnit(typeKey);
+    syncUiState();
+  }, [game, syncUiState]);
+
+  const handleUpgrade = useCallback(() => {
+    game.upgradeAura();
+    syncUiState();
+  }, [game, syncUiState]);
+
   const toggleMute = useCallback(() => {
     const next = !muted;
     setMutedState(next);
@@ -169,7 +185,7 @@ export default function PetBattleModal({ open, onClose, character, onComplete, s
               <div className="text-[12px] font-semibold text-white/85">+{(14 + (uiState.auraLevel || 1) * 4)}/s</div>
             </div>
             <button
-              onClick={() => game.upgradeAura()}
+              onClick={handleUpgrade}
               disabled={(uiState.aura || 0) < Math.round(100 * (1.5 ** ((uiState.auraLevel || 1) - 1))) || (uiState.auraLevel || 1) >= 8}
               className="rounded-xl border border-amber-400/25 bg-amber-500/[0.12] px-3 py-2 text-[11px] font-semibold text-amber-100 disabled:opacity-40"
             >
@@ -186,7 +202,7 @@ export default function PetBattleModal({ open, onClose, character, onComplete, s
               cooldown={{ remaining: uiState.cooldowns?.meatshield || 0, total: ARCHETYPES.meatshield.cooldownMs }}
               disabled={(uiState.aura || 0) < ARCHETYPES.meatshield.cost || (uiState.cooldowns?.meatshield || 0) > 0}
               accentClass="border-cyan-400/20 bg-cyan-500/[0.08]"
-              onClick={() => game.spawnUnit('meatshield')}
+              onClick={() => handleSpawn('meatshield')}
             />
             <ControlButton
               label="2 / W"
@@ -195,7 +211,7 @@ export default function PetBattleModal({ open, onClose, character, onComplete, s
               cooldown={{ remaining: uiState.cooldowns?.brawler || 0, total: ARCHETYPES.brawler.cooldownMs }}
               disabled={(uiState.aura || 0) < ARCHETYPES.brawler.cost || (uiState.cooldowns?.brawler || 0) > 0}
               accentClass="border-rose-400/20 bg-rose-500/[0.08]"
-              onClick={() => game.spawnUnit('brawler')}
+              onClick={() => handleSpawn('brawler')}
             />
             <ControlButton
               label="3 / E"
@@ -204,7 +220,7 @@ export default function PetBattleModal({ open, onClose, character, onComplete, s
               cooldown={{ remaining: uiState.cooldowns?.ranged || 0, total: ARCHETYPES.ranged.cooldownMs }}
               disabled={(uiState.aura || 0) < ARCHETYPES.ranged.cost || (uiState.cooldowns?.ranged || 0) > 0}
               accentClass="border-emerald-400/20 bg-emerald-500/[0.08]"
-              onClick={() => game.spawnUnit('ranged')}
+              onClick={() => handleSpawn('ranged')}
             />
             <ControlButton
               label="4 / R"
@@ -213,7 +229,7 @@ export default function PetBattleModal({ open, onClose, character, onComplete, s
               cooldown={{ remaining: uiState.cooldowns?.tank || 0, total: ARCHETYPES.tank.cooldownMs }}
               disabled={(uiState.aura || 0) < ARCHETYPES.tank.cost || (uiState.cooldowns?.tank || 0) > 0}
               accentClass="border-amber-400/20 bg-amber-500/[0.08]"
-              onClick={() => game.spawnUnit('tank')}
+              onClick={() => handleSpawn('tank')}
             />
           </div>
         </div>

@@ -116,7 +116,7 @@ const ENEMY_PALETTE = {
 const LANE_HEIGHT = 7;
 
 export function getBattlefieldGroundY(h) {
-  return Math.min(h * 0.72, h - 96);
+  return Math.min(h * 0.685, h - 126);
 }
 
 function drawCloud(ctx, x, y, scale) {
@@ -125,6 +125,11 @@ function drawCloud(ctx, x, y, scale) {
   drawPixelEllipse(ctx, x - ps * 2, y - ps, 5, 3, ps, SMB_PALETTE.cloud);
   drawPixelEllipse(ctx, x + ps * 3, y, 4, 3, ps, SMB_PALETTE.cloud);
   drawPixelEllipse(ctx, x, y + ps, 7, 3, ps, SMB_PALETTE.cloud);
+  drawPixelEllipse(ctx, x - ps * 2, y - ps, 2, 1, ps, SMB_PALETTE.white);
+  drawPixelEllipse(ctx, x + ps * 2, y, 2, 1, ps, 'rgba(255,255,255,0.7)');
+  drawPixelEllipse(ctx, x + ps * 4, y + ps, 2, 1, ps, 'rgba(188,188,188,0.95)');
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  ctx.fillRect(x - 5 * ps, y + 3 * ps, 8 * ps, ps);
 }
 
 function drawHill(ctx, x, y, width, height) {
@@ -135,6 +140,23 @@ function drawHill(ctx, x, y, width, height) {
   ctx.quadraticCurveTo(x + width * 0.7, y - height * 0.55, x + width, y);
   ctx.closePath();
   ctx.fill();
+  ctx.fillStyle = 'rgba(6, 96, 16, 0.5)';
+  ctx.beginPath();
+  ctx.moveTo(x + width * 0.18, y);
+  ctx.quadraticCurveTo(x + width * 0.34, y - height * 0.62, x + width * 0.54, y - height * 0.48);
+  ctx.quadraticCurveTo(x + width * 0.7, y - height * 0.36, x + width * 0.84, y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.16)';
+  ctx.beginPath();
+  ctx.moveTo(x + width * 0.24, y - height * 0.18);
+  ctx.quadraticCurveTo(x + width * 0.42, y - height * 0.62, x + width * 0.58, y - height * 0.26);
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(0,0,0,0.18)';
+  ctx.beginPath();
+  ctx.moveTo(x + width * 0.58, y - height * 0.2);
+  ctx.quadraticCurveTo(x + width * 0.76, y - height * 0.54, x + width * 0.9, y - height * 0.06);
+  ctx.stroke();
   ctx.strokeStyle = 'rgba(0,0,0,0.12)';
   ctx.stroke();
 }
@@ -153,8 +175,15 @@ export function drawBattlefield(ctx, w, h, state, reducedMotion) {
     drawCloud(ctx, ((i * 190) - drift * 5) % (w + 260) - 80, 54 + (i % 2) * 24, 4);
   }
 
+  ctx.fillStyle = 'rgba(255,255,255,0.12)';
+  for (let i = 0; i < 9; i++) {
+    const sparkleX = ((i * 113) - drift * 3.2) % (w + 140);
+    ctx.fillRect(sparkleX, 28 + (i % 3) * 18, 3, 3);
+    ctx.fillRect(sparkleX + 5, 29 + (i % 2) * 16, 2, 2);
+  }
+
   for (let i = -1; i < 4; i++) {
-    drawHill(ctx, i * 180 - drift * 2, groundY, 220, 84 - (i % 2) * 14);
+    drawHill(ctx, i * 176 - drift * 2, groundY, 228, 96 - (i % 2) * 16);
   }
 
   ctx.fillStyle = SMB_PALETTE.grassDark;
@@ -167,10 +196,14 @@ export function drawBattlefield(ctx, w, h, state, reducedMotion) {
   ctx.fillRect(0, groundY + 10, w, 4);
   ctx.fillStyle = SMB_PALETTE.dirtLight;
   ctx.fillRect(0, groundY + 14, w, h - groundY - 14);
+  ctx.fillStyle = 'rgba(255,255,255,0.18)';
+  ctx.fillRect(0, groundY + 14, w, 3);
+  ctx.fillStyle = 'rgba(124,32,0,0.3)';
+  ctx.fillRect(0, groundY + 17, w, 6);
 
   const brickW = 26;
   const brickH = 16;
-  for (let y = groundY + 16; y < h; y += brickH) {
+  for (let y = groundY + 24; y < h; y += brickH) {
     for (let x = ((Math.floor(y / brickH) % 2) * (brickW / 2)) - brickW; x < w + brickW; x += brickW) {
       ctx.fillStyle = SMB_PALETTE.dirt;
       ctx.fillRect(x, y, brickW - 2, brickH - 2);
@@ -193,12 +226,20 @@ function drawCastle(ctx, x, y, scale, mainColor, darkColor, flagColor, hpRatio, 
   ctx.fillRect(left, top + 3 * ps, baseW, baseH - 3 * ps);
   ctx.fillStyle = mainColor;
   ctx.fillRect(left + ps, top + 4 * ps, baseW - 2 * ps, baseH - 4 * ps);
+  ctx.fillStyle = 'rgba(255,255,255,0.14)';
+  ctx.fillRect(left + 2 * ps, top + 5 * ps, baseW * 0.45, 2 * ps);
+  ctx.fillStyle = 'rgba(0,0,0,0.16)';
+  ctx.fillRect(left + baseW * 0.58, top + 4 * ps, baseW * 0.22, baseH - 6 * ps);
   ctx.fillStyle = darkColor;
   ctx.fillRect(left + 4 * ps, top + 11 * ps, 4 * ps, 8 * ps);
   ctx.fillRect(left + 10 * ps, top + 11 * ps, 4 * ps, 8 * ps);
   for (let i = 0; i < 4; i++) {
     ctx.fillStyle = darkColor;
     ctx.fillRect(left + (i * 4 + 1) * ps, top, 3 * ps, 4 * ps);
+  }
+  for (let row = 0; row < 3; row++) {
+    ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    ctx.fillRect(left + 2 * ps, top + (row * 4 + 6) * ps, baseW * 0.28, ps);
   }
 
   ctx.strokeStyle = darkColor;
@@ -220,6 +261,9 @@ function drawCastle(ctx, x, y, scale, mainColor, darkColor, flagColor, hpRatio, 
   ctx.lineTo(poleX + ps, top - 2 * ps);
   ctx.closePath();
   ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.18)';
+  ctx.fillRect(left + 6 * ps, top + 7 * ps, 2 * ps, 2 * ps);
+  ctx.fillRect(left + 11 * ps, top + 7 * ps, 2 * ps, 2 * ps);
 
   const barW = baseW;
   ctx.fillStyle = 'rgba(0,0,0,0.35)';

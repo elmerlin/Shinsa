@@ -203,23 +203,23 @@ function findClosestTarget(attacker, targets, direction) {
 }
 
 function applyFormationSpacing(units, direction) {
-  const ordered = [...units].sort((a, b) => a.x - b.x);
+  const ordered = [...units].sort((a, b) => direction > 0 ? b.x - a.x : a.x - b.x);
   const spacing = 3.8;
   if (direction > 0) {
     for (let index = 1; index < ordered.length; index++) {
       const leader = ordered[index - 1];
       const follower = ordered[index];
-      const maxX = leader.x - spacing;
-      if (follower.x > maxX) follower.x = maxX;
+      const desiredX = leader.x - spacing;
+      if (follower.x > desiredX) follower.x = desiredX;
     }
     return;
   }
 
-  for (let index = ordered.length - 2; index >= 0; index--) {
-    const leader = ordered[index + 1];
+  for (let index = 1; index < ordered.length; index++) {
+    const leader = ordered[index - 1];
     const follower = ordered[index];
-    const minX = leader.x + spacing;
-    if (follower.x < minX) follower.x = minX;
+    const desiredX = leader.x + spacing;
+    if (follower.x < desiredX) follower.x = desiredX;
   }
 }
 
@@ -404,7 +404,7 @@ function updateFx(state, dt) {
 
 function updateCamera(state) {
   const playerFront = state.playerUnits.length ? Math.max(...state.playerUnits.map((unit) => unit.x)) : PLAYER_BASE_X + 12;
-  const focus = clamp(playerFront - VIEWPORT_WIDTH * 0.28, 0, WORLD_WIDTH - VIEWPORT_WIDTH);
+  const focus = clamp(playerFront - VIEWPORT_WIDTH * 0.18, 0, WORLD_WIDTH - VIEWPORT_WIDTH);
   state.cameraX += (focus - state.cameraX) * CAMERA_LERP;
 }
 
