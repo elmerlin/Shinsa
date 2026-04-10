@@ -228,7 +228,6 @@ function createRound(playerSeats) {
       character:     ps.character || null,
       isBot:         !!ps.isBot,
       passableBombs: new Set(),
-      moveCooldown:  0,
     });
   }
 
@@ -296,20 +295,56 @@ function movePlayer(state, player, dir) {
   if (!v) return;
 
   player.dir = dir;
-  if (player.moveCooldown > 0) return;
+  const speed = player.speed * DT;
+  const nx = player.x + v.dx * speed;
+  const ny = player.y + v.dy * speed;
 
-  const gx = toCell(player.x);
-  const gy = toCell(player.y);
-  const nx = gx + v.dx;
-  const ny = gy + v.dy;
+  if (canOccupy(state, player, nx, ny)) {
+    player.x = nx;
+    player.y = ny;
+  } else {
+    // Wall-sliding: when blocked, nudge the perpendicular axis toward the
+    // nearest open lane (integer position) so the player slides smoothly
+    // around corners.
+    if (v.dx !== 0) {
+      // Moving horizontally -- nudge Y toward nearest lane
+      const roundedY = Math.round(player.y);
+      const diff = roundedY - player.y;
+      if (Math.abs(diff) > 0.01) {
+        const slideDir = diff > 0 ? 1 : -1;
+        const slideAmount = Math.min(speed, Math.abs(diff));
+        const sy = player.y + slideDir * slideAmount;
+        if (canOccupy(state, player, player.x, sy)) {
+          player.y = sy;
+          // Retry horizontal movement with corrected Y
+          const nx2 = player.x + v.dx * speed;
+          if (canOccupy(state, player, nx2, player.y)) {
+            player.x = nx2;
+          }
+        }
+      }
+    } else {
+      // Moving vertically -- nudge X toward nearest lane
+      const roundedX = Math.round(player.x);
+      const diff = roundedX - player.x;
+      if (Math.abs(diff) > 0.01) {
+        const slideDir = diff > 0 ? 1 : -1;
+        const slideAmount = Math.min(speed, Math.abs(diff));
+        const sx = player.x + slideDir * slideAmount;
+        if (canOccupy(state, player, sx, player.y)) {
+          player.x = sx;
+          // Retry vertical movement with corrected X
+          const ny2 = player.y + v.dy * speed;
+          if (canOccupy(state, player, player.x, ny2)) {
+            player.y = ny2;
+          }
+        }
+      }
+    }
+  }
 
-  if (isSolid(state, player, nx, ny)) return;
-
-  player.x = nx;
-  player.y = ny;
-  player.moveCooldown = 1 / Math.max(0.1, player.speed || BASE_SPEED);
-
-  // Once the player leaves a bomb's cell, it becomes solid for them again.
+  // Update passable-bomb set: once the player fully leaves a bomb's cell,
+  // the bomb becomes solid for them.
   for (const bombId of player.passableBombs) {
     const bomb = state.bombs.get(bombId);
     if (!bomb) {
@@ -318,7 +353,12 @@ function movePlayer(state, player, dir) {
     }
     const bgx = toCell(bomb.x);
     const bgy = toCell(bomb.y);
-    if (player.x !== bgx || player.y !== bgy) {
+    // Player's AABB no longer overlaps the bomb's cell?
+    const R = PLAYER_RADIUS;
+    if (player.x + R <= bgx - 0.5 ||
+        player.x - R >= bgx + 0.5 ||
+        player.y + R <= bgy - 0.5 ||
+        player.y - R >= bgy + 0.5) {
       player.passableBombs.delete(bombId);
     }
   }
@@ -401,6 +441,9 @@ function detonateBomb(state, bomb, changes) {
     { key: 'left',  dx: -1, dy:  0 },
   ];
 
+  // Track items revealed by THIS explosion so they aren't immediately destroyed
+  const newlyRevealedItems = new Set();
+
   for (const d of dirs) {
     for (let i = 1; i <= range; i++) {
       const nx = cx + d.dx * i;
@@ -425,6 +468,7 @@ function detonateBomb(state, bomb, changes) {
           const itemId = nextId(state);
           state.items.set(itemId, { id: itemId, x: nx, y: ny, type: itemType });
           changes.push({ type: 'item', x: nx, y: ny, itemType, id: itemId });
+          newlyRevealedItems.add(itemId);
         }
         break; // explosion stops at the soft block it destroys
       }
@@ -451,8 +495,10 @@ function detonateBomb(state, bomb, changes) {
   state.explosions.set(expId, explosion);
   changes.push({ type: 'explosion', id: expId, cx, cy, ...reach });
 
-  // Destroy items caught in the blast
+  // Destroy items caught in the blast — but spare items just revealed
+  // by this same explosion (they should survive like in classic Bomberman)
   for (const [itemId, item] of state.items) {
+    if (newlyRevealedItems.has(itemId)) continue;
     if (explosionHitsCell(explosion, item.x, item.y)) {
       state.items.delete(itemId);
       changes.push({ type: 'item_destroy', id: itemId });
@@ -664,11 +710,6 @@ function tick(state, inputs) {
   }
 
   // --- Process player inputs ---
-  for (const player of state.players.values()) {
-    if (!player.alive) continue;
-    player.moveCooldown = Math.max(0, (player.moveCooldown || 0) - DT);
-  }
-
   for (const [playerId, input] of inputs) {
     const player = state.players.get(playerId);
     if (!player || !player.alive) continue;

@@ -285,6 +285,7 @@ export default function PetBomberRoom() {
           winner: data.winner,
           won: didWin,
           isHumanMatch,
+          botMode: botMode || null,
           roundsWon: localRoundsWon,
           roundsPlayed,
           stats: data.stats,

@@ -1705,7 +1705,7 @@ function queryPlayActivitySummary(db, userId) {
   const base = db.prepare(`
     SELECT
       COUNT(*) AS plays_all,
-      MAX(level) AS max_level_all,
+      MAX(CASE WHEN COALESCE(NULLIF(grade, ''), 'F') NOT IN ('F', '') AND COALESCE(score, 0) > 0 THEN level ELSE NULL END) AS max_level_all,
       SUM(CASE WHEN mode LIKE 'Double%' THEN 1 ELSE 0 END) AS doubles_all,
       SUM(CASE WHEN (replay_embed_url != '' OR replay_video_id != '') THEN 1 ELSE 0 END) AS replays_all
     FROM user_recently_played
@@ -1836,9 +1836,11 @@ function buildPetMemories(pet, summary = {}) {
   }
 
   // ── Bests ──
-  if ((summary.max_level_all || 0) > 0) {
-    const lvl = summary.max_level_all;
-    memories.push({ id: 'max-level', title: 'Biggest clear watched', detail: `Level ${lvl} is the highest chart your pet has seen you conquer.`, tone: 'level', category: 'bests', rarity: lvl >= 22 ? 'rare' : lvl >= 18 ? 'uncommon' : 'common' });
+  // Use pet.highest_level (grade-filtered) instead of summary.max_level_all
+  // (which includes attempts/stage breaks)
+  const highestClearLvl = pet.highest_level || 0;
+  if (highestClearLvl > 0) {
+    memories.push({ id: 'max-level', title: 'Biggest clear watched', detail: `Level ${highestClearLvl} is the highest chart your pet has seen you conquer.`, tone: 'level', category: 'bests', rarity: highestClearLvl >= 22 ? 'rare' : highestClearLvl >= 18 ? 'uncommon' : 'common' });
   }
   if ((summary.best_grade_all || '') !== '') {
     memories.push({ id: 'best-grade', title: 'Peak precision', detail: `Best grade achieved: ${summary.best_grade_all}.`, tone: 'grade', category: 'bests', rarity: ['SSS+', 'SSS', 'SS+', 'SS'].includes(summary.best_grade_all) ? 'rare' : 'common' });
@@ -3604,7 +3606,13 @@ router.post('/tricks/:trickId/demand', requireAuth, (req, res) => {
   if ((pet.experience || 0) < trick.xp) return res.status(400).json({ error: 'Trick not unlocked yet' });
 
   const highestLevel = pet.highest_level || 10;
-  const demandLevel = Math.max(10, highestLevel - Math.floor(Math.random() * 3) - 1);
+  // Scale the gap with difficulty — higher levels have exponentially harder
+  // progression, so demands must stay well within the player's comfort zone.
+  const gap = highestLevel >= 24 ? 4 + Math.floor(Math.random() * 3) :  // 24+: 4-6 below
+              highestLevel >= 20 ? 3 + Math.floor(Math.random() * 3) :  // 20-23: 3-5 below
+              highestLevel >= 16 ? 2 + Math.floor(Math.random() * 3) :  // 16-19: 2-4 below
+              1 + Math.floor(Math.random() * 3);                        // <16: 1-3 below
+  const demandLevel = Math.max(10, highestLevel - gap);
   const demandGrade = TRICK_DEMAND_GRADES[trickIndex] || 'A';
   const expires = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString().replace('T', ' ').replace('Z', '');
 
@@ -4635,7 +4643,11 @@ module.exports.feedPetForUser = function feedPetForUser(userId, playsOrCount) {
       const isDouble = String(play.mode || '').startsWith('Double');
       const reward = GRADE_SYNC_REWARD_TABLE[rawGrade] || GRADE_SYNC_REWARD_TABLE.F;
 
-      if (level > highestLevel) highestLevel = level;
+      // Only count genuine clears for highest_level — require at least grade C
+      // to exclude stage breaks where partial scores map to passing grades
+      if (level > highestLevel && (GRADE_INDEX[rawGrade] || 0) >= GRADE_INDEX.C) {
+        highestLevel = level;
+      }
 
       totalHunger += reward.hunger || 0;
       totalXp += (reward.xp || 0) + levelXpBonus(level);
