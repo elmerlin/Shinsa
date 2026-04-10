@@ -81,8 +81,6 @@ function buildDangerMap(botGrid, state, blastRanges) {
   ];
 
   for (const bomb of state.bombs.values()) {
-    if (bomb.timer > 1.5) continue;
-
     const br = Math.round(bomb.y);
     const bc = Math.round(bomb.x);
     const range = blastRanges[bomb.owner] || bomb.blastRange || 2;
@@ -222,7 +220,7 @@ function getInput(state, botPlayer) {
         botGrid,
         { r: br, c: bc },
         (r, c) => fakeDanger[r][c] === 0 && botGrid[r][c] !== HARD && botGrid[r][c] !== SOFT && botGrid[r][c] !== BOMB_CELL,
-        () => false
+        (r, c) => fakeDanger[r][c] === 1
       );
       if (escPath && escPath.length > 0) {
         return { dir: escPath[0], bomb: true };

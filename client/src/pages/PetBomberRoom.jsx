@@ -171,8 +171,17 @@ export default function PetBomberRoom() {
         break;
 
       case 'room_created':
-      case 'room_state':
       case 'countdown':
+        setPhase('waiting');
+        setRoundResult(null);
+        setMatchResult(null);
+        updateRoom(data.room);
+        break;
+
+      case 'room_state':
+        if (data.room?.status === 'countdown' || data.room?.status === 'waiting') {
+          setPhase('waiting');
+        }
         updateRoom(data.room);
         break;
 
