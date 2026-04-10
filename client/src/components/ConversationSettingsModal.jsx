@@ -13,6 +13,7 @@ const SHARE_KIND_LABELS = {
   clear: 'Clear',
   score_snapshot: 'Score',
   chart_compare: 'Compare',
+  pet: 'Pet',
 };
 function getRank(score) {
   const s = parseInt(score, 10) || 0;

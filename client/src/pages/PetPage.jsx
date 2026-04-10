@@ -30,6 +30,7 @@ import PetBattleModal from '../components/pet/minigames/PetBattleModal';
 import PetBomberLauncher from '../components/pet/minigames/PetBomberLauncher';
 import PetBomberModal from '../components/pet/minigames/PetBomberModal';
 import UserPickerDialog from '../components/UserPickerDialog';
+import { getProfilePath } from '../utils/profile';
 
 // ─── Sound ─────────────────────────────────────────────────────────
 let _audioCtx = null;
@@ -790,20 +791,38 @@ export default function PetPage() {
 
   const handleShareDmSend = async (targetUser) => {
     try {
-      const dataUrl = await generateShareImage();
-      if (!dataUrl) {
-        setShareStatus('');
-        throw new Error('Could not generate pet card.');
-      }
       const displayName = pet.nickname || (pet.character || 'pet').toUpperCase();
+      const petUsername = String(user?.username || '').trim();
       await getOrCreateDirectConversation(targetUser.id, {
         content: `Check out my pet ${displayName}!`,
         link_share: {
-          kind: 'link',
-          path: '/pet',
+          kind: 'pet',
+          path: getProfilePath(user?.id, petUsername),
+          petUserId: String(user?.id || ''),
+          petUsername,
           title: `${displayName} — Lv.${pet.level || 1}`,
-          subtitle: `${pet.bond_rank?.label || 'Training Partner'} • ${pet.form?.label || 'Fresh Form'}`,
-          previewImage: dataUrl,
+          subtitle: `${pet.bond_rank?.label || 'Training Partner'} • ${pet.form?.label || 'Fresh Form'} • ${pet.mood || 'happy'}`,
+          petPreview: {
+            character: pet.character,
+            nickname: pet.nickname || '',
+            level: pet.level || 1,
+            hunger: pet.hunger,
+            happiness: pet.happiness,
+            weight_state: pet.weight_state,
+            mood: pet.mood,
+            bond_rank: pet.bond_rank || null,
+            form: pet.form || null,
+            equipped_hat: pet.equipped_hat || '',
+            equipped_belt: pet.equipped_belt || '',
+            equipped_shoes: pet.equipped_shoes || '',
+            equipped_top: pet.equipped_top || '',
+            hat_color: pet.hat_color || '',
+            belt_color: pet.belt_color || '',
+            shoes_color: pet.shoes_color || '',
+            top_color: pet.top_color || '',
+            fashion: pet.fashion || null,
+            minigames: pet.minigames || { total_plays: 0, favorites: [] },
+          },
         },
       });
       setShareDmSentResults({ users: [targetUser], squads: [] });

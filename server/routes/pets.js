@@ -2257,6 +2257,162 @@ function clearPetRequestFields(db, userId) {
   `).run(userId);
 }
 
+function ensurePetBomberPublicTables(db) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS pet_bomber_stats (
+      user_id TEXT PRIMARY KEY,
+      wins INTEGER NOT NULL DEFAULT 0,
+      losses INTEGER NOT NULL DEFAULT 0,
+      rounds_won INTEGER NOT NULL DEFAULT 0,
+      rounds_played INTEGER NOT NULL DEFAULT 0,
+      matches_played INTEGER NOT NULL DEFAULT 0,
+      best_streak INTEGER NOT NULL DEFAULT 0,
+      current_streak INTEGER NOT NULL DEFAULT 0,
+      last_played_at TEXT DEFAULT ''
+    )
+  `);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS pet_bomber_bot_stats (
+      user_id TEXT PRIMARY KEY,
+      wins INTEGER NOT NULL DEFAULT 0,
+      losses INTEGER NOT NULL DEFAULT 0,
+      rounds_won INTEGER NOT NULL DEFAULT 0,
+      rounds_played INTEGER NOT NULL DEFAULT 0,
+      matches_played INTEGER NOT NULL DEFAULT 0,
+      best_streak INTEGER NOT NULL DEFAULT 0,
+      current_streak INTEGER NOT NULL DEFAULT 0,
+      last_played_at TEXT DEFAULT ''
+    )
+  `);
+}
+
+function humanizePetItemLabel(value = '', fallback = 'Accessory') {
+  const text = String(value || '').trim();
+  if (!text) return fallback;
+  return text
+    .split(/[-_]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function buildPetFashionSummary(pet = {}) {
+  const buildSlot = (slot, id, color) => {
+    if (!id) return null;
+    const item = CLOTHING_MAP[id];
+    return {
+      slot,
+      id,
+      label: item?.name || humanizePetItemLabel(id, slot),
+      color: color || '',
+    };
+  };
+
+  return {
+    hat: buildSlot('Hat', pet.equipped_hat, pet.hat_color),
+    top: buildSlot('Top', pet.equipped_top, pet.top_color),
+    belt: buildSlot('Belt', pet.equipped_belt, pet.belt_color),
+    shoes: buildSlot('Shoes', pet.equipped_shoes, pet.shoes_color),
+  };
+}
+
+function buildPublicPetMinigameSummary(db, userId) {
+  ensureMinigameTable(db);
+  ensureInvadersTable(db);
+  ensurePacItUpTable(db);
+  ensurePetBattleTable(db);
+  ensurePetBomberPublicTables(db);
+
+  const miniPump = db.prepare(`
+    SELECT rounds_played, personal_best, best_streak, last_played_at
+    FROM pet_minigame_stats
+    WHERE user_id = ? AND game_id = 'mini-pump'
+  `).get(userId);
+  const invaders = db.prepare(`
+    SELECT total_runs, high_score, best_wave, last_played_at
+    FROM pet_invaders_stats
+    WHERE user_id = ?
+  `).get(userId);
+  const pacItUp = db.prepare(`
+    SELECT total_runs, high_score, best_stage, last_played_at
+    FROM pet_pac_it_up_stats
+    WHERE user_id = ?
+  `).get(userId);
+  const petBattle = db.prepare(`
+    SELECT total_runs, high_score, best_stage, last_played_at
+    FROM pet_battle_stats
+    WHERE user_id = ?
+  `).get(userId);
+  const bomberHuman = db.prepare(`
+    SELECT matches_played, last_played_at
+    FROM pet_bomber_stats
+    WHERE user_id = ?
+  `).get(userId);
+  const bomberBot = db.prepare(`
+    SELECT matches_played, last_played_at
+    FROM pet_bomber_bot_stats
+    WHERE user_id = ?
+  `).get(userId);
+
+  const entries = [
+    miniPump ? {
+      id: 'mini-pump',
+      label: 'Mini-Pump',
+      total_plays: miniPump.rounds_played || 0,
+      accent: 'cyan',
+      summary: `Best ${miniPump.personal_best || 0} • Streak ${miniPump.best_streak || 0}`,
+      cadence: 'quick rounds',
+      last_played_at: miniPump.last_played_at || '',
+    } : null,
+    invaders ? {
+      id: 'pet-invaders',
+      label: 'Pet Invaders',
+      total_plays: invaders.total_runs || 0,
+      accent: 'violet',
+      summary: `High ${invaders.high_score || 0} • Wave ${invaders.best_wave || 0}`,
+      cadence: 'arcade runs',
+      last_played_at: invaders.last_played_at || '',
+    } : null,
+    pacItUp ? {
+      id: 'pac-it-up',
+      label: 'Pac It Up',
+      total_plays: pacItUp.total_runs || 0,
+      accent: 'amber',
+      summary: `High ${pacItUp.high_score || 0} • Stage ${pacItUp.best_stage || 0}`,
+      cadence: 'maze runs',
+      last_played_at: pacItUp.last_played_at || '',
+    } : null,
+    petBattle ? {
+      id: 'pet-battle',
+      label: 'Pet Battle',
+      total_plays: petBattle.total_runs || 0,
+      accent: 'rose',
+      summary: `High ${petBattle.high_score || 0} • Stage ${petBattle.best_stage || 0}`,
+      cadence: 'battle runs',
+      last_played_at: petBattle.last_played_at || '',
+    } : null,
+    ((bomberHuman?.matches_played || 0) + (bomberBot?.matches_played || 0)) > 0 ? {
+      id: 'pet-bomber',
+      label: 'Pet Bomber',
+      total_plays: (bomberHuman?.matches_played || 0) + (bomberBot?.matches_played || 0),
+      accent: 'emerald',
+      summary: `${bomberHuman?.matches_played || 0} vs players • ${bomberBot?.matches_played || 0} vs bots`,
+      cadence: 'arena matches',
+      last_played_at: [bomberHuman?.last_played_at || '', bomberBot?.last_played_at || ''].sort().reverse()[0] || '',
+    } : null,
+  ].filter((entry) => entry && entry.total_plays > 0);
+
+  entries.sort((a, b) => {
+    if (b.total_plays !== a.total_plays) return b.total_plays - a.total_plays;
+    return String(b.last_played_at || '').localeCompare(String(a.last_played_at || ''));
+  });
+
+  return {
+    total_plays: entries.reduce((sum, entry) => sum + (entry.total_plays || 0), 0),
+    favorites: entries.slice(0, 3),
+  };
+}
+
 // ─── Format pet for API response ──────────────────────────────────
 function formatPet(pet, isPublic = false, db = null) {
   const vitals = buildPetVitalsSnapshot(pet);
@@ -2289,6 +2445,8 @@ function formatPet(pet, isPublic = false, db = null) {
   const needs = buildPetNeeds(vitals, pet, activitySummary);
   const currentRequest = getCurrentPetRequest(pet, vitals, activitySummary);
   const recommendedActions = getRecommendedActions(vitals, pet, activitySummary);
+  const fashion = buildPetFashionSummary(pet);
+  const publicMinigames = isPublic && db ? buildPublicPetMinigameSummary(db, pet.user_id) : { total_plays: 0, favorites: [] };
 
   let pendingTrick = pet.pending_trick || '';
   let trickDemandLevel = pet.trick_demand_level || 0;
@@ -2350,6 +2508,7 @@ function formatPet(pet, isPublic = false, db = null) {
     belt_color: pet.belt_color || '',
     shoes_color: pet.shoes_color || '',
     top_color: pet.top_color || '',
+    fashion,
     is_pet_avatar: pet.is_pet_avatar || 0,
     last_trick_performed: pet.last_trick_performed || '',
     last_trick_at: pet.last_trick_at || '',
@@ -2386,6 +2545,7 @@ function formatPet(pet, isPublic = false, db = null) {
       longest_streak: pet.longest_streak || 0,
       interactions_today: interactionsToday,
       memories: memories.filter(m => m.rarity !== 'common').slice(0, 4),
+      minigames: publicMinigames,
     };
   }
 

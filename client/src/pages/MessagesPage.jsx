@@ -19,6 +19,7 @@ import {
   getMessageConversation,
   getMessageConversations,
   getOrCreateDirectConversation,
+  getPublicPet,
   getSongChartDetail,
   getUpscore,
   searchConversationMentions,
@@ -69,6 +70,8 @@ import YouTubeReplayModal from '../components/YouTubeReplayModal';
 import UserPickerDialog from '../components/UserPickerDialog';
 import PiuChartJacket, { resolveChartJacketUrl } from '../components/PiuChartJacket';
 import PlateBadge from '../components/ui/plate-badge';
+import PetModal from '../components/PetModal';
+import PublicPetShowcaseCard from '../components/pet/PublicPetShowcaseCard';
 import { useMentionComposer } from '../hooks/useMentionComposer';
 import { buildReplayModalTitle } from '../utils/replayTitle';
 
@@ -81,6 +84,7 @@ const LINK_SHARE_BADGES = {
   chart_compare: 'Compare',
   hour_of_power: 'Hour of Power',
   story: 'Story',
+  pet: 'Pet',
   link: 'Link',
 };
 const CHALLENGE_BADGES = {
@@ -1365,6 +1369,9 @@ function getMessageLabel(message) {
   if (message.message_type === 'link_share' && message.link_share?.kind === 'story') {
     return 'Shared story';
   }
+  if (message.message_type === 'link_share' && message.link_share?.kind === 'pet') {
+    return 'Shared pet';
+  }
   if (message.message_type === 'challenge_card' && message.challenge_card?.kind === 'beat_score') {
     if (message.challenge_card?.statusKind === 'accepted') return 'Challenge accepted';
     if (message.challenge_card?.statusKind === 'expired') return 'Challenge expired';
@@ -1462,6 +1469,10 @@ function buildReplyPreviewText(message) {
     return compactReplyPreviewText(message.link_share.songTitle);
   }
 
+  if (message.link_share?.kind === 'pet' && message.link_share?.title) {
+    return compactReplyPreviewText(message.link_share.title);
+  }
+
   if (message.challenge_card?.statusLabel) {
     return compactReplyPreviewText(message.challenge_card.statusLabel);
   }
@@ -1513,6 +1524,63 @@ function hasScoreSnapshotLinkShare(linkShare) {
       || Number(linkShare.miss) > 0
       || linkShare.playerName
     )
+  );
+}
+
+function PetSharePreviewCard({ linkShare, onOpenLink }) {
+  const [livePet, setLivePet] = useState(null);
+  const [liveUsername, setLiveUsername] = useState('');
+  const petUserId = String(linkShare?.petUserId || linkShare?.userId || '').trim();
+
+  useEffect(() => {
+    let active = true;
+    if (!petUserId) return undefined;
+    getPublicPet(petUserId)
+      .then((payload) => {
+        if (!active) return;
+        setLivePet(payload?.pet || null);
+        setLiveUsername(payload?.username || '');
+      })
+      .catch(() => {
+        if (!active) return;
+        setLivePet(null);
+        setLiveUsername('');
+      });
+    return () => {
+      active = false;
+    };
+  }, [petUserId]);
+
+  const title = String(linkShare?.title || '').trim() || 'Shared pet';
+  const subtitle = String(linkShare?.subtitle || '').trim();
+  const fallbackPet = livePet ? null : linkShare?.petPreview || null;
+
+  return (
+    <div className="w-full space-y-2">
+      <p className="px-1 text-[9px] font-display font-bold uppercase tracking-[0.18em] text-cyan-200/75">Pet</p>
+      {livePet || fallbackPet ? (
+        <PublicPetShowcaseCard
+          pet={livePet || fallbackPet}
+          username={liveUsername || String(linkShare?.petUsername || '').trim()}
+          compact
+          titlePrefix="Live preview"
+        />
+      ) : (
+        <div className="rounded-[1.2rem] border border-piu-border/60 bg-piu-card/70 px-3 py-3 shadow-[0_10px_24px_rgba(0,0,0,0.16)]">
+          <p className="text-[15px] font-display font-black leading-tight text-white">{title}</p>
+          {subtitle ? <p className="mt-1 text-[12px] leading-5 text-gray-300">{subtitle}</p> : null}
+        </div>
+      )}
+      <div className="flex flex-wrap gap-1.5 px-1">
+        <button
+          type="button"
+          onClick={() => onOpenLink?.(linkShare)}
+          className="inline-flex rounded-md border border-piu-border/70 bg-piu-dark/40 px-2.5 py-1.5 text-[10px] font-display font-bold text-cyan-100 transition-colors hover:border-cyan-300/35 hover:text-white"
+        >
+          Open pet
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -1773,6 +1841,7 @@ function MessageLinkCard({
   const isStoryShare = resolvedLinkShare.kind === 'story';
   const isLiveSessionShare = !!getLiveSessionSharePreview(resolvedLinkShare);
   const isAchievementBadgeShare = !!getAchievementBadgePreview(resolvedLinkShare);
+  const isPetShare = resolvedLinkShare.kind === 'pet';
   const isYouTubeShare = !resolvedLinkShare.path && !!parseYouTubeUrl(resolvedLinkShare.url).videoId;
   const handlePrimaryOpen = () => onOpenLink?.(resolvedLinkShare);
   const replayUrl = String(resolvedLinkShare.replayUrl || '').trim();
@@ -1920,6 +1989,10 @@ function MessageLinkCard({
         onOpenLink={handlePrimaryOpen}
       />
     );
+  }
+
+  if (isPetShare) {
+    return <PetSharePreviewCard linkShare={resolvedLinkShare} onOpenLink={handlePrimaryOpen} />;
   }
 
   return (
@@ -3742,6 +3815,7 @@ export default function MessagesPage() {
     title: '',
     url: '',
   });
+  const [petModalUserId, setPetModalUserId] = useState('');
   const [storyViewerState, setStoryViewerState] = useState({
     open: false,
     user: null,
@@ -3877,11 +3951,17 @@ export default function MessagesPage() {
 
   async function handleOpenChatLink(linkTarget) {
     const kind = String(linkTarget?.kind || '').trim().toLowerCase();
+    const petUserId = String(linkTarget?.petUserId || linkTarget?.userId || '').trim();
     const canOpenSharedStory = kind === 'story'
       && !!String(linkTarget?.storyId || '').trim()
       && !!String(linkTarget?.storyOwnerId || '').trim();
     const title = String(linkTarget?.title || linkTarget?.buttonLabel || 'Open link').trim() || 'Open link';
     const forceEmbed = !!linkTarget?.forceEmbed;
+
+    if (kind === 'pet' && petUserId) {
+      setPetModalUserId(petUserId);
+      return;
+    }
 
     if (canOpenSharedStory) {
       const storyOpenResult = await openSharedStoryLinkTarget(linkTarget);
@@ -5360,6 +5440,11 @@ export default function MessagesPage() {
         url={youtubeModalState.open ? youtubeModalState.url : ''}
         title={youtubeModalState.title || 'YouTube video'}
         onClose={() => setYoutubeModalState({ open: false, title: '', url: '' })}
+      />
+
+      <PetModal
+        userId={petModalUserId}
+        onClose={() => setPetModalUserId('')}
       />
 
       <NoteComposerModal

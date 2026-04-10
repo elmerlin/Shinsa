@@ -23,6 +23,7 @@ const SHARE_KIND_LABELS = {
   clear: 'Clear',
   score_snapshot: 'Score',
   chart_compare: 'Compare',
+  pet: 'Pet',
 };
 const TAB_OPTIONS = [
   { key: 'videos', label: 'Videos' },
