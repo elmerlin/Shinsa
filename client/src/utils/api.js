@@ -1495,3 +1495,12 @@ export const getPetBattleStats = () => request('/pets/minigames/pet-battle');
 export const getPetBattleLeaderboard = (limit = 10) => request(`/pets/minigames/pet-battle/leaderboard?limit=${encodeURIComponent(limit)}`);
 export const completePetBattle = (results) => request('/pets/minigames/pet-battle/complete', { method: 'POST', body: JSON.stringify(results) });
 export const getMinigameCosts = () => request('/pets/minigames/cost');
+
+// Pet Bomber
+export const getPetBomberStats = () => request('/pet-bomber/stats');
+export const getPetBomberHumanLeaderboard = (limit = 20) => request(`/pet-bomber/leaderboard/human?limit=${encodeURIComponent(limit)}`);
+export const getPetBomberBotLeaderboard = (limit = 20) => request(`/pet-bomber/leaderboard/bot?limit=${encodeURIComponent(limit)}`);
+export const getPetBomberRooms = () => request('/pet-bomber/rooms');
+export const getPetBomberRoom = (roomId) => request(`/pet-bomber/rooms/${encodeURIComponent(roomId)}`);
+export const createPetBomberRoom = (character) => request('/pet-bomber/rooms', { method: 'POST', body: JSON.stringify({ character }) });
+export const completePetBomber = (results) => request('/pet-bomber/complete', { method: 'POST', body: JSON.stringify(results) });

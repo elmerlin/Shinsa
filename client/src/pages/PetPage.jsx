@@ -11,6 +11,7 @@ import {
   getPetInvadersStats, getPetInvadersLeaderboard, completePetInvaders,
   getPacItUpStats, getPacItUpLeaderboard, completePacItUp,
   getPetBattleStats, getPetBattleLeaderboard, completePetBattle, getMinigameCosts,
+  getPetBomberStats,
   completeCurrentPetRequest, dismissCurrentPetRequest,
   getOrCreateDirectConversation,
 } from '../utils/api';
@@ -26,6 +27,8 @@ import PacItUpLauncher from '../components/pet/minigames/PacItUpLauncher';
 import PacItUpModal from '../components/pet/minigames/PacItUpModal';
 import PetBattleLauncher from '../components/pet/minigames/PetBattleLauncher';
 import PetBattleModal from '../components/pet/minigames/PetBattleModal';
+import PetBomberLauncher from '../components/pet/minigames/PetBomberLauncher';
+import PetBomberModal from '../components/pet/minigames/PetBomberModal';
 import UserPickerDialog from '../components/UserPickerDialog';
 
 // ─── Sound ─────────────────────────────────────────────────────────
@@ -200,6 +203,8 @@ export default function PetPage() {
   const [petBattleOpen, setPetBattleOpen] = useState(false);
   const [petBattleStats, setPetBattleStats] = useState(null);
   const [petBattleLeaderboard, setPetBattleLeaderboard] = useState(null);
+  const [petBomberOpen, setPetBomberOpen] = useState(false);
+  const [petBomberStats, setPetBomberStats] = useState(null);
   const [minigameCosts, setMinigameCosts] = useState(null);
   const [requestBusy, setRequestBusy] = useState(false);
   const habitatRef = useRef(null);
@@ -892,6 +897,12 @@ export default function PetPage() {
     } catch (e) { console.error('Pet battle save failed', e); }
   };
 
+  // ─── Pet Bomber minigame ────────────────────────────
+  const handleOpenPetBomber = () => {
+    setPetBomberOpen(true);
+    if (!petBomberStats) getPetBomberStats().then(setPetBomberStats).catch(() => {});
+  };
+
   // ─── Gates ──────────────────────────────────────────
   if (!user) return <div className="max-w-lg mx-auto p-6 text-center"><h1 className="text-2xl font-bold mb-4">My Pet</h1><p className="text-gray-400">Log in to adopt a pet!</p></div>;
   if (loading) return <div className="max-w-lg mx-auto p-6 flex items-center justify-center min-h-[50vh]"><div className="w-12 h-12 border-2 border-white/10 border-t-white/60 rounded-full animate-spin" /></div>;
@@ -1276,6 +1287,8 @@ export default function PetPage() {
                 onPetBattle={handleOpenPetBattle}
                 petBattleStats={petBattleStats}
                 petBattleLeaderboard={petBattleLeaderboard}
+                onPetBomber={handleOpenPetBomber}
+                petBomberStats={petBomberStats}
                 minigameCosts={minigameCosts}
                 comboBalance={combo_balance}
                 currentRequest={currentRequest}
@@ -1368,6 +1381,12 @@ export default function PetPage() {
         onComplete={handlePetBattleComplete}
         stats={petBattleStats}
         leaderboard={petBattleLeaderboard}
+      />
+
+      <PetBomberModal
+        open={petBomberOpen}
+        onClose={() => setPetBomberOpen(false)}
+        character={pet?.character || 'dojocat'}
       />
 
       <UserPickerDialog
@@ -2025,7 +2044,7 @@ function CollapsibleSection({ title, icon, defaultOpen = true, count, children }
 }
 
 // ─── Pet tab ──────────────────────────────────────────
-function PetTab({ pet, shop, combo, economy, socialFeed, interactionBusy, activityBusy, missionBusyId, toyBusy, trainingBusy, onAction, onActivity, onClaimMission, onBuyToy, onUseToy, onSetTrainingPath, onTabSwitch, onMiniPump, miniPumpStats, miniPumpLeaderboard, onPetInvaders, petInvadersStats, petInvadersLeaderboard, onPacItUp, pacItUpStats, pacItUpLeaderboard, onPetBattle, petBattleStats, petBattleLeaderboard, minigameCosts, comboBalance, currentRequest, requestBusy, onClaimCurrentRequest, onDismissCurrentRequest, onRequestCta }) {
+function PetTab({ pet, shop, combo, economy, socialFeed, interactionBusy, activityBusy, missionBusyId, toyBusy, trainingBusy, onAction, onActivity, onClaimMission, onBuyToy, onUseToy, onSetTrainingPath, onTabSwitch, onMiniPump, miniPumpStats, miniPumpLeaderboard, onPetInvaders, petInvadersStats, petInvadersLeaderboard, onPacItUp, pacItUpStats, pacItUpLeaderboard, onPetBattle, petBattleStats, petBattleLeaderboard, onPetBomber, petBomberStats, minigameCosts, comboBalance, currentRequest, requestBusy, onClaimCurrentRequest, onDismissCurrentRequest, onRequestCta }) {
   const REACTION_ICONS = { cheer: '📣', wow: '🤩', flex: '💪', heart: '💗' };
   const claimableMissions = (pet.missions || []).filter(m => m.complete && !m.claimed).length;
   const needs = Array.isArray(pet.needs) ? pet.needs : [];
@@ -2131,6 +2150,7 @@ function PetTab({ pet, shop, combo, economy, socialFeed, interactionBusy, activi
           <PetInvadersLauncher onPlay={onPetInvaders} stats={petInvadersStats} cost={minigameCosts?.['pet-invaders']} comboBalance={comboBalance} />
           <PacItUpLauncher onPlay={onPacItUp} stats={pacItUpStats} cost={minigameCosts?.['pac-it-up']} comboBalance={comboBalance} />
           <PetBattleLauncher onPlay={onPetBattle} stats={petBattleStats} cost={minigameCosts?.['pet-battle']} comboBalance={comboBalance} />
+          <PetBomberLauncher onPlay={onPetBomber} stats={petBomberStats} cost={minigameCosts?.['pet-bomber']} comboBalance={comboBalance} />
         </div>
         <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.04]">
           <div className="flex items-center justify-between mb-2">

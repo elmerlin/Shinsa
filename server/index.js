@@ -30,6 +30,8 @@ const youtubeRoutes = require('./routes/youtube');
 const i18nRoutes = require('./routes/i18n');
 const weeklyChallengeRoutes = require('./routes/weeklyChallenges');
 const petRoutes = require('./routes/pets');
+const petBomberRoutes = require('./routes/petBomber');
+const petBomberWs = require('./lib/petBomber/ws');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -93,6 +95,7 @@ app.use('/api/youtube', youtubeRoutes);
 app.use('/api/i18n', i18nRoutes);
 app.use('/api/weekly-challenges', weeklyChallengeRoutes);
 app.use('/api/pets', petRoutes);
+app.use('/api/pet-bomber', petBomberRoutes);
 
 if (typeof piugameRoutes.startOverRankingNightlyScheduler === 'function') {
   try {
@@ -196,3 +199,6 @@ const server = app.listen(PORT, () => {
 });
 // Allow long-running sync requests (5 minutes)
 server.timeout = 300000;
+
+// Attach Pet Bomber WebSocket server
+petBomberWs.attachToServer(server);

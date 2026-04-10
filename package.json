@@ -35,7 +35,8 @@
     "square": "^42.0.0",
     "tough-cookie": "^6.0.0",
     "uuid": "^10.0.0",
-    "web-push": "^3.6.7"
+    "web-push": "^3.6.7",
+    "ws": "^8.20.0"
   },
   "devDependencies": {
     "d3-geo": "^3.1.1",

@@ -46,6 +46,7 @@ const MINIGAME_COST = {
   'pet-invaders': { combo: 8, energy: -6, hunger: -4, happiness: 2, hype: 6 },
   'pac-it-up': { combo: 6, energy: -5, hunger: -4, happiness: 2, hype: 5 },
   'pet-battle': { combo: 7, energy: -5, hunger: -3, happiness: 3, hype: 5 },
+  'pet-bomber': { combo: 10, energy: -7, hunger: -5, happiness: 4, hype: 8 },
 };
 
 const GRADE_ORDER = ['F', 'D', 'C', 'B', 'A', 'A+', 'AA', 'AA+', 'AAA', 'AAA+', 'S', 'S+', 'SS', 'SS+', 'SSS', 'SSS+'];
