@@ -819,6 +819,26 @@ export default function PetBomberRoom() {
               {botMode && (
                 <p className="text-[10px] text-gray-500 animate-pulse">Starting {botMode === 'duel' ? 'duel' : 'arena'} match...</p>
               )}
+
+              {/* Items guide */}
+              <div className="border-t border-white/[0.06] pt-3 mt-1">
+                <p className="text-[10px] font-bold text-white/40 uppercase tracking-wider mb-2">Power-ups</p>
+                <div className="grid grid-cols-1 gap-1.5 text-left">
+                  {[
+                    { icon: '💣', name: 'Extra Bomb', desc: '+1 bomb capacity', color: '#ff6666' },
+                    { icon: '🔥', name: 'Blast Up', desc: '+1 blast range', color: '#ffaa33' },
+                    { icon: '⚡', name: 'Speed Up', desc: 'Move faster', color: '#55ccff' },
+                    { icon: '👢', name: 'Kick', desc: 'Kick bombs forward', color: '#ffdd44' },
+                    { icon: '👻', name: 'Pass', desc: 'Walk through bombs', color: '#bb77ff' },
+                  ].map(item => (
+                    <div key={item.name} className="flex items-center gap-2 px-2 py-1 rounded-md bg-white/[0.03]">
+                      <span className="text-sm w-5 text-center shrink-0">{item.icon}</span>
+                      <span className="text-[11px] font-semibold shrink-0" style={{ color: item.color }}>{item.name}</span>
+                      <span className="text-[10px] text-gray-500 ml-auto">{item.desc}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         )}

@@ -725,33 +725,99 @@ export default class PetBomberRenderer {
     const cx = x + cs / 2;
     const cy = y + cs / 2 + Math.sin(elapsed * 4) * cs * 0.06;
     const r = cs * 0.28;
+    const ps = Math.max(1, Math.floor(cs / 16)); // pixel size for pixel art
 
     // Glow
     ctx.save();
-    ctx.globalAlpha = 0.3 + Math.sin(elapsed * 3) * 0.1;
+    ctx.globalAlpha = 0.25 + Math.sin(elapsed * 3) * 0.1;
     ctx.fillStyle = style.fg;
     ctx.beginPath();
-    ctx.arc(cx, cy, r * 1.5, 0, Math.PI * 2);
+    ctx.arc(cx, cy, r * 1.6, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
 
-    // Circle bg
-    ctx.fillStyle = style.bg;
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.fill();
+    // Draw pixel art icon per type
+    ctx.save();
+    ctx.translate(cx, cy);
+    const px = (gx, gy, color) => {
+      ctx.fillStyle = color;
+      ctx.fillRect(gx * ps - ps * 3.5, gy * ps - ps * 3.5, ps, ps);
+    };
 
-    // Border
-    ctx.strokeStyle = style.fg;
-    ctx.lineWidth = Math.max(1, cs / 20);
-    ctx.stroke();
+    if (type === 'extra_bomb') {
+      // Bomb: round black body with red fuse spark
+      const body = '#222222';
+      const hi = '#444444';
+      const fuse = '#996633';
+      const spark1 = '#ff4400';
+      const spark2 = '#ffaa00';
+      //         0  1  2  3  4  5  6
+      // row 0:           fuse/spark
+      // row 1:        fuse
+      // row 2:     bomb body
+      // row 3:     bomb body
+      // row 4:     bomb body
+      // row 5:     bomb body
+      // row 6:
+      px(4, 0, spark2); px(5, 0, spark1);
+      px(3, 1, fuse); px(4, 1, spark1);
+      px(2, 2, body); px(3, 2, body); px(4, 2, body); px(5, 2, body);
+      px(1, 3, body); px(2, 3, body); px(3, 3, hi); px(4, 3, body); px(5, 3, body); px(6, 3, body);
+      px(1, 4, body); px(2, 4, body); px(3, 4, body); px(4, 4, body); px(5, 4, body); px(6, 4, body);
+      px(1, 5, body); px(2, 5, body); px(3, 5, body); px(4, 5, body); px(5, 5, body); px(6, 5, body);
+      px(2, 6, body); px(3, 6, body); px(4, 6, body); px(5, 6, body);
+    } else if (type === 'blast_up') {
+      // Flame: orange/red fire
+      const red = '#dd3300';
+      const ora = '#ff7700';
+      const yel = '#ffcc00';
+      px(3, 0, yel);
+      px(2, 1, ora); px(3, 1, yel); px(4, 1, ora);
+      px(1, 2, red); px(2, 2, ora); px(3, 2, yel); px(4, 2, ora); px(5, 2, red);
+      px(1, 3, red); px(2, 3, ora); px(3, 3, yel); px(4, 3, ora); px(5, 3, red);
+      px(1, 4, red); px(2, 4, ora); px(3, 4, ora); px(4, 4, ora); px(5, 4, red);
+      px(2, 5, red); px(3, 5, red); px(4, 5, red);
+      px(2, 6, red); px(3, 6, red); px(4, 6, red);
+    } else if (type === 'speed_up') {
+      // Lightning bolt
+      const brt = '#55ccff';
+      const mid = '#2288cc';
+      const drk = '#1166aa';
+      px(3, 0, brt); px(4, 0, brt);
+      px(2, 1, brt); px(3, 1, mid);
+      px(1, 2, brt); px(2, 2, mid);
+      px(1, 3, brt); px(2, 3, brt); px(3, 3, brt); px(4, 3, brt); px(5, 3, brt);
+      px(4, 4, mid); px(5, 4, brt);
+      px(3, 5, mid); px(4, 5, drk);
+      px(2, 6, mid); px(3, 6, drk);
+    } else if (type === 'kick') {
+      // Boot / shoe
+      const sole = '#553311';
+      const boot = '#ccaa00';
+      const hi = '#ffdd44';
+      px(2, 0, boot); px(3, 0, boot);
+      px(2, 1, boot); px(3, 1, hi);
+      px(2, 2, boot); px(3, 2, hi);
+      px(2, 3, boot); px(3, 3, boot);
+      px(1, 4, boot); px(2, 4, boot); px(3, 4, boot); px(4, 4, boot); px(5, 4, boot);
+      px(1, 5, sole); px(2, 5, sole); px(3, 5, sole); px(4, 5, sole); px(5, 5, sole); px(6, 5, sole);
+      px(1, 6, sole); px(2, 6, sole); px(3, 6, sole); px(4, 6, sole); px(5, 6, sole); px(6, 6, sole);
+    } else if (type === 'pass') {
+      // Ghost (pass through bombs)
+      const body = '#bb77ff';
+      const hi = '#ddaaff';
+      const eye = '#ffffff';
+      const pupil = '#333333';
+      px(2, 0, body); px(3, 0, body); px(4, 0, body);
+      px(1, 1, body); px(2, 1, hi); px(3, 1, hi); px(4, 1, body); px(5, 1, body);
+      px(1, 2, body); px(2, 2, eye); px(3, 2, body); px(4, 2, eye); px(5, 2, body);
+      px(1, 3, body); px(2, 3, pupil); px(3, 3, body); px(4, 3, pupil); px(5, 3, body);
+      px(1, 4, body); px(2, 4, body); px(3, 4, body); px(4, 4, body); px(5, 4, body);
+      px(1, 5, body); px(2, 5, body); px(3, 5, body); px(4, 5, body); px(5, 5, body);
+      px(1, 6, body); px(3, 6, body); px(5, 6, body);
+    }
 
-    // Label
-    ctx.fillStyle = '#ffffff';
-    ctx.font = `bold ${Math.max(8, Math.floor(cs * 0.26))}px monospace`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(style.label, cx, cy + 1);
+    ctx.restore();
   }
 
   // ── Player drawing ──────────────────────────────────────────────
