@@ -153,20 +153,32 @@ export default function PetWorldHUD({
 
       {/* Seasonal event banner */}
       {activeEvents && activeEvents.length > 0 && (
-        <div className="border-t border-white/[0.06] px-2 py-1 flex items-center gap-2 flex-wrap">
+        <div className="border-t border-white/[0.06] px-2 py-1 flex items-center gap-2 overflow-x-auto">
           {activeEvents.map((event) => {
             const eventStyles = {
-              spring_bloom: 'from-pink-500/15 to-emerald-500/15 border-pink-400/10 text-pink-300',
-              summer_festival: 'from-amber-500/15 to-orange-500/15 border-amber-400/10 text-amber-300',
-              harvest_moon: 'from-orange-500/15 to-amber-500/15 border-orange-400/10 text-orange-300',
-              winter_solstice: 'from-blue-500/15 to-cyan-500/15 border-blue-400/10 text-blue-300',
+              spring_bloom: 'from-pink-500/15 to-emerald-500/15 border-pink-400/10 text-pink-300 shadow-[0_0_12px_rgba(236,72,153,0.15)]',
+              summer_festival: 'from-amber-500/15 to-orange-500/15 border-amber-400/10 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.15)]',
+              harvest_moon: 'from-orange-500/15 to-amber-700/15 border-orange-400/10 text-orange-300 shadow-[0_0_12px_rgba(234,88,12,0.15)]',
+              winter_solstice: 'from-blue-500/15 to-cyan-500/15 border-blue-400/10 text-blue-300 shadow-[0_0_12px_rgba(56,189,248,0.15)]',
             };
             const style = eventStyles[event.id] || 'from-violet-500/15 to-fuchsia-500/15 border-violet-400/10 text-violet-300';
+            const daysText = typeof event.daysLeft === 'number'
+              ? event.daysLeft === 0 ? 'last day!' : `${event.daysLeft}d left`
+              : null;
+            const desc = event.description && event.description.length > 60
+              ? event.description.slice(0, 57) + '...'
+              : event.description;
             return (
-              <div key={event.id} className={`flex items-center gap-1.5 bg-gradient-to-r ${style} rounded-lg px-2 py-0.5 border`}>
-                <span className="w-[5px] h-[5px] rounded-full bg-current animate-pulse" />
+              <div key={event.id} className={`group relative flex items-center gap-1.5 bg-gradient-to-r ${style} rounded-lg px-2 py-0.5 border shrink-0`}>
+                <span className="w-[5px] h-[5px] rounded-full bg-current animate-pulse" style={{ filter: 'blur(0.5px)' }} />
+                {event.icon && <span className="text-[11px]">{event.icon}</span>}
                 <span className="text-[11px] font-semibold">{event.name}</span>
-                <span className="text-[9px] text-white/45">{event.description}</span>
+                {daysText && <span className="text-[9px] text-white/50">{daysText}</span>}
+                {desc && (
+                  <div className="hidden group-hover:block absolute left-0 top-full mt-1 z-50 max-w-[240px] rounded bg-black/90 border border-white/10 px-2 py-1 text-[9px] text-white/70 shadow-lg">
+                    {event.description}
+                  </div>
+                )}
               </div>
             );
           })}

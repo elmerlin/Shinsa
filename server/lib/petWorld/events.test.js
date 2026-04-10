@@ -6,8 +6,10 @@ const {
   ENCOUNTER_TYPES,
   getActiveEvents,
   getSeasonalBonuses,
+  getEventCountdown,
   isEventActive,
   pickEncounterType,
+  pickSeasonalEncounterType,
 } = require('./events');
 
 // ---------------------------------------------------------------------------
@@ -261,6 +263,105 @@ describe('SEASONAL_EVENTS data integrity', () => {
       assert.ok(typeof event.end.day === 'number', `${event.id} end has day`);
       assert.ok(typeof event.productionBonuses === 'object', `${event.id} has productionBonuses`);
       assert.ok(typeof event.happinessBonus === 'number', `${event.id} has happinessBonus`);
+    }
+  });
+
+  it('each event has icon, encounterBoost, and specialReward', () => {
+    for (const event of SEASONAL_EVENTS) {
+      assert.ok(typeof event.icon === 'string' && event.icon.length > 0, `${event.id} has icon`);
+      assert.ok(Array.isArray(event.encounterBoost), `${event.id} has encounterBoost array`);
+      assert.ok(event.encounterBoost.length > 0, `${event.id} encounterBoost is non-empty`);
+      // Every boosted type must exist in ENCOUNTER_TYPES
+      for (const t of event.encounterBoost) {
+        assert.ok(ENCOUNTER_TYPES.some((e) => e.type === t), `${event.id} boost target "${t}" exists`);
+      }
+      assert.ok(typeof event.specialReward === 'object', `${event.id} has specialReward`);
+      assert.ok(typeof event.specialReward.resource === 'string', `${event.id} specialReward has resource`);
+      assert.ok(typeof event.specialReward.multiplier === 'number', `${event.id} specialReward has multiplier`);
+    }
+  });
+
+  it('each event has a flavor description longer than 30 characters', () => {
+    for (const event of SEASONAL_EVENTS) {
+      assert.ok(event.description.length > 30, `${event.id} description is substantive`);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getEventCountdown
+// ---------------------------------------------------------------------------
+describe('getEventCountdown', () => {
+  it('returns correct days remaining for spring_bloom on Apr 1', () => {
+    // Spring bloom ends Apr 20; Apr 1 to Apr 20 = 19 days
+    const days = getEventCountdown(findEvent('spring_bloom'), dateOf(4, 1));
+    assert.equal(days, 19);
+  });
+
+  it('returns 0 on last day of spring_bloom (Apr 20)', () => {
+    const days = getEventCountdown(findEvent('spring_bloom'), dateOf(4, 20));
+    assert.equal(days, 0);
+  });
+
+  it('returns correct days for summer_festival on Jun 25', () => {
+    // Jun 25 to Jul 21 = 26 days
+    const days = getEventCountdown(findEvent('summer_festival'), dateOf(6, 25));
+    assert.equal(days, 26);
+  });
+
+  it('returns correct days for harvest_moon on Oct 1', () => {
+    // Oct 1 to Oct 22 = 21 days
+    const days = getEventCountdown(findEvent('harvest_moon'), dateOf(10, 1));
+    assert.equal(days, 21);
+  });
+
+  it('returns correct days for winter_solstice on Dec 25 (cross-year)', () => {
+    // Dec 25 to Jan 20 next year = 26 days
+    const days = getEventCountdown(findEvent('winter_solstice'), dateOf(12, 25));
+    assert.equal(days, 26);
+  });
+
+  it('returns 0 on last day of winter_solstice (Jan 20)', () => {
+    const days = getEventCountdown(findEvent('winter_solstice'), dateOf(1, 20));
+    assert.equal(days, 0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// pickSeasonalEncounterType
+// ---------------------------------------------------------------------------
+describe('pickSeasonalEncounterType', () => {
+  it('boosts deer_herd during spring_bloom (higher effective weight)', () => {
+    // Run many picks during spring and count deer_herd vs off-season
+    let springDeer = 0;
+    let offDeer = 0;
+    const trials = 2000;
+    for (let i = 0; i < trials; i += 1) {
+      const seed = i / trials;
+      if (pickSeasonalEncounterType(dateOf(4, 1), seed).type === 'deer_herd') springDeer += 1;
+      if (pickEncounterType(seed).type === 'deer_herd') offDeer += 1;
+    }
+    // Boosted season should yield at least as many (usually more)
+    assert.ok(springDeer >= offDeer, `spring deer ${springDeer} >= off-season deer ${offDeer}`);
+  });
+
+  it('returns a valid encounter type during summer_festival', () => {
+    const enc = pickSeasonalEncounterType(dateOf(7, 1), 0.5);
+    assert.ok(ENCOUNTER_TYPES.some((e) => e.type === enc.type));
+  });
+
+  it('falls back to first type for seed >= 1.0', () => {
+    const enc = pickSeasonalEncounterType(dateOf(4, 1), 1.0);
+    assert.equal(enc.type, ENCOUNTER_TYPES[0].type);
+  });
+
+  it('behaves like pickEncounterType when no event is active', () => {
+    // May 15 has no event
+    const seedsToCheck = [0, 0.2, 0.45, 0.6, 0.8, 0.95];
+    for (const seed of seedsToCheck) {
+      const seasonal = pickSeasonalEncounterType(dateOf(5, 15), seed);
+      const base = pickEncounterType(seed);
+      assert.equal(seasonal.type, base.type, `seed ${seed} matches base picker`);
     }
   });
 });

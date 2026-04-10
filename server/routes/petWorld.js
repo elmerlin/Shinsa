@@ -35,11 +35,12 @@ const {
 } = require('../lib/petWorld/economy');
 
 const { createUserNotification } = require('../lib/notifications');
-const { getActiveEvents, getSeasonalBonuses, pickEncounterType, ENCOUNTER_TYPES } = require('../lib/petWorld/events');
+const { getActiveEvents, getSeasonalBonuses, getEventCountdown, pickEncounterType, pickSeasonalEncounterType, ENCOUNTER_TYPES } = require('../lib/petWorld/events');
+const { getVillagePresence } = require('../lib/petWorld/ws');
 
 const router = express.Router();
 
-// In-memory co-presence tracking for village visits
+// In-memory co-presence tracking for village visits (HTTP heartbeat fallback)
 // Map<hostUserId, Map<visitorUserId, { username, since }>>
 const presenceMap = new Map();
 const PRESENCE_TTL_MS = 5 * 60 * 1000; // 5 minutes
@@ -51,19 +52,25 @@ function registerPresence(hostId, visitorId, username) {
 }
 
 function getPresence(hostId) {
-  if (!presenceMap.has(hostId)) return [];
-  const visitors = presenceMap.get(hostId);
-  const now = Date.now();
-  const active = [];
-  for (const [userId, data] of visitors.entries()) {
-    if (now - data.since > PRESENCE_TTL_MS) {
-      visitors.delete(userId);
-    } else {
-      active.push({ user_id: userId, username: data.username, since: data.since });
+  // Merge HTTP heartbeat presence with WebSocket presence
+  const wsPresence = getVillagePresence(hostId);
+  const wsUserIds = new Set(wsPresence.map((v) => v.user_id));
+
+  // Add HTTP-heartbeat visitors that are NOT already tracked via WS
+  const httpVisitors = presenceMap.get(hostId);
+  const merged = [...wsPresence];
+  if (httpVisitors) {
+    const now = Date.now();
+    for (const [userId, data] of httpVisitors.entries()) {
+      if (now - data.since > PRESENCE_TTL_MS) {
+        httpVisitors.delete(userId);
+      } else if (!wsUserIds.has(userId)) {
+        merged.push({ user_id: userId, username: data.username, since: data.since });
+      }
     }
+    if (httpVisitors.size === 0) presenceMap.delete(hostId);
   }
-  if (visitors.size === 0) presenceMap.delete(hostId);
-  return active;
+  return merged;
 }
 
 const STARTING_RESOURCES = {
@@ -360,7 +367,7 @@ function runCatchup(db, userId, now = new Date()) {
         // ~25% chance per catchup with watchtower, scaling with steps
         const spawnChance = Math.min(0.8, 0.25 * simulation.stepsToRun);
         if (Math.random() < spawnChance) {
-          const encounter = pickEncounterType();
+          const encounter = pickSeasonalEncounterType(now);
           const rewardEntries = Object.entries(encounter.reward || {});
           const primaryResource = rewardEntries[0]?.[0] || 'food';
           const primaryAmount = rewardEntries[0]?.[1] || 0;
@@ -467,7 +474,7 @@ function formatWorldBundle(db, world, buildings, options = {}) {
     },
     buildings: buildings.map(formatBuilding),
     building_catalog: getAllBuildingDefs(),
-    active_events: getActiveEvents(now),
+    active_events: getActiveEvents(now).map((evt) => ({ ...evt, daysLeft: getEventCountdown(evt, now) })),
     visitors_online: getPresence(world.user_id),
   };
 }
@@ -1117,7 +1124,12 @@ router.post('/encounters/:id/dismiss', requireAuth, (req, res) => {
 // ── Seasonal Events ─────────────────────────────────────────────────
 
 router.get('/events', requireAuth, (req, res) => {
-  res.json({ events: getActiveEvents() });
+  const now = new Date();
+  const events = getActiveEvents(now).map((evt) => ({
+    ...evt,
+    daysLeft: getEventCountdown(evt, now),
+  }));
+  res.json({ events });
 });
 
 // ── Presence heartbeat ──────────────────────────────────────────────

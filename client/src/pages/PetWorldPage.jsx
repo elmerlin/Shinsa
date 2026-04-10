@@ -26,6 +26,7 @@ import PetWorldBuildingInfo from '../components/petWorld/PetWorldBuildingInfo';
 import PetWorldCreateModal from '../components/petWorld/PetWorldCreateModal';
 import PetWorldTradeModal from '../components/petWorld/PetWorldTradeModal';
 import { playBuildSound, playClearSound, playExpandSound, playUpgradeSound, playErrorSound, playHuntStrikeSound, playHuntSuccessSound, playHuntEscapeSound, playEncounterAlertSound } from '../components/petWorld/petWorldAudio';
+import usePetWorldPresence from '../hooks/usePetWorldPresence';
 
 /* ─── Toast ─────────────────────────────────────────────────────── */
 function Toast({ message }) {
@@ -38,21 +39,71 @@ function Toast({ message }) {
 }
 
 /* ─── Seasonal Events Banner ───────────────────────────────────── */
+const SEASON_BANNER_STYLES = {
+  spring_bloom: {
+    bg: 'from-pink-500/20 via-emerald-500/10 to-pink-500/20',
+    border: 'border-pink-400/15',
+    dot: 'bg-pink-400',
+    name: 'text-pink-200/90',
+    meta: 'text-pink-300/50',
+    glow: 'shadow-[0_0_8px_rgba(236,72,153,0.3)]',
+  },
+  summer_festival: {
+    bg: 'from-amber-500/20 via-orange-500/10 to-amber-500/20',
+    border: 'border-amber-400/15',
+    dot: 'bg-amber-400',
+    name: 'text-amber-200/90',
+    meta: 'text-amber-300/50',
+    glow: 'shadow-[0_0_8px_rgba(245,158,11,0.3)]',
+  },
+  harvest_moon: {
+    bg: 'from-orange-500/20 via-amber-700/10 to-orange-500/20',
+    border: 'border-orange-400/15',
+    dot: 'bg-orange-400',
+    name: 'text-orange-200/90',
+    meta: 'text-orange-300/50',
+    glow: 'shadow-[0_0_8px_rgba(234,88,12,0.3)]',
+  },
+  winter_solstice: {
+    bg: 'from-blue-500/20 via-cyan-500/10 to-blue-500/20',
+    border: 'border-blue-400/15',
+    dot: 'bg-cyan-400',
+    name: 'text-blue-200/90',
+    meta: 'text-blue-300/50',
+    glow: 'shadow-[0_0_8px_rgba(56,189,248,0.3)]',
+  },
+};
+const DEFAULT_BANNER_STYLE = {
+  bg: 'from-violet-500/15 via-fuchsia-500/10 to-violet-500/15',
+  border: 'border-violet-400/10',
+  dot: 'bg-violet-400',
+  name: 'text-violet-200/90',
+  meta: 'text-violet-300/50',
+  glow: '',
+};
+
 function SeasonalBanner({ events }) {
   if (!events || events.length === 0) return null;
+  // Use the first event's colour scheme for the banner background
+  const primary = SEASON_BANNER_STYLES[events[0]?.id] || DEFAULT_BANNER_STYLE;
   return (
-    <div className="flex items-center gap-2 px-2 py-1 bg-gradient-to-r from-amber-500/15 via-emerald-500/10 to-amber-500/15 border-b border-amber-400/10 overflow-x-auto">
-      {events.map((evt, i) => (
-        <div key={evt.id || i} className="flex items-center gap-1.5 shrink-0">
-          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-          <span className="text-[10px] font-semibold text-amber-200/90">{evt.name || evt.title}</span>
-          {evt.ends_at && (
-            <span className="text-[9px] text-amber-300/50 ml-1">
-              ends {new Date(evt.ends_at).toLocaleDateString()}
-            </span>
-          )}
-        </div>
-      ))}
+    <div className={`flex items-center gap-3 px-2 py-1 bg-gradient-to-r ${primary.bg} border-b ${primary.border} overflow-x-auto`}>
+      {events.map((evt, i) => {
+        const s = SEASON_BANNER_STYLES[evt.id] || DEFAULT_BANNER_STYLE;
+        const daysText = typeof evt.daysLeft === 'number'
+          ? evt.daysLeft === 0 ? 'last day!' : `${evt.daysLeft}d left`
+          : null;
+        return (
+          <div key={evt.id || i} className="flex items-center gap-1.5 shrink-0">
+            <span className={`w-1.5 h-1.5 rounded-full ${s.dot} animate-pulse ${s.glow}`} />
+            {evt.icon && <span className="text-[11px]">{evt.icon}</span>}
+            <span className={`text-[10px] font-semibold ${s.name}`}>{evt.name || evt.title}</span>
+            {daysText && (
+              <span className={`text-[9px] ${s.meta} ml-0.5`}>{daysText}</span>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -683,14 +734,39 @@ function EncounterModal({ encounter, onHunt, onDismiss, onClose, busy, buildings
 }
 
 /* ─── Visitor Log Panel ────────────────────────────────────────── */
-function VisitorLogPanel({ visitors, open, onClose }) {
+function VisitorLogPanel({ visitors, onlineVisitors, open, onClose }) {
   if (!open) return null;
   return (
     <div className="absolute top-12 right-2 z-40 w-56 rounded-xl border border-white/[0.08] bg-black/80 backdrop-blur-md p-3 shadow-[0_14px_30px_rgba(0,0,0,0.3)]">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-[9px] uppercase tracking-[0.16em] text-white/40">Visitor Log</span>
+        <span className="text-[9px] uppercase tracking-[0.16em] text-white/40">Visitors</span>
         <button type="button" onClick={onClose} className="text-white/40 hover:text-white text-xs">✕</button>
       </div>
+
+      {/* Online now */}
+      {onlineVisitors && onlineVisitors.length > 0 && (
+        <div className="mb-2">
+          <div className="flex items-center gap-1 mb-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-[9px] font-semibold text-emerald-300/80">Online now ({onlineVisitors.length})</span>
+          </div>
+          <div className="space-y-0.5">
+            {onlineVisitors.map((v) => (
+              <Link
+                key={v.user_id}
+                to={`/pet/world/${v.user_id}`}
+                className="flex items-center gap-1.5 rounded-lg border border-emerald-400/10 bg-emerald-500/[0.06] px-2 py-1 text-[10px] text-emerald-200/80 hover:bg-emerald-500/[0.12] transition-colors"
+              >
+                <span className="w-1 h-1 rounded-full bg-emerald-400 shrink-0" />
+                <span className="truncate">{v.username || 'Unknown'}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Historical log */}
+      <div className="text-[9px] uppercase tracking-[0.16em] text-white/40 mb-1">Recent</div>
       <div className="space-y-1 max-h-48 overflow-y-auto">
         {(!visitors || visitors.length === 0) ? (
           <div className="text-[10px] text-white/30 py-2 text-center">No recent visitors</div>
@@ -873,15 +949,15 @@ export default function PetWorldPage() {
     return () => window.clearTimeout(showToast._timer);
   }, [loadAll, showToast]);
 
-  /* Presence heartbeat: POST every 2 minutes */
-  useEffect(() => {
-    const userId = bundle?.world?.user_id;
-    if (!userId) return;
-    const tick = () => postPetWorldPresence(userId).catch(() => {});
-    tick();
-    const id = setInterval(tick, 2 * 60 * 1000);
-    return () => clearInterval(id);
-  }, [bundle?.world?.user_id]);
+  /* Real-time co-presence via WebSocket (owner joins own village room) */
+  const handleVisitorJoined = useCallback((data) => {
+    showToast(`${data.username || 'Someone'} is visiting your world`);
+  }, [showToast]);
+
+  const { visitors: wsVisitors } = usePetWorldPresence(
+    bundle?.world?.user_id || null,
+    { onVisitorJoined: handleVisitorJoined },
+  );
 
   const world = bundle?.world || null;
   const buildings = bundle?.buildings || [];
@@ -1191,7 +1267,7 @@ export default function PetWorldPage() {
       <LeaderboardPanel leaderboard={leaderboard} open={showLeaderboard} onClose={() => setShowLeaderboard(false)} />
 
       {/* Visitor log floating panel */}
-      <VisitorLogPanel visitors={visitors} open={showVisitors} onClose={() => setShowVisitors(false)} />
+      <VisitorLogPanel visitors={visitors} onlineVisitors={wsVisitors} open={showVisitors} onClose={() => setShowVisitors(false)} />
 
       {/* ── Canvas (full screen base layer) ──────────────────────── */}
       <div className="flex-1 relative min-h-0">
