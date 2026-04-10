@@ -36,6 +36,10 @@ const ITEM_PALETTE = {
 };
 
 const LERP_SPEED = 14;
+const PREDICT_SPEED = 3.0;  // base cells/sec — overridden by measured velocity
+const PLAYER_RADIUS = 0.35;
+const CORRECTION_RATE = 6;  // how fast local player corrects toward server pos
+const DIR_VECS = { up: { dx: 0, dy: -1 }, down: { dx: 0, dy: 1 }, left: { dx: -1, dy: 0 }, right: { dx: 1, dy: 0 } };
 
 // ─── Helpers ─────────────────────────────────────────────────────
 function px(ctx, x, y, s, color) {
@@ -85,6 +89,9 @@ export default class PetBomberRenderer {
     this._timer = 90;
     this._tick = 0;
 
+    this._localDir = null;   // current input direction for local player
+    this._localSpeed = PREDICT_SPEED;
+
     this._animTime = 0;
     this._lastTime = performance.now();
     this._rafId = 0;
@@ -98,6 +105,8 @@ export default class PetBomberRenderer {
   getCanvas() { return this._canvas; }
 
   setLocalSeat(seat) { this._localSeat = seat; }
+
+  setLocalDir(dir) { this._localDir = dir || null; }
 
   setSeats(seats) {
     this._seatCharacters = {};
@@ -166,6 +175,11 @@ export default class PetBomberRenderer {
         const dy = y - p.ty;
         p.vx = dx / TICK_DT;
         p.vy = dy / TICK_DT;
+        // Track measured speed for local player prediction
+        if (seat === this._localSeat) {
+          const measuredSpeed = Math.max(Math.abs(p.vx), Math.abs(p.vy));
+          if (measuredSpeed > 0.5) this._localSpeed = measuredSpeed;
+        }
         p.tx = x;
         p.ty = y;
         p.dir = dir;
@@ -314,18 +328,90 @@ export default class PetBomberRenderer {
     this._rafId = requestAnimationFrame(frame);
   }
 
+  // Simple grid collision check for client-side prediction
+  _canOccupy(cx, cy) {
+    const grid = this._grid;
+    if (!grid) return true;
+    const R = PLAYER_RADIUS;
+    if (cx - R < -0.5 || cx + R > COLS - 0.5) return false;
+    if (cy - R < -0.5 || cy + R > ROWS - 0.5) return false;
+    const EPS = 1e-9;
+    const minGX = Math.round(cx - R);
+    const maxGX = Math.round(cx + R - EPS);
+    const minGY = Math.round(cy - R);
+    const maxGY = Math.round(cy + R - EPS);
+    for (let gy = minGY; gy <= maxGY; gy++) {
+      for (let gx = minGX; gx <= maxGX; gx++) {
+        if (gy < 0 || gy >= ROWS || gx < 0 || gx >= COLS) return false;
+        const cell = grid[gy]?.[gx];
+        if (cell === 1 || cell === 2) return false; // hard or soft block
+        // Check bombs
+        for (const b of this._bombs.values()) {
+          if (Math.round(b.x) === gx && Math.round(b.y) === gy) return false;
+        }
+      }
+    }
+    return true;
+  }
+
   _update(dt) {
-    // Interpolate player positions with velocity extrapolation
+    // Interpolate player positions
     const lf = LERP_SPEED * dt;
-    for (const p of this._players) {
+    for (let i = 0; i < this._players.length; i++) {
+      const p = this._players[i];
       if (!p.visible) continue;
-      // Extrapolate target forward using velocity so movement stays
-      // smooth between server snapshots instead of decelerating into
-      // a static target.
-      const goalX = p.tx + p.vx * dt;
-      const goalY = p.ty + p.vy * dt;
-      p.x = lerp(p.x, goalX, lf);
-      p.y = lerp(p.y, goalY, lf);
+
+      if (i === this._localSeat && p.alive) {
+        // ── Local player: client-side prediction ──
+        // Move immediately based on held direction
+        if (this._localDir) {
+          const v = DIR_VECS[this._localDir];
+          if (v) {
+            const spd = this._localSpeed * dt;
+            const nx = p.x + v.dx * spd;
+            const ny = p.y + v.dy * spd;
+            if (this._canOccupy(nx, ny)) {
+              p.x = nx;
+              p.y = ny;
+            } else {
+              // Wall-slide: nudge perpendicular axis toward lane
+              if (v.dx !== 0) {
+                const ry = Math.round(p.y);
+                const diff = ry - p.y;
+                if (Math.abs(diff) > 0.01) {
+                  const sy = p.y + Math.sign(diff) * Math.min(spd, Math.abs(diff));
+                  if (this._canOccupy(p.x, sy)) {
+                    p.y = sy;
+                    const nx2 = p.x + v.dx * spd;
+                    if (this._canOccupy(nx2, p.y)) p.x = nx2;
+                  }
+                }
+              } else {
+                const rx = Math.round(p.x);
+                const diff = rx - p.x;
+                if (Math.abs(diff) > 0.01) {
+                  const sx = p.x + Math.sign(diff) * Math.min(spd, Math.abs(diff));
+                  if (this._canOccupy(sx, p.y)) {
+                    p.x = sx;
+                    const ny2 = p.y + v.dy * spd;
+                    if (this._canOccupy(p.x, ny2)) p.y = ny2;
+                  }
+                }
+              }
+            }
+          }
+        }
+        // Gentle correction toward server authoritative position
+        const cf = CORRECTION_RATE * dt;
+        p.x = lerp(p.x, p.tx, cf);
+        p.y = lerp(p.y, p.ty, cf);
+      } else {
+        // ── Remote players: velocity-based interpolation ──
+        const goalX = p.tx + p.vx * dt;
+        const goalY = p.ty + p.vy * dt;
+        p.x = lerp(p.x, goalX, lf);
+        p.y = lerp(p.y, goalY, lf);
+      }
     }
     // Advance effect timers
     for (const b of this._bombs.values()) b.t += dt;

@@ -401,6 +401,8 @@ export default function PetBomberRoom() {
       const dir = currentDir();
       const bomb = bombHeldRef.current;
       send({ type: 'input', roomId: roomIdRef.current, dir, bomb });
+      // Feed direction to renderer for client-side prediction
+      if (rendererRef.current) rendererRef.current.setLocalDir(dir);
       // Reset bomb after sending (tap, not hold)
       bombHeldRef.current = false;
     }, TICK_INTERVAL);
@@ -446,10 +448,11 @@ export default function PetBomberRoom() {
       if (dir) {
         e.preventDefault();
         const stack = dirStackRef.current;
-        // Only add if not already in stack
         if (!stack.includes(dir)) {
           stack.push(dir);
         }
+        // Instantly feed to renderer for immediate visual response
+        if (rendererRef.current) rendererRef.current.setLocalDir(currentDir());
       }
 
       if (e.key === ' ' || e.key === 'z' || e.key === 'Z') {
@@ -465,6 +468,7 @@ export default function PetBomberRoom() {
       if (dir) {
         e.preventDefault();
         dirStackRef.current = dirStackRef.current.filter((d) => d !== dir);
+        if (rendererRef.current) rendererRef.current.setLocalDir(currentDir());
       }
     };
 
@@ -524,11 +528,13 @@ export default function PetBomberRoom() {
   const handleDpadStart = useCallback((dir) => (e) => {
     e.preventDefault();
     dpadActiveRef.current = dir;
+    if (rendererRef.current) rendererRef.current.setLocalDir(dir);
   }, []);
 
   const handleDpadEnd = useCallback(() => (e) => {
     e.preventDefault();
     dpadActiveRef.current = null;
+    if (rendererRef.current) rendererRef.current.setLocalDir(null);
   }, []);
 
   const handleBombTouch = useCallback((e) => {
@@ -556,15 +562,19 @@ export default function PetBomberRoom() {
 
     if (dist < deadZone) {
       dpadActiveRef.current = null;
+      if (rendererRef.current) rendererRef.current.setLocalDir(null);
       return;
     }
 
     // Map angle to 4 cardinal directions
     const deg = angle * (180 / Math.PI);
-    if (deg >= -45 && deg < 45) dpadActiveRef.current = 'right';
-    else if (deg >= 45 && deg < 135) dpadActiveRef.current = 'down';
-    else if (deg >= -135 && deg < -45) dpadActiveRef.current = 'up';
-    else dpadActiveRef.current = 'left';
+    let newDir;
+    if (deg >= -45 && deg < 45) newDir = 'right';
+    else if (deg >= 45 && deg < 135) newDir = 'down';
+    else if (deg >= -135 && deg < -45) newDir = 'up';
+    else newDir = 'left';
+    dpadActiveRef.current = newDir;
+    if (rendererRef.current) rendererRef.current.setLocalDir(newDir);
   }, []);
 
   const handleJoystickStart = useCallback((e) => {
@@ -594,6 +604,7 @@ export default function PetBomberRoom() {
     e.preventDefault();
     joystickTouchRef.current = null;
     dpadActiveRef.current = null;
+    if (rendererRef.current) rendererRef.current.setLocalDir(null);
     setJoystickOffset({ x: 0, y: 0 });
   }, []);
 
@@ -970,7 +981,7 @@ export default function PetBomberRoom() {
             <div className={`absolute bottom-4 z-20 pointer-events-auto ${controlSide === 'left' ? 'left-3' : 'right-3'}`}>
               {controlType === 'dpad' ? (
                 /* ── D-Pad ── */
-                <div className="relative w-44 h-44 rounded-[2rem] border border-white/10 bg-black/30 p-3 shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur-md">
+                <div className="relative w-44 h-44 rounded-[2rem] border border-white/10 bg-black/30 p-3 shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur-md select-none" style={{ touchAction: 'none', WebkitTouchCallout: 'none' }}>
                   {/* Up */}
                   <button
                     onTouchStart={handleDpadStart('up')}
@@ -1050,7 +1061,8 @@ export default function PetBomberRoom() {
             {/* Bomb button — opposite side */}
             <button
               onTouchStart={handleBombTouch}
-              className={`absolute bottom-7 z-20 flex h-24 w-24 items-center justify-center rounded-[2rem] border-2 border-rose-400/35 bg-black/30 shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur-md active:bg-rose-500/30 transition-colors pointer-events-auto ${
+              style={{ touchAction: 'none', WebkitTouchCallout: 'none' }}
+              className={`absolute bottom-7 z-20 flex h-24 w-24 items-center justify-center rounded-[2rem] border-2 border-rose-400/35 bg-black/30 shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur-md active:bg-rose-500/30 transition-colors pointer-events-auto select-none ${
                 controlSide === 'left' ? 'right-4' : 'left-4'
               }`}
             >
