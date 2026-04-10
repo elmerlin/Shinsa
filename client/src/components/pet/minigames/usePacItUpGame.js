@@ -513,12 +513,47 @@ export default function usePacItUpGame() {
   const onRenderRef = useRef(null);
   const countdownRef = useRef(null);
 
+  const clearCountdown = useCallback(() => {
+    if (countdownRef.current) clearInterval(countdownRef.current);
+    countdownRef.current = null;
+  }, []);
+
   const stopLoop = useCallback(() => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     rafRef.current = null;
     lastTimeRef.current = null;
     accRef.current = 0;
   }, []);
+
+  const startCountdown = useCallback(() => {
+    clearCountdown();
+
+    const state = stateRef.current;
+    state.mode = 'countdown';
+    state.countdownValue = 3;
+    onRenderRef.current?.(state);
+    playCountdown(false);
+
+    countdownRef.current = setInterval(() => {
+      const current = stateRef.current;
+      if (current.mode !== 'countdown') {
+        clearCountdown();
+        return;
+      }
+
+      current.countdownValue--;
+      if (current.countdownValue <= 0) {
+        clearCountdown();
+        current.mode = 'playing';
+        startSiren('normal');
+        playCountdown(true);
+      } else {
+        playCountdown(false);
+      }
+
+      onRenderRef.current?.(current);
+    }, 800);
+  }, [clearCountdown]);
 
   const startLoop = useCallback(() => {
     stopLoop();
@@ -538,6 +573,9 @@ export default function usePacItUpGame() {
         tickModeTimer(state, frameDt);
         state.animFrame++;
       } else {
+        if (state.mode === 'countdown' && !countdownRef.current) {
+          startCountdown();
+        }
         state.animFrame++;
       }
 
@@ -545,38 +583,21 @@ export default function usePacItUpGame() {
       rafRef.current = requestAnimationFrame(loop);
     };
     rafRef.current = requestAnimationFrame(loop);
-  }, [stopLoop]);
+  }, [stopLoop, startCountdown]);
 
   const startGame = useCallback((character) => {
     stopLoop();
-    if (countdownRef.current) clearInterval(countdownRef.current);
+    clearCountdown();
     startAudio();
 
     const state = createInitialState();
     state.character = character || 'dojocat';
-    state.mode = 'countdown';
-    state.countdownValue = 3;
     setupStage(state);
     stateRef.current = state;
-    onRenderRef.current?.(stateRef.current);
-
-    playCountdown(false);
-    countdownRef.current = setInterval(() => {
-      const s = stateRef.current;
-      s.countdownValue--;
-      if (s.countdownValue <= 0) {
-        clearInterval(countdownRef.current);
-        countdownRef.current = null;
-        s.mode = 'playing';
-        startSiren('normal');
-        playCountdown(true);
-      } else {
-        playCountdown(false);
-      }
-    }, 800);
+    startCountdown();
 
     startLoop();
-  }, [stopLoop, startLoop]);
+  }, [clearCountdown, startCountdown, stopLoop, startLoop]);
 
   const queueDirection = useCallback((dir) => {
     if (!dir) return;
@@ -599,12 +620,11 @@ export default function usePacItUpGame() {
 
   const reset = useCallback(() => {
     stopLoop();
-    if (countdownRef.current) clearInterval(countdownRef.current);
-    countdownRef.current = null;
+    clearCountdown();
     stopAll();
     stateRef.current = createInitialState();
     onRenderRef.current?.(stateRef.current);
-  }, [stopLoop]);
+  }, [clearCountdown, stopLoop]);
 
   const getState = useCallback(() => stateRef.current, []);
 
@@ -615,10 +635,10 @@ export default function usePacItUpGame() {
   useEffect(() => {
     return () => {
       stopLoop();
-      if (countdownRef.current) clearInterval(countdownRef.current);
+      clearCountdown();
       stopAll();
     };
-  }, [stopLoop]);
+  }, [clearCountdown, stopLoop]);
 
   return useMemo(() => ({
     startGame,
