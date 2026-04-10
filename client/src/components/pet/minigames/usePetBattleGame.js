@@ -8,9 +8,12 @@ export const ENEMY_BASE_X = WORLD_WIDTH - 14;
 
 const FIXED_DT = 1000 / 60;
 const PLAYER_BASE_HP = 1000;
-const AURA_MAX = 500;
+const AURA_BASE_MAX = 500;
+const AURA_PER_LEVEL = 200;
 const AURA_BASE_RATE = 14;
 const MAX_AURA_LEVEL = 8;
+const VET_KILLS_NEEDED = 3;
+const VET_BONUS = 0.12;
 const STAGE_CLEAR_MS = 1700;
 const WAVE_GAP_MS = 700;
 const PROJECTILE_SPEED = 44;
@@ -60,7 +63,7 @@ function createInitialState() {
     globalWave: 0,
     aura: 100,
     auraLevel: 1,
-    auraMax: AURA_MAX,
+    auraMax: AURA_BASE_MAX,
     playerBaseHp: PLAYER_BASE_HP,
     playerBaseMaxHp: PLAYER_BASE_HP,
     enemyBaseHp: getEnemyBaseHp(1),
@@ -135,7 +138,18 @@ function createPlayerUnit(state, typeKey) {
     attackFlash: 0,
     renderLane: lane,
     animOffset: Math.random() * 36,
+    kills: 0,
+    veterancy: 0,
   };
+}
+
+function applyVeterancy(unit) {
+  const template = ARCHETYPES[unit.type];
+  if (!template) return;
+  const mult = 1 + unit.veterancy * VET_BONUS;
+  unit.maxHp = Math.round(template.hp * mult);
+  unit.damage = Math.round(template.damage * mult);
+  unit.hp = unit.maxHp;
 }
 
 function createEnemyUnit(state, typeKey) {
@@ -210,25 +224,19 @@ function findClosestTarget(attacker, targets, direction) {
   return best;
 }
 
-function applyFormationSpacing(units, direction) {
-  const ordered = [...units].sort((a, b) => direction > 0 ? b.x - a.x : a.x - b.x);
-  if (direction > 0) {
-    for (let index = 1; index < ordered.length; index++) {
-      const leader = ordered[index - 1];
-      const follower = ordered[index];
-      const spacing = Math.max(1.1, Math.min(2.15, ((leader.size || 8) + (follower.size || 8)) * 0.085));
-      const desiredX = leader.x - spacing;
-      if (follower.x > desiredX) follower.x = desiredX;
+function resolveOverlaps(units) {
+  for (let i = 0; i < units.length; i++) {
+    for (let j = i + 1; j < units.length; j++) {
+      const a = units[i];
+      const b = units[j];
+      const minGap = ((a.size || 8) + (b.size || 8)) * 0.065;
+      const dist = Math.abs(a.x - b.x);
+      if (dist < minGap) {
+        const push = (minGap - dist) * 0.5;
+        if (a.x < b.x) { a.x -= push; b.x += push; }
+        else { a.x += push; b.x -= push; }
+      }
     }
-    return;
-  }
-
-  for (let index = 1; index < ordered.length; index++) {
-    const leader = ordered[index - 1];
-    const follower = ordered[index];
-    const spacing = Math.max(1.1, Math.min(2.15, ((leader.size || 8) + (follower.size || 8)) * 0.085));
-    const desiredX = leader.x + spacing;
-    if (follower.x < desiredX) follower.x = desiredX;
   }
 }
 
@@ -250,9 +258,10 @@ function setupStage(state, stage) {
   state.projectiles = [];
   state.fx = [];
   state.modeTimer = 0;
-  // Reset surviving player units back to player base for the new stage
+  // Reset surviving player units back to player base for the new stage, fully healed
   state.playerUnits.forEach((unit, i) => {
     unit.x = PLAYER_BASE_X + 10 + (i % 3) * 1.2;
+    unit.hp = unit.maxHp;
     unit.attackTimer = unit.attackMs * 0.4;
     unit.attackFlash = 0;
   });
@@ -333,26 +342,36 @@ function updateWaveSpawning(state, dt) {
 
 function updateUnits(state, dt, playerUnits, enemyUnits) {
   const dtSec = dt / 1000;
+
+  // Find the current frontline positions so melee units can push past ranged
+  const enemyFront = enemyUnits.length ? Math.min(...enemyUnits.map(u => u.x)) : ENEMY_BASE_X;
+
   playerUnits.forEach((unit) => {
     unit.attackTimer = Math.max(0, unit.attackTimer - dt);
     unit.attackFlash = Math.max(0, unit.attackFlash - dt);
     const target = findClosestTarget(unit, enemyUnits, 1);
     const canHitBase = state.enemyBaseHp > 0 && ENEMY_BASE_X - unit.x <= Math.max(BASE_CONTACT_RANGE, unit.range);
+
     if (target) {
+      // In range of a target — attack it
       if (unit.attackTimer <= 0) attackUnit(state, unit, target, false);
     } else if (canHitBase) {
       if (unit.attackTimer <= 0) attackUnit(state, unit, null, true);
     } else {
+      // No target in range — always move forward to engage
       unit.x = Math.min(ENEMY_BASE_X - 4, unit.x + unit.moveSpeed * dtSec);
     }
   });
-  applyFormationSpacing(playerUnits, 1);
+  resolveOverlaps(playerUnits);
+
+  const playerFront = playerUnits.length ? Math.max(...playerUnits.map(u => u.x)) : PLAYER_BASE_X;
 
   enemyUnits.forEach((unit) => {
     unit.attackTimer = Math.max(0, unit.attackTimer - dt);
     unit.attackFlash = Math.max(0, unit.attackFlash - dt);
     const target = findClosestTarget(unit, playerUnits, -1);
     const canHitBase = state.playerBaseHp > 0 && unit.x - PLAYER_BASE_X <= Math.max(BASE_CONTACT_RANGE, unit.range);
+
     if (target) {
       if (unit.attackTimer <= 0) attackUnit(state, unit, target, false);
     } else if (canHitBase) {
@@ -361,7 +380,7 @@ function updateUnits(state, dt, playerUnits, enemyUnits) {
       unit.x = Math.max(PLAYER_BASE_X + 4, unit.x - unit.moveSpeed * dtSec);
     }
   });
-  applyFormationSpacing(enemyUnits, -1);
+  resolveOverlaps(enemyUnits);
 }
 
 function updateProjectiles(state, dt) {
@@ -401,6 +420,9 @@ function resolveDeaths(state) {
     return false;
   });
 
+  // Track which player unit was closest to each dying enemy (the "killer")
+  const deadEnemies = state.enemyUnits.filter(u => u.hp <= 0);
+
   state.enemyUnits = state.enemyUnits.filter((unit) => {
     if (unit.hp > 0) return true;
     state.score += unit.score;
@@ -410,6 +432,23 @@ function resolveDeaths(state) {
     addFx(state, 'poof', unit.x, 0, unit.size * 1.2);
     audio.playEnemyDeath();
     return false;
+  });
+
+  // Award veterancy to the closest player unit for each kill
+  deadEnemies.forEach((enemy) => {
+    let closest = null;
+    let closestDist = Infinity;
+    state.playerUnits.forEach((unit) => {
+      const dist = Math.abs(unit.x - enemy.x);
+      if (dist < closestDist) { closest = unit; closestDist = dist; }
+    });
+    if (closest) {
+      closest.kills = (closest.kills || 0) + 1;
+      if (closest.kills >= VET_KILLS_NEEDED * (closest.veterancy + 1)) {
+        closest.veterancy += 1;
+        applyVeterancy(closest);
+      }
+    }
   });
 }
 
@@ -590,6 +629,7 @@ export default function usePetBattleGame() {
     if (state.aura < cost) return false;
     state.aura -= cost;
     state.auraLevel += 1;
+    state.auraMax = AURA_BASE_MAX + state.auraLevel * AURA_PER_LEVEL;
     audio.playAuraUpgrade();
     renderNow();
     return true;

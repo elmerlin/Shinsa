@@ -834,6 +834,28 @@ export function drawPlayerUnit(ctx, unit, x, groundY, scale, character, animFram
   ctx.fillRect(x - barW / 2, barY, barW, 3);
   ctx.fillStyle = barColor;
   ctx.fillRect(x - barW / 2, barY, barW * hpRatio, 3);
+
+  // Veterancy stars
+  const vet = unit.veterancy || 0;
+  if (vet > 0) {
+    const starY = barY - 6;
+    const starSize = Math.max(2, ps * 1.2);
+    ctx.fillStyle = '#ffd700';
+    for (let i = 0; i < Math.min(vet, 5); i++) {
+      const sx = x - (vet - 1) * starSize * 0.6 + i * starSize * 1.2;
+      ctx.beginPath();
+      for (let p = 0; p < 5; p++) {
+        const angle = -Math.PI / 2 + (p * 2 * Math.PI) / 5;
+        const r = p % 2 === 0 ? starSize : starSize * 0.4;
+        const method = p === 0 ? 'moveTo' : 'lineTo';
+        ctx[method](sx + Math.cos(angle) * r, starY + Math.sin(angle) * r);
+        const innerAngle = angle + Math.PI / 5;
+        ctx.lineTo(sx + Math.cos(innerAngle) * starSize * 0.4, starY + Math.sin(innerAngle) * starSize * 0.4);
+      }
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
 }
 
 // ━━━ Enemy Unit Sprites ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
