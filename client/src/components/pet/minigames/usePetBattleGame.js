@@ -250,6 +250,12 @@ function setupStage(state, stage) {
   state.projectiles = [];
   state.fx = [];
   state.modeTimer = 0;
+  // Reset surviving player units back to player base for the new stage
+  state.playerUnits.forEach((unit, i) => {
+    unit.x = PLAYER_BASE_X + 10 + (i % 3) * 1.2;
+    unit.attackTimer = unit.attackMs * 0.4;
+    unit.attackFlash = 0;
+  });
   queueWave(state);
 }
 
@@ -292,10 +298,13 @@ function attackUnit(state, attacker, target, isBase = false) {
 
   if (isBase) {
     damageBase(state, attacker.team, attacker.damage);
+    addFx(state, 'slash', attacker.team === 'player' ? ENEMY_BASE_X - 4 : PLAYER_BASE_X + 4, 0, 8);
     return;
   }
 
   target.hp -= attacker.damage;
+  addFx(state, 'slash', target.x, 0, target.size || 8);
+  addFx(state, 'impact', target.x, 0, 5);
   if (attacker.aoe) {
     const pool = attacker.team === 'player' ? state.enemyUnits : state.playerUnits;
     pool.forEach((candidate) => {

@@ -15,6 +15,8 @@ import {
   drawStageClearBanner,
   drawStartScreen,
   drawDeathPoof,
+  drawSlashFX,
+  drawImpactStars,
   getBattlefieldGroundY,
 } from './petBattleSprites';
 import { VIEWPORT_WIDTH, ENEMY_BASE_X, PLAYER_BASE_X } from './usePetBattleGame';
@@ -83,8 +85,11 @@ export default function PetBattleCanvas({ game, character, reducedMotion }) {
 
     state.fx.forEach((fx) => {
       const screenX = worldToScreen(fx.x);
-      if (fx.type === 'explosion') drawExplosion(ctx, screenX, groundY - 22, fx.size * scale * 0.35, fx.progress);
-      else drawDeathPoof(ctx, screenX, groundY - 18, fx.size * scale * 0.35, fx.progress);
+      const fxSize = fx.size * scale * 0.35;
+      if (fx.type === 'explosion') drawExplosion(ctx, screenX, groundY - 22, fxSize, fx.progress);
+      else if (fx.type === 'slash') drawSlashFX(ctx, screenX, groundY - 22, fxSize, fx.progress);
+      else if (fx.type === 'impact') drawImpactStars(ctx, screenX, groundY - 18, fxSize, fx.progress);
+      else drawDeathPoof(ctx, screenX, groundY - 18, fxSize, fx.progress);
     });
 
     drawHUD(ctx, w, h, state);
