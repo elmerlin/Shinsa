@@ -3,57 +3,38 @@
 // ---------------------------------------------------------------------------
 //  Pet Bomber -- Bot AI
 //
-//  Strategies:
-//    1. FLEE danger zones immediately (highest priority)
-//    2. COLLECT nearby power-ups
-//    3. BOMB adjacent soft blocks (only if escape is verified safe)
-//    4. WANDER toward soft blocks (prefer multi-exit positions)
-//    5. COLLECT distant power-ups
-//    6. HUNT enemies (approach + bomb when adjacent)
-//    7. IDLE
+//  Goals:
+//    - survive its own bombs reliably
+//    - clear the board and pressure the player
+//    - stay beatable through small hesitation and conservative bombing
 //
-//  Key improvements over naive AI:
-//    - Respects passable bombs (bot can walk through its own just-placed bombs)
-//    - Timing-aware escape validation (escape path must be reachable before fuse)
-//    - Dead-end avoidance (prefer positions with 2+ walkable exits)
-//    - Random hesitation makes bot beatable by humans
+//  The core fix here is time-aware safety planning:
+//    - bombs create a threat-time map instead of a simple boolean danger map
+//    - escape validation only approves bombs with a reachable safe endpoint
+//    - hesitation never runs before danger handling
 // ---------------------------------------------------------------------------
 
-// Grid cell types (matching simulation.js)
 const EMPTY = 0;
-const HARD  = 1;
-const SOFT  = 2;
-
-// Overlay marker for composite grid
+const HARD = 1;
+const SOFT = 2;
 const BOMB_CELL = 3;
 
-// Timing constants (must match simulation.js)
-const BOMB_FUSE     = 2.5;   // seconds
-const SAFETY_MARGIN = 0.5;   // seconds buffer for escape
+const BOMB_FUSE = 2.5;
+const OPENING_BOMB_DELAY_TICKS = 16; // 0.8s at 20 tps
+const STEP_BUFFER = 0.08;
+const ESCAPE_MARGIN = 0.18;
 
-// Bot imperfection tuning
-const IDLE_CHANCE        = 0.08;  // 8% of ticks, bot does nothing
-const BOMB_HESITATE      = 0.18;  // 18% chance to skip a bomb opportunity
-const ITEM_NEARBY_RANGE  = 8;     // prefer items within this BFS distance
+const IDLE_CHANCE = 0.05;
+const BOMB_HESITATE = 0.2;
+const ITEM_NEARBY_RANGE = 8;
 
-// Cardinal directions (shared across all functions)
 const DIRS = [
   { dr: -1, dc: 0, name: 'up' },
-  { dr:  1, dc: 0, name: 'down' },
-  { dr:  0, dc: -1, name: 'left' },
-  { dr:  0, dc:  1, name: 'right' },
+  { dr: 1, dc: 0, name: 'down' },
+  { dr: 0, dc: -1, name: 'left' },
+  { dr: 0, dc: 1, name: 'right' },
 ];
 
-// ─── BFS pathfinding ─────────────────────────────────────────────
-/**
- * BFS from `start` to the first cell that satisfies `goalFn`.
- * @param {number[][]} grid   - composite grid (EMPTY/HARD/SOFT/BOMB_CELL)
- * @param {{r,c}}     start   - starting position
- * @param {Function}  goalFn  - (r,c) => boolean
- * @param {Function|null} avoidFn - (r,c) => boolean, cells to skip during expansion
- * @param {number}    [maxDepth] - optional depth limit (won't expand beyond this)
- * @returns {string[]|null} array of direction names, or null if unreachable
- */
 function bfs(grid, start, goalFn, avoidFn, maxDepth) {
   const rows = grid.length;
   const cols = grid[0].length;
@@ -64,8 +45,6 @@ function bfs(grid, start, goalFn, avoidFn, maxDepth) {
   while (queue.length > 0) {
     const cur = queue.shift();
     if (goalFn(cur.r, cur.c)) return cur.path;
-
-    // Don't expand beyond maxDepth
     if (maxDepth !== undefined && cur.path.length >= maxDepth) continue;
 
     for (const d of DIRS) {
@@ -73,7 +52,6 @@ function bfs(grid, start, goalFn, avoidFn, maxDepth) {
       const nc = cur.c + d.dc;
       if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue;
       if (visited[nr][nc]) continue;
-
       const cell = grid[nr][nc];
       if (cell === HARD || cell === SOFT || cell === BOMB_CELL) continue;
       if (avoidFn && avoidFn(nr, nc)) continue;
@@ -86,89 +64,101 @@ function bfs(grid, start, goalFn, avoidFn, maxDepth) {
   return null;
 }
 
-// ─── Build composite grid ────────────────────────────────────────
-// Overlays bomb positions onto the raw grid so BFS treats them as walls.
-// CRITICAL: skips bombs the bot can walk through (its own passable bombs)
-// so BFS can correctly plan escape routes after placing a bomb.
 function buildBotGrid(state, botPlayer) {
-  const grid = state.grid;
-  const rows = grid.length;
-  const cols = grid[0].length;
-  const botGrid = Array.from({ length: rows }, (_, y) =>
-    Array.from({ length: cols }, (_, x) => grid[y][x])
+  const rows = state.grid.length;
+  const cols = state.grid[0].length;
+  const botGrid = Array.from({ length: rows }, (_, r) =>
+    Array.from({ length: cols }, (_, c) => state.grid[r][c])
   );
 
   for (const bomb of state.bombs.values()) {
-    const bx = Math.round(bomb.x);
-    const by = Math.round(bomb.y);
-    if (by < 0 || by >= rows || bx < 0 || bx >= cols) continue;
-    if (botGrid[by][bx] !== EMPTY) continue;
+    const br = Math.round(bomb.y);
+    const bc = Math.round(bomb.x);
+    if (br < 0 || br >= rows || bc < 0 || bc >= cols) continue;
+    if (botGrid[br][bc] !== EMPTY) continue;
 
-    // Bot can walk through its own passable bombs (just placed, still overlapping)
-    if (botPlayer) {
-      if (botPlayer.canPass) continue;
-      if (botPlayer.passableBombs && botPlayer.passableBombs.has(bomb.id)) continue;
+    const isPassableOwnBomb =
+      botPlayer &&
+      (botPlayer.canPass ||
+        (botPlayer.passableBombs && botPlayer.passableBombs.has(bomb.id)));
+
+    if (!isPassableOwnBomb) {
+      botGrid[br][bc] = BOMB_CELL;
     }
-
-    botGrid[by][bx] = BOMB_CELL;
   }
 
   return botGrid;
 }
 
-// ─── Danger detection ────────────────────────────────────────────
-// Marks every cell that is in any bomb's blast zone or active explosion.
-function buildDangerMap(botGrid, state, blastRanges) {
-  const rows = botGrid.length;
-  const cols = botGrid[0].length;
-  const danger = Array.from({ length: rows }, () => new Uint8Array(cols));
-
-  for (const bomb of state.bombs.values()) {
-    const br = Math.round(bomb.y);
-    const bc = Math.round(bomb.x);
-    const range = blastRanges[bomb.owner] || bomb.blastRange || 2;
-
-    if (br >= 0 && br < rows && bc >= 0 && bc < cols) {
-      danger[br][bc] = 1;
-    }
-
-    for (const d of DIRS) {
-      for (let i = 1; i <= range; i++) {
-        const nr = br + d.dr * i;
-        const nc = bc + d.dc * i;
-        if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) break;
-        const cell = botGrid[nr][nc];
-        if (cell === HARD) break;
-        danger[nr][nc] = 1;
-        if (cell === SOFT) break;
-      }
-    }
+function buildBlastRangeLookup(state) {
+  const blastRanges = {};
+  for (const player of state.players.values()) {
+    blastRanges[player.id] = player.blastRange || 2;
   }
-
-  // Mark cells with active explosions
-  for (const exp of state.explosions.values()) {
-    const cx = exp.cx;
-    const cy = exp.cy;
-    if (cy >= 0 && cy < rows && cx >= 0 && cx < cols) danger[cy][cx] = 1;
-    const arms = [
-      { dx: 0, dy: -1, len: exp.up },
-      { dx: 0, dy:  1, len: exp.down },
-      { dx: -1, dy: 0, len: exp.left },
-      { dx:  1, dy: 0, len: exp.right },
-    ];
-    for (const arm of arms) {
-      for (let i = 1; i <= arm.len; i++) {
-        const ax = cx + arm.dx * i;
-        const ay = cy + arm.dy * i;
-        if (ay >= 0 && ay < rows && ax >= 0 && ax < cols) danger[ay][ax] = 1;
-      }
-    }
-  }
-
-  return danger;
+  return blastRanges;
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────
+function createThreatTimes(rows, cols) {
+  return Array.from({ length: rows }, () =>
+    Array.from({ length: cols }, () => Number.POSITIVE_INFINITY)
+  );
+}
+
+function markThreatCross(threatTimes, rawGrid, bomb, timer, blastRange) {
+  const rows = rawGrid.length;
+  const cols = rawGrid[0].length;
+  const br = Math.round(bomb.y);
+  const bc = Math.round(bomb.x);
+  if (br < 0 || br >= rows || bc < 0 || bc >= cols) return;
+
+  threatTimes[br][bc] = Math.min(threatTimes[br][bc], timer);
+
+  for (const d of DIRS) {
+    for (let i = 1; i <= blastRange; i++) {
+      const nr = br + d.dr * i;
+      const nc = bc + d.dc * i;
+      if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) break;
+
+      const cell = rawGrid[nr][nc];
+      if (cell === HARD) break;
+
+      threatTimes[nr][nc] = Math.min(threatTimes[nr][nc], timer);
+
+      if (cell === SOFT) break;
+    }
+  }
+}
+
+function buildThreatTimeMap(state, blastRanges, extraBombs = []) {
+  const rows = state.grid.length;
+  const cols = state.grid[0].length;
+  const threatTimes = createThreatTimes(rows, cols);
+
+  for (const bomb of state.bombs.values()) {
+    const blastRange = blastRanges[bomb.owner] || bomb.blastRange || 2;
+    markThreatCross(threatTimes, state.grid, bomb, bomb.timer ?? BOMB_FUSE, blastRange);
+  }
+
+  for (const bomb of extraBombs) {
+    const blastRange = blastRanges[bomb.owner] || bomb.blastRange || 2;
+    markThreatCross(threatTimes, state.grid, bomb, bomb.timer ?? BOMB_FUSE, blastRange);
+  }
+
+  for (const exp of state.explosions.values()) {
+    const cells = [[exp.cy, exp.cx]];
+    for (let i = 1; i <= exp.up; i++) cells.push([exp.cy - i, exp.cx]);
+    for (let i = 1; i <= exp.down; i++) cells.push([exp.cy + i, exp.cx]);
+    for (let i = 1; i <= exp.left; i++) cells.push([exp.cy, exp.cx - i]);
+    for (let i = 1; i <= exp.right; i++) cells.push([exp.cy, exp.cx + i]);
+    for (const [r, c] of cells) {
+      if (r >= 0 && r < rows && c >= 0 && c < cols) {
+        threatTimes[r][c] = 0;
+      }
+    }
+  }
+
+  return threatTimes;
+}
 
 function getAdjacentCells(r, c, grid) {
   const result = [];
@@ -185,144 +175,137 @@ function getAdjacentCells(r, c, grid) {
 }
 
 function isAdjacentToSoftBlock(r, c, grid) {
-  return getAdjacentCells(r, c, grid).some(a => a.cell === SOFT);
+  return getAdjacentCells(r, c, grid).some((cell) => cell.cell === SOFT);
 }
 
 function hasBombAt(state, r, c) {
-  for (const b of state.bombs.values()) {
-    if (Math.round(b.y) === r && Math.round(b.x) === c) return true;
+  for (const bomb of state.bombs.values()) {
+    if (Math.round(bomb.y) === r && Math.round(bomb.x) === c) return true;
   }
   return false;
 }
 
-/** Count walkable (EMPTY) exits from position — used for dead-end avoidance */
 function countExits(grid, r, c) {
-  let count = 0;
-  const rows = grid.length;
-  const cols = grid[0].length;
+  let exits = 0;
   for (const d of DIRS) {
     const nr = r + d.dr;
     const nc = c + d.dc;
-    if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) {
-      if (grid[nr][nc] === EMPTY) count++;
-    }
+    if (nr < 0 || nr >= grid.length || nc < 0 || nc >= grid[0].length) continue;
+    if (grid[nr][nc] === EMPTY) exits++;
   }
-  return count;
+  return exits;
 }
 
-// ─── Escape validation ──────────────────────────────────────────
-// Simulates placing a bomb at (br, bc) and checks whether the bot
-// can reach a safe cell before the fuse expires.
-// Returns the escape path (array of direction names) or null.
-function findEscapePath(botGrid, state, botPlayer, blastRanges, br, bc) {
-  const rows = botGrid.length;
-  const cols = botGrid[0].length;
-
-  // Build danger map with a hypothetical bomb at the bot's position
-  const fakeBombs = new Map(state.bombs);
-  fakeBombs.set('__fake__', {
-    x: bc, y: br,
-    owner: botPlayer.id,
-    blastRange: botPlayer.blastRange || 2,
-  });
-
-  const fakeDanger = buildDangerMap(
-    botGrid,
-    { bombs: fakeBombs, explosions: state.explosions },
-    blastRanges
-  );
-
-  // Max cells the bot can traverse before the bomb detonates
-  const speed = botPlayer.speed || 3;
-  const maxSteps = Math.floor((BOMB_FUSE - SAFETY_MARGIN) * speed);
-
-  // BFS to find a safe cell, allowing traversal THROUGH danger zones
-  // (the bot must walk through the blast zone to escape it)
-  const path = bfs(
-    botGrid,
-    { r: br, c: bc },
-    (r, c) => {
-      if (r < 0 || r >= rows || c < 0 || c >= cols) return false;
-      const cell = botGrid[r][c];
-      if (cell === HARD || cell === SOFT || cell === BOMB_CELL) return false;
-      return fakeDanger[r][c] === 0;
-    },
-    null,      // allow traversing danger cells
-    maxSteps   // don't search beyond reachable distance
-  );
-
-  return path;
+function isWalkableCell(grid, r, c) {
+  if (r < 0 || r >= grid.length || c < 0 || c >= grid[0].length) return false;
+  return grid[r][c] !== HARD && grid[r][c] !== SOFT && grid[r][c] !== BOMB_CELL;
 }
 
-// ─── Main bot AI ─────────────────────────────────────────────────
-/**
- * @param {object} state     - Simulation round state
- * @param {object} botPlayer - The bot's player entry from state.players Map
- * @returns {{ dir: string|null, bomb: boolean }}
- */
-function getInput(state, botPlayer) {
-  if (!botPlayer || !botPlayer.alive) return { dir: null, bomb: false };
-
-  const { grid } = state;
-  if (!grid || grid.length === 0) return { dir: null, bomb: false };
-
-  // Random hesitation — makes the bot beatable by giving the player
-  // small windows of opportunity when the bot pauses.
-  if (Math.random() < IDLE_CHANCE) return { dir: null, bomb: false };
-
-  const botGrid = buildBotGrid(state, botPlayer);
-
-  // Bot position in grid coords (row=y, col=x)
-  const br = Math.round(botPlayer.y);
-  const bc = Math.round(botPlayer.x);
+function findTimedPath(grid, start, speed, threatTimes, goalFn, maxTime = Number.POSITIVE_INFINITY) {
   const rows = grid.length;
   const cols = grid[0].length;
+  const stepTime = 1 / Math.max(0.1, speed || 3);
+  const bestArrival = createThreatTimes(rows, cols);
+  const queue = [{ r: start.r, c: start.c, time: 0, path: [] }];
+  bestArrival[start.r][start.c] = 0;
 
-  // Blast range lookup by player id
-  const blastRanges = {};
-  for (const p of state.players.values()) {
-    blastRanges[p.id] = p.blastRange || 2;
+  while (queue.length > 0) {
+    const cur = queue.shift();
+    if (goalFn(cur.r, cur.c, cur.time)) return cur.path;
+
+    for (const d of DIRS) {
+      const nr = cur.r + d.dr;
+      const nc = cur.c + d.dc;
+      if (!isWalkableCell(grid, nr, nc)) continue;
+
+      const arrival = cur.time + stepTime;
+      if (arrival > maxTime) continue;
+
+      const threatTime = threatTimes[nr][nc];
+      if (Number.isFinite(threatTime) && arrival >= threatTime - STEP_BUFFER) continue;
+      if (arrival >= bestArrival[nr][nc] - 1e-9) continue;
+
+      bestArrival[nr][nc] = arrival;
+      queue.push({ r: nr, c: nc, time: arrival, path: [...cur.path, d.name] });
+    }
   }
 
-  const danger = buildDangerMap(botGrid, state, blastRanges);
-  const inDanger = br >= 0 && br < rows && bc >= 0 && bc < cols && danger[br][bc] === 1;
+  return null;
+}
 
-  const isSafe = (r, c) => {
-    if (r < 0 || r >= rows || c < 0 || c >= cols) return false;
-    const cell = botGrid[r][c];
-    if (cell === HARD || cell === SOFT || cell === BOMB_CELL) return false;
-    return danger[r][c] === 0;
+function findEscapePath(botGrid, state, botPlayer, blastRanges, br, bc) {
+  const speed = botPlayer.speed || 3;
+  const fakeBomb = {
+    x: bc,
+    y: br,
+    owner: botPlayer.id,
+    blastRange: botPlayer.blastRange || 2,
+    timer: BOMB_FUSE,
   };
+  const threatTimes = buildThreatTimeMap(state, blastRanges, [fakeBomb]);
+  const maxTime = Math.max(0.2, BOMB_FUSE - ESCAPE_MARGIN);
 
-  // ── Priority 1: FLEE from danger ──────────────────────────────
-  // When standing in a blast zone or active explosion, escape immediately.
-  if (inDanger) {
-    // BFS to nearest safe cell, traversing through danger zones
-    const path = bfs(botGrid, { r: br, c: bc }, (r, c) => isSafe(r, c), null);
-    if (path && path.length > 0) {
-      return { dir: path[0], bomb: false };
+  return findTimedPath(
+    botGrid,
+    { r: br, c: bc },
+    speed,
+    threatTimes,
+    (r, c, arrival) =>
+      arrival <= maxTime &&
+      !Number.isFinite(threatTimes[r][c]),
+    maxTime
+  );
+}
+
+function getNearestThreatTime(threatTimes, r, c) {
+  if (r < 0 || r >= threatTimes.length || c < 0 || c >= threatTimes[0].length) {
+    return Number.POSITIVE_INFINITY;
+  }
+  return threatTimes[r][c];
+}
+
+function getInput(state, botPlayer) {
+  if (!botPlayer || !botPlayer.alive) return { dir: null, bomb: false };
+  if (!state.grid || state.grid.length === 0) return { dir: null, bomb: false };
+
+  const br = Math.round(botPlayer.y);
+  const bc = Math.round(botPlayer.x);
+  const botGrid = buildBotGrid(state, botPlayer);
+  const blastRanges = buildBlastRangeLookup(state);
+  const threatTimes = buildThreatTimeMap(state, blastRanges);
+  const currentThreat = getNearestThreatTime(threatTimes, br, bc);
+
+  // Always resolve danger first. Random hesitation must never interrupt escape.
+  if (Number.isFinite(currentThreat)) {
+    const fleePath = findTimedPath(
+      botGrid,
+      { r: br, c: bc },
+      botPlayer.speed || 3,
+      threatTimes,
+      (r, c) => !Number.isFinite(threatTimes[r][c]),
+      currentThreat + BOMB_FUSE
+    );
+    if (fleePath && fleePath.length > 0) {
+      return { dir: fleePath[0], bomb: false };
     }
-    // No safe path found — desperately move to any walkable cell
-    const adj = getAdjacentCells(br, bc, botGrid);
-    for (const a of adj) {
-      if (a.cell !== HARD && a.cell !== SOFT && a.cell !== BOMB_CELL) {
-        return { dir: a.dir, bomb: false };
-      }
-    }
-    return { dir: null, bomb: false };
+
+    const emergencyMove = getAdjacentCells(br, bc, botGrid)
+      .filter((cell) => isWalkableCell(botGrid, cell.r, cell.c))
+      .sort((a, b) => getNearestThreatTime(threatTimes, b.r, b.c) - getNearestThreatTime(threatTimes, a.r, a.c))[0];
+    return { dir: emergencyMove?.dir || null, bomb: false };
   }
 
-  // ── Priority 2: COLLECT nearby items ──────────────────────────
-  // Power-ups are valuable — grab them if they're close and safe to reach.
+  const avoidThreat = (r, c) => Number.isFinite(threatTimes[r][c]);
+
+  // Nearby items first.
   if (state.items.size > 0) {
-    const avoidDanger = (r, c) => danger[r][c] === 1;
     let bestPath = null;
     for (const item of state.items.values()) {
       const path = bfs(
         botGrid,
         { r: br, c: bc },
         (r, c) => r === item.y && c === item.x,
-        avoidDanger
+        avoidThreat
       );
       if (path && path.length <= ITEM_NEARBY_RANGE && (!bestPath || path.length < bestPath.length)) {
         bestPath = path;
@@ -333,65 +316,54 @@ function getInput(state, botPlayer) {
     }
   }
 
-  // ── Priority 3: BOMB near soft blocks ─────────────────────────
-  // Only place a bomb if:
-  //   a) Adjacent to at least one soft block
-  //   b) No bomb already here
-  //   c) Bot hasn't used all bomb slots
-  //   d) A timed escape route exists (can reach safety before fuse)
-  //   e) Random hesitation check passes (makes bot beatable)
-  if (isAdjacentToSoftBlock(br, bc, botGrid)) {
-    if (!hasBombAt(state, br, bc)
-        && (botPlayer.bombsPlaced || 0) < (botPlayer.maxBombs || 1)
-        && Math.random() > BOMB_HESITATE) {
-      const escPath = findEscapePath(botGrid, state, botPlayer, blastRanges, br, bc);
-      if (escPath && escPath.length > 0) {
-        // Place bomb AND immediately start escaping
-        return { dir: escPath[0], bomb: true };
-      }
-      // Can't safely bomb here — fall through to wander for a better spot
+  const canBomb = state.tick >= OPENING_BOMB_DELAY_TICKS &&
+    !hasBombAt(state, br, bc) &&
+    (botPlayer.bombsPlaced || 0) < (botPlayer.maxBombs || 1) &&
+    Math.random() > BOMB_HESITATE;
+
+  // Break blocks, but only from cells with a real post-bomb escape.
+  // The server applies movement before bomb placement, so pairing a direction
+  // with bomb=true can place the bomb in a different cell than the one we
+  // validated. Plant in-place, then start escaping on the next tick.
+  if (canBomb && isAdjacentToSoftBlock(br, bc, botGrid)) {
+    const escapePath = findEscapePath(botGrid, state, botPlayer, blastRanges, br, bc);
+    if (escapePath && escapePath.length > 0) {
+      return { dir: null, bomb: true };
     }
   }
 
-  // ── Priority 4: WANDER toward soft blocks ─────────────────────
-  // Move toward a cell adjacent to soft blocks, preferring positions
-  // with 2+ walkable exits (avoiding dead ends where escape is hard).
+  // Move toward a useful bombing cell.
   {
-    const avoidDanger = (r, c) => danger[r][c] === 1;
-
-    // First: multi-exit positions (safer for bombing)
-    const path = bfs(
+    const multiExitPath = bfs(
       botGrid,
       { r: br, c: bc },
       (r, c) => isAdjacentToSoftBlock(r, c, botGrid) && countExits(botGrid, r, c) >= 2,
-      avoidDanger
+      avoidThreat
     );
-    if (path && path.length > 0) {
-      return { dir: path[0], bomb: false };
+    if (multiExitPath && multiExitPath.length > 0) {
+      return { dir: multiExitPath[0], bomb: false };
     }
 
-    // Fallback: any position adjacent to soft blocks
-    const path2 = bfs(
+    const anySoftPath = bfs(
       botGrid,
       { r: br, c: bc },
       (r, c) => isAdjacentToSoftBlock(r, c, botGrid),
-      avoidDanger
+      avoidThreat
     );
-    if (path2 && path2.length > 0) {
-      return { dir: path2[0], bomb: false };
+    if (anySoftPath && anySoftPath.length > 0) {
+      return { dir: anySoftPath[0], bomb: false };
     }
   }
 
-  // ── Priority 5: COLLECT distant items ─────────────────────────
+  // Distant items next.
   if (state.items.size > 0) {
-    const avoidDanger = (r, c) => danger[r][c] === 1;
     let bestPath = null;
     for (const item of state.items.values()) {
       const path = bfs(
         botGrid,
         { r: br, c: bc },
         (r, c) => r === item.y && c === item.x,
-        avoidDanger
+        avoidThreat
       );
       if (path && (!bestPath || path.length < bestPath.length)) {
         bestPath = path;
@@ -402,54 +374,45 @@ function getInput(state, botPlayer) {
     }
   }
 
-  // ── Priority 6: HUNT other players ────────────────────────────
-  // When no soft blocks or items remain, seek out enemies.
+  // Pressure enemies once the board opens up.
   {
-    const avoidDanger = (r, c) => danger[r][c] === 1;
-
-    // Check if already adjacent to an enemy — try to bomb them
     for (const enemy of state.players.values()) {
       if (enemy.id === botPlayer.id || !enemy.alive) continue;
       const er = Math.round(enemy.y);
       const ec = Math.round(enemy.x);
-      if (Math.abs(br - er) + Math.abs(bc - ec) <= 1) {
-        // Adjacent to enemy — try to bomb if safe
-        if (!hasBombAt(state, br, bc)
-            && (botPlayer.bombsPlaced || 0) < (botPlayer.maxBombs || 1)
-            && Math.random() > BOMB_HESITATE) {
-          const escPath = findEscapePath(botGrid, state, botPlayer, blastRanges, br, bc);
-          if (escPath && escPath.length > 0) {
-            return { dir: escPath[0], bomb: true };
-          }
+      if (Math.abs(br - er) + Math.abs(bc - ec) <= 1 && canBomb) {
+        const escapePath = findEscapePath(botGrid, state, botPlayer, blastRanges, br, bc);
+        if (escapePath && escapePath.length > 0) {
+          return { dir: null, bomb: true };
         }
-        break; // don't check more enemies for bombing
       }
     }
 
-    // Not adjacent — move toward nearest enemy
     let bestPath = null;
     for (const enemy of state.players.values()) {
       if (enemy.id === botPlayer.id || !enemy.alive) continue;
       const er = Math.round(enemy.y);
       const ec = Math.round(enemy.x);
-
       const path = bfs(
         botGrid,
         { r: br, c: bc },
         (r, c) => Math.abs(r - er) + Math.abs(c - ec) <= 1,
-        avoidDanger
+        avoidThreat
       );
       if (path && path.length > 0 && (!bestPath || path.length < bestPath.length)) {
         bestPath = path;
       }
     }
-
     if (bestPath && bestPath.length > 0) {
       return { dir: bestPath[0], bomb: false };
     }
   }
 
-  // ── Priority 7: IDLE ──────────────────────────────────────────
+  // Small hesitation at the very end keeps the bot beatable.
+  if (Math.random() < IDLE_CHANCE) {
+    return { dir: null, bomb: false };
+  }
+
   return { dir: null, bomb: false };
 }
 
