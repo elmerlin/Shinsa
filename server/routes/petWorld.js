@@ -35,8 +35,36 @@ const {
 } = require('../lib/petWorld/economy');
 
 const { createUserNotification } = require('../lib/notifications');
+const { getActiveEvents, getSeasonalBonuses, pickEncounterType, ENCOUNTER_TYPES } = require('../lib/petWorld/events');
 
 const router = express.Router();
+
+// In-memory co-presence tracking for village visits
+// Map<hostUserId, Map<visitorUserId, { username, since }>>
+const presenceMap = new Map();
+const PRESENCE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+function registerPresence(hostId, visitorId, username) {
+  if (!hostId || !visitorId || hostId === visitorId) return;
+  if (!presenceMap.has(hostId)) presenceMap.set(hostId, new Map());
+  presenceMap.get(hostId).set(visitorId, { username, since: Date.now() });
+}
+
+function getPresence(hostId) {
+  if (!presenceMap.has(hostId)) return [];
+  const visitors = presenceMap.get(hostId);
+  const now = Date.now();
+  const active = [];
+  for (const [userId, data] of visitors.entries()) {
+    if (now - data.since > PRESENCE_TTL_MS) {
+      visitors.delete(userId);
+    } else {
+      active.push({ user_id: userId, username: data.username, since: data.since });
+    }
+  }
+  if (visitors.size === 0) presenceMap.delete(hostId);
+  return active;
+}
 
 const STARTING_RESOURCES = {
   food: 20,
@@ -144,6 +172,25 @@ function ensurePetWorldTables(db) {
     )
   `);
   db.exec('CREATE INDEX IF NOT EXISTS idx_pwv_host ON pet_world_visits(host_user_id, created_at)');
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS pet_world_encounters (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      encounter_type TEXT NOT NULL DEFAULT 'wildlife',
+      encounter_name TEXT NOT NULL DEFAULT '',
+      description TEXT NOT NULL DEFAULT '',
+      reward_resource TEXT,
+      reward_amount INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'pending',
+      expires_at TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_pwe_user ON pet_world_encounters(user_id, status)');
+  // Add variant column for cosmetic variety (flower colors, path styles)
+  try {
+    db.exec("ALTER TABLE pet_world_buildings ADD COLUMN variant TEXT DEFAULT NULL");
+  } catch (_) { /* column may already exist */ }
 }
 
 function ensureUserPetRow(db, userId) {
@@ -277,12 +324,19 @@ function runCatchup(db, userId, now = new Date()) {
   if (!world) return null;
   const buildings = loadBuildings(db, userId);
   const comboBalance = getComboBalance(db, userId);
+  const grid = parseGridData(world.grid_data);
+  const gridFeatures = grid.features || [];
+  const seasonal = getSeasonalBonuses(now);
   const simulation = simulateWorld(attachBiomeSpecialty(world), buildings, {
     now,
     phaseCap: getPhaseCap(safeNumber(world.expansions, 0)),
     comboBalance,
+    gridFeatures,
+    seasonalBonuses: seasonal.productionBonuses,
+    seasonalHappinessBonus: seasonal.happinessBonus,
   });
   delete simulation.world.biome_specialty;
+  delete simulation.world._seasonalBonuses;
   simulation.world.grid_width = simulation.world.grid_width || parseGridData(simulation.world.grid_data).w;
   simulation.world.grid_height = simulation.world.grid_height || parseGridData(simulation.world.grid_data).h;
   saveWorld(db, simulation.world);
@@ -290,6 +344,34 @@ function runCatchup(db, userId, now = new Date()) {
   if (simulation.comboConsumed > 0) {
     spendCombos(db, userId, simulation.comboConsumed);
   }
+
+  // Encounter spawning: if watchtower is built and steps ran, chance to spawn wildlife encounter
+  if (simulation.stepsToRun > 0) {
+    const hasWatchtower = simulation.buildings.some(
+      (b) => b.building_type === 'watchtower' && b.state === 'built'
+    );
+    if (hasWatchtower) {
+      const pending = db.prepare(
+        "SELECT COUNT(*) AS count FROM pet_world_encounters WHERE user_id = ? AND status = 'pending'"
+      ).get(userId);
+      if ((pending?.count || 0) < 3) {
+        // ~25% chance per catchup with watchtower, scaling with steps
+        const spawnChance = Math.min(0.8, 0.25 * simulation.stepsToRun);
+        if (Math.random() < spawnChance) {
+          const encounter = pickEncounterType();
+          const rewardEntries = Object.entries(encounter.reward || {});
+          const primaryResource = rewardEntries[0]?.[0] || 'food';
+          const primaryAmount = rewardEntries[0]?.[1] || 0;
+          const expiresAt = toSqliteDate(new Date(now.getTime() + 24 * 60 * 60 * 1000));
+          db.prepare(`
+            INSERT INTO pet_world_encounters (user_id, encounter_type, encounter_name, description, reward_resource, reward_amount, status, expires_at)
+            VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)
+          `).run(userId, encounter.type, encounter.name, encounter.description, primaryResource, primaryAmount, expiresAt);
+        }
+      }
+    }
+  }
+
   return simulation;
 }
 
@@ -313,6 +395,7 @@ function formatBuilding(building) {
     is_starter: !!building.is_starter,
     build_complete_at: building.build_complete_at,
     production: def ? getBuildPreview(def, building.level) : null,
+    variant: building.variant || null,
     can_upgrade: safeNumber(building.level, 1) < getMaxLevel(building.building_type),
     upgrade_cost: getUpgradeCost(building.building_type, nextLevel),
   };
@@ -378,9 +461,12 @@ function formatWorldBundle(db, world, buildings, options = {}) {
       created_at: world.created_at,
       visit_count: visitCount,
       has_market: buildings.some((building) => building.building_type === 'market' && building.state === 'built'),
+      has_watchtower: buildings.some((building) => building.building_type === 'watchtower' && building.state === 'built'),
     },
     buildings: buildings.map(formatBuilding),
     building_catalog: getAllBuildingDefs(),
+    active_events: getActiveEvents(now),
+    visitors_online: getPresence(world.user_id),
   };
 }
 
@@ -476,6 +562,8 @@ router.get('/visit/:userId', requireAuth, (req, res) => {
   if (!world) return res.status(404).json({ error: 'World not found' });
   const buildings = loadBuildings(db, hostId);
   insertVisitLog(db, req.user.id, hostId);
+  const visitor = db.prepare('SELECT username FROM users WHERE id = ?').get(req.user.id);
+  registerPresence(hostId, req.user.id, visitor?.username || '');
   return res.json(formatWorldBundle(db, world, buildings, { viewerId: req.user.id }));
 });
 
@@ -566,6 +654,7 @@ router.post('/build', requireAuth, (req, res) => {
   const type = String(req.body?.type || '').trim();
   const x = safeNumber(req.body?.x, -1);
   const y = safeNumber(req.body?.y, -1);
+  const variant = req.body?.variant ? String(req.body.variant).trim() : null;
   const def = getBuildingDef(type);
   if (!def) return res.status(400).json({ error: 'Unknown building type' });
 
@@ -589,9 +678,9 @@ router.post('/build', requireAuth, (req, res) => {
     const state = (def.buildMinutes || 0) <= 0 ? 'built' : 'building';
     const insertResult = db.prepare(`
       INSERT INTO pet_world_buildings (
-        user_id, building_type, grid_x, grid_y, width, height, level, workers, state, is_starter, build_complete_at, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, 1, 0, ?, 0, ?, datetime('now'))
-    `).run(req.user.id, type, x, y, def.width, def.height, state, buildCompleteAt);
+        user_id, building_type, grid_x, grid_y, width, height, level, workers, state, is_starter, build_complete_at, variant, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, 1, 0, ?, 0, ?, ?, datetime('now'))
+    `).run(req.user.id, type, x, y, def.width, def.height, state, buildCompleteAt, variant);
     const buildingId = Number(insertResult.lastInsertRowid);
     setBuildingOccupancy(grid, buildingId, x, y, def.width, def.height);
     world.grid_data = serializeGridData(grid);
@@ -894,6 +983,145 @@ router.post('/trade/:id/decline', requireAuth, (req, res) => {
   }
   db.prepare(`UPDATE pet_world_trades SET status = 'declined' WHERE id = ?`).run(tradeId);
   res.json({ trades: getWorldTradeSummary(db, req.user.id) });
+});
+
+// ── Visitor Log ──────────────────────────────────────────────────────
+
+router.get('/visitors', requireAuth, (req, res) => {
+  const db = getDb();
+  ensurePetWorldTables(db);
+  const limit = Math.min(50, safeNumber(req.query?.limit, 20));
+  const rows = db.prepare(`
+    SELECT v.visitor_user_id, v.created_at, u.username
+    FROM pet_world_visits v
+    LEFT JOIN users u ON u.id = v.visitor_user_id
+    WHERE v.host_user_id = ?
+    ORDER BY v.created_at DESC
+    LIMIT ?
+  `).all(req.user.id, limit);
+  const totalCount = db.prepare(
+    'SELECT COUNT(*) AS count FROM pet_world_visits WHERE host_user_id = ?'
+  ).get(req.user.id)?.count || 0;
+  const uniqueCount = db.prepare(
+    'SELECT COUNT(DISTINCT visitor_user_id) AS count FROM pet_world_visits WHERE host_user_id = ?'
+  ).get(req.user.id)?.count || 0;
+  res.json({
+    visitors: rows.map((row) => ({
+      user_id: row.visitor_user_id,
+      username: row.username || '',
+      visited_at: row.created_at,
+    })),
+    total_visits: totalCount,
+    unique_visitors: uniqueCount,
+    online_now: getPresence(req.user.id),
+  });
+});
+
+// ── Encounters (Wildlife / Hunting) ─────────────────────────────────
+
+router.get('/encounters', requireAuth, (req, res) => {
+  const db = getDb();
+  ensurePetWorldTables(db);
+  // Expire old encounters
+  db.prepare(
+    "UPDATE pet_world_encounters SET status = 'expired' WHERE user_id = ? AND status = 'pending' AND expires_at < datetime('now')"
+  ).run(req.user.id);
+  const encounters = db.prepare(
+    "SELECT * FROM pet_world_encounters WHERE user_id = ? AND status = 'pending' ORDER BY created_at DESC"
+  ).all(req.user.id);
+  const history = db.prepare(
+    "SELECT * FROM pet_world_encounters WHERE user_id = ? AND status != 'pending' ORDER BY created_at DESC LIMIT 10"
+  ).all(req.user.id);
+  res.json({ encounters, history });
+});
+
+router.post('/encounters/:id/hunt', requireAuth, (req, res) => {
+  const db = getDb();
+  ensurePetWorldTables(db);
+  const encounterId = safeNumber(req.params.id, 0);
+  const txn = db.transaction(() => {
+    const encounter = db.prepare(
+      "SELECT * FROM pet_world_encounters WHERE id = ? AND user_id = ? AND status = 'pending'"
+    ).get(encounterId, req.user.id);
+    if (!encounter) throw new Error('Encounter not found or already resolved');
+    const simulation = runCatchup(db, req.user.id, new Date());
+    if (!simulation) throw new Error('No world found');
+    const hasWatchtower = simulation.buildings.some(
+      (b) => b.building_type === 'watchtower' && b.state === 'built'
+    );
+    if (!hasWatchtower) throw new Error('You need a Watchtower to hunt');
+    const watchtowerLevel = Math.max(
+      ...simulation.buildings
+        .filter((b) => b.building_type === 'watchtower' && b.state === 'built')
+        .map((b) => safeNumber(b.level, 1))
+    );
+    // Success chance: 60% base + 15% per watchtower level
+    const successChance = Math.min(0.95, 0.6 + (watchtowerLevel - 1) * 0.15);
+    const success = Math.random() < successChance;
+    const encounterDef = ENCOUNTER_TYPES.find((e) => e.type === encounter.encounter_type) || ENCOUNTER_TYPES[0];
+    const rewards = {};
+    if (success) {
+      for (const [resource, amount] of Object.entries(encounterDef.reward || {})) {
+        const bonus = Math.round(amount * (1 + (watchtowerLevel - 1) * 0.25));
+        rewards[resource] = bonus;
+        simulation.world[resource] = roundResource(
+          safeNumber(simulation.world[resource], 0) + bonus
+        );
+      }
+    } else {
+      // Partial reward on failure
+      const primaryResource = Object.keys(encounterDef.reward || {})[0];
+      if (primaryResource) {
+        const partial = Math.max(1, Math.floor((encounterDef.reward[primaryResource] || 0) * 0.3));
+        rewards[primaryResource] = partial;
+        simulation.world[primaryResource] = roundResource(
+          safeNumber(simulation.world[primaryResource], 0) + partial
+        );
+      }
+    }
+    saveWorld(db, simulation.world);
+    db.prepare(
+      "UPDATE pet_world_encounters SET status = ? WHERE id = ?"
+    ).run(success ? 'hunted' : 'escaped', encounterId);
+    return {
+      success,
+      rewards,
+      encounter: db.prepare('SELECT * FROM pet_world_encounters WHERE id = ?').get(encounterId),
+      bundle: formatWorldBundle(db, simulation.world, simulation.buildings, { viewerId: req.user.id }),
+    };
+  });
+  try {
+    res.json(txn());
+  } catch (err) {
+    res.status(400).json({ error: err.message || 'Could not resolve encounter' });
+  }
+});
+
+router.post('/encounters/:id/dismiss', requireAuth, (req, res) => {
+  const db = getDb();
+  ensurePetWorldTables(db);
+  const encounterId = safeNumber(req.params.id, 0);
+  const encounter = db.prepare(
+    "SELECT * FROM pet_world_encounters WHERE id = ? AND user_id = ? AND status = 'pending'"
+  ).get(encounterId, req.user.id);
+  if (!encounter) return res.status(404).json({ error: 'Encounter not found' });
+  db.prepare("UPDATE pet_world_encounters SET status = 'dismissed' WHERE id = ?").run(encounterId);
+  res.json({ ok: true });
+});
+
+// ── Seasonal Events ─────────────────────────────────────────────────
+
+router.get('/events', requireAuth, (req, res) => {
+  res.json({ events: getActiveEvents() });
+});
+
+// ── Presence heartbeat ──────────────────────────────────────────────
+
+router.post('/presence/:userId', requireAuth, (req, res) => {
+  const hostId = req.params.userId;
+  const visitor = { id: req.user.id, username: req.user.username || '' };
+  registerPresence(hostId, visitor.id, visitor.username);
+  res.json({ online: getPresence(hostId) });
 });
 
 module.exports = router;

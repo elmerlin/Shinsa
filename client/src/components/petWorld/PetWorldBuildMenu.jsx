@@ -1,7 +1,14 @@
 import React, { useState } from 'react';
 import { getBuildingUi } from './petWorldBuildings';
 
-const CATEGORIES = ['All', 'Food', 'Wood', 'Stone', 'Housing', 'Support'];
+const CATEGORIES = ['All', 'Food', 'Wood', 'Stone', 'Cloth', 'Gold', 'Housing', 'Support', 'Storage', 'Cosmetic', 'Trade'];
+
+const FLOWER_VARIANTS = [
+  { id: 'pink', label: 'Pink', color: '#e060a0' },
+  { id: 'yellow', label: 'Yellow', color: '#e0e040' },
+  { id: 'blue', label: 'Blue', color: '#4080e0' },
+  { id: 'red', label: 'Red', color: '#e04040' },
+];
 
 const RES_ICONS = { food: '\uD83C\uDF3E', wood: '\uD83E\uDEB5', stone: '\uD83E\uDEA8', cloth: '\uD83E\uDDF5', gold: '\uD83E\uDE99' };
 
@@ -35,6 +42,7 @@ export default function PetWorldBuildMenu({
   buildings = [],
   world,
   selectedType,
+  selectedVariant,
   onSelect,
   onClose,
 }) {
@@ -123,6 +131,25 @@ export default function PetWorldBuildMenu({
                   <span>{building.buildMinutes ? `${building.buildMinutes}m` : 'Instant'}</span>
                 </div>
               </div>
+
+              {/* Flower variant selector */}
+              {selected && building.id === 'flower_bed' && (
+                <div className="px-2.5 pb-2 flex items-center gap-1">
+                  <span className="text-[9px] text-white/40 mr-1">Color:</span>
+                  {FLOWER_VARIANTS.map((v) => (
+                    <button
+                      key={v.id}
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); onSelect(building.id, v.id); }}
+                      className={`w-4 h-4 rounded-full border-2 transition-all ${
+                        selectedVariant === v.id ? 'border-white scale-110' : 'border-white/20 hover:border-white/50'
+                      }`}
+                      style={{ backgroundColor: v.color }}
+                      title={v.label}
+                    />
+                  ))}
+                </div>
+              )}
 
               {/* Locked overlay */}
               {locked && (

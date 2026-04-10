@@ -43,6 +43,11 @@ export default function PetWorldHUD({
   workers,
   availableWorkers,
   phaseCap,
+  activeEvents,
+  encounterCount,
+  onShowEncounters,
+  onShowVisitors,
+  visitorsOnline,
 }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -107,6 +112,34 @@ export default function PetWorldHUD({
         <ResourceDot color="bg-fuchsia-400" value={cloth} capacity={clothCap} tooltip={`Cloth: ${Math.floor(cloth)}/${clothCap}`} />
         <ResourceDot color="bg-yellow-400" value={gold} capacity={goldCap} tooltip={`Gold: ${Math.floor(gold)}/${goldCap}`} />
 
+        {/* Encounter badge */}
+        {encounterCount > 0 && (
+          <button
+            type="button"
+            onClick={onShowEncounters}
+            className="relative flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-[10px] transition-colors"
+            title="Wildlife encounters"
+          >
+            <span>🐾</span>
+            <span className="absolute -top-1 -right-1 w-3 h-3 flex items-center justify-center rounded-full bg-amber-500 text-[7px] font-bold text-black">
+              {encounterCount}
+            </span>
+          </button>
+        )}
+
+        {/* Visitors online */}
+        {visitorsOnline > 0 && (
+          <button
+            type="button"
+            onClick={onShowVisitors}
+            className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 text-[10px] transition-colors"
+            title={`${visitorsOnline} visitor${visitorsOnline !== 1 ? 's' : ''} online`}
+          >
+            <span className="w-[5px] h-[5px] rounded-full bg-emerald-400 animate-pulse" />
+            <span>{visitorsOnline}</span>
+          </button>
+        )}
+
         {/* Expand toggle */}
         <button
           type="button"
@@ -117,6 +150,18 @@ export default function PetWorldHUD({
           {expanded ? '⬆' : '⬇'}
         </button>
       </div>
+
+      {/* Seasonal event banner */}
+      {activeEvents && activeEvents.length > 0 && (
+        <div className="border-t border-white/[0.06] px-2 py-1 flex items-center gap-2 flex-wrap">
+          {activeEvents.map((event) => (
+            <div key={event.id} className="flex items-center gap-1 bg-gradient-to-r from-violet-500/15 to-fuchsia-500/15 rounded px-2 py-0.5 border border-white/[0.06]">
+              <span className="text-[11px] font-semibold text-violet-300">{event.name}</span>
+              <span className="text-[9px] text-white/50">{event.description}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Expanded detail row */}
       {expanded && (

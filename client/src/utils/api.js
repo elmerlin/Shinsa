@@ -1525,3 +1525,8 @@ export const createPetWorldTrade = ({ toUserId, offerResource, offerAmount, requ
 export const acceptPetWorldTrade = (id) => request(`/pet-world/trade/${encodeURIComponent(id)}/accept`, { method: 'POST' });
 export const declinePetWorldTrade = (id) => request(`/pet-world/trade/${encodeURIComponent(id)}/decline`, { method: 'POST' });
 export const getPetWorldLeaderboard = () => request('/pet-world/leaderboard');
+export const getPetWorldEncounters = () => request('/pet-world/encounters');
+export const huntPetWorldEncounter = (id) => request(`/pet-world/encounters/${encodeURIComponent(id)}/hunt`, { method: 'POST' });
+export const dismissPetWorldEncounter = (id) => request(`/pet-world/encounters/${encodeURIComponent(id)}/dismiss`, { method: 'POST' });
+export const getPetWorldVisitors = () => request('/pet-world/visitors');
+export const postPetWorldPresence = (userId) => request(`/pet-world/presence/${encodeURIComponent(userId)}`, { method: 'POST' });

@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 
 const {
   SIM_STEP_MS,
+  getPhase,
   getPhaseCap,
   parseSqliteDate,
   toSqliteDate,
@@ -55,19 +56,31 @@ function makeBuilding(overrides = {}) {
   };
 }
 
+describe('getPhase', () => {
+  it('maps expansion count to phase number', () => {
+    assert.equal(getPhase(0), 1);
+    assert.equal(getPhase(1), 2);
+    assert.equal(getPhase(2), 2);
+    assert.equal(getPhase(3), 3);
+    assert.equal(getPhase(4), 3);
+    assert.equal(getPhase(5), 4);
+    assert.equal(getPhase(6), 4);
+  });
+});
+
 describe('getPhaseCap', () => {
-  it('returns 10 for 0 expansions', () => {
+  it('phase 1 (0 expansions) caps at 10', () => {
     assert.equal(getPhaseCap(0), 10);
   });
-  it('returns 15 for 1-2 expansions', () => {
-    assert.equal(getPhaseCap(1), 15);
-    assert.equal(getPhaseCap(2), 15);
+  it('phase 2 (1-2 expansions) caps at 10', () => {
+    assert.equal(getPhaseCap(1), 10);
+    assert.equal(getPhaseCap(2), 10);
   });
-  it('returns 25 for 3-4 expansions', () => {
+  it('phase 3 (3-4 expansions) caps at 25', () => {
     assert.equal(getPhaseCap(3), 25);
     assert.equal(getPhaseCap(4), 25);
   });
-  it('returns 50 for 5+ expansions', () => {
+  it('phase 4+ (5+ expansions) caps at 50', () => {
     assert.equal(getPhaseCap(5), 50);
     assert.equal(getPhaseCap(6), 50);
   });
@@ -312,6 +325,97 @@ describe('getDerivedState', () => {
     const park = makeBuilding({ id: 2, building_type: 'park', grid_x: 2, grid_y: 2, width: 3, height: 3, level: 1 });
     const derived = getDerivedState({ ...world, biome_specialty: 'food' }, [garden, park], Date.now());
     assert.equal(derived.happinessBonus, 20, 'Garden lv2 (10) + Park lv1 (10) = 20');
+  });
+});
+
+describe('simulateWorld - seasonal bonuses', () => {
+  it('applies seasonal production bonus to matching category', () => {
+    const now = new Date();
+    const world = makeWorld({
+      food: 0,
+      last_tick_at: toSqliteDate(new Date(now.getTime() - SIM_STEP_MS)),
+    });
+    const farm = makeBuilding({ building_type: 'farm', level: 1 });
+    const withBonus = simulateWorld(world, [farm], {
+      now,
+      seasonalBonuses: { food: 0.2 },
+    });
+    const worldNoBonus = makeWorld({
+      food: 0,
+      last_tick_at: toSqliteDate(new Date(now.getTime() - SIM_STEP_MS)),
+    });
+    const withoutBonus = simulateWorld(worldNoBonus, [makeBuilding({ building_type: 'farm', level: 1 })], { now });
+    assert.ok(withBonus.world.food > withoutBonus.world.food, 'Seasonal bonus should increase food production');
+  });
+
+  it('does not apply seasonal bonus to non-matching categories', () => {
+    const now = new Date();
+    const world = makeWorld({
+      wood: 0,
+      last_tick_at: toSqliteDate(new Date(now.getTime() - SIM_STEP_MS)),
+    });
+    const woodcutter = makeBuilding({ building_type: 'woodcutters_hut', level: 1 });
+    const withBonus = simulateWorld(world, [woodcutter], {
+      now,
+      seasonalBonuses: { food: 0.2 },
+    });
+    const worldNoBonus = makeWorld({
+      wood: 0,
+      last_tick_at: toSqliteDate(new Date(now.getTime() - SIM_STEP_MS)),
+    });
+    const withoutBonus = simulateWorld(worldNoBonus, [makeBuilding({ building_type: 'woodcutters_hut', level: 1 })], { now });
+    assert.equal(withBonus.world.wood, withoutBonus.world.wood, 'Food bonus should not affect wood production');
+  });
+
+  it('seasonal happiness bonus raises happiness target', () => {
+    const now = new Date();
+    const world = makeWorld({
+      happiness: 30,
+      food: 100,
+      last_tick_at: toSqliteDate(new Date(now.getTime() - 3 * SIM_STEP_MS)),
+    });
+    const result = simulateWorld(world, [], { now, seasonalHappinessBonus: 15 });
+    assert.ok(result.derived.happinessTarget >= 65, 'Target should be at least 50 + 15');
+  });
+});
+
+describe('simulateWorld - terrain feature bonuses', () => {
+  it('boosts food production for farms near ponds', () => {
+    const now = new Date();
+    const world = makeWorld({
+      food: 0,
+      last_tick_at: toSqliteDate(new Date(now.getTime() - SIM_STEP_MS)),
+    });
+    const farm = makeBuilding({ building_type: 'farm', grid_x: 5, grid_y: 5 });
+    const withFeature = simulateWorld(world, [farm], {
+      now,
+      gridFeatures: [{ type: 'pond', x: 6, y: 6, w: 2, h: 2 }],
+    });
+    const worldNoFeature = makeWorld({
+      food: 0,
+      last_tick_at: toSqliteDate(new Date(now.getTime() - SIM_STEP_MS)),
+    });
+    const withoutFeature = simulateWorld(worldNoFeature, [makeBuilding({ building_type: 'farm', grid_x: 5, grid_y: 5 })], { now });
+    assert.ok(withFeature.world.food > withoutFeature.world.food, 'Nearby pond should boost farm food');
+  });
+
+  it('does not boost unrelated category', () => {
+    const now = new Date();
+    const world = makeWorld({
+      wood: 0,
+      last_tick_at: toSqliteDate(new Date(now.getTime() - SIM_STEP_MS)),
+    });
+    const woodcutter = makeBuilding({ building_type: 'woodcutters_hut', grid_x: 5, grid_y: 5 });
+    const withPond = simulateWorld(world, [woodcutter], {
+      now,
+      gridFeatures: [{ type: 'pond', x: 6, y: 6, w: 2, h: 2 }],
+    });
+    const worldNoPond = makeWorld({
+      wood: 0,
+      last_tick_at: toSqliteDate(new Date(now.getTime() - SIM_STEP_MS)),
+    });
+    const withoutPond = simulateWorld(worldNoPond, [makeBuilding({ building_type: 'woodcutters_hut', grid_x: 5, grid_y: 5 })], { now });
+    assert.equal(withPond.world.wood, withoutPond.world.wood, 'Pond should not boost wood category');
   });
 });
 

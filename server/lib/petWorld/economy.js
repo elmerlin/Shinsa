@@ -18,11 +18,20 @@ const BASE_CAPS = {
   gold: 50,
 };
 
-function getPhaseCap(expansions) {
+// Phase caps per spec: phase 1 = 10, phase 2 = 10, phase 3 = 25, phase 4+ = 50
+// Phases map to expansion count: 0→p1, 1-2→p2, 3-4→p3, 5+→p4
+function getPhase(expansions) {
   const n = Number(expansions) || 0;
-  if (n >= 5) return 50;
-  if (n >= 3) return 25;
-  if (n >= 1) return 15;
+  if (n >= 5) return 4;
+  if (n >= 3) return 3;
+  if (n >= 1) return 2;
+  return 1;
+}
+
+function getPhaseCap(expansions) {
+  const phase = getPhase(expansions);
+  if (phase >= 4) return 50;
+  if (phase >= 3) return 25;
   return 10;
 }
 
@@ -147,6 +156,33 @@ function getProductionMultiplier(world, building, activeBuildings, stepEndMs) {
       mult *= 1 + ((wellDef?.farmAura || 0) * getBuildingLevel(well));
     });
   }
+  // Terrain feature proximity bonuses
+  const features = world._gridFeatures || [];
+  if (features.length > 0) {
+    const bFoot = getBuildingFootprint(building);
+    const featureBonusMap = {
+      pond: ['food'],           // fishing/farming near water
+      grove: ['wood', 'cloth'], // harvesting near groves
+      quarry: ['stone', 'gold'], // mining near quarries
+      reed: ['cloth'],          // weaving near reeds
+      flower: ['cosmetic'],     // cosmetic near flowers
+    };
+    for (const feature of features) {
+      const categories = featureBonusMap[feature.type];
+      if (!categories || !categories.includes(def.category)) continue;
+      const featureCenter = { x: feature.x, y: feature.y, width: feature.w || 1, height: feature.h || 1 };
+      if (overlapsRadius(bFoot, featureCenter, 4)) {
+        mult *= 1.1; // +10% for nearby matching terrain feature
+        break; // only one feature bonus per building
+      }
+    }
+  }
+  // Seasonal event bonuses
+  const seasonalBonuses = world._seasonalBonuses || {};
+  if (seasonalBonuses[def.category]) {
+    mult *= 1 + seasonalBonuses[def.category];
+  }
+
   return mult;
 }
 
@@ -212,6 +248,13 @@ function simulateWorld(worldRow, buildingRows, options = {}) {
   const elapsedMs = clamp(nowMs - lastTickMs, 0, MAX_OFFLINE_MS);
   const stepsToRun = Math.floor(elapsedMs / SIM_STEP_MS);
   const phaseCap = Math.min(GLOBAL_POP_CAP, Number(options.phaseCap) || getPhaseCap(Number(world.expansions) || 0));
+
+  // Attach grid features for terrain proximity bonuses
+  if (options.gridFeatures) world._gridFeatures = options.gridFeatures;
+
+  // Attach seasonal bonuses for event-based production boosts
+  if (options.seasonalBonuses) world._seasonalBonuses = options.seasonalBonuses;
+  const seasonalHappiness = Number(options.seasonalHappinessBonus) || 0;
 
   applyConstructionVisibility(buildings, nowMs);
 
@@ -290,8 +333,8 @@ function simulateWorld(worldRow, buildingRows, options = {}) {
         world.happiness = clamp((Number(world.happiness) || 0) - 1, 0, 100);
       }
 
-      // Happiness recovery from buildings (Garden, Park, etc.)
-      const happinessTarget = Math.min(100, 50 + derivedAfterUpkeep.happinessBonus);
+      // Happiness recovery from buildings (Garden, Park, etc.) + seasonal bonuses
+      const happinessTarget = Math.min(100, 50 + derivedAfterUpkeep.happinessBonus + seasonalHappiness);
       if ((Number(world.happiness) || 0) < happinessTarget) {
         world.happiness = clamp((Number(world.happiness) || 0) + 0.5, 0, 100);
       }
@@ -320,7 +363,7 @@ function simulateWorld(worldRow, buildingRows, options = {}) {
     derived: {
       ...currentDerived,
       phaseCap,
-      happinessTarget: Math.min(100, 50 + currentDerived.happinessBonus),
+      happinessTarget: Math.min(100, 50 + currentDerived.happinessBonus + seasonalHappiness),
       unassignedPets: Math.max(0, (Number(world.population) || 0) - currentDerived.assignedWorkers),
     },
     stepsToRun,
@@ -333,6 +376,7 @@ module.exports = {
   MAX_OFFLINE_MS,
   BASE_CAPS,
   GLOBAL_POP_CAP,
+  getPhase,
   getPhaseCap,
   parseSqliteDate,
   toSqliteDate,

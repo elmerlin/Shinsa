@@ -285,7 +285,8 @@ const BUILDINGS = {
     width: 1,
     height: 1,
     category: 'support',
-    description: 'Keeps watch over the village and deters wildlife.',
+    wildlifeDefense: true,
+    description: 'Deters wildlife and unlocks hunting encounters.',
   },
   tavern: {
     id: 'tavern',

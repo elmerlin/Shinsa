@@ -179,6 +179,35 @@ export default function PetWorldBuildingInfo({
         </div>
       )}
 
+      {/* Special building abilities */}
+      {building.type === 'watchtower' && (
+        <div className="mt-3 rounded-xl border border-amber-400/10 bg-amber-500/[0.06] px-3 py-2 text-xs text-amber-200/80">
+          <div className="font-bold text-amber-200">Wildlife Defense</div>
+          <div className="mt-0.5 text-[10px] text-white/50">
+            Enables hunting encounters. Higher level = better success rate.
+            Hunt success: {Math.min(95, 60 + (level - 1) * 15)}%
+          </div>
+        </div>
+      )}
+      {building.type === 'shrine' && (
+        <div className="mt-3 rounded-xl border border-violet-400/10 bg-violet-500/[0.06] px-3 py-2 text-xs text-violet-200/80">
+          <div className="font-bold text-violet-200">Breeding Boost</div>
+          <div className="mt-0.5 text-[10px] text-white/50">Reduces breeding check interval from 24h to 16h.</div>
+        </div>
+      )}
+      {building.type === 'market' && (
+        <div className="mt-3 rounded-xl border border-cyan-400/10 bg-cyan-500/[0.06] px-3 py-2 text-xs text-cyan-200/80">
+          <div className="font-bold text-cyan-200">Trading Unlocked</div>
+          <div className="mt-0.5 text-[10px] text-white/50">Both players need a Market to trade resources.</div>
+        </div>
+      )}
+      {building.type === 'trading_post' && (
+        <div className="mt-3 rounded-xl border border-yellow-400/10 bg-yellow-500/[0.06] px-3 py-2 text-xs text-yellow-200/80">
+          <div className="font-bold text-yellow-200">Combo Converter</div>
+          <div className="mt-0.5 text-[10px] text-white/50">Converts your accumulated combos into gold each sim tick. Workers increase throughput.</div>
+        </div>
+      )}
+
       {/* Production projections */}
       {prod && !readonly && (
         <div className="mt-3 space-y-1">

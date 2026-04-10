@@ -19,6 +19,9 @@ export const BUILDING_UI = {
   shrine:          { icon: '\u26E9\uFE0F', accent: '#9060c8', category: 'Support', roofColor: '#4a3a6a', wallColor: '#a898c0' },
   park:            { icon: '\uD83C\uDF33', accent: '#4aaa5a', category: 'Support', roofColor: '#5a7a40', wallColor: '#7aaa58' },
   warehouse:       { icon: '\uD83C\uDFED', accent: '#d8c040', category: 'Storage', roofColor: '#5a5a5e', wallColor: '#909498' },
+  flower_bed:      { icon: '\uD83C\uDF3B', accent: '#e890b0', category: 'Cosmetic', roofColor: '#5a7a3a', wallColor: '#80a858' },
+  watchtower:      { icon: '\uD83D\uDDFC', accent: '#7a6a58', category: 'Support', roofColor: '#5a4a3a', wallColor: '#8a7a6a' },
+  tavern:          { icon: '\uD83C\uDF7A', accent: '#d8a840', category: 'Support', roofColor: '#6a3a2a', wallColor: '#c8a870' },
 };
 
 /** Size lookup for ghost preview in canvas (mirrors server BUILDINGS). */
@@ -43,6 +46,9 @@ export const BUILDING_SIZES = {
   shrine:          { width: 2, height: 2 },
   park:            { width: 3, height: 3 },
   warehouse:       { width: 3, height: 2 },
+  flower_bed:      { width: 1, height: 1 },
+  watchtower:      { width: 1, height: 1 },
+  tavern:          { width: 2, height: 2 },
 };
 
 export function getBuildingUi(type) {

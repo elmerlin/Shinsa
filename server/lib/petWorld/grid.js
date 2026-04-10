@@ -23,6 +23,7 @@ function cloneGrid(grid) {
     w: grid.w,
     h: grid.h,
     tiles: grid.tiles.map((row) => row.map((tile) => ({ ...tile }))),
+    features: grid.features ? grid.features.map((f) => ({ ...f })) : [],
   };
 }
 

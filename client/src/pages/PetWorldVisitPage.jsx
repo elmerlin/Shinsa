@@ -7,6 +7,7 @@ import {
   createPetWorldTrade,
   acceptPetWorldTrade,
   declinePetWorldTrade,
+  postPetWorldPresence,
 } from '../utils/api';
 import PetWorldHUD from '../components/petWorld/PetWorldHUD';
 import PetWorldCanvas from '../components/petWorld/PetWorldCanvas';
@@ -83,6 +84,15 @@ export default function PetWorldVisitPage() {
     return () => window.clearTimeout(showToast._timer);
   }, [loadVisit, showToast]);
 
+  /* Presence heartbeat: POST every 2 minutes to host's presence endpoint */
+  useEffect(() => {
+    if (!userId) return;
+    const tick = () => postPetWorldPresence(userId).catch(() => {});
+    tick();
+    const id = setInterval(tick, 2 * 60 * 1000);
+    return () => clearInterval(id);
+  }, [userId]);
+
   const handleOfferTrade = async ({ offerResource, offerAmount, requestResource, requestAmount }) => {
     try {
       const response = await createPetWorldTrade({
@@ -136,6 +146,7 @@ export default function PetWorldVisitPage() {
   const world = bundle?.world;
   const buildings = bundle?.buildings || [];
   const canTrade = !!myBundle?.world?.has_market;
+  const visitorsOnline = bundle?.visitors_online ?? null;
 
   /* ── World not found ─────────────────────────────────────────── */
   if (!world) {
@@ -204,6 +215,15 @@ export default function PetWorldVisitPage() {
                 </span>
               </>
             )}
+            {visitorsOnline != null && visitorsOnline > 0 && (
+              <>
+                <span className="w-px h-3 bg-white/10" />
+                <span className="text-[9px] text-emerald-400/70 font-semibold shrink-0 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  {visitorsOnline} online
+                </span>
+              </>
+            )}
           </div>
         </div>
 
@@ -216,14 +236,18 @@ export default function PetWorldVisitPage() {
             className="flex items-center justify-center w-7 h-7 rounded-lg border border-white/[0.08] bg-black/50 backdrop-blur-sm text-white/50 hover:text-white/90 hover:bg-white/10 transition-colors text-[11px] disabled:opacity-40 disabled:pointer-events-none"
             aria-label="Trade"
           >
-            🔄
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+              <path fillRule="evenodd" d="M13.2 2.24a.75.75 0 00.04 1.06l2.1 1.95H6.75a.75.75 0 000 1.5h8.59l-2.1 1.95a.75.75 0 101.02 1.1l3.5-3.25a.75.75 0 000-1.1l-3.5-3.25a.75.75 0 00-1.06.04zm-6.4 8a.75.75 0 00-1.06-.04l-3.5 3.25a.75.75 0 000 1.1l3.5 3.25a.75.75 0 101.02-1.1l-2.1-1.95h8.59a.75.75 0 000-1.5H4.66l2.1-1.95a.75.75 0 00.04-1.06z" clipRule="evenodd" />
+            </svg>
           </button>
           <Link
             to="/pet/world"
             className="flex items-center justify-center w-7 h-7 rounded-lg border border-white/[0.08] bg-black/50 backdrop-blur-sm text-white/50 hover:text-white/90 hover:bg-white/10 transition-colors text-[11px]"
             aria-label="My world"
           >
-            🏠
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+              <path fillRule="evenodd" d="M9.293 2.293a1 1 0 011.414 0l7 7A1 1 0 0117 11h-1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-3a1 1 0 00-1-1H9a1 1 0 00-1 1v3a1 1 0 01-1 1H5a1 1 0 01-1-1v-6H3a1 1 0 01-.707-1.707l7-7z" clipRule="evenodd" />
+            </svg>
           </Link>
         </div>
       </div>

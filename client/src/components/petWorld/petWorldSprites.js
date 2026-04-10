@@ -655,6 +655,94 @@ const SPRITE_DRAWERS = {
     }
   },
 
+  flower_bed(ctx, x, y, w, h, ui, s) {
+    const u = s * 0.06;
+    // soil bed
+    px(ctx, x + u * 2, y + h * 0.30, w - u * 4, h * 0.55, '#5a3a18');
+    px(ctx, x + u * 2.5, y + h * 0.32, w - u * 5, h * 0.50, '#6a4a28');
+    // flowers in 3×2 grid (colors vary by variant/hash)
+    const h2 = tileHash(Math.round(x), Math.round(y));
+    const flowerSets = [
+      ['#e060a0', '#f080c0', '#d040a0'],
+      ['#e0e040', '#f0f060', '#c8c020'],
+      ['#4080e0', '#60a0f0', '#3060c0'],
+      ['#e04040', '#f06060', '#c02020'],
+    ];
+    const set = flowerSets[h2 % flowerSets.length];
+    const positions = [[0.22, 0.38], [0.50, 0.35], [0.78, 0.38], [0.30, 0.58], [0.60, 0.56], [0.80, 0.60]];
+    positions.forEach(([fx, fy], i) => {
+      px(ctx, x + w * fx, y + h * fy + u, u * 0.5, u * 2, '#3a8a2a'); // stem
+      circ(ctx, x + w * fx, y + h * fy, u * 1.4, set[i % set.length]);
+      circ(ctx, x + w * fx, y + h * fy, u * 0.6, '#f0e080', 0.7); // center
+    });
+  },
+
+  watchtower(ctx, x, y, w, h, ui, s) {
+    const u = s * 0.06;
+    shadow(ctx, x + u * 2, y + h * 0.10, w - u * 4, h * 0.82);
+    // stone base
+    px(ctx, x + w * 0.20, y + h * 0.70, w * 0.60, h * 0.22, '#7a7a80');
+    px(ctx, x + w * 0.22, y + h * 0.72, w * 0.56, h * 0.04, '#9a9aa0');
+    // tower shaft
+    px(ctx, x + w * 0.28, y + h * 0.18, w * 0.44, h * 0.54, ui.wallColor);
+    // stone texture lines
+    for (let i = 0; i < 5; i++) {
+      px(ctx, x + w * 0.28, y + h * 0.22 + i * h * 0.10, w * 0.44, u * 0.4, 'rgba(0,0,0,0.12)');
+    }
+    // window slits
+    px(ctx, x + w * 0.42, y + h * 0.30, w * 0.06, h * 0.08, '#2a2a30');
+    px(ctx, x + w * 0.42, y + h * 0.50, w * 0.06, h * 0.08, '#2a2a30');
+    // observation platform
+    px(ctx, x + w * 0.16, y + h * 0.14, w * 0.68, u * 1.5, '#6a5a4a');
+    // crenellations
+    for (let i = 0; i < 4; i++) {
+      px(ctx, x + w * 0.18 + i * w * 0.18, y + h * 0.08, w * 0.10, u * 2, ui.wallColor);
+    }
+    // flag
+    px(ctx, x + w * 0.72, y - h * 0.02, u, h * 0.14, '#5a4a3a');
+    tri(ctx, x + w * 0.72 + u, y - h * 0.02, x + w * 0.72 + u, y + h * 0.04, x + w * 0.90, y + h * 0.01, '#e04040');
+  },
+
+  tavern(ctx, x, y, w, h, ui, s) {
+    const u = s * 0.06;
+    shadow(ctx, x + u * 2, y + h * 0.25, w - u * 4, h * 0.65);
+    // warm wooden walls
+    px(ctx, x + u * 3, y + h * 0.36, w - u * 6, h * 0.56, ui.wallColor);
+    px(ctx, x + u * 3, y + h * 0.36, w - u * 6, h * 0.56, '#e8a040', 0.06); // warm glow
+    // log siding lines
+    for (let i = 0; i < 5; i++) {
+      px(ctx, x + u * 3, y + h * 0.38 + i * h * 0.10, w - u * 6, u * 0.4, '#6a4a2a');
+    }
+    // door (double wide)
+    px(ctx, x + w * 0.36, y + h * 0.58, w * 0.28, h * 0.34, '#5a3a1a');
+    px(ctx, x + w * 0.49, y + h * 0.58, u * 0.6, h * 0.34, '#4a2a10');
+    // door handle
+    circ(ctx, x + w * 0.44, y + h * 0.74, u * 0.8, '#c8a040');
+    circ(ctx, x + w * 0.54, y + h * 0.74, u * 0.8, '#c8a040');
+    // windows with warm glow
+    px(ctx, x + w * 0.10, y + h * 0.48, w * 0.14, h * 0.12, '#e8c860');
+    px(ctx, x + w * 0.10, y + h * 0.48, w * 0.14, h * 0.12, '#ffffff', 0.15);
+    px(ctx, x + w * 0.76, y + h * 0.48, w * 0.14, h * 0.12, '#e8c860');
+    px(ctx, x + w * 0.76, y + h * 0.48, w * 0.14, h * 0.12, '#ffffff', 0.15);
+    // window cross-frames
+    px(ctx, x + w * 0.10, y + h * 0.535, w * 0.14, u * 0.4, '#5a3a1a');
+    px(ctx, x + w * 0.165, y + h * 0.48, u * 0.4, h * 0.12, '#5a3a1a');
+    px(ctx, x + w * 0.76, y + h * 0.535, w * 0.14, u * 0.4, '#5a3a1a');
+    px(ctx, x + w * 0.825, y + h * 0.48, u * 0.4, h * 0.12, '#5a3a1a');
+    // roof
+    tri(ctx, x + u, y + h * 0.38, x + w / 2, y + h * 0.14, x + w - u, y + h * 0.38, ui.roofColor);
+    tri(ctx, x + u * 3, y + h * 0.38, x + w / 2, y + h * 0.18, x + w - u * 3, y + h * 0.38, lerpColor(ui.roofColor, '#ffffff', 0.12));
+    // hanging sign
+    px(ctx, x + w * 0.16, y + h * 0.24, u, h * 0.14, '#5a4a3a');
+    px(ctx, x + w * 0.08, y + h * 0.26, w * 0.14, h * 0.10, '#d8b860');
+    // mug icon on sign
+    px(ctx, x + w * 0.12, y + h * 0.28, u * 1.5, u * 2, '#8a6030');
+    // chimney with smoke
+    px(ctx, x + w * 0.78, y + h * 0.08, w * 0.08, h * 0.22, '#6a4a3a');
+    circ(ctx, x + w * 0.82, y + h * 0.04, u * 1.2, '#c0c0c0', 0.25);
+    circ(ctx, x + w * 0.84, y + h * 0.01, u, '#b0b0b0', 0.15);
+  },
+
   warehouse(ctx, x, y, w, h, ui, s) {
     const u = s * 0.06;
     shadow(ctx, x + u * 3, y + h * 0.18, w - u * 6, h * 0.74);
@@ -790,51 +878,143 @@ export function drawGhostFootprint(ctx, x, y, tileSize, bw, bh, valid) {
   ctx.restore();
 }
 
+// Pet animation state: 0 = walking, 1 = idle/sitting, 2 = sleeping
+function getPetAnimState(frameOffset) {
+  if (frameOffset < 0.6) return 'walk';
+  if (frameOffset < 0.85) return 'sit';
+  return 'sleep';
+}
+
+const PET_PALETTES = {
+  dojocat:  { body: '#4a4a52', head: '#5a5a64', eye: '#ffffff', pupil: '#222228', ear: '#4a4a52', belly: '#6a6a72', nose: '#3a3a40' },
+  buu:      { body: '#e890b0', head: '#f0a0c0', eye: '#ffffff', pupil: '#3a1828', ear: '#e080a0', belly: '#f0b0d0', nose: '#c870a0' },
+  devit:    { body: '#3a6aaa', head: '#4a7aba', eye: '#ffffff', pupil: '#1a2a44', ear: '#3060a0', belly: '#5a8aca', nose: '#2a4a8a' },
+  pixiu:    { body: '#c8a040', head: '#d8b050', eye: '#ffffff', pupil: '#3a2a10', ear: '#b89030', belly: '#d8c060', nose: '#a88030' },
+  tanuki:   { body: '#8a6a40', head: '#9a7a50', eye: '#ffffff', pupil: '#2a1a08', ear: '#6a4a28', belly: '#c0a878', nose: '#4a3018' },
+  kitsune:  { body: '#d88040', head: '#e89050', eye: '#ffffff', pupil: '#2a1a10', ear: '#c06830', belly: '#e8b080', nose: '#a06028' },
+  usagi:    { body: '#d0c8c0', head: '#e0d8d0', eye: '#ffffff', pupil: '#2a2028', ear: '#d8c8c0', belly: '#f0e8e0', nose: '#c0a0a0' },
+  kappa:    { body: '#40a060', head: '#50b070', eye: '#ffffff', pupil: '#0a2a18', ear: '#308a48', belly: '#60c080', nose: '#2a8a48' },
+};
+
 export function drawPetWander(ctx, x, y, tileSize, character, frameOffset) {
   const s = tileSize;
-  const frame = frameOffset > 0.5 ? 1 : 0;
-  const bobY = frame === 1 ? -s * 0.04 : 0;
+  const animState = getPetAnimState(frameOffset);
+  const frame = (frameOffset * 4) | 0; // 0-3 sub-frames
+  const bobPhase = Math.sin(frameOffset * Math.PI * 2);
+  const pal = PET_PALETTES[character] || PET_PALETTES.dojocat;
 
   ctx.save();
 
-  // color palette per character
-  const palettes = {
-    dojocat: { body: '#4a4a52', head: '#5a5a64', eye: '#ffffff', pupil: '#222228', ear: '#4a4a52' },
-    buu:     { body: '#e890b0', head: '#f0a0c0', eye: '#ffffff', pupil: '#3a1828', ear: '#e080a0' },
-    devit:   { body: '#3a6aaa', head: '#4a7aba', eye: '#ffffff', pupil: '#1a2a44', ear: '#3060a0' },
-    pixiu:   { body: '#c8a040', head: '#d8b050', eye: '#ffffff', pupil: '#3a2a10', ear: '#b89030' },
-  };
-  const pal = palettes[character] || palettes.dojocat;
-
   const cx = x;
-  const cy = y + bobY;
 
-  // shadow under pet
-  circ(ctx, cx, cy + s * 0.02, s * 0.16, 'rgba(0,0,0,0.18)');
-
-  // body
-  circ(ctx, cx, cy - s * 0.06, s * 0.14, pal.body);
-
-  // limbs
-  const limbShift = frame === 1 ? s * 0.03 : -s * 0.03;
-  // left leg
-  px(ctx, cx - s * 0.08, cy + s * 0.04 + limbShift, s * 0.05, s * 0.06, pal.body);
-  // right leg
-  px(ctx, cx + s * 0.03, cy + s * 0.04 - limbShift, s * 0.05, s * 0.06, pal.body);
-
-  // head
-  circ(ctx, cx, cy - s * 0.18, s * 0.12, pal.head);
-
-  // ears
-  px(ctx, cx - s * 0.10, cy - s * 0.28, s * 0.05, s * 0.06, pal.ear);
-  px(ctx, cx + s * 0.05, cy - s * 0.28, s * 0.05, s * 0.06, pal.ear);
-
-  // eyes
-  const eyeY = cy - s * 0.18;
-  circ(ctx, cx - s * 0.04, eyeY, s * 0.03, pal.eye);
-  circ(ctx, cx + s * 0.04, eyeY, s * 0.03, pal.eye);
-  circ(ctx, cx - s * 0.04, eyeY, s * 0.015, pal.pupil);
-  circ(ctx, cx + s * 0.04, eyeY, s * 0.015, pal.pupil);
+  if (animState === 'walk') {
+    const bobY = bobPhase * s * 0.03;
+    const cy = y + bobY;
+    // shadow
+    circ(ctx, cx, cy + s * 0.02, s * 0.16, 'rgba(0,0,0,0.18)');
+    // body
+    circ(ctx, cx, cy - s * 0.06, s * 0.14, pal.body);
+    // belly highlight
+    circ(ctx, cx, cy - s * 0.04, s * 0.08, pal.belly, 0.5);
+    // limbs walk cycle
+    const limbA = Math.sin(frameOffset * Math.PI * 4) * s * 0.03;
+    px(ctx, cx - s * 0.08, cy + s * 0.04 + limbA, s * 0.05, s * 0.06, pal.body);
+    px(ctx, cx + s * 0.03, cy + s * 0.04 - limbA, s * 0.05, s * 0.06, pal.body);
+    // tail
+    const tailWag = Math.sin(frameOffset * Math.PI * 6) * s * 0.02;
+    px(ctx, cx - s * 0.02, cy - s * 0.14 + tailWag, s * 0.04, s * 0.03, pal.body);
+    // head
+    circ(ctx, cx, cy - s * 0.18, s * 0.12, pal.head);
+    // ears
+    px(ctx, cx - s * 0.10, cy - s * 0.28, s * 0.05, s * 0.06, pal.ear);
+    px(ctx, cx + s * 0.05, cy - s * 0.28, s * 0.05, s * 0.06, pal.ear);
+    // eyes
+    const eyeY = cy - s * 0.18;
+    circ(ctx, cx - s * 0.04, eyeY, s * 0.03, pal.eye);
+    circ(ctx, cx + s * 0.04, eyeY, s * 0.03, pal.eye);
+    circ(ctx, cx - s * 0.04, eyeY, s * 0.015, pal.pupil);
+    circ(ctx, cx + s * 0.04, eyeY, s * 0.015, pal.pupil);
+    // nose
+    circ(ctx, cx, cy - s * 0.155, s * 0.012, pal.nose);
+  } else if (animState === 'sit') {
+    const cy = y;
+    // shadow (wider when sitting)
+    circ(ctx, cx, cy + s * 0.04, s * 0.18, 'rgba(0,0,0,0.15)');
+    // body (rounder when sitting)
+    circ(ctx, cx, cy - s * 0.02, s * 0.16, pal.body);
+    circ(ctx, cx, cy + s * 0.01, s * 0.10, pal.belly, 0.5);
+    // front paws
+    px(ctx, cx - s * 0.06, cy + s * 0.08, s * 0.04, s * 0.03, pal.body);
+    px(ctx, cx + s * 0.02, cy + s * 0.08, s * 0.04, s * 0.03, pal.body);
+    // tail curled to side
+    ctx.beginPath();
+    ctx.arc(cx + s * 0.12, cy, s * 0.05, 0, Math.PI * 1.4);
+    ctx.strokeStyle = pal.body;
+    ctx.lineWidth = s * 0.03;
+    ctx.stroke();
+    // head (slight tilt)
+    circ(ctx, cx, cy - s * 0.16, s * 0.12, pal.head);
+    // ears (perked)
+    tri(ctx, cx - s * 0.10, cy - s * 0.25, cx - s * 0.06, cy - s * 0.32, cx - s * 0.02, cy - s * 0.25, pal.ear);
+    tri(ctx, cx + s * 0.02, cy - s * 0.25, cx + s * 0.06, cy - s * 0.32, cx + s * 0.10, cy - s * 0.25, pal.ear);
+    // eyes (blink occasionally)
+    const blink = frame === 3;
+    const eyeY = cy - s * 0.16;
+    if (blink) {
+      px(ctx, cx - s * 0.05, eyeY, s * 0.04, s * 0.008, pal.pupil);
+      px(ctx, cx + s * 0.01, eyeY, s * 0.04, s * 0.008, pal.pupil);
+    } else {
+      circ(ctx, cx - s * 0.04, eyeY, s * 0.03, pal.eye);
+      circ(ctx, cx + s * 0.04, eyeY, s * 0.03, pal.eye);
+      circ(ctx, cx - s * 0.04, eyeY, s * 0.015, pal.pupil);
+      circ(ctx, cx + s * 0.04, eyeY, s * 0.015, pal.pupil);
+    }
+    circ(ctx, cx, cy - s * 0.135, s * 0.012, pal.nose);
+  } else {
+    // sleeping
+    const breathe = Math.sin(frameOffset * Math.PI * 2) * s * 0.01;
+    const cy = y + s * 0.02;
+    // shadow
+    circ(ctx, cx, cy + s * 0.04, s * 0.20, 'rgba(0,0,0,0.12)');
+    // curled body (oval)
+    ctx.save();
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, s * 0.16 + breathe, s * 0.10, 0, 0, Math.PI * 2);
+    ctx.fillStyle = pal.body;
+    ctx.fill();
+    ctx.restore();
+    // belly
+    ctx.save();
+    ctx.beginPath();
+    ctx.ellipse(cx + s * 0.02, cy + s * 0.02, s * 0.10, s * 0.06, 0.2, 0, Math.PI * 2);
+    ctx.fillStyle = pal.belly;
+    ctx.globalAlpha = 0.4;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.restore();
+    // tail wrapping around
+    ctx.beginPath();
+    ctx.arc(cx - s * 0.10, cy - s * 0.02, s * 0.06, 0, Math.PI * 1.6);
+    ctx.strokeStyle = pal.body;
+    ctx.lineWidth = s * 0.025;
+    ctx.stroke();
+    // head tucked
+    circ(ctx, cx + s * 0.10, cy - s * 0.06, s * 0.09, pal.head);
+    // closed eyes (zzz)
+    px(ctx, cx + s * 0.06, cy - s * 0.07, s * 0.03, s * 0.006, pal.pupil);
+    px(ctx, cx + s * 0.12, cy - s * 0.07, s * 0.03, s * 0.006, pal.pupil);
+    // ear
+    px(ctx, cx + s * 0.08, cy - s * 0.14, s * 0.04, s * 0.04, pal.ear);
+    // zzz bubbles
+    const zPhase = (frameOffset * 2) % 1;
+    ctx.globalAlpha = 0.4 - zPhase * 0.3;
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `${Math.round(s * 0.08)}px sans-serif`;
+    ctx.fillText('z', cx + s * 0.18, cy - s * 0.10 - zPhase * s * 0.06);
+    ctx.font = `${Math.round(s * 0.06)}px sans-serif`;
+    ctx.fillText('z', cx + s * 0.22, cy - s * 0.16 - zPhase * s * 0.04);
+    ctx.globalAlpha = 1;
+  }
 
   ctx.restore();
 }
