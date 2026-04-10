@@ -73,6 +73,7 @@ export default class PetBomberRenderer {
     this._players = Array.from({ length: 4 }, (_, i) => ({
       x: [1, 11, 1, 11][i], y: [1, 1, 9, 9][i],
       tx: [1, 11, 1, 11][i], ty: [1, 1, 9, 9][i],
+      vx: 0, vy: 0,  // velocity (cells/sec) derived from snapshot deltas
       dir: 'down', alive: true, visible: false,
     }));
     this._bombs = new Map();
@@ -121,6 +122,8 @@ export default class PetBomberRenderer {
       this._players[i].y = sy;
       this._players[i].tx = sx;
       this._players[i].ty = sy;
+      this._players[i].vx = 0;
+      this._players[i].vy = 0;
       this._players[i].dir = 'down';
       this._players[i].alive = true;
       this._players[i].visible = false;
@@ -153,10 +156,16 @@ export default class PetBomberRenderer {
 
     // Players
     if (snap.p) {
+      const TICK_DT = 1 / 20; // server tick rate
       for (const pd of snap.p) {
         const [seat, x, y, dir, alive] = pd;
         if (seat < 0 || seat >= 4) continue;
         const p = this._players[seat];
+        // Derive velocity from position delta between snapshots
+        const dx = x - p.tx;
+        const dy = y - p.ty;
+        p.vx = dx / TICK_DT;
+        p.vy = dy / TICK_DT;
         p.tx = x;
         p.ty = y;
         p.dir = dir;
@@ -306,12 +315,17 @@ export default class PetBomberRenderer {
   }
 
   _update(dt) {
-    // Interpolate player positions
+    // Interpolate player positions with velocity extrapolation
     const lf = LERP_SPEED * dt;
     for (const p of this._players) {
       if (!p.visible) continue;
-      p.x = lerp(p.x, p.tx, lf);
-      p.y = lerp(p.y, p.ty, lf);
+      // Extrapolate target forward using velocity so movement stays
+      // smooth between server snapshots instead of decelerating into
+      // a static target.
+      const goalX = p.tx + p.vx * dt;
+      const goalY = p.ty + p.vy * dt;
+      p.x = lerp(p.x, goalX, lf);
+      p.y = lerp(p.y, goalY, lf);
     }
     // Advance effect timers
     for (const b of this._bombs.values()) b.t += dt;
