@@ -174,7 +174,7 @@ export default function PetBattleCanvas({ game, character, reducedMotion }) {
   }, [game]);
 
   return (
-    <div ref={containerRef} className="w-full h-full relative select-none" style={{ minHeight: 400 }}>
+    <div ref={containerRef} className="w-full h-full relative select-none">
       <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
     </div>
   );

@@ -292,7 +292,7 @@ export default function MiniPumpCanvas({ game, character, onStart, onShoot, redu
   }, [game, onStart, onShoot]);
 
   return (
-    <div ref={containerRef} className="w-full h-full relative select-none touch-none" style={{ minHeight: 400 }}>
+    <div ref={containerRef} className="w-full h-full relative select-none touch-none">
       <canvas ref={canvasRef} className="absolute inset-0 w-full h-full"
         onTouchStart={handleTouch} onClick={handleTouch} style={{ touchAction: 'none' }} />
     </div>

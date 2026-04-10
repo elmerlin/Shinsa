@@ -89,7 +89,7 @@ export default function PacItUpModal({ open, onClose, character, onComplete, sta
   const isCoarse = typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)')?.matches;
 
   return (
-    <div className="fixed inset-0 z-[200] flex flex-col bg-[#0a0a14]">
+    <div className="fixed inset-0 z-[200] flex flex-col overflow-hidden bg-[#0a0a14]">
       {/* ── Top bar ── */}
       <div className="flex items-center justify-between px-3 py-2 bg-black/40 border-b border-white/[0.06]">
         <button onClick={handleClose} className="text-gray-400 hover:text-white text-xs flex items-center gap-1">
@@ -159,8 +159,8 @@ function GameControls({ mode, isPlaying, isCoarse, game, onStart, stats, leaderb
       </button>
 
       {(stats || (leaderboard && leaderboard.length > 0)) && (
-        <div className="mt-3 rounded-xl border border-white/[0.05] bg-white/[0.03] p-3">
-          <div className="flex items-center justify-between">
+        <div className="mt-3 overflow-hidden rounded-xl border border-white/[0.05] bg-white/[0.03]">
+          <div className="flex items-center justify-between p-3">
             <div>
               <div className="text-[10px] font-black tracking-[0.2em] uppercase text-teal-200/80">Community Board</div>
               <div className="text-[10px] text-gray-500 mt-0.5">Best maze runs from players and their pets</div>
@@ -172,7 +172,7 @@ function GameControls({ mode, isPlaying, isCoarse, game, onStart, stats, leaderb
             </div>
           </div>
 
-          <div className="mt-3 space-y-2">
+          <div className="mt-3 max-h-[min(34svh,20rem)] space-y-2 overflow-y-auto px-3 pb-3 pr-2">
             {Array.isArray(leaderboard) && leaderboard.length > 0 ? leaderboard.slice(0, 5).map((entry) => (
               <div key={`${entry.user_id || entry.username}-${entry.rank}`} className={`flex items-center gap-2 rounded-lg px-2 py-1.5 ${entry.is_me ? 'bg-teal-400/[0.08]' : 'bg-black/20'}`}>
                 <div className={`w-6 text-[10px] font-black tabular-nums ${entry.rank === 1 ? 'text-amber-300' : entry.rank === 2 ? 'text-slate-300' : 'text-orange-300'}`}>#{entry.rank}</div>

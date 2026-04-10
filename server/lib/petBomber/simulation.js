@@ -32,6 +32,8 @@ const SUDDEN_DEATH_RATE = 2;    // blocks placed per second
 const BASE_SPEED   = 3.0;  // cells / second
 const SPEED_PER_UP = 0.5;
 const PLAYER_RADIUS = 0.35;
+const LANE_SNAP_MULTIPLIER = 4.0;
+const LANE_SNAP_EPSILON = 0.02;
 
 // Soft-block / item generation
 const SOFT_BLOCK_CHANCE  = 0.65;
@@ -287,6 +289,17 @@ function canOccupy(state, player, cx, cy) {
   return true;
 }
 
+function moveTowards(value, target, maxDelta) {
+  if (Math.abs(target - value) <= maxDelta) return target;
+  return value + Math.sign(target - value) * maxDelta;
+}
+
+function snapTowardLane(value, maxDelta) {
+  const target = Math.round(value);
+  const snapped = moveTowards(value, target, maxDelta * LANE_SNAP_MULTIPLIER);
+  return Math.abs(snapped - target) <= LANE_SNAP_EPSILON ? target : snapped;
+}
+
 function movePlayer(state, player, dir) {
   if (!player.alive) return;
   const v = DIR_VECS[dir];
@@ -294,52 +307,35 @@ function movePlayer(state, player, dir) {
 
   player.dir = dir;
   const speed = player.speed * DT;
-  const nx = player.x + v.dx * speed;
-  const ny = player.y + v.dy * speed;
+  let x = player.x;
+  let y = player.y;
 
-  if (canOccupy(state, player, nx, ny)) {
-    player.x = nx;
-    player.y = ny;
+  // Bomberman movement reads best when the player stays tightly centered on
+  // the perpendicular lane rather than drifting freely within a tile.
+  if (v.dx !== 0) {
+    const alignedY = snapTowardLane(y, speed);
+    if (canOccupy(state, player, x, alignedY)) {
+      y = alignedY;
+    }
+
+    const nx = x + v.dx * speed;
+    if (canOccupy(state, player, nx, y)) {
+      x = nx;
+    }
   } else {
-    // Wall-sliding: when blocked, nudge the perpendicular axis toward the
-    // nearest open lane (integer position) so the player slides smoothly
-    // around corners.
-    if (v.dx !== 0) {
-      // Moving horizontally -- nudge Y toward nearest lane
-      const roundedY = Math.round(player.y);
-      const diff = roundedY - player.y;
-      if (Math.abs(diff) > 0.01) {
-        const slideDir = diff > 0 ? 1 : -1;
-        const slideAmount = Math.min(speed, Math.abs(diff));
-        const sy = player.y + slideDir * slideAmount;
-        if (canOccupy(state, player, player.x, sy)) {
-          player.y = sy;
-          // Retry horizontal movement with corrected Y
-          const nx2 = player.x + v.dx * speed;
-          if (canOccupy(state, player, nx2, player.y)) {
-            player.x = nx2;
-          }
-        }
-      }
-    } else {
-      // Moving vertically -- nudge X toward nearest lane
-      const roundedX = Math.round(player.x);
-      const diff = roundedX - player.x;
-      if (Math.abs(diff) > 0.01) {
-        const slideDir = diff > 0 ? 1 : -1;
-        const slideAmount = Math.min(speed, Math.abs(diff));
-        const sx = player.x + slideDir * slideAmount;
-        if (canOccupy(state, player, sx, player.y)) {
-          player.x = sx;
-          // Retry vertical movement with corrected X
-          const ny2 = player.y + v.dy * speed;
-          if (canOccupy(state, player, player.x, ny2)) {
-            player.y = ny2;
-          }
-        }
-      }
+    const alignedX = snapTowardLane(x, speed);
+    if (canOccupy(state, player, alignedX, y)) {
+      x = alignedX;
+    }
+
+    const ny = y + v.dy * speed;
+    if (canOccupy(state, player, x, ny)) {
+      y = ny;
     }
   }
+
+  player.x = x;
+  player.y = y;
 
   // Update passable-bomb set: once the player fully leaves a bomb's cell,
   // the bomb becomes solid for them.
@@ -706,11 +702,11 @@ function tick(state, inputs) {
     const player = state.players.get(playerId);
     if (!player || !player.alive) continue;
 
-    if (input.dir) {
-      movePlayer(state, player, input.dir);
-    }
     if (input.bomb) {
       placeBomb(state, player, changes);
+    }
+    if (input.dir) {
+      movePlayer(state, player, input.dir);
     }
   }
 
