@@ -14,6 +14,7 @@ const LINK_SHARE_KIND_LABELS = {
   chart_compare: 'Compare reply',
   hour_of_power: 'Hour of Power',
   story: 'Story',
+  pet: 'Pet',
   link: 'Link',
 };
 const CHALLENGE_KIND_LABELS = {
@@ -167,6 +168,29 @@ function sanitizeLinkShareItems(items) {
     .filter((item) => item.songTitle || item.score > 0 || item.grade || item.plate || item.jacketUrl);
 }
 
+function sanitizePetPreview(preview) {
+  if (!preview || typeof preview !== 'object') return null;
+  return {
+    character: String(preview.character || '').trim().slice(0, 40),
+    nickname: String(preview.nickname || '').trim().slice(0, 60),
+    level: toInt(preview.level),
+    hunger: toNumber(preview.hunger),
+    happiness: toNumber(preview.happiness),
+    weight_state: String(preview.weight_state || 'normal').trim().slice(0, 20),
+    mood: String(preview.mood || 'happy').trim().slice(0, 20),
+    bond_rank: preview.bond_rank && typeof preview.bond_rank === 'object'
+      ? { label: String(preview.bond_rank.label || '').trim().slice(0, 40) }
+      : null,
+    form: preview.form && typeof preview.form === 'object'
+      ? { label: String(preview.form.label || '').trim().slice(0, 40) }
+      : null,
+    equipped_hat: String(preview.equipped_hat || '').trim().slice(0, 40),
+    equipped_top: String(preview.equipped_top || '').trim().slice(0, 40),
+    hat_color: String(preview.hat_color || '').trim().slice(0, 20),
+    top_color: String(preview.top_color || '').trim().slice(0, 20),
+  };
+}
+
 function sanitizeLinkSharePayload(linkShare) {
   if (!linkShare || typeof linkShare !== 'object') return null;
   const src = linkShare || {};
@@ -239,6 +263,9 @@ function sanitizeLinkSharePayload(linkShare) {
     previewItems: sanitizeLinkShareItems(src.previewItems || src.preview_items),
     totalItemCount: toInt(src.totalItemCount || src.total_item_count),
     extraItemCount: toInt(src.extraItemCount || src.extra_item_count),
+    petUserId: String(src.petUserId || src.pet_user_id || '').trim().slice(0, 80),
+    petUsername: String(src.petUsername || src.pet_username || '').trim().slice(0, 80),
+    petPreview: sanitizePetPreview(src.petPreview || src.pet_preview || null),
   };
 }
 
