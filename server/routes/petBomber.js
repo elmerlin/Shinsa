@@ -154,7 +154,11 @@ router.get('/rooms', (_req, res) => {
 router.post('/rooms', requireAuth, (req, res) => {
   const result = room.createRoom(req.user.id, req.body?.character);
   if (!result) return res.status(500).json({ error: 'Failed to create room' });
-  res.json(result);
+  res.json({
+    id: result.id,
+    roomId: result.id,
+    room: room.getRoomSnapshot(result),
+  });
 });
 
 // ─── GET /rooms/:roomId ──────────────────────────────────────────
@@ -162,7 +166,7 @@ router.post('/rooms', requireAuth, (req, res) => {
 router.get('/rooms/:roomId', (req, res) => {
   const r = room.getRoom(req.params.roomId);
   if (!r) return res.status(404).json({ error: 'Room not found' });
-  res.json(r);
+  res.json(room.getRoomSnapshot(r));
 });
 
 // ─── POST /complete ──────────────────────────────────────────────

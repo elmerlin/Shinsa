@@ -27,7 +27,7 @@ function broadcastToRoom(roomId, message) {
   if (!r) return;
   const payload = JSON.stringify(message);
   const allUserIds = [
-    ...r.seats.filter(s => s.userId).map(s => s.userId),
+    ...r.seats.filter(s => s && s.userId).map(s => s.userId),
     ...(r.spectators || []),
   ];
   for (const uid of allUserIds) {

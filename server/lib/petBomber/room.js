@@ -63,6 +63,7 @@ function roomSummary(room) {
   const spectatorCount = room.spectators.size;
   return {
     id: room.id,
+    roomId: room.id,
     hostId: room.hostId,
     playerCount,
     spectatorCount,
@@ -497,6 +498,7 @@ function addChat(roomId, userId, text) {
 function getRoomSnapshot(room) {
   return {
     id: room.id,
+    roomId: room.id,
     hostId: room.hostId,
     seats: room.seats,
     status: room.match.status,

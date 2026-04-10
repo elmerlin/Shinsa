@@ -54,9 +54,10 @@ export default function PetBomberModal({ open, onClose, character }) {
     setBusy(true);
     try {
       const result = await createPetBomberRoom(character);
-      if (result?.roomId) {
+      const nextRoomId = result?.roomId || result?.id || result?.room?.roomId || result?.room?.id;
+      if (nextRoomId) {
         onClose?.();
-        navigate(`/pet/bomber/${result.roomId}`);
+        navigate(`/pet/bomber/${nextRoomId}`);
       }
     } catch (e) {
       console.error('Failed to create room', e);
@@ -75,9 +76,10 @@ export default function PetBomberModal({ open, onClose, character }) {
     setBusy(true);
     try {
       const result = await createPetBomberRoom(character);
-      if (result?.roomId) {
+      const nextRoomId = result?.roomId || result?.id || result?.room?.roomId || result?.room?.id;
+      if (nextRoomId) {
         onClose?.();
-        navigate(`/pet/bomber/${result.roomId}?bot=${botMode}`);
+        navigate(`/pet/bomber/${nextRoomId}?bot=${botMode}`);
       }
     } catch (e) {
       console.error('Failed to create solo room', e);
@@ -150,19 +152,23 @@ export default function PetBomberModal({ open, onClose, character }) {
           </div>
           {rooms.length > 0 ? (
             <div className="space-y-1.5">
-              {rooms.map((room) => (
+              {rooms.map((room) => {
+                const roomId = room.roomId || room.id;
+                if (!roomId) return null;
+                return (
                 <button
-                  key={room.roomId}
-                  onClick={() => handleJoinRoom(room.roomId)}
+                  key={roomId}
+                  onClick={() => handleJoinRoom(roomId)}
                   className="w-full flex items-center justify-between rounded-lg px-3 py-2 bg-black/20 hover:bg-white/[0.04] transition-colors text-left"
                 >
                   <div>
-                    <div className="text-[11px] font-semibold text-white/90">{room.hostName || 'Room'}</div>
+                    <div className="text-[11px] font-semibold text-white/90">{room.hostName || room.hostId || 'Room'}</div>
                     <div className="text-[9px] text-gray-500">{room.playerCount}/4 players</div>
                   </div>
                   <span className="text-[10px] text-violet-300 font-semibold">Join</span>
                 </button>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <div className="text-[10px] text-gray-600 py-2">No open rooms right now. Create one!</div>
