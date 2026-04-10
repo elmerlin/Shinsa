@@ -1,11 +1,33 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { getBuildingUi } from './petWorldBuildings';
 
-function formatMaterialList(materials = {}) {
-  const parts = Object.entries(materials)
-    .filter(([, amount]) => amount > 0)
-    .map(([key, amount]) => `${amount} ${key}`);
-  return parts.length ? parts.join(' • ') : 'No materials';
+const CATEGORIES = ['All', 'Food', 'Wood', 'Stone', 'Housing', 'Support'];
+
+const RES_ICONS = { food: '\uD83C\uDF3E', wood: '\uD83E\uDEB5', stone: '\uD83E\uDEA8', cloth: '\uD83E\uDDF5', gold: '\uD83E\uDE99' };
+
+function MaterialPills({ materials = {} }) {
+  const entries = Object.entries(materials).filter(([, v]) => v > 0);
+  if (!entries.length) return null;
+  return (
+    <span className="flex flex-wrap gap-1">
+      {entries.map(([key, amt]) => (
+        <span key={key} className="inline-flex items-center gap-0.5 rounded-full bg-white/[0.06] px-1.5 py-0.5 text-[10px] text-white/55">
+          {amt} {RES_ICONS[key] || key}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+function keyStat(building) {
+  if (building.production) {
+    const [res, rate] = Object.entries(building.production)[0] || [];
+    if (res) return `${rate}/hr ${res}`;
+  }
+  if (building.housing) return `+${building.housing} pop`;
+  if (building.happiness) return `+${building.happiness} happy`;
+  if (building.storageBonus) return `+${building.storageBonus} storage`;
+  return building.description || '';
 }
 
 export default function PetWorldBuildMenu({
@@ -16,20 +38,49 @@ export default function PetWorldBuildMenu({
   onSelect,
   onClose,
 }) {
+  const [cat, setCat] = useState('All');
+
   if (!open) return null;
+
+  const filtered = cat === 'All'
+    ? buildings
+    : buildings.filter((b) => {
+        const ui = getBuildingUi(b.id);
+        return ui.category === cat;
+      });
+
   return (
-    <div className="rounded-[1.3rem] border border-white/[0.07] bg-[linear-gradient(180deg,rgba(14,18,28,0.98),rgba(9,12,18,0.96))] p-4 shadow-[0_18px_40px_rgba(0,0,0,0.28)]">
-      <div className="mb-3 flex items-center justify-between">
-        <div>
-          <div className="text-[11px] uppercase tracking-[0.16em] text-white/45">Build Menu</div>
-          <div className="text-lg font-black text-white">Choose a structure</div>
+    <div className="rounded-[1.3rem] border border-white/[0.07] bg-[linear-gradient(180deg,rgba(14,18,28,0.98),rgba(9,12,18,0.96))] p-3 shadow-[0_18px_40px_rgba(0,0,0,0.28)]">
+      {/* Header */}
+      <div className="mb-2 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-base">🏗️</span>
+          <h2 className="text-base font-black text-white">Build</h2>
         </div>
-        <button type="button" onClick={onClose} className="rounded-full border border-white/10 px-3 py-1.5 text-xs font-semibold text-white/70 hover:border-white/20 hover:text-white">
-          Close
-        </button>
+        <button type="button" onClick={onClose} className="flex h-7 w-7 items-center justify-center rounded-full border border-white/10 text-sm text-white/60 hover:border-white/20 hover:text-white">&times;</button>
       </div>
-      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-        {buildings.map((building) => {
+
+      {/* Category tabs */}
+      <div className="mb-2 flex gap-1 overflow-x-auto scrollbar-none">
+        {CATEGORIES.map((c) => (
+          <button
+            key={c}
+            type="button"
+            onClick={() => setCat(c)}
+            className={`shrink-0 rounded-lg px-2.5 py-1 text-[10px] font-semibold transition-all ${
+              cat === c
+                ? 'bg-white/[0.12] text-white'
+                : 'text-white/40 hover:bg-white/[0.05] hover:text-white/60'
+            }`}
+          >
+            {c}
+          </button>
+        ))}
+      </div>
+
+      {/* Grid */}
+      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 overflow-y-auto" style={{ maxHeight: '20rem' }}>
+        {filtered.map((building) => {
           const ui = getBuildingUi(building.id);
           const locked = (world?.population || 0) < (building.tierUnlockPopulation || 0);
           const selected = selectedType === building.id;
@@ -38,39 +89,48 @@ export default function PetWorldBuildMenu({
               key={building.id}
               type="button"
               onClick={() => !locked && onSelect(building.id)}
-              className={`rounded-2xl border p-3 text-left transition-all ${
+              className={`relative rounded-xl border text-left transition-all ${
                 selected
-                  ? 'border-emerald-300/40 bg-emerald-500/[0.14]'
+                  ? 'border-emerald-300/40 bg-emerald-500/[0.14] shadow-[0_0_12px_rgba(16,185,129,0.15)]'
                   : locked
-                    ? 'border-white/[0.05] bg-white/[0.02] text-white/35'
-                    : 'border-white/[0.07] bg-white/[0.04] text-white/80 hover:border-white/16 hover:bg-white/[0.06]'
+                    ? 'border-white/[0.04] bg-white/[0.02]'
+                    : 'border-white/[0.07] bg-white/[0.04] hover:border-white/16 hover:bg-white/[0.06]'
               }`}
             >
-              <div className="flex items-start gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.05] text-lg">
-                  {ui.icon}
+              {/* Color bar header */}
+              <div className={`flex items-center justify-between rounded-t-xl px-2.5 py-1.5 ${locked ? 'bg-white/[0.02]' : 'bg-white/[0.04]'}`}>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="text-sm">{ui.icon}</span>
+                  <span className={`truncate text-xs font-bold ${locked ? 'text-white/30' : 'text-white/90'}`}>{building.name}</span>
                 </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <div className="truncate text-sm font-bold">{building.name}</div>
-                    <span className="rounded bg-white/[0.06] px-1.5 py-0.5 text-[8px] uppercase tracking-[0.16em] text-white/55">
-                      Tier {building.tier}
-                    </span>
-                  </div>
-                  <div className="mt-1 text-[11px] text-white/55">{building.description}</div>
-                  <div className="mt-2 flex flex-wrap gap-2 text-[10px] text-white/55">
-                    <span>{building.comboCost} combos</span>
-                    <span>{building.width}x{building.height}</span>
-                    <span>{building.buildMinutes}m</span>
-                  </div>
-                  <div className="mt-1 text-[10px] text-white/40">{formatMaterialList(building.materials)}</div>
-                  {locked ? (
-                    <div className="mt-2 text-[10px] font-semibold text-rose-300/80">
-                      Unlocks at population {building.tierUnlockPopulation}
-                    </div>
-                  ) : null}
+                <span className="shrink-0 rounded bg-white/[0.06] px-1 py-0.5 text-[8px] uppercase tracking-[0.1em] text-white/45">
+                  T{building.tier}
+                </span>
+              </div>
+
+              {/* Body */}
+              <div className={`px-2.5 pb-2 pt-1.5 ${locked ? 'opacity-35' : ''}`}>
+                {/* Cost line */}
+                <div className="flex flex-wrap items-center gap-1 text-[10px] text-white/55">
+                  <span className="font-semibold">{building.comboCost}c</span>
+                  <MaterialPills materials={building.materials} />
+                </div>
+                {/* Key stat */}
+                <div className="mt-1 truncate text-[10px] font-medium text-white/65">{keyStat(building)}</div>
+                {/* Size + build time */}
+                <div className="mt-1 flex items-center gap-2 text-[9px] text-white/35">
+                  <span>{building.width}&times;{building.height}</span>
+                  <span>{building.buildMinutes ? `${building.buildMinutes}m` : 'Instant'}</span>
                 </div>
               </div>
+
+              {/* Locked overlay */}
+              {locked && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center rounded-xl bg-black/40">
+                  <span className="text-base">🔒</span>
+                  <span className="mt-0.5 text-[9px] font-semibold text-white/50">Need {building.tierUnlockPopulation} pop</span>
+                </div>
+              )}
             </button>
           );
         })}

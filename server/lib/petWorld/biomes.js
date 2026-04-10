@@ -67,13 +67,76 @@ const BIOMES = {
   },
 };
 
-const STARTER_LAYOUT = {
-  water: [[10, 1], [10, 2], [10, 3]],
-  trees: [[1, 1], [2, 8], [3, 10], [8, 1], [9, 9], [1, 6], [10, 10]],
-  rocks: [[1, 10], [2, 2], [8, 10], [10, 7], [6, 1]],
-  bushes: [[3, 2], [7, 9], [9, 5]],
-  decor: [[0, 4], [1, 4], [2, 4], [8, 8], [9, 8], [10, 8], [5, 9], [6, 9], [7, 9]],
+const BIOME_STARTER_LAYOUTS = {
+  grasslands: {
+    water: [[10, 1], [10, 2], [10, 3]],
+    trees: [[0, 0], [1, 7], [3, 10], [8, 0], [9, 9], [0, 5]],
+    rocks: [[1, 10], [8, 10], [11, 7]],
+    bushes: [[3, 1], [7, 9], [9, 5], [2, 6]],
+    decor: [[0, 3], [1, 3], [5, 0], [6, 0], [8, 8], [9, 8], [5, 11], [6, 11], [7, 11]],
+    features: [{ type: 'pond', x: 9, y: 0, w: 3, h: 4 }, { type: 'grove', x: 0, y: 4, w: 3, h: 4 }],
+  },
+  forest: {
+    water: [[11, 5], [11, 6]],
+    trees: [[0, 0], [0, 2], [1, 1], [1, 8], [2, 10], [3, 0], [7, 0], [8, 11], [9, 10], [10, 0], [11, 9]],
+    rocks: [[0, 10], [5, 0], [10, 10]],
+    bushes: [[2, 3], [3, 7], [6, 9], [8, 2], [10, 6]],
+    decor: [[1, 4], [2, 5], [4, 11], [5, 11], [9, 1], [10, 2], [7, 8], [8, 8], [0, 8]],
+    features: [{ type: 'grove', x: 0, y: 0, w: 4, h: 3 }, { type: 'grove', x: 8, y: 9, w: 4, h: 3 }],
+  },
+  coastal: {
+    water: [[0, 0], [1, 0], [2, 0], [3, 0], [4, 0], [5, 0], [6, 0], [7, 0], [8, 0], [9, 0], [10, 0], [11, 0], [0, 1], [1, 1], [11, 1]],
+    trees: [[3, 3], [7, 8], [10, 4]],
+    rocks: [[1, 3], [9, 2], [11, 6]],
+    bushes: [[2, 5], [6, 10], [8, 3]],
+    decor: [[2, 2], [3, 2], [4, 1], [5, 1], [6, 1], [7, 1], [8, 1], [9, 1], [10, 1], [4, 11], [5, 11]],
+    features: [{ type: 'pond', x: 0, y: 0, w: 12, h: 2 }, { type: 'reed', x: 2, y: 2, w: 3, h: 1 }],
+  },
+  mountain: {
+    water: [[0, 8], [0, 9]],
+    trees: [[2, 0], [5, 10], [10, 2]],
+    rocks: [[0, 0], [0, 1], [1, 0], [1, 11], [3, 9], [8, 0], [9, 0], [10, 10], [11, 8], [11, 9], [11, 0]],
+    bushes: [[4, 2], [7, 7]],
+    decor: [[2, 2], [3, 2], [9, 8], [10, 8], [6, 0], [7, 0], [5, 5], [6, 5], [7, 5]],
+    features: [{ type: 'quarry', x: 0, y: 0, w: 3, h: 2 }, { type: 'quarry', x: 9, y: 8, w: 3, h: 3 }],
+  },
+  desert: {
+    water: [[5, 9], [5, 10], [6, 9], [6, 10]],
+    trees: [[2, 8], [7, 10]],
+    rocks: [[0, 0], [1, 5], [3, 11], [9, 1], [11, 4], [11, 11]],
+    bushes: [[0, 7], [4, 2], [10, 8]],
+    decor: [[4, 9], [7, 9], [4, 11], [7, 11], [2, 2], [3, 2], [8, 5], [9, 5], [0, 3]],
+    features: [{ type: 'pond', x: 4, y: 8, w: 4, h: 4 }],
+  },
+  tropical: {
+    water: [[0, 10], [0, 11], [1, 11], [10, 0], [11, 0], [11, 1]],
+    trees: [[0, 1], [1, 3], [2, 9], [3, 0], [7, 11], [9, 2], [10, 8], [11, 5]],
+    rocks: [[5, 0], [8, 10]],
+    bushes: [[1, 6], [3, 3], [4, 8], [6, 2], [8, 6], [10, 4], [2, 11]],
+    decor: [[0, 4], [1, 4], [4, 0], [5, 0], [9, 9], [10, 9], [6, 6], [7, 6], [8, 7]],
+    features: [{ type: 'pond', x: 0, y: 10, w: 2, h: 2 }, { type: 'flower', x: 5, y: 5, w: 4, h: 4 }],
+  },
+  tundra: {
+    water: [[9, 0], [10, 0], [9, 1]],
+    trees: [[1, 2], [4, 9], [8, 3], [11, 7]],
+    rocks: [[0, 0], [0, 6], [2, 11], [3, 4], [6, 0], [7, 10], [10, 5], [11, 10], [11, 11]],
+    bushes: [[2, 7], [5, 3]],
+    decor: [[1, 1], [2, 1], [8, 8], [9, 8], [5, 5], [6, 5], [3, 10], [4, 10], [10, 3]],
+    features: [{ type: 'quarry', x: 0, y: 0, w: 3, h: 2 }, { type: 'quarry', x: 10, y: 9, w: 2, h: 3 }],
+  },
+  volcanic: {
+    water: [[0, 5], [0, 6], [1, 5]],
+    trees: [[3, 9], [9, 2]],
+    rocks: [[0, 0], [0, 11], [1, 1], [2, 8], [4, 0], [6, 11], [8, 0], [10, 7], [11, 3], [11, 10], [11, 11]],
+    bushes: [[3, 3], [7, 8]],
+    decor: [[1, 6], [2, 6], [5, 1], [6, 1], [9, 9], [10, 9], [4, 5], [5, 5], [8, 4]],
+    features: [{ type: 'pond', x: 0, y: 4, w: 2, h: 3 }, { type: 'quarry', x: 10, y: 9, w: 2, h: 3 }],
+  },
 };
+
+function getStarterLayout(biome) {
+  return BIOME_STARTER_LAYOUTS[biome] || BIOME_STARTER_LAYOUTS.grasslands;
+}
 
 function hashSeed(input) {
   let h = 2166136261;
@@ -107,6 +170,7 @@ function buildGroundTile(def, index, x, y) {
 
 function createStarterGrid(biome) {
   const def = getBiomeDef(biome);
+  const layout = getStarterLayout(biome);
   const tiles = [];
   for (let y = 0; y < 12; y += 1) {
     const row = [];
@@ -116,19 +180,19 @@ function createStarterGrid(biome) {
     tiles.push(row);
   }
 
-  STARTER_LAYOUT.decor.forEach(([x, y], index) => {
+  (layout.decor || []).forEach(([x, y], index) => {
     if (tiles[y]?.[x]) tiles[y][x].t = buildGroundTile(def, index + 1, x, y);
   });
-  STARTER_LAYOUT.water.forEach(([x, y]) => {
+  (layout.water || []).forEach(([x, y]) => {
     if (tiles[y]?.[x]) tiles[y][x].t = 'water';
   });
-  STARTER_LAYOUT.trees.forEach(([x, y]) => {
+  (layout.trees || []).forEach(([x, y]) => {
     if (tiles[y]?.[x]) tiles[y][x].t = 'tree';
   });
-  STARTER_LAYOUT.rocks.forEach(([x, y]) => {
+  (layout.rocks || []).forEach(([x, y]) => {
     if (tiles[y]?.[x]) tiles[y][x].t = 'rock';
   });
-  STARTER_LAYOUT.bushes.forEach(([x, y]) => {
+  (layout.bushes || []).forEach(([x, y]) => {
     if (tiles[y]?.[x]) tiles[y][x].t = 'bush';
   });
 
@@ -137,6 +201,7 @@ function createStarterGrid(biome) {
     w: 12,
     h: 12,
     tiles,
+    features: layout.features || [],
   };
 }
 
@@ -144,19 +209,19 @@ function isObstacle(tileType) {
   return ['water', 'tree', 'rock', 'bush'].includes(tileType);
 }
 
-function directionBias(direction = 'e') {
-  switch (direction) {
-    case 'n':
-      return { water: 0.02, tree: 0.03, rock: 0.05, bush: 0 };
-    case 's':
-      return { water: 0.06, tree: 0.01, rock: 0.01, bush: 0.01 };
-    case 'e':
-      return { water: 0.01, tree: 0.02, rock: 0.05, bush: 0.01 };
-    case 'w':
-      return { water: 0.01, tree: 0.02, rock: 0.01, bush: 0.05 };
-    default:
-      return { water: 0, tree: 0, rock: 0, bush: 0 };
-  }
+function directionBias(biome, direction = 'e') {
+  const biasTable = {
+    grasslands: { n: { water: 0.02, tree: 0.04, rock: 0.02, bush: 0.02 }, s: { water: 0.06, tree: 0.02, rock: 0.01, bush: 0.03 }, e: { water: 0.03, tree: 0.03, rock: 0.02, bush: 0.01 }, w: { water: 0.02, tree: 0.03, rock: 0.01, bush: 0.04 } },
+    forest: { n: { water: 0.01, tree: 0.06, rock: 0.02, bush: 0.03 }, s: { water: 0.03, tree: 0.05, rock: 0.01, bush: 0.03 }, e: { water: 0.02, tree: 0.04, rock: 0.03, bush: 0.02 }, w: { water: 0.01, tree: 0.06, rock: 0.01, bush: 0.04 } },
+    coastal: { n: { water: 0.08, tree: 0.01, rock: 0.02, bush: 0.01 }, s: { water: 0.04, tree: 0.02, rock: 0.02, bush: 0.02 }, e: { water: 0.06, tree: 0.01, rock: 0.03, bush: 0.01 }, w: { water: 0.06, tree: 0.02, rock: 0.01, bush: 0.02 } },
+    mountain: { n: { water: 0.01, tree: 0.02, rock: 0.08, bush: 0 }, s: { water: 0.03, tree: 0.03, rock: 0.05, bush: 0.01 }, e: { water: 0.02, tree: 0.01, rock: 0.07, bush: 0.01 }, w: { water: 0.01, tree: 0.02, rock: 0.06, bush: 0.01 } },
+    desert: { n: { water: 0.01, tree: 0.01, rock: 0.04, bush: 0.01 }, s: { water: 0.03, tree: 0.02, rock: 0.03, bush: 0.02 }, e: { water: 0.02, tree: 0.01, rock: 0.05, bush: 0.01 }, w: { water: 0.01, tree: 0.02, rock: 0.04, bush: 0.02 } },
+    tropical: { n: { water: 0.04, tree: 0.04, rock: 0.01, bush: 0.04 }, s: { water: 0.05, tree: 0.03, rock: 0.01, bush: 0.04 }, e: { water: 0.03, tree: 0.05, rock: 0.02, bush: 0.03 }, w: { water: 0.04, tree: 0.04, rock: 0.01, bush: 0.05 } },
+    tundra: { n: { water: 0.03, tree: 0.02, rock: 0.06, bush: 0.01 }, s: { water: 0.04, tree: 0.03, rock: 0.04, bush: 0.01 }, e: { water: 0.02, tree: 0.02, rock: 0.06, bush: 0.01 }, w: { water: 0.03, tree: 0.03, rock: 0.05, bush: 0.01 } },
+    volcanic: { n: { water: 0.02, tree: 0.01, rock: 0.07, bush: 0 }, s: { water: 0.03, tree: 0.01, rock: 0.06, bush: 0.01 }, e: { water: 0.01, tree: 0.01, rock: 0.08, bush: 0.01 }, w: { water: 0.02, tree: 0.02, rock: 0.07, bush: 0 } },
+  };
+  const biomeBias = biasTable[biome] || biasTable.grasslands;
+  return biomeBias[direction] || { water: 0, tree: 0, rock: 0, bush: 0 };
 }
 
 function blendEdgeTile(def, neighborType, x, y) {
@@ -168,7 +233,7 @@ function blendEdgeTile(def, neighborType, x, y) {
 function generateExpansionChunk({ biome, direction, expansionIndex, width, height, adjacentEdge = [] }) {
   const def = getBiomeDef(biome);
   const rng = mulberry32(hashSeed(`${biome}:${direction}:${expansionIndex}`));
-  const bias = directionBias(direction);
+  const bias = directionBias(biome, direction);
   const profile = def.expansionProfile;
   const tiles = [];
   for (let y = 0; y < height; y += 1) {
@@ -204,6 +269,7 @@ module.exports = {
   BIOMES,
   DEFAULT_STARTER_HOUSE,
   getBiomeDef,
+  getStarterLayout,
   createStarterGrid,
   generateExpansionChunk,
 };

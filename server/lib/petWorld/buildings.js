@@ -193,9 +193,8 @@ const BUILDINGS = {
     width: 2,
     height: 2,
     category: 'gold',
-    production: { gold: 0.5 },
     comboToGold: 1,
-    description: 'Converts village activity into trade currency.',
+    description: 'Converts combos into gold each cycle.',
   },
   town_hall: {
     id: 'town_hall',
@@ -262,6 +261,45 @@ const BUILDINGS = {
     storageBonus: 100,
     description: 'Major storage expansion.',
   },
+  flower_bed: {
+    id: 'flower_bed',
+    name: 'Flower Bed',
+    tier: 1,
+    comboCost: 10,
+    materials: {},
+    buildMinutes: 0,
+    width: 1,
+    height: 1,
+    category: 'cosmetic',
+    happiness: 2,
+    description: 'A colorful patch that cheers up your village.',
+    maxLevel: 1,
+  },
+  watchtower: {
+    id: 'watchtower',
+    name: 'Watchtower',
+    tier: 3,
+    comboCost: 60,
+    materials: { wood: 25, stone: 20 },
+    buildMinutes: 20,
+    width: 1,
+    height: 1,
+    category: 'support',
+    description: 'Keeps watch over the village and deters wildlife.',
+  },
+  tavern: {
+    id: 'tavern',
+    name: 'Tavern',
+    tier: 2,
+    comboCost: 45,
+    materials: { wood: 20, stone: 10 },
+    buildMinutes: 20,
+    width: 2,
+    height: 2,
+    category: 'support',
+    happiness: 8,
+    description: 'A cozy gathering spot that boosts village morale.',
+  },
 };
 
 const TIER_UNLOCKS = {
@@ -308,7 +346,7 @@ function getMaxLevel(type) {
 
 function getWorkerCapacity(type, level = 1) {
   const def = getBuildingDef(type);
-  if (!def || !def.production) return 0;
+  if (!def || (!def.production && !def.comboToGold)) return 0;
   return Math.max(0, Math.min(getMaxLevel(type), Number(level) || 1));
 }
 

@@ -18,6 +18,14 @@ const BASE_CAPS = {
   gold: 50,
 };
 
+function getPhaseCap(expansions) {
+  const n = Number(expansions) || 0;
+  if (n >= 5) return 50;
+  if (n >= 3) return 25;
+  if (n >= 1) return 15;
+  return 10;
+}
+
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
@@ -203,9 +211,12 @@ function simulateWorld(worldRow, buildingRows, options = {}) {
   const lastTickMs = parseSqliteDate(world.last_tick_at || world.created_at, nowMs).getTime();
   const elapsedMs = clamp(nowMs - lastTickMs, 0, MAX_OFFLINE_MS);
   const stepsToRun = Math.floor(elapsedMs / SIM_STEP_MS);
-  const phaseCap = Math.min(GLOBAL_POP_CAP, Number(options.phaseCap) || GLOBAL_POP_CAP);
+  const phaseCap = Math.min(GLOBAL_POP_CAP, Number(options.phaseCap) || getPhaseCap(Number(world.expansions) || 0));
 
   applyConstructionVisibility(buildings, nowMs);
+
+  let comboBalance = Number(options.comboBalance) || 0;
+  let totalComboConsumed = 0;
 
   let simTime = lastTickMs;
   if (stepsToRun > 0) {
@@ -214,6 +225,8 @@ function simulateWorld(worldRow, buildingRows, options = {}) {
       const stepEnd = simTime + SIM_STEP_MS;
       simTime = stepEnd;
       const activeBuildings = getActiveBuildings(buildings, stepEnd);
+
+      // Resource production
       for (const building of activeBuildings) {
         const def = getBuildingDef(building.building_type);
         if (!def?.production) continue;
@@ -230,9 +243,25 @@ function simulateWorld(worldRow, buildingRows, options = {}) {
         }
       }
 
+      // Trading post: consume combos → produce gold
+      for (const building of activeBuildings) {
+        const def = getBuildingDef(building.building_type);
+        if (!def?.comboToGold) continue;
+        const workers = clamp(Number(building.workers) || 0, 0, getWorkerCapacity(building.building_type, getBuildingLevel(building)));
+        const mult = (1 + workers * 0.5) * getLevelMultiplier(getBuildingLevel(building));
+        const combosWanted = Math.floor(def.comboToGold * mult);
+        const combosUsed = Math.min(combosWanted, Math.max(0, comboBalance));
+        if (combosUsed > 0) {
+          world.gold = roundResource((Number(world.gold) || 0) + combosUsed);
+          comboBalance -= combosUsed;
+          totalComboConsumed += combosUsed;
+        }
+      }
+
       const derivedBeforeUpkeep = getDerivedState(world, buildings, stepEnd);
       clampResources(world, derivedBeforeUpkeep.caps);
 
+      // Food upkeep
       world.food = roundResource((Number(world.food) || 0) - ((Number(world.population) || 0) * 0.25 * 0.25));
       if (world.food < 0 && (Number(world.population) || 0) > 0) {
         world.population = Math.max(0, (Number(world.population) || 0) - 1);
@@ -242,6 +271,8 @@ function simulateWorld(worldRow, buildingRows, options = {}) {
       }
 
       const derivedAfterUpkeep = getDerivedState(world, buildings, stepEnd);
+
+      // Breeding check
       const breedingInterval = derivedAfterUpkeep.hasShrine ? 16 : 24;
       if (
         crossesBoundary(stepStart, stepEnd, breedingInterval, epochMs)
@@ -254,8 +285,15 @@ function simulateWorld(worldRow, buildingRows, options = {}) {
         world.population = Math.min(phaseCap, (Number(world.population) || 0) + 1);
       }
 
+      // Happiness decay every 48h (only above 50 base)
       if (crossesBoundary(stepStart, stepEnd, 48, epochMs) && (Number(world.happiness) || 0) > 50) {
         world.happiness = clamp((Number(world.happiness) || 0) - 1, 0, 100);
+      }
+
+      // Happiness recovery from buildings (Garden, Park, etc.)
+      const happinessTarget = Math.min(100, 50 + derivedAfterUpkeep.happinessBonus);
+      if ((Number(world.happiness) || 0) < happinessTarget) {
+        world.happiness = clamp((Number(world.happiness) || 0) + 0.5, 0, 100);
       }
 
       syncWorkerAssignments(world, buildings, stepEnd);
@@ -272,7 +310,7 @@ function simulateWorld(worldRow, buildingRows, options = {}) {
   world.stone_capacity = currentDerived.caps.stone;
   world.cloth_capacity = currentDerived.caps.cloth;
   world.gold_capacity = currentDerived.caps.gold;
-  world.population = clamp(Number(world.population) || 0, 0, phaseCap);
+  world.population = clamp(Number(world.population) || 0, 0, GLOBAL_POP_CAP);
   world.happiness = clamp(Number(world.happiness) || 0, 0, 100);
   syncWorkerAssignments(world, buildings, nowMs);
 
@@ -282,9 +320,11 @@ function simulateWorld(worldRow, buildingRows, options = {}) {
     derived: {
       ...currentDerived,
       phaseCap,
+      happinessTarget: Math.min(100, 50 + currentDerived.happinessBonus),
       unassignedPets: Math.max(0, (Number(world.population) || 0) - currentDerived.assignedWorkers),
     },
     stepsToRun,
+    comboConsumed: totalComboConsumed,
   };
 }
 
@@ -293,6 +333,7 @@ module.exports = {
   MAX_OFFLINE_MS,
   BASE_CAPS,
   GLOBAL_POP_CAP,
+  getPhaseCap,
   parseSqliteDate,
   toSqliteDate,
   getDerivedState,

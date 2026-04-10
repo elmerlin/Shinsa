@@ -25,6 +25,7 @@ const {
 } = require('../lib/petWorld/grid');
 const {
   GLOBAL_POP_CAP,
+  getPhaseCap,
   parseSqliteDate,
   toSqliteDate,
   simulateWorld,
@@ -32,6 +33,8 @@ const {
   roundResource,
   clamp,
 } = require('../lib/petWorld/economy');
+
+const { createUserNotification } = require('../lib/notifications');
 
 const router = express.Router();
 
@@ -273,15 +276,20 @@ function runCatchup(db, userId, now = new Date()) {
   const world = loadWorld(db, userId);
   if (!world) return null;
   const buildings = loadBuildings(db, userId);
+  const comboBalance = getComboBalance(db, userId);
   const simulation = simulateWorld(attachBiomeSpecialty(world), buildings, {
     now,
-    phaseCap: GLOBAL_POP_CAP,
+    phaseCap: getPhaseCap(safeNumber(world.expansions, 0)),
+    comboBalance,
   });
   delete simulation.world.biome_specialty;
   simulation.world.grid_width = simulation.world.grid_width || parseGridData(simulation.world.grid_data).w;
   simulation.world.grid_height = simulation.world.grid_height || parseGridData(simulation.world.grid_data).h;
   saveWorld(db, simulation.world);
   saveBuildings(db, simulation.buildings);
+  if (simulation.comboConsumed > 0) {
+    spendCombos(db, userId, simulation.comboConsumed);
+  }
   return simulation;
 }
 
@@ -349,7 +357,7 @@ function formatWorldBundle(db, world, buildings, options = {}) {
       population: safeNumber(world.population, 0),
       happiness: safeNumber(world.happiness, 0),
       housing_capacity: derived.housing,
-      population_cap: GLOBAL_POP_CAP,
+      population_cap: getPhaseCap(safeNumber(world.expansions, 0)),
       assigned_workers: derived.assignedWorkers,
       available_workers: derived.availableWorkers,
       unassigned_pets: Math.max(0, safeNumber(world.population, 0) - derived.assignedWorkers),
@@ -363,6 +371,8 @@ function formatWorldBundle(db, world, buildings, options = {}) {
       stone_capacity: safeNumber(world.stone_capacity, 50),
       cloth_capacity: safeNumber(world.cloth_capacity, 50),
       gold_capacity: safeNumber(world.gold_capacity, 50),
+      happiness_bonus: derived.happinessBonus,
+      happiness_target: Math.min(100, 50 + derived.happinessBonus),
       combo_balance: viewerId === world.user_id ? getComboBalance(db, world.user_id) : null,
       last_tick_at: world.last_tick_at,
       created_at: world.created_at,
@@ -800,6 +810,14 @@ router.post('/trade/offer', requireAuth, (req, res) => {
         from_user_id, to_user_id, offer_resource, offer_amount, request_resource, request_amount, status, created_at
       ) VALUES (?, ?, ?, ?, ?, ?, 'pending', datetime('now'))
     `).run(req.user.id, toUserId, offerResource, offerAmount, requestResource, requestAmount);
+    const fromUser = db.prepare('SELECT username FROM users WHERE id = ?').get(req.user.id);
+    try {
+      createUserNotification(db, toUserId, 'pet_world_trade',
+        'New trade offer',
+        `${fromUser?.username || 'Someone'} offered ${offerAmount} ${offerResource} for ${requestAmount} ${requestResource}`,
+        `/pet/world/${req.user.id}`
+      );
+    } catch (_) { /* non-critical */ }
     return {
       trade: db.prepare('SELECT * FROM pet_world_trades WHERE id = ?').get(result.lastInsertRowid),
       trades: getWorldTradeSummary(db, req.user.id),
@@ -848,6 +866,14 @@ router.post('/trade/:id/accept', requireAuth, (req, res) => {
     saveWorld(db, senderBundle.world);
     saveWorld(db, recipientBundle.world);
     db.prepare(`UPDATE pet_world_trades SET status = 'accepted' WHERE id = ?`).run(tradeId);
+    const acceptUser = db.prepare('SELECT username FROM users WHERE id = ?').get(req.user.id);
+    try {
+      createUserNotification(db, trade.from_user_id, 'pet_world_trade',
+        'Trade accepted',
+        `${acceptUser?.username || 'Someone'} accepted your trade: ${trade.offer_amount} ${trade.offer_resource} for ${trade.request_amount} ${trade.request_resource}`,
+        `/pet/world`
+      );
+    } catch (_) { /* non-critical */ }
     return { trades: getWorldTradeSummary(db, req.user.id) };
   });
   try {
