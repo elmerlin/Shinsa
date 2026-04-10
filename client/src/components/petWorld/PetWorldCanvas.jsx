@@ -169,7 +169,7 @@ export default function PetWorldCanvas({
     const endX = Math.min(world.grid.w, Math.ceil((camera.x + size.width) / tileSize) + 1);
     const endY = Math.min(world.grid.h, Math.ceil((camera.y + size.height) / tileSize) + 1);
 
-    ctx.fillStyle = '#081019';
+    ctx.fillStyle = '#07121a';
     ctx.fillRect(0, 0, size.width, size.height);
 
     // tiles
@@ -219,6 +219,19 @@ export default function PetWorldCanvas({
       const valid = isPlacementValid(world.grid, gx, gy, bSize.width, bSize.height, pendingBuildType);
       drawGhostFootprint(ctx, gx * tileSize - camera.x, gy * tileSize - camera.y, tileSize, bSize.width, bSize.height, valid);
     }
+
+    const vignette = ctx.createRadialGradient(
+      size.width * 0.5,
+      size.height * 0.48,
+      Math.min(size.width, size.height) * 0.14,
+      size.width * 0.5,
+      size.height * 0.5,
+      Math.max(size.width, size.height) * 0.72,
+    );
+    vignette.addColorStop(0, 'rgba(0,0,0,0)');
+    vignette.addColorStop(1, 'rgba(3,7,12,0.42)');
+    ctx.fillStyle = vignette;
+    ctx.fillRect(0, 0, size.width, size.height);
 
     // continue animation loop if animating
     if (animatingRef.current) {
@@ -411,10 +424,10 @@ export default function PetWorldCanvas({
   if (!world?.grid) return null;
 
   return (
-    <div className="relative overflow-hidden rounded-[1.6rem] border border-white/[0.07] bg-[#081019] shadow-[0_18px_45px_rgba(0,0,0,0.28)]">
+    <div className="relative h-full w-full overflow-hidden bg-[#07121a]">
       <div
         ref={containerRef}
-        className="relative h-[60vh] min-h-[420px] w-full select-none touch-none"
+        className="relative h-full min-h-0 w-full select-none touch-none"
         style={{ WebkitTouchCallout: 'none', overscrollBehavior: 'none' }}
         onContextMenu={(event) => event.preventDefault()}
         onTouchStart={handleTouchStart}
@@ -430,21 +443,21 @@ export default function PetWorldCanvas({
           onPointerCancel={handlePointerUp}
           onMouseMove={handleMouseMove}
         />
-        <div className="pointer-events-none absolute left-3 top-3 rounded-full border border-white/10 bg-black/35 px-3 py-1.5 text-[11px] uppercase tracking-[0.16em] text-white/60">
-          {readonly ? 'Visit Snapshot' : pendingBuildType ? 'Tap a tile to place' : 'Drag to pan'}
+        <div className="pointer-events-none absolute left-3 top-3 rounded-full border border-white/10 bg-black/35 px-3 py-1.5 text-[10px] uppercase tracking-[0.18em] text-white/55 backdrop-blur-sm">
+          {readonly ? 'Visit snapshot' : pendingBuildType ? 'Tap a tile to place' : 'Drag to pan'}
         </div>
         <div className="absolute bottom-3 right-3 flex gap-2">
           <button
             type="button"
             onClick={() => adjustZoom(-0.15)}
-            className="rounded-full border border-white/10 bg-black/40 px-3 py-2 text-sm font-bold text-white/75 hover:bg-black/55"
+            className="rounded-full border border-white/10 bg-black/40 px-3 py-2 text-sm font-bold text-white/75 backdrop-blur-sm hover:bg-black/55"
           >
             −
           </button>
           <button
             type="button"
             onClick={() => adjustZoom(0.15)}
-            className="rounded-full border border-white/10 bg-black/40 px-3 py-2 text-sm font-bold text-white/75 hover:bg-black/55"
+            className="rounded-full border border-white/10 bg-black/40 px-3 py-2 text-sm font-bold text-white/75 backdrop-blur-sm hover:bg-black/55"
           >
             +
           </button>

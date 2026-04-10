@@ -1100,7 +1100,8 @@ export default function App() {
   const isLiveOverlay = /^\/live\/[^/]+\/overlay(?:\/|$)/.test(location.pathname);
   const isTournamentChromeless = /^\/tournament\/[^/]+\/(overlay|embed)(?:\/|$)/.test(location.pathname);
   const isPetBomberFullscreen = /^\/pet\/bomber\/[^/]+(?:\/|$)/.test(location.pathname);
-  const isChromeless = isLiveOverlay || isTournamentChromeless || isPetBomberFullscreen;
+  const isPetWorldFullscreen = /^\/pet\/world(?:\/[^/]+)?(?:\/|$)/.test(location.pathname);
+  const isChromeless = isLiveOverlay || isTournamentChromeless || isPetBomberFullscreen || isPetWorldFullscreen;
   const isMessagesInboxRoute = /^\/messages\/?$/.test(location.pathname);
   const isMessagesConversationRoute = /^\/messages\/[^/]+(?:\/|$)/.test(location.pathname);
   const hideMobileHeader = isMessagesInboxRoute || isMessagesConversationRoute;

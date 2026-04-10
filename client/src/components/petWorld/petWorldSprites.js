@@ -60,22 +60,26 @@ export function drawTile(ctx, biome, tile, x, y, tileSize, time = 0) {
   const s = tileSize;
   const ix = Math.round(x);
   const iy = Math.round(y);
+  const h = tileHash(ix, iy);
 
   // base fill
   px(ctx, ix, iy, s, s, palette.fill);
-
-  // grid line
-  ctx.strokeStyle = 'rgba(0,0,0,0.10)';
-  ctx.lineWidth = 0.5;
-  ctx.strokeRect(ix, iy, s, s);
+  px(ctx, ix, iy, s, s * 0.18, 'rgba(255,255,255,0.03)');
+  px(ctx, ix, iy + s * 0.74, s, s * 0.26, biomeUi.shadow, 0.18);
 
   if (tile.t === 'water') {
+    ctx.fillStyle = 'rgba(255,255,255,0.04)';
+    ctx.beginPath();
+    ctx.roundRect(ix + s * 0.06, iy + s * 0.04, s * 0.88, s * 0.88, s * 0.18);
+    ctx.fill();
+
     // animated shimmer bands
     const phase = (time * 0.001 + ix * 0.02 + iy * 0.03) % 1;
     const shimY1 = iy + s * (0.15 + phase * 0.15);
     const shimY2 = iy + s * (0.50 + ((phase + 0.4) % 1) * 0.12);
     px(ctx, ix + s * 0.08, shimY1, s * 0.84, s * 0.08, palette.detail, 0.35);
     px(ctx, ix + s * 0.20, shimY2, s * 0.52, s * 0.06, palette.detail, 0.25);
+    px(ctx, ix + s * 0.12, iy + s * 0.74, s * 0.62, s * 0.05, '#b4f8ff', 0.14);
     // sparkle
     const spark = ((time * 0.002 + ix * 17 + iy * 31) % 3) | 0;
     if (spark === 0) px(ctx, ix + s * 0.6, iy + s * 0.3, 2, 2, '#ffffff', 0.5);
@@ -83,7 +87,6 @@ export function drawTile(ctx, biome, tile, x, y, tileSize, time = 0) {
   }
 
   if (tile.t === 'tree') {
-    const h = tileHash(ix, iy);
     const sway = Math.sin(time * 0.0015 + h * 0.01) * (s * 0.04);
     const trunkX = ix + s * 0.40;
     const trunkW = s * 0.18;
@@ -92,7 +95,10 @@ export function drawTile(ctx, biome, tile, x, y, tileSize, time = 0) {
     // canopy shadow
     circ(ctx, ix + s * 0.5 + sway, iy + s * 0.40, s * 0.34, 'rgba(0,0,0,0.15)');
     // main canopy
-    circ(ctx, ix + s * 0.5 + sway, iy + s * 0.36, s * 0.32, palette.fill);
+    circ(ctx, ix + s * 0.5 + sway, iy + s * 0.40, s * 0.22, palette.fill, 0.95);
+    circ(ctx, ix + s * 0.38 + sway * 0.8, iy + s * 0.38, s * 0.19, palette.fill, 0.95);
+    circ(ctx, ix + s * 0.62 + sway * 1.1, iy + s * 0.38, s * 0.19, palette.fill, 0.95);
+    circ(ctx, ix + s * 0.50 + sway * 0.5, iy + s * 0.28, s * 0.18, palette.detail || biomeUi.treeHighlight, 0.70);
     // highlight
     circ(ctx, ix + s * 0.42 + sway, iy + s * 0.28, s * 0.14, palette.detail || biomeUi.treeHighlight, 0.7);
     return;
@@ -137,14 +143,19 @@ export function drawTile(ctx, biome, tile, x, y, tileSize, time = 0) {
   }
 
   // ground: biome micro-detail
-  const h = tileHash(ix, iy);
   const detailColor = biomeUi.groundDetail;
+  if (h % 2 === 0) {
+    px(ctx, ix + s * 0.08, iy + s * 0.12, s * 0.24, s * 0.06, '#ffffff', 0.03);
+  }
   if (h % 5 === 0) {
     // small flower or detail dot
     px(ctx, ix + s * ((h >> 3) % 6) / 8 + s * 0.1, iy + s * ((h >> 6) % 5) / 7 + s * 0.15, s * 0.06, s * 0.06, detailColor, 0.35);
   }
   if (h % 7 === 0) {
     px(ctx, ix + s * 0.55, iy + s * 0.6, s * 0.08, s * 0.04, detailColor, 0.25);
+  }
+  if (h % 11 === 0) {
+    px(ctx, ix + s * 0.30, iy + s * 0.72, s * 0.18, s * 0.04, 'rgba(255,255,255,0.06)');
   }
 }
 
