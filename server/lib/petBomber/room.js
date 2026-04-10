@@ -506,6 +506,7 @@ function getRoomSnapshot(room) {
     currentRound: room.match.currentRound,
     round: room.match.simulation ? {
       grid: room.match.simulation.grid,
+      snapshot: sim.getSnapshot(room.match.simulation),
     } : null,
   };
 }

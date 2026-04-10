@@ -89,7 +89,7 @@ export default class PetBomberRenderer {
   _positionCamera() {
     const cx = (COLS - 1) / 2;
     const cz = (ROWS - 1) / 2;
-    this._camera.position.set(cx, 14, cz + 10);
+    this._camera.position.set(cx, 18, cz + 4);
     this._camera.lookAt(cx, 0, cz);
   }
 
@@ -154,9 +154,11 @@ export default class PetBomberRenderer {
     this._itemGeo = new THREE.SphereGeometry(0.2, 8, 6);
 
     // Player body (capsule-like: cylinder + spheres)
-    this._playerBodyGeo = new THREE.CylinderGeometry(0.22, 0.25, 0.4, 8);
-    this._playerHeadGeo = new THREE.SphereGeometry(0.22, 8, 6);
-    this._playerDirGeo = new THREE.ConeGeometry(0.08, 0.15, 4);
+    this._playerBodyGeo = new THREE.CylinderGeometry(0.28, 0.32, 0.58, 10);
+    this._playerHeadGeo = new THREE.SphereGeometry(0.28, 10, 8);
+    this._playerDirGeo = new THREE.ConeGeometry(0.1, 0.18, 4);
+    this._playerHaloGeo = new THREE.TorusGeometry(0.36, 0.05, 8, 18);
+    this._playerBeaconGeo = new THREE.SphereGeometry(0.12, 10, 8);
 
     // Sudden death block (same shape as hard, different material)
     this._sdMat = new THREE.MeshStandardMaterial({
@@ -244,27 +246,49 @@ export default class PetBomberRenderer {
 
       // Body
       const body = new THREE.Mesh(this._playerBodyGeo, bodyMat);
-      body.position.y = 0.3;
+      body.position.y = 0.38;
       group.add(body);
 
       // Head
       const head = new THREE.Mesh(this._playerHeadGeo, bodyMat);
-      head.position.y = 0.6;
+      head.position.y = 0.8;
       group.add(head);
 
       // Direction indicator
       const dirMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
       const dir = new THREE.Mesh(this._playerDirGeo, dirMat);
-      dir.position.y = 0.6;
-      dir.position.z = -0.28;
+      dir.position.y = 0.8;
+      dir.position.z = -0.38;
       dir.rotation.x = -Math.PI / 2;
       group.add(dir);
+
+      const haloMat = new THREE.MeshBasicMaterial({
+        color,
+        transparent: true,
+        opacity: 0.95,
+      });
+      const halo = new THREE.Mesh(this._playerHaloGeo, haloMat);
+      halo.position.y = 0.08;
+      halo.rotation.x = Math.PI / 2;
+      group.add(halo);
+
+      const beaconMat = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.95,
+      });
+      const beacon = new THREE.Mesh(this._playerBeaconGeo, beaconMat);
+      beacon.position.y = 1.35;
+      group.add(beacon);
 
       this._scene.add(group);
       this._players.push({
         group,
         bodyMat,
         dirMesh: dir,
+        haloMat,
+        beacon,
+        beaconMat,
         alive: true,
         seat: i,
       });
@@ -535,16 +559,29 @@ export default class PetBomberRenderer {
       p.bodyMat.color.setHex(SEAT_COLORS[seat]);
       p.bodyMat.emissive.setHex(SEAT_COLORS[seat]);
       p.bodyMat.emissiveIntensity = 0.1;
+      p.haloMat.color.setHex(SEAT_COLORS[seat]);
+      p.haloMat.opacity = 0.95;
+      p.beacon.visible = true;
+      p.beaconMat.color.setHex(seat === this._localSeat ? 0xffffff : SEAT_COLORS[seat]);
+      p.beaconMat.opacity = seat === this._localSeat ? 1 : 0.9;
       p.group.scale.set(1, 1, 1);
     } else {
       p.bodyMat.color.setHex(DEAD_COLOR);
       p.bodyMat.emissive.setHex(0x000000);
       p.bodyMat.emissiveIntensity = 0;
+      p.haloMat.color.setHex(DEAD_COLOR);
+      p.haloMat.opacity = 0.35;
+      p.beacon.visible = false;
       p.group.scale.set(1, 0.3, 1); // flatten
     }
   }
 
   _getDirectionRotation(dir) {
+    if (dir === 'up') return 0;
+    if (dir === 'right') return -Math.PI / 2;
+    if (dir === 'down') return Math.PI;
+    if (dir === 'left') return Math.PI / 2;
+
     // dir: 0=up, 1=right, 2=down, 3=left
     switch (dir) {
       case 0: return 0;            // facing -Z (up on grid)
@@ -683,6 +720,7 @@ export default class PetBomberRenderer {
       // Small idle bob for alive players
       if (p.alive) {
         p.group.position.y = Math.sin(this._clock.elapsedTime * 3 + i) * 0.03;
+        p.beacon.position.y = 1.35 + Math.sin(this._clock.elapsedTime * 4 + i) * 0.08;
       }
     }
   }

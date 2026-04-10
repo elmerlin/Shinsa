@@ -208,6 +208,9 @@ export default function PetBomberRoom() {
         if (renderer && data.room?.round?.grid) {
           renderer.setGrid(data.room.round.grid);
           renderer.setLocalSeat(localSeatRef.current);
+          if (data.room.round.snapshot) {
+            renderer.applySnapshot(data.room.round.snapshot);
+          }
         }
 
         // Start music on first round
