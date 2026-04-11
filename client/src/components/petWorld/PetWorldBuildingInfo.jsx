@@ -94,8 +94,8 @@ export default function PetWorldBuildingInfo({
     <div>
       {/* Header row */}
       <div className="flex items-center gap-2.5">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/8 bg-white/[0.04] text-lg">
-          {ui.icon}
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/8" style={{ backgroundColor: ui.accent + '18' }}>
+          <span className="text-lg">{ui.icon}</span>
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">

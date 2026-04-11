@@ -173,6 +173,45 @@ export function drawTile(ctx, biome, tile, x, y, tileSize, time = 0, neighbors) 
   // base fill -- NO outline, NO top-highlight/bottom-shadow that creates grid
   px(ctx, ix, iy, s, s, baseFill);
 
+  // Soft edge blending to break tile boundaries
+  if (tile.t !== 'water') {
+    const edgeBlend = biomeUi.groundMid || grounds[1];
+    const blendSize = s * 0.15;
+    // Top edge soft blend
+    if ((h >> 1) % 3 === 0) {
+      ctx.save();
+      const topGrad = ctx.createLinearGradient(ix, iy, ix, iy + blendSize);
+      topGrad.addColorStop(0, edgeBlend);
+      topGrad.addColorStop(1, 'transparent');
+      ctx.fillStyle = topGrad;
+      ctx.globalAlpha = 0.3;
+      ctx.fillRect(ix, iy, s, blendSize);
+      ctx.restore();
+    }
+    // Left edge soft blend
+    if ((h >> 3) % 3 === 0) {
+      ctx.save();
+      const leftGrad = ctx.createLinearGradient(ix, iy, ix + blendSize, iy);
+      leftGrad.addColorStop(0, edgeBlend);
+      leftGrad.addColorStop(1, 'transparent');
+      ctx.fillStyle = leftGrad;
+      ctx.globalAlpha = 0.25;
+      ctx.fillRect(ix, iy, blendSize, s);
+      ctx.restore();
+    }
+  }
+
+  // Macro terrain patches - smooth color variation across multiple tiles
+  if (tile.t !== 'water') {
+    const macroHash = ((Math.floor(ix / (s * 3)) * 7919) ^ (Math.floor(iy / (s * 3)) * 6271)) >>> 0;
+    const macroAlpha = ((macroHash % 100) / 100) * 0.08;
+    if (macroHash % 2 === 0) {
+      px(ctx, ix, iy, s, s, biomeUi.groundDark || grounds[0], macroAlpha);
+    } else {
+      px(ctx, ix, iy, s, s, biomeUi.highlight || 'rgba(255,255,255,0.04)', macroAlpha);
+    }
+  }
+
   if (tile.t === 'water') {
     // --- WATER: depth treatment ---
     const deep = palette.deep || '#0e3a52';
@@ -187,17 +226,46 @@ export function drawTile(ctx, biome, tile, x, y, tileSize, time = 0, neighbors) 
     ctx.fillRect(ix, iy, s, s);
     ctx.restore();
 
-    // shoreline transitions: check if neighbor tiles hint at ground (use hash-based proxy)
-    // Shore bands on edges nearest potential ground
-    const edgeAlpha = 0.35;
-    // top edge shore
-    if ((h >> 2) % 5 === 0) px(ctx, ix, iy, s, s * 0.12, shore, edgeAlpha);
-    // bottom edge shore
-    if ((h >> 4) % 5 === 0) px(ctx, ix, iy + s * 0.88, s, s * 0.12, shore, edgeAlpha);
-    // left edge shore
-    if ((h >> 6) % 5 === 0) px(ctx, ix, iy, s * 0.12, s, shore, edgeAlpha);
-    // right edge shore
-    if ((h >> 8) % 5 === 0) px(ctx, ix + s * 0.88, iy, s * 0.12, s, shore, edgeAlpha);
+    // Smoother shore transitions on all edges
+    const shoreGradSize = s * 0.18;
+    ctx.save();
+    // Top shore
+    if ((h >> 2) % 3 !== 2) {
+      const sg = ctx.createLinearGradient(ix, iy, ix, iy + shoreGradSize);
+      sg.addColorStop(0, shore);
+      sg.addColorStop(1, 'transparent');
+      ctx.fillStyle = sg;
+      ctx.globalAlpha = 0.4;
+      ctx.fillRect(ix, iy, s, shoreGradSize);
+    }
+    // Bottom shore
+    if ((h >> 4) % 3 !== 2) {
+      const sg = ctx.createLinearGradient(ix, iy + s, ix, iy + s - shoreGradSize);
+      sg.addColorStop(0, shore);
+      sg.addColorStop(1, 'transparent');
+      ctx.fillStyle = sg;
+      ctx.globalAlpha = 0.35;
+      ctx.fillRect(ix, iy + s - shoreGradSize, s, shoreGradSize);
+    }
+    // Left shore
+    if ((h >> 6) % 3 !== 2) {
+      const sg = ctx.createLinearGradient(ix, iy, ix + shoreGradSize, iy);
+      sg.addColorStop(0, shore);
+      sg.addColorStop(1, 'transparent');
+      ctx.fillStyle = sg;
+      ctx.globalAlpha = 0.35;
+      ctx.fillRect(ix, iy, shoreGradSize, s);
+    }
+    // Right shore
+    if ((h >> 8) % 3 !== 2) {
+      const sg = ctx.createLinearGradient(ix + s, iy, ix + s - shoreGradSize, iy);
+      sg.addColorStop(0, shore);
+      sg.addColorStop(1, 'transparent');
+      ctx.fillStyle = sg;
+      ctx.globalAlpha = 0.35;
+      ctx.fillRect(ix + s - shoreGradSize, iy, shoreGradSize, s);
+    }
+    ctx.restore();
 
     // animated concentric ripple rings
     const phase = (time * 0.0008 + ix * 0.02 + iy * 0.03) % 1;
@@ -469,6 +537,29 @@ export function drawTile(ctx, biome, tile, x, y, tileSize, time = 0, neighbors) 
   // dirt patch
   if (h % 15 === 0) {
     px(ctx, ix + s * 0.35, iy + s * 0.55, s * 0.12, s * 0.06, 'rgba(80,60,30,0.12)');
+  }
+
+  // Larger dirt/moss patches that span visually across tiles
+  if (h % 7 === 0) {
+    const patchX = ix + s * ((h >> 5) % 6) / 8;
+    const patchY = iy + s * ((h >> 8) % 5) / 7;
+    ctx.save();
+    ctx.globalAlpha = 0.08;
+    ctx.beginPath();
+    ctx.ellipse(patchX + s * 0.2, patchY + s * 0.2, s * 0.18, s * 0.12, (h % 6) * 0.5, 0, Math.PI * 2);
+    ctx.fillStyle = groundDark || grounds[0];
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // Scattered leaf/debris
+  if (h % 19 === 0) {
+    const lx = ix + s * ((h >> 2) % 8) / 10;
+    const ly = iy + s * ((h >> 5) % 6) / 8;
+    tri(ctx, lx, ly + s * 0.03, lx + s * 0.02, ly, lx + s * 0.04, ly + s * 0.03, detailColor);
+    ctx.globalAlpha = 0.25;
+    tri(ctx, lx + s * 0.01, ly + s * 0.01, lx + s * 0.03, ly - s * 0.01, lx + s * 0.045, ly + s * 0.02, detailColor);
+    ctx.globalAlpha = 1;
   }
 }
 

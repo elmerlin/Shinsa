@@ -79,7 +79,7 @@ export default function PetWorldBuildMenu({
       {/* Dense 2-col grid */}
       <div
         className="grid grid-cols-2 gap-1.5 overflow-y-auto"
-        style={{ maxHeight: 'calc(38vh - 4rem)', overscrollBehavior: 'contain' }}
+        style={{ overscrollBehavior: 'contain' }}
       >
         {filtered.map((building) => {
           const ui = getBuildingUi(building.id);
@@ -99,7 +99,9 @@ export default function PetWorldBuildMenu({
               }`}
             >
               <div className="flex items-center gap-1.5 px-2 py-1.5">
-                <span className="text-sm shrink-0">{ui.icon}</span>
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-white/8" style={{ backgroundColor: ui.accent + '18' }}>
+                  <span className="text-[11px]">{ui.icon}</span>
+                </span>
                 <div className="min-w-0 flex-1">
                   <div className={`truncate text-[11px] font-bold leading-tight ${locked ? 'text-white/25' : 'text-white/85'}`}>
                     {building.name}

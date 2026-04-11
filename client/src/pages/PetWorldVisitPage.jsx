@@ -202,68 +202,48 @@ export default function PetWorldVisitPage() {
         />
       </div>
 
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-20 h-48 bg-gradient-to-b from-[#03070d]/95 via-[#06101a]/55 to-transparent" />
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-56 bg-gradient-to-t from-[#03070d] via-[#03070d]/72 to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-20 h-16 bg-gradient-to-b from-[#03070d]/95 via-[#06101a]/55 to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-20 bg-gradient-to-t from-[#03070d] via-[#03070d]/72 to-transparent" />
 
-      <div className="absolute inset-x-0 top-0 z-40 px-3 pb-3 pt-2" style={{ paddingTop: 'max(10px, env(safe-area-inset-top))' }}>
-        <div className="flex items-start gap-2">
-          <Link
-            to="/pet/world"
-            className="pointer-events-auto inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-black/35 text-white/70 backdrop-blur-sm transition-colors hover:bg-black/55 hover:text-white"
-            aria-label="Back to your village"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
-              <path fillRule="evenodd" d="M17 10a.75.75 0 01-.75.75H5.612l4.158 3.96a.75.75 0 11-1.04 1.08l-5.5-5.25a.75.75 0 010-1.08l5.5-5.25a.75.75 0 111.04 1.08L5.612 9.25H16.25A.75.75 0 0117 10z" clipRule="evenodd" />
-            </svg>
-          </Link>
-
-          <div className="min-w-0 flex-1 rounded-[1.2rem] border border-white/10 bg-black/28 px-3 py-2.5 backdrop-blur-sm shadow-[0_12px_24px_rgba(0,0,0,0.2)]">
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <div className="text-[10px] uppercase tracking-[0.22em] text-cyan-200/55">
-                  {activeSheet === 'inspect' ? 'Inspecting' : 'Visit mode'}
-                </div>
-                <div className="truncate text-sm font-black text-white">
-                  Visiting {world.username || 'Unknown'}
-                </div>
-                <div className="mt-0.5 text-[11px] text-white/45">
-                  Last active {timeAgo(world.last_tick_at)}
-                  {world.visit_count != null ? ` · ${world.visit_count} visits` : ''}
-                  {visitorsOnline ? ` · ${visitorsOnline} online` : ''}
-                </div>
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setVisitTab('overview');
-                    setActiveSheet((sheet) => (sheet === 'visit' ? null : 'visit'));
-                  }}
-                  className="pointer-events-auto inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-black/35 text-white/70 backdrop-blur-sm transition-colors hover:bg-black/55 hover:text-white"
-                  aria-label="Visit tools"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
-                    <path d="M10 3a1.5 1.5 0 100 3 1.5 1.5 0 000-3zM10 8.5a1.5 1.5 0 100 3 1.5 1.5 0 000-3zM10 14a1.5 1.5 0 100 3 1.5 1.5 0 000-3z" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-            <div className="mt-2">
-              <PetWorldHUD world={world} />
-            </div>
-          </div>
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 z-40 flex items-center gap-2 px-2.5 py-1.5"
+        style={{ paddingTop: 'max(8px, env(safe-area-inset-top))', maxHeight: 52 }}
+      >
+        <Link
+          to="/pet/world"
+          className="pointer-events-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/8 bg-black/40 text-white/65 backdrop-blur-md transition-colors hover:bg-black/60 hover:text-white"
+          aria-label="Back to your village"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
+            <path fillRule="evenodd" d="M17 10a.75.75 0 01-.75.75H5.612l4.158 3.96a.75.75 0 11-1.04 1.08l-5.5-5.25a.75.75 0 010-1.08l5.5-5.25a.75.75 0 111.04 1.08L5.612 9.25H16.25A.75.75 0 0117 10z" clipRule="evenodd" />
+          </svg>
+        </Link>
+        <div className="min-w-0 flex-1">
+          <PetWorldHUD world={world} collapsed />
         </div>
+        <span className="pointer-events-none rounded-full border border-cyan-300/12 bg-cyan-400/[0.06] px-2 py-0.5 text-[9px] font-semibold text-cyan-200/70 backdrop-blur-md">
+          Visiting {world.username || 'Unknown'}
+        </span>
+        <button
+          type="button"
+          onClick={() => {
+            setVisitTab('overview');
+            setActiveSheet((sheet) => (sheet === 'visit' ? null : 'visit'));
+          }}
+          className="pointer-events-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/8 bg-black/40 text-white/60 backdrop-blur-md transition-colors hover:bg-black/60 hover:text-white"
+          aria-label="Visit tools"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
+            <path d="M10 3a1.5 1.5 0 100 3 1.5 1.5 0 000-3zM10 8.5a1.5 1.5 0 100 3 1.5 1.5 0 000-3zM10 14a1.5 1.5 0 100 3 1.5 1.5 0 000-3z" />
+          </svg>
+        </button>
       </div>
 
-      <div className="absolute bottom-4 left-3 z-40 max-w-[14rem] rounded-full border border-white/10 bg-black/32 px-3 py-2 text-[10px] text-white/65 backdrop-blur-sm shadow-[0_12px_24px_rgba(0,0,0,0.2)]">
-        {selectedBuilding
-          ? 'Building selected. Open the details sheet to inspect it.'
-          : selectedTile
-            ? inspectedObstacle
-              ? 'This tile is blocked. Inspect it for terrain details.'
-              : 'Tile selected. Open the sheet to inspect this spot.'
-            : 'Drag to pan, pinch to zoom, tap the village to inspect.'}
-      </div>
+      {!activeSheet && (
+        <div className="absolute bottom-4 left-3 z-40 rounded-full border border-white/8 bg-black/40 px-2.5 py-1 text-[9px] text-white/45 backdrop-blur-md">
+          Drag to explore · Tap to inspect
+        </div>
+      )}
 
       <div className="absolute bottom-4 right-3 z-40 flex items-center gap-2" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         <button
@@ -272,7 +252,7 @@ export default function PetWorldVisitPage() {
             setVisitTab('overview');
             setActiveSheet((sheet) => (sheet === 'visit' ? null : 'visit'));
           }}
-          className={`inline-flex items-center gap-2 rounded-full border px-4 py-3 text-xs font-semibold backdrop-blur-sm transition-all ${
+          className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1.5 text-[10px] font-semibold backdrop-blur-sm transition-all ${
             activeSheet === 'visit'
               ? 'border-cyan-300/25 bg-cyan-400/14 text-cyan-50'
               : 'border-white/10 bg-black/38 text-white/75 hover:bg-black/52 hover:text-white'
@@ -284,7 +264,7 @@ export default function PetWorldVisitPage() {
           type="button"
           onClick={() => setShowTrades(true)}
           disabled={!canTrade}
-          className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/38 px-4 py-3 text-xs font-semibold text-white/75 backdrop-blur-sm transition-all hover:bg-black/52 hover:text-white disabled:opacity-40 disabled:pointer-events-none"
+          className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/38 px-2.5 py-1.5 text-[10px] font-semibold text-white/75 backdrop-blur-sm transition-all hover:bg-black/52 hover:text-white disabled:opacity-40 disabled:pointer-events-none"
         >
           Trade
         </button>
@@ -292,7 +272,7 @@ export default function PetWorldVisitPage() {
 
       {activeSheet && (
         <div className="absolute inset-x-0 bottom-0 z-50 px-3 pb-3" style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
-          <div className="mx-auto w-full max-w-2xl overflow-hidden rounded-[1.5rem] border border-white/10 bg-[linear-gradient(180deg,rgba(9,15,22,0.97),rgba(6,10,15,0.96))] shadow-[0_-18px_40px_rgba(0,0,0,0.38)] backdrop-blur-xl">
+          <div className="mx-auto w-full max-w-2xl overflow-hidden rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(9,15,22,0.97),rgba(6,10,15,0.96))] shadow-[0_-18px_40px_rgba(0,0,0,0.38)] backdrop-blur-xl">
             <div className="flex items-center justify-between border-b border-white/8 px-4 py-3">
               <div>
                 <div className="text-[10px] uppercase tracking-[0.2em] text-white/35">
@@ -315,7 +295,7 @@ export default function PetWorldVisitPage() {
             </div>
 
             {activeSheet === 'inspect' ? (
-              <div className="max-h-[58vh] overflow-y-auto p-3">
+              <div className="max-h-[28vh] overflow-y-auto p-3">
                 {selectedBuilding ? (
                   <PetWorldBuildingInfo
                     building={selectedBuilding}
@@ -327,9 +307,9 @@ export default function PetWorldVisitPage() {
                     }}
                   />
                 ) : selectedTile ? (
-                  <div className="rounded-[1.3rem] border border-white/7 bg-[linear-gradient(180deg,rgba(14,18,28,0.96),rgba(9,12,18,0.94))] p-4 shadow-[0_14px_30px_rgba(0,0,0,0.24)]">
+                  <div className="rounded-xl border border-white/7 bg-[linear-gradient(180deg,rgba(14,18,28,0.96),rgba(9,12,18,0.94))] p-3 shadow-[0_14px_30px_rgba(0,0,0,0.24)]">
                     <div className="text-[10px] uppercase tracking-[0.18em] text-white/35">Tile</div>
-                    <div className="mt-1 text-xl font-black text-white">{selectedTile.x}, {selectedTile.y}</div>
+                    <div className="mt-1 text-lg font-black text-white">{selectedTile.x}, {selectedTile.y}</div>
                     <div className="mt-1 text-sm text-white/55 capitalize">{selectedTile.tile?.t || 'empty ground'}</div>
                     <div className="mt-3 rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-3 text-sm text-white/60">
                       {inspectedObstacle
@@ -342,7 +322,7 @@ export default function PetWorldVisitPage() {
             ) : null}
 
             {activeSheet === 'visit' ? (
-              <div className="max-h-[58vh] overflow-y-auto p-3">
+              <div className="max-h-[28vh] overflow-y-auto p-3">
                 <div className="mb-3 flex flex-wrap gap-1.5">
                   {[
                     ['overview', 'Overview'],

@@ -716,6 +716,7 @@ export default function PetWorldPage() {
   const [selectedBiome, setSelectedBiome] = useState('grasslands');
   const [pendingBuildType, setPendingBuildType] = useState('');
   const [pendingBuildVariant, setPendingBuildVariant] = useState(null);
+  const [hudCollapsed, setHudCollapsed] = useState(true);
   const [selectedBuilding, setSelectedBuilding] = useState(null);
   const [selectedTile, setSelectedTile] = useState(null);
   const [showTrades, setShowTrades] = useState(false);
@@ -1037,8 +1038,8 @@ export default function PetWorldPage() {
       </div>
 
       {/* Reduced gradient overlays */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-20 h-24 bg-gradient-to-b from-[#03070d]/90 to-transparent" />
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-32 bg-gradient-to-t from-[#03070d]/80 to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-20 h-16 bg-gradient-to-b from-[#03070d]/90 to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-20 bg-gradient-to-t from-[#03070d]/80 to-transparent" />
 
       {/* ═══ TOP HUD STRIP ═══ */}
       <div
@@ -1058,7 +1059,7 @@ export default function PetWorldPage() {
 
         {/* Resource pills row */}
         <div className="min-w-0 flex-1">
-          <PetWorldHUD world={world} activeEvents={activeEvents} />
+          <PetWorldHUD world={world} activeEvents={activeEvents} collapsed={hudCollapsed} onToggle={() => setHudCollapsed(c => !c)} />
         </div>
 
         {/* Encounter badge */}
@@ -1115,7 +1116,7 @@ export default function PetWorldPage() {
             className={`pointer-events-auto flex h-14 w-14 items-center justify-center rounded-full border shadow-[0_6px_20px_rgba(0,0,0,0.4)] backdrop-blur-md transition-all duration-200 ease-out active:scale-95 ${
               pendingBuildType
                 ? 'border-rose-400/25 bg-rose-500/20 text-rose-200 hover:bg-rose-500/30'
-                : 'border-emerald-400/20 bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25'
+                : 'border-emerald-400/20 bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25 animate-[pulse_3s_ease-in-out_infinite]'
             }`}
             aria-label={pendingBuildType ? 'Cancel build' : 'Build'}
           >
@@ -1137,16 +1138,18 @@ export default function PetWorldPage() {
       {/* ═══ PLACEMENT TRAY (when building selected from catalog) ═══ */}
       {pendingBuildType && activeSheet !== 'build' && (
         <div
-          className="absolute inset-x-0 bottom-0 z-50 transition-all duration-200 ease-out"
+          className="absolute inset-x-0 bottom-0 z-50 animate-[slideUp_0.2s_ease-out] transition-all duration-200 ease-out"
           style={{ paddingBottom: 'max(8px, env(safe-area-inset-bottom))' }}
         >
           <div className="mx-auto flex max-w-md items-center gap-2 rounded-2xl border border-white/8 bg-black/85 px-3 py-2.5 shadow-[0_-8px_24px_rgba(0,0,0,0.3)] backdrop-blur-xl mx-3">
             {pendingBuildDef && (
               <>
-                <span className="text-lg shrink-0">{getBuildingUi(pendingBuildDef.id).icon}</span>
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-white/8 bg-white/[0.04]" style={{ backgroundColor: getBuildingUi(pendingBuildDef.id).accent + '22' }}>
+                  <span className="text-xs">{getBuildingUi(pendingBuildDef.id).icon}</span>
+                </span>
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-[12px] font-bold text-white">{pendingBuildDef.name}</div>
-                  <div className="text-[10px] text-white/40">{pendingBuildDef.comboCost}c -- Tap tile to place</div>
+                  <div className="text-[10px] text-white/40">{pendingBuildDef.comboCost}c -- Tap to place</div>
                 </div>
               </>
             )}
@@ -1201,7 +1204,7 @@ export default function PetWorldPage() {
                 &times;
               </button>
             </div>
-            <div className="max-h-[38vh] overflow-y-auto px-3 pb-3" style={{ overscrollBehavior: 'contain' }}>
+            <div className="max-h-[28vh] overflow-y-auto px-3 pb-3" style={{ overscrollBehavior: 'contain' }}>
               <PetWorldBuildMenu
                 open
                 buildings={catalog}
@@ -1213,6 +1216,7 @@ export default function PetWorldPage() {
                   setPendingBuildVariant(variant || null);
                   setSelectedBuilding(null);
                   setSelectedTile(null);
+                  setHudCollapsed(true);
                   // Auto-switch to placement mode
                   setActiveSheet(null);
                   showToast('Tap a tile to place this building');
@@ -1257,7 +1261,7 @@ export default function PetWorldPage() {
                 &times;
               </button>
             </div>
-            <div className="max-h-[35vh] overflow-y-auto px-3.5 pb-3" style={{ overscrollBehavior: 'contain' }}>
+            <div className="max-h-[28vh] overflow-y-auto px-3.5 pb-3" style={{ overscrollBehavior: 'contain' }}>
               {selectedBuilding ? (
                 <PetWorldBuildingInfo
                   building={selectedBuilding}
@@ -1475,6 +1479,14 @@ export default function PetWorldPage() {
         busy={encounterBusy}
         buildings={buildings}
       />
+
+      {/* Inline animation keyframes */}
+      <style>{`
+        @keyframes slideUp {
+          from { opacity: 0; transform: translateY(16px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
     </div>
   );
 }

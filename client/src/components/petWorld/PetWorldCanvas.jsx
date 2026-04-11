@@ -159,15 +159,29 @@ export default function PetWorldCanvas({
     const mx = MINIMAP_PADDING;
     const my = viewH - MINIMAP_H - MINIMAP_PADDING;
 
-    // backdrop
+    // Premium minimap frame
     ctx.save();
+    // Outer shadow
     ctx.beginPath();
-    ctx.roundRect(mx - 2, my - 2, MINIMAP_W + 4, MINIMAP_H + 4, 6);
-    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.roundRect(mx - 3, my - 3, MINIMAP_W + 6, MINIMAP_H + 6, 8);
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
     ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
-    ctx.lineWidth = 1;
+    // Inner frame
+    ctx.beginPath();
+    ctx.roundRect(mx - 1.5, my - 1.5, MINIMAP_W + 3, MINIMAP_H + 3, 6);
+    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+    ctx.lineWidth = 0.8;
     ctx.stroke();
+    // Subtle inner glow at top
+    const glowGrad = ctx.createLinearGradient(mx, my, mx, my + MINIMAP_H * 0.3);
+    glowGrad.addColorStop(0, 'rgba(255,255,255,0.06)');
+    glowGrad.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.beginPath();
+    ctx.roundRect(mx, my, MINIMAP_W, MINIMAP_H * 0.3, [4, 4, 0, 0]);
+    ctx.fillStyle = glowGrad;
+    ctx.fill();
     ctx.restore();
 
     // clip to minimap area
@@ -187,7 +201,10 @@ export default function PetWorldCanvas({
         const dy = my + ty * dotH;
         let color;
         if (tile.b != null) {
-          color = '#ffffff'; // building: bright dot
+          // building: brighter dot with subtle glow
+          ctx.fillStyle = 'rgba(255,255,255,0.3)';
+          ctx.fillRect(dx - 0.5, dy - 0.5, Math.max(2, dotW + 1), Math.max(2, dotH + 1));
+          color = '#ffffff';
         } else if (tile.t === 'water') {
           color = biomeUi.water;
         } else if (tile.t === 'tree' || tile.t === 'bush') {
@@ -208,9 +225,37 @@ export default function PetWorldCanvas({
     const vpY = my + (camera.y / (grid.h * ts)) * MINIMAP_H;
     const vpW = (viewW / (grid.w * ts)) * MINIMAP_W;
     const vpH = (viewH / (grid.h * ts)) * MINIMAP_H;
-    ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+    // Viewport rectangle with glow
+    ctx.save();
+    ctx.strokeStyle = 'rgba(80,220,255,0.7)';
     ctx.lineWidth = 1.5;
-    ctx.strokeRect(vpX, vpY, Math.min(vpW, MINIMAP_W - (vpX - mx)), Math.min(vpH, MINIMAP_H - (vpY - my)));
+    ctx.shadowColor = 'rgba(80,220,255,0.3)';
+    ctx.shadowBlur = 4;
+    const clampedVpW = Math.min(vpW, MINIMAP_W - (vpX - mx));
+    const clampedVpH = Math.min(vpH, MINIMAP_H - (vpY - my));
+    ctx.strokeRect(vpX, vpY, clampedVpW, clampedVpH);
+    // Corner brackets for extra visibility
+    const bracketLen = Math.min(4, clampedVpW * 0.2, clampedVpH * 0.2);
+    ctx.lineWidth = 2;
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = 'rgba(80,220,255,0.9)';
+    // Top-left
+    ctx.beginPath();
+    ctx.moveTo(vpX, vpY + bracketLen); ctx.lineTo(vpX, vpY); ctx.lineTo(vpX + bracketLen, vpY);
+    ctx.stroke();
+    // Top-right
+    ctx.beginPath();
+    ctx.moveTo(vpX + clampedVpW - bracketLen, vpY); ctx.lineTo(vpX + clampedVpW, vpY); ctx.lineTo(vpX + clampedVpW, vpY + bracketLen);
+    ctx.stroke();
+    // Bottom-left
+    ctx.beginPath();
+    ctx.moveTo(vpX, vpY + clampedVpH - bracketLen); ctx.lineTo(vpX, vpY + clampedVpH); ctx.lineTo(vpX + bracketLen, vpY + clampedVpH);
+    ctx.stroke();
+    // Bottom-right
+    ctx.beginPath();
+    ctx.moveTo(vpX + clampedVpW - bracketLen, vpY + clampedVpH); ctx.lineTo(vpX + clampedVpW, vpY + clampedVpH); ctx.lineTo(vpX + clampedVpW, vpY + clampedVpH - bracketLen);
+    ctx.stroke();
+    ctx.restore();
 
     ctx.restore();
   }, [world, camera.x, camera.y, minimapVisible]);
@@ -496,14 +541,16 @@ export default function PetWorldCanvas({
           onPointerCancel={handlePointerUp}
           onMouseMove={handleMouseMove}
         />
-        <div className="pointer-events-none absolute left-3 top-3 rounded-full border border-white/10 bg-black/35 px-3 py-1.5 text-[10px] uppercase tracking-[0.18em] text-white/55 backdrop-blur-sm">
-          {readonly ? 'Visit snapshot' : pendingBuildType ? 'Tap a tile to place' : 'Drag to pan'}
-        </div>
+        {readonly && (
+          <div className="pointer-events-none absolute left-3 top-3 rounded-full border border-white/6 bg-black/25 px-2 py-1 text-[8px] uppercase tracking-[0.2em] text-white/30 backdrop-blur-sm">
+            Visiting
+          </div>
+        )}
         {/* Minimap toggle button */}
         <button
           type="button"
           onClick={() => setMinimapVisible((v) => !v)}
-          className="absolute bottom-3 right-3 rounded-full border border-white/10 bg-black/40 px-3 py-2 text-xs text-white/75 backdrop-blur-sm hover:bg-black/55"
+          className="absolute bottom-2 right-2 rounded-full border border-white/8 bg-black/30 p-1.5 text-[10px] text-white/50 backdrop-blur-sm hover:bg-black/45 hover:text-white/70 transition-colors"
           aria-label={minimapVisible ? 'Hide minimap' : 'Show minimap'}
         >
           {minimapVisible ? '\u25A3' : '\u25A2'}

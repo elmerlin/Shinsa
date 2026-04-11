@@ -22,6 +22,8 @@ export default function PetWorldHUD({
   happiness,
   phaseCap,
   activeEvents,
+  collapsed,
+  onToggle,
 }) {
   if (!world) return null;
 
@@ -32,8 +34,36 @@ export default function PetWorldHUD({
   const combos = Math.floor(world.combo_balance || 0);
   const currentEvent = activeEvents?.[0] || null;
 
+  if (collapsed) {
+    return (
+      <div className="pointer-events-auto flex items-center gap-1" style={{ maxHeight: 32 }}>
+        {onToggle && (
+          <button
+            type="button"
+            onClick={onToggle}
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-white/8 bg-white/[0.06] text-[8px] text-white/50 transition-colors hover:bg-white/10 hover:text-white/70"
+            aria-label="Expand HUD"
+          >
+            ▼
+          </button>
+        )}
+        <Pill label="Pets" value={`${pop}/${popCap}`} tone="accent" />
+      </div>
+    );
+  }
+
   return (
     <div className="pointer-events-auto flex items-center gap-1 overflow-x-auto scrollbar-none" style={{ maxHeight: 36 }}>
+      {onToggle && (
+        <button
+          type="button"
+          onClick={onToggle}
+          className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-white/8 bg-white/[0.06] text-[8px] text-white/50 transition-colors hover:bg-white/10 hover:text-white/70"
+          aria-label="Collapse HUD"
+        >
+          ▲
+        </button>
+      )}
       <Pill label="Pets" value={`${pop}/${popCap}`} tone="accent" />
       <Pill label="Mood" value={Math.round(happy)} tone={happy >= 70 ? 'happy' : happy >= 45 ? 'neutral' : 'warn'} />
       <Pill label="Food" value={Math.floor(food)} tone={food <= pop * 2 ? 'warn' : 'neutral'} />
