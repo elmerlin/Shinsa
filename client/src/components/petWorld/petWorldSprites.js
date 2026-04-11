@@ -1,4 +1,4 @@
-import { getBuildingUi } from './petWorldBuildings';
+import { BUILDING_SIZES, getBuildingUi } from './petWorldBuildings';
 import { getBiomeUi, getTilePalette } from './petWorldTiles';
 
 // --- low-level drawing helpers ---
@@ -46,6 +46,385 @@ function lerpColor(a, b, t) {
 
 function tileHash(x, y) {
   return ((x * 2654435761) ^ (y * 2246822519)) >>> 0;
+}
+
+const TERRAIN_SAMPLE_WEIGHTS = [
+  [0.08, 0.14, 0.18, 0.14, 0.08],
+  [0.14, 0.32, 0.46, 0.32, 0.14],
+  [0.18, 0.46, 1.0, 0.46, 0.18],
+  [0.14, 0.32, 0.46, 0.32, 0.14],
+  [0.08, 0.14, 0.18, 0.14, 0.08],
+];
+
+const TERRAIN_TOTAL_WEIGHT = TERRAIN_SAMPLE_WEIGHTS
+  .flat()
+  .reduce((sum, value) => sum + value, 0);
+
+function clamp01(value) {
+  return Math.max(0, Math.min(1, value));
+}
+
+function hash01(x, y, scale = 1) {
+  return tileHash(Math.floor(x / scale), Math.floor(y / scale)) / 0xffffffff;
+}
+
+function tint(base, target, amount) {
+  return lerpColor(base, target, clamp01(amount));
+}
+
+function fillEllipse(ctx, cx, cy, rx, ry, fill, alpha = 1, rotation = 0) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, rx, ry, rotation, 0, Math.PI * 2);
+  ctx.fillStyle = fill;
+  ctx.fill();
+  ctx.restore();
+}
+
+function paintEdgeGlow(ctx, x, y, size, edge, color, alpha, depth = 0.2) {
+  const span = size * depth;
+  let gradient = null;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  if (edge === 'n') {
+    gradient = ctx.createLinearGradient(x, y, x, y + span);
+    gradient.addColorStop(0, color);
+    gradient.addColorStop(1, 'transparent');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(x, y, size, span);
+  } else if (edge === 's') {
+    gradient = ctx.createLinearGradient(x, y + size, x, y + size - span);
+    gradient.addColorStop(0, color);
+    gradient.addColorStop(1, 'transparent');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(x, y + size - span, size, span);
+  } else if (edge === 'w') {
+    gradient = ctx.createLinearGradient(x, y, x + span, y);
+    gradient.addColorStop(0, color);
+    gradient.addColorStop(1, 'transparent');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(x, y, span, size);
+  } else if (edge === 'e') {
+    gradient = ctx.createLinearGradient(x + size, y, x + size - span, y);
+    gradient.addColorStop(0, color);
+    gradient.addColorStop(1, 'transparent');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(x + size - span, y, span, size);
+  }
+  ctx.restore();
+}
+
+export function analyzeTerrainGrid(grid, buildings = []) {
+  if (!grid?.tiles) return null;
+
+  const width = grid.w || grid.tiles[0]?.length || 0;
+  const height = grid.h || grid.tiles.length || 0;
+  const buildingMap = new Map(buildings.map((building) => [building.id, building]));
+
+  const occupancy = Array.from({ length: height }, (_, y) => (
+    Array.from({ length: width }, (_, x) => {
+      const tile = grid.tiles[y]?.[x] || null;
+      const buildingType = tile?.b != null ? buildingMap.get(tile.b)?.type || null : null;
+      const tileType = tile?.t || 'ground';
+      const isObstacle = tileType === 'tree' || tileType === 'rock' || tileType === 'bush';
+      return {
+        tileType,
+        buildingType,
+        isWater: tileType === 'water',
+        isFoliage: tileType === 'tree' || tileType === 'bush',
+        isRock: tileType === 'rock',
+        isPath: buildingType === 'path',
+        openGround: tile?.b == null && !isObstacle && tileType !== 'water',
+      };
+    })
+  ));
+
+  return Array.from({ length: height }, (_, y) => (
+    Array.from({ length: width }, (_, x) => {
+      const tile = occupancy[y]?.[x];
+      if (!tile) return null;
+
+      let water = 0;
+      let foliage = 0;
+      let rock = 0;
+      let path = 0;
+      let built = 0;
+      let open = 0;
+
+      for (let sy = -2; sy <= 2; sy += 1) {
+        for (let sx = -2; sx <= 2; sx += 1) {
+          const sample = occupancy[y + sy]?.[x + sx];
+          if (!sample) continue;
+          const weight = TERRAIN_SAMPLE_WEIGHTS[sy + 2][sx + 2];
+          if (sample.isWater) water += weight;
+          if (sample.isFoliage) foliage += weight;
+          if (sample.isRock) rock += weight;
+          if (sample.isPath) path += weight;
+          if (sample.buildingType && !sample.isPath) built += weight;
+          if (sample.openGround) open += weight;
+        }
+      }
+
+      const waterRatio = water / TERRAIN_TOTAL_WEIGHT;
+      const foliageRatio = foliage / TERRAIN_TOTAL_WEIGHT;
+      const rockRatio = rock / TERRAIN_TOTAL_WEIGHT;
+      const pathRatio = path / TERRAIN_TOTAL_WEIGHT;
+      const builtRatio = built / TERRAIN_TOTAL_WEIGHT;
+      const openRatio = open / TERRAIN_TOTAL_WEIGHT;
+
+      const cardinal = {
+        n: occupancy[y - 1]?.[x] || null,
+        s: occupancy[y + 1]?.[x] || null,
+        e: occupancy[y]?.[x + 1] || null,
+        w: occupancy[y]?.[x - 1] || null,
+      };
+      const cardinalWater = [cardinal.n, cardinal.s, cardinal.e, cardinal.w]
+        .filter((sample) => sample?.isWater)
+        .length / 4;
+      const cardinalLand = [cardinal.n, cardinal.s, cardinal.e, cardinal.w]
+        .filter((sample) => sample && !sample.isWater)
+        .length / 4;
+      const horizontalLane = (cardinal.w?.isPath ? 1 : 0) + (cardinal.e?.isPath ? 1 : 0);
+      const verticalLane = (cardinal.n?.isPath ? 1 : 0) + (cardinal.s?.isPath ? 1 : 0);
+
+      const macroSeed = hash01(x + 11, y + 7, 4);
+      const meadowSeed = hash01(x + 23, y + 3, 5);
+      const rockySeed = hash01(x + 31, y + 17, 3);
+      const shoulderSeed = hash01(x + 5, y + 29, 2);
+      const villageWear = tile.openGround ? clamp01(builtRatio * 0.58 + pathRatio * 0.42) : 0;
+      const shoreStrength = tile.isWater
+        ? clamp01(1 - waterRatio * 0.8 + cardinalLand * 0.32)
+        : clamp01(waterRatio * 1.35 + cardinalWater * 0.28);
+      const laneStrength = tile.openGround
+        ? clamp01(
+            pathRatio * 1.5 +
+            builtRatio * 0.4 +
+            Math.max(horizontalLane, verticalLane) * 0.18 +
+            meadowSeed * 0.05 -
+            waterRatio * 0.3
+          )
+        : 0;
+      const meadowStrength = tile.openGround
+        ? clamp01(
+            openRatio * 1.15 +
+            (meadowSeed - 0.45) * 0.24 -
+            waterRatio * 0.25 -
+            rockRatio * 0.34 -
+            laneStrength * 0.18
+          )
+        : 0;
+      const rockyStrength = !tile.isWater && !tile.isFoliage
+        ? clamp01(
+            rockRatio * 1.2 +
+            (rockySeed - 0.5) * 0.18 +
+            builtRatio * 0.08 -
+            meadowStrength * 0.2
+          )
+        : 0;
+      const foliageShadow = !tile.isWater
+        ? clamp01(foliageRatio * 1.08 + (tile.isFoliage ? 0.32 : 0))
+        : 0;
+      const basinDepth = tile.isWater
+        ? clamp01(waterRatio * 1.25 + (macroSeed - 0.45) * 0.16 - cardinalLand * 0.08)
+        : 0;
+      const contourStrength = clamp01(
+        shoreStrength * 0.38 +
+        rockyStrength * 0.46 +
+        foliageShadow * 0.22 +
+        villageWear * 0.18
+      );
+      const baseTone = clamp01(
+        0.34 +
+        meadowStrength * 0.28 -
+        rockyStrength * 0.24 -
+        villageWear * 0.08 +
+        (macroSeed - 0.5) * 0.16
+      );
+
+      return {
+        openGround: tile.openGround,
+        isWater: tile.isWater,
+        isFoliage: tile.isFoliage,
+        villageWear,
+        waterRatio,
+        foliageRatio,
+        meadowStrength,
+        rockyStrength,
+        laneStrength,
+        laneAxis: horizontalLane >= verticalLane ? 'horizontal' : 'vertical',
+        shoreStrength,
+        foliageShadow,
+        basinDepth,
+        contourStrength,
+        baseTone,
+        macroSeed,
+        meadowSeed,
+        rockySeed,
+        shoulderSeed,
+      };
+    })
+  ));
+}
+
+export function drawTerrainRegion(ctx, biome, tile, x, y, tileSize, terrain, neighbors) {
+  const biomeUi = getBiomeUi(biome);
+  const grounds = biomeUi.ground;
+  const groundDark = biomeUi.groundDark || grounds[0];
+  const groundMid = biomeUi.groundMid || grounds[1] || grounds[0];
+  const groundLight = grounds[2] || grounds[1] || grounds[0];
+  const ix = Math.round(x);
+  const iy = Math.round(y);
+  const s = tileSize;
+
+  if (tile.t === 'water') {
+    const waterBase = tint(
+      biomeUi.water,
+      biomeUi.waterDeep || biomeUi.water,
+      0.3 + (terrain?.basinDepth || 0) * 0.36,
+    );
+    px(ctx, ix, iy, s, s, waterBase);
+
+    const basin = ctx.createRadialGradient(
+      ix + s * 0.52,
+      iy + s * 0.54,
+      s * 0.14,
+      ix + s * 0.52,
+      iy + s * 0.54,
+      s * 1.02,
+    );
+    basin.addColorStop(0, tint(biomeUi.waterDeep || biomeUi.water, '#000000', 0.1));
+    basin.addColorStop(0.58, waterBase);
+    basin.addColorStop(1, biomeUi.water);
+    ctx.save();
+    ctx.fillStyle = basin;
+    ctx.globalAlpha = 0.9;
+    ctx.fillRect(ix - s * 0.08, iy - s * 0.08, s * 1.16, s * 1.16);
+    ctx.restore();
+
+    const shoreAlpha = 0.18 + (terrain?.shoreStrength || 0) * 0.22;
+    const bankColor = tint(biomeUi.waterDeep || biomeUi.water, '#000000', 0.18);
+    const shoreGlow = tint(biomeUi.waterShore || biomeUi.water, '#ffffff', 0.1);
+    if (neighbors?.n && neighbors.n !== 'water') {
+      paintEdgeGlow(ctx, ix, iy, s, 'n', shoreGlow, shoreAlpha, 0.36);
+      paintEdgeGlow(ctx, ix, iy, s, 'n', bankColor, shoreAlpha * 0.65, 0.18);
+    }
+    if (neighbors?.s && neighbors.s !== 'water') {
+      paintEdgeGlow(ctx, ix, iy, s, 's', shoreGlow, shoreAlpha * 0.92, 0.36);
+      paintEdgeGlow(ctx, ix, iy, s, 's', bankColor, shoreAlpha * 0.58, 0.18);
+    }
+    if (neighbors?.w && neighbors.w !== 'water') {
+      paintEdgeGlow(ctx, ix, iy, s, 'w', shoreGlow, shoreAlpha * 0.82, 0.32);
+      paintEdgeGlow(ctx, ix, iy, s, 'w', bankColor, shoreAlpha * 0.55, 0.16);
+    }
+    if (neighbors?.e && neighbors.e !== 'water') {
+      paintEdgeGlow(ctx, ix, iy, s, 'e', shoreGlow, shoreAlpha * 0.82, 0.32);
+      paintEdgeGlow(ctx, ix, iy, s, 'e', bankColor, shoreAlpha * 0.55, 0.16);
+    }
+    if ((terrain?.basinDepth || 0) > 0.55) {
+      fillEllipse(
+        ctx,
+        ix + s * 0.48,
+        iy + s * 0.5,
+        s * 0.46,
+        s * 0.32,
+        tint(biomeUi.waterDeep || biomeUi.water, '#000000', 0.16),
+        0.2 + (terrain?.basinDepth || 0) * 0.12,
+      );
+    }
+    return;
+  }
+
+  let baseColor = tint(groundDark, groundLight, terrain?.baseTone ?? 0.5);
+  baseColor = tint(baseColor, biomeUi.pathStone || groundDark, (terrain?.laneStrength || 0) * 0.3 + (terrain?.villageWear || 0) * 0.12);
+  baseColor = tint(baseColor, groundDark, (terrain?.rockyStrength || 0) * 0.24 + (terrain?.foliageShadow || 0) * 0.1);
+  baseColor = tint(baseColor, biomeUi.waterShore || baseColor, (terrain?.shoreStrength || 0) * 0.14);
+  px(ctx, ix, iy, s, s, baseColor);
+
+  if ((terrain?.meadowStrength || 0) > 0.06) {
+    const meadowGrad = ctx.createRadialGradient(
+      ix + s * (0.34 + (terrain?.macroSeed || 0.5) * 0.28),
+      iy + s * (0.32 + (terrain?.meadowSeed || 0.5) * 0.22),
+      s * 0.08,
+      ix + s * 0.5,
+      iy + s * 0.5,
+      s * 1.04,
+    );
+    meadowGrad.addColorStop(0, tint(groundLight, '#f1f8c8', 0.2));
+    meadowGrad.addColorStop(1, 'transparent');
+    ctx.save();
+    ctx.fillStyle = meadowGrad;
+    ctx.globalAlpha = 0.12 + (terrain?.meadowStrength || 0) * 0.16;
+    ctx.fillRect(ix - s * 0.12, iy - s * 0.12, s * 1.24, s * 1.24);
+    ctx.restore();
+  }
+
+  if ((terrain?.rockyStrength || 0) > 0.08) {
+    const stoneColor = tint(groundDark, biomeUi.rock || groundDark, 0.32);
+    fillEllipse(
+      ctx,
+      ix + s * (0.46 + ((terrain?.rockySeed || 0.5) - 0.5) * 0.16),
+      iy + s * 0.56,
+      s * 0.46,
+      s * 0.3,
+      stoneColor,
+      0.08 + (terrain?.rockyStrength || 0) * 0.14,
+    );
+  }
+
+  if ((terrain?.laneStrength || 0) > 0.12 && terrain?.openGround) {
+    const laneColor = tint(biomeUi.pathStone || groundDark, groundDark, 0.15);
+    const shoulderColor = tint(groundDark, '#000000', 0.12);
+    if (terrain?.laneAxis === 'horizontal') {
+      fillEllipse(ctx, ix + s * 0.5, iy + s * (0.56 + ((terrain?.shoulderSeed || 0.5) - 0.5) * 0.08), s * 0.78, s * 0.23, laneColor, 0.14 + (terrain?.laneStrength || 0) * 0.18);
+      fillEllipse(ctx, ix + s * 0.5, iy + s * 0.64, s * 0.78, s * 0.12, shoulderColor, 0.08 + (terrain?.laneStrength || 0) * 0.08);
+    } else {
+      fillEllipse(ctx, ix + s * (0.5 + ((terrain?.shoulderSeed || 0.5) - 0.5) * 0.08), iy + s * 0.54, s * 0.23, s * 0.78, laneColor, 0.14 + (terrain?.laneStrength || 0) * 0.18);
+      fillEllipse(ctx, ix + s * 0.58, iy + s * 0.54, s * 0.12, s * 0.78, shoulderColor, 0.08 + (terrain?.laneStrength || 0) * 0.08);
+    }
+  }
+
+  if ((terrain?.foliageShadow || 0) > 0.12) {
+    fillEllipse(
+      ctx,
+      ix + s * 0.42,
+      iy + s * 0.44,
+      s * 0.7,
+      s * 0.46,
+      biomeUi.shadowColor || 'rgba(0,0,0,0.2)',
+      0.08 + (terrain?.foliageShadow || 0) * 0.18,
+      -0.3,
+    );
+  }
+
+  if ((terrain?.shoreStrength || 0) > 0.08 && neighbors) {
+    const shoreColor = tint(biomeUi.waterShore || groundMid, groundLight, 0.28);
+    const bankShadow = tint(groundDark, '#000000', 0.1);
+    const bankAlpha = 0.12 + (terrain?.shoreStrength || 0) * 0.16;
+    if (neighbors.n === 'water') {
+      paintEdgeGlow(ctx, ix, iy, s, 'n', shoreColor, bankAlpha, 0.34);
+      paintEdgeGlow(ctx, ix, iy, s, 'n', bankShadow, bankAlpha * 0.48, 0.14);
+    }
+    if (neighbors.s === 'water') {
+      paintEdgeGlow(ctx, ix, iy, s, 's', shoreColor, bankAlpha * 0.92, 0.34);
+      paintEdgeGlow(ctx, ix, iy, s, 's', bankShadow, bankAlpha * 0.54, 0.16);
+    }
+    if (neighbors.w === 'water') {
+      paintEdgeGlow(ctx, ix, iy, s, 'w', shoreColor, bankAlpha * 0.86, 0.3);
+      paintEdgeGlow(ctx, ix, iy, s, 'w', bankShadow, bankAlpha * 0.46, 0.14);
+    }
+    if (neighbors.e === 'water') {
+      paintEdgeGlow(ctx, ix, iy, s, 'e', shoreColor, bankAlpha * 0.86, 0.3);
+      paintEdgeGlow(ctx, ix, iy, s, 'e', bankShadow, bankAlpha * 0.46, 0.14);
+    }
+  }
+
+  if ((terrain?.contourStrength || 0) > 0.1) {
+    paintEdgeGlow(ctx, ix, iy, s, 'n', '#ffffff', 0.02 + (terrain?.contourStrength || 0) * 0.04, 0.18);
+    paintEdgeGlow(ctx, ix, iy, s, 'w', '#ffffff', 0.02 + (terrain?.contourStrength || 0) * 0.03, 0.16);
+    paintEdgeGlow(ctx, ix, iy, s, 's', groundDark, 0.04 + (terrain?.contourStrength || 0) * 0.05, 0.24);
+    paintEdgeGlow(ctx, ix, iy, s, 'e', groundDark, 0.03 + (terrain?.contourStrength || 0) * 0.05, 0.22);
+  }
 }
 
 // --- faux-3D building helpers ---
@@ -143,121 +522,42 @@ function shadedRoof(ctx, x1, y1, peakX, peakY, x2, y2, color) {
 
 // --- tile drawing ---
 
-export function drawTile(ctx, biome, tile, x, y, tileSize, time = 0, neighbors) {
+export function drawTile(ctx, biome, tile, x, y, tileSize, time = 0, neighbors, terrain) {
   const palette = getTilePalette(biome, tile.t);
   const biomeUi = getBiomeUi(biome);
   const s = tileSize;
   const ix = Math.round(x);
   const iy = Math.round(y);
   const h = tileHash(ix, iy);
-
-  // hash-based ground shade variation to break grid pattern
   const grounds = biomeUi.ground;
   const groundDark = biomeUi.groundDark;
   const groundMid = biomeUi.groundMid;
-  const noiseVal = (h % 1000) / 1000;
-  let baseFill;
-  if (tile.t === 'water') {
-    baseFill = palette.fill;
-  } else {
-    // blend between dark/mid/light based on noise
-    if (noiseVal < 0.33) {
-      baseFill = groundDark || grounds[0];
-    } else if (noiseVal < 0.66) {
-      baseFill = groundMid || grounds[1];
-    } else {
-      baseFill = grounds[h % grounds.length];
-    }
-  }
+  const terrainInfo = terrain || null;
 
-  // base fill -- NO outline, NO top-highlight/bottom-shadow that creates grid
-  px(ctx, ix, iy, s, s, baseFill);
-
-  // Soft edge blending to break tile boundaries
   if (tile.t !== 'water') {
-    const edgeBlend = biomeUi.groundMid || grounds[1];
-    const blendSize = s * 0.15;
-    // Top edge soft blend
-    if ((h >> 1) % 3 === 0) {
-      ctx.save();
-      const topGrad = ctx.createLinearGradient(ix, iy, ix, iy + blendSize);
-      topGrad.addColorStop(0, edgeBlend);
-      topGrad.addColorStop(1, 'transparent');
-      ctx.fillStyle = topGrad;
-      ctx.globalAlpha = 0.3;
-      ctx.fillRect(ix, iy, s, blendSize);
-      ctx.restore();
-    }
-    // Left edge soft blend
-    if ((h >> 3) % 3 === 0) {
-      ctx.save();
-      const leftGrad = ctx.createLinearGradient(ix, iy, ix + blendSize, iy);
-      leftGrad.addColorStop(0, edgeBlend);
-      leftGrad.addColorStop(1, 'transparent');
-      ctx.fillStyle = leftGrad;
-      ctx.globalAlpha = 0.25;
-      ctx.fillRect(ix, iy, blendSize, s);
-      ctx.restore();
-    }
-  }
+    const detailAlpha = 0.04 + ((terrainInfo?.macroSeed || ((h % 1000) / 1000)) * 0.04);
+    px(ctx, ix + s * 0.16, iy + s * 0.2, s * 0.07, s * 0.07, biomeUi.highlight || '#ffffff', detailAlpha * 0.75);
+    px(ctx, ix + s * 0.62, iy + s * 0.56, s * 0.05, s * 0.05, groundDark || grounds[0], detailAlpha * 0.9);
 
-  // Multi-scale terrain patches for organic landscape feel
-  if (tile.t !== 'water') {
-    // Large patches (5x5 tile regions) — meadow/dirt zones
-    const lgHash = ((Math.floor(ix / (s * 5)) * 104729) ^ (Math.floor(iy / (s * 5)) * 56263)) >>> 0;
-    const lgAlpha = ((lgHash % 80) / 80) * 0.12;
-    if (lgHash % 3 === 0) {
-      // dark earthy patch
-      px(ctx, ix, iy, s, s, groundDark || grounds[0], lgAlpha);
-    } else if (lgHash % 3 === 1) {
-      // highlighted meadow patch
-      px(ctx, ix, iy, s, s, biomeUi.highlight || 'rgba(255,255,220,0.06)', lgAlpha);
+    if ((terrainInfo?.meadowStrength || 0) > 0.08 && (h >> 1) % 3 === 0) {
+      paintEdgeGlow(ctx, ix, iy, s, 'n', groundMid || grounds[1], 0.07 + (terrainInfo?.meadowStrength || 0) * 0.05, 0.18);
     }
-    // Medium patches (3x3 tile regions) — subtle color shift
-    const mdHash = ((Math.floor(ix / (s * 3)) * 7919) ^ (Math.floor(iy / (s * 3)) * 6271)) >>> 0;
-    const mdAlpha = ((mdHash % 60) / 60) * 0.07;
-    if (mdHash % 2 === 0) {
-      px(ctx, ix, iy, s, s, groundDark || grounds[0], mdAlpha);
-    } else {
-      px(ctx, ix, iy, s, s, groundMid || grounds[1], mdAlpha * 0.5);
+    if ((terrainInfo?.rockyStrength || 0) > 0.1 && (h >> 3) % 3 === 0) {
+      paintEdgeGlow(ctx, ix, iy, s, 's', groundDark || grounds[0], 0.06 + (terrainInfo?.rockyStrength || 0) * 0.05, 0.16);
     }
-  }
 
-  // Neighbor-aware ground transitions — blend toward adjacent terrain types
-  if (tile.t !== 'water' && neighbors) {
-    const nb = neighbors;
-    const transSize = s * 0.25;
-    // If neighbor is water, draw a subtle muddy/sandy edge toward it
-    if (nb.n === 'water') {
-      const tg = ctx.createLinearGradient(ix, iy, ix, iy + transSize);
-      tg.addColorStop(0, biomeUi.waterShore || '#5898b8');
-      tg.addColorStop(1, 'transparent');
-      ctx.save(); ctx.fillStyle = tg; ctx.globalAlpha = 0.18; ctx.fillRect(ix, iy, s, transSize); ctx.restore();
-    }
-    if (nb.s === 'water') {
-      const tg = ctx.createLinearGradient(ix, iy + s, ix, iy + s - transSize);
-      tg.addColorStop(0, biomeUi.waterShore || '#5898b8');
-      tg.addColorStop(1, 'transparent');
-      ctx.save(); ctx.fillStyle = tg; ctx.globalAlpha = 0.18; ctx.fillRect(ix, iy + s - transSize, s, transSize); ctx.restore();
-    }
-    if (nb.w === 'water') {
-      const tg = ctx.createLinearGradient(ix, iy, ix + transSize, iy);
-      tg.addColorStop(0, biomeUi.waterShore || '#5898b8');
-      tg.addColorStop(1, 'transparent');
-      ctx.save(); ctx.fillStyle = tg; ctx.globalAlpha = 0.15; ctx.fillRect(ix, iy, transSize, s); ctx.restore();
-    }
-    if (nb.e === 'water') {
-      const tg = ctx.createLinearGradient(ix + s, iy, ix + s - transSize, iy);
-      tg.addColorStop(0, biomeUi.waterShore || '#5898b8');
-      tg.addColorStop(1, 'transparent');
-      ctx.save(); ctx.fillStyle = tg; ctx.globalAlpha = 0.15; ctx.fillRect(ix + s - transSize, iy, transSize, s); ctx.restore();
-    }
-    // If neighbor is tree/bush, draw a subtle foliage shadow bleeding in
-    if (nb.n === 'tree' || nb.n === 'bush') {
-      px(ctx, ix, iy, s, s * 0.08, biomeUi.shadowColor || 'rgba(0,0,0,0.08)');
-    }
-    if (nb.w === 'tree' || nb.w === 'bush') {
-      px(ctx, ix, iy, s * 0.06, s, biomeUi.shadowColor || 'rgba(0,0,0,0.06)');
+    if (neighbors) {
+      const shoreAlpha = 0.08 + (terrainInfo?.shoreStrength || 0) * 0.12;
+      if (neighbors.n === 'water') paintEdgeGlow(ctx, ix, iy, s, 'n', biomeUi.waterShore || '#5898b8', shoreAlpha, 0.24);
+      if (neighbors.s === 'water') paintEdgeGlow(ctx, ix, iy, s, 's', biomeUi.waterShore || '#5898b8', shoreAlpha, 0.24);
+      if (neighbors.w === 'water') paintEdgeGlow(ctx, ix, iy, s, 'w', biomeUi.waterShore || '#5898b8', shoreAlpha * 0.9, 0.22);
+      if (neighbors.e === 'water') paintEdgeGlow(ctx, ix, iy, s, 'e', biomeUi.waterShore || '#5898b8', shoreAlpha * 0.9, 0.22);
+
+      const shadowAlpha = 0.06 + (terrainInfo?.foliageShadow || 0) * 0.08;
+      if (neighbors.n === 'tree' || neighbors.n === 'bush') paintEdgeGlow(ctx, ix, iy, s, 'n', biomeUi.shadowColor || 'rgba(0,0,0,0.08)', shadowAlpha, 0.2);
+      if (neighbors.s === 'tree' || neighbors.s === 'bush') paintEdgeGlow(ctx, ix, iy, s, 's', biomeUi.shadowColor || 'rgba(0,0,0,0.08)', shadowAlpha * 0.8, 0.18);
+      if (neighbors.w === 'tree' || neighbors.w === 'bush') paintEdgeGlow(ctx, ix, iy, s, 'w', biomeUi.shadowColor || 'rgba(0,0,0,0.06)', shadowAlpha * 0.86, 0.18);
+      if (neighbors.e === 'tree' || neighbors.e === 'bush') paintEdgeGlow(ctx, ix, iy, s, 'e', biomeUi.shadowColor || 'rgba(0,0,0,0.06)', shadowAlpha * 0.8, 0.18);
     }
   }
 
@@ -269,14 +569,15 @@ export function drawTile(ctx, biome, tile, x, y, tileSize, time = 0, neighbors) 
     // deep center gradient
     ctx.save();
     const wGrad = ctx.createRadialGradient(ix + s * 0.5, iy + s * 0.5, s * 0.1, ix + s * 0.5, iy + s * 0.5, s * 0.6);
-    wGrad.addColorStop(0, deep);
+    wGrad.addColorStop(0, tint(deep, '#000000', (terrainInfo?.basinDepth || 0) * 0.1));
     wGrad.addColorStop(1, palette.fill);
     ctx.fillStyle = wGrad;
+    ctx.globalAlpha = 0.46 + (terrainInfo?.basinDepth || 0) * 0.22;
     ctx.fillRect(ix, iy, s, s);
     ctx.restore();
 
     // Connected shoreline: only draw shore where water meets non-water
-    const shoreSize = s * 0.22;
+    const shoreSize = s * (0.22 + (terrainInfo?.shoreStrength || 0) * 0.1);
     const nb = neighbors || {};
     const isWater = (t) => t === 'water';
     ctx.save();
@@ -1733,6 +2034,8 @@ export function drawBuildingThumbnail(type, biome = 'grasslands', size = 48) {
   const key = `${type}_${biome}_${size}`;
   if (_thumbCache.has(key)) return _thumbCache.get(key);
 
+  if (typeof document === 'undefined') return null;
+
   const ui = getBuildingUi(type);
   ui._biome = biome;
 
@@ -1745,8 +2048,9 @@ export function drawBuildingThumbnail(type, biome = 'grasslands', size = 48) {
   const ctx = canvas.getContext('2d');
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-  const BUILDING_SIZES = { farm: [2,2], house: [2,2], well: [1,1], fishing_hut: [2,1], woodcutters_hut: [1,1], stone_pit: [1,1], path: [1,1], lumberyard: [2,2], quarry: [2,2], weaving_hut: [2,2], market: [2,2], large_house: [3,2], garden: [1,1], storehouse: [2,2], trading_post: [2,2], town_hall: [3,3], bakery: [2,2], shrine: [2,2], park: [3,3], warehouse: [3,2], flower_bed: [1,1], watchtower: [1,1], tavern: [2,2] };
-  const [bw, bh] = BUILDING_SIZES[type] || [1, 1];
+  const sizeDef = BUILDING_SIZES[type] || { width: 1, height: 1 };
+  const bw = sizeDef.width;
+  const bh = sizeDef.height;
   const maxDim = Math.max(bw, bh);
   const tileSize = (size * 0.85) / maxDim;
   const w = tileSize * bw;
@@ -1766,4 +2070,24 @@ export function drawBuildingThumbnail(type, biome = 'grasslands', size = 48) {
 
   _thumbCache.set(key, canvas);
   return canvas;
+}
+
+export function renderBuildingThumbnail(canvas, type, biome = 'grasslands', size = 48) {
+  if (!canvas) return;
+  const source = drawBuildingThumbnail(type, biome, size);
+  const ctx = canvas.getContext('2d');
+  if (!ctx || !source) return;
+
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const width = Math.round(size * dpr);
+  const height = Math.round(size * dpr);
+  if (canvas.width !== width || canvas.height !== height) {
+    canvas.width = width;
+    canvas.height = height;
+  }
+  canvas.style.width = `${size}px`;
+  canvas.style.height = `${size}px`;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, width, height);
+  ctx.drawImage(source, 0, 0, width, height);
 }

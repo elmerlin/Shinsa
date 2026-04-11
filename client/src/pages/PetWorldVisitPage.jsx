@@ -144,6 +144,8 @@ export default function PetWorldVisitPage() {
   const canTrade = !!myBundle?.world?.has_market;
   const visitorsOnline = wsVisitors.length || (bundle?.visitors_online?.length ?? null);
   const inspectedObstacle = ['tree', 'rock', 'bush'].includes(selectedTile?.tile?.t);
+  const hostName = world?.username || 'Unknown';
+  const guestLine = visitorsOnline ? `${visitorsOnline} guest${visitorsOnline === 1 ? '' : 's'} around the village` : 'Quiet guest view';
 
   /* ── World not found ─────────────────────────────────────────── */
   if (!world) {
@@ -189,6 +191,7 @@ export default function PetWorldVisitPage() {
           selectedBuildingId={selectedBuilding?.id}
           selectedTile={selectedTile}
           readonly
+          readonlyLabel="Guest View"
           onSelectBuilding={(building) => {
             setSelectedBuilding(building);
             setSelectedTile(null);
@@ -223,7 +226,7 @@ export default function PetWorldVisitPage() {
         </div>
         <span className="pointer-events-none flex items-center gap-1 rounded-full border border-cyan-300/10 bg-cyan-400/[0.05] px-2 py-0.5 backdrop-blur-md">
           <span className="h-1.5 w-1.5 rounded-full bg-cyan-400/60 animate-pulse" />
-          <span className="text-[9px] font-semibold text-cyan-200/65 truncate max-w-[120px]">{world.username || 'Unknown'}</span>
+          <span className="max-w-[140px] truncate text-[9px] font-semibold text-cyan-200/72">Guest in {hostName}</span>
         </span>
         <button
           type="button"
@@ -241,8 +244,8 @@ export default function PetWorldVisitPage() {
       </div>
 
       {!activeSheet && (
-        <div className="absolute bottom-4 left-3 z-40 rounded-full border border-white/6 bg-black/30 px-2 py-0.5 text-[8px] text-white/30 backdrop-blur-sm animate-[fadeOut_4s_ease-in_forwards]">
-          Tap buildings to inspect
+        <div className="absolute bottom-4 left-3 z-40 rounded-full border border-white/6 bg-black/30 px-2 py-0.5 text-[8px] text-white/34 backdrop-blur-sm animate-[fadeOut_4s_ease-in_forwards]">
+          Wander and inspect
         </div>
       )}
 
@@ -259,7 +262,7 @@ export default function PetWorldVisitPage() {
               : 'border-white/10 bg-black/38 text-white/75 hover:bg-black/52 hover:text-white'
           }`}
         >
-          Visit
+          Guide
         </button>
         <button
           type="button"
@@ -273,22 +276,22 @@ export default function PetWorldVisitPage() {
 
       {activeSheet && (
         <div className="absolute inset-x-0 bottom-0 z-50 px-3 pb-3" style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
-          <div className="mx-auto w-full max-w-2xl overflow-hidden rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(9,15,22,0.97),rgba(6,10,15,0.96))] shadow-[0_-18px_40px_rgba(0,0,0,0.38)] backdrop-blur-xl">
-            <div className="flex items-center justify-between border-b border-white/8 px-4 py-3">
+          <div className="mx-auto w-full max-w-lg overflow-hidden rounded-lg border border-white/10 bg-[linear-gradient(180deg,rgba(9,15,22,0.97),rgba(6,10,15,0.96))] shadow-[0_-18px_40px_rgba(0,0,0,0.38)] backdrop-blur-xl">
+            <div className="flex items-center justify-between border-b border-white/8 px-3 py-2.5">
               <div>
                 <div className="text-[10px] uppercase tracking-[0.2em] text-white/35">
-                  {activeSheet === 'inspect' ? 'Details' : 'Visit'}
+                  {activeSheet === 'inspect' ? 'Guest Inspect' : 'Guest Guide'}
                 </div>
                 <div className="text-sm font-black text-white">
                   {activeSheet === 'inspect'
-                    ? selectedBuilding ? selectedBuilding.name : 'Selected tile'
-                    : visitTab === 'overview' ? 'Visit Overview' : 'Host Notes'}
+                    ? selectedBuilding ? selectedBuilding.name : 'Village patch'
+                    : visitTab === 'overview' ? `${hostName}'s village` : 'Host notes'}
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setActiveSheet(null)}
-                className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 text-sm text-white/60 transition-colors hover:border-white/20 hover:text-white"
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 text-sm text-white/60 transition-colors hover:border-white/20 hover:text-white"
                 aria-label="Close panel"
               >
                 &times;
@@ -296,26 +299,30 @@ export default function PetWorldVisitPage() {
             </div>
 
             {activeSheet === 'inspect' ? (
-              <div className="max-h-[22vh] overflow-y-auto p-3">
+              <div className="max-h-[24vh] overflow-y-auto p-3">
                 {selectedBuilding ? (
                   <PetWorldBuildingInfo
                     building={selectedBuilding}
                     readonly
-                    ownerName={world.username || 'Unknown'}
+                    ownerName={hostName}
+                    world={world}
                     onClose={() => {
                       setSelectedBuilding(null);
                       setActiveSheet(null);
                     }}
                   />
                 ) : selectedTile ? (
-                  <div className="rounded-xl border border-white/7 bg-[linear-gradient(180deg,rgba(14,18,28,0.96),rgba(9,12,18,0.94))] p-3 shadow-[0_14px_30px_rgba(0,0,0,0.24)]">
-                    <div className="text-[10px] uppercase tracking-[0.18em] text-white/35">Tile</div>
-                    <div className="mt-1 text-lg font-black text-white">{selectedTile.x}, {selectedTile.y}</div>
-                    <div className="mt-1 text-sm text-white/55 capitalize">{selectedTile.tile?.t || 'empty ground'}</div>
-                    <div className="mt-3 rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-3 text-sm text-white/60">
+                  <div className="rounded-lg border border-white/7 bg-[linear-gradient(180deg,rgba(14,18,28,0.96),rgba(9,12,18,0.94))] p-3 shadow-[0_14px_30px_rgba(0,0,0,0.24)]">
+                    <div className="flex items-center gap-2">
+                      <span className="rounded-full border border-white/8 px-2 py-0.5 text-[8px] uppercase tracking-[0.18em] text-white/38">
+                        {selectedTile.tile?.t || 'ground'}
+                      </span>
+                      <div className="text-[13px] font-black text-white">{selectedTile.x}, {selectedTile.y}</div>
+                    </div>
+                    <div className="mt-2 rounded-lg border border-white/8 bg-white/[0.03] px-3 py-2.5 text-[11px] leading-relaxed text-white/60">
                       {inspectedObstacle
-                        ? 'This tile is part of the village terrain. Only the owner can clear or build here.'
-                        : 'This is part of the host village layout. Browse around to inspect buildings and terrain.'}
+                        ? 'Still part of the wild edge of the village. Guests can inspect, but only the host can clear it.'
+                        : 'A settled patch inside the village layout. Guests can roam, inspect, and browse the scenery.'}
                     </div>
                   </div>
                 ) : null}
@@ -346,32 +353,35 @@ export default function PetWorldVisitPage() {
 
                 {visitTab === 'overview' ? (
                   <div className="space-y-3">
+                    <div className="rounded-lg border border-cyan-300/10 bg-cyan-400/[0.05] px-3 py-2 text-[11px] text-cyan-100/72">
+                      Guest in {hostName}&apos;s village. {guestLine}.
+                    </div>
                     <div className="grid grid-cols-2 gap-2">
-                      <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-3">
+                      <div className="rounded-lg border border-white/8 bg-white/[0.03] p-3">
                         <div className="text-[10px] uppercase tracking-[0.18em] text-white/35">Population</div>
                         <div className="mt-1 text-lg font-black text-white">{world.population}</div>
                       </div>
-                      <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-3">
+                      <div className="rounded-lg border border-white/8 bg-white/[0.03] p-3">
                         <div className="text-[10px] uppercase tracking-[0.18em] text-white/35">Mood</div>
                         <div className="mt-1 text-lg font-black text-white">{Math.round(world.happiness || 0)}</div>
                       </div>
                     </div>
-                    <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-3 text-sm text-white/60">
+                    <div className="rounded-lg border border-white/8 bg-white/[0.03] p-3 text-sm text-white/60">
                       {canTrade
-                        ? 'You can send a trade offer from here if both villages have a Market.'
-                        : 'Build a Market in your own village to unlock trading with other players.'}
+                        ? 'You can send a trade offer from here if both villages keep a Market.'
+                        : 'Build a Market in your own village to unlock guest trading.'}
                     </div>
                   </div>
                 ) : (
-                  <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-3">
+                  <div className="rounded-lg border border-white/8 bg-white/[0.03] p-3">
                     <div className="text-[10px] uppercase tracking-[0.18em] text-white/35">Host village</div>
                     <div className="mt-2 space-y-2">
-                      <div className="rounded-xl border border-white/8 bg-black/20 px-3 py-2 text-sm text-white/65">
-                        {world.username || 'This player'} has welcomed {world.visit_count || 0} visit{world.visit_count === 1 ? '' : 's'} so far.
+                      <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2 text-sm text-white/65">
+                        {hostName} has welcomed {world.visit_count || 0} visit{world.visit_count === 1 ? '' : 's'} so far.
                       </div>
-                      <div className="rounded-xl border border-white/8 bg-black/20 px-3 py-2 text-sm text-white/65">
+                      <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2 text-sm text-white/65">
                         {trades.length > 0
-                          ? `You currently have ${trades.filter((trade) => trade.status === 'pending').length} pending trade${trades.filter((trade) => trade.status === 'pending').length === 1 ? '' : 's'}.`
+                          ? `You currently have ${trades.filter((trade) => trade.status === 'pending').length} pending trade${trades.filter((trade) => trade.status === 'pending').length === 1 ? '' : 's'} with this village.`
                           : 'Send a trade offer if you want to exchange resources with this village.'}
                       </div>
                     </div>

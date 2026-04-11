@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { drawTile, drawBuildingSprite, drawConstructionOverlay, drawSelectionOutline, drawGhostFootprint, drawPetWander } from './petWorldSprites';
-import { getBuildingSize } from './petWorldBuildings';
+import { analyzeTerrainGrid, drawTerrainRegion, drawTile, drawBuildingSprite, drawConstructionOverlay, drawSelectionOutline, drawGhostFootprint, drawPetWander } from './petWorldSprites';
+import { getBuildingSize, getBuildingUi } from './petWorldBuildings';
 import { getBiomeUi } from './petWorldTiles';
 
 const BASE_TILE_SIZE = 32;
@@ -107,6 +107,8 @@ export default function PetWorldCanvas({
   selectedTile,
   pendingBuildType,
   readonly = false,
+  readonlyLabel = 'Visiting',
+  placementBurst = null,
   onSelectBuilding,
   onSelectTile,
   onPlaceBuilding,
@@ -124,6 +126,11 @@ export default function PetWorldCanvas({
   const [minimapVisible, setMinimapVisible] = useState(true);
   const buildingMap = useMemo(() => getBuildingMap(buildings), [buildings]);
   const petPlacements = useMemo(() => buildPetPlacements(world), [world]);
+  const terrainRegions = useMemo(() => analyzeTerrainGrid(world?.grid, buildings), [world?.grid, buildings]);
+  const reduceMotion = useMemo(
+    () => (typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)').matches : false),
+    [],
+  );
 
   const tileSize = BASE_TILE_SIZE * FIXED_ZOOM;
 
@@ -199,18 +206,26 @@ export default function PetWorldCanvas({
         if (!tile) continue;
         const dx = mx + tx * dotW;
         const dy = my + ty * dotH;
+        const terrain = terrainRegions?.[ty]?.[tx];
         let color;
         if (tile.b != null) {
-          // building: brighter dot with subtle glow
+          const building = buildingMap.get(tile.b);
+          const ui = getBuildingUi(building?.type);
           ctx.fillStyle = 'rgba(255,255,255,0.3)';
           ctx.fillRect(dx - 0.5, dy - 0.5, Math.max(2, dotW + 1), Math.max(2, dotH + 1));
-          color = '#ffffff';
+          color = building?.type === 'path' ? (biomeUi.pathStone || '#b3a389') : (ui.accent || '#ffffff');
         } else if (tile.t === 'water') {
-          color = biomeUi.water;
+          color = (terrain?.basinDepth || 0) > 0.5 ? biomeUi.waterDeep : biomeUi.water;
         } else if (tile.t === 'tree' || tile.t === 'bush') {
           color = biomeUi.tree;
         } else if (tile.t === 'rock') {
           color = biomeUi.rock;
+        } else if ((terrain?.shoreStrength || 0) > 0.45) {
+          color = biomeUi.waterShore;
+        } else if ((terrain?.rockyStrength || 0) > 0.4) {
+          color = biomeUi.pathStone || biomeUi.ground[0];
+        } else if ((terrain?.meadowStrength || 0) > 0.45) {
+          color = biomeUi.ground[2] || biomeUi.ground[1];
         } else {
           color = biomeUi.ground[1] || biomeUi.ground[0];
         }
@@ -258,7 +273,7 @@ export default function PetWorldCanvas({
     ctx.restore();
 
     ctx.restore();
-  }, [world, camera.x, camera.y, minimapVisible, pendingBuildType]);
+  }, [world, camera.x, camera.y, minimapVisible, pendingBuildType, terrainRegions, buildingMap]);
 
   // --- main render ---
   const render = useCallback((timestamp) => {
@@ -305,14 +320,13 @@ export default function PetWorldCanvas({
     ctx.fillStyle = '#07121a';
     ctx.fillRect(0, 0, size.width, size.height);
 
-    // tiles
+    const visibleTiles = [];
     for (let y = startY; y < endY; y += 1) {
       for (let x = startX; x < endX; x += 1) {
         const tile = world.grid.tiles[y]?.[x];
         if (!tile) continue;
         const screenX = x * tileSize - camera.x;
         const screenY = y * tileSize - camera.y;
-        // Compute cardinal + diagonal neighbor tile types for terrain composition
         const neighbors = {
           n:  world.grid.tiles[y - 1]?.[x]?.t || null,
           s:  world.grid.tiles[y + 1]?.[x]?.t || null,
@@ -323,9 +337,25 @@ export default function PetWorldCanvas({
           se: world.grid.tiles[y + 1]?.[x + 1]?.t || null,
           sw: world.grid.tiles[y + 1]?.[x - 1]?.t || null,
         };
-        drawTile(ctx, world.biome, tile, screenX, screenY, tileSize, time, neighbors);
+        visibleTiles.push({
+          x,
+          y,
+          tile,
+          screenX,
+          screenY,
+          neighbors,
+          terrain: terrainRegions?.[y]?.[x] || null,
+        });
       }
     }
+
+    visibleTiles.forEach(({ tile, screenX, screenY, neighbors, terrain }) => {
+      drawTerrainRegion(ctx, world.biome, tile, screenX, screenY, tileSize, terrain, neighbors);
+    });
+
+    visibleTiles.forEach(({ tile, screenX, screenY, neighbors, terrain }) => {
+      drawTile(ctx, world.biome, tile, screenX, screenY, tileSize, time, neighbors, terrain);
+    });
 
     // atmospheric depth: distant tiles (top of grid) slightly hazier
     if (endY > startY) {
@@ -379,6 +409,27 @@ export default function PetWorldCanvas({
       drawGhostFootprint(ctx, gx * tileSize - camera.x, gy * tileSize - camera.y, tileSize, bSize.width, bSize.height, valid, time);
     }
 
+    if (placementBurst) {
+      const elapsed = time - placementBurst.startedAt;
+      const burstDuration = reduceMotion ? 120 : 760;
+      if (elapsed >= 0 && elapsed < burstDuration) {
+        const progress = elapsed / burstDuration;
+        const burstX = placementBurst.x * tileSize - camera.x;
+        const burstY = placementBurst.y * tileSize - camera.y;
+        const burstW = (placementBurst.width || 1) * tileSize;
+        const burstH = (placementBurst.height || 1) * tileSize;
+        const spread = progress * tileSize * 0.8;
+        const alpha = Math.max(0, 1 - progress);
+        ctx.save();
+        ctx.fillStyle = `rgba(110,231,183,${(0.14 * alpha).toFixed(3)})`;
+        ctx.fillRect(burstX - spread * 0.2, burstY - spread * 0.2, burstW + spread * 0.4, burstH + spread * 0.4);
+        ctx.strokeStyle = `rgba(110,231,183,${(0.8 * alpha).toFixed(3)})`;
+        ctx.lineWidth = 2.2;
+        ctx.strokeRect(burstX + 2 - spread * 0.18, burstY + 2 - spread * 0.18, burstW - 4 + spread * 0.36, burstH - 4 + spread * 0.36);
+        ctx.restore();
+      }
+    }
+
     // subtle vignette
     const vignette = ctx.createRadialGradient(
       size.width * 0.5,
@@ -400,7 +451,7 @@ export default function PetWorldCanvas({
     if (animatingRef.current) {
       animationFrameRef.current = requestAnimationFrame(render);
     }
-  }, [world, buildings, size.width, size.height, camera.x, camera.y, tileSize, selectedBuildingId, selectedTile, pendingBuildType, petPlacements, hoverTile, drawMinimap]);
+  }, [world, buildings, size.width, size.height, camera.x, camera.y, tileSize, selectedBuildingId, selectedTile, pendingBuildType, petPlacements, hoverTile, drawMinimap, terrainRegions, placementBurst, reduceMotion]);
 
   // --- animation control: always running ---
   const startAnimating = useCallback(() => {
@@ -552,9 +603,9 @@ export default function PetWorldCanvas({
           onPointerCancel={handlePointerUp}
           onMouseMove={handleMouseMove}
         />
-        {readonly && (
+        {readonly && readonlyLabel && (
           <div className="pointer-events-none absolute left-3 top-3 rounded-full border border-white/6 bg-black/25 px-2 py-1 text-[8px] uppercase tracking-[0.2em] text-white/30 backdrop-blur-sm">
-            Visiting
+            {readonlyLabel}
           </div>
         )}
         {/* Minimap toggle button */}

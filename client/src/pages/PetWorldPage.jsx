@@ -24,7 +24,8 @@ import PetWorldBuildMenu from '../components/petWorld/PetWorldBuildMenu';
 import PetWorldBuildingInfo from '../components/petWorld/PetWorldBuildingInfo';
 import PetWorldCreateModal from '../components/petWorld/PetWorldCreateModal';
 import PetWorldTradeModal from '../components/petWorld/PetWorldTradeModal';
-import { getBuildingUi } from '../components/petWorld/petWorldBuildings';
+import PetWorldSpriteThumbnail from '../components/petWorld/PetWorldSpriteThumbnail';
+import { getBuildingSize, getBuildingUi } from '../components/petWorld/petWorldBuildings';
 import { playBuildSound, playClearSound, playExpandSound, playUpgradeSound, playErrorSound, playHuntStrikeSound, playHuntSuccessSound, playHuntEscapeSound, playEncounterAlertSound } from '../components/petWorld/petWorldAudio';
 import usePetWorldPresence from '../hooks/usePetWorldPresence';
 
@@ -36,6 +37,29 @@ function Toast({ message }) {
       {message}
     </div>
   );
+}
+
+const BUILD_SHEET_SNAPS = ['peek', 'browse', 'expanded'];
+const BUILD_SHEET_HEIGHTS = {
+  peek: '10.5rem',
+  browse: 'min(27rem, 33vh)',
+  expanded: 'min(36rem, 58vh)',
+};
+
+function stepBuildSnap(current, direction) {
+  const index = BUILD_SHEET_SNAPS.indexOf(current);
+  const nextIndex = Math.max(0, Math.min(BUILD_SHEET_SNAPS.length - 1, index + direction));
+  return BUILD_SHEET_SNAPS[nextIndex];
+}
+
+function getTileInspectCopy(tileType, inspectedObstacle) {
+  if (inspectedObstacle) {
+    return 'This patch is still part of the wild village edge. Clear it to open fresh build ground.';
+  }
+  if (tileType === 'water') {
+    return 'A quiet pond edge. Fishing huts and shore buildings sit best where the bank stays open.';
+  }
+  return 'Open ground with enough room for the next miniature structure.';
 }
 
 /* ─── Encounter Scene Drawing Helpers ──────────────────────────── */
@@ -721,10 +745,13 @@ export default function PetWorldPage() {
   const [selectedTile, setSelectedTile] = useState(null);
   const [showTrades, setShowTrades] = useState(false);
   const [activeSheet, setActiveSheet] = useState(null);
+  const [buildSheetSnap, setBuildSheetSnap] = useState('browse');
   const [villageTab, setVillageTab] = useState('overview');
+  const [placementBurst, setPlacementBurst] = useState(null);
   const [toast, setToast] = useState('');
   const [entered, setEntered] = useState(false);
   const gameRef = useRef(null);
+  const buildSheetGestureRef = useRef(null);
 
   /* Fade-in on mount */
   useEffect(() => {
@@ -774,6 +801,12 @@ export default function PetWorldPage() {
     return () => window.clearTimeout(showToast._timer);
   }, [loadAll, showToast]);
 
+  useEffect(() => {
+    if (!placementBurst) return undefined;
+    const timer = window.setTimeout(() => setPlacementBurst(null), 900);
+    return () => window.clearTimeout(timer);
+  }, [placementBurst]);
+
   /* Real-time co-presence via WebSocket (owner joins own village room) */
   const handleVisitorJoined = useCallback((data) => {
     showToast(`${data.username || 'Someone'} is visiting your world`);
@@ -816,9 +849,18 @@ export default function PetWorldPage() {
   const handlePlaceBuilding = async (x, y) => {
     if (!pendingBuildType) return;
     try {
+      const placedType = pendingBuildType;
+      const placedSize = getBuildingSize(placedType);
       const next = await buildPetWorldBuilding({ type: pendingBuildType, x, y, variant: pendingBuildVariant });
       playBuildSound();
       setBundle(next);
+      setPlacementBurst({
+        x,
+        y,
+        width: placedSize.width,
+        height: placedSize.height,
+        startedAt: performance.now(),
+      });
       setPendingBuildType('');
       setPendingBuildVariant(null);
       setActiveSheet(null);
@@ -960,6 +1002,34 @@ export default function PetWorldPage() {
     if (!pendingBuildType) setActiveSheet('inspect');
   }, [pendingBuildType]);
 
+  const handleBuildHandlePointerDown = useCallback((event) => {
+    buildSheetGestureRef.current = {
+      id: event.pointerId,
+      startY: event.clientY,
+    };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  }, []);
+
+  const handleBuildHandlePointerUp = useCallback((event) => {
+    const gesture = buildSheetGestureRef.current;
+    if (!gesture || gesture.id !== event.pointerId) return;
+    const deltaY = event.clientY - gesture.startY;
+    if (deltaY <= -24) {
+      setBuildSheetSnap((current) => stepBuildSnap(current, 1));
+    } else if (deltaY >= 24) {
+      setBuildSheetSnap((current) => stepBuildSnap(current, -1));
+    } else {
+      setBuildSheetSnap((current) => (
+        current === 'peek'
+          ? 'browse'
+          : current === 'browse'
+            ? 'expanded'
+            : 'peek'
+      ));
+    }
+    buildSheetGestureRef.current = null;
+  }, []);
+
   /* ── Loading ─────────────────────────────────────────────────── */
   if (loading) {
     return (
@@ -1007,6 +1077,10 @@ export default function PetWorldPage() {
   const pendingBuildDef = pendingBuildType
     ? catalog.find((b) => b.id === pendingBuildType)
     : null;
+  const pendingBuildUi = pendingBuildDef ? getBuildingUi(pendingBuildDef.id) : null;
+  const selectedBuildingDef = selectedBuilding
+    ? catalog.find((b) => b.id === selectedBuilding.type)
+    : null;
 
   /* ── Full-screen game mode ───────────────────────────────────── */
   return (
@@ -1031,6 +1105,7 @@ export default function PetWorldPage() {
           selectedBuildingId={selectedBuilding?.id}
           selectedTile={selectedTile}
           pendingBuildType={pendingBuildType}
+          placementBurst={placementBurst}
           onSelectBuilding={handleSelectBuilding}
           onSelectTile={handleSelectTile}
           onPlaceBuilding={handlePlaceBuilding}
@@ -1111,6 +1186,7 @@ export default function PetWorldPage() {
               }
               setSelectedBuilding(null);
               setSelectedTile(null);
+              setBuildSheetSnap('browse');
               setActiveSheet('build');
             }}
             className={`pointer-events-auto flex h-12 w-12 items-center justify-center rounded-full border shadow-[0_6px_20px_rgba(0,0,0,0.4)] backdrop-blur-md transition-all duration-200 ease-out active:scale-95 ${
@@ -1138,41 +1214,53 @@ export default function PetWorldPage() {
       {/* ═══ PLACEMENT TRAY (when building selected from catalog) ═══ */}
       {pendingBuildType && activeSheet !== 'build' && (
         <div
-          className="absolute inset-x-0 bottom-0 z-50 animate-[slideUp_0.2s_ease-out] transition-all duration-200 ease-out"
+          className="absolute inset-x-0 bottom-0 z-50 transition-all duration-200 ease-out motion-reduce:transition-none"
           style={{ paddingBottom: 'max(8px, env(safe-area-inset-bottom))' }}
         >
-          <div className="mx-auto flex max-w-sm items-center gap-2 rounded-xl border border-white/6 bg-black/80 px-2.5 py-1.5 shadow-[0_-6px_18px_rgba(0,0,0,0.3)] backdrop-blur-xl mx-3">
-            {pendingBuildDef && (
-              <>
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style={{ background: `linear-gradient(135deg, ${getBuildingUi(pendingBuildDef.id).accent}30, ${getBuildingUi(pendingBuildDef.id).accent}10)`, border: `1px solid ${getBuildingUi(pendingBuildDef.id).accent}25` }}>
-                  <span className="text-sm">{getBuildingUi(pendingBuildDef.id).icon}</span>
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-[12px] font-bold text-white">{pendingBuildDef.name}</div>
-                  <div className="text-[9px] text-white/35">{pendingBuildDef.comboCost}c · Tap to place</div>
-                </div>
-              </>
-            )}
-            <button
-              type="button"
-              onClick={() => {
-                setActiveSheet('build');
-              }}
-              className="pointer-events-auto shrink-0 rounded-md border border-white/8 bg-white/[0.05] px-2 py-1 text-[9px] font-semibold text-white/60 transition-colors hover:bg-white/10 hover:text-white"
-            >
-              Change
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setPendingBuildType('');
-                setPendingBuildVariant(null);
-                setActiveSheet(null);
-              }}
-              className="pointer-events-auto shrink-0 rounded-md border border-rose-400/12 bg-rose-500/8 px-2 py-1 text-[9px] font-semibold text-rose-200/70 transition-colors hover:bg-rose-500/20 hover:text-rose-100"
-            >
-              Cancel
-            </button>
+          <div className="mx-3 flex justify-center">
+            <div className="flex w-full max-w-md items-center gap-2 rounded-lg border border-white/8 bg-[linear-gradient(180deg,rgba(10,17,24,0.94),rgba(6,10,15,0.92))] px-2.5 py-2 shadow-[0_-10px_24px_rgba(0,0,0,0.32)] backdrop-blur-xl">
+              {pendingBuildDef && (
+                <>
+                  <span
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border bg-black/20"
+                    style={{ borderColor: `${pendingBuildUi?.accent || '#6ee7b7'}30`, boxShadow: `0 10px 22px ${(pendingBuildUi?.accent || '#6ee7b7')}16` }}
+                  >
+                    <PetWorldSpriteThumbnail type={pendingBuildDef.id} biome={world.biome} size={38} className="block" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[12px] font-black text-white">{pendingBuildDef.name}</div>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-1 text-[8px] uppercase tracking-[0.18em] text-white/34">
+                      <span className="rounded-full border border-white/8 px-1.5 py-0.5">{pendingBuildDef.width}&times;{pendingBuildDef.height}</span>
+                      <span className="rounded-full border px-1.5 py-0.5" style={{ borderColor: `${pendingBuildUi?.accent || '#6ee7b7'}28`, color: pendingBuildUi?.accent || '#6ee7b7' }}>
+                        Ready
+                      </span>
+                    </div>
+                    <div className="mt-1 text-[9px] text-white/42">{pendingBuildDef.comboCost}c · Tap the ground to place</div>
+                  </div>
+                </>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setBuildSheetSnap('browse');
+                  setActiveSheet('build');
+                }}
+                className="pointer-events-auto shrink-0 rounded-lg border border-white/8 bg-white/[0.05] px-2.5 py-1.5 text-[9px] font-semibold text-white/66 transition-colors hover:bg-white/10 hover:text-white"
+              >
+                Change
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPendingBuildType('');
+                  setPendingBuildVariant(null);
+                  setActiveSheet(null);
+                }}
+                className="pointer-events-auto shrink-0 rounded-lg border border-rose-400/12 bg-rose-500/8 px-2.5 py-1.5 text-[9px] font-semibold text-rose-200/70 transition-colors hover:bg-rose-500/20 hover:text-rose-100"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1180,17 +1268,52 @@ export default function PetWorldPage() {
       {/* ═══ BUILD CATALOG SHEET ═══ */}
       {activeSheet === 'build' && (
         <div
-          className="absolute inset-x-0 bottom-0 z-50 px-3 pb-3 transition-all duration-200 ease-out"
+          className="absolute inset-x-0 bottom-0 z-50 px-3 pb-3 transition-all duration-200 ease-out motion-reduce:transition-none"
           style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}
         >
-          <div className="mx-auto w-full max-w-2xl overflow-hidden rounded-2xl border border-white/8 bg-black/85 shadow-[0_-12px_32px_rgba(0,0,0,0.35)] backdrop-blur-xl">
-            {/* Drag handle */}
-            <div className="flex justify-center pt-2 pb-1">
-              <div className="h-1 w-8 rounded-full bg-white/15" />
+          <div
+            className="mx-auto w-full max-w-xl overflow-hidden rounded-lg border border-white/8 bg-[linear-gradient(180deg,rgba(10,17,24,0.96),rgba(6,10,15,0.94))] shadow-[0_-18px_38px_rgba(0,0,0,0.36)] backdrop-blur-xl transition-[max-height] duration-300 ease-out motion-reduce:transition-none"
+            style={{ maxHeight: BUILD_SHEET_HEIGHTS[buildSheetSnap] }}
+          >
+            <div className="flex justify-center pt-2">
+              <button
+                type="button"
+                onPointerDown={handleBuildHandlePointerDown}
+                onPointerUp={handleBuildHandlePointerUp}
+                onPointerCancel={() => { buildSheetGestureRef.current = null; }}
+                className="flex w-full items-center justify-center pb-1"
+                aria-label="Resize build palette"
+              >
+                <span className="h-1 w-10 rounded-full bg-white/15" />
+              </button>
             </div>
-            {/* Compact palette header */}
-            <div className="flex items-center justify-between px-3 pb-1">
-              <span className="text-[10px] uppercase tracking-[0.14em] font-semibold text-white/40">Build</span>
+            <div className="flex flex-wrap items-center gap-2 px-3 pb-2">
+              <div className="min-w-0 flex-1">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/36">Build Palette</div>
+                <div className="mt-0.5 text-[11px] text-white/48">
+                  {buildSheetSnap === 'peek'
+                    ? 'Quick pick dock'
+                    : buildSheetSnap === 'browse'
+                      ? 'Browse a few miniatures at a time'
+                      : 'Full catalog view'}
+                </div>
+              </div>
+              <div className="flex items-center gap-1 rounded-lg border border-white/8 bg-white/[0.04] p-1">
+                {BUILD_SHEET_SNAPS.map((snap) => (
+                  <button
+                    key={snap}
+                    type="button"
+                    onClick={() => setBuildSheetSnap(snap)}
+                    className={`rounded-md px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.14em] transition-colors ${
+                      buildSheetSnap === snap
+                        ? 'bg-cyan-400/[0.14] text-cyan-50'
+                        : 'text-white/40 hover:text-white/72'
+                    }`}
+                  >
+                    {snap === 'expanded' ? 'Full' : snap}
+                  </button>
+                ))}
+              </div>
               <button
                 type="button"
                 onClick={() => {
@@ -1198,19 +1321,26 @@ export default function PetWorldPage() {
                   setPendingBuildType('');
                   setPendingBuildVariant(null);
                 }}
-                className="flex h-7 w-7 items-center justify-center rounded-full border border-white/8 text-[11px] text-white/50 transition-colors hover:border-white/15 hover:text-white"
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/8 text-[11px] text-white/50 transition-colors hover:border-white/15 hover:text-white"
                 aria-label="Close build menu"
               >
                 &times;
               </button>
             </div>
-            <div className="max-h-[32vh] overflow-y-auto px-2.5 pb-2" style={{ overscrollBehavior: 'contain' }}>
+            <div
+              className={`px-3 pb-3 ${buildSheetSnap === 'peek' ? 'overflow-visible' : 'overflow-y-auto'}`}
+              style={{
+                maxHeight: `calc(${BUILD_SHEET_HEIGHTS[buildSheetSnap]} - 76px)`,
+                overscrollBehavior: 'contain',
+              }}
+            >
               <PetWorldBuildMenu
                 open
                 buildings={catalog}
                 world={world}
                 selectedType={pendingBuildType}
                 selectedVariant={pendingBuildVariant}
+                layout={buildSheetSnap}
                 onSelect={(type, variant) => {
                   setPendingBuildType(type);
                   setPendingBuildVariant(variant || null);
@@ -1234,19 +1364,22 @@ export default function PetWorldPage() {
       {/* ═══ INSPECT SHEET ═══ */}
       {activeSheet === 'inspect' && (
         <div
-          className="absolute inset-x-0 bottom-0 z-50 px-3 pb-3 transition-all duration-200 ease-out"
+          className="absolute inset-x-0 bottom-0 z-50 px-3 pb-3 transition-all duration-200 ease-out motion-reduce:transition-none"
           style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}
         >
-          <div className="mx-auto w-full max-w-2xl overflow-hidden rounded-2xl border border-white/8 bg-black/85 shadow-[0_-12px_32px_rgba(0,0,0,0.35)] backdrop-blur-xl">
-            {/* Drag handle */}
+          <div className="mx-auto w-full max-w-lg overflow-hidden rounded-lg border border-white/8 bg-[linear-gradient(180deg,rgba(10,17,24,0.96),rgba(6,10,15,0.94))] shadow-[0_-18px_36px_rgba(0,0,0,0.34)] backdrop-blur-xl">
             <div className="flex justify-center pt-2 pb-1">
-              <div className="h-1 w-8 rounded-full bg-white/15" />
+              <div className="h-1 w-9 rounded-full bg-white/15" />
             </div>
-            {/* Close */}
-            <div className="flex items-center justify-between px-3.5 pb-1">
-              <span className="text-[9px] uppercase tracking-[0.16em] text-white/30">
-                {selectedBuilding ? 'Building' : 'Tile'}
-              </span>
+            <div className="flex items-center justify-between px-3 pb-2">
+              <div>
+                <div className="text-[9px] uppercase tracking-[0.16em] text-white/30">
+                  {selectedBuilding ? 'Building Inspect' : 'Ground Inspect'}
+                </div>
+                <div className="mt-0.5 text-[11px] text-white/50">
+                  {selectedBuilding ? 'Village details at a glance' : 'A tiny world note for this patch'}
+                </div>
+              </div>
               <button
                 type="button"
                 onClick={() => {
@@ -1254,16 +1387,17 @@ export default function PetWorldPage() {
                   setSelectedTile(null);
                   setActiveSheet(null);
                 }}
-                className="flex h-7 w-7 items-center justify-center rounded-full border border-white/8 text-[11px] text-white/50 transition-colors hover:border-white/15 hover:text-white"
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/8 text-[11px] text-white/50 transition-colors hover:border-white/15 hover:text-white"
                 aria-label="Close inspect"
               >
                 &times;
               </button>
             </div>
-            <div className="max-h-[28vh] overflow-y-auto px-3.5 pb-3" style={{ overscrollBehavior: 'contain' }}>
+            <div className="max-h-[26vh] overflow-y-auto px-3 pb-3" style={{ overscrollBehavior: 'contain' }}>
               {selectedBuilding ? (
                 <PetWorldBuildingInfo
                   building={selectedBuilding}
+                  buildingDef={selectedBuildingDef}
                   world={world}
                   onClose={() => {
                     setSelectedBuilding(null);
@@ -1274,15 +1408,15 @@ export default function PetWorldPage() {
                   onSetWorkers={handleSetWorkers}
                 />
               ) : selectedTile ? (
-                <div>
+                <div className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2.5">
                   <div className="flex items-center gap-2">
-                    <div className="text-lg font-black text-white">{selectedTile.x}, {selectedTile.y}</div>
-                    <span className="text-[11px] text-white/45 capitalize">{selectedTile.tile?.t || 'empty ground'}</span>
+                    <span className="rounded-full border border-white/8 px-2 py-0.5 text-[8px] uppercase tracking-[0.18em] text-white/42">
+                      {selectedTile.tile?.t || 'ground'}
+                    </span>
+                    <div className="text-[13px] font-black text-white">{selectedTile.x}, {selectedTile.y}</div>
                   </div>
-                  <div className="mt-1.5 text-[11px] text-white/50 leading-relaxed">
-                    {inspectedObstacle
-                      ? 'This obstacle blocks construction. Clear it to open the area.'
-                      : 'Open ground. Use the Build button to place something here.'}
+                  <div className="mt-2 text-[11px] leading-relaxed text-white/56">
+                    {getTileInspectCopy(selectedTile.tile?.t, inspectedObstacle)}
                   </div>
                   {inspectedObstacle && (
                     <button
