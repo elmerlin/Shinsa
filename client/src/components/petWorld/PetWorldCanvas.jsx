@@ -491,6 +491,7 @@ export default function PetWorldCanvas({
       canvas.style.height = `${size.height}px`;
     }
     const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, size.width, size.height);
 
@@ -559,8 +560,8 @@ export default function PetWorldCanvas({
       if (topScreenY < size.height * 0.4) {
         ctx.save();
         const hazeGrad = ctx.createLinearGradient(0, Math.max(0, topScreenY), 0, Math.max(0, topScreenY) + hazeH);
-        hazeGrad.addColorStop(0, 'rgba(7,18,26,0.15)');
-        hazeGrad.addColorStop(1, 'rgba(7,18,26,0)');
+        hazeGrad.addColorStop(0, 'rgba(255,247,212,0.16)');
+        hazeGrad.addColorStop(1, 'rgba(255,247,212,0)');
         ctx.fillStyle = hazeGrad;
         ctx.fillRect(0, Math.max(0, topScreenY), size.width, hazeH);
         ctx.restore();
@@ -847,7 +848,7 @@ export default function PetWorldCanvas({
         <canvas
           ref={canvasRef}
           className="h-full w-full"
-          style={{ willChange: 'transform' }}
+          style={{ willChange: 'transform', imageRendering: 'pixelated' }}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}

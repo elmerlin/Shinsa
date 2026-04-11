@@ -1,5 +1,11 @@
 import { BUILDING_SIZES, getBuildingUi } from './petWorldBuildings';
 import { getBiomeUi, getTilePalette } from './petWorldTiles';
+import {
+  drawAmbientCritterAtlas,
+  drawPetAtlas,
+  drawTerrainAtlasSprite,
+  drawVillageResidentAtlas,
+} from './petWorldAtlas';
 
 // --- low-level drawing helpers ---
 
@@ -534,6 +540,12 @@ export function drawTile(ctx, biome, tile, x, y, tileSize, time = 0, neighbors, 
   const groundMid = biomeUi.groundMid;
   const terrainInfo = terrain || null;
 
+  if (tile.t === 'tree' || tile.t === 'rock' || tile.t === 'bush') {
+    if (drawTerrainAtlasSprite(ctx, biome, tile, ix, iy, s, time, terrainInfo, neighbors, h)) {
+      return;
+    }
+  }
+
   if (tile.t !== 'water') {
     const detailAlpha = 0.04 + ((terrainInfo?.macroSeed || ((h % 1000) / 1000)) * 0.04);
     px(ctx, ix + s * 0.16, iy + s * 0.2, s * 0.07, s * 0.07, biomeUi.highlight || '#ffffff', detailAlpha * 0.75);
@@ -671,6 +683,7 @@ export function drawTile(ctx, biome, tile, x, y, tileSize, time = 0, neighbors, 
       const sparkY = iy + s * (0.2 + ((h >> 7) % 5) / 10);
       px(ctx, sparkX, sparkY, 2, 2, '#ffffff', 0.55);
     }
+    drawTerrainAtlasSprite(ctx, biome, tile, ix, iy, s, time, terrainInfo, neighbors, h);
     return;
   }
 
@@ -934,6 +947,8 @@ export function drawTile(ctx, biome, tile, x, y, tileSize, time = 0, neighbors, 
     tri(ctx, lx + s * 0.01, ly + s * 0.01, lx + s * 0.03, ly - s * 0.01, lx + s * 0.045, ly + s * 0.02, detailColor);
     ctx.globalAlpha = 1;
   }
+
+  drawTerrainAtlasSprite(ctx, biome, tile, ix, iy, s, time, terrainInfo, neighbors, h);
 }
 
 // --- building sprites ---
@@ -1896,6 +1911,9 @@ const RESIDENT_PALETTES = {
 };
 
 export function drawVillageResident(ctx, x, y, tileSize, paletteKey, activity = 'stroll', frameOffset = 0, facing = 1) {
+  if (drawVillageResidentAtlas(ctx, x, y, tileSize, paletteKey, activity, frameOffset, facing)) {
+    return;
+  }
   const s = tileSize;
   const pal = RESIDENT_PALETTES[paletteKey] || RESIDENT_PALETTES.teal;
   const stride = Math.sin(frameOffset * Math.PI * 4) * s * 0.028;
@@ -1950,6 +1968,9 @@ export function drawVillageResident(ctx, x, y, tileSize, paletteKey, activity = 
 }
 
 export function drawAmbientCritter(ctx, x, y, tileSize, species, frameOffset = 0, options = {}) {
+  if (drawAmbientCritterAtlas(ctx, x, y, tileSize, species, frameOffset, options)) {
+    return;
+  }
   const s = tileSize * (options.scale || 1);
   const hover = Math.sin(frameOffset * Math.PI * 2);
   const facing = options.facing || 1;
@@ -2086,6 +2107,9 @@ const PET_PALETTES = {
 };
 
 export function drawPetWander(ctx, x, y, tileSize, character, frameOffset) {
+  if (drawPetAtlas(ctx, x, y, tileSize * 1.06, character, frameOffset)) {
+    return;
+  }
   const s = tileSize * 1.12;
   const animState = getPetAnimState(frameOffset);
   const frame = (frameOffset * 4) | 0; // 0-3 sub-frames
