@@ -53,6 +53,21 @@ const HOME_BUILDINGS = new Set(['house', 'large_house']);
 const COMMON_BUILDINGS = new Set(['well', 'market', 'town_hall', 'shrine', 'park', 'tavern', 'trading_post']);
 const SOCIAL_BUILDINGS = new Set(['market', 'tavern', 'park', 'town_hall', 'trading_post']);
 const QUIET_BUILDINGS = new Set(['well', 'shrine']);
+const ACTIVE_MARKER_BUILDINGS = new Set([
+  'farm',
+  'fishing_hut',
+  'woodcutters_hut',
+  'lumberyard',
+  'quarry',
+  'stone_pit',
+  'market',
+  'trading_post',
+  'storehouse',
+  'warehouse',
+  'tavern',
+  'watchtower',
+  'shrine',
+]);
 
 function getBuildingMap(buildings = []) {
   return new Map(buildings.map((building) => [building.id, building]));
@@ -65,6 +80,10 @@ function hash01(seed, salt = 0) {
 
 function tileKey(x, y) {
   return `${x}:${y}`;
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
 }
 
 function findClearTiles(grid) {
@@ -119,6 +138,7 @@ function pointFromTile(tile, seed, radiusX = 0.2, radiusY = 0.16) {
     role: tile.role || 'path',
     buildingType: tile.buildingType || null,
     anchorKind: tile.anchorKind || null,
+    buildingId: tile.buildingId || null,
   };
 }
 
@@ -226,6 +246,7 @@ function getRouteMotion(entity, time) {
       frameOffset: 0,
       facing: 1,
       moving: false,
+      buildingId: entity.buildingId || null,
     };
   }
 
@@ -249,6 +270,7 @@ function getRouteMotion(entity, time) {
         role: node.role || 'path',
         buildingType: node.buildingType || null,
         anchorKind: node.anchorKind || null,
+        buildingId: node.buildingId || null,
       };
     }
     cursor -= pauseMs;
@@ -271,6 +293,7 @@ function getRouteMotion(entity, time) {
         role: node.role || 'path',
         buildingType: node.buildingType || next.buildingType || null,
         anchorKind: node.anchorKind || next.anchorKind || null,
+        buildingId: node.buildingId || next.buildingId || null,
       };
     }
     cursor -= moveMs;
@@ -288,6 +311,7 @@ function getRouteMotion(entity, time) {
     role: fallback.role || 'path',
     buildingType: fallback.buildingType || null,
     anchorKind: fallback.anchorKind || null,
+    buildingId: fallback.buildingId || null,
   };
 }
 
@@ -316,6 +340,228 @@ function getResidentDisplayActivity(resident, motion) {
   if (resident.archetype === 'craft') return 'build';
   if (resident.archetype === 'gatherer') return 'gather';
   return 'stroll';
+}
+
+function assignResidentGroups(placements) {
+  const socialResidents = placements
+    .map((resident, index) => ({ resident, index }))
+    .filter(({ resident }) => resident.archetype === 'social' || resident.archetype === 'merchant');
+
+  socialResidents.forEach(({ resident }, order) => {
+    resident.socialGroup = Math.floor(order / 3);
+    resident.groupSlot = order % 3;
+  });
+
+  return placements;
+}
+
+function getGroupSlotOffset(slot = 0) {
+  if (slot === 1) return { x: -0.11, y: 0.03 };
+  if (slot === 2) return { x: 0.12, y: 0.04 };
+  return { x: 0, y: -0.02 };
+}
+
+function getResidentInteractionPose(resident, motion, time) {
+  const swing = Math.sin(time * 0.012 + resident.seed * 0.17);
+  const bounce = Math.sin(time * 0.009 + resident.seed * 0.13);
+  const pose = {
+    offsetX: 0,
+    offsetY: 0,
+    facing: motion.facing,
+    tool: null,
+    social: false,
+    kneel: false,
+    sit: false,
+    taskPulse: 0.4 + Math.abs(swing) * 0.6,
+  };
+
+  if (!motion.paused) return pose;
+
+  if (motion.anchorKind === 'social') {
+    const slot = getGroupSlotOffset(resident.groupSlot || 0);
+    pose.offsetX += slot.x;
+    pose.offsetY += slot.y;
+    pose.social = true;
+  }
+
+  switch (motion.buildingType) {
+    case 'farm':
+      pose.offsetY += 0.04 + bounce * 0.01;
+      pose.tool = 'hoe';
+      break;
+    case 'fishing_hut':
+      pose.offsetX += (motion.facing || 1) * 0.03;
+      pose.tool = 'rod';
+      break;
+    case 'woodcutters_hut':
+    case 'lumberyard':
+      pose.tool = 'axe';
+      pose.offsetX += swing * 0.02;
+      break;
+    case 'quarry':
+    case 'stone_pit':
+      pose.tool = 'pick';
+      pose.offsetX += swing * 0.015;
+      pose.offsetY += 0.02;
+      break;
+    case 'market':
+    case 'trading_post':
+      pose.social = true;
+      pose.tool = resident.archetype === 'merchant' ? 'crate' : null;
+      break;
+    case 'storehouse':
+    case 'warehouse':
+      pose.tool = 'crate';
+      break;
+    case 'watchtower':
+      pose.offsetY -= 0.03;
+      break;
+    case 'shrine':
+      pose.kneel = true;
+      pose.offsetY += 0.05;
+      break;
+    case 'park':
+    case 'tavern':
+      pose.social = true;
+      pose.sit = motion.buildingType === 'park' && (resident.groupSlot || 0) === 1;
+      if (pose.sit) {
+        pose.offsetY += 0.04;
+      }
+      break;
+    default:
+      break;
+  }
+
+  return pose;
+}
+
+function countBuildingOccupants(buildings, residentStates) {
+  const counts = new Map();
+  residentStates.forEach(({ motion }) => {
+    if (!motion?.paused || !motion.buildingId) return;
+    counts.set(motion.buildingId, (counts.get(motion.buildingId) || 0) + 1);
+  });
+  buildings.forEach((building) => {
+    if (building.state !== 'built') return;
+    if (!ACTIVE_MARKER_BUILDINGS.has(building.type)) return;
+    if (!counts.has(building.id) && building.workers > 0) {
+      counts.set(building.id, Math.max(1, Math.min(3, building.workers)));
+    }
+  });
+  return counts;
+}
+
+function drawTinyProp(ctx, x, y, color, width, height, shadow = 'rgba(0,0,0,0.16)') {
+  ctx.save();
+  ctx.fillStyle = shadow;
+  ctx.fillRect(Math.round(x), Math.round(y + height * 0.2), Math.max(1, Math.round(width)), Math.max(1, Math.round(height * 0.32)));
+  ctx.fillStyle = color;
+  ctx.fillRect(Math.round(x), Math.round(y), Math.max(1, Math.round(width)), Math.max(1, Math.round(height)));
+  ctx.restore();
+}
+
+function drawOccupancyMarkers(ctx, buildings, occupancyCounts, tileSize, camera, viewport) {
+  buildings.forEach((building) => {
+    if (building.state !== 'built') return;
+    const occupancy = occupancyCounts.get(building.id) || 0;
+    if (occupancy <= 0) return;
+
+    const baseX = building.grid_x * tileSize - camera.x;
+    const baseY = building.grid_y * tileSize - camera.y;
+    const width = building.width * tileSize;
+    const height = building.height * tileSize;
+    if (baseX + width < -tileSize || baseY + height < -tileSize || baseX > viewport.width + tileSize || baseY > viewport.height + tileSize) return;
+
+    const markerCount = clamp(occupancy, 1, 3);
+    for (let i = 0; i < markerCount; i += 1) {
+      const px = baseX + width * (0.16 + i * 0.18);
+      const py = baseY + height * 0.76 + (i % 2) * tileSize * 0.03;
+      switch (building.type) {
+        case 'farm':
+          drawTinyProp(ctx, px, py, '#d9b85c', tileSize * 0.13, tileSize * 0.09);
+          break;
+        case 'fishing_hut':
+          drawTinyProp(ctx, px, py, '#62a9c6', tileSize * 0.12, tileSize * 0.06);
+          drawTinyProp(ctx, px + tileSize * 0.06, py - tileSize * 0.03, '#d2d8b8', tileSize * 0.08, tileSize * 0.04);
+          break;
+        case 'woodcutters_hut':
+        case 'lumberyard':
+          drawTinyProp(ctx, px, py, '#94663d', tileSize * 0.15, tileSize * 0.07);
+          break;
+        case 'quarry':
+        case 'stone_pit':
+          drawTinyProp(ctx, px, py, '#9aa1ab', tileSize * 0.14, tileSize * 0.08);
+          break;
+        case 'market':
+        case 'trading_post':
+          drawTinyProp(ctx, px, py, i % 2 === 0 ? '#d35a52' : '#d9b85c', tileSize * 0.1, tileSize * 0.1);
+          break;
+        case 'storehouse':
+        case 'warehouse':
+          drawTinyProp(ctx, px, py, '#a9764b', tileSize * 0.11, tileSize * 0.11);
+          break;
+        case 'tavern':
+          drawTinyProp(ctx, px, py, '#8e6644', tileSize * 0.09, tileSize * 0.12);
+          break;
+        case 'watchtower':
+          drawTinyProp(ctx, baseX + width * 0.55, baseY + height * 0.18, '#d95454', tileSize * 0.06, tileSize * 0.12, 'rgba(0,0,0,0)');
+          break;
+        case 'shrine':
+          drawTinyProp(ctx, px, py, '#e2d7b6', tileSize * 0.08, tileSize * 0.12);
+          break;
+        default:
+          break;
+      }
+    }
+  });
+}
+
+function drawResidentInteractionOverlay(ctx, screenX, screenY, tileSize, motion, pose, time) {
+  if (!motion?.paused) return;
+  const pulse = pose.taskPulse || 0.7;
+  const baseX = screenX;
+  const baseY = screenY - tileSize * 0.06;
+
+  ctx.save();
+  ctx.lineWidth = Math.max(1, tileSize * 0.035);
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = 'rgba(58,37,23,0.9)';
+  ctx.fillStyle = 'rgba(230,210,166,0.92)';
+
+  if (pose.tool === 'rod') {
+    ctx.beginPath();
+    ctx.moveTo(baseX + tileSize * 0.04, baseY - tileSize * 0.08);
+    ctx.lineTo(baseX + tileSize * 0.14, baseY - tileSize * 0.23);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(baseX + tileSize * 0.14, baseY - tileSize * 0.23);
+    ctx.lineTo(baseX + tileSize * 0.2, baseY - tileSize * 0.16 + Math.sin(time * 0.01) * tileSize * 0.01);
+    ctx.stroke();
+  } else if (pose.tool === 'axe' || pose.tool === 'pick' || pose.tool === 'hoe') {
+    const lean = Math.sin(time * 0.018) * tileSize * 0.02;
+    ctx.beginPath();
+    ctx.moveTo(baseX - tileSize * 0.02, baseY - tileSize * 0.1);
+    ctx.lineTo(baseX + tileSize * 0.08, baseY - tileSize * 0.24 + lean);
+    ctx.stroke();
+    ctx.fillStyle = pose.tool === 'hoe' ? '#b9914b' : '#bfc6cf';
+    ctx.fillRect(Math.round(baseX + tileSize * 0.06), Math.round(baseY - tileSize * 0.26 + lean), Math.max(1, Math.round(tileSize * 0.06)), Math.max(1, Math.round(tileSize * 0.03)));
+  } else if (pose.tool === 'crate') {
+    drawTinyProp(ctx, baseX - tileSize * 0.06, baseY - tileSize * 0.12, '#af7a4a', tileSize * 0.12, tileSize * 0.1);
+  }
+
+  if (pose.social) {
+    ctx.fillStyle = `rgba(255,238,188,${(0.22 + pulse * 0.12).toFixed(3)})`;
+    ctx.beginPath();
+    ctx.arc(baseX, baseY - tileSize * 0.2, tileSize * 0.05, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  if (pose.kneel) {
+    ctx.fillStyle = 'rgba(226,215,182,0.85)';
+    ctx.fillRect(Math.round(baseX - tileSize * 0.04), Math.round(baseY - tileSize * 0.02), Math.max(1, Math.round(tileSize * 0.08)), Math.max(1, Math.round(tileSize * 0.02)));
+  }
+
+  ctx.restore();
 }
 
 function getEntityWanderPos(entity, time) {
@@ -411,14 +657,16 @@ function buildResidentPlacements(world, terrainRegions, buildings = []) {
     const homeTile = pickFromPool(homeAnchors, i * 5 + 1, tile);
     const laneTile = pickFromPool(laneTiles, i * 7 + 2, tile);
     const preferredSocial = (seed % 3) !== 0;
+    const socialGroup = Math.floor(i / 3);
+    const socialSeedBase = socialGroup * 19;
     const leisureTile = preferredSocial
-      ? pickFromPool(weightedSocialAnchors, i * 9 + 3, pickFromPool(commonAnchors, i * 7 + 1, pickFromPool(meadowTiles, i * 11 + 5, tile)))
-      : pickFromPool(weightedQuietAnchors, i * 9 + 3, pickFromPool(commonAnchors, i * 7 + 1, pickFromPool(meadowTiles, i * 11 + 5, tile)));
+      ? pickFromPool(weightedSocialAnchors, socialSeedBase + 3, pickFromPool(commonAnchors, i * 7 + 1, pickFromPool(meadowTiles, i * 11 + 5, tile)))
+      : pickFromPool(weightedQuietAnchors, socialSeedBase + 5, pickFromPool(commonAnchors, i * 7 + 1, pickFromPool(meadowTiles, i * 11 + 5, tile)));
     const natureTile = pickFromPool(shoreTiles, i * 13 + 7, pickFromPool(meadowTiles, i * 17 + 4, tile));
     const workTile = working
       ? pickFromPool(weightedWorkAnchors, i * 3 + assignedWorkers, pickFromPool(commonAnchors, i * 6 + 1, tile))
       : leisureTile;
-    const plazaTile = pickFromPool(weightedSocialAnchors, i * 15 + 2, laneTile);
+    const plazaTile = pickFromPool(weightedSocialAnchors, socialSeedBase + 2, laneTile);
     const residentArchetype = working
       ? (
         workTile?.buildingType && ['market', 'trading_post', 'storehouse', 'warehouse', 'bakery'].includes(workTile.buildingType) ? 'merchant'
@@ -455,7 +703,7 @@ function buildResidentPlacements(world, terrainRegions, buildings = []) {
       y: tile.y,
     });
   }
-  return placements;
+  return assignResidentGroups(placements);
 }
 
 function buildAmbientFauna(world, terrainRegions) {
@@ -928,6 +1176,19 @@ export default function PetWorldCanvas({
       }
     }
 
+    const residentStates = residentPlacements.map((resident) => {
+      const motion = getRouteMotion(resident, time);
+      const pose = getResidentInteractionPose(resident, motion, time);
+      return {
+        resident,
+        motion,
+        pose,
+        screenX: (motion.x + pose.offsetX) * tileSize - camera.x + tileSize / 2,
+        screenY: (motion.y + pose.offsetY) * tileSize - camera.y + tileSize * 0.82,
+      };
+    });
+    const occupancyCounts = countBuildingOccupants(buildings, residentStates);
+
     // buildings
     buildings.forEach((building) => {
       const screenX = building.grid_x * tileSize - camera.x;
@@ -939,6 +1200,8 @@ export default function PetWorldCanvas({
       if (building.state !== 'built') drawConstructionOverlay(ctx, building, screenX, screenY, tileSize, time);
       if (selectedBuildingId === building.id) drawSelectionOutline(ctx, screenX, screenY, width, height, 'rgba(80,220,255,0.95)', time);
     });
+
+    drawOccupancyMarkers(ctx, buildings, occupancyCounts, tileSize, camera, size);
 
     ambientFauna
       .filter((creature) => creature.layer !== 'water')
@@ -953,10 +1216,7 @@ export default function PetWorldCanvas({
         });
       });
 
-    residentPlacements.forEach((resident) => {
-      const wander = getRouteMotion(resident, time);
-      const screenX = wander.x * tileSize - camera.x + tileSize / 2;
-      const screenY = wander.y * tileSize - camera.y + tileSize * 0.82;
+    residentStates.forEach(({ resident, motion, pose, screenX, screenY }) => {
       if (screenX < -tileSize || screenY < -tileSize || screenX > size.width + tileSize || screenY > size.height + tileSize) return;
       drawVillageResident(
         ctx,
@@ -964,10 +1224,11 @@ export default function PetWorldCanvas({
         screenY,
         tileSize,
         resident.palette,
-        getResidentDisplayActivity(resident, wander),
-        wander.frameOffset,
-        wander.facing,
+        getResidentDisplayActivity(resident, motion),
+        motion.frameOffset,
+        pose.facing || motion.facing,
       );
+      drawResidentInteractionOverlay(ctx, screenX, screenY, tileSize, motion, pose, time);
     });
 
     // pet wandering
