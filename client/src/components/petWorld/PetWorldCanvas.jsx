@@ -1,5 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { analyzeTerrainGrid, drawTerrainRegion, drawTile, drawBuildingSprite, drawConstructionOverlay, drawSelectionOutline, drawGhostFootprint, drawPetWander } from './petWorldSprites';
+import {
+  analyzeTerrainGrid,
+  drawTerrainRegion,
+  drawTile,
+  drawBuildingSprite,
+  drawConstructionOverlay,
+  drawSelectionOutline,
+  drawGhostFootprint,
+  drawPetWander,
+  drawVillageResident,
+  drawAmbientCritter,
+} from './petWorldSprites';
 import { getBuildingSize, getBuildingUi } from './petWorldBuildings';
 import { getBiomeUi } from './petWorldTiles';
 
@@ -11,6 +22,15 @@ const MINIMAP_W = 120;
 const MINIMAP_H = 80;
 const MINIMAP_PADDING = 8;
 const LERP_SPEED = 0.15;
+const PET_ROSTER = ['dojocat', 'buu', 'devit', 'pixiu', 'tanuki', 'kitsune', 'usagi', 'kappa'];
+const RESIDENT_STYLES = ['teal', 'berry', 'ochre', 'slate', 'moss', 'plum'];
+const ENCOUNTER_SPECIES = {
+  fox_raid: 'fox',
+  wolf_pack: 'wolf',
+  bear_sighting: 'bear',
+  deer_herd: 'deer',
+  rare_bird: 'rare_bird',
+};
 
 function getBuildingMap(buildings = []) {
   return new Map(buildings.map((building) => [building.id, building]));
@@ -30,17 +50,165 @@ function findClearTiles(grid) {
   return result;
 }
 
+function findTilesByType(grid, type) {
+  const result = [];
+  if (!grid) return result;
+  for (let y = 0; y < grid.h; y += 1) {
+    for (let x = 0; x < grid.w; x += 1) {
+      const tile = grid.tiles[y]?.[x];
+      if (tile?.t === type) result.push({ x, y });
+    }
+  }
+  return result;
+}
+
+function getEntityWanderPos(entity, time) {
+  const period = entity.period || 3200;
+  const t = ((time + entity.seed * 97) % period) / period;
+  const angle = ((entity.seed % 360) / 180) * Math.PI + t * Math.PI * 2;
+  const rangeX = entity.rangeX ?? entity.range ?? 0.45;
+  const rangeY = entity.rangeY ?? entity.range ?? 0.3;
+  return {
+    x: entity.x + Math.cos(angle) * rangeX,
+    y: entity.y + Math.sin(angle * 1.35) * rangeY,
+    frameOffset: t,
+    facing: Math.cos(angle) >= 0 ? 1 : -1,
+  };
+}
+
 function buildPetPlacements(world) {
   const grid = world?.grid;
   if (!grid) return [];
   const clearTiles = findClearTiles(grid);
-  const count = Math.min(Math.max(2, Math.floor((world.population || 0) / 2)), 8, clearTiles.length);
+  const population = Math.max(0, world.population || 0);
+  const count = Math.min(Math.max(2, population), 12, clearTiles.length);
   const placements = [];
   for (let i = 0; i < count; i += 1) {
-    const tile = clearTiles[(i * 7) % clearTiles.length];
-    placements.push({ ...tile, character: ['dojocat', 'buu', 'devit', 'pixiu'][i % 4], seed: i * 13 + 7 });
+    const tile = clearTiles[(i * 11 + Math.floor(i / 2) * 3) % clearTiles.length];
+    placements.push({ ...tile, character: PET_ROSTER[i % PET_ROSTER.length], seed: i * 13 + 7 });
   }
   return placements;
+}
+
+function buildResidentPlacements(world, terrainRegions) {
+  const grid = world?.grid;
+  if (!grid) return [];
+  const clearTiles = findClearTiles(grid);
+  const livedInTiles = clearTiles.filter(({ x, y }) => {
+    const terrain = terrainRegions?.[y]?.[x];
+    return (terrain?.laneStrength || 0) > 0.08 || (terrain?.villageWear || 0) > 0.08 || (terrain?.meadowStrength || 0) > 0.24;
+  });
+  const pool = livedInTiles.length >= 6 ? livedInTiles : clearTiles;
+  const count = Math.min(Math.max(4, (world.population || 0) + 2), 18, pool.length);
+  const assignedWorkers = Math.max(0, world.assigned_workers || 0);
+  const placements = [];
+  for (let i = 0; i < count; i += 1) {
+    const tile = pool[(i * 13 + Math.floor(i / 3) * 5) % pool.length];
+    const working = i < assignedWorkers;
+    placements.push({
+      ...tile,
+      palette: RESIDENT_STYLES[i % RESIDENT_STYLES.length],
+      activity: working ? ['gather', 'carry', 'build'][i % 3] : ['stroll', 'play', 'stroll'][i % 3],
+      seed: i * 29 + 11,
+      range: working ? 0.28 : 0.42,
+      period: 2600 + (i % 5) * 280,
+    });
+  }
+  return placements;
+}
+
+function buildAmbientFauna(world, terrainRegions) {
+  const grid = world?.grid;
+  if (!grid) return [];
+  const clearTiles = findClearTiles(grid);
+  const waterTiles = findTilesByType(grid, 'water');
+  const meadowTiles = clearTiles.filter(({ x, y }) => (terrainRegions?.[y]?.[x]?.meadowStrength || 0) > 0.28);
+  const woodedTiles = clearTiles.filter(({ x, y }) => (terrainRegions?.[y]?.[x]?.foliageShadow || 0) > 0.18);
+  const shoreTiles = clearTiles.filter(({ x, y }) => (terrainRegions?.[y]?.[x]?.shoreStrength || 0) > 0.24);
+
+  const placements = [];
+  const fishCount = Math.min(7, Math.max(2, Math.floor(waterTiles.length / 18)));
+  for (let i = 0; i < fishCount && waterTiles.length; i += 1) {
+    const tile = waterTiles[(i * 7 + 3) % waterTiles.length];
+    placements.push({
+      ...tile,
+      species: i % 3 === 0 ? 'duck' : (i % 2 === 0 ? 'fish_koi' : 'fish_perch'),
+      seed: 101 + i * 19,
+      rangeX: i % 3 === 0 ? 0.2 : 0.35,
+      rangeY: i % 3 === 0 ? 0.12 : 0.2,
+      period: 2800 + i * 210,
+      layer: 'water',
+      yBias: i % 3 === 0 ? 0.58 : 0.62,
+      scale: i % 3 === 0 ? 0.72 : 0.62,
+    });
+  }
+
+  const mammalPool = meadowTiles.length ? meadowTiles : clearTiles;
+  const mammalCount = Math.min(6, Math.max(2, Math.ceil((world.expansions || 0) + (world.population || 0) / 5)));
+  for (let i = 0; i < mammalCount && mammalPool.length; i += 1) {
+    const tile = mammalPool[(i * 11 + 5) % mammalPool.length];
+    placements.push({
+      ...tile,
+      species: ['rabbit', 'deer', 'boar', 'fox'][i % 4],
+      seed: 203 + i * 23,
+      range: i % 2 === 0 ? 0.34 : 0.46,
+      period: 3200 + i * 250,
+      layer: 'ground',
+      yBias: 0.82,
+      scale: ['rabbit', 'fox'].includes(['rabbit', 'deer', 'boar', 'fox'][i % 4]) ? 0.56 : 0.68,
+    });
+  }
+
+  const birdPool = shoreTiles.length ? shoreTiles : (woodedTiles.length ? woodedTiles : clearTiles);
+  const birdCount = Math.min(5, Math.max(2, Math.ceil(((world.population || 0) + 2) / 4)));
+  for (let i = 0; i < birdCount && birdPool.length; i += 1) {
+    const tile = birdPool[(i * 9 + 1) % birdPool.length];
+    placements.push({
+      ...tile,
+      species: i % 4 === 0 ? 'rare_bird' : 'songbird',
+      seed: 307 + i * 31,
+      rangeX: 0.28,
+      rangeY: 0.22,
+      period: 2400 + i * 160,
+      layer: 'air',
+      yBias: 0.48,
+      scale: i % 4 === 0 ? 0.58 : 0.46,
+    });
+  }
+
+  return placements;
+}
+
+function buildEncounterSightings(world, terrainRegions, encounters = []) {
+  const grid = world?.grid;
+  if (!grid || !encounters.length) return [];
+  const clearTiles = findClearTiles(grid);
+  if (!clearTiles.length) return [];
+  const meadowTiles = clearTiles.filter(({ x, y }) => (terrainRegions?.[y]?.[x]?.meadowStrength || 0) > 0.28);
+  const woodedTiles = clearTiles.filter(({ x, y }) => (terrainRegions?.[y]?.[x]?.foliageShadow || 0) > 0.2);
+  const shoreTiles = clearTiles.filter(({ x, y }) => (terrainRegions?.[y]?.[x]?.shoreStrength || 0) > 0.22);
+
+  return encounters.map((encounter, index) => {
+    const type = encounter.encounter_type;
+    const pool =
+      type === 'rare_bird' ? (shoreTiles.length ? shoreTiles : meadowTiles) :
+      type === 'bear_sighting' ? (woodedTiles.length ? woodedTiles : clearTiles) :
+      type === 'wolf_pack' ? (woodedTiles.length ? woodedTiles : meadowTiles) :
+      (meadowTiles.length ? meadowTiles : clearTiles);
+    const tile = pool[(index * 17 + 7) % pool.length];
+    return {
+      ...tile,
+      encounter,
+      species: ENCOUNTER_SPECIES[type] || 'fox',
+      seed: 409 + index * 37,
+      range: type === 'bear_sighting' ? 0.28 : 0.4,
+      period: 3000 + index * 180,
+      layer: type === 'rare_bird' ? 'air' : 'ground',
+      yBias: type === 'rare_bird' ? 0.46 : 0.8,
+      scale: type === 'bear_sighting' ? 0.86 : type === 'wolf_pack' ? 0.76 : 0.72,
+      tileKey: `${tile.x}:${tile.y}`,
+    };
+  });
 }
 
 /** Deterministic pet position: wanders 1 tile every ~2s based on seed. */
@@ -103,6 +271,7 @@ function clampCamera(cx, cy, zoom, gridW, gridH, viewW, viewH) {
 export default function PetWorldCanvas({
   world,
   buildings = [],
+  encounters = [],
   selectedBuildingId,
   selectedTile,
   pendingBuildType,
@@ -110,6 +279,7 @@ export default function PetWorldCanvas({
   readonlyLabel = 'Visiting',
   placementBurst = null,
   onSelectBuilding,
+  onSelectEncounter,
   onSelectTile,
   onPlaceBuilding,
 }) {
@@ -125,8 +295,15 @@ export default function PetWorldCanvas({
   const [hoverTile, setHoverTile] = useState(null);
   const [minimapVisible, setMinimapVisible] = useState(true);
   const buildingMap = useMemo(() => getBuildingMap(buildings), [buildings]);
-  const petPlacements = useMemo(() => buildPetPlacements(world), [world]);
   const terrainRegions = useMemo(() => analyzeTerrainGrid(world?.grid, buildings), [world?.grid, buildings]);
+  const residentPlacements = useMemo(() => buildResidentPlacements(world, terrainRegions), [world, terrainRegions]);
+  const petPlacements = useMemo(() => buildPetPlacements(world), [world]);
+  const ambientFauna = useMemo(() => buildAmbientFauna(world, terrainRegions), [world, terrainRegions]);
+  const encounterSightings = useMemo(() => buildEncounterSightings(world, terrainRegions, encounters), [world, terrainRegions, encounters]);
+  const encounterTileMap = useMemo(
+    () => new Map(encounterSightings.map((sighting) => [sighting.tileKey, sighting])),
+    [encounterSightings],
+  );
   const reduceMotion = useMemo(
     () => (typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)').matches : false),
     [],
@@ -207,6 +384,7 @@ export default function PetWorldCanvas({
         const dx = mx + tx * dotW;
         const dy = my + ty * dotH;
         const terrain = terrainRegions?.[ty]?.[tx];
+        const encounterKey = `${tx}:${ty}`;
         let color;
         if (tile.b != null) {
           const building = buildingMap.get(tile.b);
@@ -231,6 +409,10 @@ export default function PetWorldCanvas({
         }
         ctx.fillStyle = color;
         ctx.fillRect(dx, dy, Math.max(1, dotW), Math.max(1, dotH));
+        if (encounterTileMap.has(encounterKey)) {
+          ctx.fillStyle = '#fbbf24';
+          ctx.fillRect(dx + Math.max(0, dotW * 0.2), dy + Math.max(0, dotH * 0.2), Math.max(1.5, dotW * 0.65), Math.max(1.5, dotH * 0.65));
+        }
       }
     }
 
@@ -273,7 +455,7 @@ export default function PetWorldCanvas({
     ctx.restore();
 
     ctx.restore();
-  }, [world, camera.x, camera.y, minimapVisible, pendingBuildType, terrainRegions, buildingMap]);
+  }, [world, camera.x, camera.y, minimapVisible, pendingBuildType, terrainRegions, buildingMap, encounterTileMap]);
 
   // --- main render ---
   const render = useCallback((timestamp) => {
@@ -357,6 +539,19 @@ export default function PetWorldCanvas({
       drawTile(ctx, world.biome, tile, screenX, screenY, tileSize, time, neighbors, terrain);
     });
 
+    ambientFauna
+      .filter((creature) => creature.layer === 'water')
+      .forEach((creature) => {
+        const wander = getEntityWanderPos(creature, time);
+        const screenX = wander.x * tileSize - camera.x + tileSize / 2;
+        const screenY = wander.y * tileSize - camera.y + tileSize * creature.yBias;
+        if (screenX < -tileSize || screenY < -tileSize || screenX > size.width + tileSize || screenY > size.height + tileSize) return;
+        drawAmbientCritter(ctx, screenX, screenY, tileSize, creature.species, wander.frameOffset, {
+          scale: creature.scale,
+          facing: wander.facing,
+        });
+      });
+
     // atmospheric depth: distant tiles (top of grid) slightly hazier
     if (endY > startY) {
       const hazeH = Math.min(size.height * 0.3, (endY - startY) * tileSize * 0.2);
@@ -384,6 +579,27 @@ export default function PetWorldCanvas({
       if (selectedBuildingId === building.id) drawSelectionOutline(ctx, screenX, screenY, width, height, 'rgba(80,220,255,0.95)', time);
     });
 
+    ambientFauna
+      .filter((creature) => creature.layer !== 'water')
+      .forEach((creature) => {
+        const wander = getEntityWanderPos(creature, time);
+        const screenX = wander.x * tileSize - camera.x + tileSize / 2;
+        const screenY = wander.y * tileSize - camera.y + tileSize * creature.yBias;
+        if (screenX < -tileSize || screenY < -tileSize || screenX > size.width + tileSize || screenY > size.height + tileSize) return;
+        drawAmbientCritter(ctx, screenX, screenY, tileSize, creature.species, wander.frameOffset, {
+          scale: creature.scale,
+          facing: wander.facing,
+        });
+      });
+
+    residentPlacements.forEach((resident) => {
+      const wander = getEntityWanderPos(resident, time);
+      const screenX = wander.x * tileSize - camera.x + tileSize / 2;
+      const screenY = wander.y * tileSize - camera.y + tileSize * 0.82;
+      if (screenX < -tileSize || screenY < -tileSize || screenX > size.width + tileSize || screenY > size.height + tileSize) return;
+      drawVillageResident(ctx, screenX, screenY, tileSize, resident.palette, resident.activity, wander.frameOffset, wander.facing);
+    });
+
     // pet wandering
     petPlacements.forEach((pet) => {
       const wander = getPetWanderPos(pet, time);
@@ -391,6 +607,18 @@ export default function PetWorldCanvas({
       const screenY = wander.y * tileSize - camera.y + tileSize * 0.80;
       if (screenX < -tileSize || screenY < -tileSize || screenX > size.width + tileSize || screenY > size.height + tileSize) return;
       drawPetWander(ctx, screenX, screenY, tileSize, pet.character, wander.frameOffset);
+    });
+
+    encounterSightings.forEach((sighting) => {
+      const wander = getEntityWanderPos(sighting, time);
+      const screenX = wander.x * tileSize - camera.x + tileSize / 2;
+      const screenY = wander.y * tileSize - camera.y + tileSize * sighting.yBias;
+      if (screenX < -tileSize || screenY < -tileSize || screenX > size.width + tileSize || screenY > size.height + tileSize) return;
+      drawAmbientCritter(ctx, screenX, screenY, tileSize, sighting.species, wander.frameOffset, {
+        scale: sighting.scale,
+        facing: wander.facing,
+        highlight: true,
+      });
     });
 
     // selection outline on selected tile
@@ -451,7 +679,27 @@ export default function PetWorldCanvas({
     if (animatingRef.current) {
       animationFrameRef.current = requestAnimationFrame(render);
     }
-  }, [world, buildings, size.width, size.height, camera.x, camera.y, tileSize, selectedBuildingId, selectedTile, pendingBuildType, petPlacements, hoverTile, drawMinimap, terrainRegions, placementBurst, reduceMotion]);
+  }, [
+    world,
+    buildings,
+    size.width,
+    size.height,
+    camera.x,
+    camera.y,
+    tileSize,
+    selectedBuildingId,
+    selectedTile,
+    pendingBuildType,
+    residentPlacements,
+    petPlacements,
+    ambientFauna,
+    encounterSightings,
+    hoverTile,
+    drawMinimap,
+    terrainRegions,
+    placementBurst,
+    reduceMotion,
+  ]);
 
   // --- animation control: always running ---
   const startAnimating = useCallback(() => {
@@ -560,7 +808,10 @@ export default function PetWorldCanvas({
     if (!pointer.dragging) {
       const hit = toTilePosition(event.clientX, event.clientY);
       if (hit) {
-        if (elapsed >= LONG_PRESS_MS) {
+        const encounterHit = !readonly && !pendingBuildType ? encounterTileMap.get(`${hit.x}:${hit.y}`) : null;
+        if (encounterHit) {
+          onSelectEncounter?.(encounterHit.encounter);
+        } else if (elapsed >= LONG_PRESS_MS) {
           // long-press: show tile info
           onSelectTile?.({ x: hit.x, y: hit.y, tile: hit.tile });
         } else if (hit.tile?.b != null) {
@@ -609,14 +860,18 @@ export default function PetWorldCanvas({
           </div>
         )}
         {/* Minimap toggle button */}
-        <button
-          type="button"
-          onClick={() => setMinimapVisible((v) => !v)}
-          className="absolute bottom-2 right-2 rounded-full border border-white/8 bg-black/30 p-1.5 text-[10px] text-white/50 backdrop-blur-sm hover:bg-black/45 hover:text-white/70 transition-colors"
-          aria-label={minimapVisible ? 'Hide minimap' : 'Show minimap'}
-        >
-          {minimapVisible ? '\u25A3' : '\u25A2'}
-        </button>
+        {!pendingBuildType && (
+          <button
+            type="button"
+            onClick={() => setMinimapVisible((v) => !v)}
+            className={`absolute left-2 rounded-full border border-white/8 bg-black/30 p-1.5 text-[10px] text-white/50 backdrop-blur-sm transition-colors hover:bg-black/45 hover:text-white/70 ${
+              minimapVisible ? 'bottom-[92px]' : 'bottom-2'
+            }`}
+            aria-label={minimapVisible ? 'Hide minimap' : 'Show minimap'}
+          >
+            {minimapVisible ? '\u25A3' : '\u25A2'}
+          </button>
+        )}
       </div>
     </div>
   );

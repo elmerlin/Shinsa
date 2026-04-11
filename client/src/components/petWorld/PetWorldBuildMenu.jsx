@@ -66,7 +66,10 @@ export default function PetWorldBuildMenu({
   return (
     <div className="space-y-2">
       {/* Category pills -- horizontal scroll */}
-      <div className="flex gap-1 overflow-x-auto scrollbar-none" style={{ overscrollBehavior: 'contain' }}>
+      <div
+        className="flex gap-1 overflow-x-auto scrollbar-none"
+        style={{ overscrollBehavior: 'contain', touchAction: 'pan-x', WebkitOverflowScrolling: 'touch' }}
+      >
         {CATEGORIES.map((c) => (
           <button
             key={c}
@@ -84,7 +87,10 @@ export default function PetWorldBuildMenu({
       </div>
 
       {isPeek ? (
-        <div className="flex gap-2 overflow-x-auto pb-0.5 scrollbar-none" style={{ overscrollBehavior: 'contain' }}>
+        <div
+          className="flex gap-2 overflow-x-auto pb-0.5 scrollbar-none"
+          style={{ overscrollBehavior: 'contain', touchAction: 'pan-x', WebkitOverflowScrolling: 'touch' }}
+        >
           {filtered.map((building) => {
             const ui = getBuildingUi(building.id);
             const locked = (world?.population || 0) < (building.tierUnlockPopulation || 0);
@@ -124,8 +130,8 @@ export default function PetWorldBuildMenu({
         </div>
       ) : (
         <div
-          className={`grid ${gridCols} gap-1.5 overflow-y-auto`}
-          style={{ overscrollBehavior: 'contain' }}
+          className={`grid ${gridCols} gap-1.5`}
+          style={{ touchAction: 'pan-y' }}
         >
           {filtered.map((building) => {
             const ui = getBuildingUi(building.id);

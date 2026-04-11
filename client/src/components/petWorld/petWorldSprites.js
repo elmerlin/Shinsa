@@ -1886,6 +1886,187 @@ export function drawGhostFootprint(ctx, x, y, tileSize, bw, bh, valid, time = 0)
   ctx.restore();
 }
 
+const RESIDENT_PALETTES = {
+  teal:   { hood: '#4b8f88', coat: '#2f6e69', accent: '#cce9df', skin: '#efd3bc', hair: '#4c3426' },
+  berry:  { hood: '#a24f64', coat: '#7f334a', accent: '#f4d8dd', skin: '#f0cfbf', hair: '#513122' },
+  ochre:  { hood: '#b98b3d', coat: '#8f6623', accent: '#f5e2b9', skin: '#efd0ba', hair: '#5f4128' },
+  slate:  { hood: '#667287', coat: '#475264', accent: '#d8e0ea', skin: '#eccab6', hair: '#3f2f22' },
+  moss:   { hood: '#5f8b4a', coat: '#476b38', accent: '#dcebc8', skin: '#e8c3ad', hair: '#4a3423' },
+  plum:   { hood: '#8866a2', coat: '#64497d', accent: '#e6dcf3', skin: '#efc8b3', hair: '#4a2c22' },
+};
+
+export function drawVillageResident(ctx, x, y, tileSize, paletteKey, activity = 'stroll', frameOffset = 0, facing = 1) {
+  const s = tileSize;
+  const pal = RESIDENT_PALETTES[paletteKey] || RESIDENT_PALETTES.teal;
+  const stride = Math.sin(frameOffset * Math.PI * 4) * s * 0.028;
+  const bob = Math.sin(frameOffset * Math.PI * 2) * s * 0.016;
+  const blink = ((frameOffset * 8) | 0) % 7 === 0;
+
+  ctx.save();
+  ctx.translate(x, y + bob);
+  ctx.scale(facing, 1);
+  ctx.shadowColor = 'rgba(0,0,0,0.24)';
+  ctx.shadowBlur = Math.max(2, s * 0.06);
+  ctx.shadowOffsetY = Math.max(1, s * 0.015);
+
+  fillEllipse(ctx, 0, s * 0.04, s * 0.15, s * 0.06, 'rgba(0,0,0,0.18)', 1);
+
+  // legs
+  px(ctx, -s * 0.055, -s * 0.005 + stride, s * 0.032, s * 0.09, '#3b2a1d');
+  px(ctx, s * 0.02, -s * 0.005 - stride, s * 0.032, s * 0.09, '#3b2a1d');
+  // coat
+  px(ctx, -s * 0.09, -s * 0.12, s * 0.18, s * 0.17, pal.coat);
+  px(ctx, -s * 0.03, -s * 0.10, s * 0.06, s * 0.12, pal.accent, 0.45);
+  // arms
+  px(ctx, -s * 0.12, -s * 0.1, s * 0.04, s * 0.11, pal.hood);
+  px(ctx, s * 0.08, -s * 0.08, s * 0.04, s * 0.11, pal.hood);
+  // head
+  circ(ctx, 0, -s * 0.17, s * 0.072, pal.skin);
+  px(ctx, -s * 0.06, -s * 0.24, s * 0.12, s * 0.045, pal.hair);
+  // hood
+  tri(ctx, -s * 0.10, -s * 0.14, 0, -s * 0.28, s * 0.10, -s * 0.14, pal.hood);
+
+  if (blink) {
+    px(ctx, -s * 0.03, -s * 0.18, s * 0.018, s * 0.005, '#2b2019');
+    px(ctx, s * 0.015, -s * 0.18, s * 0.018, s * 0.005, '#2b2019');
+  } else {
+    circ(ctx, -s * 0.022, -s * 0.18, s * 0.010, '#2b2019');
+    circ(ctx, s * 0.022, -s * 0.18, s * 0.010, '#2b2019');
+  }
+
+  if (activity === 'gather') {
+    px(ctx, s * 0.09, -s * 0.02, s * 0.05, s * 0.05, '#d8b76a');
+  } else if (activity === 'build') {
+    px(ctx, s * 0.085, -s * 0.07, s * 0.02, s * 0.13, '#8d6c4f');
+    px(ctx, s * 0.05, -s * 0.1, s * 0.08, s * 0.03, '#c7cbd6');
+  } else if (activity === 'carry') {
+    px(ctx, -s * 0.13, -s * 0.08, s * 0.06, s * 0.06, '#9a7f58');
+    px(ctx, -s * 0.122, -s * 0.072, s * 0.044, s * 0.044, '#d6be82');
+  } else if (activity === 'play') {
+    circ(ctx, s * 0.12, -s * 0.02, s * 0.03, '#63c7ff');
+  }
+
+  ctx.restore();
+}
+
+export function drawAmbientCritter(ctx, x, y, tileSize, species, frameOffset = 0, options = {}) {
+  const s = tileSize * (options.scale || 1);
+  const hover = Math.sin(frameOffset * Math.PI * 2);
+  const facing = options.facing || 1;
+  const highlight = options.highlight;
+
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(facing, 1);
+  ctx.shadowColor = highlight ? 'rgba(251,191,36,0.34)' : 'rgba(0,0,0,0.2)';
+  ctx.shadowBlur = Math.max(2, s * (highlight ? 0.11 : 0.06));
+  ctx.shadowOffsetY = Math.max(1, s * 0.02);
+
+  if (highlight) {
+    const pulse = 0.35 + Math.abs(hover) * 0.25;
+    ctx.save();
+    ctx.strokeStyle = `rgba(251,191,36,${pulse.toFixed(3)})`;
+    ctx.lineWidth = Math.max(1, s * 0.03);
+    ctx.beginPath();
+    ctx.arc(0, -s * 0.08, s * 0.24, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  if (species === 'fish_koi' || species === 'fish_perch') {
+    const body = species === 'fish_koi' ? '#f29f4b' : '#76a7c8';
+    const stripe = species === 'fish_koi' ? '#fff4dd' : '#d8edf8';
+    fillEllipse(ctx, 0, 0, s * 0.16, s * 0.08, 'rgba(0,0,0,0.16)', 1);
+    fillEllipse(ctx, 0, -s * 0.03, s * 0.14, s * 0.08, body, 1);
+    tri(ctx, -s * 0.15, -s * 0.03, -s * 0.24, -s * 0.12, -s * 0.24, s * 0.05, body);
+    tri(ctx, -s * 0.03, -s * 0.10, s * 0.05, -s * 0.16, s * 0.08, -s * 0.06, stripe);
+    px(ctx, -s * 0.04, -s * 0.05, s * 0.08, s * 0.015, stripe);
+    circ(ctx, s * 0.08, -s * 0.04, s * 0.01, '#13283a');
+  } else if (species === 'duck') {
+    fillEllipse(ctx, 0, s * 0.03, s * 0.18, s * 0.08, 'rgba(0,0,0,0.15)', 1);
+    fillEllipse(ctx, 0, -s * 0.03, s * 0.14, s * 0.09, '#ddd5b3', 1);
+    circ(ctx, s * 0.11, -s * 0.10 + hover * s * 0.01, s * 0.05, '#e6ddbf');
+    tri(ctx, s * 0.14, -s * 0.10, s * 0.22, -s * 0.08, s * 0.14, -s * 0.04, '#e39a2f');
+    circ(ctx, s * 0.12, -s * 0.11, s * 0.008, '#1d1710');
+    px(ctx, -s * 0.08, s * 0.08, s * 0.16, s * 0.008, 'rgba(255,255,255,0.25)');
+  } else if (species === 'rabbit') {
+    fillEllipse(ctx, 0, s * 0.02, s * 0.18, s * 0.08, 'rgba(0,0,0,0.14)', 1);
+    fillEllipse(ctx, -s * 0.02, -s * 0.03, s * 0.12, s * 0.085, '#d9d3ca', 1);
+    circ(ctx, s * 0.1, -s * 0.09, s * 0.05, '#e5ddd6');
+    px(ctx, s * 0.08, -s * 0.22, s * 0.026, s * 0.11, '#e5ddd6');
+    px(ctx, s * 0.12, -s * 0.23, s * 0.022, s * 0.12, '#d3b7bc');
+    px(ctx, s * 0.14, -s * 0.22, s * 0.026, s * 0.11, '#e5ddd6');
+    px(ctx, s * 0.18, -s * 0.23, s * 0.022, s * 0.12, '#d3b7bc');
+    circ(ctx, s * 0.115, -s * 0.095, s * 0.007, '#1d1710');
+  } else if (species === 'deer') {
+    fillEllipse(ctx, 0, s * 0.04, s * 0.22, s * 0.08, 'rgba(0,0,0,0.15)', 1);
+    px(ctx, -s * 0.12, -s * 0.08, s * 0.22, s * 0.10, '#9e7744');
+    px(ctx, s * 0.08, -s * 0.16, s * 0.05, s * 0.12, '#9e7744');
+    px(ctx, s * 0.1, -s * 0.20, s * 0.08, s * 0.06, '#ae8751');
+    px(ctx, s * 0.14, -s * 0.25, s * 0.008, s * 0.06, '#8b6a3d');
+    px(ctx, s * 0.11, -s * 0.28, s * 0.008, s * 0.04, '#8b6a3d');
+    px(ctx, s * 0.16, -s * 0.28, s * 0.008, s * 0.04, '#8b6a3d');
+    px(ctx, -s * 0.08, s * 0.02, s * 0.018, s * 0.12, '#73552c');
+    px(ctx, -s * 0.01, s * 0.02 + hover * s * 0.01, s * 0.018, s * 0.12, '#73552c');
+    px(ctx, s * 0.05, s * 0.02, s * 0.018, s * 0.12, '#73552c');
+    circ(ctx, s * 0.14, -s * 0.19, s * 0.008, '#1d1710');
+  } else if (species === 'boar') {
+    fillEllipse(ctx, 0, s * 0.05, s * 0.22, s * 0.08, 'rgba(0,0,0,0.15)', 1);
+    fillEllipse(ctx, 0, -s * 0.03, s * 0.16, s * 0.10, '#6e5240', 1);
+    px(ctx, s * 0.11, -s * 0.11, s * 0.09, s * 0.07, '#7f614e');
+    tri(ctx, s * 0.14, -s * 0.05, s * 0.23, -s * 0.02, s * 0.14, 0, '#d8c4aa');
+    px(ctx, -s * 0.08, s * 0.02, s * 0.025, s * 0.10, '#473225');
+    px(ctx, 0, s * 0.02 + hover * s * 0.01, s * 0.025, s * 0.10, '#473225');
+    px(ctx, s * 0.07, s * 0.02, s * 0.025, s * 0.10, '#473225');
+  } else if (species === 'fox') {
+    fillEllipse(ctx, 0, s * 0.03, s * 0.18, s * 0.08, 'rgba(0,0,0,0.15)', 1);
+    px(ctx, -s * 0.12, -s * 0.07, s * 0.18, s * 0.09, '#d87333');
+    px(ctx, s * 0.05, -s * 0.12, s * 0.08, s * 0.07, '#e0823b');
+    tri(ctx, s * 0.08, -s * 0.12, s * 0.11, -s * 0.19, s * 0.14, -s * 0.12, '#d87333');
+    tri(ctx, s * 0.12, -s * 0.12, s * 0.15, -s * 0.19, s * 0.18, -s * 0.12, '#d87333');
+    px(ctx, -s * 0.18, -s * 0.10 + hover * s * 0.02, s * 0.09, s * 0.04, '#f5e4cc');
+    px(ctx, -s * 0.07, s * 0.02, s * 0.022, s * 0.10, '#8c4a1d');
+    px(ctx, s * 0.01, s * 0.02 + hover * s * 0.008, s * 0.022, s * 0.10, '#8c4a1d');
+    circ(ctx, s * 0.1, -s * 0.10, s * 0.008, '#1d1710');
+  } else if (species === 'wolf') {
+    fillEllipse(ctx, 0, s * 0.03, s * 0.21, s * 0.08, 'rgba(0,0,0,0.16)', 1);
+    px(ctx, -s * 0.13, -s * 0.08, s * 0.2, s * 0.1, '#7c808b');
+    px(ctx, s * 0.05, -s * 0.13, s * 0.09, s * 0.08, '#8d919d');
+    tri(ctx, s * 0.07, -s * 0.13, s * 0.10, -s * 0.20, s * 0.13, -s * 0.13, '#7c808b');
+    tri(ctx, s * 0.13, -s * 0.13, s * 0.16, -s * 0.20, s * 0.19, -s * 0.13, '#7c808b');
+    px(ctx, -s * 0.07, s * 0.02, s * 0.025, s * 0.10, '#50545d');
+    px(ctx, s * 0.01, s * 0.02 + hover * s * 0.01, s * 0.025, s * 0.10, '#50545d');
+    px(ctx, s * 0.08, s * 0.02, s * 0.025, s * 0.10, '#50545d');
+    circ(ctx, s * 0.1, -s * 0.10, s * 0.009, '#e4ba4f');
+  } else if (species === 'bear') {
+    fillEllipse(ctx, 0, s * 0.05, s * 0.22, s * 0.09, 'rgba(0,0,0,0.18)', 1);
+    fillEllipse(ctx, 0, -s * 0.02, s * 0.18, s * 0.12, '#6a4425', 1);
+    circ(ctx, s * 0.13, -s * 0.08, s * 0.06, '#775030');
+    circ(ctx, s * 0.11, -s * 0.15, s * 0.02, '#6a4425');
+    circ(ctx, s * 0.16, -s * 0.15, s * 0.02, '#6a4425');
+    px(ctx, -s * 0.08, s * 0.03, s * 0.03, s * 0.12, '#4f3118');
+    px(ctx, 0, s * 0.03 + hover * s * 0.008, s * 0.03, s * 0.12, '#4f3118');
+    px(ctx, s * 0.08, s * 0.03, s * 0.03, s * 0.12, '#4f3118');
+  } else {
+    // songbird / rare_bird
+    const body = species === 'rare_bird' ? '#48a7c8' : '#d9c356';
+    const wing = species === 'rare_bird' ? '#246d93' : '#7f5bb7';
+    const crest = species === 'rare_bird' ? '#f2d28e' : '#f08c42';
+    fillEllipse(ctx, 0, s * 0.03, s * 0.14, s * 0.06, 'rgba(0,0,0,0.15)', 1);
+    circ(ctx, 0, -s * 0.03 + hover * s * 0.02, s * 0.08, body);
+    circ(ctx, s * 0.07, -s * 0.08 + hover * s * 0.02, s * 0.04, body);
+    tri(ctx, s * 0.11, -s * 0.08, s * 0.18, -s * 0.06, s * 0.11, -s * 0.03, '#e39a2f');
+    tri(ctx, -s * 0.03, -s * 0.03, -s * 0.11, -s * 0.12 - hover * s * 0.03, s * 0.03, s * 0.01, wing);
+    tri(ctx, -s * 0.08, -s * 0.02, -s * 0.18, -s * 0.08, -s * 0.12, s * 0.02, wing);
+    px(ctx, s * 0.01, s * 0.06, s * 0.01, s * 0.06, '#7a5a30');
+    px(ctx, s * 0.05, s * 0.06, s * 0.01, s * 0.06, '#7a5a30');
+    px(ctx, s * 0.02, -s * 0.15, s * 0.012, s * 0.04, crest);
+    px(ctx, s * 0.04, -s * 0.17, s * 0.012, s * 0.04, crest);
+  }
+
+  ctx.restore();
+}
+
 // Pet animation state: 0 = walking, 1 = idle/sitting, 2 = sleeping
 function getPetAnimState(frameOffset) {
   if (frameOffset < 0.6) return 'walk';
@@ -1905,13 +2086,16 @@ const PET_PALETTES = {
 };
 
 export function drawPetWander(ctx, x, y, tileSize, character, frameOffset) {
-  const s = tileSize;
+  const s = tileSize * 1.12;
   const animState = getPetAnimState(frameOffset);
   const frame = (frameOffset * 4) | 0; // 0-3 sub-frames
   const bobPhase = Math.sin(frameOffset * Math.PI * 2);
   const pal = PET_PALETTES[character] || PET_PALETTES.dojocat;
 
   ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.28)';
+  ctx.shadowBlur = Math.max(2, s * 0.08);
+  ctx.shadowOffsetY = Math.max(1, s * 0.02);
 
   const cx = x;
 

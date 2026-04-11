@@ -371,6 +371,9 @@ export default function PetWorldVisitPage() {
                         ? 'You can send a trade offer from here if both villages keep a Market.'
                         : 'Build a Market in your own village to unlock guest trading.'}
                     </div>
+                    <div className="rounded-lg border border-amber-300/10 bg-amber-400/[0.05] p-3 text-sm text-white/62">
+                      This village now has visible life in the world itself: roaming villagers, water creatures, meadow animals, and visiting birds. Some wildlife only becomes huntable in the host&apos;s own view.
+                    </div>
                   </div>
                 ) : (
                   <div className="rounded-lg border border-white/8 bg-white/[0.03] p-3">

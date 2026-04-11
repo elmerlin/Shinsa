@@ -1081,6 +1081,7 @@ export default function PetWorldPage() {
   const selectedBuildingDef = selectedBuilding
     ? catalog.find((b) => b.id === selectedBuilding.type)
     : null;
+  const hasWatchtower = buildings.some((building) => building.type === 'watchtower' && building.state === 'built');
 
   /* ── Full-screen game mode ───────────────────────────────────── */
   return (
@@ -1102,10 +1103,16 @@ export default function PetWorldPage() {
         <PetWorldCanvas
           world={world}
           buildings={buildings}
+          encounters={encounters}
           selectedBuildingId={selectedBuilding?.id}
           selectedTile={selectedTile}
           pendingBuildType={pendingBuildType}
           placementBurst={placementBurst}
+          onSelectEncounter={(encounter) => {
+            setActiveSheet(null);
+            setActiveEncounter(encounter);
+            playEncounterAlertSound();
+          }}
           onSelectBuilding={handleSelectBuilding}
           onSelectTile={handleSelectTile}
           onPlaceBuilding={handlePlaceBuilding}
@@ -1332,6 +1339,8 @@ export default function PetWorldPage() {
               style={{
                 maxHeight: `calc(${BUILD_SHEET_HEIGHTS[buildSheetSnap]} - 76px)`,
                 overscrollBehavior: 'contain',
+                touchAction: 'pan-y',
+                WebkitOverflowScrolling: 'touch',
               }}
             >
               <PetWorldBuildMenu
@@ -1495,6 +1504,29 @@ export default function PetWorldPage() {
                       <div className="text-[9px] uppercase tracking-[0.14em] text-white/30">Online Now</div>
                       <div className="mt-0.5 text-lg font-black text-white">{wsVisitors.length}</div>
                       <div className="mt-0.5 text-[10px] text-white/35">Friends visiting now.</div>
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-cyan-300/10 bg-cyan-400/[0.04] p-2.5">
+                    <div className="text-[9px] uppercase tracking-[0.14em] text-cyan-100/40">Population growth</div>
+                    <div className="mt-1 text-[13px] font-black text-white">
+                      {world.population}/{world.housing_capacity} villagers
+                      <span className="ml-2 text-[10px] font-semibold text-cyan-100/45">Phase cap {world.population_cap}</span>
+                    </div>
+                    <div className="mt-1.5 text-[10px] leading-relaxed text-white/50">
+                      Build Houses or Large Houses, keep food at 10+, and keep mood above 60. New villagers arrive every 24h, or every 16h once you build a Shrine.
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-amber-300/10 bg-amber-400/[0.05] p-2.5">
+                    <div className="text-[9px] uppercase tracking-[0.14em] text-amber-100/45">Village life</div>
+                    <div className="mt-1 text-[13px] font-black text-white">
+                      {world.population} roaming villager{world.population === 1 ? '' : 's'}
+                      <span className="ml-2 text-[10px] font-semibold text-amber-100/45">
+                        {encounters.length ? `${encounters.length} huntable sighting${encounters.length === 1 ? '' : 's'}` : 'ambient wildlife active'}
+                      </span>
+                    </div>
+                    <div className="mt-1.5 text-[10px] leading-relaxed text-white/50">
+                      Birds, fish, and wild mammals now roam the village. Tap an amber-marked animal to hunt it.
+                      {hasWatchtower ? ' Your Watchtower lets you resolve sightings.' : ' Build a Watchtower to turn sightings into hunts.'}
                     </div>
                   </div>
                   <div className="rounded-xl border border-white/[0.06] bg-white/[0.025] p-2.5">
