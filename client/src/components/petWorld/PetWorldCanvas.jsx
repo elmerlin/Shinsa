@@ -51,6 +51,8 @@ const WORK_BUILDINGS = new Set([
 
 const HOME_BUILDINGS = new Set(['house', 'large_house']);
 const COMMON_BUILDINGS = new Set(['well', 'market', 'town_hall', 'shrine', 'park', 'tavern', 'trading_post']);
+const SOCIAL_BUILDINGS = new Set(['market', 'tavern', 'park', 'town_hall', 'trading_post']);
+const QUIET_BUILDINGS = new Set(['well', 'shrine']);
 
 function getBuildingMap(buildings = []) {
   return new Map(buildings.map((building) => [building.id, building]));
@@ -96,6 +98,15 @@ function pickFromPool(pool, index, fallback = null) {
   return fallback;
 }
 
+function expandWeightedStops(stops, weightFn) {
+  const expanded = [];
+  stops.forEach((stop) => {
+    const weight = Math.max(1, Math.round(weightFn(stop)));
+    for (let i = 0; i < weight; i += 1) expanded.push(stop);
+  });
+  return expanded;
+}
+
 function pointFromTile(tile, seed, radiusX = 0.2, radiusY = 0.16) {
   if (!tile) return null;
   const offsetX = (hash01(seed, 1) - 0.5) * radiusX * 2;
@@ -106,6 +117,8 @@ function pointFromTile(tile, seed, radiusX = 0.2, radiusY = 0.16) {
     tileX: tile.x,
     tileY: tile.y,
     role: tile.role || 'path',
+    buildingType: tile.buildingType || null,
+    anchorKind: tile.anchorKind || null,
   };
 }
 
@@ -232,6 +245,10 @@ function getRouteMotion(entity, time) {
         frameOffset: 0,
         facing: idleFacing,
         moving: false,
+        paused: true,
+        role: node.role || 'path',
+        buildingType: node.buildingType || null,
+        anchorKind: node.anchorKind || null,
       };
     }
     cursor -= pauseMs;
@@ -250,6 +267,10 @@ function getRouteMotion(entity, time) {
         frameOffset: (strideDistance * 1.9 + progress * 1.7 + entity.seed * 0.13) % 1,
         facing,
         moving: node.distance > 0.02,
+        paused: false,
+        role: node.role || 'path',
+        buildingType: node.buildingType || next.buildingType || null,
+        anchorKind: node.anchorKind || next.anchorKind || null,
       };
     }
     cursor -= moveMs;
@@ -263,7 +284,38 @@ function getRouteMotion(entity, time) {
     frameOffset: 0,
     facing: fallback.facing || 1,
     moving: false,
+    paused: true,
+    role: fallback.role || 'path',
+    buildingType: fallback.buildingType || null,
+    anchorKind: fallback.anchorKind || null,
   };
+}
+
+function getResidentDisplayActivity(resident, motion) {
+  if (!motion) return resident.activity || 'stroll';
+  const buildingType = motion.buildingType || resident.workBuildingType || null;
+  if (!motion.moving || motion.paused) {
+    if (buildingType && ['farm', 'fishing_hut', 'woodcutters_hut', 'lumberyard', 'quarry', 'stone_pit'].includes(buildingType)) {
+      return 'gather';
+    }
+    if (buildingType && ['market', 'trading_post', 'storehouse', 'warehouse', 'bakery'].includes(buildingType)) {
+      return 'carry';
+    }
+    if (buildingType && ['watchtower', 'shrine', 'town_hall', 'weaving_hut'].includes(buildingType)) {
+      return 'build';
+    }
+    if (buildingType && ['tavern', 'park'].includes(buildingType)) {
+      return 'play';
+    }
+    if (motion.anchorKind === 'social') return 'play';
+    if (motion.anchorKind === 'quiet') return 'stroll';
+    return resident.activity || 'stroll';
+  }
+
+  if (resident.archetype === 'merchant') return 'carry';
+  if (resident.archetype === 'craft') return 'build';
+  if (resident.archetype === 'gatherer') return 'gather';
+  return 'stroll';
 }
 
 function getEntityWanderPos(entity, time) {
@@ -322,16 +374,32 @@ function buildResidentPlacements(world, terrainRegions, buildings = []) {
     .filter((building) => WORK_BUILDINGS.has(building.type))
     .map((building) => {
       const anchor = getBuildingAnchor(building, clearTileMap, clearTiles, terrainRegions);
-      return anchor ? { ...anchor, role: 'work', buildingType: building.type } : null;
+      return anchor
+        ? { ...anchor, role: 'work', buildingType: building.type, maxWorkers: building.max_workers || 1, buildingId: building.id }
+        : null;
     })
     .filter(Boolean);
   const commonAnchors = builtBuildings
     .filter((building) => COMMON_BUILDINGS.has(building.type))
     .map((building) => {
       const anchor = getBuildingAnchor(building, clearTileMap, clearTiles, terrainRegions);
-      return anchor ? { ...anchor, role: 'common', buildingType: building.type } : null;
+      return anchor
+        ? {
+            ...anchor,
+            role: 'common',
+            buildingType: building.type,
+            anchorKind: SOCIAL_BUILDINGS.has(building.type) ? 'social' : (QUIET_BUILDINGS.has(building.type) ? 'quiet' : 'common'),
+            buildingId: building.id,
+          }
+        : null;
     })
     .filter(Boolean);
+
+  const weightedWorkAnchors = expandWeightedStops(workAnchors, (anchor) => anchor.maxWorkers || 1);
+  const socialAnchors = commonAnchors.filter((anchor) => anchor.anchorKind === 'social');
+  const quietAnchors = commonAnchors.filter((anchor) => anchor.anchorKind === 'quiet');
+  const weightedSocialAnchors = expandWeightedStops(socialAnchors, (anchor) => (anchor.buildingType === 'town_hall' ? 3 : anchor.buildingType === 'market' ? 4 : 2));
+  const weightedQuietAnchors = expandWeightedStops(quietAnchors, () => 2);
 
   const count = Math.min(Math.max(4, (world.population || 0) + 2), 18, pool.length);
   const assignedWorkers = Math.max(0, world.assigned_workers || 0);
@@ -342,30 +410,45 @@ function buildResidentPlacements(world, terrainRegions, buildings = []) {
     const seed = i * 29 + 11;
     const homeTile = pickFromPool(homeAnchors, i * 5 + 1, tile);
     const laneTile = pickFromPool(laneTiles, i * 7 + 2, tile);
-    const leisureTile = pickFromPool(commonAnchors, i * 9 + 3, pickFromPool(meadowTiles, i * 11 + 5, tile));
+    const preferredSocial = (seed % 3) !== 0;
+    const leisureTile = preferredSocial
+      ? pickFromPool(weightedSocialAnchors, i * 9 + 3, pickFromPool(commonAnchors, i * 7 + 1, pickFromPool(meadowTiles, i * 11 + 5, tile)))
+      : pickFromPool(weightedQuietAnchors, i * 9 + 3, pickFromPool(commonAnchors, i * 7 + 1, pickFromPool(meadowTiles, i * 11 + 5, tile)));
     const natureTile = pickFromPool(shoreTiles, i * 13 + 7, pickFromPool(meadowTiles, i * 17 + 4, tile));
     const workTile = working
-      ? pickFromPool(workAnchors, i * 3 + assignedWorkers, pickFromPool(commonAnchors, i * 6 + 1, tile))
+      ? pickFromPool(weightedWorkAnchors, i * 3 + assignedWorkers, pickFromPool(commonAnchors, i * 6 + 1, tile))
       : leisureTile;
+    const plazaTile = pickFromPool(weightedSocialAnchors, i * 15 + 2, laneTile);
+    const residentArchetype = working
+      ? (
+        workTile?.buildingType && ['market', 'trading_post', 'storehouse', 'warehouse', 'bakery'].includes(workTile.buildingType) ? 'merchant'
+          : workTile?.buildingType && ['watchtower', 'shrine', 'town_hall', 'weaving_hut'].includes(workTile.buildingType) ? 'craft'
+            : 'gatherer'
+      )
+      : (preferredSocial ? 'social' : 'quiet');
 
     const routePoints = working
       ? [
           { ...pointFromTile(homeTile, seed + 1, 0.16, 0.12), role: 'home', pauseMs: 1200 + hash01(seed, 3) * 900 },
           { ...pointFromTile(laneTile, seed + 2, 0.1, 0.08), role: 'path', pauseMs: 200 + hash01(seed, 4) * 160 },
           { ...pointFromTile(workTile, seed + 3, 0.12, 0.1), role: 'work', pauseMs: 1600 + hash01(seed, 5) * 1200 },
-          { ...pointFromTile(leisureTile, seed + 4, 0.14, 0.11), role: 'common', pauseMs: 800 + hash01(seed, 6) * 700 },
+          { ...pointFromTile(plazaTile, seed + 4, 0.14, 0.11), role: 'common', pauseMs: 520 + hash01(seed, 6) * 420 },
+          { ...pointFromTile(leisureTile, seed + 5, 0.14, 0.11), role: 'common', pauseMs: 820 + hash01(seed, 7) * 700 },
         ]
       : [
           { ...pointFromTile(homeTile, seed + 1, 0.16, 0.12), role: 'home', pauseMs: 1400 + hash01(seed, 3) * 1000 },
-          { ...pointFromTile(leisureTile, seed + 2, 0.14, 0.11), role: 'common', pauseMs: 1100 + hash01(seed, 4) * 800 },
-          { ...pointFromTile(natureTile, seed + 3, 0.18, 0.12), role: 'common', pauseMs: 700 + hash01(seed, 5) * 600 },
-          { ...pointFromTile(laneTile, seed + 4, 0.1, 0.08), role: 'path', pauseMs: 240 + hash01(seed, 6) * 180 },
+          { ...pointFromTile(plazaTile, seed + 2, 0.13, 0.1), role: 'common', pauseMs: 920 + hash01(seed, 4) * 820 },
+          { ...pointFromTile(leisureTile, seed + 3, 0.14, 0.11), role: 'common', pauseMs: 1100 + hash01(seed, 5) * 800 },
+          { ...pointFromTile(natureTile, seed + 4, 0.18, 0.12), role: 'common', pauseMs: 700 + hash01(seed, 6) * 600 },
+          { ...pointFromTile(laneTile, seed + 5, 0.1, 0.08), role: 'path', pauseMs: 240 + hash01(seed, 7) * 180 },
         ];
 
     placements.push({
       ...homeTile,
       palette: RESIDENT_STYLES[i % RESIDENT_STYLES.length],
       activity: working ? ['gather', 'carry', 'build'][i % 3] : ['stroll', 'play', 'stroll'][i % 3],
+      archetype: residentArchetype,
+      workBuildingType: workTile?.buildingType || null,
       seed,
       route: expandResidentRoute(routePoints, seed),
       x: tile.x,
@@ -875,7 +958,16 @@ export default function PetWorldCanvas({
       const screenX = wander.x * tileSize - camera.x + tileSize / 2;
       const screenY = wander.y * tileSize - camera.y + tileSize * 0.82;
       if (screenX < -tileSize || screenY < -tileSize || screenX > size.width + tileSize || screenY > size.height + tileSize) return;
-      drawVillageResident(ctx, screenX, screenY, tileSize, resident.palette, resident.activity, wander.frameOffset, wander.facing);
+      drawVillageResident(
+        ctx,
+        screenX,
+        screenY,
+        tileSize,
+        resident.palette,
+        getResidentDisplayActivity(resident, wander),
+        wander.frameOffset,
+        wander.facing,
+      );
     });
 
     // pet wandering
