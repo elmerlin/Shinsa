@@ -6,6 +6,12 @@ import {
   drawTerrainAtlasSprite,
   drawVillageResidentAtlas,
 } from './petWorldAtlas';
+import {
+  drawKenneyBuilding,
+  drawKenneyCritter,
+  drawKenneyResident,
+  drawKenneyTerrain,
+} from './petWorldKenneySprites';
 
 // --- low-level drawing helpers ---
 
@@ -541,6 +547,9 @@ export function drawTile(ctx, biome, tile, x, y, tileSize, time = 0, neighbors, 
   const terrainInfo = terrain || null;
 
   if (tile.t === 'tree' || tile.t === 'rock' || tile.t === 'bush') {
+    if (drawKenneyTerrain(ctx, biome, tile, ix, iy, s, h, terrainInfo)) {
+      return;
+    }
     if (drawTerrainAtlasSprite(ctx, biome, tile, ix, iy, s, time, terrainInfo, neighbors, h)) {
       return;
     }
@@ -683,6 +692,7 @@ export function drawTile(ctx, biome, tile, x, y, tileSize, time = 0, neighbors, 
       const sparkY = iy + s * (0.2 + ((h >> 7) % 5) / 10);
       px(ctx, sparkX, sparkY, 2, 2, '#ffffff', 0.55);
     }
+    drawKenneyTerrain(ctx, biome, tile, ix, iy, s, h, terrainInfo);
     drawTerrainAtlasSprite(ctx, biome, tile, ix, iy, s, time, terrainInfo, neighbors, h);
     return;
   }
@@ -948,6 +958,7 @@ export function drawTile(ctx, biome, tile, x, y, tileSize, time = 0, neighbors, 
     ctx.globalAlpha = 1;
   }
 
+  drawKenneyTerrain(ctx, biome, tile, ix, iy, s, h, terrainInfo);
   drawTerrainAtlasSprite(ctx, biome, tile, ix, iy, s, time, terrainInfo, neighbors, h);
 }
 
@@ -1709,7 +1720,6 @@ const SPRITE_DRAWERS = {
 export function drawBuildingSprite(ctx, biome, building, x, y, tileSize, isSelected = false) {
   const type = building.type || building.building_type;
   const ui = getBuildingUi(type);
-  const biomeUi = getBiomeUi(biome);
   const width = tileSize * building.width;
   const height = tileSize * building.height;
 
@@ -1718,22 +1728,28 @@ export function drawBuildingSprite(ctx, biome, building, x, y, tileSize, isSelec
   // attach biome for path drawing
   ui._biome = biome;
 
-  const drawer = SPRITE_DRAWERS[type];
-  if (drawer) {
-    drawer(ctx, x, y, width, height, ui, tileSize);
-    // subtle outline on all buildings (except path) -- lighter than before
+  if (drawKenneyBuilding(ctx, building, x, y, width, height)) {
     if (type !== 'path') {
-      outline(ctx, x + 1, y + height * 0.12, width - 2, height * 0.82, 'rgba(0,0,0,0.22)');
+      outline(ctx, x + 1, y + height * 0.16, width - 2, height * 0.74, 'rgba(0,0,0,0.18)');
     }
   } else {
-    // fallback for unknown types
-    castShadow(ctx, x + 2, y + height * 0.13, width - 4, height * 0.72);
-    px(ctx, x + 2, y + height * 0.15, width - 4, height * 0.70, ui.wallColor);
-    topHighlight(ctx, x + 2, y + height * 0.15, width - 4, height * 0.70);
-    sideShade(ctx, x + 2, y + height * 0.15, width - 4, height * 0.70);
-    outline(ctx, x + 2, y + height * 0.15, width - 4, height * 0.70, 'rgba(0,0,0,0.25)');
-    shadedRoof(ctx, x, y + height * 0.18, x + width / 2, y + height * 0.02, x + width, y + height * 0.18, ui.roofColor);
-    contactShadow(ctx, x + 2, y + height * 0.85, width - 4);
+    const drawer = SPRITE_DRAWERS[type];
+    if (drawer) {
+      drawer(ctx, x, y, width, height, ui, tileSize);
+      // subtle outline on all buildings (except path) -- lighter than before
+      if (type !== 'path') {
+        outline(ctx, x + 1, y + height * 0.12, width - 2, height * 0.82, 'rgba(0,0,0,0.22)');
+      }
+    } else {
+      // fallback for unknown types
+      castShadow(ctx, x + 2, y + height * 0.13, width - 4, height * 0.72);
+      px(ctx, x + 2, y + height * 0.15, width - 4, height * 0.70, ui.wallColor);
+      topHighlight(ctx, x + 2, y + height * 0.15, width - 4, height * 0.70);
+      sideShade(ctx, x + 2, y + height * 0.15, width - 4, height * 0.70);
+      outline(ctx, x + 2, y + height * 0.15, width - 4, height * 0.70, 'rgba(0,0,0,0.25)');
+      shadedRoof(ctx, x, y + height * 0.18, x + width / 2, y + height * 0.02, x + width, y + height * 0.18, ui.roofColor);
+      contactShadow(ctx, x + 2, y + height * 0.85, width - 4);
+    }
   }
 
   // selection glow
@@ -1911,6 +1927,9 @@ const RESIDENT_PALETTES = {
 };
 
 export function drawVillageResident(ctx, x, y, tileSize, paletteKey, activity = 'stroll', frameOffset = 0, facing = 1) {
+  if (drawKenneyResident(ctx, x, y, tileSize, paletteKey, activity, frameOffset, facing)) {
+    return;
+  }
   if (drawVillageResidentAtlas(ctx, x, y, tileSize, paletteKey, activity, frameOffset, facing)) {
     return;
   }
@@ -1968,6 +1987,9 @@ export function drawVillageResident(ctx, x, y, tileSize, paletteKey, activity = 
 }
 
 export function drawAmbientCritter(ctx, x, y, tileSize, species, frameOffset = 0, options = {}) {
+  if (drawKenneyCritter(ctx, x, y, tileSize, species, frameOffset, options)) {
+    return;
+  }
   if (drawAmbientCritterAtlas(ctx, x, y, tileSize, species, frameOffset, options)) {
     return;
   }

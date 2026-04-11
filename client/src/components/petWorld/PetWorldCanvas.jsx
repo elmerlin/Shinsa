@@ -32,8 +32,37 @@ const ENCOUNTER_SPECIES = {
   rare_bird: 'rare_bird',
 };
 
+const WORK_BUILDINGS = new Set([
+  'farm',
+  'fishing_hut',
+  'woodcutters_hut',
+  'stone_pit',
+  'lumberyard',
+  'quarry',
+  'weaving_hut',
+  'market',
+  'storehouse',
+  'trading_post',
+  'bakery',
+  'warehouse',
+  'watchtower',
+  'tavern',
+]);
+
+const HOME_BUILDINGS = new Set(['house', 'large_house']);
+const COMMON_BUILDINGS = new Set(['well', 'market', 'town_hall', 'shrine', 'park', 'tavern', 'trading_post']);
+
 function getBuildingMap(buildings = []) {
   return new Map(buildings.map((building) => [building.id, building]));
+}
+
+function hash01(seed, salt = 0) {
+  const value = Math.sin((seed + 1) * 12.9898 + salt * 78.233) * 43758.5453;
+  return value - Math.floor(value);
+}
+
+function tileKey(x, y) {
+  return `${x}:${y}`;
 }
 
 function findClearTiles(grid) {
@@ -60,6 +89,181 @@ function findTilesByType(grid, type) {
     }
   }
   return result;
+}
+
+function pickFromPool(pool, index, fallback = null) {
+  if (pool?.length) return pool[((index % pool.length) + pool.length) % pool.length];
+  return fallback;
+}
+
+function pointFromTile(tile, seed, radiusX = 0.2, radiusY = 0.16) {
+  if (!tile) return null;
+  const offsetX = (hash01(seed, 1) - 0.5) * radiusX * 2;
+  const offsetY = (hash01(seed, 2) - 0.5) * radiusY * 2;
+  return {
+    x: tile.x + 0.5 + offsetX,
+    y: tile.y + 0.5 + offsetY,
+    tileX: tile.x,
+    tileY: tile.y,
+    role: tile.role || 'path',
+  };
+}
+
+function getTileScore(tile, terrainRegions) {
+  const terrain = terrainRegions?.[tile.y]?.[tile.x];
+  return (terrain?.laneStrength || 0) * 2.4 + (terrain?.villageWear || 0) * 1.8 + (terrain?.meadowStrength || 0) * 0.5;
+}
+
+function getBuildingAnchor(building, clearTileMap, clearTiles, terrainRegions) {
+  if (!building) return null;
+  const candidates = [];
+  const left = building.grid_x - 1;
+  const right = building.grid_x + building.width;
+  const top = building.grid_y - 1;
+  const bottom = building.grid_y + building.height;
+
+  for (let y = top; y <= bottom; y += 1) {
+    for (let x = left; x <= right; x += 1) {
+      const outsideFootprint = x < building.grid_x || x >= building.grid_x + building.width || y < building.grid_y || y >= building.grid_y + building.height;
+      if (!outsideFootprint) continue;
+      const tile = clearTileMap.get(tileKey(x, y));
+      if (!tile) continue;
+      const centerX = building.grid_x + building.width / 2;
+      const centerY = building.grid_y + building.height / 2;
+      const distance = Math.abs(tile.x + 0.5 - centerX) + Math.abs(tile.y + 0.5 - centerY);
+      const terrainScore = getTileScore(tile, terrainRegions);
+      candidates.push({
+        ...tile,
+        score: terrainScore - distance * 0.12,
+      });
+    }
+  }
+
+  if (candidates.length) {
+    candidates.sort((a, b) => b.score - a.score);
+    return candidates[0];
+  }
+
+  let best = null;
+  let bestDistance = Infinity;
+  const centerX = building.grid_x + building.width / 2;
+  const centerY = building.grid_y + building.height / 2;
+  clearTiles.forEach((tile) => {
+    const distance = Math.abs(tile.x + 0.5 - centerX) + Math.abs(tile.y + 0.5 - centerY);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = tile;
+    }
+  });
+  return best;
+}
+
+function expandResidentRoute(points, seed) {
+  const filtered = points.filter(Boolean);
+  if (!filtered.length) return [];
+  const nodes = [];
+  filtered.forEach((point, index) => {
+    const current = {
+      ...point,
+      pauseMs: point.pauseMs ?? (point.role === 'work' ? 1700 : point.role === 'home' ? 1400 : 900),
+    };
+    nodes.push(current);
+    const next = filtered[(index + 1) % filtered.length];
+    if (!next) return;
+    const dx = next.x - current.x;
+    const dy = next.y - current.y;
+    if (Math.abs(dx) > 0.18 && Math.abs(dy) > 0.18) {
+      const viaHorizontalFirst = ((seed + index) % 2) === 0;
+      nodes.push({
+        x: viaHorizontalFirst ? next.x : current.x,
+        y: viaHorizontalFirst ? current.y : next.y,
+        tileX: viaHorizontalFirst ? next.tileX : current.tileX,
+        tileY: viaHorizontalFirst ? current.tileY : next.tileY,
+        role: 'path',
+        pauseMs: 0,
+      });
+    }
+  });
+
+  const speed = 0.9 + hash01(seed, 7) * 0.45;
+  return nodes.map((node, index) => {
+    const next = nodes[(index + 1) % nodes.length];
+    const dx = next.x - node.x;
+    const dy = next.y - node.y;
+    const distance = Math.hypot(dx, dy);
+    return {
+      ...node,
+      moveMs: Math.max(360, (distance / speed) * 1000),
+      distance,
+      facing: Math.abs(dx) > 0.02 ? (dx >= 0 ? 1 : -1) : null,
+    };
+  });
+}
+
+function smoothStep(value) {
+  return value * value * (3 - 2 * value);
+}
+
+function getRouteMotion(entity, time) {
+  const route = entity.route;
+  if (!route?.length) {
+    return {
+      x: entity.x + 0.5,
+      y: entity.y + 0.5,
+      frameOffset: 0,
+      facing: 1,
+      moving: false,
+    };
+  }
+
+  const cycleMs = route.reduce((total, node) => total + node.pauseMs + node.moveMs, 0) || 1;
+  let cursor = (time + entity.seed * 173) % cycleMs;
+  let lastFacing = route.find((node) => node.facing)?.facing || 1;
+
+  for (let index = 0; index < route.length; index += 1) {
+    const node = route[index];
+    const next = route[(index + 1) % route.length];
+    const pauseMs = node.pauseMs || 0;
+    if (cursor < pauseMs) {
+      const idleFacing = node.facing || lastFacing || 1;
+      return {
+        x: node.x,
+        y: node.y,
+        frameOffset: 0,
+        facing: idleFacing,
+        moving: false,
+      };
+    }
+    cursor -= pauseMs;
+
+    const moveMs = node.moveMs || 0;
+    if (cursor < moveMs) {
+      const progress = moveMs > 0 ? cursor / moveMs : 1;
+      const eased = smoothStep(progress);
+      const dx = next.x - node.x;
+      const dy = next.y - node.y;
+      const facing = node.facing || lastFacing || 1;
+      const strideDistance = node.distance * eased;
+      return {
+        x: node.x + dx * eased,
+        y: node.y + dy * eased,
+        frameOffset: (strideDistance * 1.9 + progress * 1.7 + entity.seed * 0.13) % 1,
+        facing,
+        moving: node.distance > 0.02,
+      };
+    }
+    cursor -= moveMs;
+    if (node.facing) lastFacing = node.facing;
+  }
+
+  const fallback = route[route.length - 1];
+  return {
+    x: fallback.x,
+    y: fallback.y,
+    frameOffset: 0,
+    facing: fallback.facing || 1,
+    moving: false,
+  };
 }
 
 function getEntityWanderPos(entity, time) {
@@ -90,28 +294,82 @@ function buildPetPlacements(world) {
   return placements;
 }
 
-function buildResidentPlacements(world, terrainRegions) {
+function buildResidentPlacements(world, terrainRegions, buildings = []) {
   const grid = world?.grid;
   if (!grid) return [];
   const clearTiles = findClearTiles(grid);
+  const clearTileMap = new Map(clearTiles.map((tile) => [tileKey(tile.x, tile.y), tile]));
   const livedInTiles = clearTiles.filter(({ x, y }) => {
     const terrain = terrainRegions?.[y]?.[x];
     return (terrain?.laneStrength || 0) > 0.08 || (terrain?.villageWear || 0) > 0.08 || (terrain?.meadowStrength || 0) > 0.24;
   });
   const pool = livedInTiles.length >= 6 ? livedInTiles : clearTiles;
+  const laneTiles = clearTiles
+    .filter((tile) => getTileScore(tile, terrainRegions) > 0.42)
+    .sort((a, b) => getTileScore(b, terrainRegions) - getTileScore(a, terrainRegions));
+  const shoreTiles = clearTiles.filter(({ x, y }) => (terrainRegions?.[y]?.[x]?.shoreStrength || 0) > 0.22);
+  const meadowTiles = clearTiles.filter(({ x, y }) => (terrainRegions?.[y]?.[x]?.meadowStrength || 0) > 0.2);
+
+  const builtBuildings = buildings.filter((building) => building.state === 'built');
+  const homeAnchors = builtBuildings
+    .filter((building) => HOME_BUILDINGS.has(building.type))
+    .map((building) => {
+      const anchor = getBuildingAnchor(building, clearTileMap, clearTiles, terrainRegions);
+      return anchor ? { ...anchor, role: 'home' } : null;
+    })
+    .filter(Boolean);
+  const workAnchors = builtBuildings
+    .filter((building) => WORK_BUILDINGS.has(building.type))
+    .map((building) => {
+      const anchor = getBuildingAnchor(building, clearTileMap, clearTiles, terrainRegions);
+      return anchor ? { ...anchor, role: 'work', buildingType: building.type } : null;
+    })
+    .filter(Boolean);
+  const commonAnchors = builtBuildings
+    .filter((building) => COMMON_BUILDINGS.has(building.type))
+    .map((building) => {
+      const anchor = getBuildingAnchor(building, clearTileMap, clearTiles, terrainRegions);
+      return anchor ? { ...anchor, role: 'common', buildingType: building.type } : null;
+    })
+    .filter(Boolean);
+
   const count = Math.min(Math.max(4, (world.population || 0) + 2), 18, pool.length);
   const assignedWorkers = Math.max(0, world.assigned_workers || 0);
   const placements = [];
   for (let i = 0; i < count; i += 1) {
-    const tile = pool[(i * 13 + Math.floor(i / 3) * 5) % pool.length];
+    const tile = pickFromPool(pool, i * 13 + Math.floor(i / 3) * 5, pool[0]);
     const working = i < assignedWorkers;
+    const seed = i * 29 + 11;
+    const homeTile = pickFromPool(homeAnchors, i * 5 + 1, tile);
+    const laneTile = pickFromPool(laneTiles, i * 7 + 2, tile);
+    const leisureTile = pickFromPool(commonAnchors, i * 9 + 3, pickFromPool(meadowTiles, i * 11 + 5, tile));
+    const natureTile = pickFromPool(shoreTiles, i * 13 + 7, pickFromPool(meadowTiles, i * 17 + 4, tile));
+    const workTile = working
+      ? pickFromPool(workAnchors, i * 3 + assignedWorkers, pickFromPool(commonAnchors, i * 6 + 1, tile))
+      : leisureTile;
+
+    const routePoints = working
+      ? [
+          { ...pointFromTile(homeTile, seed + 1, 0.16, 0.12), role: 'home', pauseMs: 1200 + hash01(seed, 3) * 900 },
+          { ...pointFromTile(laneTile, seed + 2, 0.1, 0.08), role: 'path', pauseMs: 200 + hash01(seed, 4) * 160 },
+          { ...pointFromTile(workTile, seed + 3, 0.12, 0.1), role: 'work', pauseMs: 1600 + hash01(seed, 5) * 1200 },
+          { ...pointFromTile(leisureTile, seed + 4, 0.14, 0.11), role: 'common', pauseMs: 800 + hash01(seed, 6) * 700 },
+        ]
+      : [
+          { ...pointFromTile(homeTile, seed + 1, 0.16, 0.12), role: 'home', pauseMs: 1400 + hash01(seed, 3) * 1000 },
+          { ...pointFromTile(leisureTile, seed + 2, 0.14, 0.11), role: 'common', pauseMs: 1100 + hash01(seed, 4) * 800 },
+          { ...pointFromTile(natureTile, seed + 3, 0.18, 0.12), role: 'common', pauseMs: 700 + hash01(seed, 5) * 600 },
+          { ...pointFromTile(laneTile, seed + 4, 0.1, 0.08), role: 'path', pauseMs: 240 + hash01(seed, 6) * 180 },
+        ];
+
     placements.push({
-      ...tile,
+      ...homeTile,
       palette: RESIDENT_STYLES[i % RESIDENT_STYLES.length],
       activity: working ? ['gather', 'carry', 'build'][i % 3] : ['stroll', 'play', 'stroll'][i % 3],
-      seed: i * 29 + 11,
-      range: working ? 0.28 : 0.42,
-      period: 2600 + (i % 5) * 280,
+      seed,
+      route: expandResidentRoute(routePoints, seed),
+      x: tile.x,
+      y: tile.y,
     });
   }
   return placements;
@@ -213,13 +471,32 @@ function buildEncounterSightings(world, terrainRegions, encounters = []) {
 
 /** Deterministic pet position: wanders 1 tile every ~2s based on seed. */
 function getPetWanderPos(pet, time) {
-  const period = 2000;
+  const period = 2600;
   const step = Math.floor(time / period);
-  const hash = (pet.seed * 2654435761 + step * 2246822519) >>> 0;
-  const dx = (hash % 3) - 1; // -1, 0, 1
-  const dy = ((hash >> 4) % 3) - 1;
-  const frac = (time % period) / period;
-  return { x: pet.x + dx, y: pet.y + dy, frameOffset: frac };
+  const currentHash = (pet.seed * 2654435761 + step * 2246822519) >>> 0;
+  const nextHash = (pet.seed * 2654435761 + (step + 1) * 2246822519) >>> 0;
+  const from = {
+    x: (currentHash % 3) - 1,
+    y: ((currentHash >> 4) % 3) - 1,
+  };
+  const to = {
+    x: (nextHash % 3) - 1,
+    y: ((nextHash >> 4) % 3) - 1,
+  };
+  const phase = (time % period) / period;
+  if (phase < 0.18) {
+    return { x: pet.x + from.x * 0.44, y: pet.y + from.y * 0.34, frameOffset: 0 };
+  }
+  if (phase > 0.82) {
+    return { x: pet.x + to.x * 0.44, y: pet.y + to.y * 0.34, frameOffset: 0 };
+  }
+
+  const travel = smoothStep((phase - 0.18) / 0.64);
+  return {
+    x: pet.x + (from.x + (to.x - from.x) * travel) * 0.44,
+    y: pet.y + (from.y + (to.y - from.y) * travel) * 0.34,
+    frameOffset: (travel * 1.8 + pet.seed * 0.07) % 1,
+  };
 }
 
 /** Check if all tiles in a footprint are valid for building. */
@@ -296,7 +573,7 @@ export default function PetWorldCanvas({
   const [minimapVisible, setMinimapVisible] = useState(true);
   const buildingMap = useMemo(() => getBuildingMap(buildings), [buildings]);
   const terrainRegions = useMemo(() => analyzeTerrainGrid(world?.grid, buildings), [world?.grid, buildings]);
-  const residentPlacements = useMemo(() => buildResidentPlacements(world, terrainRegions), [world, terrainRegions]);
+  const residentPlacements = useMemo(() => buildResidentPlacements(world, terrainRegions, buildings), [world, terrainRegions, buildings]);
   const petPlacements = useMemo(() => buildPetPlacements(world), [world]);
   const ambientFauna = useMemo(() => buildAmbientFauna(world, terrainRegions), [world, terrainRegions]);
   const encounterSightings = useMemo(() => buildEncounterSightings(world, terrainRegions, encounters), [world, terrainRegions, encounters]);
@@ -594,7 +871,7 @@ export default function PetWorldCanvas({
       });
 
     residentPlacements.forEach((resident) => {
-      const wander = getEntityWanderPos(resident, time);
+      const wander = getRouteMotion(resident, time);
       const screenX = wander.x * tileSize - camera.x + tileSize / 2;
       const screenY = wander.y * tileSize - camera.y + tileSize * 0.82;
       if (screenX < -tileSize || screenY < -tileSize || screenX > size.width + tileSize || screenY > size.height + tileSize) return;
