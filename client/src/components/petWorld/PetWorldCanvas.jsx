@@ -151,7 +151,7 @@ export default function PetWorldCanvas({
 
   // --- minimap rendering helper ---
   const drawMinimap = useCallback((ctx, viewW, viewH) => {
-    if (!minimapVisible || !world?.grid) return;
+    if (!minimapVisible || !world?.grid || pendingBuildType) return;
     const grid = world.grid;
     const biomeUi = getBiomeUi(world.biome);
 
@@ -258,7 +258,7 @@ export default function PetWorldCanvas({
     ctx.restore();
 
     ctx.restore();
-  }, [world, camera.x, camera.y, minimapVisible]);
+  }, [world, camera.x, camera.y, minimapVisible, pendingBuildType]);
 
   // --- main render ---
   const render = useCallback((timestamp) => {
@@ -312,7 +312,18 @@ export default function PetWorldCanvas({
         if (!tile) continue;
         const screenX = x * tileSize - camera.x;
         const screenY = y * tileSize - camera.y;
-        drawTile(ctx, world.biome, tile, screenX, screenY, tileSize, time);
+        // Compute cardinal + diagonal neighbor tile types for terrain composition
+        const neighbors = {
+          n:  world.grid.tiles[y - 1]?.[x]?.t || null,
+          s:  world.grid.tiles[y + 1]?.[x]?.t || null,
+          e:  world.grid.tiles[y]?.[x + 1]?.t || null,
+          w:  world.grid.tiles[y]?.[x - 1]?.t || null,
+          ne: world.grid.tiles[y - 1]?.[x + 1]?.t || null,
+          nw: world.grid.tiles[y - 1]?.[x - 1]?.t || null,
+          se: world.grid.tiles[y + 1]?.[x + 1]?.t || null,
+          sw: world.grid.tiles[y + 1]?.[x - 1]?.t || null,
+        };
+        drawTile(ctx, world.biome, tile, screenX, screenY, tileSize, time, neighbors);
       }
     }
 

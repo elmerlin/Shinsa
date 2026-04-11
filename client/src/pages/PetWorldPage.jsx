@@ -1113,21 +1113,21 @@ export default function PetWorldPage() {
               setSelectedTile(null);
               setActiveSheet('build');
             }}
-            className={`pointer-events-auto flex h-14 w-14 items-center justify-center rounded-full border shadow-[0_6px_20px_rgba(0,0,0,0.4)] backdrop-blur-md transition-all duration-200 ease-out active:scale-95 ${
+            className={`pointer-events-auto flex h-12 w-12 items-center justify-center rounded-full border shadow-[0_6px_20px_rgba(0,0,0,0.4)] backdrop-blur-md transition-all duration-200 ease-out active:scale-95 ${
               pendingBuildType
                 ? 'border-rose-400/25 bg-rose-500/20 text-rose-200 hover:bg-rose-500/30'
-                : 'border-emerald-400/20 bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25 animate-[pulse_3s_ease-in-out_infinite]'
+                : 'border-emerald-400/20 bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25'
             }`}
             aria-label={pendingBuildType ? 'Cancel build' : 'Build'}
           >
             {pendingBuildType ? (
               /* X icon for cancel */
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
                 <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
               </svg>
             ) : (
               /* Wrench icon for build */
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
                 <path fillRule="evenodd" d="M14.5 10a4.5 4.5 0 004.284-5.882c-.105-.324-.51-.391-.752-.15L15.34 6.66a.454.454 0 01-.493.101 3.046 3.046 0 01-1.61-1.61.454.454 0 01.1-.492l2.693-2.693c.242-.242.174-.647-.15-.752a4.5 4.5 0 00-5.873 4.575c.055.873-.128 1.808-.8 2.368l-7.23 6.024a2.724 2.724 0 103.837 3.837l6.024-7.23c.56-.672 1.495-.855 2.368-.8.096.007.193.01.291.01zM5 16a1 1 0 11-2 0 1 1 0 012 0z" clipRule="evenodd" />
               </svg>
             )}
@@ -1141,15 +1141,15 @@ export default function PetWorldPage() {
           className="absolute inset-x-0 bottom-0 z-50 animate-[slideUp_0.2s_ease-out] transition-all duration-200 ease-out"
           style={{ paddingBottom: 'max(8px, env(safe-area-inset-bottom))' }}
         >
-          <div className="mx-auto flex max-w-md items-center gap-2 rounded-2xl border border-white/8 bg-black/85 px-3 py-2.5 shadow-[0_-8px_24px_rgba(0,0,0,0.3)] backdrop-blur-xl mx-3">
+          <div className="mx-auto flex max-w-sm items-center gap-2 rounded-xl border border-white/6 bg-black/80 px-2.5 py-1.5 shadow-[0_-6px_18px_rgba(0,0,0,0.3)] backdrop-blur-xl mx-3">
             {pendingBuildDef && (
               <>
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-white/8 bg-white/[0.04]" style={{ backgroundColor: getBuildingUi(pendingBuildDef.id).accent + '22' }}>
-                  <span className="text-xs">{getBuildingUi(pendingBuildDef.id).icon}</span>
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style={{ background: `linear-gradient(135deg, ${getBuildingUi(pendingBuildDef.id).accent}30, ${getBuildingUi(pendingBuildDef.id).accent}10)`, border: `1px solid ${getBuildingUi(pendingBuildDef.id).accent}25` }}>
+                  <span className="text-sm">{getBuildingUi(pendingBuildDef.id).icon}</span>
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-[12px] font-bold text-white">{pendingBuildDef.name}</div>
-                  <div className="text-[10px] text-white/40">{pendingBuildDef.comboCost}c -- Tap to place</div>
+                  <div className="text-[9px] text-white/35">{pendingBuildDef.comboCost}c · Tap to place</div>
                 </div>
               </>
             )}
@@ -1158,7 +1158,7 @@ export default function PetWorldPage() {
               onClick={() => {
                 setActiveSheet('build');
               }}
-              className="pointer-events-auto shrink-0 rounded-lg border border-white/10 bg-white/[0.06] px-2.5 py-1.5 text-[10px] font-semibold text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+              className="pointer-events-auto shrink-0 rounded-md border border-white/8 bg-white/[0.05] px-2 py-1 text-[9px] font-semibold text-white/60 transition-colors hover:bg-white/10 hover:text-white"
             >
               Change
             </button>
@@ -1169,7 +1169,7 @@ export default function PetWorldPage() {
                 setPendingBuildVariant(null);
                 setActiveSheet(null);
               }}
-              className="pointer-events-auto shrink-0 rounded-lg border border-rose-400/15 bg-rose-500/10 px-2.5 py-1.5 text-[10px] font-semibold text-rose-200/70 transition-colors hover:bg-rose-500/20 hover:text-rose-100"
+              className="pointer-events-auto shrink-0 rounded-md border border-rose-400/12 bg-rose-500/8 px-2 py-1 text-[9px] font-semibold text-rose-200/70 transition-colors hover:bg-rose-500/20 hover:text-rose-100"
             >
               Cancel
             </button>
@@ -1188,9 +1188,9 @@ export default function PetWorldPage() {
             <div className="flex justify-center pt-2 pb-1">
               <div className="h-1 w-8 rounded-full bg-white/15" />
             </div>
-            {/* Sheet header */}
-            <div className="flex items-center justify-between px-3.5 pb-2">
-              <h2 className="text-[13px] font-black text-white">Build</h2>
+            {/* Compact palette header */}
+            <div className="flex items-center justify-between px-3 pb-1">
+              <span className="text-[10px] uppercase tracking-[0.14em] font-semibold text-white/40">Build</span>
               <button
                 type="button"
                 onClick={() => {
@@ -1204,7 +1204,7 @@ export default function PetWorldPage() {
                 &times;
               </button>
             </div>
-            <div className="max-h-[28vh] overflow-y-auto px-3 pb-3" style={{ overscrollBehavior: 'contain' }}>
+            <div className="max-h-[32vh] overflow-y-auto px-2.5 pb-2" style={{ overscrollBehavior: 'contain' }}>
               <PetWorldBuildMenu
                 open
                 buildings={catalog}
@@ -1216,10 +1216,9 @@ export default function PetWorldPage() {
                   setPendingBuildVariant(variant || null);
                   setSelectedBuilding(null);
                   setSelectedTile(null);
-                  setHudCollapsed(true);
-                  // Auto-switch to placement mode
                   setActiveSheet(null);
-                  showToast('Tap a tile to place this building');
+                  setHudCollapsed(true);
+                  showToast('Tap to place');
                 }}
                 onClose={() => {
                   setPendingBuildType('');

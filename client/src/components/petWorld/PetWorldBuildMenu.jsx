@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { getBuildingUi } from './petWorldBuildings';
 import { RESOURCE_ICONS as RES_ICONS } from './petWorldUtils';
+import { drawBuildingThumbnail } from './petWorldSprites';
 
 const CATEGORIES = ['All', 'Food', 'Wood', 'Stone', 'Cloth', 'Gold', 'Housing', 'Support', 'Storage', 'Cosmetic', 'Trade'];
 
@@ -10,6 +11,29 @@ const FLOWER_VARIANTS = [
   { id: 'blue', label: 'Blue', color: '#4080e0' },
   { id: 'red', label: 'Red', color: '#e04040' },
 ];
+
+function BuildingThumbnail({ type, biome, size = 36 }) {
+  const containerRef = React.useRef(null);
+
+  React.useEffect(() => {
+    if (!containerRef.current) return;
+    const thumb = drawBuildingThumbnail(type, biome, size);
+    if (!thumb) return;
+    // Replace content with the cached canvas clone
+    const container = containerRef.current;
+    container.innerHTML = '';
+    const clone = thumb.cloneNode(true);
+    const srcCtx = thumb.getContext('2d');
+    const destCtx = clone.getContext('2d');
+    destCtx.drawImage(thumb, 0, 0);
+    clone.style.width = `${size}px`;
+    clone.style.height = `${size}px`;
+    clone.style.display = 'block';
+    container.appendChild(clone);
+  }, [type, biome, size]);
+
+  return <div ref={containerRef} className="shrink-0" style={{ width: size, height: size }} />;
+}
 
 function CostLine({ comboCost, materials = {} }) {
   const mats = Object.entries(materials).filter(([, v]) => v > 0);
@@ -78,7 +102,7 @@ export default function PetWorldBuildMenu({
 
       {/* Dense 2-col grid */}
       <div
-        className="grid grid-cols-2 gap-1.5 overflow-y-auto"
+        className="grid grid-cols-2 gap-1 overflow-y-auto"
         style={{ overscrollBehavior: 'contain' }}
       >
         {filtered.map((building) => {
@@ -99,9 +123,7 @@ export default function PetWorldBuildMenu({
               }`}
             >
               <div className="flex items-center gap-1.5 px-2 py-1.5">
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-white/8" style={{ backgroundColor: ui.accent + '18' }}>
-                  <span className="text-[11px]">{ui.icon}</span>
-                </span>
+                <BuildingThumbnail type={building.id} biome={world?.biome} size={32} />
                 <div className="min-w-0 flex-1">
                   <div className={`truncate text-[11px] font-bold leading-tight ${locked ? 'text-white/25' : 'text-white/85'}`}>
                     {building.name}

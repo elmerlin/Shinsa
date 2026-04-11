@@ -201,14 +201,63 @@ export function drawTile(ctx, biome, tile, x, y, tileSize, time = 0, neighbors) 
     }
   }
 
-  // Macro terrain patches - smooth color variation across multiple tiles
+  // Multi-scale terrain patches for organic landscape feel
   if (tile.t !== 'water') {
-    const macroHash = ((Math.floor(ix / (s * 3)) * 7919) ^ (Math.floor(iy / (s * 3)) * 6271)) >>> 0;
-    const macroAlpha = ((macroHash % 100) / 100) * 0.08;
-    if (macroHash % 2 === 0) {
-      px(ctx, ix, iy, s, s, biomeUi.groundDark || grounds[0], macroAlpha);
+    // Large patches (5x5 tile regions) — meadow/dirt zones
+    const lgHash = ((Math.floor(ix / (s * 5)) * 104729) ^ (Math.floor(iy / (s * 5)) * 56263)) >>> 0;
+    const lgAlpha = ((lgHash % 80) / 80) * 0.12;
+    if (lgHash % 3 === 0) {
+      // dark earthy patch
+      px(ctx, ix, iy, s, s, groundDark || grounds[0], lgAlpha);
+    } else if (lgHash % 3 === 1) {
+      // highlighted meadow patch
+      px(ctx, ix, iy, s, s, biomeUi.highlight || 'rgba(255,255,220,0.06)', lgAlpha);
+    }
+    // Medium patches (3x3 tile regions) — subtle color shift
+    const mdHash = ((Math.floor(ix / (s * 3)) * 7919) ^ (Math.floor(iy / (s * 3)) * 6271)) >>> 0;
+    const mdAlpha = ((mdHash % 60) / 60) * 0.07;
+    if (mdHash % 2 === 0) {
+      px(ctx, ix, iy, s, s, groundDark || grounds[0], mdAlpha);
     } else {
-      px(ctx, ix, iy, s, s, biomeUi.highlight || 'rgba(255,255,255,0.04)', macroAlpha);
+      px(ctx, ix, iy, s, s, groundMid || grounds[1], mdAlpha * 0.5);
+    }
+  }
+
+  // Neighbor-aware ground transitions — blend toward adjacent terrain types
+  if (tile.t !== 'water' && neighbors) {
+    const nb = neighbors;
+    const transSize = s * 0.25;
+    // If neighbor is water, draw a subtle muddy/sandy edge toward it
+    if (nb.n === 'water') {
+      const tg = ctx.createLinearGradient(ix, iy, ix, iy + transSize);
+      tg.addColorStop(0, biomeUi.waterShore || '#5898b8');
+      tg.addColorStop(1, 'transparent');
+      ctx.save(); ctx.fillStyle = tg; ctx.globalAlpha = 0.18; ctx.fillRect(ix, iy, s, transSize); ctx.restore();
+    }
+    if (nb.s === 'water') {
+      const tg = ctx.createLinearGradient(ix, iy + s, ix, iy + s - transSize);
+      tg.addColorStop(0, biomeUi.waterShore || '#5898b8');
+      tg.addColorStop(1, 'transparent');
+      ctx.save(); ctx.fillStyle = tg; ctx.globalAlpha = 0.18; ctx.fillRect(ix, iy + s - transSize, s, transSize); ctx.restore();
+    }
+    if (nb.w === 'water') {
+      const tg = ctx.createLinearGradient(ix, iy, ix + transSize, iy);
+      tg.addColorStop(0, biomeUi.waterShore || '#5898b8');
+      tg.addColorStop(1, 'transparent');
+      ctx.save(); ctx.fillStyle = tg; ctx.globalAlpha = 0.15; ctx.fillRect(ix, iy, transSize, s); ctx.restore();
+    }
+    if (nb.e === 'water') {
+      const tg = ctx.createLinearGradient(ix + s, iy, ix + s - transSize, iy);
+      tg.addColorStop(0, biomeUi.waterShore || '#5898b8');
+      tg.addColorStop(1, 'transparent');
+      ctx.save(); ctx.fillStyle = tg; ctx.globalAlpha = 0.15; ctx.fillRect(ix + s - transSize, iy, transSize, s); ctx.restore();
+    }
+    // If neighbor is tree/bush, draw a subtle foliage shadow bleeding in
+    if (nb.n === 'tree' || nb.n === 'bush') {
+      px(ctx, ix, iy, s, s * 0.08, biomeUi.shadowColor || 'rgba(0,0,0,0.08)');
+    }
+    if (nb.w === 'tree' || nb.w === 'bush') {
+      px(ctx, ix, iy, s * 0.06, s, biomeUi.shadowColor || 'rgba(0,0,0,0.06)');
     }
   }
 
@@ -226,44 +275,67 @@ export function drawTile(ctx, biome, tile, x, y, tileSize, time = 0, neighbors) 
     ctx.fillRect(ix, iy, s, s);
     ctx.restore();
 
-    // Smoother shore transitions on all edges
-    const shoreGradSize = s * 0.18;
+    // Connected shoreline: only draw shore where water meets non-water
+    const shoreSize = s * 0.22;
+    const nb = neighbors || {};
+    const isWater = (t) => t === 'water';
     ctx.save();
-    // Top shore
-    if ((h >> 2) % 3 !== 2) {
-      const sg = ctx.createLinearGradient(ix, iy, ix, iy + shoreGradSize);
+    // North shore (top edge) — only if neighbor above is NOT water
+    if (nb.n && !isWater(nb.n)) {
+      const sg = ctx.createLinearGradient(ix, iy, ix, iy + shoreSize);
       sg.addColorStop(0, shore);
       sg.addColorStop(1, 'transparent');
       ctx.fillStyle = sg;
-      ctx.globalAlpha = 0.4;
-      ctx.fillRect(ix, iy, s, shoreGradSize);
+      ctx.globalAlpha = 0.55;
+      ctx.fillRect(ix, iy, s, shoreSize);
+      // sandy/foam edge line
+      px(ctx, ix, iy, s, s * 0.04, '#ffffff', 0.12);
     }
-    // Bottom shore
-    if ((h >> 4) % 3 !== 2) {
-      const sg = ctx.createLinearGradient(ix, iy + s, ix, iy + s - shoreGradSize);
+    // South shore
+    if (nb.s && !isWater(nb.s)) {
+      const sg = ctx.createLinearGradient(ix, iy + s, ix, iy + s - shoreSize);
       sg.addColorStop(0, shore);
       sg.addColorStop(1, 'transparent');
       ctx.fillStyle = sg;
-      ctx.globalAlpha = 0.35;
-      ctx.fillRect(ix, iy + s - shoreGradSize, s, shoreGradSize);
+      ctx.globalAlpha = 0.50;
+      ctx.fillRect(ix, iy + s - shoreSize, s, shoreSize);
+      px(ctx, ix, iy + s - s * 0.04, s, s * 0.04, '#ffffff', 0.10);
     }
-    // Left shore
-    if ((h >> 6) % 3 !== 2) {
-      const sg = ctx.createLinearGradient(ix, iy, ix + shoreGradSize, iy);
+    // West shore (left edge)
+    if (nb.w && !isWater(nb.w)) {
+      const sg = ctx.createLinearGradient(ix, iy, ix + shoreSize, iy);
       sg.addColorStop(0, shore);
       sg.addColorStop(1, 'transparent');
       ctx.fillStyle = sg;
-      ctx.globalAlpha = 0.35;
-      ctx.fillRect(ix, iy, shoreGradSize, s);
+      ctx.globalAlpha = 0.45;
+      ctx.fillRect(ix, iy, shoreSize, s);
     }
-    // Right shore
-    if ((h >> 8) % 3 !== 2) {
-      const sg = ctx.createLinearGradient(ix + s, iy, ix + s - shoreGradSize, iy);
+    // East shore
+    if (nb.e && !isWater(nb.e)) {
+      const sg = ctx.createLinearGradient(ix + s, iy, ix + s - shoreSize, iy);
       sg.addColorStop(0, shore);
       sg.addColorStop(1, 'transparent');
       ctx.fillStyle = sg;
-      ctx.globalAlpha = 0.35;
-      ctx.fillRect(ix + s - shoreGradSize, iy, shoreGradSize, s);
+      ctx.globalAlpha = 0.45;
+      ctx.fillRect(ix + s - shoreSize, iy, shoreSize, s);
+    }
+    // Corner shores — where diagonal neighbor is not water but both cardinal neighbors are water
+    // This creates rounded shore corners for natural-looking ponds
+    if (nb.nw && !isWater(nb.nw) && isWater(nb.n) && isWater(nb.w)) {
+      circ(ctx, ix + s * 0.1, iy + s * 0.1, s * 0.18, shore, 0.3);
+    }
+    if (nb.ne && !isWater(nb.ne) && isWater(nb.n) && isWater(nb.e)) {
+      circ(ctx, ix + s * 0.9, iy + s * 0.1, s * 0.18, shore, 0.3);
+    }
+    if (nb.sw && !isWater(nb.sw) && isWater(nb.s) && isWater(nb.w)) {
+      circ(ctx, ix + s * 0.1, iy + s * 0.9, s * 0.18, shore, 0.3);
+    }
+    if (nb.se && !isWater(nb.se) && isWater(nb.s) && isWater(nb.e)) {
+      circ(ctx, ix + s * 0.9, iy + s * 0.9, s * 0.18, shore, 0.3);
+    }
+    // If ALL cardinal neighbors are water, this is an interior water tile — darker, calmer
+    if (isWater(nb.n) && isWater(nb.s) && isWater(nb.e) && isWater(nb.w)) {
+      px(ctx, ix, iy, s, s, deep, 0.15);
     }
     ctx.restore();
 
@@ -310,9 +382,9 @@ export function drawTile(ctx, biome, tile, x, y, tileSize, time = 0, neighbors) 
 
     // cast shadow on ground (offset down-right)
     ctx.save();
-    ctx.fillStyle = 'rgba(0,0,0,0.18)';
+    ctx.fillStyle = 'rgba(0,0,0,0.28)';
     ctx.beginPath();
-    ctx.ellipse(ix + s * 0.58 + sway * 0.5, iy + s * 0.78, s * 0.30, s * 0.10, 0.15, 0, Math.PI * 2);
+    ctx.ellipse(ix + s * 0.60 + sway * 0.5, iy + s * 0.82, s * 0.36, s * 0.12, 0.2, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
 
@@ -355,9 +427,9 @@ export function drawTile(ctx, biome, tile, x, y, tileSize, time = 0, neighbors) 
     // --- ROCK: sculpted with facets, lit top, dark side ---
     // small shadow underneath
     ctx.save();
-    ctx.fillStyle = 'rgba(0,0,0,0.18)';
+    ctx.fillStyle = 'rgba(0,0,0,0.26)';
     ctx.beginPath();
-    ctx.ellipse(ix + s * 0.50, iy + s * 0.76, s * 0.32, s * 0.08, 0, 0, Math.PI * 2);
+    ctx.ellipse(ix + s * 0.54, iy + s * 0.80, s * 0.38, s * 0.10, 0.1, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
 
@@ -1652,4 +1724,46 @@ export function drawPetWander(ctx, x, y, tileSize, character, frameOffset) {
   }
 
   ctx.restore();
+}
+
+/** Render a building sprite to an offscreen canvas for use as a thumbnail in the build UI.
+ *  Returns a canvas element or null if no drawer exists. Cached by type+biome. */
+const _thumbCache = new Map();
+export function drawBuildingThumbnail(type, biome = 'grasslands', size = 48) {
+  const key = `${type}_${biome}_${size}`;
+  if (_thumbCache.has(key)) return _thumbCache.get(key);
+
+  const ui = getBuildingUi(type);
+  ui._biome = biome;
+
+  const canvas = document.createElement('canvas');
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = Math.round(size * dpr);
+  canvas.height = Math.round(size * dpr);
+  canvas.style.width = `${size}px`;
+  canvas.style.height = `${size}px`;
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  const BUILDING_SIZES = { farm: [2,2], house: [2,2], well: [1,1], fishing_hut: [2,1], woodcutters_hut: [1,1], stone_pit: [1,1], path: [1,1], lumberyard: [2,2], quarry: [2,2], weaving_hut: [2,2], market: [2,2], large_house: [3,2], garden: [1,1], storehouse: [2,2], trading_post: [2,2], town_hall: [3,3], bakery: [2,2], shrine: [2,2], park: [3,3], warehouse: [3,2], flower_bed: [1,1], watchtower: [1,1], tavern: [2,2] };
+  const [bw, bh] = BUILDING_SIZES[type] || [1, 1];
+  const maxDim = Math.max(bw, bh);
+  const tileSize = (size * 0.85) / maxDim;
+  const w = tileSize * bw;
+  const h = tileSize * bh;
+  const ox = (size - w) / 2;
+  const oy = (size - h) / 2 + size * 0.05; // slight down offset for shadow room
+
+  const drawer = SPRITE_DRAWERS[type];
+  if (drawer) {
+    drawer(ctx, ox, oy, w, h, ui, tileSize);
+  } else {
+    // fallback
+    castShadow(ctx, ox + 2, oy + h * 0.13, w - 4, h * 0.72);
+    px(ctx, ox + 2, oy + h * 0.15, w - 4, h * 0.70, ui.wallColor);
+    shadedRoof(ctx, ox, oy + h * 0.18, ox + w / 2, oy + h * 0.02, ox + w, oy + h * 0.18, ui.roofColor);
+  }
+
+  _thumbCache.set(key, canvas);
+  return canvas;
 }

@@ -221,8 +221,9 @@ export default function PetWorldVisitPage() {
         <div className="min-w-0 flex-1">
           <PetWorldHUD world={world} collapsed />
         </div>
-        <span className="pointer-events-none rounded-full border border-cyan-300/12 bg-cyan-400/[0.06] px-2 py-0.5 text-[9px] font-semibold text-cyan-200/70 backdrop-blur-md">
-          Visiting {world.username || 'Unknown'}
+        <span className="pointer-events-none flex items-center gap-1 rounded-full border border-cyan-300/10 bg-cyan-400/[0.05] px-2 py-0.5 backdrop-blur-md">
+          <span className="h-1.5 w-1.5 rounded-full bg-cyan-400/60 animate-pulse" />
+          <span className="text-[9px] font-semibold text-cyan-200/65 truncate max-w-[120px]">{world.username || 'Unknown'}</span>
         </span>
         <button
           type="button"
@@ -240,8 +241,8 @@ export default function PetWorldVisitPage() {
       </div>
 
       {!activeSheet && (
-        <div className="absolute bottom-4 left-3 z-40 rounded-full border border-white/8 bg-black/40 px-2.5 py-1 text-[9px] text-white/45 backdrop-blur-md">
-          Drag to explore · Tap to inspect
+        <div className="absolute bottom-4 left-3 z-40 rounded-full border border-white/6 bg-black/30 px-2 py-0.5 text-[8px] text-white/30 backdrop-blur-sm animate-[fadeOut_4s_ease-in_forwards]">
+          Tap buildings to inspect
         </div>
       )}
 
@@ -252,7 +253,7 @@ export default function PetWorldVisitPage() {
             setVisitTab('overview');
             setActiveSheet((sheet) => (sheet === 'visit' ? null : 'visit'));
           }}
-          className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1.5 text-[10px] font-semibold backdrop-blur-sm transition-all ${
+          className={`inline-flex items-center gap-2 rounded-full border px-2 py-1 text-[9px] font-semibold backdrop-blur-sm transition-all ${
             activeSheet === 'visit'
               ? 'border-cyan-300/25 bg-cyan-400/14 text-cyan-50'
               : 'border-white/10 bg-black/38 text-white/75 hover:bg-black/52 hover:text-white'
@@ -264,7 +265,7 @@ export default function PetWorldVisitPage() {
           type="button"
           onClick={() => setShowTrades(true)}
           disabled={!canTrade}
-          className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/38 px-2.5 py-1.5 text-[10px] font-semibold text-white/75 backdrop-blur-sm transition-all hover:bg-black/52 hover:text-white disabled:opacity-40 disabled:pointer-events-none"
+          className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/38 px-2 py-1 text-[9px] font-semibold text-white/75 backdrop-blur-sm transition-all hover:bg-black/52 hover:text-white disabled:opacity-40 disabled:pointer-events-none"
         >
           Trade
         </button>
@@ -295,7 +296,7 @@ export default function PetWorldVisitPage() {
             </div>
 
             {activeSheet === 'inspect' ? (
-              <div className="max-h-[28vh] overflow-y-auto p-3">
+              <div className="max-h-[22vh] overflow-y-auto p-3">
                 {selectedBuilding ? (
                   <PetWorldBuildingInfo
                     building={selectedBuilding}
