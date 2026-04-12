@@ -258,14 +258,19 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
   const h = seed || 0;
   const t = time || 0;
 
-  /* ── Water tiles: animated water ── */
+  /* ── Water tiles: solid base + animated shimmer ── */
   if (tile.t === 'water') {
-    const fi = Math.floor((t * 0.003 + h * 0.1) % WATER_ANIM_FRAMES);
-    if (drawFrame(ctx, cfp(WATER_ANIM), fi * 16, 0, 16, 16, x, y, size, size)) {
-      return true;
+    // Always draw solid water base first (matches Wang shore tiles)
+    const staticDrawn = drawImg(ctx, cfp(WATER_STATIC), x, y, size, size);
+    if (!staticDrawn) {
+      // Placeholder while loading — CF water blue
+      ctx.fillStyle = '#3888b0';
+      ctx.fillRect(x, y, size, size);
     }
-    // Fallback to static water
-    return drawImg(ctx, cfp(WATER_STATIC), x, y, size, size);
+    // Overlay animated ripple at low opacity for shimmer
+    const fi = Math.floor((t * 0.003 + h * 0.1) % WATER_ANIM_FRAMES);
+    drawFrame(ctx, cfp(WATER_ANIM), fi * 16, 0, 16, 16, x, y, size, size, undefined, 0.35);
+    return true; // always suppress procedural water
   }
 
   /* ── Non-water tiles: Wang water-grass transition ── */
@@ -286,14 +291,24 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
 
   /* ── Desert / volcanic → sand ── */
   if (biome === 'desert' || biome === 'volcanic') {
-    return drawImg(ctx, cfp(SAND_TILE), x, y, size, size);
+    if (!drawImg(ctx, cfp(SAND_TILE), x, y, size, size)) {
+      // Placeholder while loading
+      ctx.fillStyle = '#c8b080';
+      ctx.fillRect(x, y, size, size);
+    }
+    return true; // always suppress procedural
   }
 
   /* ── Grass (single colour) ── */
   const grassDrawn = drawImg(ctx, cfp(GRASS_TILE), x, y, size, size);
+  if (!grassDrawn) {
+    // Placeholder while loading — consistent CF grass green
+    ctx.fillStyle = '#5a8a38';
+    ctx.fillRect(x, y, size, size);
+  }
 
   /* ── Flower-grass overlays on ~16 % of open ground tiles ── */
-  if (grassDrawn && tile.t !== 'tree' && tile.t !== 'rock' && tile.t !== 'bush') {
+  if (tile.t !== 'tree' && tile.t !== 'rock' && tile.t !== 'bush') {
     if (h % 6 === 0) {
       const variant = (h >>> 3) % FLOWER_GRASS_COUNT + 1;
       const fi = Math.floor((t * 0.002 + h * 0.07) % FLOWER_GRASS_FRAMES);
@@ -302,7 +317,7 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
     }
   }
 
-  return grassDrawn;
+  return true; // always suppress procedural
 }
 
 /**
@@ -391,7 +406,7 @@ export function drawCuteFantasyResident(ctx, x, y, tileSize, paletteKey, activit
 
   const src = cfp(file);
   const entry = getImage(src);
-  if (!entry?.loaded) return false;
+  if (!entry?.loaded) return true; // suppress procedural fallback while loading
 
   const cols = Math.floor(entry.image.width / NPC_FW);
   const n = Math.min(cols, 4);

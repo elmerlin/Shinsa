@@ -355,10 +355,8 @@ export function drawTerrainRegion(ctx, biome, tile, x, y, tileSize, terrain, nei
     return;
   }
 
-  let baseColor = tint(groundDark, groundLight, terrain?.baseTone ?? 0.5);
-  baseColor = tint(baseColor, biomeUi.pathStone || groundDark, (terrain?.laneStrength || 0) * 0.3 + (terrain?.villageWear || 0) * 0.12);
-  baseColor = tint(baseColor, groundDark, (terrain?.rockyStrength || 0) * 0.24 + (terrain?.foliageShadow || 0) * 0.1);
-  baseColor = tint(baseColor, biomeUi.waterShore || baseColor, (terrain?.shoreStrength || 0) * 0.14);
+  // Use a single consistent base color so CF tiles don't show varying underlays
+  const baseColor = groundMid || grounds[1] || grounds[0];
   px(ctx, ix, iy, s, s, baseColor);
 
   if ((terrain?.meadowStrength || 0) > 0.06) {

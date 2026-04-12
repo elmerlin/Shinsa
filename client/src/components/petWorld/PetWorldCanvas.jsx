@@ -580,7 +580,7 @@ function isTileWalkable(grid, tx, ty) {
  * Movement checks walkability so animals stay on valid ground.
  */
 function getAnimalWanderPos(entity, time, grid) {
-  const period = entity.period || 4000;
+  const period = entity.period || 8000; // slower cycle — more natural
   const step = Math.floor(time / period);
   const seed = entity.seed || 0;
 
@@ -590,11 +590,11 @@ function getAnimalWanderPos(entity, time, grid) {
 
   // Current & next target offset from home (small: 0 or ±1 tile)
   const getOffset = (h) => {
-    const idle = (h % 10) >= 3; // ~70% idle
+    const idle = (h % 10) >= 1; // ~90% idle, 10% walking — mostly still
     if (idle) return { dx: 0, dy: 0 };
     const dx = ((h >> 4) % 3) - 1;
     const dy = ((h >> 6) % 3) - 1;
-    return { dx: dx * 0.4, dy: dy * 0.3 };
+    return { dx: dx * 0.2, dy: dy * 0.15 };
   };
 
   const from = getOffset(hash);
@@ -604,8 +604,8 @@ function getAnimalWanderPos(entity, time, grid) {
   if (grid) {
     const homeX = Math.floor(entity.x);
     const homeY = Math.floor(entity.y);
-    if (!isTileWalkable(grid, homeX + Math.round(from.dx / 0.4), homeY + Math.round(from.dy / 0.3))) { from.dx = 0; from.dy = 0; }
-    if (!isTileWalkable(grid, homeX + Math.round(to.dx / 0.4), homeY + Math.round(to.dy / 0.3))) { to.dx = 0; to.dy = 0; }
+    if (!isTileWalkable(grid, homeX + Math.round(from.dx / 0.2), homeY + Math.round(from.dy / 0.15))) { from.dx = 0; from.dy = 0; }
+    if (!isTileWalkable(grid, homeX + Math.round(to.dx / 0.2), homeY + Math.round(to.dy / 0.15))) { to.dx = 0; to.dy = 0; }
   }
 
   const phase = (time % period) / period;
