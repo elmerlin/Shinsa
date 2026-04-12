@@ -28,12 +28,13 @@ import PetWorldSpriteThumbnail from '../components/petWorld/PetWorldSpriteThumbn
 import { getBuildingSize, getBuildingUi } from '../components/petWorld/petWorldBuildings';
 import { playBuildSound, playClearSound, playExpandSound, playUpgradeSound, playErrorSound, playHuntStrikeSound, playHuntSuccessSound, playHuntEscapeSound, playEncounterAlertSound } from '../components/petWorld/petWorldAudio';
 import usePetWorldPresence from '../hooks/usePetWorldPresence';
+import '../components/petWorld/petWorldCfUi.css';
 
 /* ─── Toast ─────────────────────────────────────────────────────── */
 function Toast({ message }) {
   if (!message) return null;
   return (
-    <div className="fixed left-1/2 top-4 z-[90] -translate-x-1/2 rounded-full border border-white/10 bg-black/80 px-4 py-2 text-sm font-semibold text-white shadow-[0_14px_30px_rgba(0,0,0,0.28)]">
+    <div className="cf-pill fixed left-1/2 top-4 z-[90] -translate-x-1/2 text-sm font-semibold shadow-[0_14px_30px_rgba(40,20,0,0.35)]">
       {message}
     </div>
   );
@@ -714,7 +715,7 @@ function ExpandButtons({ onExpand }) {
           key={dir}
           type="button"
           onClick={() => onExpand(dir)}
-          className="rounded-lg border border-white/[0.08] bg-black/50 backdrop-blur-sm px-2 py-1 text-[10px] font-semibold text-white/60 hover:bg-white/10 hover:text-white/90 transition-colors"
+          className="cf-btn cf-btn-green px-2 py-1 text-[10px] font-semibold transition-colors"
         >
           {label}
         </button>
@@ -1055,7 +1056,7 @@ export default function PetWorldPage() {
       >
         <Link
           to="/pet"
-          className="absolute top-3 left-3 z-50 flex items-center gap-1.5 rounded-lg border border-white/[0.08] bg-black/50 backdrop-blur-sm px-2.5 py-1.5 text-[11px] font-semibold text-white/60 hover:text-white/90 hover:bg-white/10 transition-colors"
+          className="cf-btn cf-btn-brown absolute top-3 left-3 z-50 flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold transition-colors"
         >
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
             <path fillRule="evenodd" d="M17 10a.75.75 0 01-.75.75H5.612l4.158 3.96a.75.75 0 11-1.04 1.08l-5.5-5.25a.75.75 0 010-1.08l5.5-5.25a.75.75 0 111.04 1.08L5.612 9.25H16.25A.75.75 0 0117 10z" clipRule="evenodd" />
@@ -1119,9 +1120,9 @@ export default function PetWorldPage() {
         />
       </div>
 
-      {/* Reduced gradient overlays */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-20 h-16 bg-gradient-to-b from-[#03070d]/90 to-transparent" />
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-20 bg-gradient-to-t from-[#03070d]/80 to-transparent" />
+      {/* Reduced gradient overlays — warm parchment tones */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-20 h-16 cf-top-bar" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-20 cf-bottom-bar" />
 
       {/* ═══ TOP HUD STRIP ═══ */}
       <div
@@ -1131,7 +1132,8 @@ export default function PetWorldPage() {
         {/* Back button */}
         <Link
           to="/pet"
-          className="pointer-events-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/8 bg-black/40 text-white/65 backdrop-blur-md transition-colors hover:bg-black/60 hover:text-white"
+          className="pointer-events-auto cf-btn cf-btn-brown flex h-9 w-9 shrink-0 items-center justify-center"
+          style={{ borderRadius: '50%', padding: 0 }}
           aria-label="Back to pet"
         >
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
@@ -1153,7 +1155,8 @@ export default function PetWorldPage() {
               setActiveEncounter(encounters[0]);
               playEncounterAlertSound();
             }}
-            className="pointer-events-auto flex h-9 items-center gap-1 rounded-full border border-amber-300/12 bg-black/40 px-2 text-[10px] font-semibold text-amber-200 backdrop-blur-md transition-colors hover:bg-amber-400/15"
+            className="pointer-events-auto cf-btn cf-btn-orange flex h-9 items-center gap-1 px-2 text-[10px] font-semibold"
+            style={{ borderRadius: 20 }}
           >
             <span className="h-1.5 w-1.5 rounded-full bg-amber-300 animate-pulse" />
             {encounters.length}
@@ -1169,7 +1172,8 @@ export default function PetWorldPage() {
             setVillageTab('overview');
             setActiveSheet((s) => (s === 'village' ? null : 'village'));
           }}
-          className="pointer-events-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/8 bg-black/40 text-white/60 backdrop-blur-md transition-colors hover:bg-black/60 hover:text-white"
+          className="pointer-events-auto cf-btn cf-btn-brown flex h-9 w-9 shrink-0 items-center justify-center"
+          style={{ borderRadius: '50%', padding: 0 }}
           aria-label="Village tools"
         >
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
@@ -1196,11 +1200,12 @@ export default function PetWorldPage() {
               setBuildSheetSnap('browse');
               setActiveSheet('build');
             }}
-            className={`pointer-events-auto flex h-12 w-12 items-center justify-center rounded-full border shadow-[0_6px_20px_rgba(0,0,0,0.4)] backdrop-blur-md transition-all duration-200 ease-out active:scale-95 ${
+            className={`pointer-events-auto cf-btn flex h-12 w-12 items-center justify-center transition-all duration-200 ease-out active:scale-95 ${
               pendingBuildType
-                ? 'border-rose-400/25 bg-rose-500/20 text-rose-200 hover:bg-rose-500/30'
-                : 'border-emerald-400/20 bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25'
+                ? 'cf-btn-red'
+                : 'cf-btn-green'
             }`}
+            style={{ borderRadius: '50%', padding: 0 }}
             aria-label={pendingBuildType ? 'Cancel build' : 'Build'}
           >
             {pendingBuildType ? (
@@ -1225,24 +1230,23 @@ export default function PetWorldPage() {
           style={{ paddingBottom: 'max(8px, env(safe-area-inset-bottom))' }}
         >
           <div className="mx-3 flex justify-center">
-            <div className="flex w-full max-w-md items-center gap-2 rounded-lg border border-white/8 bg-[linear-gradient(180deg,rgba(10,17,24,0.94),rgba(6,10,15,0.92))] px-2.5 py-2 shadow-[0_-10px_24px_rgba(0,0,0,0.32)] backdrop-blur-xl">
+            <div className="cf-panel-dark flex w-full max-w-md items-center gap-2 px-2.5 py-2">
               {pendingBuildDef && (
                 <>
                   <span
-                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border bg-black/20"
-                    style={{ borderColor: `${pendingBuildUi?.accent || '#6ee7b7'}30`, boxShadow: `0 10px 22px ${(pendingBuildUi?.accent || '#6ee7b7')}16` }}
+                    className="cf-inset flex h-11 w-11 shrink-0 items-center justify-center"
                   >
                     <PetWorldSpriteThumbnail type={pendingBuildDef.id} biome={world.biome} size={38} className="block" />
                   </span>
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-[12px] font-black text-white">{pendingBuildDef.name}</div>
-                    <div className="mt-0.5 flex flex-wrap items-center gap-1 text-[8px] uppercase tracking-[0.18em] text-white/34">
-                      <span className="rounded-full border border-white/8 px-1.5 py-0.5">{pendingBuildDef.width}&times;{pendingBuildDef.height}</span>
-                      <span className="rounded-full border px-1.5 py-0.5" style={{ borderColor: `${pendingBuildUi?.accent || '#6ee7b7'}28`, color: pendingBuildUi?.accent || '#6ee7b7' }}>
+                    <div className="cf-text truncate text-[12px] font-black">{pendingBuildDef.name}</div>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-1 cf-text-label">
+                      <span className="cf-pill" style={{ fontSize: 8, padding: '1px 6px' }}>{pendingBuildDef.width}&times;{pendingBuildDef.height}</span>
+                      <span className="cf-pill cf-pill-happy" style={{ fontSize: 8, padding: '1px 6px' }}>
                         Ready
                       </span>
                     </div>
-                    <div className="mt-1 text-[9px] text-white/42">{pendingBuildDef.comboCost}c · Tap the ground to place</div>
+                    <div className="mt-1 cf-text-muted text-[9px]">{pendingBuildDef.comboCost}c · Tap the ground to place</div>
                   </div>
                 </>
               )}
@@ -1252,7 +1256,7 @@ export default function PetWorldPage() {
                   setBuildSheetSnap('browse');
                   setActiveSheet('build');
                 }}
-                className="pointer-events-auto shrink-0 rounded-lg border border-white/8 bg-white/[0.05] px-2.5 py-1.5 text-[9px] font-semibold text-white/66 transition-colors hover:bg-white/10 hover:text-white"
+                className="pointer-events-auto shrink-0 cf-btn cf-btn-brown px-2.5 py-1.5 text-[9px] font-semibold"
               >
                 Change
               </button>
@@ -1263,7 +1267,7 @@ export default function PetWorldPage() {
                   setPendingBuildVariant(null);
                   setActiveSheet(null);
                 }}
-                className="pointer-events-auto shrink-0 rounded-lg border border-rose-400/12 bg-rose-500/8 px-2.5 py-1.5 text-[9px] font-semibold text-rose-200/70 transition-colors hover:bg-rose-500/20 hover:text-rose-100"
+                className="pointer-events-auto shrink-0 cf-btn cf-btn-red px-2.5 py-1.5 text-[9px] font-semibold"
               >
                 Cancel
               </button>
@@ -1279,7 +1283,7 @@ export default function PetWorldPage() {
           style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}
         >
           <div
-            className="mx-auto w-full max-w-xl overflow-hidden rounded-lg border border-white/8 bg-[linear-gradient(180deg,rgba(10,17,24,0.96),rgba(6,10,15,0.94))] shadow-[0_-18px_38px_rgba(0,0,0,0.36)] backdrop-blur-xl transition-[max-height] duration-300 ease-out motion-reduce:transition-none"
+            className="cf-panel-dark mx-auto w-full max-w-xl overflow-hidden transition-[max-height] duration-300 ease-out motion-reduce:transition-none"
             style={{ maxHeight: BUILD_SHEET_HEIGHTS[buildSheetSnap] }}
           >
             <div className="flex justify-center pt-2">
@@ -1291,13 +1295,13 @@ export default function PetWorldPage() {
                 className="flex w-full items-center justify-center pb-1"
                 aria-label="Resize build palette"
               >
-                <span className="h-1 w-10 rounded-full bg-white/15" />
+                <span className="h-1 w-10 rounded-full" style={{ background: 'rgba(139,94,43,0.35)' }} />
               </button>
             </div>
             <div className="flex flex-wrap items-center gap-2 px-3 pb-2">
               <div className="min-w-0 flex-1">
-                <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/36">Build Palette</div>
-                <div className="mt-0.5 text-[11px] text-white/48">
+                <div className="cf-text-label text-[10px] font-semibold">Build Palette</div>
+                <div className="mt-0.5 cf-text-muted text-[11px]">
                   {buildSheetSnap === 'peek'
                     ? 'Quick pick dock'
                     : buildSheetSnap === 'browse'
@@ -1305,17 +1309,14 @@ export default function PetWorldPage() {
                       : 'Full catalog view'}
                 </div>
               </div>
-              <div className="flex items-center gap-1 rounded-lg border border-white/8 bg-white/[0.04] p-1">
+              <div className="cf-inset flex items-center gap-1 p-1">
                 {BUILD_SHEET_SNAPS.map((snap) => (
                   <button
                     key={snap}
                     type="button"
                     onClick={() => setBuildSheetSnap(snap)}
-                    className={`rounded-md px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.14em] transition-colors ${
-                      buildSheetSnap === snap
-                        ? 'bg-cyan-400/[0.14] text-cyan-50'
-                        : 'text-white/40 hover:text-white/72'
-                    }`}
+                    className={`cf-btn ${buildSheetSnap === snap ? 'cf-btn-orange' : 'cf-btn-ghost'}`}
+                    style={{ padding: '3px 8px', fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.14em' }}
                   >
                     {snap === 'expanded' ? 'Full' : snap}
                   </button>
@@ -1328,7 +1329,8 @@ export default function PetWorldPage() {
                   setPendingBuildType('');
                   setPendingBuildVariant(null);
                 }}
-                className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/8 text-[11px] text-white/50 transition-colors hover:border-white/15 hover:text-white"
+                className="cf-btn cf-btn-brown flex h-8 w-8 items-center justify-center text-[11px]"
+                style={{ padding: 0 }}
                 aria-label="Close build menu"
               >
                 &times;
@@ -1376,16 +1378,16 @@ export default function PetWorldPage() {
           className="absolute inset-x-0 bottom-0 z-50 px-3 pb-3 transition-all duration-200 ease-out motion-reduce:transition-none"
           style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}
         >
-          <div className="mx-auto w-full max-w-lg overflow-hidden rounded-lg border border-white/8 bg-[linear-gradient(180deg,rgba(10,17,24,0.96),rgba(6,10,15,0.94))] shadow-[0_-18px_36px_rgba(0,0,0,0.34)] backdrop-blur-xl">
+          <div className="cf-panel-dark mx-auto w-full max-w-lg overflow-hidden">
             <div className="flex justify-center pt-2 pb-1">
-              <div className="h-1 w-9 rounded-full bg-white/15" />
+              <div className="h-1 w-9 rounded-full" style={{ background: 'rgba(139,94,43,0.35)' }} />
             </div>
             <div className="flex items-center justify-between px-3 pb-2">
               <div>
-                <div className="text-[9px] uppercase tracking-[0.16em] text-white/30">
+                <div className="cf-text-label">
                   {selectedBuilding ? 'Building Inspect' : 'Ground Inspect'}
                 </div>
-                <div className="mt-0.5 text-[11px] text-white/50">
+                <div className="mt-0.5 cf-text-muted text-[11px]">
                   {selectedBuilding ? 'Village details at a glance' : 'A tiny world note for this patch'}
                 </div>
               </div>
@@ -1396,7 +1398,8 @@ export default function PetWorldPage() {
                   setSelectedTile(null);
                   setActiveSheet(null);
                 }}
-                className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/8 text-[11px] text-white/50 transition-colors hover:border-white/15 hover:text-white"
+                className="cf-btn cf-btn-brown flex h-8 w-8 items-center justify-center text-[11px]"
+                style={{ padding: 0 }}
                 aria-label="Close inspect"
               >
                 &times;
@@ -1417,21 +1420,21 @@ export default function PetWorldPage() {
                   onSetWorkers={handleSetWorkers}
                 />
               ) : selectedTile ? (
-                <div className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2.5">
+                <div className="cf-inset" style={{ padding: '10px 12px' }}>
                   <div className="flex items-center gap-2">
-                    <span className="rounded-full border border-white/8 px-2 py-0.5 text-[8px] uppercase tracking-[0.18em] text-white/42">
+                    <span className="cf-pill" style={{ fontSize: 8, padding: '1px 8px' }}>
                       {selectedTile.tile?.t || 'ground'}
                     </span>
-                    <div className="text-[13px] font-black text-white">{selectedTile.x}, {selectedTile.y}</div>
+                    <div className="cf-text text-[13px] font-black">{selectedTile.x}, {selectedTile.y}</div>
                   </div>
-                  <div className="mt-2 text-[11px] leading-relaxed text-white/56">
+                  <div className="mt-2 cf-text-muted text-[11px] leading-relaxed">
                     {getTileInspectCopy(selectedTile.tile?.t, inspectedObstacle)}
                   </div>
                   {inspectedObstacle && (
                     <button
                       type="button"
                       onClick={() => handleClearTile(selectedTile)}
-                      className="mt-2 rounded-lg border border-amber-300/15 bg-amber-400/10 px-3 py-1.5 text-[11px] font-semibold text-amber-100 transition-colors hover:bg-amber-400/18"
+                      className="cf-btn cf-btn-orange mt-2 px-3 py-1.5 text-[11px] font-semibold"
                     >
                       Clear obstacle
                     </button>
@@ -1450,18 +1453,19 @@ export default function PetWorldPage() {
         <div className="absolute inset-0 z-50 flex items-center justify-center transition-all duration-200 ease-out">
           {/* Backdrop */}
           <div
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
             onClick={() => setActiveSheet(null)}
           />
           {/* Centered card */}
-          <div className="relative mx-4 w-full max-w-md max-h-[80vh] overflow-hidden rounded-2xl border border-white/8 bg-[#0a0f16]/95 shadow-[0_20px_50px_rgba(0,0,0,0.5)] backdrop-blur-xl">
+          <div className="cf-panel relative mx-4 w-full max-w-md max-h-[80vh] overflow-hidden">
             {/* Header */}
-            <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-3">
-              <h2 className="text-sm font-black text-white">Village Tools</h2>
+            <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '2px solid rgba(139,94,43,0.2)' }}>
+              <h2 className="cf-heading cf-text text-sm font-black">Village Tools</h2>
               <button
                 type="button"
                 onClick={() => setActiveSheet(null)}
-                className="flex h-7 w-7 items-center justify-center rounded-full border border-white/8 text-[11px] text-white/50 transition-colors hover:border-white/15 hover:text-white"
+                className="cf-btn cf-btn-brown flex h-7 w-7 items-center justify-center text-[11px]"
+                style={{ borderRadius: '50%', padding: 0 }}
                 aria-label="Close village tools"
               >
                 &times;
@@ -1479,11 +1483,8 @@ export default function PetWorldPage() {
                   key={id}
                   type="button"
                   onClick={() => setVillageTab(id)}
-                  className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold transition-colors ${
-                    villageTab === id
-                      ? 'border-cyan-300/15 bg-cyan-400/12 text-cyan-50'
-                      : 'border-white/8 bg-white/[0.03] text-white/50 hover:bg-white/[0.06] hover:text-white/70'
-                  }`}
+                  className={`cf-btn ${villageTab === id ? 'cf-btn-orange' : 'cf-btn-ghost'}`}
+                  style={{ padding: '4px 10px', fontSize: 10, borderRadius: 4 }}
                 >
                   {label}
                 </button>
@@ -1491,56 +1492,56 @@ export default function PetWorldPage() {
             </div>
 
             {/* Tab content */}
-            <div className="overflow-y-auto px-4 py-3" style={{ maxHeight: 'calc(80vh - 7rem)', overscrollBehavior: 'contain' }}>
+            <div className="cf-scroll overflow-y-auto px-4 py-3" style={{ maxHeight: 'calc(80vh - 7rem)', overscrollBehavior: 'contain' }}>
               {villageTab === 'overview' && (
                 <div className="space-y-2.5">
                   <div className="grid grid-cols-2 gap-1.5">
-                    <div className="rounded-xl border border-white/[0.06] bg-white/[0.025] p-2.5">
-                      <div className="text-[9px] uppercase tracking-[0.14em] text-white/30">Village Mood</div>
-                      <div className="mt-0.5 text-lg font-black text-white">{Math.round(world.happiness || 0)}</div>
-                      <div className="mt-0.5 text-[10px] text-white/35">Keep high for breeding.</div>
+                    <div className="cf-inset p-2.5">
+                      <div className="cf-text-label">Village Mood</div>
+                      <div className="cf-text mt-0.5 text-lg font-black">{Math.round(world.happiness || 0)}</div>
+                      <div className="cf-text-muted mt-0.5 text-[10px]">Keep high for breeding.</div>
                     </div>
-                    <div className="rounded-xl border border-white/[0.06] bg-white/[0.025] p-2.5">
-                      <div className="text-[9px] uppercase tracking-[0.14em] text-white/30">Online Now</div>
-                      <div className="mt-0.5 text-lg font-black text-white">{wsVisitors.length}</div>
-                      <div className="mt-0.5 text-[10px] text-white/35">Friends visiting now.</div>
+                    <div className="cf-inset p-2.5">
+                      <div className="cf-text-label">Online Now</div>
+                      <div className="cf-text mt-0.5 text-lg font-black">{wsVisitors.length}</div>
+                      <div className="cf-text-muted mt-0.5 text-[10px]">Friends visiting now.</div>
                     </div>
                   </div>
-                  <div className="rounded-xl border border-cyan-300/10 bg-cyan-400/[0.04] p-2.5">
-                    <div className="text-[9px] uppercase tracking-[0.14em] text-cyan-100/40">Population growth</div>
-                    <div className="mt-1 text-[13px] font-black text-white">
+                  <div className="cf-inset-light p-2.5">
+                    <div className="cf-text-label" style={{ color: '#2a6a2a' }}>Population growth</div>
+                    <div className="cf-text mt-1 text-[13px] font-black">
                       {world.population}/{world.housing_capacity} villagers
-                      <span className="ml-2 text-[10px] font-semibold text-cyan-100/45">Phase cap {world.population_cap}</span>
+                      <span className="cf-text-muted ml-2 text-[10px] font-semibold">Phase cap {world.population_cap}</span>
                     </div>
-                    <div className="mt-1.5 text-[10px] leading-relaxed text-white/50">
+                    <div className="cf-text-muted mt-1.5 text-[10px] leading-relaxed">
                       Build Houses or Large Houses, keep food at 10+, and keep mood above 60. New villagers arrive every 24h, or every 16h once you build a Shrine.
                     </div>
                   </div>
-                  <div className="rounded-xl border border-amber-300/10 bg-amber-400/[0.05] p-2.5">
-                    <div className="text-[9px] uppercase tracking-[0.14em] text-amber-100/45">Village life</div>
-                    <div className="mt-1 text-[13px] font-black text-white">
+                  <div className="cf-inset-light p-2.5">
+                    <div className="cf-text-label" style={{ color: '#8a5a10' }}>Village life</div>
+                    <div className="cf-text mt-1 text-[13px] font-black">
                       {world.population} roaming villager{world.population === 1 ? '' : 's'}
-                      <span className="ml-2 text-[10px] font-semibold text-amber-100/45">
+                      <span className="cf-text-muted ml-2 text-[10px] font-semibold">
                         {encounters.length ? `${encounters.length} huntable sighting${encounters.length === 1 ? '' : 's'}` : 'ambient wildlife active'}
                       </span>
                     </div>
-                    <div className="mt-1.5 text-[10px] leading-relaxed text-white/50">
+                    <div className="cf-text-muted mt-1.5 text-[10px] leading-relaxed">
                       Birds, fish, and wild mammals now roam the village. Tap an amber-marked animal to hunt it.
                       {hasWatchtower ? ' Your Watchtower lets you resolve sightings.' : ' Build a Watchtower to turn sightings into hunts.'}
                     </div>
                   </div>
-                  <div className="rounded-xl border border-white/[0.06] bg-white/[0.025] p-2.5">
-                    <div className="text-[9px] uppercase tracking-[0.14em] text-white/30">Expand Village</div>
+                  <div className="cf-inset p-2.5">
+                    <div className="cf-text-label">Expand Village</div>
                     <div className="mt-1.5 flex flex-wrap gap-1.5">
                       <ExpandButtons onExpand={handleExpand} />
                     </div>
-                    <div className="mt-1.5 text-[10px] text-white/35">Grow toward resources to shape your village.</div>
+                    <div className="cf-text-muted mt-1.5 text-[10px]">Grow toward resources to shape your village.</div>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     <button
                       type="button"
                       onClick={() => { setActiveSheet(null); setShowTrades(true); }}
-                      className="rounded-lg border border-white/8 bg-white/[0.04] px-3 py-2 text-[11px] font-semibold text-white/65 transition-colors hover:bg-white/[0.08] hover:text-white"
+                      className="cf-btn cf-btn-blue px-3 py-2 text-[11px] font-semibold"
                     >
                       Open Trades
                     </button>
@@ -1552,7 +1553,7 @@ export default function PetWorldPage() {
                           setActiveEncounter(encounters[0]);
                           playEncounterAlertSound();
                         }}
-                        className="rounded-lg border border-amber-300/12 bg-amber-400/8 px-3 py-2 text-[11px] font-semibold text-amber-100 transition-colors hover:bg-amber-400/15"
+                        className="cf-btn cf-btn-orange px-3 py-2 text-[11px] font-semibold"
                       >
                         Hunt Encounter
                       </button>
@@ -1564,38 +1565,39 @@ export default function PetWorldPage() {
               {villageTab === 'visitors' && (
                 <div className="space-y-2">
                   {wsVisitors.length > 0 && (
-                    <div className="rounded-xl border border-emerald-300/10 bg-emerald-400/[0.04] p-2.5">
-                      <div className="text-[9px] uppercase tracking-[0.14em] text-emerald-200/50">Online now</div>
+                    <div className="cf-inset-light p-2.5">
+                      <div className="cf-text-label" style={{ color: '#2a6a2a' }}>Online now</div>
                       <div className="mt-1.5 space-y-1">
                         {wsVisitors.map((visitor) => (
                           <Link
                             key={visitor.user_id}
                             to={`/pet/world/${visitor.user_id}`}
-                            className="flex items-center justify-between rounded-lg border border-emerald-300/8 bg-black/20 px-2.5 py-1.5 text-[11px] text-emerald-100/80"
+                            className="cf-inset flex items-center justify-between px-2.5 py-1.5 text-[11px]"
+                            style={{ color: '#2a5a2a' }}
                           >
                             <span>{visitor.username || 'Unknown visitor'}</span>
-                            <span className="text-[9px] uppercase text-emerald-200/40">Visiting</span>
+                            <span className="cf-text-label">Visiting</span>
                           </Link>
                         ))}
                       </div>
                     </div>
                   )}
-                  <div className="rounded-xl border border-white/[0.06] bg-white/[0.025] p-2.5">
-                    <div className="text-[9px] uppercase tracking-[0.14em] text-white/30">Recent visitors</div>
+                  <div className="cf-inset p-2.5">
+                    <div className="cf-text-label">Recent visitors</div>
                     <div className="mt-1.5 space-y-1">
                       {visitors.length > 0 ? visitors.map((visitor, index) => (
                         <Link
                           key={visitor.user_id || index}
                           to={`/pet/world/${visitor.user_id}`}
-                          className="flex items-center justify-between rounded-lg border border-white/[0.06] bg-black/20 px-2.5 py-1.5 text-[11px] text-white/65"
+                          className="cf-inset flex items-center justify-between px-2.5 py-1.5 text-[11px] cf-text"
                         >
                           <span className="truncate">{visitor.username || 'Unknown visitor'}</span>
-                          <span className="ml-2 shrink-0 text-[9px] text-white/30">
+                          <span className="cf-text-muted ml-2 shrink-0 text-[9px]">
                             {visitor.visited_at ? timeAgo(visitor.visited_at) : ''}
                           </span>
                         </Link>
                       )) : (
-                        <div className="rounded-lg border border-dashed border-white/8 px-3 py-3 text-[11px] text-white/35">
+                        <div className="cf-inset cf-text-muted px-3 py-3 text-[11px]" style={{ borderStyle: 'dashed' }}>
                           No visitors yet. Share your village once it grows.
                         </div>
                       )}
@@ -1605,17 +1607,17 @@ export default function PetWorldPage() {
               )}
 
               {villageTab === 'leaderboard' && (
-                <div className="rounded-xl border border-white/[0.06] bg-white/[0.025] p-2.5">
-                  <div className="text-[9px] uppercase tracking-[0.14em] text-white/30">Top villages</div>
+                <div className="cf-inset p-2.5">
+                  <div className="cf-text-label">Top villages</div>
                   <div className="mt-1.5 space-y-1">
                     {leaderboard.slice(0, 8).map((entry) => (
                       <Link
                         key={entry.user_id}
                         to={`/pet/world/${entry.user_id}`}
-                        className="flex items-center justify-between rounded-lg border border-white/[0.06] bg-black/20 px-2.5 py-1.5 text-[11px] text-white/65"
+                        className="cf-inset flex items-center justify-between px-2.5 py-1.5 text-[11px] cf-text"
                       >
                         <span className="truncate">#{entry.rank} {entry.username || 'Unknown'}</span>
-                        <span className="ml-2 shrink-0 font-mono text-cyan-100/70">{entry.population}</span>
+                        <span className="ml-2 shrink-0 font-mono" style={{ color: '#2a6a2a', fontWeight: 700 }}>{entry.population}</span>
                       </Link>
                     ))}
                   </div>

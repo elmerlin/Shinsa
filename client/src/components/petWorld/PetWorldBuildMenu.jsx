@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { getBuildingUi } from './petWorldBuildings';
 import { RESOURCE_ICONS as RES_ICONS } from './petWorldUtils';
 import PetWorldSpriteThumbnail from './PetWorldSpriteThumbnail';
+import './petWorldCfUi.css';
 
 const CATEGORIES = ['All', 'Food', 'Wood', 'Stone', 'Cloth', 'Gold', 'Housing', 'Support', 'Storage', 'Cosmetic', 'Trade'];
 
@@ -15,10 +16,10 @@ const FLOWER_VARIANTS = [
 function CostLine({ comboCost, materials = {} }) {
   const mats = Object.entries(materials).filter(([, v]) => v > 0);
   return (
-    <span className="flex flex-wrap items-center gap-0.5 text-[9px] text-white/50">
-      <span className="font-semibold">{comboCost}c</span>
+    <span className="flex flex-wrap items-center gap-0.5" style={{ fontSize: 9, color: '#6b4420' }}>
+      <span style={{ fontWeight: 700 }}>{comboCost}c</span>
       {mats.map(([key, amt]) => (
-        <span key={key} className="inline-flex items-center gap-px rounded bg-white/[0.06] px-1 py-px">
+        <span key={key} className="cf-inset-light" style={{ display: 'inline-flex', alignItems: 'center', gap: 1, padding: '1px 4px', fontSize: 9 }}>
           {amt}{RES_ICONS[key] || key}
         </span>
       ))}
@@ -75,11 +76,8 @@ export default function PetWorldBuildMenu({
             key={c}
             type="button"
             onClick={() => setCat(c)}
-            className={`shrink-0 rounded-full border px-2.5 py-1 text-[9px] font-semibold transition-all motion-reduce:transition-none ${
-              cat === c
-                ? 'border-cyan-300/18 bg-cyan-400/[0.12] text-cyan-50'
-                : 'border-white/[0.06] text-white/38 hover:bg-white/[0.06] hover:text-white/70'
-            }`}
+            className={`cf-btn shrink-0 ${cat === c ? 'cf-btn-orange' : 'cf-btn-ghost'}`}
+            style={{ padding: '4px 10px', fontSize: 9, fontWeight: 700 }}
           >
             {c}
           </button>
@@ -100,27 +98,25 @@ export default function PetWorldBuildMenu({
                 key={building.id}
                 type="button"
                 onClick={() => !locked && onSelect(building.id)}
-                className={`relative flex min-w-[148px] shrink-0 items-center gap-2 rounded-lg border px-2.5 py-2 text-left transition-all motion-reduce:transition-none ${
-                  selected
-                    ? 'border-cyan-300/24 bg-cyan-400/[0.12] text-white'
-                    : locked
-                      ? 'border-white/[0.04] bg-white/[0.02] text-white/25'
-                      : 'border-white/[0.08] bg-white/[0.04] text-white/82 hover:border-white/14 hover:bg-white/[0.06]'
+                className={`cf-inset relative flex min-w-[148px] shrink-0 items-center gap-2 px-2.5 py-2 text-left transition-all motion-reduce:transition-none ${
+                  selected ? 'cf-select-ring' : ''
                 }`}
+                style={{ opacity: locked ? 0.45 : 1 }}
               >
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/8 bg-black/25">
+                <span className="cf-inset flex h-10 w-10 shrink-0 items-center justify-center">
                   <PetWorldSpriteThumbnail type={building.id} biome={world?.biome} size={34} className="block" />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[11px] font-bold">{building.name}</span>
-                  <span className="mt-0.5 block truncate text-[9px] text-white/48">{keyStat(building)}</span>
-                  <span className="mt-1 block text-[8px] text-white/34">{building.comboCost}c</span>
+                  <span className="cf-text block truncate text-[11px] font-bold">{building.name}</span>
+                  <span className="cf-text-muted mt-0.5 block truncate text-[9px]">{keyStat(building)}</span>
+                  <span className="cf-text-muted mt-1 block text-[8px]">{building.comboCost}c</span>
                 </span>
-                <span className="rounded-full border px-1.5 py-0.5 text-[7px] uppercase tracking-[0.18em]" style={{ borderColor: `${ui.accent}30`, color: `${ui.accent}` }}>
+                <span className="cf-pill" style={{ fontSize: 7, padding: '1px 6px' }}>
                   T{building.tier}
                 </span>
                 {locked && (
-                  <span className="absolute inset-x-2 bottom-1.5 rounded-full bg-black/55 px-1.5 py-0.5 text-center text-[8px] font-semibold text-white/42">
+                  <span className="absolute inset-x-2 bottom-1.5 rounded text-center text-[8px] font-semibold cf-text-muted"
+                    style={{ background: 'rgba(232,200,138,0.8)', padding: '2px 6px' }}>
                     Need {building.tierUnlockPopulation} pop
                   </span>
                 )}
@@ -142,46 +138,46 @@ export default function PetWorldBuildMenu({
                 key={building.id}
                 type="button"
                 onClick={() => !locked && onSelect(building.id)}
-                className={`relative rounded-lg border text-left transition-all motion-reduce:transition-none ${
-                  selected
-                    ? 'border-cyan-300/26 bg-cyan-400/[0.12] ring-1 ring-cyan-300/15'
-                    : locked
-                      ? 'border-white/[0.03] bg-white/[0.02]'
-                      : 'border-white/[0.06] bg-white/[0.03] hover:border-white/12 hover:bg-white/[0.05]'
+                className={`cf-inset relative text-left transition-all motion-reduce:transition-none ${
+                  selected ? 'cf-select-ring' : ''
                 }`}
+                style={{ opacity: locked ? 0.45 : 1, borderRadius: 4 }}
               >
                 <div className="flex items-center gap-2 px-2.5 py-2">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/8 bg-black/20">
+                  <span className="cf-inset flex h-10 w-10 shrink-0 items-center justify-center">
                     <PetWorldSpriteThumbnail type={building.id} biome={world?.biome} size={34} className="block" />
                   </span>
                   <div className="min-w-0 flex-1">
-                    <div className={`truncate text-[11px] font-bold leading-tight ${locked ? 'text-white/25' : 'text-white/88'}`}>
+                    <div className="cf-text truncate text-[11px] font-bold leading-tight">
                       {building.name}
                     </div>
-                    <div className={`mt-0.5 truncate text-[9px] font-medium leading-tight ${locked ? 'text-white/20' : 'text-white/50'}`}>
+                    <div className="cf-text-muted mt-0.5 truncate text-[9px] font-medium leading-tight">
                       {keyStat(building)}
                     </div>
                   </div>
-                  <span className="shrink-0 text-[7px] uppercase tracking-[0.18em] text-white/28">T{building.tier}</span>
+                  <span className="cf-text-label shrink-0">T{building.tier}</span>
                 </div>
 
-                <div className={`flex items-center justify-between px-2.5 pb-2 ${locked ? 'opacity-30' : ''}`}>
+                <div className="flex items-center justify-between px-2.5 pb-2">
                   <CostLine comboCost={building.comboCost} materials={building.materials} />
-                  <span className="text-[8px] text-white/25">{building.width}&times;{building.height}</span>
+                  <span className="cf-text-muted text-[8px]">{building.width}&times;{building.height}</span>
                 </div>
 
                 {selected && building.id === 'flower_bed' && (
                   <div className="flex items-center gap-1 px-2.5 pb-2">
-                    <span className="mr-0.5 text-[8px] text-white/35">Color:</span>
+                    <span className="cf-text-muted mr-0.5 text-[8px]">Color:</span>
                     {FLOWER_VARIANTS.map((v) => (
                       <button
                         key={v.id}
                         type="button"
                         onClick={(e) => { e.stopPropagation(); onSelect(building.id, v.id); }}
-                        className={`h-3.5 w-3.5 rounded-full border-2 transition-all motion-reduce:transition-none ${
-                          selectedVariant === v.id ? 'scale-110 border-white' : 'border-white/20 hover:border-white/50'
+                        className={`h-3.5 w-3.5 rounded-full transition-all motion-reduce:transition-none ${
+                          selectedVariant === v.id ? 'scale-110' : ''
                         }`}
-                        style={{ backgroundColor: v.color }}
+                        style={{
+                          backgroundColor: v.color,
+                          border: selectedVariant === v.id ? '2px solid #8b5e2b' : '2px solid rgba(139,94,43,0.3)',
+                        }}
                         title={v.label}
                       />
                     ))}
@@ -189,8 +185,8 @@ export default function PetWorldBuildMenu({
                 )}
 
                 {locked && (
-                  <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/50">
-                    <span className="text-[9px] font-semibold text-white/40">Need {building.tierUnlockPopulation} pop</span>
+                  <div className="absolute inset-0 flex items-center justify-center" style={{ background: 'rgba(232,200,138,0.6)', borderRadius: 4 }}>
+                    <span className="cf-text text-[9px] font-semibold">Need {building.tierUnlockPopulation} pop</span>
                   </div>
                 )}
               </button>

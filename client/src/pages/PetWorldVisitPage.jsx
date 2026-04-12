@@ -13,6 +13,7 @@ import PetWorldHUD from '../components/petWorld/PetWorldHUD';
 import PetWorldCanvas from '../components/petWorld/PetWorldCanvas';
 import PetWorldBuildingInfo from '../components/petWorld/PetWorldBuildingInfo';
 import PetWorldTradeModal from '../components/petWorld/PetWorldTradeModal';
+import '../components/petWorld/petWorldCfUi.css';
 
 /* ─── Relative time helper ──────────────────────────────────────── */
 function timeAgo(isoString) {
@@ -179,7 +180,7 @@ export default function PetWorldVisitPage() {
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(30,92,118,0.2),transparent_34%),linear-gradient(180deg,rgba(7,18,26,0.15),rgba(3,6,10,0.92))]" />
       {/* Toast */}
       {toast ? (
-        <div className="fixed left-1/2 top-4 z-[90] -translate-x-1/2 rounded-full border border-white/10 bg-black/80 px-4 py-2 text-sm font-semibold text-white shadow-[0_14px_30px_rgba(0,0,0,0.28)]">
+        <div className="cf-pill fixed left-1/2 top-4 z-[90] -translate-x-1/2 text-sm font-semibold shadow-[0_14px_30px_rgba(40,20,0,0.35)]">
           {toast}
         </div>
       ) : null}
@@ -205,8 +206,8 @@ export default function PetWorldVisitPage() {
         />
       </div>
 
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-20 h-16 bg-gradient-to-b from-[#03070d]/95 via-[#06101a]/55 to-transparent" />
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-20 bg-gradient-to-t from-[#03070d] via-[#03070d]/72 to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-20 h-16 cf-top-bar" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-20 cf-bottom-bar" />
 
       <div
         className="pointer-events-none absolute inset-x-0 top-0 z-40 flex items-center gap-2 px-2.5 py-1.5"
@@ -214,7 +215,8 @@ export default function PetWorldVisitPage() {
       >
         <Link
           to="/pet/world"
-          className="pointer-events-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/8 bg-black/40 text-white/65 backdrop-blur-md transition-colors hover:bg-black/60 hover:text-white"
+          className="pointer-events-auto cf-btn cf-btn-brown flex h-9 w-9 shrink-0 items-center justify-center"
+          style={{ borderRadius: '50%', padding: 0 }}
           aria-label="Back to your village"
         >
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
@@ -224,9 +226,9 @@ export default function PetWorldVisitPage() {
         <div className="min-w-0 flex-1">
           <PetWorldHUD world={world} collapsed />
         </div>
-        <span className="pointer-events-none flex items-center gap-1 rounded-full border border-cyan-300/10 bg-cyan-400/[0.05] px-2 py-0.5 backdrop-blur-md">
-          <span className="h-1.5 w-1.5 rounded-full bg-cyan-400/60 animate-pulse" />
-          <span className="max-w-[140px] truncate text-[9px] font-semibold text-cyan-200/72">Guest in {hostName}</span>
+        <span className="cf-pill cf-pill-accent pointer-events-none">
+          <span className="cf-dot animate-pulse" style={{ backgroundColor: '#5eb85e', width: 6, height: 6 }} />
+          <span className="max-w-[140px] truncate text-[9px] font-semibold">Guest in {hostName}</span>
         </span>
         <button
           type="button"
@@ -234,7 +236,8 @@ export default function PetWorldVisitPage() {
             setVisitTab('overview');
             setActiveSheet((sheet) => (sheet === 'visit' ? null : 'visit'));
           }}
-          className="pointer-events-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/8 bg-black/40 text-white/60 backdrop-blur-md transition-colors hover:bg-black/60 hover:text-white"
+          className="pointer-events-auto cf-btn cf-btn-brown flex h-9 w-9 shrink-0 items-center justify-center"
+          style={{ borderRadius: '50%', padding: 0 }}
           aria-label="Visit tools"
         >
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
@@ -244,7 +247,7 @@ export default function PetWorldVisitPage() {
       </div>
 
       {!activeSheet && (
-        <div className="absolute bottom-4 left-3 z-40 rounded-full border border-white/6 bg-black/30 px-2 py-0.5 text-[8px] text-white/34 backdrop-blur-sm animate-[fadeOut_4s_ease-in_forwards]">
+        <div className="cf-pill absolute bottom-4 left-3 z-40 text-[8px] animate-[fadeOut_4s_ease-in_forwards]" style={{ opacity: 0.7 }}>
           Wander and inspect
         </div>
       )}
@@ -256,11 +259,7 @@ export default function PetWorldVisitPage() {
             setVisitTab('overview');
             setActiveSheet((sheet) => (sheet === 'visit' ? null : 'visit'));
           }}
-          className={`inline-flex items-center gap-2 rounded-full border px-2 py-1 text-[9px] font-semibold backdrop-blur-sm transition-all ${
-            activeSheet === 'visit'
-              ? 'border-cyan-300/25 bg-cyan-400/14 text-cyan-50'
-              : 'border-white/10 bg-black/38 text-white/75 hover:bg-black/52 hover:text-white'
-          }`}
+          className={`cf-btn ${activeSheet === 'visit' ? 'cf-btn-orange' : 'cf-btn-brown'} px-2 py-1 text-[9px] font-semibold`}
         >
           Guide
         </button>
@@ -268,7 +267,7 @@ export default function PetWorldVisitPage() {
           type="button"
           onClick={() => setShowTrades(true)}
           disabled={!canTrade}
-          className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/38 px-2 py-1 text-[9px] font-semibold text-white/75 backdrop-blur-sm transition-all hover:bg-black/52 hover:text-white disabled:opacity-40 disabled:pointer-events-none"
+          className="cf-btn cf-btn-blue px-2 py-1 text-[9px] font-semibold disabled:opacity-40 disabled:pointer-events-none"
         >
           Trade
         </button>
@@ -276,13 +275,13 @@ export default function PetWorldVisitPage() {
 
       {activeSheet && (
         <div className="absolute inset-x-0 bottom-0 z-50 px-3 pb-3" style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
-          <div className="mx-auto w-full max-w-lg overflow-hidden rounded-lg border border-white/10 bg-[linear-gradient(180deg,rgba(9,15,22,0.97),rgba(6,10,15,0.96))] shadow-[0_-18px_40px_rgba(0,0,0,0.38)] backdrop-blur-xl">
-            <div className="flex items-center justify-between border-b border-white/8 px-3 py-2.5">
+          <div className="cf-panel-dark mx-auto w-full max-w-lg overflow-hidden">
+            <div className="flex items-center justify-between px-3 py-2.5" style={{ borderBottom: '2px solid rgba(139,94,43,0.2)' }}>
               <div>
-                <div className="text-[10px] uppercase tracking-[0.2em] text-white/35">
+                <div className="cf-text-label">
                   {activeSheet === 'inspect' ? 'Guest Inspect' : 'Guest Guide'}
                 </div>
-                <div className="text-sm font-black text-white">
+                <div className="cf-text cf-heading text-sm font-black">
                   {activeSheet === 'inspect'
                     ? selectedBuilding ? selectedBuilding.name : 'Village patch'
                     : visitTab === 'overview' ? `${hostName}'s village` : 'Host notes'}
@@ -291,7 +290,8 @@ export default function PetWorldVisitPage() {
               <button
                 type="button"
                 onClick={() => setActiveSheet(null)}
-                className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 text-sm text-white/60 transition-colors hover:border-white/20 hover:text-white"
+                className="cf-btn cf-btn-brown flex h-8 w-8 items-center justify-center text-sm"
+                style={{ padding: 0 }}
                 aria-label="Close panel"
               >
                 &times;
@@ -312,14 +312,14 @@ export default function PetWorldVisitPage() {
                     }}
                   />
                 ) : selectedTile ? (
-                  <div className="rounded-lg border border-white/7 bg-[linear-gradient(180deg,rgba(14,18,28,0.96),rgba(9,12,18,0.94))] p-3 shadow-[0_14px_30px_rgba(0,0,0,0.24)]">
+                  <div className="cf-inset p-3">
                     <div className="flex items-center gap-2">
-                      <span className="rounded-full border border-white/8 px-2 py-0.5 text-[8px] uppercase tracking-[0.18em] text-white/38">
+                      <span className="cf-pill" style={{ fontSize: 8, padding: '1px 8px' }}>
                         {selectedTile.tile?.t || 'ground'}
                       </span>
-                      <div className="text-[13px] font-black text-white">{selectedTile.x}, {selectedTile.y}</div>
+                      <div className="cf-text text-[13px] font-black">{selectedTile.x}, {selectedTile.y}</div>
                     </div>
-                    <div className="mt-2 rounded-lg border border-white/8 bg-white/[0.03] px-3 py-2.5 text-[11px] leading-relaxed text-white/60">
+                    <div className="cf-inset-light mt-2 px-3 py-2.5 text-[11px] leading-relaxed cf-text-muted">
                       {inspectedObstacle
                         ? 'Still part of the wild edge of the village. Guests can inspect, but only the host can clear it.'
                         : 'A settled patch inside the village layout. Guests can roam, inspect, and browse the scenery.'}
@@ -340,11 +340,8 @@ export default function PetWorldVisitPage() {
                       key={id}
                       type="button"
                       onClick={() => setVisitTab(id)}
-                      className={`rounded-full border px-3 py-1.5 text-[11px] font-semibold transition-colors ${
-                        visitTab === id
-                          ? 'border-cyan-300/18 bg-cyan-400/14 text-cyan-50'
-                          : 'border-white/10 bg-white/[0.03] text-white/60 hover:bg-white/[0.06] hover:text-white/80'
-                      }`}
+                      className={`cf-btn ${visitTab === id ? 'cf-btn-orange' : 'cf-btn-ghost'}`}
+                      style={{ padding: '5px 12px', fontSize: 11 }}
                     >
                       {label}
                     </button>
@@ -353,36 +350,36 @@ export default function PetWorldVisitPage() {
 
                 {visitTab === 'overview' ? (
                   <div className="space-y-3">
-                    <div className="rounded-lg border border-cyan-300/10 bg-cyan-400/[0.05] px-3 py-2 text-[11px] text-cyan-100/72">
+                    <div className="cf-inset-light px-3 py-2 text-[11px]" style={{ color: '#2a5a3a' }}>
                       Guest in {hostName}&apos;s village. {guestLine}.
                     </div>
                     <div className="grid grid-cols-2 gap-2">
-                      <div className="rounded-lg border border-white/8 bg-white/[0.03] p-3">
-                        <div className="text-[10px] uppercase tracking-[0.18em] text-white/35">Population</div>
-                        <div className="mt-1 text-lg font-black text-white">{world.population}</div>
+                      <div className="cf-inset p-3">
+                        <div className="cf-text-label">Population</div>
+                        <div className="cf-text mt-1 text-lg font-black">{world.population}</div>
                       </div>
-                      <div className="rounded-lg border border-white/8 bg-white/[0.03] p-3">
-                        <div className="text-[10px] uppercase tracking-[0.18em] text-white/35">Mood</div>
-                        <div className="mt-1 text-lg font-black text-white">{Math.round(world.happiness || 0)}</div>
+                      <div className="cf-inset p-3">
+                        <div className="cf-text-label">Mood</div>
+                        <div className="cf-text mt-1 text-lg font-black">{Math.round(world.happiness || 0)}</div>
                       </div>
                     </div>
-                    <div className="rounded-lg border border-white/8 bg-white/[0.03] p-3 text-sm text-white/60">
+                    <div className="cf-inset p-3 text-sm cf-text-muted">
                       {canTrade
                         ? 'You can send a trade offer from here if both villages keep a Market.'
                         : 'Build a Market in your own village to unlock guest trading.'}
                     </div>
-                    <div className="rounded-lg border border-amber-300/10 bg-amber-400/[0.05] p-3 text-sm text-white/62">
+                    <div className="cf-inset-light p-3 text-sm cf-text-muted">
                       This village now has visible life in the world itself: roaming villagers, water creatures, meadow animals, and visiting birds. Some wildlife only becomes huntable in the host&apos;s own view.
                     </div>
                   </div>
                 ) : (
-                  <div className="rounded-lg border border-white/8 bg-white/[0.03] p-3">
-                    <div className="text-[10px] uppercase tracking-[0.18em] text-white/35">Host village</div>
+                  <div className="cf-inset p-3">
+                    <div className="cf-text-label">Host village</div>
                     <div className="mt-2 space-y-2">
-                      <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2 text-sm text-white/65">
+                      <div className="cf-inset px-3 py-2 text-sm cf-text">
                         {hostName} has welcomed {world.visit_count || 0} visit{world.visit_count === 1 ? '' : 's'} so far.
                       </div>
-                      <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2 text-sm text-white/65">
+                      <div className="cf-inset px-3 py-2 text-sm cf-text">
                         {trades.length > 0
                           ? `You currently have ${trades.filter((trade) => trade.status === 'pending').length} pending trade${trades.filter((trade) => trade.status === 'pending').length === 1 ? '' : 's'} with this village.`
                           : 'Send a trade offer if you want to exchange resources with this village.'}

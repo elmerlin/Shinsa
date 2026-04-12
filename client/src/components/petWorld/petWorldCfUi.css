@@ -1,0 +1,305 @@
+/*
+ * Cute Fantasy UI Theme for Pet World
+ * Warm parchment-style panels matching the CF pixel-art aesthetic.
+ */
+
+@font-face {
+  font-family: 'CuteFantasy';
+  src: url('/pet-world/cute-fantasy/Fonts/CuteFantasy-5x9.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ── Panel frame ─────────────────────────────────────────────── */
+.cf-panel {
+  background: linear-gradient(180deg, #e8c88a 0%, #d4a862 100%);
+  border: 3px solid #8b5e2b;
+  border-radius: 6px;
+  box-shadow:
+    inset 0 1px 0 rgba(255,235,190,0.55),
+    inset 0 -1px 0 rgba(100,60,20,0.25),
+    0 4px 12px rgba(40,20,0,0.35);
+  color: #3a2010;
+  image-rendering: pixelated;
+}
+
+.cf-panel-dark {
+  background: linear-gradient(180deg, rgba(218,176,108,0.92) 0%, rgba(194,146,74,0.88) 100%);
+  border: 3px solid rgba(139,94,43,0.7);
+  border-radius: 6px;
+  box-shadow:
+    inset 0 1px 0 rgba(255,235,190,0.4),
+    inset 0 -1px 0 rgba(100,60,20,0.2),
+    0 6px 18px rgba(0,0,0,0.4);
+  color: #3a2010;
+  backdrop-filter: blur(12px);
+}
+
+/* ── Section within panel ────────────────────────────────────── */
+.cf-inset {
+  background: linear-gradient(180deg, rgba(139,94,43,0.12) 0%, rgba(139,94,43,0.06) 100%);
+  border: 2px solid rgba(139,94,43,0.25);
+  border-radius: 4px;
+  box-shadow: inset 0 1px 3px rgba(100,60,20,0.1);
+}
+
+.cf-inset-light {
+  background: rgba(255,240,210,0.35);
+  border: 2px solid rgba(139,94,43,0.18);
+  border-radius: 4px;
+}
+
+/* ── Buttons ─────────────────────────────────────────────────── */
+.cf-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  border-radius: 4px;
+  border: 2px solid;
+  cursor: pointer;
+  transition: filter 0.12s, transform 0.1s;
+  box-shadow: 0 2px 0 rgba(0,0,0,0.18);
+  image-rendering: pixelated;
+}
+.cf-btn:active {
+  transform: translateY(1px);
+  box-shadow: none;
+}
+.cf-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.cf-btn-green {
+  background: linear-gradient(180deg, #5eb85e 0%, #3d8b3d 100%);
+  border-color: #2a6f2a;
+  color: #fff;
+  text-shadow: 0 1px 1px rgba(0,0,0,0.25);
+}
+.cf-btn-green:hover:not(:disabled) { filter: brightness(1.1); }
+
+.cf-btn-orange {
+  background: linear-gradient(180deg, #e8a540 0%, #c6862e 100%);
+  border-color: #9a6520;
+  color: #fff;
+  text-shadow: 0 1px 1px rgba(0,0,0,0.2);
+}
+.cf-btn-orange:hover:not(:disabled) { filter: brightness(1.1); }
+
+.cf-btn-red {
+  background: linear-gradient(180deg, #d45050 0%, #a83030 100%);
+  border-color: #8a2020;
+  color: #fff;
+  text-shadow: 0 1px 1px rgba(0,0,0,0.25);
+}
+.cf-btn-red:hover:not(:disabled) { filter: brightness(1.1); }
+
+.cf-btn-blue {
+  background: linear-gradient(180deg, #4aa8d8 0%, #2c7eb0 100%);
+  border-color: #1e5e8a;
+  color: #fff;
+  text-shadow: 0 1px 1px rgba(0,0,0,0.2);
+}
+.cf-btn-blue:hover:not(:disabled) { filter: brightness(1.1); }
+
+.cf-btn-brown {
+  background: linear-gradient(180deg, #c8a060 0%, #a07840 100%);
+  border-color: #7a5828;
+  color: #fff;
+  text-shadow: 0 1px 1px rgba(0,0,0,0.18);
+}
+.cf-btn-brown:hover:not(:disabled) { filter: brightness(1.1); }
+
+.cf-btn-ghost {
+  background: rgba(139,94,43,0.12);
+  border-color: rgba(139,94,43,0.3);
+  color: #5a3a18;
+}
+.cf-btn-ghost:hover:not(:disabled) {
+  background: rgba(139,94,43,0.2);
+}
+
+/* ── Tabs ────────────────────────────────────────────────────── */
+.cf-tab {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 4px 4px 0 0;
+  border: 2px solid transparent;
+  border-bottom: none;
+  cursor: pointer;
+  transition: background 0.12s;
+  color: #6b4420;
+}
+.cf-tab:hover {
+  background: rgba(139,94,43,0.1);
+}
+.cf-tab-active {
+  background: linear-gradient(180deg, #e8c88a 0%, #dbb878 100%);
+  border-color: #8b5e2b;
+  color: #3a2010;
+}
+
+/* ── Pill badge ──────────────────────────────────────────────── */
+.cf-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  border: 2px solid rgba(139,94,43,0.4);
+  background: linear-gradient(180deg, rgba(232,200,138,0.88) 0%, rgba(212,168,98,0.85) 100%);
+  font-size: 10px;
+  font-weight: 700;
+  color: #4a2a10;
+  box-shadow: 0 1px 3px rgba(40,20,0,0.15);
+  white-space: nowrap;
+  backdrop-filter: blur(6px);
+}
+
+.cf-pill-accent {
+  border-color: rgba(60,120,60,0.5);
+  background: linear-gradient(180deg, rgba(120,190,120,0.85) 0%, rgba(80,150,80,0.8) 100%);
+  color: #1a3a1a;
+}
+
+.cf-pill-warn {
+  border-color: rgba(180,80,40,0.4);
+  background: linear-gradient(180deg, rgba(220,140,60,0.88) 0%, rgba(190,100,40,0.82) 100%);
+  color: #4a1a08;
+}
+
+.cf-pill-happy {
+  border-color: rgba(60,140,60,0.45);
+  background: linear-gradient(180deg, rgba(130,200,100,0.85) 0%, rgba(90,160,70,0.8) 100%);
+  color: #1a3a10;
+}
+
+/* ── Status dot ──────────────────────────────────────────────── */
+.cf-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 1px solid rgba(0,0,0,0.15);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.12);
+}
+
+/* ── Ribbon header ───────────────────────────────────────────── */
+.cf-ribbon {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 14px;
+  background: linear-gradient(180deg, #e0b060 0%, #c89038 100%);
+  border: 2px solid #8a5e20;
+  border-radius: 4px;
+  color: #3a2008;
+  font-weight: 800;
+  font-size: 13px;
+  box-shadow: 0 2px 6px rgba(40,20,0,0.2);
+  text-shadow: 0 1px 0 rgba(255,235,190,0.4);
+}
+
+/* ── Progress bar ────────────────────────────────────────────── */
+.cf-bar-track {
+  background: rgba(139,94,43,0.2);
+  border: 2px solid rgba(139,94,43,0.35);
+  border-radius: 6px;
+  overflow: hidden;
+  height: 10px;
+}
+.cf-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  background: linear-gradient(180deg, #6ec46e 0%, #48a048 100%);
+  transition: width 0.3s ease-out;
+}
+.cf-bar-fill-amber {
+  background: linear-gradient(180deg, #e8a840 0%, #c48820 100%);
+}
+
+/* ── Tooltip / speech bubble ─────────────────────────────────── */
+.cf-tooltip {
+  background: #f5e8c8;
+  border: 2px solid #8b5e2b;
+  border-radius: 4px;
+  padding: 4px 8px;
+  color: #3a2010;
+  font-size: 10px;
+  box-shadow: 0 2px 6px rgba(40,20,0,0.18);
+}
+
+/* ── Scrollbar ───────────────────────────────────────────────── */
+.cf-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.cf-scroll::-webkit-scrollbar-track {
+  background: rgba(139,94,43,0.08);
+  border-radius: 3px;
+}
+.cf-scroll::-webkit-scrollbar-thumb {
+  background: rgba(139,94,43,0.25);
+  border-radius: 3px;
+}
+.cf-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(139,94,43,0.4);
+}
+
+/* ── Selection ring ──────────────────────────────────────────── */
+.cf-select-ring {
+  outline: 2px solid #e8a540;
+  outline-offset: -2px;
+  box-shadow: inset 0 0 0 1px rgba(255,235,190,0.3);
+}
+
+/* ── Top bar backdrop ────────────────────────────────────────── */
+.cf-top-bar {
+  background: linear-gradient(180deg, rgba(139,94,43,0.7) 0%, rgba(139,94,43,0.0) 100%);
+}
+
+/* ── Bottom bar backdrop ─────────────────────────────────────── */
+.cf-bottom-bar {
+  background: linear-gradient(0deg, rgba(139,94,43,0.5) 0%, rgba(139,94,43,0.0) 100%);
+}
+
+/* ── Text utilities ──────────────────────────────────────────── */
+.cf-text { color: #3a2010; }
+.cf-text-muted { color: rgba(58,32,16,0.55); }
+.cf-text-label { color: rgba(58,32,16,0.4); font-size: 8px; text-transform: uppercase; letter-spacing: 0.14em; }
+.cf-text-white { color: #fff; text-shadow: 0 1px 1px rgba(0,0,0,0.15); }
+
+/* ── Heading font ────────────────────────────────────────────── */
+.cf-heading {
+  font-family: 'CuteFantasy', monospace;
+  letter-spacing: 0.04em;
+}
+
+/* ── Input ────────────────────────────────────────────────────── */
+.cf-input {
+  background: rgba(255,240,210,0.5);
+  border: 2px solid rgba(139,94,43,0.35);
+  border-radius: 4px;
+  padding: 6px 10px;
+  color: #3a2010;
+  font-size: 13px;
+}
+.cf-input:focus {
+  outline: none;
+  border-color: rgba(139,94,43,0.6);
+  box-shadow: 0 0 0 2px rgba(232,200,138,0.3);
+}
+
+/* ── Select dropdown ─────────────────────────────────────────── */
+.cf-select {
+  background: rgba(255,240,210,0.5);
+  border: 2px solid rgba(139,94,43,0.35);
+  border-radius: 4px;
+  padding: 6px 10px;
+  color: #3a2010;
+  font-size: 13px;
+  cursor: pointer;
+}
