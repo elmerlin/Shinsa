@@ -12,6 +12,14 @@ import {
   drawKenneyResident,
   drawKenneyTerrain,
 } from './petWorldKenneySprites';
+import {
+  drawCuteFantasyGround,
+  drawCuteFantasyTerrain,
+  drawCuteFantasyBuilding,
+  drawCuteFantasyResident,
+  drawCuteFantasyCritter,
+  drawCuteFantasyPet,
+} from './petWorldCuteFantasySprites';
 
 // --- low-level drawing helpers ---
 
@@ -546,7 +554,13 @@ export function drawTile(ctx, biome, tile, x, y, tileSize, time = 0, neighbors, 
   const groundMid = biomeUi.groundMid;
   const terrainInfo = terrain || null;
 
+  // Cute Fantasy ground tile overlay (replaces procedural base when loaded)
+  drawCuteFantasyGround(ctx, biome, tile, ix, iy, s);
+
   if (tile.t === 'tree' || tile.t === 'rock' || tile.t === 'bush') {
+    if (drawCuteFantasyTerrain(ctx, biome, tile, ix, iy, s, h, terrainInfo)) {
+      return;
+    }
     if (drawKenneyTerrain(ctx, biome, tile, ix, iy, s, h, terrainInfo)) {
       return;
     }
@@ -692,6 +706,7 @@ export function drawTile(ctx, biome, tile, x, y, tileSize, time = 0, neighbors, 
       const sparkY = iy + s * (0.2 + ((h >> 7) % 5) / 10);
       px(ctx, sparkX, sparkY, 2, 2, '#ffffff', 0.55);
     }
+    drawCuteFantasyTerrain(ctx, biome, tile, ix, iy, s, h, terrainInfo);
     drawKenneyTerrain(ctx, biome, tile, ix, iy, s, h, terrainInfo);
     drawTerrainAtlasSprite(ctx, biome, tile, ix, iy, s, time, terrainInfo, neighbors, h);
     return;
@@ -1728,7 +1743,11 @@ export function drawBuildingSprite(ctx, biome, building, x, y, tileSize, isSelec
   // attach biome for path drawing
   ui._biome = biome;
 
-  if (drawKenneyBuilding(ctx, building, x, y, width, height)) {
+  if (drawCuteFantasyBuilding(ctx, building, x, y, width, height)) {
+    if (type !== 'path') {
+      outline(ctx, x + 1, y + height * 0.16, width - 2, height * 0.74, 'rgba(0,0,0,0.18)');
+    }
+  } else if (drawKenneyBuilding(ctx, building, x, y, width, height)) {
     if (type !== 'path') {
       outline(ctx, x + 1, y + height * 0.16, width - 2, height * 0.74, 'rgba(0,0,0,0.18)');
     }
@@ -1927,6 +1946,9 @@ const RESIDENT_PALETTES = {
 };
 
 export function drawVillageResident(ctx, x, y, tileSize, paletteKey, activity = 'stroll', frameOffset = 0, facing = 1) {
+  if (drawCuteFantasyResident(ctx, x, y, tileSize, paletteKey, activity, frameOffset, facing)) {
+    return;
+  }
   if (drawKenneyResident(ctx, x, y, tileSize, paletteKey, activity, frameOffset, facing)) {
     return;
   }
@@ -1987,6 +2009,9 @@ export function drawVillageResident(ctx, x, y, tileSize, paletteKey, activity = 
 }
 
 export function drawAmbientCritter(ctx, x, y, tileSize, species, frameOffset = 0, options = {}) {
+  if (drawCuteFantasyCritter(ctx, x, y, tileSize, species, frameOffset, options)) {
+    return;
+  }
   if (drawKenneyCritter(ctx, x, y, tileSize, species, frameOffset, options)) {
     return;
   }
@@ -2129,6 +2154,9 @@ const PET_PALETTES = {
 };
 
 export function drawPetWander(ctx, x, y, tileSize, character, frameOffset) {
+  if (drawCuteFantasyPet(ctx, x, y, tileSize * 1.06, character, frameOffset)) {
+    return;
+  }
   if (drawPetAtlas(ctx, x, y, tileSize * 1.06, character, frameOffset)) {
     return;
   }
