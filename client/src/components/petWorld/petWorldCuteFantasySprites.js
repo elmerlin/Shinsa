@@ -156,18 +156,38 @@ const BIOME_TREES = {
   volcanic:   ['oak'],
 };
 
-/* ── Ground tiles ── */
+/* ── Wang tile auto-tiling ── */
 
-const GRASS = {
-  grasslands: 'Tiles/Grass/Grass_1_Middle.png',
-  forest:     'Tiles/Grass/Grass_2_Middle.png',
-  coastal:    'Tiles/Grass/Grass_3_Middle.png',
-  mountain:   'Tiles/Grass/Grass_4_Middle.png',
-  desert:     'Tiles/Grass/Path_Middle.png',
-  tropical:   'Tiles/Grass/Grass_1_Middle.png',
-  tundra:     'Tiles/Grass/Grass_4_Middle.png',
-  volcanic:   'Tiles/Grass/Path_Middle.png',
+// Wang tile lookup: index (NW*8 + NE*4 + SW*2 + SE, 0=lower 1=upper) → [sx, sy] in 64×64 sheet
+const WANG_LOOKUP = [
+  [32, 16], [48, 16], [32, 32], [16, 32],  //  0-3
+  [32, 0],  [48, 32], [0, 16],  [48, 48],  //  4-7
+  [16, 16], [32, 48], [16, 0],  [0, 32],   //  8-11
+  [48, 0],  [0, 0],   [16, 48], [0, 48],   // 12-15
+];
+
+const WANG_WATER_GRASS = 'Tiles/wang_water_grass.png';   // PixelLab water↔grass 4×4 Wang tileset
+
+/* ── Grass variations (4 tiles to break checkerboard) ── */
+
+const GRASS_VARS = [
+  'Tiles/Grass/Grass_1_Middle.png',
+  'Tiles/Grass/Grass_2_Middle.png',
+  'Tiles/Grass/Grass_3_Middle.png',
+  'Tiles/Grass/Grass_4_Middle.png',
+];
+
+// Each biome picks grass variants with weighted pools (index into GRASS_VARS)
+const BIOME_GRASS_POOL = {
+  grasslands: [0, 0, 1, 2],
+  forest:     [1, 1, 2, 0],
+  coastal:    [2, 2, 0, 3],
+  mountain:   [3, 3, 2, 3],
+  tropical:   [0, 0, 2, 0],
+  tundra:     [3, 3, 3, 2],
 };
+
+const SAND_GROUND = 'Tiles/Grass/Path_Middle.png';
 
 /* ── Rock / bush frame positions ── */
 
@@ -235,14 +255,49 @@ const NPC_FH = 64;
    ═══════════════════════════════════════════════════════ */
 
 /**
- * Overlay Cute Fantasy ground tile (grass or water).
- * Called at the top of drawTile to replace the procedural base color.
+ * Overlay Cute Fantasy ground tile with auto-tiling.
+ * Handles: water centre, water↔grass Wang transitions, grass variations.
+ * @param {object} neighbors - { n, s, e, w, nw, ne, sw, se } tile-type strings
+ * @param {number} seed      - position-based hash for deterministic variation
  */
-export function drawCuteFantasyGround(ctx, biome, tile, x, y, size) {
-  const file = tile.t === 'water'
-    ? 'Tiles/Water/Water_Middle.png'
-    : (GRASS[biome] || GRASS.grasslands);
-  return drawImg(ctx, cfp(file), x, y, size, size);
+export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, seed) {
+  const h = seed || 0;
+
+  /* ── Water tiles ── */
+  if (tile.t === 'water') {
+    return drawImg(ctx, cfp('Tiles/Water/Water_Middle.png'), x, y, size, size);
+  }
+
+  /* ── Non-water tiles: Wang water↔grass transition ── */
+  if (neighbors) {
+    const w = (t) => t === 'water';
+    // Each corner = 0 if ANY adjacent tile in that direction is water
+    const cNW = (w(neighbors.n) || w(neighbors.w) || w(neighbors.nw)) ? 0 : 1;
+    const cNE = (w(neighbors.n) || w(neighbors.e) || w(neighbors.ne)) ? 0 : 1;
+    const cSW = (w(neighbors.s) || w(neighbors.w) || w(neighbors.sw)) ? 0 : 1;
+    const cSE = (w(neighbors.s) || w(neighbors.e) || w(neighbors.se)) ? 0 : 1;
+
+    const idx = cNW * 8 + cNE * 4 + cSW * 2 + cSE;
+
+    if (idx < 15) {
+      // Has water influence at one or more corners → draw Wang transition tile
+      const [sx, sy] = WANG_LOOKUP[idx];
+      if (drawFrame(ctx, cfp(WANG_WATER_GRASS), sx, sy, 16, 16, x, y, size, size)) {
+        return true;
+      }
+      // Fall through to grass variation while Wang image loads
+    }
+  }
+
+  /* ── Desert / volcanic → sand ground ── */
+  if (biome === 'desert' || biome === 'volcanic') {
+    return drawImg(ctx, cfp(SAND_GROUND), x, y, size, size);
+  }
+
+  /* ── Grass variation based on position hash ── */
+  const pool = BIOME_GRASS_POOL[biome] || [0, 1, 2, 3];
+  const vi = pool[Math.abs(h) % pool.length];
+  return drawImg(ctx, cfp(GRASS_VARS[vi]), x, y, size, size);
 }
 
 /**

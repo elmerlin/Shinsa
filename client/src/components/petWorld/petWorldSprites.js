@@ -555,7 +555,7 @@ export function drawTile(ctx, biome, tile, x, y, tileSize, time = 0, neighbors, 
   const terrainInfo = terrain || null;
 
   // Cute Fantasy ground tile overlay (replaces procedural base when loaded)
-  drawCuteFantasyGround(ctx, biome, tile, ix, iy, s);
+  drawCuteFantasyGround(ctx, biome, tile, ix, iy, s, neighbors, h);
 
   if (tile.t === 'tree' || tile.t === 'rock' || tile.t === 'bush') {
     if (drawCuteFantasyTerrain(ctx, biome, tile, ix, iy, s, h, terrainInfo)) {
