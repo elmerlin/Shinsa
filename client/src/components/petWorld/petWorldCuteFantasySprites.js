@@ -154,10 +154,12 @@ const BIOME_TREES = {
 const GRASS_TILE = 'Tiles/Grass/Grass_1_Middle.png';
 const SAND_TILE  = 'Tiles/Grass/Path_Middle.png';
 
-// Animated water: Water_Middle_Anim_1.png = 128x16, 8 frames at 16x16
-const WATER_ANIM       = 'Tiles/Water/Water_Middle_Anim_1.png';
-const WATER_ANIM_FRAMES = 8;
-const WATER_STATIC     = 'Tiles/Water/Water_Middle.png';
+// Animated connected-water tileset (color-matched to Wang tileset)
+// Water_Tile_1_Anim.png = 384x80 = 8 frames × 48x80 connected tileset (3×5 @ 16px)
+// Centre tile of each frame = pure animated water matching shore transitions
+const WATER_CONN_ANIM    = 'Tiles/Water/Water_Tile_1_Anim.png';
+const WATER_CONN_FRAME_W = 48;  // width of one connected-tileset frame
+const WATER_CONN_FRAMES  = 8;   // number of animation frames
 
 /* ── Wang tile auto-tiling ── */
 
@@ -191,16 +193,17 @@ const BUSHES = [
 
 /* ── Animal sprites (all 32x32 frame grids) ── */
 
+// Per-animal idle/walk row definitions (row = spritesheet row, n = frame count)
 const ANIMALS = {
-  chicken: { p: 'Animals/Chicken/Chicken_01.png', cols: 8, rows: 16 },
-  pig:     { p: 'Animals/Pig/Pig_01.png',         cols: 9, rows: 15 },
-  sheep:   { p: 'Animals/Sheep/Sheep_01.png',     cols: 8, rows: 15 },
-  duck:    { p: 'Animals/Duck/Duck_01.png',        cols: 8, rows: 20 },
-  cow:     { p: 'Animals/Cow/Cow_01.png',          cols: 8, rows: 15 },
-  frog:    { p: 'Animals/Frog/Frog_01.png',        cols: 10, rows: 4 },
-  mouse:   { p: 'Animals/Mouse/Mouse_01.png',      cols: 10, rows: 4 },
-  goose:   { p: 'Animals/Goose/Goose_01.png',      cols: 12, rows: 16 },
-  horse:   { p: 'Animals/Horse/Horse_01.png',       cols: 8, rows: 15 },
+  chicken: { p: 'Animals/Chicken/Chicken_01.png', idle: { row: 0, n: 2 }, walk: { row: 1, n: 6 } },
+  pig:     { p: 'Animals/Pig/Pig_01.png',         idle: { row: 0, n: 3 }, walk: { row: 3, n: 8 } },
+  sheep:   { p: 'Animals/Sheep/Sheep_01.png',     idle: { row: 0, n: 2 }, walk: { row: 3, n: 8 } },
+  duck:    { p: 'Animals/Duck/Duck_01.png',        idle: { row: 0, n: 2 }, walk: { row: 1, n: 5 } },
+  cow:     { p: 'Animals/Cow/Cow_01.png',          idle: { row: 1, n: 2 }, walk: { row: 3, n: 8 } },
+  frog:    { p: 'Animals/Frog/Frog_01.png',        idle: { row: 0, n: 2 }, walk: { row: 1, n: 8 } },
+  mouse:   { p: 'Animals/Mouse/Mouse_01.png',      idle: { row: 0, n: 2 }, walk: { row: 1, n: 6 } },
+  goose:   { p: 'Animals/Goose/Goose_01.png',      idle: { row: 0, n: 2 }, walk: { row: 2, n: 6 } },
+  horse:   { p: 'Animals/Horse/Horse_01.png',       idle: { row: 1, n: 3 }, walk: { row: 3, n: 8 } },
 };
 
 // Small creatures — different frame layouts
@@ -258,22 +261,23 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
   const h = seed || 0;
   const t = time || 0;
 
-  /* ── Water tiles: solid base + animated shimmer ── */
+  /* ── Water tiles: Wang pure-water base + colour-matched animation ── */
   if (tile.t === 'water') {
-    // Always draw solid water base first (matches Wang shore tiles)
-    const staticDrawn = drawImg(ctx, cfp(WATER_STATIC), x, y, size, size);
-    if (!staticDrawn) {
-      // Placeholder while loading — CF water blue
-      ctx.fillStyle = '#3888b0';
+    // Use Wang tileset's pure-water tile (idx 0) so colour matches shore transitions
+    const [wsx, wsy] = WANG_LOOKUP[0];
+    if (!drawFrame(ctx, cfp(WANG_WATER_GRASS), wsx, wsy, 16, 16, x, y, size, size)) {
+      ctx.fillStyle = '#3888b0'; // placeholder while loading
       ctx.fillRect(x, y, size, size);
     }
-    // Overlay animated ripple at low opacity for shimmer
-    const fi = Math.floor((t * 0.003 + h * 0.1) % WATER_ANIM_FRAMES);
-    drawFrame(ctx, cfp(WATER_ANIM), fi * 16, 0, 16, 16, x, y, size, size, undefined, 0.35);
-    return true; // always suppress procedural water
+    // Animated shimmer from connected-water tileset (same palette as Wang)
+    // Centre tile of each frame = column 1 row 1 → offset (16, 16) within the 48×80 frame
+    const fi = Math.floor((t * 0.003 + h * 0.1) % WATER_CONN_FRAMES);
+    drawFrame(ctx, cfp(WATER_CONN_ANIM), fi * WATER_CONN_FRAME_W + 16, 16, 16, 16, x, y, size, size, undefined, 0.3);
+    return true;
   }
 
-  /* ── Non-water tiles: Wang water-grass transition ── */
+  /* ── Non-water tiles: Wang auto-tiling for ALL tiles ── */
+  let wangDrawn = false;
   if (neighbors) {
     const w = (tt) => tt === 'water';
     const cNW = (w(neighbors.n) || w(neighbors.w) || w(neighbors.nw)) ? 0 : 1;
@@ -281,29 +285,19 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
     const cSW = (w(neighbors.s) || w(neighbors.w) || w(neighbors.sw)) ? 0 : 1;
     const cSE = (w(neighbors.s) || w(neighbors.e) || w(neighbors.se)) ? 0 : 1;
     const idx = cNW * 8 + cNE * 4 + cSW * 2 + cSE;
-    if (idx < 15) {
-      const [sx, sy] = WANG_LOOKUP[idx];
-      if (drawFrame(ctx, cfp(WANG_WATER_GRASS), sx, sy, 16, 16, x, y, size, size)) {
-        return 2; // Wang shore drawn — caller should suppress extra shore glow
-      }
-    }
+    const [sx, sy] = WANG_LOOKUP[idx];
+    wangDrawn = drawFrame(ctx, cfp(WANG_WATER_GRASS), sx, sy, 16, 16, x, y, size, size);
+    // Shore transition tiles (idx < 15) — tell caller to suppress extra shore glow
+    if (wangDrawn && idx < 15) return 2;
   }
 
-  /* ── Desert / volcanic → sand ── */
-  if (biome === 'desert' || biome === 'volcanic') {
-    if (!drawImg(ctx, cfp(SAND_TILE), x, y, size, size)) {
-      // Placeholder while loading
+  /* ── Fallback placeholder while Wang tileset loads ── */
+  if (!wangDrawn) {
+    if (biome === 'desert' || biome === 'volcanic') {
       ctx.fillStyle = '#c8b080';
-      ctx.fillRect(x, y, size, size);
+    } else {
+      ctx.fillStyle = '#5a8a38';
     }
-    return true; // always suppress procedural
-  }
-
-  /* ── Grass (single colour) ── */
-  const grassDrawn = drawImg(ctx, cfp(GRASS_TILE), x, y, size, size);
-  if (!grassDrawn) {
-    // Placeholder while loading — consistent CF grass green
-    ctx.fillStyle = '#5a8a38';
     ctx.fillRect(x, y, size, size);
   }
 
@@ -409,10 +403,25 @@ export function drawCuteFantasyResident(ctx, x, y, tileSize, paletteKey, activit
   if (!entry?.loaded) return true; // suppress procedural fallback while loading
 
   const cols = Math.floor(entry.image.width / NPC_FW);
-  const n = Math.min(cols, 4);
-  const fi = activity === 'stroll' ? Math.floor(frameOffset * 4) % n : 0;
+  const rows = Math.floor(entry.image.height / NPC_FH);
+
+  // NPC spritesheets: rows 0-3 = walk (down/up/left/right), row 4+ = idle
+  let row, numFrames;
+  if (activity === 'stroll') {
+    // Walk: pick direction-specific row
+    if (facing === -1 && rows > 2) row = 2;       // walk left
+    else if (facing === 1 && rows > 3) row = 3;   // walk right
+    else row = 0;                                  // walk down (default)
+    numFrames = Math.min(cols, 6);
+  } else {
+    // Idle: use idle row (row 4) with slow frame cycling
+    row = rows > 4 ? 4 : 0;
+    numFrames = Math.min(cols, 6);
+  }
+
+  const fi = Math.floor(frameOffset * numFrames) % numFrames;
   const sx = fi * NPC_FW;
-  const sy = 0;
+  const sy = row * NPC_FH;
 
   const dw = tileSize * 0.72;
   const dh = dw * (NPC_FH / NPC_FW);
@@ -420,11 +429,11 @@ export function drawCuteFantasyResident(ctx, x, y, tileSize, paletteKey, activit
     ? Math.sin(frameOffset * Math.PI * 2) * tileSize * 0.02
     : 0;
 
+  // Direction-specific rows → no horizontal flip needed
   return drawFrame(
     ctx, src,
     sx, sy, NPC_FW, NPC_FH,
     x - dw / 2, y - dh * 0.82 + bob, dw, dh,
-    facing === -1 ? -1 : 1,
   );
 }
 
@@ -459,7 +468,7 @@ export function drawCuteFantasyCritter(ctx, x, y, tileSize, species, frameOffset
     );
   }
 
-  // Regular CF animals — 32x32 frame grid
+  // Regular CF animals — 32x32 frame grid with idle/walk rows
   const an = ANIMALS[mapped];
   if (!an) return false;
 
@@ -467,17 +476,17 @@ export function drawCuteFantasyCritter(ctx, x, y, tileSize, species, frameOffset
   const entry = getImage(src);
   if (!entry?.loaded) return true; // suppress fallback
 
-  // Animation: idle = frame 0 (static), walk = frames 0-3 cycle
-  const numFrames = Math.min(an.cols, 4);
-  const fi = moving
-    ? Math.floor(frameOffset * numFrames) % numFrames
-    : 0; // idle: static first frame
+  // Pick the correct animation row and frame count
+  const anim = moving ? an.walk : an.idle;
+  const fi = Math.floor(frameOffset * anim.n) % anim.n;
+  const sx = fi * 32;
+  const sy = anim.row * 32;
 
   const d = tileSize * scale;
   dropShadow(ctx, x, y + d * 0.06, d * 0.22, d * 0.07, 0.18);
   return drawFrame(
     ctx, src,
-    fi * 32, 0, 32, 32,
+    sx, sy, 32, 32,
     x - d / 2, y - d * 0.6, d, d,
     fac,
   );
@@ -498,10 +507,11 @@ export function drawCuteFantasyPet(ctx, x, y, tileSize, character, frameOffset, 
   const entry = getImage(src);
   if (!entry?.loaded) return true; // suppress fallback
 
-  const numFrames = Math.min(an.cols, 4);
-  const fi = moving
-    ? Math.floor(frameOffset * numFrames) % numFrames
-    : 0; // idle: static first frame
+  // Pick the correct animation row and frame count
+  const anim = moving ? an.walk : an.idle;
+  const fi = Math.floor(frameOffset * anim.n) % anim.n;
+  const sx = fi * 32;
+  const sy = anim.row * 32;
 
   const d = tileSize * 0.9;
 
@@ -509,7 +519,7 @@ export function drawCuteFantasyPet(ctx, x, y, tileSize, character, frameOffset, 
 
   return drawFrame(
     ctx, src,
-    fi * 32, 0, 32, 32,
+    sx, sy, 32, 32,
     x - d / 2, y - d * 0.65, d, d,
   );
 }

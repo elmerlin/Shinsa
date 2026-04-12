@@ -253,6 +253,8 @@ function getRouteMotion(entity, time) {
   const cycleMs = route.reduce((total, node) => total + node.pauseMs + node.moveMs, 0) || 1;
   let cursor = (time + entity.seed * 173) % cycleMs;
   let lastFacing = route.find((node) => node.facing)?.facing || 1;
+  // Slow idle frame cycle for breathing / subtle shifting animation
+  const idleFrame = (time * 0.0003 + entity.seed * 0.1) % 1;
 
   for (let index = 0; index < route.length; index += 1) {
     const node = route[index];
@@ -263,7 +265,7 @@ function getRouteMotion(entity, time) {
       return {
         x: node.x,
         y: node.y,
-        frameOffset: 0,
+        frameOffset: idleFrame,
         facing: idleFacing,
         moving: false,
         paused: true,
@@ -611,23 +613,26 @@ function getAnimalWanderPos(entity, time, grid) {
   const phase = (time % period) / period;
   let x, y, moving, frameOffset;
 
+  // Slow idle cycle for breathing / shifting animation (~1 cycle per 3s)
+  const idleFrame = (time * 0.0003 + seed * 0.1) % 1;
+
   if (phase < 0.2) {
     x = entity.x + from.dx;
     y = entity.y + from.dy;
     moving = false;
-    frameOffset = 0;
+    frameOffset = idleFrame;
   } else if (phase > 0.8) {
     x = entity.x + to.dx;
     y = entity.y + to.dy;
     moving = false;
-    frameOffset = 0;
+    frameOffset = idleFrame;
   } else {
     const t = smoothStep((phase - 0.2) / 0.6);
     x = entity.x + from.dx + (to.dx - from.dx) * t;
     y = entity.y + from.dy + (to.dy - from.dy) * t;
     const actuallyMoving = Math.abs(to.dx - from.dx) > 0.01 || Math.abs(to.dy - from.dy) > 0.01;
     moving = actuallyMoving;
-    frameOffset = actuallyMoving ? (t * 2 + seed * 0.07) % 1 : 0;
+    frameOffset = actuallyMoving ? (t * 2 + seed * 0.07) % 1 : idleFrame;
   }
 
   const facingDx = to.dx - from.dx;
@@ -882,11 +887,13 @@ function getPetWanderPos(pet, time, grid) {
   }
 
   const phase = (time % period) / period;
+  const idleFrame = (time * 0.0003 + pet.seed * 0.1) % 1; // slow idle cycle
+
   if (phase < 0.18) {
-    return { x: pet.x + from.x * 0.44, y: pet.y + from.y * 0.34, frameOffset: 0, moving: false };
+    return { x: pet.x + from.x * 0.44, y: pet.y + from.y * 0.34, frameOffset: idleFrame, moving: false };
   }
   if (phase > 0.82) {
-    return { x: pet.x + to.x * 0.44, y: pet.y + to.y * 0.34, frameOffset: 0, moving: false };
+    return { x: pet.x + to.x * 0.44, y: pet.y + to.y * 0.34, frameOffset: idleFrame, moving: false };
   }
 
   const travel = smoothStep((phase - 0.18) / 0.64);
@@ -894,7 +901,7 @@ function getPetWanderPos(pet, time, grid) {
   return {
     x: pet.x + (from.x + (to.x - from.x) * travel) * 0.44,
     y: pet.y + (from.y + (to.y - from.y) * travel) * 0.34,
-    frameOffset: actuallyMoving ? (travel * 1.8 + pet.seed * 0.07) % 1 : 0,
+    frameOffset: actuallyMoving ? (travel * 1.8 + pet.seed * 0.07) % 1 : idleFrame,
     moving: actuallyMoving,
   };
 }
