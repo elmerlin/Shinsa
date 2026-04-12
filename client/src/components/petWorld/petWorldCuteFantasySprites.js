@@ -103,40 +103,32 @@ const UB = BB + '/Unique_Buildings';
 const HW = BB + '/Houses/Wood';
 const OD = 'Outdoor decoration';
 
-// p = path, w/h = full image dims, f = [sx,sy,sw,sh] frame extraction, tile = fill-tile mode
 const BUILDINGS = {
-  // Houses
   house:           { p: HW + '/House_1_Wood_Base_Blue.png', w: 96, h: 128 },
   large_house:     { p: UB + '/Inn/Inn_Blue.png', w: 240, h: 192 },
   bakery:          { p: HW + '/House_3_Wood_Base_Blue.png', w: 144, h: 128 },
   weaving_hut:     { p: HW + '/House_2_Wood_Base_Blue.png', w: 144, h: 128 },
   tavern:          { p: HW + '/House_4_Wood_Base_Blue.png', w: 112, h: 96 },
-  // Barns / storage
   farm:            { p: UB + '/Barn/Barn_Base_Blue.png', w: 128, h: 144 },
   storehouse:      { p: UB + '/Barn/Barn_Green_Blue.png', w: 128, h: 144 },
   warehouse:       { p: UB + '/Greenhouse/Greenhouse_Green.png', f: [0, 0, 128, 128] },
-  // Industrial
   woodcutters_hut: { p: UB + '/Shed/Shed_Base_Blue.png', w: 96, h: 112 },
   lumberyard:      { p: UB + '/Shed/Shed_Green_Blue.png', w: 96, h: 112 },
   fishing_hut:     { p: UB + '/Fisherman_House/Fisherman_House_Base_Blue.png', w: 96, h: 112 },
   quarry:          { p: UB + '/Blacksmith_House/Blacksmith_House_Blue.png', w: 160, h: 128 },
   stone_pit:       { p: UB + '/Silo/Silo.png', w: 48, h: 80 },
   watchtower:      { p: UB + '/Silo/Silo.png', w: 48, h: 80 },
-  // Commerce
   market:          { p: UB + '/Stalls/Market_Stalls.png', w: 192, h: 48 },
   trading_post:    { p: UB + '/Stalls/Market_Stalls.png', w: 192, h: 48 },
-  // Civic / special
   shrine:          { p: UB + '/Windmill/Windmill.png', w: 128, h: 112 },
   town_hall:       { p: UB + '/Church/Church_Blue.png', f: [0, 0, 112, 144] },
-  // Outdoor
   well:            { p: OD + '/Well.png', w: 32, h: 48 },
   park:            { p: OD + '/Fountain.png', w: 32, h: 80 },
   garden:          { p: OD + '/Flowers.png', f: [0, 0, 32, 32] },
-  // Tile-fill
   path:            { p: 'Tiles/Grass/Path_Middle.png', w: 16, h: 16, tile: true },
 };
 
-/* ── Tree sprites (Medium trees: 96×48, 3 frames at 32×48 each) ── */
+/* ── Tree sprites (Medium trees: 96x48, 3 frames at 32x48 each) ── */
 
 const TREES = {
   oak:    'Trees/Medium_Oak_Tree.png',
@@ -156,64 +148,59 @@ const BIOME_TREES = {
   volcanic:   ['oak'],
 };
 
+/* ── Ground tiles ── */
+
+// Single grass tile for consistent colour — NO multi-colour variation
+const GRASS_TILE = 'Tiles/Grass/Grass_1_Middle.png';
+const SAND_TILE  = 'Tiles/Grass/Path_Middle.png';
+
+// Animated water: Water_Middle_Anim_1.png = 128x16, 8 frames at 16x16
+const WATER_ANIM       = 'Tiles/Water/Water_Middle_Anim_1.png';
+const WATER_ANIM_FRAMES = 8;
+const WATER_STATIC     = 'Tiles/Water/Water_Middle.png';
+
 /* ── Wang tile auto-tiling ── */
 
-// Wang tile lookup: index (NW*8 + NE*4 + SW*2 + SE, 0=lower 1=upper) → [sx, sy] in 64×64 sheet
+// Wang tile lookup: index (NW*8 + NE*4 + SW*2 + SE, 0=lower 1=upper) → [sx, sy]
 const WANG_LOOKUP = [
   [32, 16], [48, 16], [32, 32], [16, 32],  //  0-3
   [32, 0],  [48, 32], [0, 16],  [48, 48],  //  4-7
   [16, 16], [32, 48], [16, 0],  [0, 32],   //  8-11
   [48, 0],  [0, 0],   [16, 48], [0, 48],   // 12-15
 ];
+const WANG_WATER_GRASS = 'Tiles/wang_water_grass.png';
 
-const WANG_WATER_GRASS = 'Tiles/wang_water_grass.png';   // PixelLab water↔grass 4×4 Wang tileset
-
-/* ── Grass variations (4 tiles to break checkerboard) ── */
-
-const GRASS_VARS = [
-  'Tiles/Grass/Grass_1_Middle.png',
-  'Tiles/Grass/Grass_2_Middle.png',
-  'Tiles/Grass/Grass_3_Middle.png',
-  'Tiles/Grass/Grass_4_Middle.png',
-];
-
-// Each biome picks grass variants with weighted pools (index into GRASS_VARS)
-const BIOME_GRASS_POOL = {
-  grasslands: [0, 0, 1, 2],
-  forest:     [1, 1, 2, 0],
-  coastal:    [2, 2, 0, 3],
-  mountain:   [3, 3, 2, 3],
-  tropical:   [0, 0, 2, 0],
-  tundra:     [3, 3, 3, 2],
-};
-
-const SAND_GROUND = 'Tiles/Grass/Path_Middle.png';
+/* ── Animated flower-grass overlays ── */
+// Flower_Grass_1-15_Anim.png = 128x16, 8 frames at 16x16 each
+const FLOWER_GRASS_DIR    = 'Outdoor decoration/Outdoor_Decor_Animations/Grass_Animations/';
+const FLOWER_GRASS_COUNT  = 15;
+const FLOWER_GRASS_FRAMES = 8;
 
 /* ── Rock / bush frame positions ── */
 
-// Ores.png (128×128) — pick 16×16 rock regions
+// Ores.png (128x128) — 16x16 rock regions
 const ROCKS = [
   [0, 0], [0, 16], [16, 0], [16, 16],
   [32, 0], [32, 16], [48, 0], [48, 16],
 ];
-// Flowers.png (160×160) — pick 16×16 flower/bush regions
+// Flowers.png (160x160) — 16x16 flower/bush regions
 const BUSHES = [
   [0, 0], [16, 0], [32, 0], [48, 0], [64, 0],
   [0, 16], [16, 16], [32, 16], [48, 16], [64, 16],
 ];
 
-/* ── Animal sprites (all 32×32 frame grids) ── */
+/* ── Animal sprites (all 32x32 frame grids) ── */
 
 const ANIMALS = {
-  chicken: { p: 'Animals/Chicken/Chicken_01.png', cols: 8 },
-  pig:     { p: 'Animals/Pig/Pig_01.png',         cols: 9 },
-  sheep:   { p: 'Animals/Sheep/Sheep_01.png',     cols: 8 },
-  duck:    { p: 'Animals/Duck/Duck_01.png',        cols: 8 },
-  cow:     { p: 'Animals/Cow/Cow_01.png',          cols: 8 },
-  frog:    { p: 'Animals/Frog/Frog_01.png',        cols: 10 },
-  mouse:   { p: 'Animals/Mouse/Mouse_01.png',      cols: 10 },
-  goose:   { p: 'Animals/Goose/Goose_01.png',      cols: 12 },
-  horse:   { p: 'Animals/Horse/Horse_01.png',       cols: 8 },
+  chicken: { p: 'Animals/Chicken/Chicken_01.png', cols: 8, rows: 16 },
+  pig:     { p: 'Animals/Pig/Pig_01.png',         cols: 9, rows: 15 },
+  sheep:   { p: 'Animals/Sheep/Sheep_01.png',     cols: 8, rows: 15 },
+  duck:    { p: 'Animals/Duck/Duck_01.png',        cols: 8, rows: 20 },
+  cow:     { p: 'Animals/Cow/Cow_01.png',          cols: 8, rows: 15 },
+  frog:    { p: 'Animals/Frog/Frog_01.png',        cols: 10, rows: 4 },
+  mouse:   { p: 'Animals/Mouse/Mouse_01.png',      cols: 10, rows: 4 },
+  goose:   { p: 'Animals/Goose/Goose_01.png',      cols: 12, rows: 16 },
+  horse:   { p: 'Animals/Horse/Horse_01.png',       cols: 8, rows: 15 },
 };
 
 // Small creatures — different frame layouts
@@ -229,6 +216,10 @@ const CRITTER_MAP = {
   bird: 'chicken', rabbit: 'mouse', squirrel: 'mouse',
   dragonfly: 'butterfly', ladybug: 'bee', firefly: 'bee',
   duck: 'duck', goose: 'goose',
+  // Map procedural species to CF animals
+  fox: 'mouse', wolf: 'cow', bear: 'cow', deer: 'horse', boar: 'pig',
+  songbird: 'chicken', rare_bird: 'goose',
+  fish_koi: 'frog', fish_perch: 'frog',
 };
 
 const PET_MAP = {
@@ -236,7 +227,7 @@ const PET_MAP = {
   tanuki: 'cow', kitsune: 'duck', usagi: 'sheep', kappa: 'frog',
 };
 
-/* ── NPC residents (48×64 frame size) ── */
+/* ── NPC residents (48x64 frame size) ── */
 
 const NPCS = {
   teal:  'NPCs (Premade)/Fisherman_Fin.png',
@@ -255,91 +246,103 @@ const NPC_FH = 64;
    ═══════════════════════════════════════════════════════ */
 
 /**
- * Overlay Cute Fantasy ground tile with auto-tiling.
- * Handles: water centre, water↔grass Wang transitions, grass variations.
- * @param {object} neighbors - { n, s, e, w, nw, ne, sw, se } tile-type strings
- * @param {number} seed      - position-based hash for deterministic variation
+ * Draw ground tile with auto-tiling transitions and animated decorations.
+ * Single grass colour for consistency; flower-grass overlays for variety.
+ *
+ * @returns {false|true|2}
+ *   false = nothing drawn (images loading)
+ *   true  = basic ground drawn
+ *   2     = Wang shore transition drawn (suppress procedural shore glow)
  */
-export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, seed) {
+export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, seed, time) {
   const h = seed || 0;
+  const t = time || 0;
 
-  /* ── Water tiles ── */
+  /* ── Water tiles: animated water ── */
   if (tile.t === 'water') {
-    return drawImg(ctx, cfp('Tiles/Water/Water_Middle.png'), x, y, size, size);
+    const fi = Math.floor((t * 0.003 + h * 0.1) % WATER_ANIM_FRAMES);
+    if (drawFrame(ctx, cfp(WATER_ANIM), fi * 16, 0, 16, 16, x, y, size, size)) {
+      return true;
+    }
+    // Fallback to static water
+    return drawImg(ctx, cfp(WATER_STATIC), x, y, size, size);
   }
 
-  /* ── Non-water tiles: Wang water↔grass transition ── */
+  /* ── Non-water tiles: Wang water-grass transition ── */
   if (neighbors) {
-    const w = (t) => t === 'water';
-    // Each corner = 0 if ANY adjacent tile in that direction is water
+    const w = (tt) => tt === 'water';
     const cNW = (w(neighbors.n) || w(neighbors.w) || w(neighbors.nw)) ? 0 : 1;
     const cNE = (w(neighbors.n) || w(neighbors.e) || w(neighbors.ne)) ? 0 : 1;
     const cSW = (w(neighbors.s) || w(neighbors.w) || w(neighbors.sw)) ? 0 : 1;
     const cSE = (w(neighbors.s) || w(neighbors.e) || w(neighbors.se)) ? 0 : 1;
-
     const idx = cNW * 8 + cNE * 4 + cSW * 2 + cSE;
-
     if (idx < 15) {
-      // Has water influence at one or more corners → draw Wang transition tile
       const [sx, sy] = WANG_LOOKUP[idx];
       if (drawFrame(ctx, cfp(WANG_WATER_GRASS), sx, sy, 16, 16, x, y, size, size)) {
-        return true;
+        return 2; // Wang shore drawn — caller should suppress extra shore glow
       }
-      // Fall through to grass variation while Wang image loads
     }
   }
 
-  /* ── Desert / volcanic → sand ground ── */
+  /* ── Desert / volcanic → sand ── */
   if (biome === 'desert' || biome === 'volcanic') {
-    return drawImg(ctx, cfp(SAND_GROUND), x, y, size, size);
+    return drawImg(ctx, cfp(SAND_TILE), x, y, size, size);
   }
 
-  /* ── Grass variation based on position hash ── */
-  const pool = BIOME_GRASS_POOL[biome] || [0, 1, 2, 3];
-  const vi = pool[Math.abs(h) % pool.length];
-  return drawImg(ctx, cfp(GRASS_VARS[vi]), x, y, size, size);
+  /* ── Grass (single colour) ── */
+  const grassDrawn = drawImg(ctx, cfp(GRASS_TILE), x, y, size, size);
+
+  /* ── Flower-grass overlays on ~16 % of open ground tiles ── */
+  if (grassDrawn && tile.t !== 'tree' && tile.t !== 'rock' && tile.t !== 'bush') {
+    if (h % 6 === 0) {
+      const variant = (h >>> 3) % FLOWER_GRASS_COUNT + 1;
+      const fi = Math.floor((t * 0.002 + h * 0.07) % FLOWER_GRASS_FRAMES);
+      const file = FLOWER_GRASS_DIR + 'Flower_Grass_' + variant + '_Anim.png';
+      drawFrame(ctx, cfp(file), fi * 16, 0, 16, 16, x, y, size, size);
+    }
+  }
+
+  return grassDrawn;
 }
 
 /**
- * Draw terrain feature (tree / rock / bush). Returns boolean.
- * Signature matches drawKenneyTerrain.
+ * Draw terrain feature (tree / rock / bush).
+ * Returns true even while image is loading to SUPPRESS procedural fallback
+ * (prevents flashing / visual artifacts when sprites pop in).
  */
 export function drawCuteFantasyTerrain(ctx, biome, tile, x, y, size, seed, terrain) {
   if (tile.t === 'tree') {
     const treeType = pick(BIOME_TREES[biome] || BIOME_TREES.grasslands, seed);
     const file = TREES[treeType];
     if (!file) return false;
-    // Medium trees: 96×48, 3 variant frames at 32×48
+    const src = cfp(file);
+    const entry = getImage(src);
+    if (!entry?.loaded) return true; // suppress fallback while loading
     const fi = Math.abs(seed >> 2) % 3;
     const treeW = size;
-    const treeH = size * 1.5; // 48/32 aspect ratio
+    const treeH = size * 1.5;
     dropShadow(ctx, x + size * 0.5, y + size * 0.9, size * 0.32, size * 0.1, 0.25);
-    return drawFrame(
-      ctx, cfp(file),
-      fi * 32, 0, 32, 48,
-      x, y - size * 0.5, treeW, treeH,
-    );
+    return drawFrame(ctx, src, fi * 32, 0, 32, 48, x, y - size * 0.5, treeW, treeH);
   }
 
   if (tile.t === 'rock') {
+    const src = cfp(OD + '/Ores.png');
+    const entry = getImage(src);
+    if (!entry?.loaded) return true; // suppress fallback
     const [sx, sy] = pick(ROCKS, seed);
     const rockSize = size * 0.7;
     const off = size * 0.15;
     dropShadow(ctx, x + size * 0.5, y + size * 0.86, size * 0.24, size * 0.08, 0.2);
-    return drawFrame(
-      ctx, cfp(OD + '/Ores.png'),
-      sx, sy, 16, 16,
-      x + off, y + off, rockSize, rockSize,
-    );
+    return drawFrame(ctx, src, sx, sy, 16, 16, x + off, y + off, rockSize, rockSize);
   }
 
   if (tile.t === 'bush') {
+    const src = cfp(OD + '/Flowers.png');
+    const entry = getImage(src);
+    if (!entry?.loaded) return true; // suppress fallback
     const [sx, sy] = pick(BUSHES, seed);
-    return drawFrame(
-      ctx, cfp(OD + '/Flowers.png'),
-      sx, sy, 16, 16,
-      x + size * 0.12, y + size * 0.12, size * 0.76, size * 0.76,
-    );
+    return drawFrame(ctx, src, sx, sy, 16, 16,
+      x + size * 0.12, y + size * 0.12, size * 0.76, size * 0.76);
   }
 
   return false;
@@ -347,7 +350,6 @@ export function drawCuteFantasyTerrain(ctx, biome, tile, x, y, size, seed, terra
 
 /**
  * Draw building sprite. Returns boolean.
- * Signature matches drawKenneyBuilding.
  */
 export function drawCuteFantasyBuilding(ctx, buildingOrType, x, y, width, height) {
   const type = bType(buildingOrType);
@@ -356,12 +358,10 @@ export function drawCuteFantasyBuilding(ctx, buildingOrType, x, y, width, height
 
   const src = cfp(b.p);
 
-  // Tile-fill mode: cover the entire footprint
   if (b.tile) {
     return drawImg(ctx, src, x, y, width, height);
   }
 
-  // Frame extraction from spritesheet
   if (b.f) {
     const [sx, sy, sw, sh] = b.f;
     const sc = Math.min(width / sw, height / sh);
@@ -373,7 +373,6 @@ export function drawCuteFantasyBuilding(ctx, buildingOrType, x, y, width, height
     return drawFrame(ctx, src, sx, sy, sw, sh, dx, dy, dw, dh);
   }
 
-  // Full image, scaled to fit bottom-center
   const sc = Math.min(width / b.w, height / b.h);
   const dw = b.w * sc;
   const dh = b.h * sc;
@@ -385,7 +384,6 @@ export function drawCuteFantasyBuilding(ctx, buildingOrType, x, y, width, height
 
 /**
  * Draw NPC village resident. Returns boolean.
- * Signature matches drawKenneyResident.
  */
 export function drawCuteFantasyResident(ctx, x, y, tileSize, paletteKey, activity, frameOffset, facing) {
   const file = NPCS[paletteKey];
@@ -395,7 +393,6 @@ export function drawCuteFantasyResident(ctx, x, y, tileSize, paletteKey, activit
   const entry = getImage(src);
   if (!entry?.loaded) return false;
 
-  // Walk cycle: first row, first 4 frames
   const cols = Math.floor(entry.image.width / NPC_FW);
   const n = Math.min(cols, 4);
   const fi = activity === 'stroll' ? Math.floor(frameOffset * 4) % n : 0;
@@ -417,8 +414,8 @@ export function drawCuteFantasyResident(ctx, x, y, tileSize, paletteKey, activit
 }
 
 /**
- * Draw ambient critter. Returns boolean.
- * Signature matches drawKenneyCritter.
+ * Draw ambient critter using CF animal sprites.
+ * Uses idle or walk animation based on options.moving.
  */
 export function drawCuteFantasyCritter(ctx, x, y, tileSize, species, frameOffset, options) {
   const mapped = CRITTER_MAP[species];
@@ -426,58 +423,78 @@ export function drawCuteFantasyCritter(ctx, x, y, tileSize, species, frameOffset
 
   const fac = options?.facing || 1;
   const scale = options?.scale || 0.6;
+  const moving = options?.moving || false;
 
-  // Small creatures (butterfly, bee) — different spritesheet layouts
+  // Small creatures (butterfly, bee) — special layouts
   const sm = SMALL[mapped];
   if (sm) {
+    const src = cfp(sm.p);
+    const entry = getImage(src);
+    if (!entry?.loaded) return true; // suppress fallback
     const fi = Math.floor(frameOffset * 4) % sm.n;
     const sx = sm.vert ? 0 : fi * sm.fw;
     const sy = sm.vert ? fi * sm.fh : 0;
     const d = tileSize * scale;
     const hover = Math.sin(frameOffset * Math.PI * 2) * tileSize * 0.04;
     return drawFrame(
-      ctx, cfp(sm.p),
+      ctx, src,
       sx, sy, sm.fw, sm.fh,
       x - d / 2, y - d * 0.7 + hover, d, d,
       fac,
     );
   }
 
-  // Regular animals (32×32 frame grid)
+  // Regular CF animals — 32x32 frame grid
   const an = ANIMALS[mapped];
   if (!an) return false;
 
-  const fi = Math.floor(frameOffset * 4) % Math.min(an.cols, 4);
+  const src = cfp(an.p);
+  const entry = getImage(src);
+  if (!entry?.loaded) return true; // suppress fallback
+
+  // Animation: idle = frame 0 (static), walk = frames 0-3 cycle
+  const numFrames = Math.min(an.cols, 4);
+  const fi = moving
+    ? Math.floor(frameOffset * numFrames) % numFrames
+    : 0; // idle: static first frame
+
   const d = tileSize * scale;
-  const bob = Math.sin(frameOffset * Math.PI * 2) * tileSize * 0.015;
+  dropShadow(ctx, x, y + d * 0.06, d * 0.22, d * 0.07, 0.18);
   return drawFrame(
-    ctx, cfp(an.p),
+    ctx, src,
     fi * 32, 0, 32, 32,
-    x - d / 2, y - d * 0.6 + bob, d, d,
+    x - d / 2, y - d * 0.6, d, d,
     fac,
   );
 }
 
 /**
- * Draw pet character. Returns boolean.
- * Called before drawPetAtlas in the fallback chain.
+ * Draw pet character using CF animal sprites.
+ * Uses idle or walk animation based on moving flag.
  */
-export function drawCuteFantasyPet(ctx, x, y, tileSize, character, frameOffset) {
+export function drawCuteFantasyPet(ctx, x, y, tileSize, character, frameOffset, moving) {
   const mapped = PET_MAP[character];
   if (!mapped) return false;
 
   const an = ANIMALS[mapped];
   if (!an) return false;
 
-  const fi = Math.floor(frameOffset * 4) % Math.min(an.cols, 4);
+  const src = cfp(an.p);
+  const entry = getImage(src);
+  if (!entry?.loaded) return true; // suppress fallback
+
+  const numFrames = Math.min(an.cols, 4);
+  const fi = moving
+    ? Math.floor(frameOffset * numFrames) % numFrames
+    : 0; // idle: static first frame
+
   const d = tileSize * 0.9;
-  const bob = Math.sin(frameOffset * Math.PI * 2) * tileSize * 0.02;
 
   dropShadow(ctx, x, y + d * 0.08, d * 0.28, d * 0.09, 0.2);
 
   return drawFrame(
-    ctx, cfp(an.p),
+    ctx, src,
     fi * 32, 0, 32, 32,
-    x - d / 2, y - d * 0.65 + bob, d, d,
+    x - d / 2, y - d * 0.65, d, d,
   );
 }

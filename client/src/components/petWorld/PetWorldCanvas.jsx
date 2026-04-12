@@ -564,18 +564,76 @@ function drawResidentInteractionOverlay(ctx, screenX, screenY, tileSize, motion,
   ctx.restore();
 }
 
-function getEntityWanderPos(entity, time) {
-  const period = entity.period || 3200;
-  const t = ((time + entity.seed * 97) % period) / period;
-  const angle = ((entity.seed % 360) / 180) * Math.PI + t * Math.PI * 2;
-  const rangeX = entity.rangeX ?? entity.range ?? 0.45;
-  const rangeY = entity.rangeY ?? entity.range ?? 0.3;
-  return {
-    x: entity.x + Math.cos(angle) * rangeX,
-    y: entity.y + Math.sin(angle * 1.35) * rangeY,
-    frameOffset: t,
-    facing: Math.cos(angle) >= 0 ? 1 : -1,
+/** Check if a tile at (tx, ty) is walkable for land animals. */
+function isTileWalkable(grid, tx, ty) {
+  if (!grid || tx < 0 || ty < 0 || tx >= grid.w || ty >= grid.h) return false;
+  const tile = grid.tiles[ty]?.[tx];
+  if (!tile) return false;
+  if (tile.t === 'water' || tile.t === 'tree' || tile.t === 'rock') return false;
+  if (tile.b != null) return false;
+  return true;
+}
+
+/**
+ * Deterministic land-aware animal wander.
+ * Animals spend ~70% of time idle and ~30% walking short distances.
+ * Movement checks walkability so animals stay on valid ground.
+ */
+function getAnimalWanderPos(entity, time, grid) {
+  const period = entity.period || 4000;
+  const step = Math.floor(time / period);
+  const seed = entity.seed || 0;
+
+  // Deterministic hash for this step
+  const hash = (seed * 2654435761 + step * 2246822519) >>> 0;
+  const nextHash = (seed * 2654435761 + (step + 1) * 2246822519) >>> 0;
+
+  // Current & next target offset from home (small: 0 or ±1 tile)
+  const getOffset = (h) => {
+    const idle = (h % 10) >= 3; // ~70% idle
+    if (idle) return { dx: 0, dy: 0 };
+    const dx = ((h >> 4) % 3) - 1;
+    const dy = ((h >> 6) % 3) - 1;
+    return { dx: dx * 0.4, dy: dy * 0.3 };
   };
+
+  const from = getOffset(hash);
+  const to = getOffset(nextHash);
+
+  // Validate target tiles against grid walkability
+  if (grid) {
+    const homeX = Math.floor(entity.x);
+    const homeY = Math.floor(entity.y);
+    if (!isTileWalkable(grid, homeX + Math.round(from.dx / 0.4), homeY + Math.round(from.dy / 0.3))) { from.dx = 0; from.dy = 0; }
+    if (!isTileWalkable(grid, homeX + Math.round(to.dx / 0.4), homeY + Math.round(to.dy / 0.3))) { to.dx = 0; to.dy = 0; }
+  }
+
+  const phase = (time % period) / period;
+  let x, y, moving, frameOffset;
+
+  if (phase < 0.2) {
+    x = entity.x + from.dx;
+    y = entity.y + from.dy;
+    moving = false;
+    frameOffset = 0;
+  } else if (phase > 0.8) {
+    x = entity.x + to.dx;
+    y = entity.y + to.dy;
+    moving = false;
+    frameOffset = 0;
+  } else {
+    const t = smoothStep((phase - 0.2) / 0.6);
+    x = entity.x + from.dx + (to.dx - from.dx) * t;
+    y = entity.y + from.dy + (to.dy - from.dy) * t;
+    const actuallyMoving = Math.abs(to.dx - from.dx) > 0.01 || Math.abs(to.dy - from.dy) > 0.01;
+    moving = actuallyMoving;
+    frameOffset = actuallyMoving ? (t * 2 + seed * 0.07) % 1 : 0;
+  }
+
+  const facingDx = to.dx - from.dx;
+  const facing = facingDx < -0.01 ? -1 : facingDx > 0.01 ? 1 : ((seed % 2) === 0 ? 1 : -1);
+
+  return { x, y, frameOffset, facing, moving };
 }
 
 function buildPetPlacements(world) {
@@ -800,8 +858,8 @@ function buildEncounterSightings(world, terrainRegions, encounters = []) {
   });
 }
 
-/** Deterministic pet position: wanders 1 tile every ~2s based on seed. */
-function getPetWanderPos(pet, time) {
+/** Deterministic pet position: wanders 1 tile every ~2s based on seed. Grid-aware. */
+function getPetWanderPos(pet, time, grid) {
   const period = 2600;
   const step = Math.floor(time / period);
   const currentHash = (pet.seed * 2654435761 + step * 2246822519) >>> 0;
@@ -814,19 +872,30 @@ function getPetWanderPos(pet, time) {
     x: (nextHash % 3) - 1,
     y: ((nextHash >> 4) % 3) - 1,
   };
+
+  // Validate against grid walkability
+  if (grid) {
+    const homeX = Math.floor(pet.x);
+    const homeY = Math.floor(pet.y);
+    if (!isTileWalkable(grid, homeX + from.x, homeY + from.y)) { from.x = 0; from.y = 0; }
+    if (!isTileWalkable(grid, homeX + to.x, homeY + to.y)) { to.x = 0; to.y = 0; }
+  }
+
   const phase = (time % period) / period;
   if (phase < 0.18) {
-    return { x: pet.x + from.x * 0.44, y: pet.y + from.y * 0.34, frameOffset: 0 };
+    return { x: pet.x + from.x * 0.44, y: pet.y + from.y * 0.34, frameOffset: 0, moving: false };
   }
   if (phase > 0.82) {
-    return { x: pet.x + to.x * 0.44, y: pet.y + to.y * 0.34, frameOffset: 0 };
+    return { x: pet.x + to.x * 0.44, y: pet.y + to.y * 0.34, frameOffset: 0, moving: false };
   }
 
   const travel = smoothStep((phase - 0.18) / 0.64);
+  const actuallyMoving = Math.abs(to.x - from.x) > 0 || Math.abs(to.y - from.y) > 0;
   return {
     x: pet.x + (from.x + (to.x - from.x) * travel) * 0.44,
     y: pet.y + (from.y + (to.y - from.y) * travel) * 0.34,
-    frameOffset: (travel * 1.8 + pet.seed * 0.07) % 1,
+    frameOffset: actuallyMoving ? (travel * 1.8 + pet.seed * 0.07) % 1 : 0,
+    moving: actuallyMoving,
   };
 }
 
@@ -917,7 +986,7 @@ export default function PetWorldCanvas({
     [],
   );
 
-  const tileSize = BASE_TILE_SIZE * FIXED_ZOOM;
+  const tileSize = Math.round(BASE_TILE_SIZE * FIXED_ZOOM);
 
   // --- resize observer ---
   useEffect(() => {
@@ -1151,13 +1220,14 @@ export default function PetWorldCanvas({
     ambientFauna
       .filter((creature) => creature.layer === 'water')
       .forEach((creature) => {
-        const wander = getEntityWanderPos(creature, time);
+        const wander = getAnimalWanderPos(creature, time, null); // water creatures skip land checks
         const screenX = wander.x * tileSize - camera.x + tileSize / 2;
         const screenY = wander.y * tileSize - camera.y + tileSize * creature.yBias;
         if (screenX < -tileSize || screenY < -tileSize || screenX > size.width + tileSize || screenY > size.height + tileSize) return;
         drawAmbientCritter(ctx, screenX, screenY, tileSize, creature.species, wander.frameOffset, {
           scale: creature.scale,
           facing: wander.facing,
+          moving: wander.moving,
         });
       });
 
@@ -1206,13 +1276,14 @@ export default function PetWorldCanvas({
     ambientFauna
       .filter((creature) => creature.layer !== 'water')
       .forEach((creature) => {
-        const wander = getEntityWanderPos(creature, time);
+        const wander = getAnimalWanderPos(creature, time, world.grid);
         const screenX = wander.x * tileSize - camera.x + tileSize / 2;
         const screenY = wander.y * tileSize - camera.y + tileSize * creature.yBias;
         if (screenX < -tileSize || screenY < -tileSize || screenX > size.width + tileSize || screenY > size.height + tileSize) return;
         drawAmbientCritter(ctx, screenX, screenY, tileSize, creature.species, wander.frameOffset, {
           scale: creature.scale,
           facing: wander.facing,
+          moving: wander.moving,
         });
       });
 
@@ -1233,21 +1304,22 @@ export default function PetWorldCanvas({
 
     // pet wandering
     petPlacements.forEach((pet) => {
-      const wander = getPetWanderPos(pet, time);
+      const wander = getPetWanderPos(pet, time, world.grid);
       const screenX = wander.x * tileSize - camera.x + tileSize / 2;
       const screenY = wander.y * tileSize - camera.y + tileSize * 0.80;
       if (screenX < -tileSize || screenY < -tileSize || screenX > size.width + tileSize || screenY > size.height + tileSize) return;
-      drawPetWander(ctx, screenX, screenY, tileSize, pet.character, wander.frameOffset);
+      drawPetWander(ctx, screenX, screenY, tileSize, pet.character, wander.frameOffset, wander.moving);
     });
 
     encounterSightings.forEach((sighting) => {
-      const wander = getEntityWanderPos(sighting, time);
+      const wander = getAnimalWanderPos(sighting, time, world.grid);
       const screenX = wander.x * tileSize - camera.x + tileSize / 2;
       const screenY = wander.y * tileSize - camera.y + tileSize * sighting.yBias;
       if (screenX < -tileSize || screenY < -tileSize || screenX > size.width + tileSize || screenY > size.height + tileSize) return;
       drawAmbientCritter(ctx, screenX, screenY, tileSize, sighting.species, wander.frameOffset, {
         scale: sighting.scale,
         facing: wander.facing,
+        moving: wander.moving,
         highlight: true,
       });
     });

@@ -555,7 +555,7 @@ export function drawTile(ctx, biome, tile, x, y, tileSize, time = 0, neighbors, 
   const terrainInfo = terrain || null;
 
   // Cute Fantasy ground tile overlay (replaces procedural base when loaded)
-  drawCuteFantasyGround(ctx, biome, tile, ix, iy, s, neighbors, h);
+  const cfGround = drawCuteFantasyGround(ctx, biome, tile, ix, iy, s, neighbors, h, time);
 
   if (tile.t === 'tree' || tile.t === 'rock' || tile.t === 'bush') {
     if (drawCuteFantasyTerrain(ctx, biome, tile, ix, iy, s, h, terrainInfo)) {
@@ -569,7 +569,7 @@ export function drawTile(ctx, biome, tile, x, y, tileSize, time = 0, neighbors, 
     }
   }
 
-  if (tile.t !== 'water') {
+  if (tile.t !== 'water' && !cfGround) {
     const detailAlpha = 0.04 + ((terrainInfo?.macroSeed || ((h % 1000) / 1000)) * 0.04);
     px(ctx, ix + s * 0.16, iy + s * 0.2, s * 0.07, s * 0.07, biomeUi.highlight || '#ffffff', detailAlpha * 0.75);
     px(ctx, ix + s * 0.62, iy + s * 0.56, s * 0.05, s * 0.05, groundDark || grounds[0], detailAlpha * 0.9);
@@ -596,7 +596,7 @@ export function drawTile(ctx, biome, tile, x, y, tileSize, time = 0, neighbors, 
     }
   }
 
-  if (tile.t === 'water') {
+  if (tile.t === 'water' && !cfGround) {
     // --- WATER: depth treatment ---
     const deep = palette.deep || '#0e3a52';
     const shore = palette.shore || '#3898b8';
@@ -886,6 +886,9 @@ export function drawTile(ctx, biome, tile, x, y, tileSize, time = 0, neighbors, 
     circ(ctx, ix + s * 0.38, iy + s * 0.52, s * 0.025, palette.detail, 0.50);
     return;
   }
+
+  // When CF tiles handle ground, skip all procedural ground details
+  if (cfGround) return;
 
   // --- GROUND: NO visible grid ---
   // Vary the fill per tile using hash-based noise (already done with baseFill above)
@@ -2153,8 +2156,8 @@ const PET_PALETTES = {
   kappa:    { body: '#40a060', head: '#50b070', eye: '#ffffff', pupil: '#0a2a18', ear: '#308a48', belly: '#60c080', nose: '#2a8a48' },
 };
 
-export function drawPetWander(ctx, x, y, tileSize, character, frameOffset) {
-  if (drawCuteFantasyPet(ctx, x, y, tileSize * 1.06, character, frameOffset)) {
+export function drawPetWander(ctx, x, y, tileSize, character, frameOffset, moving) {
+  if (drawCuteFantasyPet(ctx, x, y, tileSize * 1.06, character, frameOffset, moving)) {
     return;
   }
   if (drawPetAtlas(ctx, x, y, tileSize * 1.06, character, frameOffset)) {
