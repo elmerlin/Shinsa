@@ -186,6 +186,19 @@ const FLOWER_GRASS_DIR    = 'Outdoor decoration/Outdoor_Decor_Animations/Grass_A
 const FLOWER_GRASS_COUNT  = 15;
 const FLOWER_GRASS_FRAMES = 8;
 
+/* ── Water decoration overlays ── */
+// Lillypad animations: 128x16 = 8 frames at 16x16 each
+const WATER_DECOR_DIR = 'Outdoor decoration/Outdoor_Decor_Animations/Water_Decor_Animations/Water_Plants/';
+const WATER_LILLYPADS = [
+  'Lillypad_Green_1_Anim.png',
+  'Lillypad_Green_4_Anim.png',
+  'Lillypad_Green_5_Anim.png',
+];
+const WATER_LILLYPAD_FRAMES = 8;
+// Animated pure water overlay for richer shimmer
+const WATER_MIDDLE_ANIM = 'Tiles/Water/Water_Middle_Anim_1.png';
+const WATER_MIDDLE_FRAMES = 8;
+
 /* ── Rock / bush frame positions ── */
 
 // Ores.png (128x128) — 16x16 rock regions
@@ -269,7 +282,7 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
   const h = seed || 0;
   const t = time || 0;
 
-  /* ── Water tiles: Wang pure-water base + colour-matched animation ── */
+  /* ── Water tiles: Wang pure-water base + layered animation ── */
   if (tile.t === 'water') {
     // Use Wang tileset's pure-water tile (idx 0) so colour matches shore transitions
     const [wsx, wsy] = WANG_LOOKUP[0];
@@ -277,9 +290,24 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
       ctx.fillStyle = '#3888b0'; // placeholder while loading
       ctx.fillRect(x, y, size, size);
     }
-    // Animated shimmer from connected-water tileset (same palette as Wang)
+    // Primary animated shimmer from connected-water tileset (same palette as Wang)
     const fi = Math.floor((t * 0.003 + h * 0.1) % WATER_CONN_FRAMES);
-    drawFrame(ctx, cfp(WATER_CONN_ANIM), fi * WATER_CONN_FRAME_W + 16, 16, 16, 16, x, y, size, size, undefined, 0.3);
+    drawFrame(ctx, cfp(WATER_CONN_ANIM), fi * WATER_CONN_FRAME_W + 16, 16, 16, 16, x, y, size, size, undefined, 0.25);
+    // Secondary shimmer layer (phase-offset) for richer water movement
+    const fi2 = Math.floor((t * 0.0025 + h * 0.3 + 3) % WATER_MIDDLE_FRAMES);
+    drawFrame(ctx, cfp(WATER_MIDDLE_ANIM), fi2 * 16, 0, 16, 16, x, y, size, size, undefined, 0.15);
+
+    // Lillypad decorations on ~12% of shore-adjacent water tiles
+    if (neighbors) {
+      const isLand = (tt) => tt && tt !== 'water';
+      const nearShore = isLand(neighbors.n) || isLand(neighbors.s) || isLand(neighbors.e) || isLand(neighbors.w);
+      if (nearShore && h % 8 === 0) {
+        const padIdx = (h >>> 5) % WATER_LILLYPADS.length;
+        const padFi = Math.floor((t * 0.0015 + h * 0.2) % WATER_LILLYPAD_FRAMES);
+        drawFrame(ctx, cfp(WATER_DECOR_DIR + WATER_LILLYPADS[padIdx]),
+          padFi * 16, 0, 16, 16, x, y, size, size, undefined, 0.7);
+      }
+    }
     return true;
   }
 
@@ -333,17 +361,48 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
     }
   }
 
+  /* ── Shore softening on grass-side tiles near water ── */
+  const isShoreTransition = wangIdx > 0 && wangIdx < 15;
+  if (isShoreTransition && neighbors) {
+    // Soft earthy gradient along water edges to blend the transition
+    ctx.save();
+    const shoreDepth = size * 0.28;
+    const shoreColor = 'rgba(142,126,92,0.18)'; // warm sandy-earth tone
+    if (neighbors.n === 'water') {
+      const sg = ctx.createLinearGradient(x, y, x, y + shoreDepth);
+      sg.addColorStop(0, shoreColor); sg.addColorStop(1, 'transparent');
+      ctx.fillStyle = sg; ctx.fillRect(x, y, size, shoreDepth);
+    }
+    if (neighbors.s === 'water') {
+      const sg = ctx.createLinearGradient(x, y + size, x, y + size - shoreDepth);
+      sg.addColorStop(0, shoreColor); sg.addColorStop(1, 'transparent');
+      ctx.fillStyle = sg; ctx.fillRect(x, y + size - shoreDepth, size, shoreDepth);
+    }
+    if (neighbors.w === 'water') {
+      const sg = ctx.createLinearGradient(x, y, x + shoreDepth, y);
+      sg.addColorStop(0, shoreColor); sg.addColorStop(1, 'transparent');
+      ctx.fillStyle = sg; ctx.fillRect(x, y, shoreDepth, size);
+    }
+    if (neighbors.e === 'water') {
+      const sg = ctx.createLinearGradient(x + size, y, x + size - shoreDepth, y);
+      sg.addColorStop(0, shoreColor); sg.addColorStop(1, 'transparent');
+      ctx.fillStyle = sg; ctx.fillRect(x + size - shoreDepth, y, shoreDepth, size);
+    }
+    ctx.restore();
+  }
+
   /* ── Grass variation on pure-grass tiles ── */
   if (wangIdx === 15 && laneStrength < 0.2 && tile.t !== 'tree' && tile.t !== 'rock' && tile.t !== 'bush') {
-    // ~30% of tiles get a subtle grass variant overlay
-    if (h % 3 === 0) {
+    // ~40% of tiles get a subtle grass variant overlay for less monotony
+    if (h % 5 < 2) {
       const variantIdx = (h >>> 4) % GRASS_VARIANTS.length;
-      drawFrame(ctx, cfp(GRASS_VARIANTS[variantIdx]), 0, 0, 16, 16, x, y, size, size, undefined, 0.35);
+      const varAlpha = 0.25 + ((h >>> 7) % 3) * 0.08; // vary opacity per tile
+      drawFrame(ctx, cfp(GRASS_VARIANTS[variantIdx]), 0, 0, 16, 16, x, y, size, size, undefined, varAlpha);
     }
   }
 
-  /* ── Flower-grass overlays on ~16 % of open ground tiles ── */
-  if (tile.t !== 'tree' && tile.t !== 'rock' && tile.t !== 'bush') {
+  /* ── Flower-grass overlays on ~16 % of open ground tiles (NOT on shore tiles) ── */
+  if (tile.t !== 'tree' && tile.t !== 'rock' && tile.t !== 'bush' && !isShoreTransition) {
     if (h % 6 === 0) {
       const variant = (h >>> 3) % FLOWER_GRASS_COUNT + 1;
       const fi = Math.floor((t * 0.002 + h * 0.07) % FLOWER_GRASS_FRAMES);
@@ -361,8 +420,8 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
  * (prevents flashing / visual artifacts when sprites pop in).
  */
 export function drawCuteFantasyTerrain(ctx, biome, tile, x, y, size, seed, terrain, neighbors) {
-  // Skip trees/bushes adjacent to water — they look unnatural on shorelines
-  if ((tile.t === 'tree' || tile.t === 'bush') && neighbors) {
+  // Skip ALL obstacles adjacent to water — trees, rocks, bushes look unnatural on shorelines
+  if ((tile.t === 'tree' || tile.t === 'bush' || tile.t === 'rock') && neighbors) {
     const nb = neighbors;
     if (nb.n === 'water' || nb.s === 'water' || nb.e === 'water' || nb.w === 'water'
       || nb.ne === 'water' || nb.nw === 'water' || nb.se === 'water' || nb.sw === 'water') {

@@ -57,6 +57,39 @@ function canPlace(grid, x, y, width, height, options = {}) {
   return false;
 }
 
+/**
+ * Sanitize a grid: remove obstacles (trees, rocks, bushes) adjacent to water.
+ * Fixes legacy worlds that were generated before the shoreline cleanup pass.
+ * Safe to call multiple times — only modifies tiles that violate the rule.
+ */
+function sanitizeGrid(grid) {
+  if (!grid?.tiles) return grid;
+  const h = grid.h || grid.tiles.length;
+  const w = grid.w || (grid.tiles[0]?.length || 0);
+  let changed = false;
+  for (let y = 0; y < h; y += 1) {
+    for (let x = 0; x < w; x += 1) {
+      const tile = grid.tiles[y]?.[x];
+      if (!tile) continue;
+      const tt = tile.t;
+      if (tt !== 'tree' && tt !== 'bush' && tt !== 'rock') continue;
+      let adjacentWater = false;
+      for (let dy = -1; dy <= 1 && !adjacentWater; dy += 1) {
+        for (let dx = -1; dx <= 1 && !adjacentWater; dx += 1) {
+          if (dx === 0 && dy === 0) continue;
+          const neighbor = grid.tiles[y + dy]?.[x + dx];
+          if (neighbor && neighbor.t === 'water') adjacentWater = true;
+        }
+      }
+      if (adjacentWater) {
+        tile.t = 'ground';
+        changed = true;
+      }
+    }
+  }
+  return grid;
+}
+
 function setBuildingOccupancy(grid, buildingId, x, y, width, height) {
   for (let dy = 0; dy < height; dy += 1) {
     for (let dx = 0; dx < width; dx += 1) {
@@ -139,6 +172,7 @@ module.exports = {
   isObstacleTile,
   isWaterTile,
   canPlace,
+  sanitizeGrid,
   setBuildingOccupancy,
   clearBuildingOccupancy,
   expandGrid,

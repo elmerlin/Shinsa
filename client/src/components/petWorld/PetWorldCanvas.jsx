@@ -591,71 +591,115 @@ function isTileWalkable(grid, tx, ty) {
 }
 
 /**
- * Deterministic land-aware animal wander.
- * Animals spend ~70% of time idle and ~30% walking short distances.
- * Movement checks walkability so animals stay on valid ground.
+ * Deterministic land-aware animal wander with multi-state behaviour.
+ * State machine: idle → look-around → walk → pause → walk → idle
+ * Each period is split into sub-phases for more natural movement.
  */
 function getAnimalWanderPos(entity, time, grid) {
-  const period = entity.period || 8000; // slower cycle — more natural
+  const period = entity.period || 8000;
   const step = Math.floor(time / period);
   const seed = entity.seed || 0;
 
-  // Deterministic hash for this step
+  // Deterministic hash for this step and next
   const hash = (seed * 2654435761 + step * 2246822519) >>> 0;
   const nextHash = (seed * 2654435761 + (step + 1) * 2246822519) >>> 0;
 
-  // Current & next target offset from home (small: 0 or ±1 tile)
+  // Movement offset: ~35% chance of moving, wider range, grid-aware
   const getOffset = (h) => {
-    const idle = (h % 10) >= 1; // ~90% idle, 10% walking — mostly still
-    if (idle) return { dx: 0, dy: 0 };
-    const dx = ((h >> 4) % 3) - 1;
-    const dy = ((h >> 6) % 3) - 1;
-    return { dx: dx * 0.2, dy: dy * 0.15 };
+    const roll = h % 20;
+    if (roll >= 7) return { dx: 0, dy: 0 }; // 65% idle
+    const dx = ((h >> 4) % 5) - 2; // range: -2 to 2
+    const dy = ((h >> 7) % 5) - 2;
+    // Scale to sub-tile offsets
+    return { dx: dx * 0.14, dy: dy * 0.12 };
   };
 
   const from = getOffset(hash);
   const to = getOffset(nextHash);
 
-  // Validate target tiles against grid walkability
+  // Validate against grid walkability
   if (grid) {
     const homeX = Math.floor(entity.x);
     const homeY = Math.floor(entity.y);
-    if (!isTileWalkable(grid, homeX + Math.round(from.dx / 0.2), homeY + Math.round(from.dy / 0.15))) { from.dx = 0; from.dy = 0; }
-    if (!isTileWalkable(grid, homeX + Math.round(to.dx / 0.2), homeY + Math.round(to.dy / 0.15))) { to.dx = 0; to.dy = 0; }
+    const tileFromX = homeX + (from.dx > 0 ? Math.ceil(from.dx / 0.14) : Math.floor(from.dx / 0.14));
+    const tileFromY = homeY + (from.dy > 0 ? Math.ceil(from.dy / 0.12) : Math.floor(from.dy / 0.12));
+    const tileToX = homeX + (to.dx > 0 ? Math.ceil(to.dx / 0.14) : Math.floor(to.dx / 0.14));
+    const tileToY = homeY + (to.dy > 0 ? Math.ceil(to.dy / 0.12) : Math.floor(to.dy / 0.12));
+    if (!isTileWalkable(grid, tileFromX, tileFromY)) { from.dx = 0; from.dy = 0; }
+    if (!isTileWalkable(grid, tileToX, tileToY)) { to.dx = 0; to.dy = 0; }
   }
 
   const phase = (time % period) / period;
-  let x, y, moving, frameOffset;
-
-  // Slow idle cycle for breathing / shifting animation (~1 cycle per 3s)
   const idleFrame = (time * 0.0003 + seed * 0.1) % 1;
 
-  if (phase < 0.2) {
+  // Multi-phase cycle:
+  // 0.00-0.15  idle at 'from'
+  // 0.15-0.25  "look around" — idle but change facing (uses midHash for facing)
+  // 0.25-0.55  walk from → to (smooth ease in/out)
+  // 0.55-0.65  pause at 'to' — brief stop mid-journey
+  // 0.65-0.85  gentle drift/settle (slight movement around 'to')
+  // 0.85-1.00  idle at 'to'
+
+  const midHash = (hash ^ (nextHash >>> 8)) >>> 0;
+  const lookFacing = [1, -1, 2, -2][midHash % 4];
+
+  let x, y, moving, frameOffset, facing;
+
+  if (phase < 0.15) {
+    // Idle at from
     x = entity.x + from.dx;
     y = entity.y + from.dy;
     moving = false;
     frameOffset = idleFrame;
-  } else if (phase > 0.8) {
+    facing = ((seed % 2) === 0 ? 1 : -1);
+  } else if (phase < 0.25) {
+    // Look around — same position, different facing
+    x = entity.x + from.dx;
+    y = entity.y + from.dy;
+    moving = false;
+    frameOffset = idleFrame;
+    facing = lookFacing;
+  } else if (phase < 0.55) {
+    // Walk from → to with smooth easing
+    const walkT = smoothStep((phase - 0.25) / 0.3);
+    x = entity.x + from.dx + (to.dx - from.dx) * walkT;
+    y = entity.y + from.dy + (to.dy - from.dy) * walkT;
+    const dist = Math.abs(to.dx - from.dx) + Math.abs(to.dy - from.dy);
+    moving = dist > 0.01;
+    frameOffset = moving ? (walkT * 2.5 + seed * 0.07) % 1 : idleFrame;
+    const fdx = to.dx - from.dx;
+    const fdy = to.dy - from.dy;
+    facing = Math.abs(fdx) >= Math.abs(fdy) && Math.abs(fdx) > 0.01
+      ? (fdx >= 0 ? 1 : -1)
+      : Math.abs(fdy) > 0.01
+        ? (fdy >= 0 ? 2 : -2)
+        : lookFacing;
+  } else if (phase < 0.65) {
+    // Brief pause at destination
     x = entity.x + to.dx;
     y = entity.y + to.dy;
     moving = false;
     frameOffset = idleFrame;
+    const fdx = to.dx - from.dx;
+    const fdy = to.dy - from.dy;
+    facing = Math.abs(fdx) >= Math.abs(fdy) ? (fdx >= 0 ? 1 : -1) : (fdy >= 0 ? 2 : -2);
+  } else if (phase < 0.85) {
+    // Gentle settle — tiny drift around 'to' position
+    const settleT = (phase - 0.65) / 0.2;
+    const drift = Math.sin(settleT * Math.PI) * 0.03;
+    x = entity.x + to.dx + drift * ((midHash >> 2) % 2 === 0 ? 1 : -1);
+    y = entity.y + to.dy + drift * ((midHash >> 4) % 2 === 0 ? 1 : -1);
+    moving = false;
+    frameOffset = idleFrame;
+    facing = [1, -1, 2, -2][(midHash >> 6) % 4];
   } else {
-    const t = smoothStep((phase - 0.2) / 0.6);
-    x = entity.x + from.dx + (to.dx - from.dx) * t;
-    y = entity.y + from.dy + (to.dy - from.dy) * t;
-    const actuallyMoving = Math.abs(to.dx - from.dx) > 0.01 || Math.abs(to.dy - from.dy) > 0.01;
-    moving = actuallyMoving;
-    frameOffset = actuallyMoving ? (t * 2 + seed * 0.07) % 1 : idleFrame;
+    // Final idle
+    x = entity.x + to.dx;
+    y = entity.y + to.dy;
+    moving = false;
+    frameOffset = idleFrame;
+    facing = ((seed % 2) === 0 ? 1 : -1);
   }
-
-  const facingDx = to.dx - from.dx;
-  const facingDy = to.dy - from.dy;
-  const facing = Math.abs(facingDx) >= Math.abs(facingDy) && Math.abs(facingDx) > 0.01
-    ? (facingDx >= 0 ? 1 : -1)
-    : Math.abs(facingDy) > 0.01
-      ? (facingDy >= 0 ? 2 : -2)
-      : ((seed % 2) === 0 ? 1 : -1);
 
   return { x, y, frameOffset, facing, moving };
 }
@@ -882,9 +926,9 @@ function buildEncounterSightings(world, terrainRegions, encounters = []) {
   });
 }
 
-/** Deterministic pet position: wanders 1 tile every ~2s based on seed. Grid-aware. */
+/** Deterministic pet position with multi-state wander. Grid-aware. */
 function getPetWanderPos(pet, time, grid) {
-  const period = 2600;
+  const period = 4200; // slower, more pet-like
   const step = Math.floor(time / period);
   const currentHash = (pet.seed * 2654435761 + step * 2246822519) >>> 0;
   const nextHash = (pet.seed * 2654435761 + (step + 1) * 2246822519) >>> 0;
@@ -906,23 +950,42 @@ function getPetWanderPos(pet, time, grid) {
   }
 
   const phase = (time % period) / period;
-  const idleFrame = (time * 0.0003 + pet.seed * 0.1) % 1; // slow idle cycle
+  const idleFrame = (time * 0.0003 + pet.seed * 0.1) % 1;
+  const midHash = (currentHash ^ (nextHash >>> 8)) >>> 0;
+  const scale = 0.44;
 
-  if (phase < 0.18) {
-    return { x: pet.x + from.x * 0.44, y: pet.y + from.y * 0.34, frameOffset: idleFrame, moving: false };
+  // Multi-phase: idle → walk → pause → settle → idle
+  if (phase < 0.2) {
+    return { x: pet.x + from.x * scale, y: pet.y + from.y * 0.34, frameOffset: idleFrame, moving: false };
   }
-  if (phase > 0.82) {
-    return { x: pet.x + to.x * 0.44, y: pet.y + to.y * 0.34, frameOffset: idleFrame, moving: false };
+  if (phase < 0.55) {
+    const t = smoothStep((phase - 0.2) / 0.35);
+    const fx = from.x + (to.x - from.x) * t;
+    const fy = from.y + (to.y - from.y) * t;
+    const dist = Math.abs(to.x - from.x) + Math.abs(to.y - from.y);
+    const isMoving = dist > 0;
+    return {
+      x: pet.x + fx * scale,
+      y: pet.y + fy * 0.34,
+      frameOffset: isMoving ? (t * 2.2 + pet.seed * 0.07) % 1 : idleFrame,
+      moving: isMoving,
+    };
   }
-
-  const travel = smoothStep((phase - 0.18) / 0.64);
-  const actuallyMoving = Math.abs(to.x - from.x) > 0 || Math.abs(to.y - from.y) > 0;
-  return {
-    x: pet.x + (from.x + (to.x - from.x) * travel) * 0.44,
-    y: pet.y + (from.y + (to.y - from.y) * travel) * 0.34,
-    frameOffset: actuallyMoving ? (travel * 1.8 + pet.seed * 0.07) % 1 : idleFrame,
-    moving: actuallyMoving,
-  };
+  if (phase < 0.68) {
+    // Brief pause — pet "sniffs" or looks around
+    return { x: pet.x + to.x * scale, y: pet.y + to.y * 0.34, frameOffset: idleFrame, moving: false };
+  }
+  if (phase < 0.82) {
+    // Settle: tiny drift
+    const drift = Math.sin((phase - 0.68) / 0.14 * Math.PI) * 0.025;
+    return {
+      x: pet.x + to.x * scale + drift * ((midHash % 2) === 0 ? 1 : -1),
+      y: pet.y + to.y * 0.34 + drift * ((midHash >> 2) % 2 === 0 ? 1 : -1),
+      frameOffset: idleFrame,
+      moving: false,
+    };
+  }
+  return { x: pet.x + to.x * scale, y: pet.y + to.y * 0.34, frameOffset: idleFrame, moving: false };
 }
 
 /** Check if all tiles in a footprint are valid for building. */
