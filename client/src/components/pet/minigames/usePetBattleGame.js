@@ -88,6 +88,8 @@ function createInitialState() {
     modeTimer: 0,
     outcome: '',
     victory: false,
+    stageElapsedMs: 0,
+    lastStageBonus: null, // { speed, hp, waveSkip } for banner display
     battlefieldGround: 0,
     _nextId: 1,
   };
@@ -107,6 +109,11 @@ function upgradeCost(level) {
 
 function enemyScale(stage) {
   return 1 + (stage - 1) * 0.3;
+}
+
+// Par time per stage in ms — clearing faster than this earns a speed bonus
+function stageParTime(stage) {
+  return (30 + stage * 6) * 1000; // 36s for stage 1, up to 90s for stage 10
 }
 
 function stageOutcomeScore(stage) {
@@ -257,6 +264,8 @@ function setupStage(state, stage) {
   state.projectiles = [];
   state.fx = [];
   state.modeTimer = 0;
+  state.stageElapsedMs = 0;
+  state.lastStageBonus = null;
   // Reset surviving player units back to player base for the new stage, fully healed
   state.playerUnits.forEach((unit, i) => {
     unit.x = PLAYER_BASE_X + 10 + (i % 3) * 1.2;
@@ -493,6 +502,7 @@ export function tick(state, dt) {
 
   if (state.mode !== 'playing') return state;
 
+  state.stageElapsedMs += dt;
   updateCooldowns(state, dt);
   updateWaveSpawning(state, dt);
   updateUnits(state, dt, state.playerUnits, state.enemyUnits);
@@ -511,7 +521,27 @@ export function tick(state, dt) {
   }
 
   if (state.enemyBaseHp <= 0) {
-    state.score += stageOutcomeScore(state.stage);
+    const stg = state.stage;
+    // Base clear score (unchanged)
+    const baseScore = stageOutcomeScore(stg);
+
+    // Speed bonus — clearing under par time earns up to stage×400 extra
+    const par = stageParTime(stg);
+    const speedRatio = Math.max(0, 1 - state.stageElapsedMs / par);
+    const speedBonus = Math.round(stg * 400 * speedRatio);
+
+    // Base HP bonus — keeping your castle healthy earns up to stage×150
+    const hpRatio = state.playerBaseHp / Math.max(1, state.playerBaseMaxHp);
+    const hpBonus = Math.round(stg * 150 * hpRatio);
+
+    // Wave skip bonus — credit for waves that never spawned (efficient clear)
+    const wavesSkipped = Math.max(0, state.waveCount - state.wave);
+    const waveSkipBonus = wavesSkipped * stg * 80;
+
+    const totalBonus = baseScore + speedBonus + hpBonus + waveSkipBonus;
+    state.score += totalBonus;
+    state.lastStageBonus = { base: baseScore, speed: speedBonus, hp: hpBonus, waveSkip: waveSkipBonus };
+
     state.mode = 'stage_clear';
     state.modeTimer = STAGE_CLEAR_MS;
     state.waveQueue = [];

@@ -107,7 +107,7 @@ export default function PetBattleCanvas({ game, character, reducedMotion }) {
     }
 
     if (state.mode === 'stage_clear') {
-      drawStageClearBanner(ctx, w, h, state.stage);
+      drawStageClearBanner(ctx, w, h, state);
     }
 
     if (state.mode === 'game_over') {

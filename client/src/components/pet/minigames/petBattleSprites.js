@@ -1112,19 +1112,35 @@ export function drawCountdown(ctx, w, h, label) {
   ctx.restore();
 }
 
-export function drawStageClearBanner(ctx, w, h, stage) {
+export function drawStageClearBanner(ctx, w, h, state) {
+  const stage = state.stage;
+  const bonus = state.lastStageBonus;
+  const hasBonus = bonus && (bonus.speed > 0 || bonus.hp > 0 || bonus.waveSkip > 0);
+  const bannerH = hasBonus ? 100 : 64;
+  const bannerY = h * 0.22;
   ctx.fillStyle = 'rgba(0,0,0,0.3)';
-  ctx.fillRect(w * 0.15, h * 0.28, w * 0.7, 64);
+  ctx.fillRect(w * 0.1, bannerY, w * 0.8, bannerH);
   ctx.strokeStyle = '#f7d55b';
   ctx.lineWidth = 2;
-  ctx.strokeRect(w * 0.15, h * 0.28, w * 0.7, 64);
+  ctx.strokeRect(w * 0.1, bannerY, w * 0.8, bannerH);
   ctx.textAlign = 'center';
   ctx.fillStyle = '#ffffff';
   ctx.font = '900 22px system-ui, -apple-system, sans-serif';
-  ctx.fillText(`STAGE ${stage} CLEAR!`, w / 2, h * 0.28 + 26);
-  ctx.fillStyle = '#f7d55b';
-  ctx.font = '700 12px system-ui, -apple-system, sans-serif';
-  ctx.fillText('Marching to the next castle...', w / 2, h * 0.28 + 48);
+  ctx.fillText(`STAGE ${stage} CLEAR!`, w / 2, bannerY + 26);
+  if (hasBonus) {
+    ctx.font = '700 10px monospace';
+    let row = 0;
+    if (bonus.speed > 0) { ctx.fillStyle = '#58e17c'; ctx.fillText(`\u26A1 Speed  +${bonus.speed}`, w / 2, bannerY + 46 + row * 14); row++; }
+    if (bonus.hp > 0)    { ctx.fillStyle = '#60a5fa'; ctx.fillText(`\uD83D\uDEE1\uFE0F  No-hit  +${bonus.hp}`, w / 2, bannerY + 46 + row * 14); row++; }
+    if (bonus.waveSkip > 0) { ctx.fillStyle = '#c084fc'; ctx.fillText(`\uD83D\uDD25 Blitz  +${bonus.waveSkip}`, w / 2, bannerY + 46 + row * 14); row++; }
+    ctx.fillStyle = '#f7d55b';
+    ctx.font = '700 11px system-ui, -apple-system, sans-serif';
+    ctx.fillText('Marching to the next castle...', w / 2, bannerY + bannerH - 10);
+  } else {
+    ctx.fillStyle = '#f7d55b';
+    ctx.font = '700 12px system-ui, -apple-system, sans-serif';
+    ctx.fillText('Marching to the next castle...', w / 2, bannerY + 48);
+  }
   ctx.textAlign = 'left';
 }
 
