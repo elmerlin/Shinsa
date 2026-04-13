@@ -794,12 +794,13 @@ export function drawCuteFantasyPet(ctx, x, y, tileSize, character, frameOffset, 
     const sx = fi * CUSTOM_PET_FW;
     const sy = row * CUSTOM_PET_FH;
 
-    const d = tileSize * 1.1; // slightly larger for chibi visibility
-    dropShadow(ctx, x, y + d * 0.06, d * 0.24, d * 0.08, 0.2);
+    // Match NPC villager size (NPC uses tileSize*1.4 width at 48x64 aspect)
+    const d = tileSize * 1.35;
+    dropShadow(ctx, x, y + tileSize * 0.08, d * 0.22, d * 0.07, 0.2);
     return drawFrame(
       ctx, src,
       sx, sy, CUSTOM_PET_FW, CUSTOM_PET_FH,
-      x - d / 2, y - d * 0.7, d, d,
+      x - d / 2, y - d * 0.82, d, d,
     );
   }
 
