@@ -303,6 +303,22 @@ const PET_MAP = {
   tanuki: 'cow', kitsune: 'duck', usagi: 'sheep', kappa: 'frog',
 };
 
+/* ── Custom pet sprites (PixelLab-generated, 48×48 directional) ── */
+// Sprite sheet layout: 6 cols × 8 rows of 48×48 frames
+//   Rows 0-3: idle (south/north/east/west), 4 frames padded to 6
+//   Rows 4-7: walk (south/north/east/west), 6 frames
+const CUSTOM_PET_FW = 48;
+const CUSTOM_PET_FH = 48;
+const CUSTOM_PET_WALK_FRAMES = 6;
+const CUSTOM_PET_IDLE_FRAMES = 4; // actual frames (padded to 6 in sheet)
+// Direction → row offset (same for idle block 0-3 and walk block 4-7)
+const CUSTOM_PET_DIR = { south: 0, north: 1, east: 2, west: 3 };
+
+const CUSTOM_PETS = {
+  dojocat: { p: 'Pets/Dojocat.png' },
+  buu:     { p: 'Pets/Buu.png' },
+};
+
 /* ── NPC residents (48x64 frame size) ── */
 
 const NPCS = {
@@ -744,10 +760,50 @@ export function drawCuteFantasyCritter(ctx, x, y, tileSize, species, frameOffset
 }
 
 /**
- * Draw pet character using CF animal sprites.
- * Uses idle or walk animation based on moving flag.
+ * Draw pet character.
+ * Custom pets (dojocat, buu) use PixelLab-generated 4-direction sprite sheets.
+ * Other pets fall back to CF animal sprites.
+ *
+ * @param {number} facing - 2=south, -2=north, -1=west, 1=east (or undefined)
  */
-export function drawCuteFantasyPet(ctx, x, y, tileSize, character, frameOffset, moving) {
+export function drawCuteFantasyPet(ctx, x, y, tileSize, character, frameOffset, moving, facing) {
+  // ── Custom pet sprites (directional 48×48) ──
+  const custom = CUSTOM_PETS[character];
+  if (custom) {
+    const src = cfp(custom.p);
+    const entry = getImage(src);
+    if (!entry?.loaded) return true; // suppress fallback while loading
+
+    // Map facing → direction string
+    let dir = 'south';
+    if (facing === -2) dir = 'north';
+    else if (facing === -1) dir = 'west';
+    else if (facing === 1) dir = 'east';
+
+    const dirRow = CUSTOM_PET_DIR[dir];
+    let row, numFrames;
+    if (moving) {
+      row = 4 + dirRow; // walk block starts at row 4
+      numFrames = CUSTOM_PET_WALK_FRAMES;
+    } else {
+      row = dirRow;     // idle block starts at row 0
+      numFrames = CUSTOM_PET_IDLE_FRAMES;
+    }
+
+    const fi = Math.floor(frameOffset * numFrames) % numFrames;
+    const sx = fi * CUSTOM_PET_FW;
+    const sy = row * CUSTOM_PET_FH;
+
+    const d = tileSize * 1.1; // slightly larger for chibi visibility
+    dropShadow(ctx, x, y + d * 0.06, d * 0.24, d * 0.08, 0.2);
+    return drawFrame(
+      ctx, src,
+      sx, sy, CUSTOM_PET_FW, CUSTOM_PET_FH,
+      x - d / 2, y - d * 0.7, d, d,
+    );
+  }
+
+  // ── Fallback: generic CF animal sprites ──
   const mapped = PET_MAP[character];
   if (!mapped) return false;
 
@@ -758,16 +814,13 @@ export function drawCuteFantasyPet(ctx, x, y, tileSize, character, frameOffset, 
   const entry = getImage(src);
   if (!entry?.loaded) return true; // suppress fallback
 
-  // Pick the correct animation row and frame count
   const anim = moving ? an.walk : an.idle;
   const fi = Math.floor(frameOffset * anim.n) % anim.n;
   const sx = fi * 32;
   const sy = anim.row * 32;
 
   const d = tileSize * 0.9;
-
   dropShadow(ctx, x, y + d * 0.08, d * 0.28, d * 0.09, 0.2);
-
   return drawFrame(
     ctx, src,
     sx, sy, 32, 32,

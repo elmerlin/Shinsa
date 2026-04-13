@@ -917,9 +917,22 @@ function getPetWanderPos(pet, time, grid) {
   const midHash = (currentHash ^ (nextHash >>> 8)) >>> 0;
   const scale = 0.44;
 
+  // Compute facing from movement vector (from → to)
+  // 2=south(down), -2=north(up), -1=west(left), 1=east(right)
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  let moveFacing = 2; // default south
+  if (Math.abs(dx) >= Math.abs(dy) && dx !== 0) {
+    moveFacing = dx > 0 ? 1 : -1;
+  } else if (dy !== 0) {
+    moveFacing = dy > 0 ? 2 : -2;
+  }
+  // Idle facing: deterministic from hash so pet doesn't snap direction randomly
+  const idleFacing = [2, 1, -1, -2][(currentHash >>> 12) % 4];
+
   // Multi-phase: idle → walk → pause → settle → idle
   if (phase < 0.2) {
-    return { x: pet.x + from.x * scale, y: pet.y + from.y * 0.34, frameOffset: idleFrame, moving: false };
+    return { x: pet.x + from.x * scale, y: pet.y + from.y * 0.34, frameOffset: idleFrame, moving: false, facing: idleFacing };
   }
   if (phase < 0.55) {
     const t = smoothStep((phase - 0.2) / 0.35);
@@ -932,11 +945,12 @@ function getPetWanderPos(pet, time, grid) {
       y: pet.y + fy * 0.34,
       frameOffset: isMoving ? (t * 2.2 + pet.seed * 0.07) % 1 : idleFrame,
       moving: isMoving,
+      facing: isMoving ? moveFacing : idleFacing,
     };
   }
   if (phase < 0.68) {
-    // Brief pause — pet "sniffs" or looks around
-    return { x: pet.x + to.x * scale, y: pet.y + to.y * 0.34, frameOffset: idleFrame, moving: false };
+    // Brief pause — pet "sniffs" or looks around, keep last move direction
+    return { x: pet.x + to.x * scale, y: pet.y + to.y * 0.34, frameOffset: idleFrame, moving: false, facing: moveFacing };
   }
   if (phase < 0.82) {
     // Settle: tiny drift
@@ -946,9 +960,10 @@ function getPetWanderPos(pet, time, grid) {
       y: pet.y + to.y * 0.34 + drift * ((midHash >> 2) % 2 === 0 ? 1 : -1),
       frameOffset: idleFrame,
       moving: false,
+      facing: moveFacing,
     };
   }
-  return { x: pet.x + to.x * scale, y: pet.y + to.y * 0.34, frameOffset: idleFrame, moving: false };
+  return { x: pet.x + to.x * scale, y: pet.y + to.y * 0.34, frameOffset: idleFrame, moving: false, facing: idleFacing };
 }
 
 /** Check if all tiles in a footprint are valid for building. */
@@ -1377,7 +1392,7 @@ export default function PetWorldCanvas({
       const screenX = wander.x * tileSize - camX + tileSize / 2;
       const screenY = wander.y * tileSize - camY + tileSize * 0.80;
       if (screenX < -tileSize || screenY < -tileSize || screenX > size.width + tileSize || screenY > size.height + tileSize) return;
-      drawPetWander(ctx, screenX, screenY, tileSize, pet.character, wander.frameOffset, wander.moving);
+      drawPetWander(ctx, screenX, screenY, tileSize, pet.character, wander.frameOffset, wander.moving, wander.facing);
     });
 
     encounterSightings.forEach((sighting) => {
