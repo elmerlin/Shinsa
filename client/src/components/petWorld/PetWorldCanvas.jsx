@@ -198,7 +198,7 @@ function expandResidentRoute(points, seed) {
   filtered.forEach((point, index) => {
     const current = {
       ...point,
-      pauseMs: point.pauseMs ?? (point.role === 'work' ? 1700 : point.role === 'home' ? 1400 : 900),
+      pauseMs: point.pauseMs ?? (point.role === 'work' ? 2800 : point.role === 'home' ? 2200 : 1400),
     };
     nodes.push(current);
     const next = filtered[(index + 1) % filtered.length];
@@ -217,7 +217,7 @@ function expandResidentRoute(points, seed) {
         tileX: Math.floor(midX),
         tileY: Math.floor(midY),
         role: 'path',
-        pauseMs: 80 + ((seed + index * 7) % 4) * 60, // brief micro-pause at the turn
+        pauseMs: 200 + ((seed + index * 7) % 4) * 120, // brief micro-pause at the turn
       });
     }
     // For longer journeys (>2 tiles), add an extra midpoint with a brief pause
@@ -232,12 +232,12 @@ function expandResidentRoute(points, seed) {
         tileX: Math.floor(midX2),
         tileY: Math.floor(midY2),
         role: 'path',
-        pauseMs: 120 + ((seed + index * 13) % 5) * 80, // brief hesitation mid-walk
+        pauseMs: 300 + ((seed + index * 13) % 5) * 150, // brief hesitation mid-walk
       });
     }
   });
 
-  const speed = 0.9 + hash01(seed, 7) * 0.45;
+  const speed = 0.55 + hash01(seed, 7) * 0.25; // slower, calmer movement
   return nodes.map((node, index) => {
     const next = nodes[(index + 1) % nodes.length];
     const dx = next.x - node.x;
@@ -334,7 +334,7 @@ function getRouteMotion(entity, time) {
         x: node.x + dx * eased,
         y: node.y + dy * eased,
         frameOffset: node.distance > 0.02
-          ? (strideDistance * 3.2 + entity.seed * 0.13) % 1
+          ? (strideDistance * 2.4 + entity.seed * 0.13) % 1
           : idleFrame,
         facing,
         moving: node.distance > 0.02,
@@ -734,7 +734,11 @@ function getAnimalWanderPos(entity, time, grid) {
     facing = ((seed % 2) === 0 ? 1 : -1);
   }
 
-  return { x, y, frameOffset, facing, moving };
+  // Safety: prevent NaN from propagating — use home position as fallback
+  if (Number.isNaN(x) || Number.isNaN(y)) {
+    return { x: entity.x, y: entity.y, frameOffset: 0, facing: 1, moving: false };
+  }
+  return { x, y, frameOffset: frameOffset || 0, facing: facing || 1, moving: !!moving };
 }
 
 function buildPetPlacements(world) {
@@ -1324,14 +1328,15 @@ export default function PetWorldCanvas({
           se: world.grid.tiles[y + 1]?.[x + 1]?.t || null,
           sw: world.grid.tiles[y + 1]?.[x - 1]?.t || null,
           // Path neighbor flags for Wang grass↔path auto-tiling
-          n_path:  (terrainRegions?.[y - 1]?.[x]?.laneStrength || 0) > 0.12,
-          s_path:  (terrainRegions?.[y + 1]?.[x]?.laneStrength || 0) > 0.12,
-          e_path:  (terrainRegions?.[y]?.[x + 1]?.laneStrength || 0) > 0.12,
-          w_path:  (terrainRegions?.[y]?.[x - 1]?.laneStrength || 0) > 0.12,
-          ne_path: (terrainRegions?.[y - 1]?.[x + 1]?.laneStrength || 0) > 0.12,
-          nw_path: (terrainRegions?.[y - 1]?.[x - 1]?.laneStrength || 0) > 0.12,
-          se_path: (terrainRegions?.[y + 1]?.[x + 1]?.laneStrength || 0) > 0.12,
-          sw_path: (terrainRegions?.[y + 1]?.[x - 1]?.laneStrength || 0) > 0.12,
+          // A tile is "path" if it has high lane strength OR has a path building placed on it
+          n_path:  (terrainRegions?.[y - 1]?.[x]?.laneStrength || 0) > 0.12 || !!terrainRegions?.[y - 1]?.[x]?.isPathBuilding,
+          s_path:  (terrainRegions?.[y + 1]?.[x]?.laneStrength || 0) > 0.12 || !!terrainRegions?.[y + 1]?.[x]?.isPathBuilding,
+          e_path:  (terrainRegions?.[y]?.[x + 1]?.laneStrength || 0) > 0.12 || !!terrainRegions?.[y]?.[x + 1]?.isPathBuilding,
+          w_path:  (terrainRegions?.[y]?.[x - 1]?.laneStrength || 0) > 0.12 || !!terrainRegions?.[y]?.[x - 1]?.isPathBuilding,
+          ne_path: (terrainRegions?.[y - 1]?.[x + 1]?.laneStrength || 0) > 0.12 || !!terrainRegions?.[y - 1]?.[x + 1]?.isPathBuilding,
+          nw_path: (terrainRegions?.[y - 1]?.[x - 1]?.laneStrength || 0) > 0.12 || !!terrainRegions?.[y - 1]?.[x - 1]?.isPathBuilding,
+          se_path: (terrainRegions?.[y + 1]?.[x + 1]?.laneStrength || 0) > 0.12 || !!terrainRegions?.[y + 1]?.[x + 1]?.isPathBuilding,
+          sw_path: (terrainRegions?.[y + 1]?.[x - 1]?.laneStrength || 0) > 0.12 || !!terrainRegions?.[y + 1]?.[x - 1]?.isPathBuilding,
         };
         visibleTiles.push({
           x,

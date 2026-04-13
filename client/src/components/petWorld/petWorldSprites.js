@@ -266,6 +266,7 @@ export function analyzeTerrainGrid(grid, buildings = []) {
         openGround: tile.openGround,
         isWater: tile.isWater,
         isFoliage: tile.isFoliage,
+        isPathBuilding: tile.isPath,
         villageWear,
         waterRatio,
         foliageRatio,
@@ -1593,13 +1594,9 @@ export function drawBuildingSprite(ctx, biome, building, x, y, tileSize, isSelec
   ui._biome = biome;
 
   if (drawCuteFantasyBuilding(ctx, building, x, y, width, height)) {
-    if (type !== 'path') {
-      outline(ctx, x + 1, y + height * 0.16, width - 2, height * 0.74, 'rgba(0,0,0,0.18)');
-    }
+    // No outline — CF sprites have their own pixel-art borders
   } else if (drawKenneyBuilding(ctx, building, x, y, width, height)) {
-    if (type !== 'path') {
-      outline(ctx, x + 1, y + height * 0.16, width - 2, height * 0.74, 'rgba(0,0,0,0.18)');
-    }
+    // No outline — Kenney sprites have clean edges
   } else {
     const drawer = SPRITE_DRAWERS[type];
     if (drawer) {

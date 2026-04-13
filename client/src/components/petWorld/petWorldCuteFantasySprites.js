@@ -128,8 +128,33 @@ const BUILDINGS = {
   path:            { p: 'Tiles/Grass/Path_Middle.png', w: 16, h: 16, tile: true },
 };
 
-/* ── Tree sprites (Medium trees: 96x48, 3 frames at 32x48 each) ── */
+/* ── Tree sprites ── */
+// Big trees: 192x80 → 3 frames at 64x80 each (oak, spruce), 96x80 → birch (1 frame at 96x80)
+// Medium trees: 96x48 → 3 frames at 32x48 each
+// Small trees: 96x64 → 3 frames at 32x64 each (oak), 96x64 (birch/spruce/fruit)
 
+const BIG_TREES = {
+  oak:    { p: 'Trees/Big_Oak_Tree.png',     fw: 64, fh: 80, n: 3 },
+  birch:  { p: 'Trees/Big_Birch_Tree.png',   fw: 32, fh: 80, n: 3 },
+  spruce: { p: 'Trees/Big_Spruce_tree.png',  fw: 64, fh: 80, n: 3 },
+  fruit:  { p: 'Trees/Big_Fruit_Tree.png',   fw: 32, fh: 64, n: 3 },
+};
+
+const MEDIUM_TREES = {
+  oak:    { p: 'Trees/Medium_Oak_Tree.png',   fw: 32, fh: 48, n: 3 },
+  birch:  { p: 'Trees/Medium_Birch_Tree.png', fw: 32, fh: 48, n: 3 },
+  spruce: { p: 'Trees/Medium_Spruce_Tree.png', fw: 32, fh: 48, n: 3 },
+  fruit:  { p: 'Trees/Medium_Fruit_Tree.png', fw: 32, fh: 48, n: 3 },
+};
+
+const SMALL_TREES = {
+  oak:    { p: 'Trees/Small_Oak_Tree.png',    fw: 32, fh: 64, n: 3 },
+  birch:  { p: 'Trees/Small_Birch_Tree.png',  fw: 32, fh: 64, n: 3 },
+  spruce: { p: 'Trees/Small_Spruce_Tree.png', fw: 32, fh: 64, n: 3 },
+  fruit:  { p: 'Trees/Small_Fruit_Tree.png',  fw: 32, fh: 64, n: 3 },
+};
+
+// Legacy alias kept for compatibility
 const TREES = {
   oak:    'Trees/Medium_Oak_Tree.png',
   birch:  'Trees/Medium_Birch_Tree.png',
@@ -209,6 +234,18 @@ const WATER_LILLYPAD_FRAMES = 8;
 // Animated pure water overlay for richer shimmer
 const WATER_MIDDLE_ANIM = 'Tiles/Water/Water_Middle_Anim_1.png';
 const WATER_MIDDLE_FRAMES = 8;
+
+/* ── Animated flower garden sprites ── */
+// Flowers_1-5_Anim.png in Not_Potted = 96x160 = 6cols×10rows of 16x16 frames
+const FLOWER_ANIM_DIR = 'Outdoor decoration/Outdoor_Decor_Animations/Flower_Animations/Not_Potted/';
+const FLOWER_ANIM_FILES = [
+  'Flowers_1_Anim.png', 'Flowers_2_Anim.png', 'Flowers_3_Anim.png',
+  'Flowers_4_Anim.png', 'Flowers_5_Anim.png',
+];
+const FLOWER_ANIM_FW = 16;
+const FLOWER_ANIM_FH = 16;
+const FLOWER_ANIM_COLS = 6;
+const FLOWER_ANIM_ROWS = 10;
 
 /* ── Rock / bush frame positions ── */
 
@@ -332,11 +369,18 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
     const cSW = (w(neighbors.s) || w(neighbors.w) || w(neighbors.sw)) ? 0 : 1;
     const cSE = (w(neighbors.s) || w(neighbors.e) || w(neighbors.se)) ? 0 : 1;
     wangIdx = cNW * 8 + cNE * 4 + cSW * 2 + cSE;
-    const [sx, sy] = WANG_LOOKUP[wangIdx];
-    wangDrawn = drawFrame(ctx, cfp(WANG_WATER_GRASS), sx, sy, 16, 16, x, y, size, size);
-    // NOTE: shore transition tiles (idx < 15) used to return 2 here to skip
-    // procedural shore glow. Now we fall through so shore softening + variation
-    // can render on top before returning.
+    const isShore = wangIdx > 0 && wangIdx < 15;
+    if (isShore) {
+      // Shore transition: draw pure-grass base first, then shore tile at reduced opacity
+      // This softens the harsh red/brown Wang shore edges by letting grass show through
+      const [grassSx, grassSy] = WANG_LOOKUP[15]; // pure grass tile
+      drawFrame(ctx, cfp(WANG_WATER_GRASS), grassSx, grassSy, 16, 16, x, y, size, size);
+      const [sx, sy] = WANG_LOOKUP[wangIdx];
+      wangDrawn = drawFrame(ctx, cfp(WANG_WATER_GRASS), sx, sy, 16, 16, x, y, size, size, undefined, 0.62);
+    } else {
+      const [sx, sy] = WANG_LOOKUP[wangIdx];
+      wangDrawn = drawFrame(ctx, cfp(WANG_WATER_GRASS), sx, sy, 16, 16, x, y, size, size);
+    }
   }
 
   /* ── Fallback placeholder while Wang tileset loads ── */
@@ -351,64 +395,77 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
 
   /* ── Path auto-tiling (grass↔path Wang transitions) ── */
   const laneStrength = terrain?.laneStrength || 0;
-  if (laneStrength > 0.12 && wangIdx === 15 && neighbors) {
+  // Also detect if current tile has a path building placed on it
+  const hasPathBuilding = tile.b != null && terrain?.isPathBuilding;
+  const effectiveLane = hasPathBuilding ? Math.max(laneStrength, 0.85) : laneStrength;
+  if (effectiveLane > 0.12 && neighbors) {
     // Check which neighbors are also path-like
-    const isPath = (dir) => {
-      // We check if the neighbor tile is a path building or has a high lane strength
-      return neighbors[dir + '_path'] || false;
-    };
+    const isPath = (dir) => neighbors[dir + '_path'] || false;
     const pNW = (isPath('n') || isPath('w') || isPath('nw')) ? 1 : 0;
     const pNE = (isPath('n') || isPath('e') || isPath('ne')) ? 1 : 0;
     const pSW = (isPath('s') || isPath('w') || isPath('sw')) ? 1 : 0;
     const pSE = (isPath('s') || isPath('e') || isPath('se')) ? 1 : 0;
     const pathIdx = pNW * 8 + pNE * 4 + pSW * 2 + pSE;
+    const pathAlpha = Math.min(1, effectiveLane * 1.6);
     if (pathIdx > 0) {
       const [psx, psy] = WANG_LOOKUP[pathIdx];
-      // Blend path on top of grass at strength-based opacity
-      const pathAlpha = Math.min(1, laneStrength * 1.6);
       drawFrame(ctx, cfp(WANG_GRASS_PATH), psx, psy, 16, 16, x, y, size, size, undefined, pathAlpha);
-    } else if (laneStrength > 0.3) {
-      // Pure path tile (centre, idx 15 = all corners path)
-      drawFrame(ctx, cfp(WANG_GRASS_PATH), WANG_LOOKUP[15][0], WANG_LOOKUP[15][1], 16, 16, x, y, size, size, undefined, Math.min(1, laneStrength * 1.4));
+    } else if (effectiveLane > 0.2) {
+      // Isolated path tile or centre tile — draw pure path (idx 15)
+      drawFrame(ctx, cfp(WANG_GRASS_PATH), WANG_LOOKUP[15][0], WANG_LOOKUP[15][1], 16, 16, x, y, size, size, undefined, pathAlpha);
     }
   }
 
   /* ── Shore softening on grass-side tiles near water ── */
   const isShoreTransition = wangIdx > 0 && wangIdx < 15;
   if (isShoreTransition && neighbors) {
-    // Soft earthy gradient along water edges to blend the transition
+    // Two-layer shore softening: wide sandy wash + inner grass blend
     ctx.save();
-    const shoreDepth = size * 0.28;
-    const shoreColor = 'rgba(142,126,92,0.18)'; // warm sandy-earth tone
+    const shoreD1 = size * 0.45;  // wide outer wash
+    const shoreD2 = size * 0.25;  // tighter inner blend
+    const sandColor = 'rgba(148,134,98,0.22)';
+    const greenColor = 'rgba(90,138,56,0.12)';
     if (neighbors.n === 'water') {
-      const sg = ctx.createLinearGradient(x, y, x, y + shoreDepth);
-      sg.addColorStop(0, shoreColor); sg.addColorStop(1, 'transparent');
-      ctx.fillStyle = sg; ctx.fillRect(x, y, size, shoreDepth);
+      let sg = ctx.createLinearGradient(x, y, x, y + shoreD1);
+      sg.addColorStop(0, sandColor); sg.addColorStop(1, 'transparent');
+      ctx.fillStyle = sg; ctx.fillRect(x, y, size, shoreD1);
+      sg = ctx.createLinearGradient(x, y + shoreD1 * 0.35, x, y + shoreD1);
+      sg.addColorStop(0, greenColor); sg.addColorStop(1, 'transparent');
+      ctx.fillStyle = sg; ctx.fillRect(x, y + shoreD1 * 0.3, size, shoreD2);
     }
     if (neighbors.s === 'water') {
-      const sg = ctx.createLinearGradient(x, y + size, x, y + size - shoreDepth);
-      sg.addColorStop(0, shoreColor); sg.addColorStop(1, 'transparent');
-      ctx.fillStyle = sg; ctx.fillRect(x, y + size - shoreDepth, size, shoreDepth);
+      let sg = ctx.createLinearGradient(x, y + size, x, y + size - shoreD1);
+      sg.addColorStop(0, sandColor); sg.addColorStop(1, 'transparent');
+      ctx.fillStyle = sg; ctx.fillRect(x, y + size - shoreD1, size, shoreD1);
+      sg = ctx.createLinearGradient(x, y + size - shoreD1 * 0.35, x, y + size - shoreD1);
+      sg.addColorStop(0, greenColor); sg.addColorStop(1, 'transparent');
+      ctx.fillStyle = sg; ctx.fillRect(x, y + size - shoreD1, size, shoreD2);
     }
     if (neighbors.w === 'water') {
-      const sg = ctx.createLinearGradient(x, y, x + shoreDepth, y);
-      sg.addColorStop(0, shoreColor); sg.addColorStop(1, 'transparent');
-      ctx.fillStyle = sg; ctx.fillRect(x, y, shoreDepth, size);
+      let sg = ctx.createLinearGradient(x, y, x + shoreD1, y);
+      sg.addColorStop(0, sandColor); sg.addColorStop(1, 'transparent');
+      ctx.fillStyle = sg; ctx.fillRect(x, y, shoreD1, size);
+      sg = ctx.createLinearGradient(x + shoreD1 * 0.35, y, x + shoreD1, y);
+      sg.addColorStop(0, greenColor); sg.addColorStop(1, 'transparent');
+      ctx.fillStyle = sg; ctx.fillRect(x + shoreD1 * 0.3, y, shoreD2, size);
     }
     if (neighbors.e === 'water') {
-      const sg = ctx.createLinearGradient(x + size, y, x + size - shoreDepth, y);
-      sg.addColorStop(0, shoreColor); sg.addColorStop(1, 'transparent');
-      ctx.fillStyle = sg; ctx.fillRect(x + size - shoreDepth, y, shoreDepth, size);
+      let sg = ctx.createLinearGradient(x + size, y, x + size - shoreD1, y);
+      sg.addColorStop(0, sandColor); sg.addColorStop(1, 'transparent');
+      ctx.fillStyle = sg; ctx.fillRect(x + size - shoreD1, y, shoreD1, size);
+      sg = ctx.createLinearGradient(x + size - shoreD1 * 0.35, y, x + size - shoreD1, y);
+      sg.addColorStop(0, greenColor); sg.addColorStop(1, 'transparent');
+      ctx.fillStyle = sg; ctx.fillRect(x + size - shoreD1, y, shoreD2, size);
     }
     ctx.restore();
   }
 
   /* ── Grass variation on pure-grass and near-pure tiles ── */
-  if (wangIdx >= 13 && laneStrength < 0.2 && tile.t !== 'tree' && tile.t !== 'rock' && tile.t !== 'bush') {
-    // ~45% of tiles get a subtle grass variant overlay for less monotony
-    if (h % 9 < 4) {
+  if (wangIdx >= 13 && effectiveLane < 0.3 && tile.t !== 'tree' && tile.t !== 'rock' && tile.t !== 'bush') {
+    // ~65% of tiles get a subtle grass variant overlay for natural ground variation
+    if (h % 10 < 7) {
       const variantIdx = (h >>> 4) % GRASS_VARIANTS.length;
-      const varAlpha = 0.22 + ((h >>> 7) % 4) * 0.07; // vary opacity per tile
+      const varAlpha = 0.18 + ((h >>> 7) % 5) * 0.06; // vary opacity per tile
       drawFrame(ctx, cfp(GRASS_VARIANTS[variantIdx]), 0, 0, 16, 16, x, y, size, size, undefined, varAlpha);
     }
     // Biome-specific tint overlay for distinct biome feels
@@ -453,16 +510,43 @@ export function drawCuteFantasyTerrain(ctx, biome, tile, x, y, size, seed, terra
 
   if (tile.t === 'tree') {
     const treeType = pick(BIOME_TREES[biome] || BIOME_TREES.grasslands, seed);
-    const file = TREES[treeType];
-    if (!file) return false;
-    const src = cfp(file);
+    if (!treeType) return false;
+
+    // Mix tree sizes: ~25% big, ~50% medium, ~25% small for natural variety
+    const sizeMix = Math.abs(seed >> 3) % 4;
+    let treeData, sizeCategory;
+    if (sizeMix === 0 && BIG_TREES[treeType]) {
+      treeData = BIG_TREES[treeType];
+      sizeCategory = 'big';
+    } else if (sizeMix >= 3 && SMALL_TREES[treeType]) {
+      treeData = SMALL_TREES[treeType];
+      sizeCategory = 'small';
+    } else {
+      treeData = MEDIUM_TREES[treeType];
+      sizeCategory = 'medium';
+    }
+    if (!treeData) return false;
+
+    const src = cfp(treeData.p);
     const entry = getImage(src);
     if (!entry?.loaded) return true; // suppress fallback while loading
-    const fi = Math.abs(seed >> 2) % 3;
-    const treeW = size;
-    const treeH = size * 1.5;
+
+    // Pick frame variant (avoid stump frame 0 on Big trees — that's the small/stump version)
+    let fi = Math.abs(seed >> 2) % treeData.n;
+    if (sizeCategory === 'big' && treeData.n >= 3) fi = 1 + (fi % 2); // use frames 1-2 (full trees)
+
+    const fw = treeData.fw;
+    const fh = treeData.fh;
+    // Scale tree to tile: big trees overhang ~1.8x, medium ~1.5x, small ~1.2x
+    const scaleW = sizeCategory === 'big' ? 1.8 : sizeCategory === 'small' ? 1.0 : 1.2;
+    const scaleH = scaleW * (fh / fw);
+    const treeW = size * scaleW;
+    const treeH = size * scaleH;
+    const drawX = x + (size - treeW) / 2;
+    const drawY = y + size - treeH;
+
     dropShadow(ctx, x + size * 0.5, y + size * 0.9, size * 0.32, size * 0.1, 0.25);
-    return drawFrame(ctx, src, fi * 32, 0, 32, 48, x, y - size * 0.5, treeW, treeH);
+    return drawFrame(ctx, src, fi * fw, 0, fw, fh, drawX, drawY, treeW, treeH);
   }
 
   if (tile.t === 'rock') {
@@ -496,6 +580,11 @@ export function drawCuteFantasyBuilding(ctx, buildingOrType, x, y, width, height
   const b = BUILDINGS[type];
   if (!b) return false;
 
+  // Special: animated flower garden
+  if (type === 'garden') {
+    return drawFlowerGarden(ctx, x, y, width, height);
+  }
+
   const src = cfp(b.p);
 
   if (b.tile) {
@@ -520,6 +609,37 @@ export function drawCuteFantasyBuilding(ctx, buildingOrType, x, y, width, height
   const dy = y + height - dh;
   dropShadow(ctx, dx + dw * 0.5, dy + dh * 0.94, dw * 0.38, dh * 0.06, 0.22);
   return drawImg(ctx, src, dx, dy, dw, dh);
+}
+
+/** Draw a garden as a tiled bed of animated flowers from the CF flower animation sheets. */
+function drawFlowerGarden(ctx, x, y, width, height) {
+  const t = Date.now();
+  const cellSize = Math.min(width, height) / 2; // 2×2 grid of flowers
+  const cols = Math.max(1, Math.round(width / cellSize));
+  const rows = Math.max(1, Math.round(height / cellSize));
+  const cw = width / cols;
+  const ch = height / rows;
+  let anyDrawn = false;
+
+  for (let fy = 0; fy < rows; fy += 1) {
+    for (let fx = 0; fx < cols; fx += 1) {
+      const hash = (fx * 7 + fy * 13 + Math.floor(x) * 3 + Math.floor(y) * 5) & 0xFFFF;
+      // Pick a flower file and a row from it (different flower color)
+      const fileIdx = hash % FLOWER_ANIM_FILES.length;
+      const rowIdx = (hash >> 4) % FLOWER_ANIM_ROWS;
+      // Animate: cycle through the 6 columns as frames
+      const fi = Math.floor((t * 0.002 + hash * 0.1) % FLOWER_ANIM_COLS);
+      const sx = fi * FLOWER_ANIM_FW;
+      const sy = rowIdx * FLOWER_ANIM_FH;
+      const src = cfp(FLOWER_ANIM_DIR + FLOWER_ANIM_FILES[fileIdx]);
+      const dx = x + fx * cw;
+      const dy = y + fy * ch;
+      if (drawFrame(ctx, src, sx, sy, FLOWER_ANIM_FW, FLOWER_ANIM_FH, dx, dy, cw, ch)) {
+        anyDrawn = true;
+      }
+    }
+  }
+  return anyDrawn || true; // return true even while loading to suppress fallback
 }
 
 /**
@@ -563,11 +683,14 @@ export function drawCuteFantasyResident(ctx, x, y, tileSize, paletteKey, activit
   const sx = fi * NPC_FW;
   const sy = row * NPC_FH;
 
-  const dw = tileSize * 0.72;
+  const dw = tileSize * 1.4;
   const dh = dw * (NPC_FH / NPC_FW);
   const bob = activity === 'stroll'
-    ? Math.sin(frameOffset * Math.PI * 2) * tileSize * 0.02
+    ? Math.sin(frameOffset * Math.PI * 2) * tileSize * 0.015
     : 0;
+
+  // Drop shadow under NPC
+  dropShadow(ctx, x, y + tileSize * 0.08, dw * 0.22, dw * 0.07, 0.2);
 
   // Direction-specific rows → no horizontal flip needed
   return drawFrame(
