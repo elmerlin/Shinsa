@@ -319,9 +319,9 @@ function getRouteMotion(entity, time) {
       return {
         x: node.x + dx * eased,
         y: node.y + dy * eased,
-        // Walk frame: use smooth continuous time so animation never jumps/pops
+        // Walk frame: tied to movement progress so stride matches body speed
         frameOffset: node.distance > 0.02
-          ? (time * 0.004 + entity.seed * 0.1) % 1
+          ? (eased * Math.max(node.distance, 0.3) * 3.5 + entity.seed * 0.1) % 1
           : idleFrame,
         facing,
         moving: node.distance > 0.02,
@@ -368,8 +368,8 @@ function getResidentDisplayActivity(resident, motion) {
       return 'play';
     }
     if (motion.anchorKind === 'social') return 'play';
-    if (motion.anchorKind === 'quiet') return 'stroll';
-    return resident.activity || 'stroll';
+    if (motion.anchorKind === 'quiet') return 'idle';
+    return 'idle'; // stopped NPCs with no building → idle animation
   }
 
   if (resident.archetype === 'merchant') return 'carry';
@@ -1359,6 +1359,7 @@ export default function PetWorldCanvas({
         getResidentDisplayActivity(resident, motion),
         motion.frameOffset,
         pose.facing || motion.facing,
+        motion.moving,
       );
       drawResidentInteractionOverlay(ctx, screenX, screenY, tileSize, motion, pose, time);
     });

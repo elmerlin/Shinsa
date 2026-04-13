@@ -200,7 +200,7 @@ const WANG_LOOKUP = [
   [48, 0],  [0, 0],   [16, 48], [0, 48],   // 12-15
 ];
 const WANG_WATER_GRASS = 'Tiles/wang_water_grass.png';
-const WANG_GRASS_PATH  = 'Tiles/wang_grass_path.png';
+const WANG_GRASS_PATH  = 'Tiles/wang_grass_path.png?v=2';
 
 /* ── Grass variation tiles (16x16 each) ── */
 const GRASS_VARIANTS = [
@@ -388,11 +388,14 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
     ctx.fillRect(x, y, size, size);
   }
 
+  /* ── Shore transition flag (computed early — used by path + water sections) ── */
+  const isShoreTransition = wangIdx > 0 && wangIdx < 15;
+
   /* ── Path auto-tiling (grass↔path Wang transitions) ── */
-  // Only render path tiles on actual path buildings or tiles adjacent to paths.
-  // Previous laneStrength-based approach bled cobblestone onto grass near any building.
+  // Only render on actual path buildings or adjacent tiles.
+  // Skip path rendering on shore transition tiles for clean water-edge coherence.
   const hasPathBuilding = tile.b != null && terrain?.isPathBuilding;
-  if (neighbors) {
+  if (neighbors && !isShoreTransition) {
     const isPath = (dir) => neighbors[dir + '_path'] || false;
     const pNW = (isPath('n') || isPath('w') || isPath('nw')) ? 1 : 0;
     const pNE = (isPath('n') || isPath('e') || isPath('ne')) ? 1 : 0;
@@ -400,22 +403,23 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
     const pSE = (isPath('s') || isPath('e') || isPath('se')) ? 1 : 0;
     const pathIdx = pNW * 8 + pNE * 4 + pSW * 2 + pSE;
     if (hasPathBuilding) {
-      // This tile IS a path — draw full path (use neighbor-aware index or pure center)
+      // This tile IS a path — draw full path
       const idx = pathIdx > 0 ? pathIdx : 15;
       const [psx, psy] = WANG_LOOKUP[idx];
       drawFrame(ctx, cfp(WANG_GRASS_PATH), psx, psy, 16, 16, x, y, size, size);
     } else if (pathIdx > 0) {
-      // Adjacent to a path — draw grass↔path transition
+      // Adjacent to a path — slightly reduced alpha for gentle grass↔path blend
       const [psx, psy] = WANG_LOOKUP[pathIdx];
-      drawFrame(ctx, cfp(WANG_GRASS_PATH), psx, psy, 16, 16, x, y, size, size);
+      drawFrame(ctx, cfp(WANG_GRASS_PATH), psx, psy, 16, 16, x, y, size, size, undefined, 0.88);
     }
-    // Tiles with no path building AND no path neighbors: draw nothing (pure grass)
   }
 
-  /* ── Shore transition flag ── */
-  const isShoreTransition = wangIdx > 0 && wangIdx < 15;
-
-  /* ── Grass variation — disabled: the overlay textures created visible square patches ── */
+  /* ── Shore water shimmer — unify water colour with animated deep water ── */
+  if (isShoreTransition) {
+    const shFi = Math.floor((t * 0.003 + h * 0.1) % WATER_CONN_FRAMES);
+    drawFrame(ctx, cfp(WATER_CONN_ANIM), shFi * WATER_CONN_FRAME_W + 16, 16, 16, 16,
+      x, y, size, size, undefined, 0.12);
+  }
 
   /* ── Flower-grass overlays on ~16 % of open ground tiles (NOT on shore tiles) ── */
   if (tile.t !== 'tree' && tile.t !== 'rock' && tile.t !== 'bush' && !isShoreTransition) {
@@ -428,7 +432,7 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
   }
 
   // Return 2 for shore transitions to suppress procedural shore glow in drawTile
-  return (wangIdx > 0 && wangIdx < 15) ? 2 : true;
+  return isShoreTransition ? 2 : true;
 }
 
 /**
@@ -520,7 +524,7 @@ export function drawCuteFantasyBuilding(ctx, buildingOrType, x, y, width, height
 
   // Special: flower garden (both 'garden' and 'flower_bed' building types)
   if (type === 'garden' || type === 'flower_bed') {
-    return drawFlowerGarden(ctx, x, y, width, height);
+    return drawFlowerGarden(ctx, x, y, width, height, buildingOrType);
   }
 
   // Path tiles: don't draw here — the ground layer handles path rendering
@@ -556,35 +560,50 @@ export function drawCuteFantasyBuilding(ctx, buildingOrType, x, y, width, height
   return drawImg(ctx, src, dx, dy, dw, dh);
 }
 
-/* ── PixelLab-generated garden bed sprites ── */
-const GARDEN_BED_48 = OD + '/garden_bed_48.png'; // 48×48 rectangular plot
-const GARDEN_BED_32 = OD + '/garden_bed_32.png'; // 32×32 round patch
+/* ── Flower garden built from Cute Fantasy Flowers.png ── */
+// Flowers.png = 160×160 = 10 cols × 10 rows of 16×16 sprites
+// Colour-row mapping (approximate — rows 2-8 have distinct colours)
+const FLOWER_COLOR_ROWS = { red: 2, pink: 3, yellow: 4, blue: 5 };
+const FLOWER_ROW_MIN = 2;
+const FLOWER_ROW_MAX = 5; // rows 2-5 inclusive (actual flowers, not cacti)
 
-/** Draw a flower garden using PixelLab-generated garden bed sprites. */
-function drawFlowerGarden(ctx, x, y, width, height) {
-  // Pick variant based on position hash — larger gardens get the 48px sprite
-  const hash = (Math.floor(x) * 7 + Math.floor(y) * 13) & 0xFFFF;
-  const useLarge = width >= 28 || height >= 28;
-  const src = cfp(useLarge ? GARDEN_BED_48 : GARDEN_BED_32);
+/** Draw a 2×2 flower bed using actual CF flower sprites (same colour per bed). */
+function drawFlowerGarden(ctx, x, y, width, height, building) {
+  const src = cfp(OD + '/Flowers.png');
   const entry = getImage(src);
   if (!entry?.loaded) return true; // suppress fallback
 
-  // Scale the garden sprite to fill the tile, preserving aspect ratio
-  const imgW = useLarge ? 48 : 32;
-  const imgH = useLarge ? 48 : 32;
-  const sc = Math.min(width / imgW, height / imgH);
-  const dw = imgW * sc;
-  const dh = imgH * sc;
-  const dx = x + (width - dw) / 2;
-  const dy = y + (height - dh) / 2;
+  // Deterministic hash from position
+  const hash = (Math.floor(x) * 7 + Math.floor(y) * 13) & 0xFFFF;
 
-  return drawImg(ctx, src, dx, dy, dw, dh);
+  // Flower colour: from building metadata or deterministic hash
+  const flowerColor = typeof building === 'object'
+    ? (building?.metadata?.flowerColor || building?.flowerColor)
+    : null;
+  const row = flowerColor && FLOWER_COLOR_ROWS[flowerColor] != null
+    ? FLOWER_COLOR_ROWS[flowerColor]
+    : FLOWER_ROW_MIN + (hash % (FLOWER_ROW_MAX - FLOWER_ROW_MIN + 1));
+  const baseCol = 1 + ((hash >>> 4) % 7); // cols 1-7 (varied flower sprites)
+
+  // 2×2 grid — same colour (row), slight column variation for natural look
+  const halfW = width / 2;
+  const halfH = height / 2;
+  const inset = Math.max(1, width * 0.05);
+  for (let fy = 0; fy < 2; fy++) {
+    for (let fx = 0; fx < 2; fx++) {
+      const col = (baseCol + fx + fy * 2) % 10;
+      drawFrame(ctx, src, col * 16, row * 16, 16, 16,
+        x + fx * halfW + inset, y + fy * halfH + inset,
+        halfW - inset * 2, halfH - inset * 2);
+    }
+  }
+  return true;
 }
 
 /**
  * Draw NPC village resident. Returns boolean.
  */
-export function drawCuteFantasyResident(ctx, x, y, tileSize, paletteKey, activity, frameOffset, facing) {
+export function drawCuteFantasyResident(ctx, x, y, tileSize, paletteKey, activity, frameOffset, facing, moving) {
   const file = NPCS[paletteKey];
   if (!file) return false;
 
@@ -595,23 +614,27 @@ export function drawCuteFantasyResident(ctx, x, y, tileSize, paletteKey, activit
   const cols = Math.floor(entry.image.width / NPC_FW);
   const rows = Math.floor(entry.image.height / NPC_FH);
 
+  // Use `moving` flag (not activity string) to pick walk vs idle rows.
+  // This prevents stopped NPCs from using walk animation.
+  const isWalking = !!moving;
+
   // NPC spritesheets: rows 0-3 = walk (down/up/left/right), rows 4-7 = idle (down/up/left/right)
   let row, numFrames;
-  if (activity === 'stroll') {
-    // Walk: pick direction-specific row (0=down, 1=up, 2=left, 3=right)
-    if (facing === 2) row = 0;                              // walk down
-    else if (facing === -2 && rows > 1) row = 1;            // walk up
-    else if (facing === -1 && rows > 2) row = 2;            // walk left
-    else if (facing === 1 && rows > 3) row = 3;             // walk right
-    else row = 0;                                            // default down
+  if (isWalking) {
+    // Walk: direction-specific row (0=down, 1=up, 2=left, 3=right)
+    if (facing === 2) row = 0;
+    else if (facing === -2 && rows > 1) row = 1;
+    else if (facing === -1 && rows > 2) row = 2;
+    else if (facing === 1 && rows > 3) row = 3;
+    else row = 0;
     numFrames = Math.min(cols, 6);
   } else {
-    // Idle: use direction-specific idle row (4=down, 5=up, 6=left, 7=right)
+    // Idle: direction-specific idle row (4=down, 5=up, 6=left, 7=right)
     if (rows > 7) {
-      if (facing === -2) row = 5;         // idle up
-      else if (facing === -1) row = 6;    // idle left
-      else if (facing === 1) row = 7;     // idle right
-      else row = 4;                        // idle down (default)
+      if (facing === -2) row = 5;
+      else if (facing === -1) row = 6;
+      else if (facing === 1) row = 7;
+      else row = 4;
     } else {
       row = rows > 4 ? 4 : 0;
     }
@@ -624,8 +647,9 @@ export function drawCuteFantasyResident(ctx, x, y, tileSize, paletteKey, activit
 
   const dw = tileSize * 1.4;
   const dh = dw * (NPC_FH / NPC_FW);
-  const bob = activity === 'stroll'
-    ? Math.sin(frameOffset * Math.PI * 2) * tileSize * 0.015
+  // Gentle bob only while walking — idle NPCs stay perfectly still
+  const bob = isWalking
+    ? Math.sin(frameOffset * Math.PI * 2) * tileSize * 0.012
     : 0;
 
   // Drop shadow under NPC

@@ -1791,8 +1791,8 @@ const RESIDENT_PALETTES = {
   plum:   { hood: '#8866a2', coat: '#64497d', accent: '#e6dcf3', skin: '#efc8b3', hair: '#4a2c22' },
 };
 
-export function drawVillageResident(ctx, x, y, tileSize, paletteKey, activity = 'stroll', frameOffset = 0, facing = 1) {
-  if (drawCuteFantasyResident(ctx, x, y, tileSize, paletteKey, activity, frameOffset, facing)) {
+export function drawVillageResident(ctx, x, y, tileSize, paletteKey, activity = 'stroll', frameOffset = 0, facing = 1, moving = false) {
+  if (drawCuteFantasyResident(ctx, x, y, tileSize, paletteKey, activity, frameOffset, facing, moving)) {
     return;
   }
   if (drawKenneyResident(ctx, x, y, tileSize, paletteKey, activity, frameOffset, facing)) {
