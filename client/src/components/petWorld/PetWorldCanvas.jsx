@@ -1247,15 +1247,16 @@ export default function PetWorldCanvas({
           se: world.grid.tiles[y + 1]?.[x + 1]?.t || null,
           sw: world.grid.tiles[y + 1]?.[x - 1]?.t || null,
           // Path neighbor flags for Wang grass↔path auto-tiling
-          // A tile is "path" if it has high lane strength OR has a path building placed on it
-          n_path:  (terrainRegions?.[y - 1]?.[x]?.laneStrength || 0) > 0.12 || !!terrainRegions?.[y - 1]?.[x]?.isPathBuilding,
-          s_path:  (terrainRegions?.[y + 1]?.[x]?.laneStrength || 0) > 0.12 || !!terrainRegions?.[y + 1]?.[x]?.isPathBuilding,
-          e_path:  (terrainRegions?.[y]?.[x + 1]?.laneStrength || 0) > 0.12 || !!terrainRegions?.[y]?.[x + 1]?.isPathBuilding,
-          w_path:  (terrainRegions?.[y]?.[x - 1]?.laneStrength || 0) > 0.12 || !!terrainRegions?.[y]?.[x - 1]?.isPathBuilding,
-          ne_path: (terrainRegions?.[y - 1]?.[x + 1]?.laneStrength || 0) > 0.12 || !!terrainRegions?.[y - 1]?.[x + 1]?.isPathBuilding,
-          nw_path: (terrainRegions?.[y - 1]?.[x - 1]?.laneStrength || 0) > 0.12 || !!terrainRegions?.[y - 1]?.[x - 1]?.isPathBuilding,
-          se_path: (terrainRegions?.[y + 1]?.[x + 1]?.laneStrength || 0) > 0.12 || !!terrainRegions?.[y + 1]?.[x + 1]?.isPathBuilding,
-          sw_path: (terrainRegions?.[y + 1]?.[x - 1]?.laneStrength || 0) > 0.12 || !!terrainRegions?.[y + 1]?.[x - 1]?.isPathBuilding,
+          // Only actual path buildings count — ambient laneStrength was bleeding
+          // cobblestone texture onto grass tiles near non-path buildings
+          n_path:  !!terrainRegions?.[y - 1]?.[x]?.isPathBuilding,
+          s_path:  !!terrainRegions?.[y + 1]?.[x]?.isPathBuilding,
+          e_path:  !!terrainRegions?.[y]?.[x + 1]?.isPathBuilding,
+          w_path:  !!terrainRegions?.[y]?.[x - 1]?.isPathBuilding,
+          ne_path: !!terrainRegions?.[y - 1]?.[x + 1]?.isPathBuilding,
+          nw_path: !!terrainRegions?.[y - 1]?.[x - 1]?.isPathBuilding,
+          se_path: !!terrainRegions?.[y + 1]?.[x + 1]?.isPathBuilding,
+          sw_path: !!terrainRegions?.[y + 1]?.[x - 1]?.isPathBuilding,
         };
         visibleTiles.push({
           x,

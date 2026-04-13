@@ -74,12 +74,15 @@ function pick(arr, seed) {
   return arr[Math.abs(seed) % arr.length];
 }
 
+// Subtle contact shadow — thin ground-line instead of floating blob disc
 function dropShadow(ctx, cx, cy, rx, ry, a) {
   ctx.save();
-  ctx.globalAlpha = a ?? 0.22;
+  ctx.globalAlpha = (a ?? 0.22) * 0.35;  // much more subtle
   ctx.fillStyle = '#1a1208';
+  // Flat thin ellipse (ry capped at ~30% of rx) for grounded contact feel
+  const flatRy = Math.max(1, Math.min(ry, rx * 0.3));
   ctx.beginPath();
-  ctx.ellipse(cx, cy, Math.max(1, rx), Math.max(1, ry), 0, 0, Math.PI * 2);
+  ctx.ellipse(cx, cy, Math.max(1, rx * 0.7), flatRy, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 }
@@ -125,6 +128,7 @@ const BUILDINGS = {
   well:            { p: OD + '/Well.png', w: 32, h: 48 },
   park:            { p: OD + '/Fountain.png', w: 32, h: 80 },
   garden:          { p: OD + '/Flowers.png', f: [0, 0, 32, 32] },
+  flower_bed:      { p: OD + '/Flowers.png', f: [0, 0, 32, 32] },
   path:            { p: 'Tiles/Grass/Path_Middle.png', w: 16, h: 16, tile: true },
 };
 
@@ -385,25 +389,27 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
   }
 
   /* ── Path auto-tiling (grass↔path Wang transitions) ── */
-  const laneStrength = terrain?.laneStrength || 0;
+  // Only render path tiles on actual path buildings or tiles adjacent to paths.
+  // Previous laneStrength-based approach bled cobblestone onto grass near any building.
   const hasPathBuilding = tile.b != null && terrain?.isPathBuilding;
-  const effectiveLane = hasPathBuilding ? Math.max(laneStrength, 1.0) : laneStrength;
-  if (effectiveLane > 0.10 && neighbors) {
+  if (neighbors) {
     const isPath = (dir) => neighbors[dir + '_path'] || false;
     const pNW = (isPath('n') || isPath('w') || isPath('nw')) ? 1 : 0;
     const pNE = (isPath('n') || isPath('e') || isPath('ne')) ? 1 : 0;
     const pSW = (isPath('s') || isPath('w') || isPath('sw')) ? 1 : 0;
     const pSE = (isPath('s') || isPath('e') || isPath('se')) ? 1 : 0;
     const pathIdx = pNW * 8 + pNE * 4 + pSW * 2 + pSE;
-    // Path building tiles always render at full opacity
-    const pathAlpha = hasPathBuilding ? 1.0 : Math.min(1, effectiveLane * 1.6);
-    if (pathIdx > 0) {
+    if (hasPathBuilding) {
+      // This tile IS a path — draw full path (use neighbor-aware index or pure center)
+      const idx = pathIdx > 0 ? pathIdx : 15;
+      const [psx, psy] = WANG_LOOKUP[idx];
+      drawFrame(ctx, cfp(WANG_GRASS_PATH), psx, psy, 16, 16, x, y, size, size);
+    } else if (pathIdx > 0) {
+      // Adjacent to a path — draw grass↔path transition
       const [psx, psy] = WANG_LOOKUP[pathIdx];
-      drawFrame(ctx, cfp(WANG_GRASS_PATH), psx, psy, 16, 16, x, y, size, size, undefined, pathAlpha);
-    } else {
-      // Centre / isolated path tile — draw pure path (idx 15 = all corners path)
-      drawFrame(ctx, cfp(WANG_GRASS_PATH), WANG_LOOKUP[15][0], WANG_LOOKUP[15][1], 16, 16, x, y, size, size, undefined, pathAlpha);
+      drawFrame(ctx, cfp(WANG_GRASS_PATH), psx, psy, 16, 16, x, y, size, size);
     }
+    // Tiles with no path building AND no path neighbors: draw nothing (pure grass)
   }
 
   /* ── Shore transition flag ── */
@@ -512,8 +518,8 @@ export function drawCuteFantasyBuilding(ctx, buildingOrType, x, y, width, height
   const b = BUILDINGS[type];
   if (!b) return false;
 
-  // Special: animated flower garden
-  if (type === 'garden') {
+  // Special: flower garden (both 'garden' and 'flower_bed' building types)
+  if (type === 'garden' || type === 'flower_bed') {
     return drawFlowerGarden(ctx, x, y, width, height);
   }
 
