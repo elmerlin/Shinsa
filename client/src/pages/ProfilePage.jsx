@@ -2247,7 +2247,9 @@ export default function ProfilePage() {
   const cabinetShoes = Array.isArray(shoeCabinet?.shoes) ? shoeCabinet.shoes : [];
   const activeCabinetShoes = cabinetShoes.filter((shoe) => !shoe.retired_at);
   const retiredCabinetShoes = cabinetShoes.filter((shoe) => !!shoe.retired_at);
-  const overallProfilePumbility = parseInt(songAnalytics?.pumbility, 10) || parseInt(profile?.pumbility, 10) || 0;
+  const syncedProfilePumbility = parseInt(piuStatus?.pumbility_value, 10) || parseInt(profile?.pumbility, 10) || 0;
+  const computedOverallProfilePumbility = parseInt(songAnalytics?.computed_pumbility, 10) || 0;
+  const overallProfilePumbility = syncedProfilePumbility || computedOverallProfilePumbility || 0;
   const singlesProfilePumbility = parseInt(songAnalytics?.singles_pumbility, 10) || 0;
   const hasSinglesProfilePumbility = singlesProfilePumbility > 0;
   const activeTopProfileMetricMode = topProfileMetricMode === 'singles' && hasSinglesProfilePumbility
@@ -2258,9 +2260,13 @@ export default function ProfilePage() {
         ? 'singles'
         : 'overall';
   const activeTopProfilePumbility = activeTopProfileMetricMode === 'singles' ? singlesProfilePumbility : overallProfilePumbility;
+  const canShowOverallProfilePumbilityBreakdown = computedOverallProfilePumbility > 0
+    && computedOverallProfilePumbility === overallProfilePumbility;
   const activeTopProfilePumbilityRows = activeTopProfileMetricMode === 'singles'
     ? songAnalytics?.pumbility_breakdown?.singles_top50 || []
-    : songAnalytics?.pumbility_breakdown?.overall_top50 || [];
+    : canShowOverallProfilePumbilityBreakdown
+      ? songAnalytics?.pumbility_breakdown?.overall_top50 || []
+      : [];
   const canOpenTopProfilePumbilityModal = activeTopProfilePumbility > 0 && activeTopProfilePumbilityRows.length > 0;
   const pumbilityTopScores = Array.isArray(piuPumbility?.scores) ? piuPumbility.scores : [];
   const pumbilityAvgScore = pumbilityTopScores.length > 0
