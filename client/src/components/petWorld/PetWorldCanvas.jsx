@@ -276,34 +276,21 @@ function getRouteMotion(entity, time) {
   const cycleMs = route.reduce((total, node) => total + node.pauseMs + node.moveMs, 0) || 1;
   let cursor = (time + entity.seed * 173) % cycleMs;
   let lastFacing = route.find((node) => node.facing)?.facing || 1;
-  // Slow idle frame cycle for breathing / subtle shifting animation
-  const idleFrame = (time * 0.0003 + entity.seed * 0.1) % 1;
+  // Very slow idle frame cycle — almost static to prevent any visible jitter
+  const idleFrame = (time * 0.00008 + entity.seed * 0.1) % 1;
 
   for (let index = 0; index < route.length; index += 1) {
     const node = route[index];
     const next = route[(index + 1) % route.length];
     const pauseMs = node.pauseMs || 0;
     if (cursor < pauseMs) {
-      const baseFacing = node.facing || lastFacing || 1;
-      // Loiter: during longer pauses, NPCs look around and shift weight
-      let idleFacing = baseFacing;
-      let loiterX = 0;
-      let loiterY = 0;
-      if (pauseMs > 600) {
-        const pauseProgress = cursor / pauseMs;
-        // Change facing direction 2-3 times during a long pause
-        const facingCycle = Math.floor(pauseProgress * 3);
-        const facingOptions = [baseFacing, baseFacing === 1 ? 2 : -2, baseFacing === -1 ? -2 : 2, baseFacing];
-        idleFacing = facingOptions[facingCycle % facingOptions.length];
-        // Subtle weight-shift drift
-        loiterX = Math.sin(pauseProgress * Math.PI * 2.5 + entity.seed) * 0.02;
-        loiterY = Math.cos(pauseProgress * Math.PI * 1.8 + entity.seed * 0.7) * 0.015;
-      }
+      // Idle: hold position and facing completely stable — no loiter, no drift, no facing changes
+      const stableFacing = node.facing || lastFacing || 1;
       return {
-        x: node.x + loiterX,
-        y: node.y + loiterY,
+        x: node.x,
+        y: node.y,
         frameOffset: idleFrame,
-        facing: idleFacing,
+        facing: stableFacing,
         moving: false,
         paused: true,
         role: node.role || 'path',
@@ -329,12 +316,12 @@ function getRouteMotion(entity, time) {
       } else {
         facing = node.facing || lastFacing || 1;
       }
-      const strideDistance = node.distance * eased;
       return {
         x: node.x + dx * eased,
         y: node.y + dy * eased,
+        // Walk frame: use smooth continuous time so animation never jumps/pops
         frameOffset: node.distance > 0.02
-          ? (strideDistance * 2.4 + entity.seed * 0.13) % 1
+          ? (time * 0.004 + entity.seed * 0.1) % 1
           : idleFrame,
         facing,
         moving: node.distance > 0.02,
@@ -624,121 +611,53 @@ function isTileWalkable(grid, tx, ty) {
 }
 
 /**
- * Deterministic land-aware animal wander with multi-state behaviour.
- * State machine: idle → look-around → walk → pause → walk → idle
- * Each period is split into sub-phases for more natural movement.
+ * Simple, stable animal wander. Uses smooth sine-based drift from home position.
+ * No complex phase transitions = no position jumps or blinking.
  */
 function getAnimalWanderPos(entity, time, grid) {
-  const period = entity.period || 8000;
-  const step = Math.floor(time / period);
   const seed = entity.seed || 0;
+  const period = entity.period || 8000;
 
-  // Deterministic hash for this step and next
-  const hash = (seed * 2654435761 + step * 2246822519) >>> 0;
-  const nextHash = (seed * 2654435761 + (step + 1) * 2246822519) >>> 0;
+  // Slow sinusoidal drift around home position — completely smooth, no phase boundaries
+  const tx = Math.sin(time * 0.0004 + seed * 2.1) * 0.18;
+  const ty = Math.cos(time * 0.00035 + seed * 1.7) * 0.15;
 
-  // Movement offset: ~35% chance of moving, wider range, grid-aware
-  const getOffset = (h) => {
-    const roll = h % 20;
-    if (roll >= 7) return { dx: 0, dy: 0 }; // 65% idle
-    const dx = ((h >> 4) % 5) - 2; // range: -2 to 2
-    const dy = ((h >> 7) % 5) - 2;
-    // Scale to sub-tile offsets
-    return { dx: dx * 0.14, dy: dy * 0.12 };
-  };
-
-  const from = getOffset(hash);
-  const to = getOffset(nextHash);
-
-  // Validate against grid walkability
+  // Determine if the offset tile is walkable; clamp to home if not
+  let dx = tx;
+  let dy = ty;
   if (grid) {
     const homeX = Math.floor(entity.x);
     const homeY = Math.floor(entity.y);
-    const tileFromX = homeX + (from.dx > 0 ? Math.ceil(from.dx / 0.14) : Math.floor(from.dx / 0.14));
-    const tileFromY = homeY + (from.dy > 0 ? Math.ceil(from.dy / 0.12) : Math.floor(from.dy / 0.12));
-    const tileToX = homeX + (to.dx > 0 ? Math.ceil(to.dx / 0.14) : Math.floor(to.dx / 0.14));
-    const tileToY = homeY + (to.dy > 0 ? Math.ceil(to.dy / 0.12) : Math.floor(to.dy / 0.12));
-    if (!isTileWalkable(grid, tileFromX, tileFromY)) { from.dx = 0; from.dy = 0; }
-    if (!isTileWalkable(grid, tileToX, tileToY)) { to.dx = 0; to.dy = 0; }
+    const targetTileX = homeX + Math.round(dx);
+    const targetTileY = homeY + Math.round(dy);
+    if (!isTileWalkable(grid, targetTileX, targetTileY)) {
+      dx = 0;
+      dy = 0;
+    }
   }
 
-  const phase = (time % period) / period;
-  const idleFrame = (time * 0.0003 + seed * 0.1) % 1;
+  // Very slow movement detection — only flag as moving if drift is significant
+  const speed = Math.abs(Math.cos(time * 0.0004 + seed * 2.1) * 0.0004)
+              + Math.abs(Math.sin(time * 0.00035 + seed * 1.7) * 0.00035);
+  const moving = speed > 0.0002;
 
-  // Multi-phase cycle:
-  // 0.00-0.15  idle at 'from'
-  // 0.15-0.25  "look around" — idle but change facing (uses midHash for facing)
-  // 0.25-0.55  walk from → to (smooth ease in/out)
-  // 0.55-0.65  pause at 'to' — brief stop mid-journey
-  // 0.65-0.85  gentle drift/settle (slight movement around 'to')
-  // 0.85-1.00  idle at 'to'
+  // Stable facing based on current drift direction
+  const facing = Math.abs(dx) >= Math.abs(dy)
+    ? (dx >= 0 ? 1 : -1)
+    : (dy >= 0 ? 2 : -2);
 
-  const midHash = (hash ^ (nextHash >>> 8)) >>> 0;
-  const lookFacing = [1, -1, 2, -2][midHash % 4];
+  // Very slow idle frame — almost static
+  const frameOffset = moving
+    ? (time * 0.003 + seed * 0.1) % 1
+    : (time * 0.00008 + seed * 0.1) % 1;
 
-  let x, y, moving, frameOffset, facing;
+  const x = entity.x + dx;
+  const y = entity.y + dy;
 
-  if (phase < 0.15) {
-    // Idle at from
-    x = entity.x + from.dx;
-    y = entity.y + from.dy;
-    moving = false;
-    frameOffset = idleFrame;
-    facing = ((seed % 2) === 0 ? 1 : -1);
-  } else if (phase < 0.25) {
-    // Look around — same position, different facing
-    x = entity.x + from.dx;
-    y = entity.y + from.dy;
-    moving = false;
-    frameOffset = idleFrame;
-    facing = lookFacing;
-  } else if (phase < 0.55) {
-    // Walk from → to with smooth easing
-    const walkT = smoothStep((phase - 0.25) / 0.3);
-    x = entity.x + from.dx + (to.dx - from.dx) * walkT;
-    y = entity.y + from.dy + (to.dy - from.dy) * walkT;
-    const dist = Math.abs(to.dx - from.dx) + Math.abs(to.dy - from.dy);
-    moving = dist > 0.01;
-    frameOffset = moving ? (walkT * 2.5 + seed * 0.07) % 1 : idleFrame;
-    const fdx = to.dx - from.dx;
-    const fdy = to.dy - from.dy;
-    facing = Math.abs(fdx) >= Math.abs(fdy) && Math.abs(fdx) > 0.01
-      ? (fdx >= 0 ? 1 : -1)
-      : Math.abs(fdy) > 0.01
-        ? (fdy >= 0 ? 2 : -2)
-        : lookFacing;
-  } else if (phase < 0.65) {
-    // Brief pause at destination
-    x = entity.x + to.dx;
-    y = entity.y + to.dy;
-    moving = false;
-    frameOffset = idleFrame;
-    const fdx = to.dx - from.dx;
-    const fdy = to.dy - from.dy;
-    facing = Math.abs(fdx) >= Math.abs(fdy) ? (fdx >= 0 ? 1 : -1) : (fdy >= 0 ? 2 : -2);
-  } else if (phase < 0.85) {
-    // Gentle settle — tiny drift around 'to' position
-    const settleT = (phase - 0.65) / 0.2;
-    const drift = Math.sin(settleT * Math.PI) * 0.03;
-    x = entity.x + to.dx + drift * ((midHash >> 2) % 2 === 0 ? 1 : -1);
-    y = entity.y + to.dy + drift * ((midHash >> 4) % 2 === 0 ? 1 : -1);
-    moving = false;
-    frameOffset = idleFrame;
-    facing = [1, -1, 2, -2][(midHash >> 6) % 4];
-  } else {
-    // Final idle
-    x = entity.x + to.dx;
-    y = entity.y + to.dy;
-    moving = false;
-    frameOffset = idleFrame;
-    facing = ((seed % 2) === 0 ? 1 : -1);
-  }
-
-  // Safety: prevent NaN from propagating — use home position as fallback
   if (Number.isNaN(x) || Number.isNaN(y)) {
     return { x: entity.x, y: entity.y, frameOffset: 0, facing: 1, moving: false };
   }
-  return { x, y, frameOffset: frameOffset || 0, facing: facing || 1, moving: !!moving };
+  return { x, y, frameOffset, facing, moving };
 }
 
 function buildPetPlacements(world) {

@@ -369,18 +369,9 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
     const cSW = (w(neighbors.s) || w(neighbors.w) || w(neighbors.sw)) ? 0 : 1;
     const cSE = (w(neighbors.s) || w(neighbors.e) || w(neighbors.se)) ? 0 : 1;
     wangIdx = cNW * 8 + cNE * 4 + cSW * 2 + cSE;
-    const isShore = wangIdx > 0 && wangIdx < 15;
-    if (isShore) {
-      // Shore transition: draw pure-grass base first, then shore tile at reduced opacity
-      // This softens the harsh red/brown Wang shore edges by letting grass show through
-      const [grassSx, grassSy] = WANG_LOOKUP[15]; // pure grass tile
-      drawFrame(ctx, cfp(WANG_WATER_GRASS), grassSx, grassSy, 16, 16, x, y, size, size);
-      const [sx, sy] = WANG_LOOKUP[wangIdx];
-      wangDrawn = drawFrame(ctx, cfp(WANG_WATER_GRASS), sx, sy, 16, 16, x, y, size, size, undefined, 0.62);
-    } else {
-      const [sx, sy] = WANG_LOOKUP[wangIdx];
-      wangDrawn = drawFrame(ctx, cfp(WANG_WATER_GRASS), sx, sy, 16, 16, x, y, size, size);
-    }
+    // Draw Wang tile at full opacity — no grass underlay (that caused green bleed into water)
+    const [sx, sy] = WANG_LOOKUP[wangIdx];
+    wangDrawn = drawFrame(ctx, cfp(WANG_WATER_GRASS), sx, sy, 16, 16, x, y, size, size);
   }
 
   /* ── Fallback placeholder while Wang tileset loads ── */
@@ -395,89 +386,30 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
 
   /* ── Path auto-tiling (grass↔path Wang transitions) ── */
   const laneStrength = terrain?.laneStrength || 0;
-  // Also detect if current tile has a path building placed on it
   const hasPathBuilding = tile.b != null && terrain?.isPathBuilding;
-  const effectiveLane = hasPathBuilding ? Math.max(laneStrength, 0.85) : laneStrength;
-  if (effectiveLane > 0.12 && neighbors) {
-    // Check which neighbors are also path-like
+  const effectiveLane = hasPathBuilding ? Math.max(laneStrength, 1.0) : laneStrength;
+  if (effectiveLane > 0.10 && neighbors) {
     const isPath = (dir) => neighbors[dir + '_path'] || false;
     const pNW = (isPath('n') || isPath('w') || isPath('nw')) ? 1 : 0;
     const pNE = (isPath('n') || isPath('e') || isPath('ne')) ? 1 : 0;
     const pSW = (isPath('s') || isPath('w') || isPath('sw')) ? 1 : 0;
     const pSE = (isPath('s') || isPath('e') || isPath('se')) ? 1 : 0;
     const pathIdx = pNW * 8 + pNE * 4 + pSW * 2 + pSE;
-    const pathAlpha = Math.min(1, effectiveLane * 1.6);
+    // Path building tiles always render at full opacity
+    const pathAlpha = hasPathBuilding ? 1.0 : Math.min(1, effectiveLane * 1.6);
     if (pathIdx > 0) {
       const [psx, psy] = WANG_LOOKUP[pathIdx];
       drawFrame(ctx, cfp(WANG_GRASS_PATH), psx, psy, 16, 16, x, y, size, size, undefined, pathAlpha);
-    } else if (effectiveLane > 0.2) {
-      // Isolated path tile or centre tile — draw pure path (idx 15)
+    } else {
+      // Centre / isolated path tile — draw pure path (idx 15 = all corners path)
       drawFrame(ctx, cfp(WANG_GRASS_PATH), WANG_LOOKUP[15][0], WANG_LOOKUP[15][1], 16, 16, x, y, size, size, undefined, pathAlpha);
     }
   }
 
-  /* ── Shore softening on grass-side tiles near water ── */
+  /* ── Shore transition flag ── */
   const isShoreTransition = wangIdx > 0 && wangIdx < 15;
-  if (isShoreTransition && neighbors) {
-    // Two-layer shore softening: wide sandy wash + inner grass blend
-    ctx.save();
-    const shoreD1 = size * 0.45;  // wide outer wash
-    const shoreD2 = size * 0.25;  // tighter inner blend
-    const sandColor = 'rgba(148,134,98,0.22)';
-    const greenColor = 'rgba(90,138,56,0.12)';
-    if (neighbors.n === 'water') {
-      let sg = ctx.createLinearGradient(x, y, x, y + shoreD1);
-      sg.addColorStop(0, sandColor); sg.addColorStop(1, 'transparent');
-      ctx.fillStyle = sg; ctx.fillRect(x, y, size, shoreD1);
-      sg = ctx.createLinearGradient(x, y + shoreD1 * 0.35, x, y + shoreD1);
-      sg.addColorStop(0, greenColor); sg.addColorStop(1, 'transparent');
-      ctx.fillStyle = sg; ctx.fillRect(x, y + shoreD1 * 0.3, size, shoreD2);
-    }
-    if (neighbors.s === 'water') {
-      let sg = ctx.createLinearGradient(x, y + size, x, y + size - shoreD1);
-      sg.addColorStop(0, sandColor); sg.addColorStop(1, 'transparent');
-      ctx.fillStyle = sg; ctx.fillRect(x, y + size - shoreD1, size, shoreD1);
-      sg = ctx.createLinearGradient(x, y + size - shoreD1 * 0.35, x, y + size - shoreD1);
-      sg.addColorStop(0, greenColor); sg.addColorStop(1, 'transparent');
-      ctx.fillStyle = sg; ctx.fillRect(x, y + size - shoreD1, size, shoreD2);
-    }
-    if (neighbors.w === 'water') {
-      let sg = ctx.createLinearGradient(x, y, x + shoreD1, y);
-      sg.addColorStop(0, sandColor); sg.addColorStop(1, 'transparent');
-      ctx.fillStyle = sg; ctx.fillRect(x, y, shoreD1, size);
-      sg = ctx.createLinearGradient(x + shoreD1 * 0.35, y, x + shoreD1, y);
-      sg.addColorStop(0, greenColor); sg.addColorStop(1, 'transparent');
-      ctx.fillStyle = sg; ctx.fillRect(x + shoreD1 * 0.3, y, shoreD2, size);
-    }
-    if (neighbors.e === 'water') {
-      let sg = ctx.createLinearGradient(x + size, y, x + size - shoreD1, y);
-      sg.addColorStop(0, sandColor); sg.addColorStop(1, 'transparent');
-      ctx.fillStyle = sg; ctx.fillRect(x + size - shoreD1, y, shoreD1, size);
-      sg = ctx.createLinearGradient(x + size - shoreD1 * 0.35, y, x + size - shoreD1, y);
-      sg.addColorStop(0, greenColor); sg.addColorStop(1, 'transparent');
-      ctx.fillStyle = sg; ctx.fillRect(x + size - shoreD1, y, shoreD2, size);
-    }
-    ctx.restore();
-  }
 
-  /* ── Grass variation on pure-grass and near-pure tiles ── */
-  if (wangIdx >= 13 && effectiveLane < 0.3 && tile.t !== 'tree' && tile.t !== 'rock' && tile.t !== 'bush') {
-    // ~65% of tiles get a subtle grass variant overlay for natural ground variation
-    if (h % 10 < 7) {
-      const variantIdx = (h >>> 4) % GRASS_VARIANTS.length;
-      const varAlpha = 0.18 + ((h >>> 7) % 5) * 0.06; // vary opacity per tile
-      drawFrame(ctx, cfp(GRASS_VARIANTS[variantIdx]), 0, 0, 16, 16, x, y, size, size, undefined, varAlpha);
-    }
-    // Biome-specific tint overlay for distinct biome feels
-    const biomeTint = BIOME_TINTS[biome];
-    if (biomeTint && h % 7 < 3) {
-      ctx.save();
-      ctx.globalAlpha = biomeTint.alpha;
-      ctx.fillStyle = biomeTint.color;
-      ctx.fillRect(x, y, size, size);
-      ctx.restore();
-    }
-  }
+  /* ── Grass variation — disabled: the overlay textures created visible square patches ── */
 
   /* ── Flower-grass overlays on ~16 % of open ground tiles (NOT on shore tiles) ── */
   if (tile.t !== 'tree' && tile.t !== 'rock' && tile.t !== 'bush' && !isShoreTransition) {
@@ -531,9 +463,9 @@ export function drawCuteFantasyTerrain(ctx, biome, tile, x, y, size, seed, terra
     const entry = getImage(src);
     if (!entry?.loaded) return true; // suppress fallback while loading
 
-    // Pick frame variant (avoid stump frame 0 on Big trees — that's the small/stump version)
+    // Pick frame variant — skip frame 0 on all multi-frame trees (frame 0 is often a stump/sapling)
     let fi = Math.abs(seed >> 2) % treeData.n;
-    if (sizeCategory === 'big' && treeData.n >= 3) fi = 1 + (fi % 2); // use frames 1-2 (full trees)
+    if (treeData.n >= 3) fi = 1 + (fi % 2); // use frames 1-2 (full tree variants only)
 
     const fw = treeData.fw;
     const fh = treeData.fh;
@@ -585,6 +517,13 @@ export function drawCuteFantasyBuilding(ctx, buildingOrType, x, y, width, height
     return drawFlowerGarden(ctx, x, y, width, height);
   }
 
+  // Path tiles: don't draw here — the ground layer handles path rendering
+  // via Wang grass↔path auto-tiling. Drawing Path_Middle.png here just
+  // creates a flat tan square that overwrites the proper transitions.
+  if (type === 'path') {
+    return true; // claim handled so procedural fallback doesn't kick in
+  }
+
   const src = cfp(b.p);
 
   if (b.tile) {
@@ -611,35 +550,36 @@ export function drawCuteFantasyBuilding(ctx, buildingOrType, x, y, width, height
   return drawImg(ctx, src, dx, dy, dw, dh);
 }
 
-/** Draw a garden as a tiled bed of animated flowers from the CF flower animation sheets. */
+/** Draw a garden using static CF Flowers.png — scattered flower sprites for a natural bed look. */
 function drawFlowerGarden(ctx, x, y, width, height) {
-  const t = Date.now();
-  const cellSize = Math.min(width, height) / 2; // 2×2 grid of flowers
-  const cols = Math.max(1, Math.round(width / cellSize));
-  const rows = Math.max(1, Math.round(height / cellSize));
-  const cw = width / cols;
-  const ch = height / rows;
-  let anyDrawn = false;
+  // Flowers.png = 160x160, contains varied 16x16 flower sprites in a grid
+  const src = cfp(OD + '/Flowers.png');
+  const entry = getImage(src);
+  if (!entry?.loaded) return true; // suppress fallback
 
-  for (let fy = 0; fy < rows; fy += 1) {
-    for (let fx = 0; fx < cols; fx += 1) {
-      const hash = (fx * 7 + fy * 13 + Math.floor(x) * 3 + Math.floor(y) * 5) & 0xFFFF;
-      // Pick a flower file and a row from it (different flower color)
-      const fileIdx = hash % FLOWER_ANIM_FILES.length;
-      const rowIdx = (hash >> 4) % FLOWER_ANIM_ROWS;
-      // Animate: cycle through the 6 columns as frames
-      const fi = Math.floor((t * 0.002 + hash * 0.1) % FLOWER_ANIM_COLS);
-      const sx = fi * FLOWER_ANIM_FW;
-      const sy = rowIdx * FLOWER_ANIM_FH;
-      const src = cfp(FLOWER_ANIM_DIR + FLOWER_ANIM_FILES[fileIdx]);
-      const dx = x + fx * cw;
-      const dy = y + fy * ch;
-      if (drawFrame(ctx, src, sx, sy, FLOWER_ANIM_FW, FLOWER_ANIM_FH, dx, dy, cw, ch)) {
-        anyDrawn = true;
-      }
-    }
+  // Draw a soft green bed background first
+  ctx.save();
+  ctx.fillStyle = '#5a9a3a';
+  ctx.globalAlpha = 0.35;
+  ctx.beginPath();
+  ctx.roundRect(x + 1, y + 1, width - 2, height - 2, 3);
+  ctx.fill();
+  ctx.restore();
+
+  // Scatter multiple flower sprites across the garden footprint
+  const hash = (Math.floor(x) * 7 + Math.floor(y) * 13) & 0xFFFF;
+  const count = Math.max(4, Math.round((width * height) / 200));
+  for (let i = 0; i < count; i += 1) {
+    const ih = (hash + i * 37) & 0xFFFF;
+    // Pick from the Flowers.png grid (10 cols × 10 rows of 16x16)
+    const col = ih % 10;
+    const row = (ih >> 4) % 10;
+    const fSize = Math.min(width, height) * (0.35 + ((ih >> 8) % 3) * 0.08);
+    const fx = x + ((ih >> 2) % 100) / 100 * (width - fSize);
+    const fy = y + ((ih >> 6) % 100) / 100 * (height - fSize);
+    drawFrame(ctx, src, col * 16, row * 16, 16, 16, fx, fy, fSize, fSize);
   }
-  return anyDrawn || true; // return true even while loading to suppress fallback
+  return true;
 }
 
 /**
