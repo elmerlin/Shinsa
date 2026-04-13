@@ -1179,10 +1179,15 @@ export default function PetWorldCanvas({
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, size.width, size.height);
 
-    const startX = Math.max(0, Math.floor(camera.x / tileSize));
-    const startY = Math.max(0, Math.floor(camera.y / tileSize));
-    const endX = Math.min(world.grid.w, Math.ceil((camera.x + size.width) / tileSize) + 1);
-    const endY = Math.min(world.grid.h, Math.ceil((camera.y + size.height) / tileSize) + 1);
+    // Snap camera to integer pixels — prevents subpixel tile seams and
+    // ensures tileHash is stable (no asset re-rolling during camera pans)
+    const camX = Math.round(camera.x);
+    const camY = Math.round(camera.y);
+
+    const startX = Math.max(0, Math.floor(camX / tileSize));
+    const startY = Math.max(0, Math.floor(camY / tileSize));
+    const endX = Math.min(world.grid.w, Math.ceil((camX + size.width) / tileSize) + 1);
+    const endY = Math.min(world.grid.h, Math.ceil((camY + size.height) / tileSize) + 1);
 
     ctx.fillStyle = '#07121a';
     ctx.fillRect(0, 0, size.width, size.height);
@@ -1192,8 +1197,8 @@ export default function PetWorldCanvas({
       for (let x = startX; x < endX; x += 1) {
         const tile = world.grid.tiles[y]?.[x];
         if (!tile) continue;
-        const screenX = x * tileSize - camera.x;
-        const screenY = y * tileSize - camera.y;
+        const screenX = x * tileSize - camX;
+        const screenY = y * tileSize - camY;
         const neighbors = {
           n:  world.grid.tiles[y - 1]?.[x]?.t || null,
           s:  world.grid.tiles[y + 1]?.[x]?.t || null,
@@ -1216,20 +1221,20 @@ export default function PetWorldCanvas({
       }
     }
 
-    visibleTiles.forEach(({ tile, screenX, screenY, neighbors, terrain }) => {
+    visibleTiles.forEach(({ tile, x: gx, y: gy, screenX, screenY, neighbors, terrain }) => {
       drawTerrainRegion(ctx, world.biome, tile, screenX, screenY, tileSize, terrain, neighbors);
     });
 
-    visibleTiles.forEach(({ tile, screenX, screenY, neighbors, terrain }) => {
-      drawTile(ctx, world.biome, tile, screenX, screenY, tileSize, time, neighbors, terrain);
+    visibleTiles.forEach(({ tile, x: gx, y: gy, screenX, screenY, neighbors, terrain }) => {
+      drawTile(ctx, world.biome, tile, screenX, screenY, tileSize, time, neighbors, terrain, gx, gy);
     });
 
     ambientFauna
       .filter((creature) => creature.layer === 'water')
       .forEach((creature) => {
         const wander = getAnimalWanderPos(creature, time, null); // water creatures skip land checks
-        const screenX = wander.x * tileSize - camera.x + tileSize / 2;
-        const screenY = wander.y * tileSize - camera.y + tileSize * creature.yBias;
+        const screenX = wander.x * tileSize - camX + tileSize / 2;
+        const screenY = wander.y * tileSize - camY + tileSize * creature.yBias;
         if (screenX < -tileSize || screenY < -tileSize || screenX > size.width + tileSize || screenY > size.height + tileSize) return;
         drawAmbientCritter(ctx, screenX, screenY, tileSize, creature.species, wander.frameOffset, {
           scale: creature.scale,
@@ -1241,7 +1246,7 @@ export default function PetWorldCanvas({
     // atmospheric depth: distant tiles (top of grid) slightly hazier
     if (endY > startY) {
       const hazeH = Math.min(size.height * 0.3, (endY - startY) * tileSize * 0.2);
-      const topScreenY = startY * tileSize - camera.y;
+      const topScreenY = startY * tileSize - camY;
       if (topScreenY < size.height * 0.4) {
         ctx.save();
         const hazeGrad = ctx.createLinearGradient(0, Math.max(0, topScreenY), 0, Math.max(0, topScreenY) + hazeH);
@@ -1260,16 +1265,16 @@ export default function PetWorldCanvas({
         resident,
         motion,
         pose,
-        screenX: (motion.x + pose.offsetX) * tileSize - camera.x + tileSize / 2,
-        screenY: (motion.y + pose.offsetY) * tileSize - camera.y + tileSize * 0.82,
+        screenX: (motion.x + pose.offsetX) * tileSize - camX + tileSize / 2,
+        screenY: (motion.y + pose.offsetY) * tileSize - camY + tileSize * 0.82,
       };
     });
     const occupancyCounts = countBuildingOccupants(buildings, residentStates);
 
     // buildings
     buildings.forEach((building) => {
-      const screenX = building.grid_x * tileSize - camera.x;
-      const screenY = building.grid_y * tileSize - camera.y;
+      const screenX = building.grid_x * tileSize - camX;
+      const screenY = building.grid_y * tileSize - camY;
       const width = building.width * tileSize;
       const height = building.height * tileSize;
       if (screenX + width < 0 || screenY + height < 0 || screenX > size.width || screenY > size.height) return;
@@ -1284,8 +1289,8 @@ export default function PetWorldCanvas({
       .filter((creature) => creature.layer !== 'water')
       .forEach((creature) => {
         const wander = getAnimalWanderPos(creature, time, world.grid);
-        const screenX = wander.x * tileSize - camera.x + tileSize / 2;
-        const screenY = wander.y * tileSize - camera.y + tileSize * creature.yBias;
+        const screenX = wander.x * tileSize - camX + tileSize / 2;
+        const screenY = wander.y * tileSize - camY + tileSize * creature.yBias;
         if (screenX < -tileSize || screenY < -tileSize || screenX > size.width + tileSize || screenY > size.height + tileSize) return;
         drawAmbientCritter(ctx, screenX, screenY, tileSize, creature.species, wander.frameOffset, {
           scale: creature.scale,
@@ -1312,16 +1317,16 @@ export default function PetWorldCanvas({
     // pet wandering
     petPlacements.forEach((pet) => {
       const wander = getPetWanderPos(pet, time, world.grid);
-      const screenX = wander.x * tileSize - camera.x + tileSize / 2;
-      const screenY = wander.y * tileSize - camera.y + tileSize * 0.80;
+      const screenX = wander.x * tileSize - camX + tileSize / 2;
+      const screenY = wander.y * tileSize - camY + tileSize * 0.80;
       if (screenX < -tileSize || screenY < -tileSize || screenX > size.width + tileSize || screenY > size.height + tileSize) return;
       drawPetWander(ctx, screenX, screenY, tileSize, pet.character, wander.frameOffset, wander.moving);
     });
 
     encounterSightings.forEach((sighting) => {
       const wander = getAnimalWanderPos(sighting, time, world.grid);
-      const screenX = wander.x * tileSize - camera.x + tileSize / 2;
-      const screenY = wander.y * tileSize - camera.y + tileSize * sighting.yBias;
+      const screenX = wander.x * tileSize - camX + tileSize / 2;
+      const screenY = wander.y * tileSize - camY + tileSize * sighting.yBias;
       if (screenX < -tileSize || screenY < -tileSize || screenX > size.width + tileSize || screenY > size.height + tileSize) return;
       drawAmbientCritter(ctx, screenX, screenY, tileSize, sighting.species, wander.frameOffset, {
         scale: sighting.scale,
@@ -1334,7 +1339,7 @@ export default function PetWorldCanvas({
     // selection outline on selected tile
     if (selectedTile && selectedTile.x >= 0 && selectedTile.y >= 0) {
       const color = pendingBuildType ? 'rgba(110,231,183,0.9)' : 'rgba(80,220,255,0.95)';
-      drawSelectionOutline(ctx, selectedTile.x * tileSize - camera.x, selectedTile.y * tileSize - camera.y, tileSize, tileSize, color, time);
+      drawSelectionOutline(ctx, selectedTile.x * tileSize - camX, selectedTile.y * tileSize - camY, tileSize, tileSize, color, time);
     }
 
     // ghost footprint for pending build
@@ -1344,7 +1349,7 @@ export default function PetWorldCanvas({
       const gx = ghostTile.x;
       const gy = ghostTile.y;
       const valid = isPlacementValid(world.grid, gx, gy, bSize.width, bSize.height, pendingBuildType);
-      drawGhostFootprint(ctx, gx * tileSize - camera.x, gy * tileSize - camera.y, tileSize, bSize.width, bSize.height, valid, time);
+      drawGhostFootprint(ctx, gx * tileSize - camX, gy * tileSize - camY, tileSize, bSize.width, bSize.height, valid, time);
     }
 
     if (placementBurst) {
@@ -1352,8 +1357,8 @@ export default function PetWorldCanvas({
       const burstDuration = reduceMotion ? 120 : 760;
       if (elapsed >= 0 && elapsed < burstDuration) {
         const progress = elapsed / burstDuration;
-        const burstX = placementBurst.x * tileSize - camera.x;
-        const burstY = placementBurst.y * tileSize - camera.y;
+        const burstX = placementBurst.x * tileSize - camX;
+        const burstY = placementBurst.y * tileSize - camY;
         const burstW = (placementBurst.width || 1) * tileSize;
         const burstH = (placementBurst.height || 1) * tileSize;
         const spread = progress * tileSize * 0.8;

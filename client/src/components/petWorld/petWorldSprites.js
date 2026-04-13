@@ -387,13 +387,14 @@ function shadedRoof(ctx, x1, y1, peakX, peakY, x2, y2, color) {
 
 // --- tile drawing ---
 
-export function drawTile(ctx, biome, tile, x, y, tileSize, time = 0, neighbors, terrain) {
+export function drawTile(ctx, biome, tile, x, y, tileSize, time = 0, neighbors, terrain, gx, gy) {
   const palette = getTilePalette(biome, tile.t);
   const biomeUi = getBiomeUi(biome);
   const s = tileSize;
   const ix = Math.round(x);
   const iy = Math.round(y);
-  const h = tileHash(ix, iy);
+  // Hash from WORLD GRID coords (stable) — never from screen coords (which shift with camera)
+  const h = tileHash(gx ?? ix, gy ?? iy);
   const grounds = biomeUi.ground;
   const groundDark = biomeUi.groundDark;
   const groundMid = biomeUi.groundMid;
