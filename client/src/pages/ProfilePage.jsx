@@ -1483,6 +1483,7 @@ export default function ProfilePage() {
         syncPumbility().catch(() => null),
         syncRecentlyPlayed().catch(() => null),
       ]).then(() => {
+        getUserProfile(profileId).then((data) => { if (data) setProfile(data); }).catch(() => {});
         getPiugamePumbility(profileId).then(setPiuPumbility).catch(() => {});
         getPiugameBestScores(profileId).then(setPiuBestScores).catch(() => {});
         getPiugameTitles(profileId).then(setPiuTitles).catch(() => {});
@@ -1644,6 +1645,7 @@ export default function ProfilePage() {
     try {
       await syncRecentlyPlayed();
       await Promise.all([
+        getUserProfile(profileId).then((data) => { if (data) setProfile(data); }).catch(() => {}),
         (tab === 'recently-played' || piuRecentlyPlayed
           ? getPiugameRecentlyPlayed(profileId, { sort: 'desc' }).then(setPiuRecentlyPlayed).catch(() => {})
           : Promise.resolve()),

@@ -372,6 +372,7 @@ export default function MyAccountPage() {
         setPiuMessage(`Best scores imported! ${result.scores_count} scores synced!`);
       } else if (type === 'recently-played') {
         result = await syncRecentlyPlayed();
+        await refreshUser();
         setPiuMessage(`Recently played synced! ${result.plays_count} plays, ${result.scores_updated} best scores updated!`);
       }
     } catch (err) {
