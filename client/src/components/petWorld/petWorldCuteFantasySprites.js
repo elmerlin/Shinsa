@@ -550,36 +550,29 @@ export function drawCuteFantasyBuilding(ctx, buildingOrType, x, y, width, height
   return drawImg(ctx, src, dx, dy, dw, dh);
 }
 
-/** Draw a garden using static CF Flowers.png — scattered flower sprites for a natural bed look. */
+/* ── PixelLab-generated garden bed sprites ── */
+const GARDEN_BED_48 = OD + '/garden_bed_48.png'; // 48×48 rectangular plot
+const GARDEN_BED_32 = OD + '/garden_bed_32.png'; // 32×32 round patch
+
+/** Draw a flower garden using PixelLab-generated garden bed sprites. */
 function drawFlowerGarden(ctx, x, y, width, height) {
-  // Flowers.png = 160x160, contains varied 16x16 flower sprites in a grid
-  const src = cfp(OD + '/Flowers.png');
+  // Pick variant based on position hash — larger gardens get the 48px sprite
+  const hash = (Math.floor(x) * 7 + Math.floor(y) * 13) & 0xFFFF;
+  const useLarge = width >= 28 || height >= 28;
+  const src = cfp(useLarge ? GARDEN_BED_48 : GARDEN_BED_32);
   const entry = getImage(src);
   if (!entry?.loaded) return true; // suppress fallback
 
-  // Draw a soft green bed background first
-  ctx.save();
-  ctx.fillStyle = '#5a9a3a';
-  ctx.globalAlpha = 0.35;
-  ctx.beginPath();
-  ctx.roundRect(x + 1, y + 1, width - 2, height - 2, 3);
-  ctx.fill();
-  ctx.restore();
+  // Scale the garden sprite to fill the tile, preserving aspect ratio
+  const imgW = useLarge ? 48 : 32;
+  const imgH = useLarge ? 48 : 32;
+  const sc = Math.min(width / imgW, height / imgH);
+  const dw = imgW * sc;
+  const dh = imgH * sc;
+  const dx = x + (width - dw) / 2;
+  const dy = y + (height - dh) / 2;
 
-  // Scatter multiple flower sprites across the garden footprint
-  const hash = (Math.floor(x) * 7 + Math.floor(y) * 13) & 0xFFFF;
-  const count = Math.max(4, Math.round((width * height) / 200));
-  for (let i = 0; i < count; i += 1) {
-    const ih = (hash + i * 37) & 0xFFFF;
-    // Pick from the Flowers.png grid (10 cols × 10 rows of 16x16)
-    const col = ih % 10;
-    const row = (ih >> 4) % 10;
-    const fSize = Math.min(width, height) * (0.35 + ((ih >> 8) % 3) * 0.08);
-    const fx = x + ((ih >> 2) % 100) / 100 * (width - fSize);
-    const fy = y + ((ih >> 6) % 100) / 100 * (height - fSize);
-    drawFrame(ctx, src, col * 16, row * 16, 16, 16, fx, fy, fSize, fSize);
-  }
-  return true;
+  return drawImg(ctx, src, dx, dy, dw, dh);
 }
 
 /**
