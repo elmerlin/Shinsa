@@ -262,6 +262,30 @@ function generateExpansionChunk({ biome, direction, expansionIndex, width, heigh
     }
     tiles.push(row);
   }
+
+  // Post-generation pass: remove trees/bushes adjacent to water.
+  // Trees on shorelines look unnatural and block visual transitions.
+  for (let y2 = 0; y2 < height; y2 += 1) {
+    for (let x2 = 0; x2 < width; x2 += 1) {
+      const tt = tiles[y2][x2].t;
+      if (tt !== 'tree' && tt !== 'bush') continue;
+      let adjacentWater = false;
+      for (let dy = -1; dy <= 1 && !adjacentWater; dy += 1) {
+        for (let dx = -1; dx <= 1 && !adjacentWater; dx += 1) {
+          if (dx === 0 && dy === 0) continue;
+          const ny = y2 + dy;
+          const nx = x2 + dx;
+          if (ny >= 0 && ny < height && nx >= 0 && nx < width && tiles[ny][nx].t === 'water') {
+            adjacentWater = true;
+          }
+        }
+      }
+      if (adjacentWater) {
+        tiles[y2][x2].t = 'ground';
+      }
+    }
+  }
+
   return tiles;
 }
 

@@ -228,7 +228,11 @@ function expandResidentRoute(points, seed) {
       ...node,
       moveMs: Math.max(360, (distance / speed) * 1000),
       distance,
-      facing: Math.abs(dx) > 0.02 ? (dx >= 0 ? 1 : -1) : null,
+      facing: Math.abs(dx) >= Math.abs(dy) && Math.abs(dx) > 0.02
+        ? (dx >= 0 ? 1 : -1)
+        : Math.abs(dy) > 0.02
+          ? (dy >= 0 ? 2 : -2)
+          : null,
     };
   });
 }
@@ -283,12 +287,22 @@ function getRouteMotion(entity, time) {
       const eased = smoothStep(progress);
       const dx = next.x - node.x;
       const dy = next.y - node.y;
-      const facing = node.facing || lastFacing || 1;
+      // 4-direction facing: derive from actual movement vector
+      let facing;
+      if (Math.abs(dx) >= Math.abs(dy) && Math.abs(dx) > 0.02) {
+        facing = dx >= 0 ? 1 : -1;
+      } else if (Math.abs(dy) > 0.02) {
+        facing = dy >= 0 ? 2 : -2;  // 2 = down, -2 = up
+      } else {
+        facing = node.facing || lastFacing || 1;
+      }
       const strideDistance = node.distance * eased;
       return {
         x: node.x + dx * eased,
         y: node.y + dy * eased,
-        frameOffset: (strideDistance * 1.9 + progress * 1.7 + entity.seed * 0.13) % 1,
+        frameOffset: node.distance > 0.02
+          ? (strideDistance * 3.2 + entity.seed * 0.13) % 1
+          : idleFrame,
         facing,
         moving: node.distance > 0.02,
         paused: false,
@@ -636,7 +650,12 @@ function getAnimalWanderPos(entity, time, grid) {
   }
 
   const facingDx = to.dx - from.dx;
-  const facing = facingDx < -0.01 ? -1 : facingDx > 0.01 ? 1 : ((seed % 2) === 0 ? 1 : -1);
+  const facingDy = to.dy - from.dy;
+  const facing = Math.abs(facingDx) >= Math.abs(facingDy) && Math.abs(facingDx) > 0.01
+    ? (facingDx >= 0 ? 1 : -1)
+    : Math.abs(facingDy) > 0.01
+      ? (facingDy >= 0 ? 2 : -2)
+      : ((seed % 2) === 0 ? 1 : -1);
 
   return { x, y, frameOffset, facing, moving };
 }
@@ -1208,6 +1227,15 @@ export default function PetWorldCanvas({
           nw: world.grid.tiles[y - 1]?.[x - 1]?.t || null,
           se: world.grid.tiles[y + 1]?.[x + 1]?.t || null,
           sw: world.grid.tiles[y + 1]?.[x - 1]?.t || null,
+          // Path neighbor flags for Wang grass↔path auto-tiling
+          n_path:  (terrainRegions?.[y - 1]?.[x]?.laneStrength || 0) > 0.12,
+          s_path:  (terrainRegions?.[y + 1]?.[x]?.laneStrength || 0) > 0.12,
+          e_path:  (terrainRegions?.[y]?.[x + 1]?.laneStrength || 0) > 0.12,
+          w_path:  (terrainRegions?.[y]?.[x - 1]?.laneStrength || 0) > 0.12,
+          ne_path: (terrainRegions?.[y - 1]?.[x + 1]?.laneStrength || 0) > 0.12,
+          nw_path: (terrainRegions?.[y - 1]?.[x - 1]?.laneStrength || 0) > 0.12,
+          se_path: (terrainRegions?.[y + 1]?.[x + 1]?.laneStrength || 0) > 0.12,
+          sw_path: (terrainRegions?.[y + 1]?.[x - 1]?.laneStrength || 0) > 0.12,
         };
         visibleTiles.push({
           x,

@@ -171,6 +171,14 @@ const WANG_LOOKUP = [
   [48, 0],  [0, 0],   [16, 48], [0, 48],   // 12-15
 ];
 const WANG_WATER_GRASS = 'Tiles/wang_water_grass.png';
+const WANG_GRASS_PATH  = 'Tiles/wang_grass_path.png';
+
+/* ── Grass variation tiles (16x16 each) ── */
+const GRASS_VARIANTS = [
+  'Tiles/Grass/Grass_2_Middle.png',
+  'Tiles/Grass/Grass_3_Middle.png',
+  'Tiles/Grass/Grass_4_Middle.png',
+];
 
 /* ── Animated flower-grass overlays ── */
 // Flower_Grass_1-15_Anim.png = 128x16, 8 frames at 16x16 each
@@ -257,7 +265,7 @@ const NPC_FH = 64;
  *   true  = basic ground drawn
  *   2     = Wang shore transition drawn (suppress procedural shore glow)
  */
-export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, seed, time) {
+export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, seed, time, terrain) {
   const h = seed || 0;
   const t = time || 0;
 
@@ -270,25 +278,25 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
       ctx.fillRect(x, y, size, size);
     }
     // Animated shimmer from connected-water tileset (same palette as Wang)
-    // Centre tile of each frame = column 1 row 1 → offset (16, 16) within the 48×80 frame
     const fi = Math.floor((t * 0.003 + h * 0.1) % WATER_CONN_FRAMES);
     drawFrame(ctx, cfp(WATER_CONN_ANIM), fi * WATER_CONN_FRAME_W + 16, 16, 16, 16, x, y, size, size, undefined, 0.3);
     return true;
   }
 
-  /* ── Non-water tiles: Wang auto-tiling for ALL tiles ── */
+  /* ── Non-water tiles: Wang auto-tiling for water↔grass ── */
   let wangDrawn = false;
+  let wangIdx = 15; // default = pure grass
   if (neighbors) {
     const w = (tt) => tt === 'water';
     const cNW = (w(neighbors.n) || w(neighbors.w) || w(neighbors.nw)) ? 0 : 1;
     const cNE = (w(neighbors.n) || w(neighbors.e) || w(neighbors.ne)) ? 0 : 1;
     const cSW = (w(neighbors.s) || w(neighbors.w) || w(neighbors.sw)) ? 0 : 1;
     const cSE = (w(neighbors.s) || w(neighbors.e) || w(neighbors.se)) ? 0 : 1;
-    const idx = cNW * 8 + cNE * 4 + cSW * 2 + cSE;
-    const [sx, sy] = WANG_LOOKUP[idx];
+    wangIdx = cNW * 8 + cNE * 4 + cSW * 2 + cSE;
+    const [sx, sy] = WANG_LOOKUP[wangIdx];
     wangDrawn = drawFrame(ctx, cfp(WANG_WATER_GRASS), sx, sy, 16, 16, x, y, size, size);
     // Shore transition tiles (idx < 15) — tell caller to suppress extra shore glow
-    if (wangDrawn && idx < 15) return 2;
+    if (wangDrawn && wangIdx < 15) return 2;
   }
 
   /* ── Fallback placeholder while Wang tileset loads ── */
@@ -299,6 +307,39 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
       ctx.fillStyle = '#5a8a38';
     }
     ctx.fillRect(x, y, size, size);
+  }
+
+  /* ── Path auto-tiling (grass↔path Wang transitions) ── */
+  const laneStrength = terrain?.laneStrength || 0;
+  if (laneStrength > 0.12 && wangIdx === 15 && neighbors) {
+    // Check which neighbors are also path-like
+    const isPath = (dir) => {
+      // We check if the neighbor tile is a path building or has a high lane strength
+      return neighbors[dir + '_path'] || false;
+    };
+    const pNW = (isPath('n') || isPath('w') || isPath('nw')) ? 1 : 0;
+    const pNE = (isPath('n') || isPath('e') || isPath('ne')) ? 1 : 0;
+    const pSW = (isPath('s') || isPath('w') || isPath('sw')) ? 1 : 0;
+    const pSE = (isPath('s') || isPath('e') || isPath('se')) ? 1 : 0;
+    const pathIdx = pNW * 8 + pNE * 4 + pSW * 2 + pSE;
+    if (pathIdx > 0) {
+      const [psx, psy] = WANG_LOOKUP[pathIdx];
+      // Blend path on top of grass at strength-based opacity
+      const pathAlpha = Math.min(1, laneStrength * 1.6);
+      drawFrame(ctx, cfp(WANG_GRASS_PATH), psx, psy, 16, 16, x, y, size, size, undefined, pathAlpha);
+    } else if (laneStrength > 0.3) {
+      // Pure path tile (centre, idx 15 = all corners path)
+      drawFrame(ctx, cfp(WANG_GRASS_PATH), WANG_LOOKUP[15][0], WANG_LOOKUP[15][1], 16, 16, x, y, size, size, undefined, Math.min(1, laneStrength * 1.4));
+    }
+  }
+
+  /* ── Grass variation on pure-grass tiles ── */
+  if (wangIdx === 15 && laneStrength < 0.2 && tile.t !== 'tree' && tile.t !== 'rock' && tile.t !== 'bush') {
+    // ~30% of tiles get a subtle grass variant overlay
+    if (h % 3 === 0) {
+      const variantIdx = (h >>> 4) % GRASS_VARIANTS.length;
+      drawFrame(ctx, cfp(GRASS_VARIANTS[variantIdx]), 0, 0, 16, 16, x, y, size, size, undefined, 0.35);
+    }
   }
 
   /* ── Flower-grass overlays on ~16 % of open ground tiles ── */
@@ -319,7 +360,16 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
  * Returns true even while image is loading to SUPPRESS procedural fallback
  * (prevents flashing / visual artifacts when sprites pop in).
  */
-export function drawCuteFantasyTerrain(ctx, biome, tile, x, y, size, seed, terrain) {
+export function drawCuteFantasyTerrain(ctx, biome, tile, x, y, size, seed, terrain, neighbors) {
+  // Skip trees/bushes adjacent to water — they look unnatural on shorelines
+  if ((tile.t === 'tree' || tile.t === 'bush') && neighbors) {
+    const nb = neighbors;
+    if (nb.n === 'water' || nb.s === 'water' || nb.e === 'water' || nb.w === 'water'
+      || nb.ne === 'water' || nb.nw === 'water' || nb.se === 'water' || nb.sw === 'water') {
+      return true; // suppress — act as if drawn to prevent procedural fallback
+    }
+  }
+
   if (tile.t === 'tree') {
     const treeType = pick(BIOME_TREES[biome] || BIOME_TREES.grasslands, seed);
     const file = TREES[treeType];
@@ -405,17 +455,26 @@ export function drawCuteFantasyResident(ctx, x, y, tileSize, paletteKey, activit
   const cols = Math.floor(entry.image.width / NPC_FW);
   const rows = Math.floor(entry.image.height / NPC_FH);
 
-  // NPC spritesheets: rows 0-3 = walk (down/up/left/right), row 4+ = idle
+  // NPC spritesheets: rows 0-3 = walk (down/up/left/right), rows 4-7 = idle (down/up/left/right)
   let row, numFrames;
   if (activity === 'stroll') {
-    // Walk: pick direction-specific row
-    if (facing === -1 && rows > 2) row = 2;       // walk left
-    else if (facing === 1 && rows > 3) row = 3;   // walk right
-    else row = 0;                                  // walk down (default)
+    // Walk: pick direction-specific row (0=down, 1=up, 2=left, 3=right)
+    if (facing === 2) row = 0;                              // walk down
+    else if (facing === -2 && rows > 1) row = 1;            // walk up
+    else if (facing === -1 && rows > 2) row = 2;            // walk left
+    else if (facing === 1 && rows > 3) row = 3;             // walk right
+    else row = 0;                                            // default down
     numFrames = Math.min(cols, 6);
   } else {
-    // Idle: use idle row (row 4) with slow frame cycling
-    row = rows > 4 ? 4 : 0;
+    // Idle: use direction-specific idle row (4=down, 5=up, 6=left, 7=right)
+    if (rows > 7) {
+      if (facing === -2) row = 5;         // idle up
+      else if (facing === -1) row = 6;    // idle left
+      else if (facing === 1) row = 7;     // idle right
+      else row = 4;                        // idle down (default)
+    } else {
+      row = rows > 4 ? 4 : 0;
+    }
     numFrames = Math.min(cols, 6);
   }
 

@@ -401,10 +401,10 @@ export function drawTile(ctx, biome, tile, x, y, tileSize, time = 0, neighbors, 
   const terrainInfo = terrain || null;
 
   // Cute Fantasy ground tile overlay (replaces procedural base when loaded)
-  const cfGround = drawCuteFantasyGround(ctx, biome, tile, ix, iy, s, neighbors, h, time);
+  const cfGround = drawCuteFantasyGround(ctx, biome, tile, ix, iy, s, neighbors, h, time, terrainInfo);
 
   if (tile.t === 'tree' || tile.t === 'rock' || tile.t === 'bush') {
-    if (drawCuteFantasyTerrain(ctx, biome, tile, ix, iy, s, h, terrainInfo)) {
+    if (drawCuteFantasyTerrain(ctx, biome, tile, ix, iy, s, h, terrainInfo, neighbors)) {
       return;
     }
     if (drawKenneyTerrain(ctx, biome, tile, ix, iy, s, h, terrainInfo)) {
@@ -552,7 +552,7 @@ export function drawTile(ctx, biome, tile, x, y, tileSize, time = 0, neighbors, 
       const sparkY = iy + s * (0.2 + ((h >> 7) % 5) / 10);
       px(ctx, sparkX, sparkY, 2, 2, '#ffffff', 0.55);
     }
-    drawCuteFantasyTerrain(ctx, biome, tile, ix, iy, s, h, terrainInfo);
+    drawCuteFantasyTerrain(ctx, biome, tile, ix, iy, s, h, terrainInfo, neighbors);
     drawKenneyTerrain(ctx, biome, tile, ix, iy, s, h, terrainInfo);
     drawTerrainAtlasSprite(ctx, biome, tile, ix, iy, s, time, terrainInfo, neighbors, h);
     return;
