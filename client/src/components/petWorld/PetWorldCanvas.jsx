@@ -69,6 +69,8 @@ const ACTIVE_MARKER_BUILDINGS = new Set([
   'shrine',
 ]);
 
+const WALK_BLOCKERS = new Set(['water', 'rock', 'tree', 'bush']);
+
 function getBuildingMap(buildings = []) {
   return new Map(buildings.map((building) => [building.id, building]));
 }
@@ -92,7 +94,7 @@ function findClearTiles(grid) {
     for (let x = 0; x < grid.w; x += 1) {
       const tile = grid.tiles[y]?.[x];
       if (!tile) continue;
-      if (tile.b == null && !['water', 'rock', 'tree', 'bush'].includes(tile.t)) {
+      if (tile.b == null && !WALK_BLOCKERS.has(tile.t)) {
         result.push({ x, y });
       }
     }
@@ -191,51 +193,139 @@ function getBuildingAnchor(building, clearTileMap, clearTiles, terrainRegions) {
   return best;
 }
 
-function expandResidentRoute(points, seed) {
-  const filtered = points.filter(Boolean);
-  if (!filtered.length) return [];
-  const nodes = [];
-  filtered.forEach((point, index) => {
-    const current = {
+function isGridTileWalkable(grid, tx, ty) {
+  if (!grid || tx < 0 || ty < 0 || tx >= grid.w || ty >= grid.h) return false;
+  const tile = grid.tiles[ty]?.[tx];
+  if (!tile) return false;
+  if (tile.b != null) return false;
+  if (WALK_BLOCKERS.has(tile.t)) return false;
+  return true;
+}
+
+function getPathDirections(seed) {
+  const dirs = [
+    [1, 0],
+    [0, 1],
+    [-1, 0],
+    [0, -1],
+  ];
+  const offset = Math.abs(seed) % dirs.length;
+  return dirs.slice(offset).concat(dirs.slice(0, offset));
+}
+
+function findTilePath(grid, start, goal, seed = 0) {
+  if (!grid || !start || !goal) return null;
+  const sx = Math.floor(start.x);
+  const sy = Math.floor(start.y);
+  const gx = Math.floor(goal.x);
+  const gy = Math.floor(goal.y);
+  if (sx === gx && sy === gy) return [{ x: sx, y: sy }];
+  if (!isGridTileWalkable(grid, sx, sy) || !isGridTileWalkable(grid, gx, gy)) return null;
+
+  const startKey = tileKey(sx, sy);
+  const goalKey = tileKey(gx, gy);
+  const queue = [{ x: sx, y: sy }];
+  const previous = new Map([[startKey, null]]);
+
+  for (let cursor = 0; cursor < queue.length; cursor += 1) {
+    const current = queue[cursor];
+    if (current.x === gx && current.y === gy) break;
+    const dirs = getPathDirections(seed + current.x * 17 + current.y * 31);
+    dirs.forEach(([dx, dy]) => {
+      const nx = current.x + dx;
+      const ny = current.y + dy;
+      const key = tileKey(nx, ny);
+      if (previous.has(key)) return;
+      if (!isGridTileWalkable(grid, nx, ny)) return;
+      previous.set(key, current);
+      queue.push({ x: nx, y: ny });
+    });
+  }
+
+  if (!previous.has(goalKey)) return null;
+
+  const path = [];
+  let cursor = { x: gx, y: gy };
+  while (cursor) {
+    path.push(cursor);
+    cursor = previous.get(tileKey(cursor.x, cursor.y));
+  }
+  return path.reverse();
+}
+
+function makeRouteNode(x, y, tileX, tileY, role = 'path', pauseMs = 0, meta = null) {
+  return {
+    x,
+    y,
+    tileX,
+    tileY,
+    role,
+    pauseMs,
+    buildingType: meta?.buildingType || null,
+    anchorKind: meta?.anchorKind || null,
+    buildingId: meta?.buildingId || null,
+  };
+}
+
+function pushRouteNode(nodes, node) {
+  const last = nodes[nodes.length - 1];
+  if (
+    last
+    && Math.abs(last.x - node.x) < 0.001
+    && Math.abs(last.y - node.y) < 0.001
+    && last.tileX === node.tileX
+    && last.tileY === node.tileY
+  ) {
+    nodes[nodes.length - 1] = { ...last, ...node };
+    return;
+  }
+  nodes.push(node);
+}
+
+function expandResidentRoute(points, seed, grid) {
+  const stops = points
+    .filter(Boolean)
+    .map((point) => ({
       ...point,
       pauseMs: point.pauseMs ?? (point.role === 'work' ? 2800 : point.role === 'home' ? 2200 : 1400),
-    };
-    nodes.push(current);
-    const next = filtered[(index + 1) % filtered.length];
-    if (!next) return;
-    const dx = next.x - current.x;
-    const dy = next.y - current.y;
-    const dist = Math.hypot(dx, dy);
-    if (Math.abs(dx) > 0.18 && Math.abs(dy) > 0.18) {
-      // L-shaped path via orthogonal waypoint
-      const viaHorizontalFirst = ((seed + index) % 2) === 0;
-      const midX = viaHorizontalFirst ? next.x : current.x;
-      const midY = viaHorizontalFirst ? current.y : next.y;
-      nodes.push({
-        x: midX,
-        y: midY,
-        tileX: Math.floor(midX),
-        tileY: Math.floor(midY),
-        role: 'path',
-        pauseMs: 200 + ((seed + index * 7) % 4) * 120, // brief micro-pause at the turn
-      });
+      tileX: point.tileX ?? Math.floor(point.x),
+      tileY: point.tileY ?? Math.floor(point.y),
+    }))
+    .filter((point) => isGridTileWalkable(grid, point.tileX, point.tileY));
+  if (!stops.length) return [];
+
+  const nodes = [stops[0]];
+  let current = stops[0];
+  for (let step = 1; step <= stops.length; step += 1) {
+    const next = stops[step % stops.length];
+    const currentCenter = makeRouteNode(current.tileX + 0.5, current.tileY + 0.5, current.tileX, current.tileY, 'path');
+    pushRouteNode(nodes, currentCenter);
+
+    const tilePath = findTilePath(
+      grid,
+      { x: current.tileX, y: current.tileY },
+      { x: next.tileX, y: next.tileY },
+      seed + step * 13,
+    );
+    if (!tilePath?.length) continue;
+
+    tilePath.slice(1).forEach((tile, pathIndex) => {
+      const isGoalTile = pathIndex === tilePath.length - 2;
+      const role = isGoalTile ? next.role : 'path';
+      const pauseMs = isGoalTile ? 0 : (pathIndex > 0 && pathIndex === Math.floor((tilePath.length - 1) / 2)
+        ? 180 + ((seed + step * 7) % 3) * 80
+        : 0);
+      pushRouteNode(
+        nodes,
+        makeRouteNode(tile.x + 0.5, tile.y + 0.5, tile.x, tile.y, role, pauseMs, next),
+      );
+    });
+
+    if (step < stops.length) {
+      pushRouteNode(nodes, next);
+      current = next;
     }
-    // For longer journeys (>2 tiles), add an extra midpoint with a brief pause
-    if (dist > 2.2) {
-      const t = 0.45 + (hash01(seed + index, 11) - 0.5) * 0.15;
-      const midNode = nodes[nodes.length - 1]; // last pushed (could be waypoint or current)
-      const midX2 = midNode.x + (next.x - midNode.x) * t;
-      const midY2 = midNode.y + (next.y - midNode.y) * t;
-      nodes.push({
-        x: midX2,
-        y: midY2,
-        tileX: Math.floor(midX2),
-        tileY: Math.floor(midY2),
-        role: 'path',
-        pauseMs: 300 + ((seed + index * 13) % 5) * 150, // brief hesitation mid-walk
-      });
-    }
-  });
+  }
 
   const speed = 0.55 + hash01(seed, 7) * 0.25; // slower, calmer movement
   return nodes.map((node, index) => {
@@ -362,8 +452,17 @@ function getResidentDisplayActivity(resident, motion) {
   if (!motion) return resident.activity || 'stroll';
   const buildingType = motion.buildingType || resident.workBuildingType || null;
   if (!motion.moving || motion.paused) {
-    if (buildingType && ['farm', 'fishing_hut', 'woodcutters_hut', 'lumberyard', 'quarry', 'stone_pit'].includes(buildingType)) {
-      return 'gather';
+    if (buildingType === 'farm') {
+      return (resident.seed % 2 === 0) ? 'farm_till' : 'farm_water';
+    }
+    if (buildingType === 'fishing_hut') {
+      return 'fish';
+    }
+    if (buildingType && ['woodcutters_hut', 'lumberyard'].includes(buildingType)) {
+      return 'chop';
+    }
+    if (buildingType && ['quarry', 'stone_pit'].includes(buildingType)) {
+      return 'mine';
     }
     if (buildingType && ['market', 'trading_post', 'storehouse', 'warehouse', 'bakery'].includes(buildingType)) {
       return 'carry';
@@ -609,12 +708,7 @@ function drawResidentInteractionOverlay(ctx, screenX, screenY, tileSize, motion,
 
 /** Check if a tile at (tx, ty) is walkable for land animals. */
 function isTileWalkable(grid, tx, ty) {
-  if (!grid || tx < 0 || ty < 0 || tx >= grid.w || ty >= grid.h) return false;
-  const tile = grid.tiles[ty]?.[tx];
-  if (!tile) return false;
-  if (tile.t === 'water' || tile.t === 'tree' || tile.t === 'rock') return false;
-  if (tile.b != null) return false;
-  return true;
+  return isGridTileWalkable(grid, tx, ty);
 }
 
 /**
@@ -787,7 +881,7 @@ function buildResidentPlacements(world, terrainRegions, buildings = []) {
       archetype: residentArchetype,
       workBuildingType: workTile?.buildingType || null,
       seed,
-      route: expandResidentRoute(routePoints, seed),
+      route: expandResidentRoute(routePoints, seed, grid),
       x: tile.x,
       y: tile.y,
     });
@@ -916,19 +1010,14 @@ function getPetWanderPos(pet, time, grid) {
   const idleFrame = (time * 0.0003 + pet.seed * 0.1) % 1;
   const midHash = (currentHash ^ (nextHash >>> 8)) >>> 0;
   const scale = 0.44;
-
-  // Compute facing from movement vector (from → to)
-  // 2=south(down), -2=north(up), -1=west(left), 1=east(right)
-  const dx = to.x - from.x;
-  const dy = to.y - from.y;
-  let moveFacing = 2; // default south
-  if (Math.abs(dx) >= Math.abs(dy) && dx !== 0) {
-    moveFacing = dx > 0 ? 1 : -1;
-  } else if (dy !== 0) {
-    moveFacing = dy > 0 ? 2 : -2;
-  }
-  // Idle facing: deterministic from hash so pet doesn't snap direction randomly
-  const idleFacing = [2, 1, -1, -2][(currentHash >>> 12) % 4];
+  const moveDx = to.x - from.x;
+  const moveDy = to.y - from.y;
+  const moveFacing = Math.abs(moveDx) >= Math.abs(moveDy)
+    ? (moveDx >= 0 ? 1 : -1)
+    : (moveDy >= 0 ? 2 : -2);
+  const idleFacing = Math.abs(to.x) >= Math.abs(to.y)
+    ? (to.x === 0 ? moveFacing : (to.x >= 0 ? 1 : -1))
+    : (to.y === 0 ? moveFacing : (to.y >= 0 ? 2 : -2));
 
   // Multi-phase: idle → walk → pause → settle → idle
   if (phase < 0.2) {

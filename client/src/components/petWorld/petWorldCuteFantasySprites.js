@@ -26,9 +26,14 @@ function getImage(src) {
 /* ═══ Path helper ═══ */
 
 const CF = '/pet-world/cute-fantasy';
+const PIXELLAB = '/pet-world/pixellab';
 
 function cfp(...parts) {
   return (CF + '/' + parts.join('/')).replace(/ /g, '%20');
+}
+
+function pfp(...parts) {
+  return (PIXELLAB + '/' + parts.join('/')).replace(/ /g, '%20');
 }
 
 /* ═══ Draw helpers ═══ */
@@ -316,21 +321,109 @@ const CUSTOM_PET_DIR = { south: 0, north: 1, east: 2, west: 3 };
 
 const CUSTOM_PETS = {
   dojocat: { p: 'Pets/Dojocat.png' },
-  buu:     { p: 'Pets/Buu.png' },
+};
+const PIXELLAB_PETS = {
+  buu: {
+    fw: 68,
+    fh: 68,
+    idleFrames: 4,
+    walkFrames: 6,
+    scale: 1.05,
+    idle: {
+      south: pfp('buu', 'idle_south.png'),
+      north: pfp('buu', 'idle_north.png'),
+      east: pfp('buu', 'idle_east.png'),
+      west: pfp('buu', 'idle_west.png'),
+    },
+    walk: {
+      south: pfp('buu', 'walk_south.png'),
+      north: pfp('buu', 'walk_north.png'),
+      east: pfp('buu', 'walk_east.png'),
+      west: pfp('buu', 'walk_west.png'),
+    },
+  },
 };
 
-/* ── NPC residents (48x64 frame size) ── */
+function petDirFromFacing(facing) {
+  if (facing === -2) return 'north';
+  if (facing === -1) return 'west';
+  if (facing === 1) return 'east';
+  return 'south';
+}
+
+/* ── NPC residents (64x64 frame size) ── */
+
+function dirGroupFromFacing(facing) {
+  if (facing === -2) return 'up';
+  if (facing === -1 || facing === 1) return 'side';
+  return 'down';
+}
+
+function npcRowSet(rows, frameCount = 6) {
+  return {
+    down: { row: rows[0], n: frameCount },
+    side: { row: rows[1], n: frameCount },
+    up: { row: rows[2], n: frameCount },
+  };
+}
 
 const NPCS = {
-  teal:  'NPCs (Premade)/Fisherman_Fin.png',
-  berry: 'NPCs (Premade)/Chef_Chloe.png',
-  ochre: 'NPCs (Premade)/Farmer_Bob.png',
-  slate: 'NPCs (Premade)/Miner_Mike.png',
-  moss:  'NPCs (Premade)/Lumberjack_Jack.png',
-  plum:  'NPCs (Premade)/Bartender_Katy.png',
+  // Premade Cute Fantasy workers are grouped as:
+  // 0-2 idle (down/side/up), 3-5 walk (down/side/up), 6 special downed row,
+  // then profession-specific work rows.
+  teal: {
+    p: 'NPCs (Premade)/Fisherman_Fin.png',
+    idle: npcRowSet([0, 1, 2]),
+    walk: npcRowSet([3, 4, 5]),
+    work: {
+      // Use the calmer second fishing set for looped village work.
+      fish: {
+        down: { row: 10, n: 8 },
+        side: { row: 11, n: 9 },
+        up: { row: 12, n: 8 },
+      },
+    },
+  },
+  berry: {
+    p: 'NPCs (Premade)/Chef_Chloe.png',
+    idle: npcRowSet([0, 1, 2]),
+    walk: npcRowSet([3, 4, 5]),
+    work: {},
+  },
+  ochre: {
+    p: 'NPCs (Premade)/Farmer_Bob.png',
+    idle: npcRowSet([0, 1, 2]),
+    walk: npcRowSet([3, 4, 5]),
+    work: {
+      farm_till: npcRowSet([7, 8, 9]),
+      farm_water: npcRowSet([10, 11, 12]),
+    },
+  },
+  slate: {
+    p: 'NPCs (Premade)/Miner_Mike.png',
+    idle: npcRowSet([0, 1, 2]),
+    walk: npcRowSet([3, 4, 5]),
+    work: {
+      mine: npcRowSet([7, 8, 9]),
+    },
+  },
+  moss: {
+    p: 'NPCs (Premade)/Lumberjack_Jack.png',
+    idle: npcRowSet([0, 1, 2]),
+    walk: npcRowSet([3, 4, 5]),
+    work: {
+      chop: npcRowSet([7, 8, 9]),
+    },
+  },
+  plum: {
+    p: 'NPCs (Premade)/Bartender_Katy.png',
+    idle: npcRowSet([0, 1, 2]),
+    walk: npcRowSet([3, 4, 5]),
+    work: {},
+  },
 };
 
-const NPC_FW = 48;
+const NPC_FW = 64;
 const NPC_FH = 64;
 
 /* ═══════════════════════════════════════════════════════
@@ -621,66 +714,36 @@ function drawFlowerGarden(ctx, x, y, width, height, building) {
 /**
  * Draw NPC village resident. Returns boolean.
  *
- * CF premade NPC spritesheets (48×64 frames):
- *   Rows 0-3 = walk (down/up/left/right), 8 frames each
- *   Row  4   = idle down  (8 frames)
- *   Row  5   = idle side  (8 frames, flip for right)
- *   Row  6   = idle up    (5 frames)
- *   Rows 7-9 = working action set 1 (down/up/side), 8 frames each
- *   Rows 10-12 = working action set 2 (if present)
+ * CF premade NPC spritesheets expose grouped animation families:
+ *   Rows 0-2 = idle (down / side / up)
+ *   Rows 3-5 = walk/run (down / side / up)
+ *   Row  6   = special downed / hit row (unused here)
+ *   Later rows = profession-specific work sets, varying by sheet.
  *
- * Not all NPCs have action rows:
- *   Fisherman_Fin (13 rows), Farmer_Bob (13 rows) → 2 action sets
- *   Miner_Mike (10 rows), Lumberjack_Jack (10 rows) → 1 action set
- *   Chef_Chloe (7 rows), Bartender_Katy (7 rows) → no action rows
+ * We only drive the states that Pet World actually needs:
+ *   idle animations
+ *   running / walking animations
+ *   working animations relevant to the resident's real job
+ *     - farm_till / farm_water
+ *     - fish
+ *     - chop
+ *     - mine
  */
 export function drawCuteFantasyResident(ctx, x, y, tileSize, paletteKey, activity, frameOffset, facing, moving) {
-  const file = NPCS[paletteKey];
-  if (!file) return false;
+  const profile = NPCS[paletteKey];
+  if (!profile) return false;
 
-  const src = cfp(file);
+  const src = cfp(profile.p);
   const entry = getImage(src);
   if (!entry?.loaded) return true; // suppress procedural fallback while loading
 
-  const cols = Math.floor(entry.image.width / NPC_FW);
-  const rows = Math.floor(entry.image.height / NPC_FH);
   const isWalking = !!moving;
-  const hasActions = rows > 7;   // action rows start at 7
-
-  // Determine if this NPC should play a working animation
-  const isWorking = !isWalking && hasActions
-    && (activity === 'gather' || activity === 'build' || activity === 'carry');
-
-  let row, numFrames, flipH = false;
-
-  if (isWalking) {
-    // Walk: rows 0-3, 8 frames per direction
-    if (facing === 2) row = 0;                              // walk down
-    else if (facing === -2 && rows > 1) row = 1;            // walk up
-    else if (facing === -1 && rows > 2) row = 2;            // walk left
-    else if (facing === 1 && rows > 3) row = 3;             // walk right
-    else row = 0;
-    numFrames = 8;
-  } else if (isWorking) {
-    // Working: action rows 7-9 (down/up/side)
-    if (facing === 2) row = 7;                              // work facing down
-    else if (facing === -2 && rows > 8) row = 8;            // work facing up
-    else if ((facing === -1 || facing === 1) && rows > 9) {
-      row = 9;                                              // work facing side
-      flipH = facing === 1;                                 // flip for right
-    } else row = 7;                                         // default work down
-    numFrames = 8;
-  } else {
-    // Idle: direction-specific rows
-    if (facing === -2 && rows > 6) {
-      row = 6; numFrames = 5;                               // idle up
-    } else if ((facing === -1 || facing === 1) && rows > 5) {
-      row = 5; numFrames = 8;                               // idle side
-      flipH = facing === 1;                                 // flip for right
-    } else {
-      row = rows > 4 ? 4 : 0; numFrames = 8;               // idle down (default)
-    }
-  }
+  const dir = dirGroupFromFacing(facing);
+  const flipH = dir === 'side' && facing === 1;
+  const workSet = !isWalking ? profile.work?.[activity] || null : null;
+  const anim = isWalking ? profile.walk[dir] : (workSet?.[dir] || profile.idle[dir]);
+  const row = anim.row;
+  const numFrames = anim.n;
 
   const fi = Math.floor(frameOffset * numFrames) % numFrames;
   const sx = fi * NPC_FW;
@@ -766,7 +829,25 @@ export function drawCuteFantasyCritter(ctx, x, y, tileSize, species, frameOffset
  *
  * @param {number} facing - 2=south, -2=north, -1=west, 1=east (or undefined)
  */
-export function drawCuteFantasyPet(ctx, x, y, tileSize, character, frameOffset, moving, facing) {
+export function drawCuteFantasyPet(ctx, x, y, tileSize, character, frameOffset, moving, facing = 2) {
+  const pixellabPet = PIXELLAB_PETS[character];
+  if (pixellabPet) {
+    const dir = petDirFromFacing(facing);
+    const frameCount = moving ? pixellabPet.walkFrames : pixellabPet.idleFrames;
+    const src = moving ? pixellabPet.walk[dir] : pixellabPet.idle[dir];
+    const entry = getImage(src);
+    if (!entry?.loaded) return true;
+
+    const fi = Math.floor(frameOffset * frameCount) % frameCount;
+    const d = tileSize * pixellabPet.scale;
+    dropShadow(ctx, x, y + d * 0.08, d * 0.24, d * 0.08, 0.18);
+    return drawFrame(
+      ctx, src,
+      fi * pixellabPet.fw, 0, pixellabPet.fw, pixellabPet.fh,
+      x - d / 2, y - d * 0.76, d, d,
+    );
+  }
+
   // ── Custom pet sprites (directional 48×48) ──
   const custom = CUSTOM_PETS[character];
   if (custom) {
@@ -774,27 +855,14 @@ export function drawCuteFantasyPet(ctx, x, y, tileSize, character, frameOffset, 
     const entry = getImage(src);
     if (!entry?.loaded) return true; // suppress fallback while loading
 
-    // Map facing → direction string
-    let dir = 'south';
-    if (facing === -2) dir = 'north';
-    else if (facing === -1) dir = 'west';
-    else if (facing === 1) dir = 'east';
-
+    const dir = petDirFromFacing(facing);
     const dirRow = CUSTOM_PET_DIR[dir];
-    let row, numFrames;
-    if (moving) {
-      row = 4 + dirRow; // walk block starts at row 4
-      numFrames = CUSTOM_PET_WALK_FRAMES;
-    } else {
-      row = dirRow;     // idle block starts at row 0
-      numFrames = CUSTOM_PET_IDLE_FRAMES;
-    }
-
+    const row = moving ? 4 + dirRow : dirRow;
+    const numFrames = moving ? CUSTOM_PET_WALK_FRAMES : CUSTOM_PET_IDLE_FRAMES;
     const fi = Math.floor(frameOffset * numFrames) % numFrames;
     const sx = fi * CUSTOM_PET_FW;
     const sy = row * CUSTOM_PET_FH;
 
-    // Match NPC villager size (NPC uses tileSize*1.4 width at 48x64 aspect)
     const d = tileSize * 1.35;
     dropShadow(ctx, x, y + tileSize * 0.08, d * 0.22, d * 0.07, 0.2);
     return drawFrame(
@@ -804,7 +872,6 @@ export function drawCuteFantasyPet(ctx, x, y, tileSize, character, frameOffset, 
     );
   }
 
-  // ── Fallback: generic CF animal sprites ──
   const mapped = PET_MAP[character];
   if (!mapped) return false;
 
