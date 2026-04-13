@@ -601,9 +601,7 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
 
   /* ── Path auto-tiling (dirt↔grass Wang transitions) ── */
   const hasPathBuilding = tile.b != null && terrain?.isPathBuilding;
-  // Path buildings always render dirt — even on shore tiles (covers the wang base).
-  // Adjacent non-path tiles skip dirt transitions on shore for clean water-edge coherence.
-  if (neighbors && (!isShoreTransition || hasPathBuilding)) {
+  if (neighbors) {
     const isPath = (dir) => neighbors[dir + '_path'] || false;
     const pNW = (isPath('n') || isPath('w') || isPath('nw')) ? 1 : 0;
     const pNE = (isPath('n') || isPath('e') || isPath('ne')) ? 1 : 0;
@@ -611,12 +609,13 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
     const pSE = (isPath('s') || isPath('e') || isPath('se')) ? 1 : 0;
     const pathIdx = pNW * 8 + pNE * 4 + pSW * 2 + pSE;
     if (hasPathBuilding) {
-      // This tile IS a path — draw full dirt; isolated paths (pathIdx=0) force to 15 (pure dirt)
+      // Path building: always draw dirt (even on shore tiles)
       const idx = pathIdx > 0 ? pathIdx : 15;
       const [psx, psy] = PATH_WANG_LOOKUP[idx];
       drawFrame(ctx, cfp(WANG_DIRT_GRASS), psx, psy, 16, 16, x, y, size, size);
-    } else if (pathIdx > 0) {
-      // Adjacent to a path — slightly reduced alpha for gentle grass↔dirt blend
+    } else if (pathIdx > 0 && (!isShoreTransition || wangIdx >= 8)) {
+      // Adjacent to a path: draw transition on inland tiles and grass-heavy shore tiles.
+      // Skip only on mostly-water shore tiles (wangIdx < 8) to avoid dirt overlaying water.
       const [psx, psy] = PATH_WANG_LOOKUP[pathIdx];
       drawFrame(ctx, cfp(WANG_DIRT_GRASS), psx, psy, 16, 16, x, y, size, size, undefined, 0.88);
     }
