@@ -278,6 +278,8 @@ function getRouteMotion(entity, time) {
   let lastFacing = route.find((node) => node.facing)?.facing || 1;
   // Very slow idle frame cycle — almost static to prevent any visible jitter
   const idleFrame = (time * 0.00008 + entity.seed * 0.1) % 1;
+  // Moderate work animation cycle (~3s per loop) — visible tool swinging
+  const workFrame = (time * 0.00035 + entity.seed * 0.1) % 1;
 
   for (let index = 0; index < route.length; index += 1) {
     const node = route[index];
@@ -286,10 +288,14 @@ function getRouteMotion(entity, time) {
     if (cursor < pauseMs) {
       // Idle: hold position and facing completely stable — no loiter, no drift, no facing changes
       const stableFacing = node.facing || lastFacing || 1;
+      // Use faster frame rate for NPCs paused at work buildings (tool swing animation)
+      const bt = node.buildingType || '';
+      const isWorkBuilding = ['farm', 'fishing_hut', 'woodcutters_hut', 'lumberyard',
+        'quarry', 'stone_pit', 'watchtower', 'shrine', 'town_hall', 'weaving_hut'].includes(bt);
       return {
         x: node.x,
         y: node.y,
-        frameOffset: idleFrame,
+        frameOffset: isWorkBuilding ? workFrame : idleFrame,
         facing: stableFacing,
         moving: false,
         paused: true,
@@ -320,8 +326,9 @@ function getRouteMotion(entity, time) {
         x: node.x + dx * eased,
         y: node.y + dy * eased,
         // Walk frame: tied to movement progress so stride matches body speed
+        // Multiplier 2.0 = ~2 full walk cycles per tile (8 frames each)
         frameOffset: node.distance > 0.02
-          ? (eased * Math.max(node.distance, 0.3) * 3.5 + entity.seed * 0.1) % 1
+          ? (eased * Math.max(node.distance, 0.3) * 2.0 + entity.seed * 0.1) % 1
           : idleFrame,
         facing,
         moving: node.distance > 0.02,

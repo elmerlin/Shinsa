@@ -573,8 +573,10 @@ function drawFlowerGarden(ctx, x, y, width, height, building) {
   const entry = getImage(src);
   if (!entry?.loaded) return true; // suppress fallback
 
-  // Deterministic hash from position
-  const hash = (Math.floor(x) * 7 + Math.floor(y) * 13) & 0xFFFF;
+  // Deterministic hash from WORLD GRID coords — never screen coords (those shift with camera)
+  const gx = typeof building === 'object' ? (building.grid_x ?? 0) : 0;
+  const gy = typeof building === 'object' ? (building.grid_y ?? 0) : 0;
+  const hash = ((gx * 2654435761 + gy * 2246822519) >>> 0) & 0xFFFF;
 
   // Flower colour: from building metadata or deterministic hash
   const flowerColor = typeof building === 'object'
@@ -602,6 +604,19 @@ function drawFlowerGarden(ctx, x, y, width, height, building) {
 
 /**
  * Draw NPC village resident. Returns boolean.
+ *
+ * CF premade NPC spritesheets (48×64 frames):
+ *   Rows 0-3 = walk (down/up/left/right), 8 frames each
+ *   Row  4   = idle down  (8 frames)
+ *   Row  5   = idle side  (8 frames, flip for right)
+ *   Row  6   = idle up    (5 frames)
+ *   Rows 7-9 = working action set 1 (down/up/side), 8 frames each
+ *   Rows 10-12 = working action set 2 (if present)
+ *
+ * Not all NPCs have action rows:
+ *   Fisherman_Fin (13 rows), Farmer_Bob (13 rows) → 2 action sets
+ *   Miner_Mike (10 rows), Lumberjack_Jack (10 rows) → 1 action set
+ *   Chef_Chloe (7 rows), Bartender_Katy (7 rows) → no action rows
  */
 export function drawCuteFantasyResident(ctx, x, y, tileSize, paletteKey, activity, frameOffset, facing, moving) {
   const file = NPCS[paletteKey];
@@ -613,32 +628,42 @@ export function drawCuteFantasyResident(ctx, x, y, tileSize, paletteKey, activit
 
   const cols = Math.floor(entry.image.width / NPC_FW);
   const rows = Math.floor(entry.image.height / NPC_FH);
-
-  // Use `moving` flag (not activity string) to pick walk vs idle rows.
-  // This prevents stopped NPCs from using walk animation.
   const isWalking = !!moving;
+  const hasActions = rows > 7;   // action rows start at 7
 
-  // NPC spritesheets: rows 0-3 = walk (down/up/left/right), rows 4-7 = idle (down/up/left/right)
-  let row, numFrames;
+  // Determine if this NPC should play a working animation
+  const isWorking = !isWalking && hasActions
+    && (activity === 'gather' || activity === 'build' || activity === 'carry');
+
+  let row, numFrames, flipH = false;
+
   if (isWalking) {
-    // Walk: direction-specific row (0=down, 1=up, 2=left, 3=right)
-    if (facing === 2) row = 0;
-    else if (facing === -2 && rows > 1) row = 1;
-    else if (facing === -1 && rows > 2) row = 2;
-    else if (facing === 1 && rows > 3) row = 3;
+    // Walk: rows 0-3, 8 frames per direction
+    if (facing === 2) row = 0;                              // walk down
+    else if (facing === -2 && rows > 1) row = 1;            // walk up
+    else if (facing === -1 && rows > 2) row = 2;            // walk left
+    else if (facing === 1 && rows > 3) row = 3;             // walk right
     else row = 0;
-    numFrames = Math.min(cols, 6);
+    numFrames = 8;
+  } else if (isWorking) {
+    // Working: action rows 7-9 (down/up/side)
+    if (facing === 2) row = 7;                              // work facing down
+    else if (facing === -2 && rows > 8) row = 8;            // work facing up
+    else if ((facing === -1 || facing === 1) && rows > 9) {
+      row = 9;                                              // work facing side
+      flipH = facing === 1;                                 // flip for right
+    } else row = 7;                                         // default work down
+    numFrames = 8;
   } else {
-    // Idle: direction-specific idle row (4=down, 5=up, 6=left, 7=right)
-    if (rows > 7) {
-      if (facing === -2) row = 5;
-      else if (facing === -1) row = 6;
-      else if (facing === 1) row = 7;
-      else row = 4;
+    // Idle: direction-specific rows
+    if (facing === -2 && rows > 6) {
+      row = 6; numFrames = 5;                               // idle up
+    } else if ((facing === -1 || facing === 1) && rows > 5) {
+      row = 5; numFrames = 8;                               // idle side
+      flipH = facing === 1;                                 // flip for right
     } else {
-      row = rows > 4 ? 4 : 0;
+      row = rows > 4 ? 4 : 0; numFrames = 8;               // idle down (default)
     }
-    numFrames = Math.min(cols, 6);
   }
 
   const fi = Math.floor(frameOffset * numFrames) % numFrames;
@@ -647,7 +672,7 @@ export function drawCuteFantasyResident(ctx, x, y, tileSize, paletteKey, activit
 
   const dw = tileSize * 1.4;
   const dh = dw * (NPC_FH / NPC_FW);
-  // Gentle bob only while walking — idle NPCs stay perfectly still
+  // Gentle bob only while walking — idle/working NPCs stay perfectly still
   const bob = isWalking
     ? Math.sin(frameOffset * Math.PI * 2) * tileSize * 0.012
     : 0;
@@ -655,11 +680,11 @@ export function drawCuteFantasyResident(ctx, x, y, tileSize, paletteKey, activit
   // Drop shadow under NPC
   dropShadow(ctx, x, y + tileSize * 0.08, dw * 0.22, dw * 0.07, 0.2);
 
-  // Direction-specific rows → no horizontal flip needed
   return drawFrame(
     ctx, src,
     sx, sy, NPC_FW, NPC_FH,
     x - dw / 2, y - dh * 0.82 + bob, dw, dh,
+    flipH ? -1 : undefined,
   );
 }
 
