@@ -324,11 +324,87 @@ const CUSTOM_PETS = {
   buu:     { p: 'Pets/Buu.png' },
 };
 
-const BASE_HERO_PETS = {
-  dojocat: { p: hfp('dojocat', 'base.png'), baseScale: 1.55 },
-  buu:     { p: hfp('buu', 'base.png'), baseScale: 1.55 },
-  devit:   { p: hfp('devit', 'base.png'), baseScale: 1.52 },
-  pixiu:   { p: hfp('pixiu', 'base.png'), baseScale: 1.52 },
+const HERO_ANIM_PETS = {
+  dojocat: {
+    base: hfp('dojocat', 'base.png'),
+    baseScale: 1.55,
+    fw: 128,
+    fh: 128,
+    idleFrames: 4,
+    walkFrames: 4,
+    idle: {
+      south: hfp('dojocat', 'idle_south.png'),
+      north: hfp('dojocat', 'idle_north.png'),
+      east: hfp('dojocat', 'idle_east.png'),
+      west: hfp('dojocat', 'idle_west.png'),
+    },
+    walk: {
+      south: hfp('dojocat', 'walk_south.png'),
+      north: hfp('dojocat', 'walk_north.png'),
+      east: hfp('dojocat', 'walk_east.png'),
+      west: hfp('dojocat', 'walk_west.png'),
+    },
+  },
+  buu: {
+    base: hfp('buu', 'base.png'),
+    baseScale: 1.55,
+    fw: 128,
+    fh: 128,
+    idleFrames: 4,
+    walkFrames: 4,
+    idle: {
+      south: hfp('buu', 'idle_south.png'),
+      north: hfp('buu', 'idle_north.png'),
+      east: hfp('buu', 'idle_east.png'),
+      west: hfp('buu', 'idle_west.png'),
+    },
+    walk: {
+      south: hfp('buu', 'walk_south.png'),
+      north: hfp('buu', 'walk_north.png'),
+      east: hfp('buu', 'walk_east.png'),
+      west: hfp('buu', 'walk_west.png'),
+    },
+  },
+  devit: {
+    base: hfp('devit', 'base.png'),
+    baseScale: 1.52,
+    fw: 128,
+    fh: 128,
+    idleFrames: 4,
+    walkFrames: 4,
+    idle: {
+      south: hfp('devit', 'idle_south.png'),
+      north: hfp('devit', 'idle_north.png'),
+      east: hfp('devit', 'idle_east.png'),
+      west: hfp('devit', 'idle_west.png'),
+    },
+    walk: {
+      south: hfp('devit', 'walk_south.png'),
+      north: hfp('devit', 'walk_north.png'),
+      east: hfp('devit', 'walk_east.png'),
+      west: hfp('devit', 'walk_west.png'),
+    },
+  },
+  pixiu: {
+    base: hfp('pixiu', 'base.png'),
+    baseScale: 1.52,
+    fw: 128,
+    fh: 128,
+    idleFrames: 4,
+    walkFrames: 4,
+    idle: {
+      south: hfp('pixiu', 'idle_south.png'),
+      north: hfp('pixiu', 'idle_north.png'),
+      east: hfp('pixiu', 'idle_east.png'),
+      west: hfp('pixiu', 'idle_west.png'),
+    },
+    walk: {
+      south: hfp('pixiu', 'walk_south.png'),
+      north: hfp('pixiu', 'walk_north.png'),
+      east: hfp('pixiu', 'walk_east.png'),
+      west: hfp('pixiu', 'walk_west.png'),
+    },
+  },
 };
 
 function petDirFromFacing(facing) {
@@ -817,17 +893,29 @@ export function drawCuteFantasyCritter(ctx, x, y, tileSize, species, frameOffset
  * @param {number} facing - 2=south, -2=north, -1=west, 1=east (or undefined)
  */
 export function drawCuteFantasyPet(ctx, x, y, tileSize, character, frameOffset, moving, facing = 2, scaleMultiplier = 1) {
-  const heroPet = BASE_HERO_PETS[character];
+  const heroPet = HERO_ANIM_PETS[character];
   if (heroPet) {
-    const src = heroPet.p;
-    const entry = getImage(src);
-    if (!entry?.loaded) return true;
     const dir = petDirFromFacing(facing);
-    const drawFacing = dir === 'west' ? -1 : 1;
     const d = tileSize * heroPet.baseScale * scaleMultiplier;
     const bob = moving ? Math.sin(frameOffset * Math.PI * 2) * d * 0.025 : 0;
     dropShadow(ctx, x, y + d * 0.16, d * 0.22, d * 0.07, 0.18);
-    return drawImg(ctx, src, x - d / 2, y - d * 0.76 + bob, d, d, drawFacing);
+
+    const animSrc = moving ? heroPet.walk[dir] : heroPet.idle[dir];
+    const animEntry = getImage(animSrc);
+    if (animEntry?.loaded) {
+      const frameCount = moving ? heroPet.walkFrames : heroPet.idleFrames;
+      const fi = Math.floor(frameOffset * frameCount) % frameCount;
+      return drawFrame(
+        ctx, animSrc,
+        fi * heroPet.fw, 0, heroPet.fw, heroPet.fh,
+        x - d / 2, y - d * 0.76 + bob, d, d,
+      );
+    }
+
+    const baseEntry = getImage(heroPet.base);
+    if (!baseEntry?.loaded) return true;
+    const drawFacing = dir === 'west' ? -1 : 1;
+    return drawImg(ctx, heroPet.base, x - d / 2, y - d * 0.76 + bob, d, d, drawFacing);
   }
 
   // ── Custom pet sprites (directional 48×48) ──
