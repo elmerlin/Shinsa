@@ -581,7 +581,7 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
     if (biome === 'desert' || biome === 'volcanic') {
       ctx.fillStyle = '#c8b080';
     } else {
-      ctx.fillStyle = '#5a8a38';
+      ctx.fillStyle = '#3e8948';
     }
     ctx.fillRect(x, y, size, size);
   }
@@ -627,8 +627,9 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
   // correct water-coloured pixels that blend with adjacent animated water tiles.
 
   /* ── Flower-grass overlays on ~16 % of open ground tiles ── */
-  // Allowed on shore tiles with enough visible grass (wangIdx >= 8 ≈ 50%+ grass corners)
-  if (tile.t !== 'tree' && tile.t !== 'rock' && tile.t !== 'bush' && tile.t !== 'stump' && (!isShoreTransition || wangIdx >= 8)) {
+  // Suppressed on path tiles (would draw green grass blobs on dirt) and
+  // allowed on shore tiles with enough visible grass (wangIdx >= 8 ≈ 50%+ grass corners)
+  if (!hasPathBuilding && tile.t !== 'tree' && tile.t !== 'rock' && tile.t !== 'bush' && tile.t !== 'stump' && (!isShoreTransition || wangIdx >= 8)) {
     if (h % 6 === 0) {
       const variant = (h >>> 3) % FLOWER_GRASS_COUNT + 1;
       const fi = Math.floor((t * 0.002 + h * 0.07) % FLOWER_GRASS_FRAMES);
