@@ -205,15 +205,34 @@ function expandResidentRoute(points, seed) {
     if (!next) return;
     const dx = next.x - current.x;
     const dy = next.y - current.y;
+    const dist = Math.hypot(dx, dy);
     if (Math.abs(dx) > 0.18 && Math.abs(dy) > 0.18) {
+      // L-shaped path via orthogonal waypoint
       const viaHorizontalFirst = ((seed + index) % 2) === 0;
+      const midX = viaHorizontalFirst ? next.x : current.x;
+      const midY = viaHorizontalFirst ? current.y : next.y;
       nodes.push({
-        x: viaHorizontalFirst ? next.x : current.x,
-        y: viaHorizontalFirst ? current.y : next.y,
-        tileX: viaHorizontalFirst ? next.tileX : current.tileX,
-        tileY: viaHorizontalFirst ? current.tileY : next.tileY,
+        x: midX,
+        y: midY,
+        tileX: Math.floor(midX),
+        tileY: Math.floor(midY),
         role: 'path',
-        pauseMs: 0,
+        pauseMs: 80 + ((seed + index * 7) % 4) * 60, // brief micro-pause at the turn
+      });
+    }
+    // For longer journeys (>2 tiles), add an extra midpoint with a brief pause
+    if (dist > 2.2) {
+      const t = 0.45 + (hash01(seed + index, 11) - 0.5) * 0.15;
+      const midNode = nodes[nodes.length - 1]; // last pushed (could be waypoint or current)
+      const midX2 = midNode.x + (next.x - midNode.x) * t;
+      const midY2 = midNode.y + (next.y - midNode.y) * t;
+      nodes.push({
+        x: midX2,
+        y: midY2,
+        tileX: Math.floor(midX2),
+        tileY: Math.floor(midY2),
+        role: 'path',
+        pauseMs: 120 + ((seed + index * 13) % 5) * 80, // brief hesitation mid-walk
       });
     }
   });
@@ -265,10 +284,24 @@ function getRouteMotion(entity, time) {
     const next = route[(index + 1) % route.length];
     const pauseMs = node.pauseMs || 0;
     if (cursor < pauseMs) {
-      const idleFacing = node.facing || lastFacing || 1;
+      const baseFacing = node.facing || lastFacing || 1;
+      // Loiter: during longer pauses, NPCs look around and shift weight
+      let idleFacing = baseFacing;
+      let loiterX = 0;
+      let loiterY = 0;
+      if (pauseMs > 600) {
+        const pauseProgress = cursor / pauseMs;
+        // Change facing direction 2-3 times during a long pause
+        const facingCycle = Math.floor(pauseProgress * 3);
+        const facingOptions = [baseFacing, baseFacing === 1 ? 2 : -2, baseFacing === -1 ? -2 : 2, baseFacing];
+        idleFacing = facingOptions[facingCycle % facingOptions.length];
+        // Subtle weight-shift drift
+        loiterX = Math.sin(pauseProgress * Math.PI * 2.5 + entity.seed) * 0.02;
+        loiterY = Math.cos(pauseProgress * Math.PI * 1.8 + entity.seed * 0.7) * 0.015;
+      }
       return {
-        x: node.x,
-        y: node.y,
+        x: node.x + loiterX,
+        y: node.y + loiterY,
         frameOffset: idleFrame,
         facing: idleFacing,
         moving: false,

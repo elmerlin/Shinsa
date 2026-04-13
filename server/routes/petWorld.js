@@ -445,7 +445,18 @@ function formatWorldBundle(db, world, buildings, options = {}) {
       biome: world.biome,
       grid_width: safeNumber(world.grid_width, 12),
       grid_height: safeNumber(world.grid_height, 12),
-      grid: sanitizeGrid(parseGridData(world.grid_data)),
+      grid: (() => {
+        const parsed = parseGridData(world.grid_data);
+        const { grid: sanitized, changed } = sanitizeGrid(parsed);
+        // Persist sanitized grid back so legacy worlds are fixed permanently
+        if (changed) {
+          try {
+            db.prepare('UPDATE pet_worlds SET grid_data = ? WHERE user_id = ?')
+              .run(serializeGridData(sanitized), world.user_id);
+          } catch (_) { /* non-critical — will retry on next load */ }
+        }
+        return sanitized;
+      })(),
       expansions: safeNumber(world.expansions, 0),
       population: safeNumber(world.population, 0),
       happiness: safeNumber(world.happiness, 0),

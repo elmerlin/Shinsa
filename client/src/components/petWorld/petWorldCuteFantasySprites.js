@@ -180,6 +180,17 @@ const GRASS_VARIANTS = [
   'Tiles/Grass/Grass_4_Middle.png',
 ];
 
+/* ── Biome-specific grass tints ── */
+const BIOME_TINTS = {
+  forest:    { color: '#1a3a12', alpha: 0.06 },   // darker, deeper green
+  coastal:   { color: '#c8d8a0', alpha: 0.04 },   // lighter, sun-bleached
+  mountain:  { color: '#8a9a7a', alpha: 0.05 },   // cool grey-green
+  desert:    { color: '#d4c088', alpha: 0.08 },   // warm sandy
+  tropical:  { color: '#2a5a18', alpha: 0.05 },   // lush deep green
+  tundra:    { color: '#a0b8a8', alpha: 0.06 },   // frosty blue-green
+  volcanic:  { color: '#4a3a2a', alpha: 0.07 },   // ashy earth
+};
+
 /* ── Animated flower-grass overlays ── */
 // Flower_Grass_1-15_Anim.png = 128x16, 8 frames at 16x16 each
 const FLOWER_GRASS_DIR    = 'Outdoor decoration/Outdoor_Decor_Animations/Grass_Animations/';
@@ -323,8 +334,9 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
     wangIdx = cNW * 8 + cNE * 4 + cSW * 2 + cSE;
     const [sx, sy] = WANG_LOOKUP[wangIdx];
     wangDrawn = drawFrame(ctx, cfp(WANG_WATER_GRASS), sx, sy, 16, 16, x, y, size, size);
-    // Shore transition tiles (idx < 15) — tell caller to suppress extra shore glow
-    if (wangDrawn && wangIdx < 15) return 2;
+    // NOTE: shore transition tiles (idx < 15) used to return 2 here to skip
+    // procedural shore glow. Now we fall through so shore softening + variation
+    // can render on top before returning.
   }
 
   /* ── Fallback placeholder while Wang tileset loads ── */
@@ -391,13 +403,22 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
     ctx.restore();
   }
 
-  /* ── Grass variation on pure-grass tiles ── */
-  if (wangIdx === 15 && laneStrength < 0.2 && tile.t !== 'tree' && tile.t !== 'rock' && tile.t !== 'bush') {
-    // ~40% of tiles get a subtle grass variant overlay for less monotony
-    if (h % 5 < 2) {
+  /* ── Grass variation on pure-grass and near-pure tiles ── */
+  if (wangIdx >= 13 && laneStrength < 0.2 && tile.t !== 'tree' && tile.t !== 'rock' && tile.t !== 'bush') {
+    // ~45% of tiles get a subtle grass variant overlay for less monotony
+    if (h % 9 < 4) {
       const variantIdx = (h >>> 4) % GRASS_VARIANTS.length;
-      const varAlpha = 0.25 + ((h >>> 7) % 3) * 0.08; // vary opacity per tile
+      const varAlpha = 0.22 + ((h >>> 7) % 4) * 0.07; // vary opacity per tile
       drawFrame(ctx, cfp(GRASS_VARIANTS[variantIdx]), 0, 0, 16, 16, x, y, size, size, undefined, varAlpha);
+    }
+    // Biome-specific tint overlay for distinct biome feels
+    const biomeTint = BIOME_TINTS[biome];
+    if (biomeTint && h % 7 < 3) {
+      ctx.save();
+      ctx.globalAlpha = biomeTint.alpha;
+      ctx.fillStyle = biomeTint.color;
+      ctx.fillRect(x, y, size, size);
+      ctx.restore();
     }
   }
 
@@ -411,7 +432,8 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
     }
   }
 
-  return true; // always suppress procedural
+  // Return 2 for shore transitions to suppress procedural shore glow in drawTile
+  return (wangIdx > 0 && wangIdx < 15) ? 2 : true;
 }
 
 /**

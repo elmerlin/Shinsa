@@ -62,8 +62,12 @@ function canPlace(grid, x, y, width, height, options = {}) {
  * Fixes legacy worlds that were generated before the shoreline cleanup pass.
  * Safe to call multiple times — only modifies tiles that violate the rule.
  */
+/**
+ * Sanitize a grid: remove obstacles (trees, rocks, bushes) adjacent to water.
+ * Returns { grid, changed } so callers can persist if needed.
+ */
 function sanitizeGrid(grid) {
-  if (!grid?.tiles) return grid;
+  if (!grid?.tiles) return { grid, changed: false };
   const h = grid.h || grid.tiles.length;
   const w = grid.w || (grid.tiles[0]?.length || 0);
   let changed = false;
@@ -87,7 +91,7 @@ function sanitizeGrid(grid) {
       }
     }
   }
-  return grid;
+  return { grid, changed };
 }
 
 function setBuildingOccupancy(grid, buildingId, x, y, width, height) {
