@@ -73,6 +73,7 @@ const WALK_BLOCKERS = new Set(['water', 'rock', 'tree', 'bush']);
 const RESIDENT_WALK_OPTIONS = { maxShoreStrength: 0.08, maxWaterRatio: 0.04 };
 const ROAMING_WALK_OPTIONS = { maxShoreStrength: 0.06, maxWaterRatio: 0.03 };
 const ENCOUNTER_WALK_OPTIONS = { maxShoreStrength: 0.07, maxWaterRatio: 0.035 };
+const LAND_ANIMAL_WALK_OPTIONS = { maxShoreStrength: 0.025, maxWaterRatio: 0.008 };
 
 function getBuildingMap(buildings = []) {
   return new Map(buildings.map((building) => [building.id, building]));
@@ -254,6 +255,44 @@ function pickVillageAnchor(roamTiles, buildings = [], seed = 0) {
     }
   });
   return best;
+}
+
+function isStrictInlandTile(grid, terrainRegions, tile, walkOptions = LAND_ANIMAL_WALK_OPTIONS) {
+  if (!tile) return false;
+  const { x, y } = tile;
+  if (!isGridTileWalkable(grid, terrainRegions, x, y, walkOptions)) return false;
+  const terrain = terrainRegions?.[y]?.[x];
+  if ((terrain?.shoreStrength || 0) > (walkOptions.maxShoreStrength ?? 0.025)) return false;
+  if ((terrain?.waterRatio || 0) > (walkOptions.maxWaterRatio ?? 0.008)) return false;
+
+  for (let ny = y - 1; ny <= y + 1; ny += 1) {
+    for (let nx = x - 1; nx <= x + 1; nx += 1) {
+      if (nx < 0 || ny < 0 || nx >= grid.w || ny >= grid.h) continue;
+      const neighborTile = grid.tiles[ny]?.[nx];
+      const neighborTerrain = terrainRegions?.[ny]?.[nx];
+      if (neighborTile?.t === 'water') return false;
+      if ((neighborTerrain?.waterRatio || 0) > 0.04) return false;
+      if ((neighborTerrain?.shoreStrength || 0) > 0.12) return false;
+    }
+  }
+  return true;
+}
+
+function buildVillageAnimalPool(grid, terrainRegions, roamTiles, buildings = [], seed = 0) {
+  if (!grid || !roamTiles?.length) return [];
+  const villageAnchor = pickVillageAnchor(roamTiles, buildings, seed) || roamTiles[0];
+  const inlandTiles = roamTiles.filter((tile) => isStrictInlandTile(grid, terrainRegions, tile));
+  if (!inlandTiles.length) return [];
+
+  const anchorX = villageAnchor?.x ?? inlandTiles[0].x;
+  const anchorY = villageAnchor?.y ?? inlandTiles[0].y;
+  const nearbyTiles = inlandTiles.filter((tile) => {
+    const distance = Math.abs(tile.x - anchorX) + Math.abs(tile.y - anchorY);
+    return distance <= 9;
+  });
+  const meadowNearbyTiles = nearbyTiles.filter(({ x, y }) => (terrainRegions?.[y]?.[x]?.meadowStrength || 0) > 0.2);
+  const villageCoreTiles = meadowNearbyTiles.length ? meadowNearbyTiles : nearbyTiles;
+  return villageCoreTiles.length ? villageCoreTiles : inlandTiles;
 }
 
 function pointFromTileCenter(tile, seed, radiusX = 0.03, radiusY = 0.025) {
@@ -1236,11 +1275,11 @@ function buildAmbientFauna(world, terrainRegions, buildings = []) {
   if (!grid) return [];
   const landGraph = buildLandComponents(grid, terrainRegions, ROAMING_WALK_OPTIONS, buildings);
   const roamingTiles = landGraph.primary?.length ? landGraph.primary : landGraph.tiles;
-  const clearTiles = findClearTiles(grid);
   const waterTiles = findTilesByType(grid, 'water');
   const meadowTiles = roamingTiles.filter(({ x, y }) => (terrainRegions?.[y]?.[x]?.meadowStrength || 0) > 0.28);
   const woodedTiles = roamingTiles.filter(({ x, y }) => (terrainRegions?.[y]?.[x]?.foliageShadow || 0) > 0.18);
   const shoreTiles = roamingTiles.filter(({ x, y }) => (terrainRegions?.[y]?.[x]?.shoreStrength || 0) > 0.12);
+  const villageAnimalTiles = buildVillageAnimalPool(grid, terrainRegions, roamingTiles, buildings, 811);
 
   const placements = [];
   const fishCount = Math.min(7, Math.max(2, Math.floor(waterTiles.length / 18)));
@@ -1259,7 +1298,7 @@ function buildAmbientFauna(world, terrainRegions, buildings = []) {
     });
   }
 
-  const mammalPool = meadowTiles.length ? meadowTiles : roamingTiles;
+  const mammalPool = villageAnimalTiles.length ? villageAnimalTiles : (meadowTiles.length ? meadowTiles : roamingTiles);
   const mammalCount = Math.min(6, Math.max(2, Math.ceil((world.expansions || 0) + (world.population || 0) / 5)));
   for (let i = 0; i < mammalCount && mammalPool.length; i += 1) {
     const tile = mammalPool[(i * 11 + 5) % mammalPool.length];
