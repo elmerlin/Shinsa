@@ -1291,7 +1291,19 @@ function buildAmbientFauna(world, terrainRegions, buildings = []) {
   if (!grid) return [];
   const landGraph = buildLandComponents(grid, terrainRegions, ROAMING_WALK_OPTIONS, buildings);
   const roamingTiles = landGraph.primary?.length ? landGraph.primary : landGraph.tiles;
-  const waterTiles = findTilesByType(grid, 'water');
+  const allWaterTiles = findTilesByType(grid, 'water');
+  // Keep ducks/fish near the village — only water tiles adjacent to land
+  const waterTiles = allWaterTiles.filter(({ x, y }) => {
+    const { tiles, w, h } = grid;
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        if (dx === 0 && dy === 0) continue;
+        const ny = y + dy, nx = x + dx;
+        if (ny >= 0 && ny < h && nx >= 0 && nx < w && tiles[ny][nx].t !== 'water') return true;
+      }
+    }
+    return false;
+  });
   const meadowTiles = roamingTiles.filter(({ x, y }) => (terrainRegions?.[y]?.[x]?.meadowStrength || 0) > 0.28);
   const woodedTiles = roamingTiles.filter(({ x, y }) => (terrainRegions?.[y]?.[x]?.foliageShadow || 0) > 0.18);
   const shoreTiles = roamingTiles.filter(({ x, y }) => (terrainRegions?.[y]?.[x]?.shoreStrength || 0) > 0.12);

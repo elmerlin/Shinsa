@@ -603,11 +603,15 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
     }
   }
 
-  /* ── Shore water shimmer — unify water colour with animated deep water ── */
+  /* ── Shore water shimmer — match pure-water animation strength ── */
   if (isShoreTransition) {
+    // Scale shimmer strength by how "watery" the Wang tile is (low idx = more water)
+    // This makes mostly-water shore tiles animate like pure water, fixing dead-blue patches.
+    const waterWeight = 1 - (wangIdx / 15); // 0 for pure grass, 1 for pure water
+    const shimmerAlpha = 0.08 + waterWeight * 0.22; // 0.08 for mostly-grass, 0.30 for mostly-water
     const shFi = Math.floor((t * 0.003 + h * 0.1) % WATER_CONN_FRAMES);
     drawFrame(ctx, cfp(WATER_CONN_ANIM), shFi * WATER_CONN_FRAME_W + 16, 16, 16, 16,
-      x, y, size, size, undefined, 0.12);
+      x, y, size, size, undefined, shimmerAlpha);
   }
 
   /* ── Flower-grass overlays on ~16 % of open ground tiles (NOT on shore tiles) ── */
