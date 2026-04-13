@@ -600,10 +600,10 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
   const isShoreTransition = wangIdx > 0 && wangIdx < 15;
 
   /* ── Path auto-tiling (dirt↔grass Wang transitions) ── */
-  // Only render on actual path buildings or adjacent tiles.
-  // Skip path rendering on shore transition tiles for clean water-edge coherence.
   const hasPathBuilding = tile.b != null && terrain?.isPathBuilding;
-  if (neighbors && !isShoreTransition) {
+  // Path buildings always render dirt — even on shore tiles (covers the wang base).
+  // Adjacent non-path tiles skip dirt transitions on shore for clean water-edge coherence.
+  if (neighbors && (!isShoreTransition || hasPathBuilding)) {
     const isPath = (dir) => neighbors[dir + '_path'] || false;
     const pNW = (isPath('n') || isPath('w') || isPath('nw')) ? 1 : 0;
     const pNE = (isPath('n') || isPath('e') || isPath('ne')) ? 1 : 0;
