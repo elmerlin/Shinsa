@@ -154,7 +154,7 @@ const MEDIUM_TREES = {
   oak:    { p: 'Trees/Medium_Oak_Tree.png',   fw: 32, fh: 48, n: 3 },
   birch:  { p: 'Trees/Medium_Birch_Tree.png', fw: 32, fh: 48, n: 3 },
   spruce: { p: 'Trees/Medium_Spruce_Tree.png', fw: 32, fh: 48, n: 3 },
-  fruit:  { p: 'Trees/Medium_Fruit_Tree.png', fw: 32, fh: 48, n: 3 },
+  fruit:  { p: 'Trees/Medium_Fruit_Tree.png', fw: 32, fh: 64, n: 3 },
 };
 
 const SMALL_TREES = {
@@ -662,9 +662,10 @@ export function drawCuteFantasyTerrain(ctx, biome, tile, x, y, size, seed, terra
     const entry = getImage(src);
     if (!entry?.loaded) return true; // suppress fallback while loading
 
-    // Pick frame variant — skip frame 0 on all multi-frame trees (frame 0 is often a stump/sapling)
+    // Cute Fantasy tree sheets commonly use frame 0 as a stump/sapling and frame 2 as a tiny shrub.
+    // Use the stable full-tree middle frame so trees never render with a missing base/trunk.
     let fi = Math.abs(seed >> 2) % treeData.n;
-    if (treeData.n >= 3) fi = 1 + (fi % 2); // use frames 1-2 (full tree variants only)
+    if (treeData.n >= 3) fi = 1;
 
     const fw = treeData.fw;
     const fh = treeData.fh;
