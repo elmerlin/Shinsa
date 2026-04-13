@@ -1117,6 +1117,33 @@ function getLinkedPiugameUsername(userId) {
   return String(creds.username).replace(/\s+/g, ' ').trim();
 }
 
+function calculateLocalPumbilityFromBestScores(db, userId) {
+  const freshScores = db.prepare(
+    'SELECT level, score, grade FROM user_best_scores WHERE user_id = ? AND score > 0'
+  ).all(userId).filter((row) => isPassingScore(row.score, row.grade));
+
+  const rated = [];
+  for (const s of freshScores) {
+    const level = parseInt(s.level, 10) || 0;
+    const base = LEVEL_BASE_POINTS[level];
+    if (!base) continue;
+    const score = parseInt(s.score, 10) || 0;
+    if (score <= 0) continue;
+    const grade = s.grade || gradeFromScore(score);
+    const rating = calculateRatingPoints(level, grade, score);
+    if (rating > 0) rated.push(rating);
+  }
+
+  rated.sort((a, b) => b - a);
+  return rated.slice(0, 50).reduce((sum, rating) => sum + rating, 0);
+}
+
+function persistCalculatedPumbility(db, userId) {
+  const recalculatedPumbility = calculateLocalPumbilityFromBestScores(db, userId);
+  db.prepare('UPDATE users SET pumbility = ? WHERE id = ?').run(recalculatedPumbility, userId);
+  return recalculatedPumbility;
+}
+
 function isLeaderboardRefreshNeeded(lastSync, maxAgeMinutes = 60) {
   if (!lastSync) return true;
   const lastDate = new Date(`${lastSync}Z`);
@@ -2908,6 +2935,8 @@ async function syncRecentlyPlayedForUser(user, options = {}) {
   });
   txn();
 
+  const recalculatedPumbility = persistCalculatedPumbility(db, userId);
+
   // Feed the user's emoji pet based on NEW songs only (not re-synced plays)
   if (newPlaysForPet.length > 0) {
     try {
@@ -2996,6 +3025,7 @@ async function syncRecentlyPlayedForUser(user, options = {}) {
     profile_link: profileLink,
     plays_count: plays.length,
     scores_updated: updatedCount,
+    pumbility_value: recalculatedPumbility,
     plays,
     upscores: upscoreRowsWithGains,
     new_clears: clearRowsWithGains,
@@ -3252,24 +3282,8 @@ router.post('/sync/best-scores', requireAuth, async (req, res) => {
       });
       txn();
 
-      // Recalculate pumbility from the freshly imported best scores
-      const freshScores = db.prepare(
-        'SELECT level, score, grade FROM user_best_scores WHERE user_id = ? AND score > 0'
-      ).all(userId).filter((row) => isPassingScore(row.score, row.grade));
-      const rated = [];
-      for (const s of freshScores) {
-        const level = parseInt(s.level, 10) || 0;
-        const base = LEVEL_BASE_POINTS[level];
-        if (!base) continue;
-        const score = parseInt(s.score, 10) || 0;
-        if (score <= 0) continue;
-        const grade = s.grade || gradeFromScore(score);
-        const rating = calculateRatingPoints(level, grade, score);
-        if (rating > 0) rated.push(rating);
-      }
-      rated.sort((a, b) => b - a);
-      const recalcPumbility = rated.slice(0, 50).reduce((sum, r) => sum + r, 0);
-      db.prepare('UPDATE users SET pumbility = ? WHERE id = ?').run(recalcPumbility, userId);
+      // Recalculate pumbility from the freshly imported best scores.
+      persistCalculatedPumbility(db, userId);
 
       checkSssAchievements(db, userId);
       const progressAfterSync = updateUserSkillTitleFromBestScores(db, userId);

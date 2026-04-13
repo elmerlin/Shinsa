@@ -2247,7 +2247,7 @@ export default function ProfilePage() {
   const cabinetShoes = Array.isArray(shoeCabinet?.shoes) ? shoeCabinet.shoes : [];
   const activeCabinetShoes = cabinetShoes.filter((shoe) => !shoe.retired_at);
   const retiredCabinetShoes = cabinetShoes.filter((shoe) => !!shoe.retired_at);
-  const syncedProfilePumbility = parseInt(piuStatus?.pumbility_value, 10) || parseInt(profile?.pumbility, 10) || 0;
+  const syncedProfilePumbility = parseInt(profile?.pumbility, 10) || parseInt(piuStatus?.pumbility_value, 10) || 0;
   const computedOverallProfilePumbility = parseInt(songAnalytics?.computed_pumbility, 10) || 0;
   const overallProfilePumbility = syncedProfilePumbility || computedOverallProfilePumbility || 0;
   const singlesProfilePumbility = parseInt(songAnalytics?.singles_pumbility, 10) || 0;
