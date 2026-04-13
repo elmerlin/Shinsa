@@ -1141,6 +1141,11 @@ function calculateLocalPumbilityFromBestScores(db, userId) {
 function persistCalculatedPumbility(db, userId) {
   const recalculatedPumbility = calculateLocalPumbilityFromBestScores(db, userId);
   db.prepare('UPDATE users SET pumbility = ? WHERE id = ?').run(recalculatedPumbility, userId);
+  db.prepare(`
+    INSERT INTO user_piugame_sync (user_id, pumbility_value)
+    VALUES (?, ?)
+    ON CONFLICT(user_id) DO UPDATE SET pumbility_value = excluded.pumbility_value
+  `).run(userId, recalculatedPumbility);
   return recalculatedPumbility;
 }
 
