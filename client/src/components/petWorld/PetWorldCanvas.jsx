@@ -1149,7 +1149,7 @@ function buildPetPlacements(world, terrainRegions, buildings = []) {
     y: heroAnchor?.y ?? Math.floor((grid.h || 20) * ry),
     character: heroCharacter,
     seed,
-    heroScale: 1.25,
+    heroScale: 1.0,
     idleFacing: 2,
     walkCyclesPerTile: 2.8,
     idleFrameRate: 0.00006,

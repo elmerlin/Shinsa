@@ -20,6 +20,11 @@ function hasFlag(flag) {
   return process.argv.includes(flag);
 }
 
+function toInt(value, fallback) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 function hashSeed(input) {
   let h = 2166136261;
   const text = String(input || '');
@@ -530,6 +535,9 @@ async function main() {
   const username = argValue('--user', 'ELMER');
   const previewPath = argValue('--preview', `/tmp/${username.toLowerCase()}_pet_world_regen.png`);
   const apply = hasFlag('--apply');
+  const targetW = clamp(toInt(argValue('--target-w', null), null) || 0, 0, 30) || null;
+  const targetH = clamp(toInt(argValue('--target-h', null), null) || 0, 0, 30) || null;
+  const targetExpansions = toInt(argValue('--target-expansions', null), null);
 
   const db = new Database(dbPath);
   const world = db.prepare(`
@@ -548,13 +556,49 @@ async function main() {
     ORDER BY grid_y, grid_x, id
   `).all(world.user_id);
 
-  const originalGrid = parseGridData(world.grid_data);
-  const regenerated = regenerateGrid(originalGrid, buildings, `${world.user_id}:${world.biome}:regen-v1`);
-  await renderPreview(regenerated, buildings, previewPath);
+  let originalGrid = parseGridData(world.grid_data);
+  let workingBuildings = buildings.map((b) => ({ ...b }));
+  let appliedShift = { x: 0, y: 0 };
+
+  if (targetW && targetH && (targetW !== originalGrid.w || targetH !== originalGrid.h)) {
+    const footprint = computeVillageRect(workingBuildings);
+    const footprintW = footprint.maxX - footprint.minX + 1;
+    const footprintH = footprint.maxY - footprint.minY + 1;
+    const desiredMinX = Math.max(1, Math.floor((targetW - footprintW) / 2));
+    const desiredMinY = Math.max(2, Math.floor((targetH - footprintH) / 2));
+    appliedShift = {
+      x: desiredMinX - footprint.minX,
+      y: desiredMinY - footprint.minY,
+    };
+    workingBuildings = workingBuildings.map((b) => ({
+      ...b,
+      grid_x: b.grid_x + appliedShift.x,
+      grid_y: b.grid_y + appliedShift.y,
+    }));
+    originalGrid = {
+      v: originalGrid.v || 1,
+      w: targetW,
+      h: targetH,
+      tiles: createGrid(targetW, targetH, null).map((row) => row.map(() => ({ t: 'ground', b: null }))),
+      features: [],
+    };
+  }
+
+  const regenerated = regenerateGrid(originalGrid, workingBuildings, `${world.user_id}:${world.biome}:regen-v1:${originalGrid.w}x${originalGrid.h}`);
+  await renderPreview(regenerated, workingBuildings, previewPath);
 
   if (apply) {
-    db.prepare('UPDATE pet_worlds SET grid_data = ? WHERE user_id = ?')
-      .run(serializeGridData(regenerated), world.user_id);
+    const tx = db.transaction(() => {
+      if (appliedShift.x || appliedShift.y) {
+        const updateBuilding = db.prepare('UPDATE pet_world_buildings SET grid_x = ?, grid_y = ? WHERE id = ? AND user_id = ?');
+        for (const building of workingBuildings) {
+          updateBuilding.run(building.grid_x, building.grid_y, building.id, world.user_id);
+        }
+      }
+      db.prepare('UPDATE pet_worlds SET grid_width = ?, grid_height = ?, grid_data = ?, expansions = COALESCE(?, expansions) WHERE user_id = ?')
+        .run(regenerated.w, regenerated.h, serializeGridData(regenerated), Number.isFinite(targetExpansions) ? targetExpansions : null, world.user_id);
+    });
+    tx();
   }
 
   const counts = regenerated.tiles.flat().reduce((acc, tile) => {
@@ -567,6 +611,7 @@ async function main() {
     dbPath,
     applied: apply,
     previewPath,
+    shift: appliedShift,
     counts,
   }, null, 2));
 }
