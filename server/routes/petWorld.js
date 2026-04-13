@@ -436,6 +436,7 @@ function formatWorldBundle(db, world, buildings, options = {}) {
   const now = options.now instanceof Date ? options.now : new Date();
   const derived = getDerivedState(attachBiomeSpecialty(world), buildings, now.getTime());
   const owner = db.prepare('SELECT id, username FROM users WHERE id = ?').get(world.user_id);
+  const ownerPet = db.prepare('SELECT character FROM user_pets WHERE user_id = ?').get(world.user_id);
   const visitCount = db.prepare('SELECT COUNT(*) AS count FROM pet_world_visits WHERE host_user_id = ?').get(world.user_id)?.count || 0;
   const viewerId = options.viewerId || null;
   return {
@@ -481,6 +482,7 @@ function formatWorldBundle(db, world, buildings, options = {}) {
       last_tick_at: world.last_tick_at,
       created_at: world.created_at,
       visit_count: visitCount,
+      hero_character: String(ownerPet?.character || 'dojocat').trim().toLowerCase() || 'dojocat',
       has_market: buildings.some((building) => building.building_type === 'market' && building.state === 'built'),
       has_watchtower: buildings.some((building) => building.building_type === 'watchtower' && building.state === 'built'),
     },

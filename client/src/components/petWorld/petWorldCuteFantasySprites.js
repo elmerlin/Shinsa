@@ -26,9 +26,14 @@ function getImage(src) {
 /* ═══ Path helper ═══ */
 
 const CF = '/pet-world/cute-fantasy';
+const HERO = '/pet-world/heroes';
 
 function cfp(...parts) {
   return (CF + '/' + parts.join('/')).replace(/ /g, '%20');
+}
+
+function hfp(...parts) {
+  return (HERO + '/' + parts.join('/')).replace(/ /g, '%20');
 }
 
 /* ═══ Draw helpers ═══ */
@@ -317,6 +322,13 @@ const CUSTOM_PET_DIR = { south: 0, north: 1, east: 2, west: 3 };
 const CUSTOM_PETS = {
   dojocat: { p: 'Pets/Dojocat.png' },
   buu:     { p: 'Pets/Buu.png' },
+};
+
+const BASE_HERO_PETS = {
+  dojocat: { p: hfp('dojocat', 'base.png'), baseScale: 1.55 },
+  buu:     { p: hfp('buu', 'base.png'), baseScale: 1.55 },
+  devit:   { p: hfp('devit', 'base.png'), baseScale: 1.52 },
+  pixiu:   { p: hfp('pixiu', 'base.png'), baseScale: 1.52 },
 };
 
 function petDirFromFacing(facing) {
@@ -804,7 +816,20 @@ export function drawCuteFantasyCritter(ctx, x, y, tileSize, species, frameOffset
  *
  * @param {number} facing - 2=south, -2=north, -1=west, 1=east (or undefined)
  */
-export function drawCuteFantasyPet(ctx, x, y, tileSize, character, frameOffset, moving, facing = 2) {
+export function drawCuteFantasyPet(ctx, x, y, tileSize, character, frameOffset, moving, facing = 2, scaleMultiplier = 1) {
+  const heroPet = BASE_HERO_PETS[character];
+  if (heroPet) {
+    const src = heroPet.p;
+    const entry = getImage(src);
+    if (!entry?.loaded) return true;
+    const dir = petDirFromFacing(facing);
+    const drawFacing = dir === 'west' ? -1 : 1;
+    const d = tileSize * heroPet.baseScale * scaleMultiplier;
+    const bob = moving ? Math.sin(frameOffset * Math.PI * 2) * d * 0.025 : 0;
+    dropShadow(ctx, x, y + d * 0.16, d * 0.22, d * 0.07, 0.18);
+    return drawImg(ctx, src, x - d / 2, y - d * 0.76 + bob, d, d, drawFacing);
+  }
+
   // ── Custom pet sprites (directional 48×48) ──
   const custom = CUSTOM_PETS[character];
   if (custom) {
@@ -820,12 +845,12 @@ export function drawCuteFantasyPet(ctx, x, y, tileSize, character, frameOffset, 
     const sx = fi * CUSTOM_PET_FW;
     const sy = row * CUSTOM_PET_FH;
 
-    const d = tileSize * 1.35;
-    dropShadow(ctx, x, y + tileSize * 0.08, d * 0.22, d * 0.07, 0.2);
+    const d = tileSize * 1.3 * scaleMultiplier;
+    dropShadow(ctx, x, y + d * 0.16, d * 0.22, d * 0.07, 0.18);
     return drawFrame(
       ctx, src,
       sx, sy, CUSTOM_PET_FW, CUSTOM_PET_FH,
-      x - d / 2, y - d * 0.82, d, d,
+      x - d / 2, y - d * 0.72, d, d,
     );
   }
 
@@ -844,7 +869,7 @@ export function drawCuteFantasyPet(ctx, x, y, tileSize, character, frameOffset, 
   const sx = fi * 32;
   const sy = anim.row * 32;
 
-  const d = tileSize * 0.9;
+  const d = tileSize * 0.9 * scaleMultiplier;
   dropShadow(ctx, x, y + d * 0.08, d * 0.28, d * 0.09, 0.2);
   return drawFrame(
     ctx, src,

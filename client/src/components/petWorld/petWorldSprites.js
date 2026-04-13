@@ -1999,8 +1999,8 @@ const PET_PALETTES = {
   kappa:    { body: '#40a060', head: '#50b070', eye: '#ffffff', pupil: '#0a2a18', ear: '#308a48', belly: '#60c080', nose: '#2a8a48' },
 };
 
-export function drawPetWander(ctx, x, y, tileSize, character, frameOffset, moving, facing) {
-  if (drawCuteFantasyPet(ctx, x, y, tileSize * 1.06, character, frameOffset, moving, facing)) {
+export function drawPetWander(ctx, x, y, tileSize, character, frameOffset, moving, facing, scaleMultiplier = 1) {
+  if (drawCuteFantasyPet(ctx, x, y, tileSize * 1.06, character, frameOffset, moving, facing, scaleMultiplier)) {
     return;
   }
   if (drawPetAtlas(ctx, x, y, tileSize * 1.06, character, frameOffset)) {
