@@ -26,14 +26,9 @@ function getImage(src) {
 /* ═══ Path helper ═══ */
 
 const CF = '/pet-world/cute-fantasy';
-const PIXELLAB = '/pet-world/pixellab';
 
 function cfp(...parts) {
   return (CF + '/' + parts.join('/')).replace(/ /g, '%20');
-}
-
-function pfp(...parts) {
-  return (PIXELLAB + '/' + parts.join('/')).replace(/ /g, '%20');
 }
 
 /* ═══ Draw helpers ═══ */
@@ -321,27 +316,7 @@ const CUSTOM_PET_DIR = { south: 0, north: 1, east: 2, west: 3 };
 
 const CUSTOM_PETS = {
   dojocat: { p: 'Pets/Dojocat.png' },
-};
-const PIXELLAB_PETS = {
-  buu: {
-    fw: 68,
-    fh: 68,
-    idleFrames: 4,
-    walkFrames: 6,
-    scale: 1.05,
-    idle: {
-      south: pfp('buu', 'idle_south.png'),
-      north: pfp('buu', 'idle_north.png'),
-      east: pfp('buu', 'idle_east.png'),
-      west: pfp('buu', 'idle_west.png'),
-    },
-    walk: {
-      south: pfp('buu', 'walk_south.png'),
-      north: pfp('buu', 'walk_north.png'),
-      east: pfp('buu', 'walk_east.png'),
-      west: pfp('buu', 'walk_west.png'),
-    },
-  },
+  buu:     { p: 'Pets/Buu.png' },
 };
 
 function petDirFromFacing(facing) {
@@ -830,24 +805,6 @@ export function drawCuteFantasyCritter(ctx, x, y, tileSize, species, frameOffset
  * @param {number} facing - 2=south, -2=north, -1=west, 1=east (or undefined)
  */
 export function drawCuteFantasyPet(ctx, x, y, tileSize, character, frameOffset, moving, facing = 2) {
-  const pixellabPet = PIXELLAB_PETS[character];
-  if (pixellabPet) {
-    const dir = petDirFromFacing(facing);
-    const frameCount = moving ? pixellabPet.walkFrames : pixellabPet.idleFrames;
-    const src = moving ? pixellabPet.walk[dir] : pixellabPet.idle[dir];
-    const entry = getImage(src);
-    if (!entry?.loaded) return true;
-
-    const fi = Math.floor(frameOffset * frameCount) % frameCount;
-    const d = tileSize * pixellabPet.scale;
-    dropShadow(ctx, x, y + d * 0.08, d * 0.24, d * 0.08, 0.18);
-    return drawFrame(
-      ctx, src,
-      fi * pixellabPet.fw, 0, pixellabPet.fw, pixellabPet.fh,
-      x - d / 2, y - d * 0.76, d, d,
-    );
-  }
-
   // ── Custom pet sprites (directional 48×48) ──
   const custom = CUSTOM_PETS[character];
   if (custom) {

@@ -22,7 +22,7 @@ const MINIMAP_W = 120;
 const MINIMAP_H = 80;
 const MINIMAP_PADDING = 8;
 const LERP_SPEED = 0.15;
-const PET_ROSTER = ['dojocat', 'buu', 'devit', 'pixiu', 'tanuki', 'kitsune', 'usagi', 'kappa'];
+// Only pro-generated pets: one Dojocat + one Buu per world
 const RESIDENT_STYLES = ['teal', 'berry', 'ochre', 'slate', 'moss', 'plum'];
 const ENCOUNTER_SPECIES = {
   fox_raid: 'fox',
@@ -764,15 +764,11 @@ function getAnimalWanderPos(entity, time, grid) {
 function buildPetPlacements(world) {
   const grid = world?.grid;
   if (!grid) return [];
-  const clearTiles = findClearTiles(grid);
-  const population = Math.max(0, world.population || 0);
-  const count = Math.min(Math.max(2, population), 12, clearTiles.length);
-  const placements = [];
-  for (let i = 0; i < count; i += 1) {
-    const tile = clearTiles[(i * 11 + Math.floor(i / 2) * 3) % clearTiles.length];
-    placements.push({ ...tile, character: PET_ROSTER[i % PET_ROSTER.length], seed: i * 13 + 7 });
-  }
-  return placements;
+  // Exactly one Dojocat and one Buu per world, roaming freely
+  return [
+    { x: Math.floor((grid.w || 20) * 0.35), y: Math.floor((grid.h || 20) * 0.35), character: 'dojocat', seed: 7 },
+    { x: Math.floor((grid.w || 20) * 0.65), y: Math.floor((grid.h || 20) * 0.65), character: 'buu', seed: 20 },
+  ];
 }
 
 function buildResidentPlacements(world, terrainRegions, buildings = []) {
@@ -983,76 +979,50 @@ function buildEncounterSightings(world, terrainRegions, encounters = []) {
   });
 }
 
-/** Deterministic pet position with multi-state wander. Grid-aware. */
+/** Deterministic free-roaming pet position using smooth Lissajous orbit. */
 function getPetWanderPos(pet, time, grid) {
-  const period = 4200; // slower, more pet-like
-  const step = Math.floor(time / period);
-  const currentHash = (pet.seed * 2654435761 + step * 2246822519) >>> 0;
-  const nextHash = (pet.seed * 2654435761 + (step + 1) * 2246822519) >>> 0;
-  const from = {
-    x: (currentHash % 3) - 1,
-    y: ((currentHash >> 4) % 3) - 1,
-  };
-  const to = {
-    x: (nextHash % 3) - 1,
-    y: ((nextHash >> 4) % 3) - 1,
-  };
+  const w = grid?.w || 20;
+  const h = grid?.h || 20;
+  const s = pet.seed;
+  const hash = (s * 2654435761) >>> 0;
 
-  // Validate against grid walkability
-  if (grid) {
-    const homeX = Math.floor(pet.x);
-    const homeY = Math.floor(pet.y);
-    if (!isTileWalkable(grid, homeX + from.x, homeY + from.y)) { from.x = 0; from.y = 0; }
-    if (!isTileWalkable(grid, homeX + to.x, homeY + to.y)) { to.x = 0; to.y = 0; }
-  }
+  // Unique orbit per pet — Lissajous parameters from seed
+  const cx = w / 2;
+  const cy = h / 2;
+  const rx = w * 0.32 + (hash % 40) * w * 0.003;
+  const ry = h * 0.32 + ((hash >> 8) % 40) * h * 0.003;
+  const sp1 = 0.000022 + ((hash >> 16) % 20) * 0.0000012;
+  const sp2 = 0.000013 + ((hash >> 24) % 20) * 0.0000008;
+  const ph1 = ((hash >> 2) % 628) / 100;
+  const ph2 = ((hash >> 6) % 628) / 100;
 
-  const phase = (time % period) / period;
-  const idleFrame = (time * 0.0003 + pet.seed * 0.1) % 1;
-  const midHash = (currentHash ^ (nextHash >>> 8)) >>> 0;
-  const scale = 0.44;
-  const moveDx = to.x - from.x;
-  const moveDy = to.y - from.y;
-  const moveFacing = Math.abs(moveDx) >= Math.abs(moveDy)
-    ? (moveDx >= 0 ? 1 : -1)
-    : (moveDy >= 0 ? 2 : -2);
-  const idleFacing = Math.abs(to.x) >= Math.abs(to.y)
-    ? (to.x === 0 ? moveFacing : (to.x >= 0 ? 1 : -1))
-    : (to.y === 0 ? moveFacing : (to.y >= 0 ? 2 : -2));
+  const rawX = cx + Math.sin(time * sp1 + ph1) * rx;
+  const rawY = cy + Math.cos(time * sp2 + ph2) * ry;
+  const x = Math.max(1.5, Math.min(w - 2.5, rawX));
+  const y = Math.max(1.5, Math.min(h - 2.5, rawY));
 
-  // Multi-phase: idle → walk → pause → settle → idle
-  if (phase < 0.2) {
-    return { x: pet.x + from.x * scale, y: pet.y + from.y * 0.34, frameOffset: idleFrame, moving: false, facing: idleFacing };
-  }
-  if (phase < 0.55) {
-    const t = smoothStep((phase - 0.2) / 0.35);
-    const fx = from.x + (to.x - from.x) * t;
-    const fy = from.y + (to.y - from.y) * t;
-    const dist = Math.abs(to.x - from.x) + Math.abs(to.y - from.y);
-    const isMoving = dist > 0;
-    return {
-      x: pet.x + fx * scale,
-      y: pet.y + fy * 0.34,
-      frameOffset: isMoving ? (t * 2.2 + pet.seed * 0.07) % 1 : idleFrame,
-      moving: isMoving,
-      facing: isMoving ? moveFacing : idleFacing,
-    };
-  }
-  if (phase < 0.68) {
-    // Brief pause — pet "sniffs" or looks around, keep last move direction
-    return { x: pet.x + to.x * scale, y: pet.y + to.y * 0.34, frameOffset: idleFrame, moving: false, facing: moveFacing };
-  }
-  if (phase < 0.82) {
-    // Settle: tiny drift
-    const drift = Math.sin((phase - 0.68) / 0.14 * Math.PI) * 0.025;
-    return {
-      x: pet.x + to.x * scale + drift * ((midHash % 2) === 0 ? 1 : -1),
-      y: pet.y + to.y * 0.34 + drift * ((midHash >> 2) % 2 === 0 ? 1 : -1),
-      frameOffset: idleFrame,
-      moving: false,
-      facing: moveFacing,
-    };
-  }
-  return { x: pet.x + to.x * scale, y: pet.y + to.y * 0.34, frameOffset: idleFrame, moving: false, facing: idleFacing };
+  // Compute facing from velocity
+  const dt = 250;
+  const prevX = cx + Math.sin((time - dt) * sp1 + ph1) * rx;
+  const prevY = cy + Math.cos((time - dt) * sp2 + ph2) * ry;
+  const dx = rawX - prevX;
+  const dy = rawY - prevY;
+
+  // Periodic idle pauses (pet stops, looks around, resumes)
+  const pauseCycle = ((hash >> 10) % 4 + 5) * 7000; // 35-56s cycle
+  const pausePhase = (time % pauseCycle) / pauseCycle;
+  const isPaused = pausePhase > 0.82; // ~18% idle
+
+  const moving = !isPaused && (Math.abs(dx) + Math.abs(dy)) > 0.0003;
+  const facing = Math.abs(dx) >= Math.abs(dy)
+    ? (dx >= 0 ? 1 : -1)
+    : (dy >= 0 ? 2 : -2);
+
+  const frameOffset = moving
+    ? (time * 0.00035 + s * 0.07) % 1
+    : (time * 0.00025 + s * 0.1) % 1;
+
+  return { x, y, frameOffset, moving, facing };
 }
 
 /** Check if all tiles in a footprint are valid for building. */
