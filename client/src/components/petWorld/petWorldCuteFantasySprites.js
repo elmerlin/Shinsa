@@ -27,13 +27,14 @@ function getImage(src) {
 
 const CF = '/pet-world/cute-fantasy';
 const HERO = '/pet-world/heroes';
+const HERO_ASSET_VERSION = '20260413b';
 
 function cfp(...parts) {
   return (CF + '/' + parts.join('/')).replace(/ /g, '%20');
 }
 
 function hfp(...parts) {
-  return (HERO + '/' + parts.join('/')).replace(/ /g, '%20');
+  return `${(HERO + '/' + parts.join('/')).replace(/ /g, '%20')}?v=${HERO_ASSET_VERSION}`;
 }
 
 /* ═══ Draw helpers ═══ */
