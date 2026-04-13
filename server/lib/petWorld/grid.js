@@ -35,14 +35,28 @@ function isWaterTile(type) {
   return type === 'water';
 }
 
+function isShoreTile(grid, tx, ty) {
+  const tile = grid.tiles[ty]?.[tx];
+  if (!tile || tile.t === 'water') return false;
+  for (let dy = -1; dy <= 1; dy += 1) {
+    for (let dx = -1; dx <= 1; dx += 1) {
+      if (dx === 0 && dy === 0) continue;
+      const nb = grid.tiles[ty + dy]?.[tx + dx];
+      if (nb && nb.t === 'water') return true;
+    }
+  }
+  return false;
+}
+
 function canPlace(grid, x, y, width, height, options = {}) {
-  const { requiresAdjacentWater = false } = options;
+  const { requiresAdjacentWater = false, rejectShoreTiles = false } = options;
   for (let dy = 0; dy < height; dy += 1) {
     for (let dx = 0; dx < width; dx += 1) {
       const tile = grid.tiles[y + dy]?.[x + dx];
       if (!tile) return false;
       if (tile.b != null) return false;
       if (isObstacleTile(tile.t)) return false;
+      if (rejectShoreTiles && isShoreTile(grid, x + dx, y + dy)) return false;
     }
   }
   if (!requiresAdjacentWater) return true;

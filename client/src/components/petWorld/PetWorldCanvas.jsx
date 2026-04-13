@@ -1434,6 +1434,22 @@ function isPlacementValid(grid, gx, gy, bw, bh, buildingType) {
       if (['water', 'rock', 'tree', 'bush', 'stump'].includes(tile.t)) return false;
     }
   }
+  // Paths cannot be placed on shore tiles (adjacent to water)
+  if (buildingType === 'path') {
+    for (let dy = 0; dy < bh; dy++) {
+      for (let dx = 0; dx < bw; dx++) {
+        const tx = gx + dx;
+        const ty = gy + dy;
+        for (let ny = -1; ny <= 1; ny++) {
+          for (let nx = -1; nx <= 1; nx++) {
+            if (nx === 0 && ny === 0) continue;
+            const nb = grid.tiles[ty + ny]?.[tx + nx];
+            if (nb?.t === 'water') return false;
+          }
+        }
+      }
+    }
+  }
   // fishing_hut requires adjacent water
   if (buildingType === 'fishing_hut') {
     let hasWater = false;

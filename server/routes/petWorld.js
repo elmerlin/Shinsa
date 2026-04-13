@@ -695,7 +695,10 @@ router.post('/build', requireAuth, (req, res) => {
     }
     const cost = getBuildCost(type);
     if (!validateResources(world, cost.materials)) throw new Error('Not enough resources');
-    if (!canPlace(grid, x, y, def.width, def.height, { requiresAdjacentWater: !!def.requiresAdjacentWater })) {
+    if (!canPlace(grid, x, y, def.width, def.height, {
+      requiresAdjacentWater: !!def.requiresAdjacentWater,
+      rejectShoreTiles: type === 'path',
+    })) {
       throw new Error('Cannot place building there');
     }
     if (!spendCombos(db, req.user.id, cost.combos)) throw new Error('Not enough combos');

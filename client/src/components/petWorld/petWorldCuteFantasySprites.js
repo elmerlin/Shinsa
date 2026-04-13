@@ -206,7 +206,16 @@ const WANG_LOOKUP = [
   [48, 0],  [0, 0],   [16, 48], [0, 48],   // 12-15
 ];
 const WANG_WATER_GRASS = 'Tiles/wang_water_grass.png';
-const WANG_GRASS_PATH  = 'Tiles/wang_grass_path.png?v=2';
+
+// Path wang lookup: pathIdx uses 1=path(dirt), 0=grass — inverted from PixelLab's
+// 0=lower(dirt), 1=upper(grass) convention, so we map via 15-pathIdx.
+const WANG_DIRT_GRASS  = 'Tiles/wang_dirt_grass.png';
+const PATH_WANG_LOOKUP = [
+  [0, 48],  [16, 48], [0, 0],   [48, 0],   //  0-3  (all grass → mostly grass)
+  [0, 32],  [16, 0],  [32, 48], [16, 16],   //  4-7
+  [48, 48], [0, 16],  [48, 32], [32, 0],    //  8-11
+  [16, 32], [32, 32], [48, 16], [32, 16],   // 12-15 (mostly dirt → all dirt)
+];
 
 /* ── Grass variation tiles (16x16 each) ── */
 const GRASS_VARIANTS = [
@@ -590,7 +599,7 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
   /* ── Shore transition flag (computed early — used by path + water sections) ── */
   const isShoreTransition = wangIdx > 0 && wangIdx < 15;
 
-  /* ── Path auto-tiling (grass↔path Wang transitions) ── */
+  /* ── Path auto-tiling (dirt↔grass Wang transitions) ── */
   // Only render on actual path buildings or adjacent tiles.
   // Skip path rendering on shore transition tiles for clean water-edge coherence.
   const hasPathBuilding = tile.b != null && terrain?.isPathBuilding;
@@ -602,31 +611,24 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
     const pSE = (isPath('s') || isPath('e') || isPath('se')) ? 1 : 0;
     const pathIdx = pNW * 8 + pNE * 4 + pSW * 2 + pSE;
     if (hasPathBuilding) {
-      // This tile IS a path — draw full path
+      // This tile IS a path — draw full dirt; isolated paths (pathIdx=0) force to 15 (pure dirt)
       const idx = pathIdx > 0 ? pathIdx : 15;
-      const [psx, psy] = WANG_LOOKUP[idx];
-      drawFrame(ctx, cfp(WANG_GRASS_PATH), psx, psy, 16, 16, x, y, size, size);
+      const [psx, psy] = PATH_WANG_LOOKUP[idx];
+      drawFrame(ctx, cfp(WANG_DIRT_GRASS), psx, psy, 16, 16, x, y, size, size);
     } else if (pathIdx > 0) {
-      // Adjacent to a path — slightly reduced alpha for gentle grass↔path blend
-      const [psx, psy] = WANG_LOOKUP[pathIdx];
-      drawFrame(ctx, cfp(WANG_GRASS_PATH), psx, psy, 16, 16, x, y, size, size, undefined, 0.88);
+      // Adjacent to a path — slightly reduced alpha for gentle grass↔dirt blend
+      const [psx, psy] = PATH_WANG_LOOKUP[pathIdx];
+      drawFrame(ctx, cfp(WANG_DIRT_GRASS), psx, psy, 16, 16, x, y, size, size, undefined, 0.88);
     }
   }
 
-  /* ── Shore water shimmer — only on tiles with significant water presence ── */
-  if (isShoreTransition && wangIdx <= 10) {
-    // Only shimmer tiles where water is visually dominant (wangIdx <= 10 ≈ >33% water).
-    // Tiles that are mostly grass (wangIdx 11-14) skip shimmer to avoid blue-tinting grass.
-    const waterWeight = 1 - (wangIdx / 15);
-    const shimmerAlpha = waterWeight * 0.30;
-    const shFi = Math.floor((t * 0.003 + h * 0.1) % WATER_CONN_FRAMES);
-    drawFrame(ctx, cfp(WATER_CONN_ANIM), shFi * WATER_CONN_FRAME_W + 16, 16, 16, 16,
-      x, y, size, size, undefined, shimmerAlpha);
-  }
+  // Shore shimmer removed — it overlaid blue animation on the ENTIRE tile including
+  // grass portions, visibly tinting shore grass darker. The wang tiles already contain
+  // correct water-coloured pixels that blend with adjacent animated water tiles.
 
   /* ── Flower-grass overlays on ~16 % of open ground tiles ── */
-  // Also allowed on grass-dominant shore tiles (wangIdx >= 10) for colour consistency
-  if (tile.t !== 'tree' && tile.t !== 'rock' && tile.t !== 'bush' && tile.t !== 'stump' && (!isShoreTransition || wangIdx >= 10)) {
+  // Allowed on shore tiles with enough visible grass (wangIdx >= 8 ≈ 50%+ grass corners)
+  if (tile.t !== 'tree' && tile.t !== 'rock' && tile.t !== 'bush' && tile.t !== 'stump' && (!isShoreTransition || wangIdx >= 8)) {
     if (h % 6 === 0) {
       const variant = (h >>> 3) % FLOWER_GRASS_COUNT + 1;
       const fi = Math.floor((t * 0.002 + h * 0.07) % FLOWER_GRASS_FRAMES);
