@@ -84,6 +84,7 @@ const STARTING_RESOURCES = {
 
 const OBSTACLE_CLEAR_RULES = {
   tree: { combos: 5, yield: { wood: 3 } },
+  stump: { combos: 2, yield: { wood: 1 } },
   rock: { combos: 8, yield: { stone: 3 } },
   bush: { combos: 3, yield: { cloth: 1 } },
 };

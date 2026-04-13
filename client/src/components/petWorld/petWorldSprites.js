@@ -147,12 +147,12 @@ export function analyzeTerrainGrid(grid, buildings = []) {
       const tile = grid.tiles[y]?.[x] || null;
       const buildingType = tile?.b != null ? buildingMap.get(tile.b)?.type || null : null;
       const tileType = tile?.t || 'ground';
-      const isObstacle = tileType === 'tree' || tileType === 'rock' || tileType === 'bush';
+      const isObstacle = tileType === 'tree' || tileType === 'rock' || tileType === 'bush' || tileType === 'stump';
       return {
         tileType,
         buildingType,
         isWater: tileType === 'water',
-        isFoliage: tileType === 'tree' || tileType === 'bush',
+        isFoliage: tileType === 'tree' || tileType === 'bush' || tileType === 'stump',
         isRock: tileType === 'rock',
         isPath: buildingType === 'path',
         openGround: tile?.b == null && !isObstacle && tileType !== 'water',
@@ -404,7 +404,7 @@ export function drawTile(ctx, biome, tile, x, y, tileSize, time = 0, neighbors, 
   // Cute Fantasy ground tile overlay (replaces procedural base when loaded)
   const cfGround = drawCuteFantasyGround(ctx, biome, tile, ix, iy, s, neighbors, h, time, terrainInfo);
 
-  if (tile.t === 'tree' || tile.t === 'rock' || tile.t === 'bush') {
+  if (tile.t === 'tree' || tile.t === 'rock' || tile.t === 'bush' || tile.t === 'stump') {
     if (drawCuteFantasyTerrain(ctx, biome, tile, ix, iy, s, h, terrainInfo, neighbors)) {
       return;
     }
@@ -436,10 +436,10 @@ export function drawTile(ctx, biome, tile, x, y, tileSize, time = 0, neighbors, 
       if (neighbors.e === 'water') paintEdgeGlow(ctx, ix, iy, s, 'e', biomeUi.waterShore || '#5898b8', shoreAlpha * 0.9, 0.22);
 
       const shadowAlpha = 0.06 + (terrainInfo?.foliageShadow || 0) * 0.08;
-      if (neighbors.n === 'tree' || neighbors.n === 'bush') paintEdgeGlow(ctx, ix, iy, s, 'n', biomeUi.shadowColor || 'rgba(0,0,0,0.08)', shadowAlpha, 0.2);
-      if (neighbors.s === 'tree' || neighbors.s === 'bush') paintEdgeGlow(ctx, ix, iy, s, 's', biomeUi.shadowColor || 'rgba(0,0,0,0.08)', shadowAlpha * 0.8, 0.18);
-      if (neighbors.w === 'tree' || neighbors.w === 'bush') paintEdgeGlow(ctx, ix, iy, s, 'w', biomeUi.shadowColor || 'rgba(0,0,0,0.06)', shadowAlpha * 0.86, 0.18);
-      if (neighbors.e === 'tree' || neighbors.e === 'bush') paintEdgeGlow(ctx, ix, iy, s, 'e', biomeUi.shadowColor || 'rgba(0,0,0,0.06)', shadowAlpha * 0.8, 0.18);
+      if (neighbors.n === 'tree' || neighbors.n === 'bush' || neighbors.n === 'stump') paintEdgeGlow(ctx, ix, iy, s, 'n', biomeUi.shadowColor || 'rgba(0,0,0,0.08)', shadowAlpha, 0.2);
+      if (neighbors.s === 'tree' || neighbors.s === 'bush' || neighbors.s === 'stump') paintEdgeGlow(ctx, ix, iy, s, 's', biomeUi.shadowColor || 'rgba(0,0,0,0.08)', shadowAlpha * 0.8, 0.18);
+      if (neighbors.w === 'tree' || neighbors.w === 'bush' || neighbors.w === 'stump') paintEdgeGlow(ctx, ix, iy, s, 'w', biomeUi.shadowColor || 'rgba(0,0,0,0.06)', shadowAlpha * 0.86, 0.18);
+      if (neighbors.e === 'tree' || neighbors.e === 'bush' || neighbors.e === 'stump') paintEdgeGlow(ctx, ix, iy, s, 'e', biomeUi.shadowColor || 'rgba(0,0,0,0.06)', shadowAlpha * 0.8, 0.18);
     }
   }
 

@@ -69,7 +69,7 @@ const ACTIVE_MARKER_BUILDINGS = new Set([
   'shrine',
 ]);
 
-const WALK_BLOCKERS = new Set(['water', 'rock', 'tree', 'bush']);
+const WALK_BLOCKERS = new Set(['water', 'rock', 'tree', 'bush', 'stump']);
 const RESIDENT_WALK_OPTIONS = { maxShoreStrength: 0.02, maxWaterRatio: 0.006 };
 const ROAMING_WALK_OPTIONS = { maxShoreStrength: 0.018, maxWaterRatio: 0.005 };
 const ENCOUNTER_WALK_OPTIONS = { maxShoreStrength: 0.022, maxWaterRatio: 0.008 };
@@ -1419,7 +1419,7 @@ function isPlacementValid(grid, gx, gy, bw, bh, buildingType) {
       const tile = grid.tiles[ty]?.[tx];
       if (!tile) return false;
       if (tile.b != null) return false;
-      if (['water', 'rock', 'tree', 'bush'].includes(tile.t)) return false;
+      if (['water', 'rock', 'tree', 'bush', 'stump'].includes(tile.t)) return false;
     }
   }
   // fishing_hut requires adjacent water
@@ -1580,7 +1580,7 @@ export default function PetWorldCanvas({
           color = building?.type === 'path' ? (biomeUi.pathStone || '#b3a389') : (ui.accent || '#ffffff');
         } else if (tile.t === 'water') {
           color = (terrain?.basinDepth || 0) > 0.5 ? biomeUi.waterDeep : biomeUi.water;
-        } else if (tile.t === 'tree' || tile.t === 'bush') {
+        } else if (tile.t === 'tree' || tile.t === 'bush' || tile.t === 'stump') {
           color = biomeUi.tree;
         } else if (tile.t === 'rock') {
           color = biomeUi.rock;

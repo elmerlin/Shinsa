@@ -611,7 +611,7 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
   }
 
   /* ── Flower-grass overlays on ~16 % of open ground tiles (NOT on shore tiles) ── */
-  if (tile.t !== 'tree' && tile.t !== 'rock' && tile.t !== 'bush' && !isShoreTransition) {
+  if (tile.t !== 'tree' && tile.t !== 'rock' && tile.t !== 'bush' && tile.t !== 'stump' && !isShoreTransition) {
     if (h % 6 === 0) {
       const variant = (h >>> 3) % FLOWER_GRASS_COUNT + 1;
       const fi = Math.floor((t * 0.002 + h * 0.07) % FLOWER_GRASS_FRAMES);
@@ -631,7 +631,7 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
  */
 export function drawCuteFantasyTerrain(ctx, biome, tile, x, y, size, seed, terrain, neighbors) {
   // Skip ALL obstacles adjacent to water — trees, rocks, bushes look unnatural on shorelines
-  if ((tile.t === 'tree' || tile.t === 'bush' || tile.t === 'rock') && neighbors) {
+  if ((tile.t === 'tree' || tile.t === 'bush' || tile.t === 'rock' || tile.t === 'stump') && neighbors) {
     const nb = neighbors;
     if (nb.n === 'water' || nb.s === 'water' || nb.e === 'water' || nb.w === 'water'
       || nb.ne === 'water' || nb.nw === 'water' || nb.se === 'water' || nb.sw === 'water') {
@@ -639,7 +639,7 @@ export function drawCuteFantasyTerrain(ctx, biome, tile, x, y, size, seed, terra
     }
   }
 
-  if (tile.t === 'tree') {
+  if (tile.t === 'tree' || tile.t === 'stump') {
     const treeType = pick(BIOME_TREES[biome] || BIOME_TREES.grasslands, seed);
     if (!treeType) return false;
 
@@ -669,16 +669,18 @@ export function drawCuteFantasyTerrain(ctx, biome, tile, x, y, size, seed, terra
 
     const fw = treeData.fw;
     const fh = treeData.fh;
-    // Scale tree to tile: big trees overhang ~1.8x, medium ~1.5x, small ~1.2x
-    const scaleW = sizeCategory === 'big' ? 1.8 : sizeCategory === 'small' ? 1.0 : 1.2;
+    const isStump = tile.t === 'stump';
+    const frameIndex = isStump ? 0 : fi;
+    // Stumps use the cut trunk frame at a grounded size; trees keep their normal overhang.
+    const scaleW = isStump ? 0.72 : (sizeCategory === 'big' ? 1.8 : sizeCategory === 'small' ? 1.0 : 1.2);
     const scaleH = scaleW * (fh / fw);
     const treeW = size * scaleW;
     const treeH = size * scaleH;
     const drawX = x + (size - treeW) / 2;
-    const drawY = y + size - treeH;
+    const drawY = y + size - treeH - (isStump ? size * 0.04 : 0);
 
-    dropShadow(ctx, x + size * 0.5, y + size * 0.9, size * 0.32, size * 0.1, 0.25);
-    return drawFrame(ctx, src, fi * fw, 0, fw, fh, drawX, drawY, treeW, treeH);
+    dropShadow(ctx, x + size * 0.5, y + size * (isStump ? 0.88 : 0.9), size * (isStump ? 0.22 : 0.32), size * (isStump ? 0.07 : 0.1), isStump ? 0.18 : 0.25);
+    return drawFrame(ctx, src, frameIndex * fw, 0, fw, fh, drawX, drawY, treeW, treeH);
   }
 
   if (tile.t === 'rock') {

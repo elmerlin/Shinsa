@@ -206,7 +206,7 @@ function createStarterGrid(biome) {
 }
 
 function isObstacle(tileType) {
-  return ['water', 'tree', 'rock', 'bush'].includes(tileType);
+  return ['water', 'tree', 'rock', 'bush', 'stump'].includes(tileType);
 }
 
 function directionBias(biome, direction = 'e') {
@@ -268,7 +268,7 @@ function generateExpansionChunk({ biome, direction, expansionIndex, width, heigh
   for (let y2 = 0; y2 < height; y2 += 1) {
     for (let x2 = 0; x2 < width; x2 += 1) {
       const tt = tiles[y2][x2].t;
-      if (tt !== 'tree' && tt !== 'bush' && tt !== 'rock') continue;
+      if (tt !== 'tree' && tt !== 'bush' && tt !== 'rock' && tt !== 'stump') continue;
       let adjacentWater = false;
       for (let dy = -1; dy <= 1 && !adjacentWater; dy += 1) {
         for (let dx = -1; dx <= 1 && !adjacentWater; dx += 1) {

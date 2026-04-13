@@ -1,6 +1,6 @@
 const { generateExpansionChunk } = require('./biomes');
 
-const OBSTACLE_TILES = new Set(['water', 'rock', 'tree', 'bush']);
+const OBSTACLE_TILES = new Set(['water', 'rock', 'tree', 'bush', 'stump']);
 
 function parseGridData(gridData) {
   if (!gridData) return { v: 1, w: 12, h: 12, tiles: [] };
@@ -76,7 +76,7 @@ function sanitizeGrid(grid) {
       const tile = grid.tiles[y]?.[x];
       if (!tile) continue;
       const tt = tile.t;
-      if (tt !== 'tree' && tt !== 'bush' && tt !== 'rock') continue;
+      if (tt !== 'tree' && tt !== 'bush' && tt !== 'rock' && tt !== 'stump') continue;
       let adjacentWater = false;
       for (let dy = -1; dy <= 1 && !adjacentWater; dy += 1) {
         for (let dx = -1; dx <= 1 && !adjacentWater; dx += 1) {
