@@ -794,10 +794,10 @@ function buildWoodcuttingTaskTiles(grid, terrainRegions, landTiles = [], buildin
   if (!grid || !landTiles.length) return [];
   const villageAnchor = pickVillageAnchor(landTiles, buildings, seed) || landTiles[0];
   const dirs = [
-    { dx: 0, dy: -1 },
     { dx: 1, dy: 0 },
-    { dx: 0, dy: 1 },
     { dx: -1, dy: 0 },
+    { dx: 0, dy: -1 },
+    { dx: 0, dy: 1 },
   ];
 
   return landTiles
@@ -815,14 +815,14 @@ function buildWoodcuttingTaskTiles(grid, terrainRegions, landTiles = [], buildin
         }))
         .filter(({ tile }) => tile && (tile.t === 'tree' || tile.t === 'stump'));
 
-      const foliageScore = terrain?.foliageShadow || 0;
-      if (!neighborTrees.length && foliageScore < 0.16) return null;
-
-      const focus = neighborTrees[0];
+      const horizontalFocus = neighborTrees.find(({ dx }) => dx !== 0) || null;
+      const focus = horizontalFocus || null;
+      if (!focus) return null;
       const pauseFacing = focus
         ? facingFromVector(focus.dx, focus.dy, 2)
         : (hash01(seed + index * 17, 111) > 0.5 ? -1 : 1);
-      const score = neighborTrees.length * 2.2 + foliageScore * 3 + hash01(seed + index * 19, 112);
+      const foliageScore = terrain?.foliageShadow || 0;
+      const score = neighborTrees.length * 2.2 + foliageScore * 3.2 + 1.8 + hash01(seed + index * 19, 112);
       return {
         x,
         y,
@@ -946,7 +946,17 @@ function buildResidentTaskState(entity, motion, taskKind, world, terrainRegions,
   if (taskKind === 'fish') {
     const shoreTiles = buildFishingShoreTiles(grid, terrainRegions, landTiles, buildings, entity.seed + 613);
     const scenicSpots = selectFishingSceneSpots(grid, terrainRegions, shoreTiles, buildings);
-    const preferredPool = scenicSpots.length ? scenicSpots : shoreTiles;
+    const primaryScenicSpot = scenicSpots.find((spot) => findTilePath(
+      grid,
+      terrainRegions,
+      startTile,
+      spot,
+      entity.seed + 615,
+      RESIDENT_WALK_OPTIONS,
+    ));
+    const preferredPool = primaryScenicSpot
+      ? [{ ...primaryScenicSpot, score: (primaryScenicSpot.score || 0) + 5 }, ...scenicSpots.filter((spot) => spot !== primaryScenicSpot)]
+      : (scenicSpots.length ? scenicSpots : shoreTiles);
     target = pickResidentTaskTarget(preferredPool, startTile, entity.seed + 617, grid, terrainRegions, RESIDENT_WALK_OPTIONS);
     if (!target) return null;
     const intro = buildResidentTaskIntroRoute(motion, target, entity.seed + 619, grid, terrainRegions, target, {
@@ -2128,7 +2138,7 @@ function getTileRouteMotion(entity, time) {
 
 function getResidentDisplayActivity(resident, motion) {
   if (!motion) return resident.activity || 'stroll';
-  const buildingType = motion.buildingType || resident.workBuildingType || null;
+  const buildingType = motion.buildingType || null;
   if (!motion.moving || motion.paused) {
     if (buildingType === 'farm') {
       return (resident.seed % 2 === 0) ? 'farm_till' : 'farm_water';
