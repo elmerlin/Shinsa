@@ -772,6 +772,8 @@ function buildFishingShoreTiles(grid, terrainRegions, landTiles = [], buildings 
     return {
       x,
       y,
+      standX: x + 0.5 + dirVector.dx * 0.22,
+      standY: y + 0.58 + dirVector.dy * 0.16,
       fishingSpotId: tileKey(x, y),
       fishingFacing: facingForWaterDir(target.dir),
       pauseFacing: facingForWaterDir(target.dir),
@@ -829,6 +831,8 @@ function buildWoodcuttingTaskTiles(grid, terrainRegions, landTiles = [], buildin
         role: 'work',
         buildingType: 'woodcutters_hut',
         pauseFacing,
+        standX: x + 0.5 + focus.dx * 0.18,
+        standY: y + 0.56 + focus.dy * 0.08,
         strikeTargetX: focus ? (x + focus.dx + 0.5) : (x + 0.5 + (pauseFacing === 1 ? 0.65 : pauseFacing === -1 ? -0.65 : 0)),
         strikeTargetY: focus ? (y + focus.dy + 0.66) : (y + 0.62 + (pauseFacing === 2 ? 0.65 : pauseFacing === -2 ? -0.65 : 0)),
         score,
@@ -887,7 +891,9 @@ function buildResidentTaskIntroRoute(startMotion, targetTile, seed, grid, terrai
 
   tilePath.slice(1).forEach((tile, index) => {
     const isGoal = index === tilePath.length - 2;
-    const point = pointFromTileCenter(tile, seed + 223 + index * 17, 0, 0, clearance);
+    const point = isGoal && meta && Number.isFinite(meta.standX) && Number.isFinite(meta.standY)
+      ? { x: meta.standX, y: meta.standY }
+      : pointFromTileCenter(tile, seed + 223 + index * 17, 0, 0, clearance);
     nodes.push(
       makeRouteNode(
         point?.x ?? tile.x + 0.5,
@@ -915,7 +921,9 @@ function buildResidentTaskLoop(targetTile, seed, grid, terrainRegions, meta, opt
     walkOptions: options.walkOptions || RESIDENT_WALK_OPTIONS,
     padding: options.clearancePadding ?? 0.12,
   };
-  const point = pointFromTileCenter(targetTile, seed + 241, 0, 0, clearance);
+  const point = (meta && Number.isFinite(meta.standX) && Number.isFinite(meta.standY))
+    ? { x: meta.standX, y: meta.standY }
+    : pointFromTileCenter(targetTile, seed + 241, 0, 0, clearance);
   return finalizeRouteNodes([
     makeRouteNode(
       point?.x ?? targetTile.x + 0.5,
