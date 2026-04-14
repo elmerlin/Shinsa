@@ -882,6 +882,48 @@ function buildFishingDecorations(world, terrainRegions, buildings = []) {
 
   const landGraph = buildLandComponents(grid, terrainRegions, RESIDENT_WALK_OPTIONS, buildings);
   const landTiles = landGraph.primary?.length ? landGraph.primary : findClearTiles(grid);
+  const showcaseCandidates = landTiles.map(({ x, y }) => {
+    const terrain = terrainRegions?.[y]?.[x];
+    if (!hasCardinalWater(grid, x, y)
+      || y < Math.floor(grid.h * 0.38)
+      || (terrain?.waterRatio || 0) >= 0.38
+      || (terrain?.shoreStrength || 0) <= 0.03
+      || (terrain?.shoreStrength || 0) >= 0.62) {
+      return null;
+    }
+    const waterOptions = getCardinalWaterNeighbors(grid, x, y)
+      .map((candidate) => ({
+        ...candidate,
+        openness: countNearbyWater(grid, candidate.x, candidate.y, 1),
+      }))
+      .sort((a, b) => b.openness - a.openness || a.dir.localeCompare(b.dir));
+    const target = waterOptions[0];
+    if (!target) return null;
+    const dirVector = vectorForWaterDir(target.dir);
+    const nearbyWater = collectNearbyWaterTiles(grid, x, y, 3)
+      .filter((tile) => isSameWaterBank(tile, { x, y, shoreDir: target.dir }))
+      .sort((a, b) => b.openWater - a.openWater || a.dist - b.dist);
+    const castTile = nearbyWater[0] || { x: target.x, y: target.y };
+    return {
+      x,
+      y,
+      fishingSpotId: tileKey(x, y),
+      fishingFacing: facingForWaterDir(target.dir),
+      pauseFacing: facingForWaterDir(target.dir),
+      castTargetX: castTile.x + 0.5 + dirVector.dx * 0.22,
+      castTargetY: castTile.y + 0.56 + dirVector.dy * 0.22,
+      shoreDir: target.dir,
+      shoreWaterX: target.x,
+      shoreWaterY: target.y,
+    };
+  }).filter(Boolean);
+  const showcaseTarget = { x: grid.w * 0.56, y: grid.h * 0.58 };
+  const explicitShowcaseSpot = showcaseCandidates
+    .map((tile) => ({
+      ...tile,
+      showcaseScore: Math.abs(tile.x - showcaseTarget.x) * 0.95 + Math.abs(tile.y - showcaseTarget.y) * 1.15,
+    }))
+    .sort((a, b) => a.showcaseScore - b.showcaseScore)[0] || null;
   const fishingShoreTiles = selectFishingSceneSpots(
     grid,
     terrainRegions,
@@ -927,7 +969,10 @@ function buildFishingDecorations(world, terrainRegions, buildings = []) {
     : Array.from(new Map([...fishingShoreTiles, ...broadShoreTiles].map((tile) => [tileKey(tile.x, tile.y), tile])).values());
   if (!shorePool.length) return [];
 
-  const spots = selectFishingSceneSpots(grid, terrainRegions, shorePool, buildings);
+  const spots = [
+    ...(explicitShowcaseSpot ? [explicitShowcaseSpot] : []),
+    ...selectFishingSceneSpots(grid, terrainRegions, shorePool, buildings),
+  ].filter((spot, index, arr) => arr.findIndex((candidate) => Math.abs(candidate.x - spot.x) + Math.abs(candidate.y - spot.y) < 2) === index);
   if (!spots.length) return [];
 
   const decorations = [];
@@ -1109,17 +1154,50 @@ function buildFishingDecorations(world, terrainRegions, buildings = []) {
 function buildDriftingCloudShadows(world) {
   const grid = world?.grid;
   if (!grid) return [];
-  const count = clamp(Math.round((grid.w + grid.h) / 10), 4, 6);
-  return Array.from({ length: count }, (_, index) => ({
+  const heroClouds = [
+    {
+      seed: 1001,
+      variant: 0,
+      startX: grid.w * 0.08,
+      y: grid.h * 0.2,
+      widthTiles: 9.4,
+      heightTiles: 4.8,
+      speed: 0.00016,
+      alpha: 0.42,
+    },
+    {
+      seed: 1038,
+      variant: 1,
+      startX: grid.w * 0.3,
+      y: grid.h * 0.42,
+      widthTiles: 8.8,
+      heightTiles: 4.4,
+      speed: 0.00013,
+      alpha: 0.4,
+    },
+    {
+      seed: 1079,
+      variant: 2,
+      startX: grid.w * 0.56,
+      y: grid.h * 0.64,
+      widthTiles: 7.4,
+      heightTiles: 3.7,
+      speed: 0.00011,
+      alpha: 0.32,
+    },
+  ];
+  const count = clamp(Math.round((grid.w + grid.h) / 11), 3, 5);
+  const ambientClouds = Array.from({ length: count }, (_, index) => ({
     seed: 1001 + index * 37,
     variant: index % 4,
     startX: -8 + (grid.w / Math.max(1, count)) * index + hash01(index * 13, 2) * 3.2,
-    y: 3.2 + index * ((grid.h - 8.4) / Math.max(1, count - 1)) + hash01(index * 17, 3) * 1.2,
+    y: 2.6 + index * ((grid.h - 6.4) / Math.max(1, count - 1)) + hash01(index * 17, 3) * 1.1,
     widthTiles: 6.2 + hash01(index * 19, 4) * 2.2,
     heightTiles: 3.2 + hash01(index * 23, 5) * 0.9,
-    speed: 0.00018 + index * 0.00002,
-    alpha: 0.28 + hash01(index * 29, 6) * 0.08,
+    speed: 0.00018 + index * 0.000025,
+    alpha: 0.26 + hash01(index * 29, 6) * 0.06,
   }));
+  return [...heroClouds, ...ambientClouds];
 }
 
 function getTileScore(tile, terrainRegions) {

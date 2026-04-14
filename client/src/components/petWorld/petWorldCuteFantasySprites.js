@@ -874,23 +874,33 @@ export function drawCuteFantasyFishingDecor(ctx, decor, tileSize, time = 0) {
     const [sx, sy] = CLOUD_VARIANTS[Math.abs(decor.variant ?? seed) % CLOUD_VARIANTS.length];
     const drift = decor.externalDrift ? 0 : Math.sin(time * 0.00008 + seed * 1.17) * tileSize * 0.12;
     const entry = getImage(cfp(CLOUDS_IMG));
-    if (!entry?.loaded) return false;
+    const width = decor.width ?? tileSize * 3.8;
+    const height = decor.height ?? tileSize * 2.6;
     ctx.save();
     ctx.imageSmoothingEnabled = false;
-    ctx.globalAlpha = decor.alpha ?? 0.34;
-    ctx.globalCompositeOperation = 'multiply';
-    ctx.filter = 'brightness(0) opacity(1)';
-    ctx.drawImage(
-      entry.image,
-      sx,
-      sy,
-      64,
-      64,
-      x + drift,
-      y,
-      decor.width ?? tileSize * 3.8,
-      decor.height ?? tileSize * 2.6,
-    );
+    ctx.globalAlpha = Math.min(0.55, (decor.alpha ?? 0.34) + 0.12);
+    ctx.fillStyle = 'rgba(14, 20, 30, 0.46)';
+    ctx.beginPath();
+    ctx.ellipse(x + drift + width * 0.25, y + height * 0.57, width * 0.22, height * 0.2, -0.08, 0, Math.PI * 2);
+    ctx.ellipse(x + drift + width * 0.5, y + height * 0.52, width * 0.26, height * 0.24, 0.03, 0, Math.PI * 2);
+    ctx.ellipse(x + drift + width * 0.75, y + height * 0.58, width * 0.22, height * 0.2, 0.09, 0, Math.PI * 2);
+    ctx.fill();
+    if (entry?.loaded) {
+      ctx.globalAlpha = Math.min(0.34, (decor.alpha ?? 0.34) * 0.82);
+      ctx.globalCompositeOperation = 'multiply';
+      ctx.filter = 'brightness(0) opacity(1)';
+      ctx.drawImage(
+        entry.image,
+        sx,
+        sy,
+        64,
+        64,
+        x + drift,
+        y,
+        width,
+        height,
+      );
+    }
     ctx.restore();
     return true;
   }
