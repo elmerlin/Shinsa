@@ -303,24 +303,28 @@ const PATH_WANG_LOOKUP = [
 /* ── Fence auto-tile lookup ── */
 // 4-directional connectivity: mask = N*8 + E*4 + S*2 + W
 // Fences.png = 64×64 = 4×4 grid of 16×16 tiles
-// Standard tileset layout: rows go from S-connections (top) to N-connections (bottom)
+// Layout verified via pixel-edge analysis:
+//   Row 0: S(2)    E(4)     EW(5)    W(1)
+//   Row 1: NS(10)  ES(6)    ESW(7)   SW(3)
+//   Row 2: N(8)    NES(14)  NESW(15) NSW(11)
+//   Row 3: ·(0)    NE(12)   NEW(13)  NW(9)
 const FENCE_TILE_LOOKUP = [
-  [48, 48], //  0: isolated (no connections)
-  [32, 48], //  1: W
-  [48,  0], //  2: S
-  [32,  0], //  3: SW
-  [ 0, 48], //  4: E
-  [16, 48], //  5: EW (horizontal)
-  [ 0,  0], //  6: ES
-  [16,  0], //  7: ESW
-  [48, 32], //  8: N
-  [32, 32], //  9: NW
-  [48, 16], // 10: NS (vertical)
-  [32, 16], // 11: NSW
-  [ 0, 32], // 12: NE
-  [16, 32], // 13: NEW
-  [ 0, 16], // 14: NES
-  [16, 16], // 15: NESW (cross)
+  [ 0, 48], //  0: isolated (no connections)
+  [48,  0], //  1: W
+  [ 0,  0], //  2: S
+  [48, 16], //  3: SW
+  [16,  0], //  4: E
+  [32,  0], //  5: EW (horizontal)
+  [16, 16], //  6: ES
+  [32, 16], //  7: ESW
+  [ 0, 32], //  8: N
+  [48, 48], //  9: NW
+  [ 0, 16], // 10: NS (vertical)
+  [48, 32], // 11: NSW
+  [16, 48], // 12: NE
+  [32, 48], // 13: NEW
+  [16, 32], // 14: NES
+  [32, 32], // 15: NESW (cross)
 ];
 
 /* ── Grass variation tiles (16x16 each) ── */
