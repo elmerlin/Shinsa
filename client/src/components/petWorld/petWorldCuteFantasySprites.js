@@ -873,9 +873,14 @@ export function drawCuteFantasyFishingDecor(ctx, decor, tileSize, time = 0) {
   if (decor.type === 'cloud_shadow') {
     const [sx, sy] = CLOUD_VARIANTS[Math.abs(decor.variant ?? seed) % CLOUD_VARIANTS.length];
     const drift = decor.externalDrift ? 0 : Math.sin(time * 0.00008 + seed * 1.17) * tileSize * 0.12;
-    return drawFrame(
-      ctx,
-      cfp(CLOUDS_IMG),
+    const entry = getImage(cfp(CLOUDS_IMG));
+    if (!entry?.loaded) return false;
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    ctx.globalAlpha = decor.alpha ?? 0.28;
+    ctx.globalCompositeOperation = 'multiply';
+    ctx.drawImage(
+      entry.image,
       sx,
       sy,
       64,
@@ -884,9 +889,9 @@ export function drawCuteFantasyFishingDecor(ctx, decor, tileSize, time = 0) {
       y,
       decor.width ?? tileSize * 3.8,
       decor.height ?? tileSize * 2.6,
-      undefined,
-      decor.alpha ?? 0.18,
     );
+    ctx.restore();
+    return true;
   }
 
   if (decor.type === 'boat') {

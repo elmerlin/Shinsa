@@ -830,10 +830,14 @@ function selectFishingSceneSpots(grid, terrainRegions, shorePool = [], buildings
 
   const spots = [];
   if (villageAnchor) {
-    const bestNearVillage = rankedShoreTiles
+    const villageBand = rankedShoreTiles.filter((tile) => tile.y >= villageAnchor.y - 1);
+    const villageCandidates = villageBand.length ? villageBand : rankedShoreTiles;
+    const bestNearVillage = villageCandidates
       .map((tile) => ({
         ...tile,
-        villageScore: Math.abs(tile.x - villageAnchor.x) + Math.abs(tile.y - villageAnchor.y) - tile.score * 0.1,
+        villageScore: Math.abs(tile.x - villageAnchor.x) * 0.8
+          + Math.abs(tile.y - villageAnchor.y) * 1.15
+          - tile.score * 0.14,
       }))
       .sort((a, b) => a.villageScore - b.villageScore)[0];
     if (bestNearVillage) spots.push(bestNearVillage);
@@ -1092,16 +1096,16 @@ function buildFishingDecorations(world, terrainRegions, buildings = []) {
 function buildDriftingCloudShadows(world) {
   const grid = world?.grid;
   if (!grid) return [];
-  const count = clamp(Math.round((grid.w + grid.h) / 12), 3, 5);
+  const count = clamp(Math.round((grid.w + grid.h) / 10), 4, 6);
   return Array.from({ length: count }, (_, index) => ({
     seed: 1001 + index * 37,
     variant: index % 4,
-    startX: -6 + (grid.w / Math.max(1, count)) * index + hash01(index * 13, 2) * 2.6,
-    y: 1.8 + index * ((grid.h - 4.2) / Math.max(1, count - 1)) + hash01(index * 17, 3) * 1.1,
-    widthTiles: 5.1 + hash01(index * 19, 4) * 1.8,
-    heightTiles: 2.8 + hash01(index * 23, 5) * 0.7,
-    speed: 0.00022 + index * 0.000025,
-    alpha: 0.2 + hash01(index * 29, 6) * 0.06,
+    startX: -8 + (grid.w / Math.max(1, count)) * index + hash01(index * 13, 2) * 3.2,
+    y: 3.2 + index * ((grid.h - 8.4) / Math.max(1, count - 1)) + hash01(index * 17, 3) * 1.2,
+    widthTiles: 6.2 + hash01(index * 19, 4) * 2.2,
+    heightTiles: 3.2 + hash01(index * 23, 5) * 0.9,
+    speed: 0.00018 + index * 0.00002,
+    alpha: 0.28 + hash01(index * 29, 6) * 0.08,
   }));
 }
 
