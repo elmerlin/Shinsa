@@ -1090,7 +1090,7 @@ export function drawCuteFantasyCritter(ctx, x, y, tileSize, species, frameOffset
     ctx, src,
     sx, sy, 32, 32,
     x - d / 2, y - d * 0.6 + verticalFloat, d, d,
-    resolvedDir === 'side' ? (fac === -1 ? -1 : 1) : undefined,
+    resolvedDir === 'side' ? (fac === 1 ? -1 : 1) : undefined,
   );
 }
 
