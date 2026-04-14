@@ -75,7 +75,7 @@ const RESIDENT_WALK_OPTIONS = { maxShoreStrength: 0.02, maxWaterRatio: 0.006 };
 const ROAMING_WALK_OPTIONS = { maxShoreStrength: 0.018, maxWaterRatio: 0.005 };
 const ENCOUNTER_WALK_OPTIONS = { maxShoreStrength: 0.022, maxWaterRatio: 0.008 };
 const LAND_ANIMAL_WALK_OPTIONS = { maxShoreStrength: 0.025, maxWaterRatio: 0.008 };
-const ENTITY_DROP_WALK_OPTIONS = { maxShoreStrength: 0.09, maxWaterRatio: 0.03 };
+const ENTITY_DROP_WALK_OPTIONS = { maxShoreStrength: 0.14, maxWaterRatio: 0.05 };
 const WATER_ANIMAL_SPECIES = new Set(['duck', 'fish_koi', 'fish_perch']);
 
 const GROUND_ANIMAL_PROFILES = {
@@ -576,16 +576,17 @@ function buildRelocatedRoamingState(entity, tx, ty, world, terrainRegions, walkO
     ? basePool.filter((tile) => countOpenComponentNeighbors(tile, poolKeySet) >= 2)
     : [];
   const pool = comfortPool.length ? comfortPool : basePool;
-  const anchor = compactComponent
-    ? (pickCenteredComponentTile(pool, entity.seed) || requestedAnchor)
-    : requestedAnchor;
+  const requestedKey = tileKey(requestedAnchor.x, requestedAnchor.y);
+  const anchor = pool.find((tile) => tileKey(tile.x, tile.y) === requestedKey)
+    || basePool.find((tile) => tileKey(tile.x, tile.y) === requestedKey)
+    || (compactComponent ? (pickCenteredComponentTile(pool, entity.seed) || requestedAnchor) : requestedAnchor);
   const routeConfig = compactComponent
     ? {
         stopCount: Math.min(routeOptions.stopCount ?? 3, Math.max(2, pool.length)),
         minDist: 1,
         maxDist: Math.min(3, routeOptions.maxDist ?? 3),
-        pauseBase: Math.max(routeOptions.pauseBase ?? 9000, 14000),
-        pauseVariance: Math.max(routeOptions.pauseVariance ?? 2400, 5000),
+        pauseBase: Math.max(routeOptions.pauseBase ?? 9000, 18000),
+        pauseVariance: Math.max(routeOptions.pauseVariance ?? 2400, 6500),
       }
     : routeOptions;
   return {
@@ -627,10 +628,10 @@ function buildRelocatedAnimalState(entity, tx, ty, world, terrainRegions, buildi
 function buildRelocatedPetState(entity, tx, ty, world, terrainRegions) {
   return buildRelocatedRoamingState(entity, tx, ty, world, terrainRegions, ROAMING_WALK_OPTIONS, {
     stopCount: 3,
-    minDist: 3,
-    maxDist: 6,
-    pauseBase: 11000,
-    pauseVariance: 4200,
+    minDist: 4,
+    maxDist: 10,
+    pauseBase: 16000,
+    pauseVariance: 5600,
     speed: 0.58,
     pauseFacing: 2,
   });
@@ -639,11 +640,11 @@ function buildRelocatedPetState(entity, tx, ty, world, terrainRegions) {
 function buildRelocatedResidentState(entity, tx, ty, world, terrainRegions) {
   return buildRelocatedRoamingState(entity, tx, ty, world, terrainRegions, RESIDENT_WALK_OPTIONS, {
     stopCount: 3,
-    minDist: 2,
-    maxDist: 5,
-    pauseBase: 12000,
-    pauseVariance: 3800,
-    speed: 0.72,
+    minDist: 4,
+    maxDist: 9,
+    pauseBase: 17000,
+    pauseVariance: 5200,
+    speed: 0.76,
     pauseFacing: 2,
   });
 }
@@ -777,6 +778,15 @@ function countOpenComponentNeighbors(tile, componentKeySet) {
     + (componentKeySet.has(tileKey(tile.x + 1, tile.y)) ? 1 : 0)
     + (componentKeySet.has(tileKey(tile.x, tile.y - 1)) ? 1 : 0)
     + (componentKeySet.has(tileKey(tile.x, tile.y + 1)) ? 1 : 0)
+  );
+}
+
+function countWalkableNeighbors(grid, terrainRegions, tile, walkOptions = {}) {
+  return (
+    (isGridTileWalkable(grid, terrainRegions, tile.x - 1, tile.y, walkOptions) ? 1 : 0)
+    + (isGridTileWalkable(grid, terrainRegions, tile.x + 1, tile.y, walkOptions) ? 1 : 0)
+    + (isGridTileWalkable(grid, terrainRegions, tile.x, tile.y - 1, walkOptions) ? 1 : 0)
+    + (isGridTileWalkable(grid, terrainRegions, tile.x, tile.y + 1, walkOptions) ? 1 : 0)
   );
 }
 
@@ -1008,6 +1018,7 @@ function buildRoamingTileRoute(anchorTile, pool, grid, terrainRegions, seed, opt
       if (distance < minDist || distance > maxDist) return;
       const path = findTilePath(grid, terrainRegions, current, candidate, seed + i * 23, walkOptions);
       if (!path?.length) return;
+      const openness = countWalkableNeighbors(grid, terrainRegions, candidate, walkOptions);
       const averageSpread = stops.reduce((sum, stop) => (
         sum + Math.abs(candidate.x - stop.x) + Math.abs(candidate.y - stop.y)
       ), 0) / stops.length;
@@ -1017,6 +1028,8 @@ function buildRoamingTileRoute(anchorTile, pool, grid, terrainRegions, seed, opt
         averageSpread * 0.55
         + Math.min(anchorSpread, maxDist + 2) * 0.22
         - Math.abs(distance - desiredDistance) * 0.42
+        + openness * 0.55
+        - Math.max(0, 2 - openness) * 0.85
         - verticalPenalty
         + hash01(seed + candidate.x * 17 + candidate.y * 31, i) * 0.12
       );
@@ -1621,7 +1634,7 @@ function buildPetPlacements(world, terrainRegions, buildings = []) {
     : (['dojocat', 'buu', 'devit', 'pixiu'].includes(world?.pet_character) ? world.pet_character : 'dojocat');
   const landGraph = buildLandComponents(grid, terrainRegions, ROAMING_WALK_OPTIONS, buildings);
   const landTiles = landGraph.primary?.length ? landGraph.primary : landGraph.tiles;
-  const roamTiles = buildVillageCoreTiles(grid, terrainRegions, landTiles, buildings, 401, 7);
+  const roamTiles = buildVillageCoreTiles(grid, terrainRegions, landTiles, buildings, 401, 15);
   const clearTiles = roamTiles.length ? roamTiles : findClearTiles(grid);
   const pickAnchor = (targetXRatio, targetYRatio, seed) => {
     const targetX = (grid.w || 20) * targetXRatio;
@@ -1659,11 +1672,11 @@ function buildPetPlacements(world, terrainRegions, buildings = []) {
     idleFrameRate: 0.00026,
     route: buildRoamingTileRoute(heroAnchor, roamTiles, grid, terrainRegions, seed, {
       stopCount: 3,
-      minDist: 3,
-      maxDist: 6,
-      pauseBase: 11000,
-      pauseVariance: 4200,
-      speed: 0.58,
+      minDist: 5,
+      maxDist: 12,
+      pauseBase: 18000,
+      pauseVariance: 6500,
+      speed: 0.6,
       pauseFacing: 2,
       walkOptions: ROAMING_WALK_OPTIONS,
     }),
@@ -1687,6 +1700,13 @@ function buildResidentPlacements(world, terrainRegions, buildings = []) {
     .filter((tile) => getTileScore(tile, terrainRegions) > 0.42)
     .sort((a, b) => getTileScore(b, terrainRegions) - getTileScore(a, terrainRegions));
   const meadowTiles = clearTiles.filter(({ x, y }) => (terrainRegions?.[y]?.[x]?.meadowStrength || 0) > 0.2);
+  const wanderTiles = landTiles.filter(({ x, y }) => {
+    const terrain = terrainRegions?.[y]?.[x];
+    const distanceFromVillage = Math.abs(x - (villageAnchor?.x ?? x)) + Math.abs(y - (villageAnchor?.y ?? y));
+    return distanceFromVillage >= 8
+      && (terrain?.shoreStrength || 0) < 0.03
+      && (terrain?.waterRatio || 0) < 0.015;
+  });
   const inlandNatureTiles = landTiles.filter(({ x, y }) => {
     const terrain = terrainRegions?.[y]?.[x];
     const distanceFromVillage = Math.abs(x - (villageAnchor?.x ?? x)) + Math.abs(y - (villageAnchor?.y ?? y));
@@ -1761,6 +1781,7 @@ function buildResidentPlacements(world, terrainRegions, buildings = []) {
       ? pickFromPool(weightedWorkAnchors, i * 3 + assignedWorkers, pickFromPool(commonAnchors, i * 6 + 1, tile))
       : leisureTile;
     const plazaTile = pickFromPool(weightedSocialAnchors, socialSeedBase + 2, laneTile);
+    const wanderTile = pickFromPool(wanderTiles, i * 19 + 9, natureTile);
     const residentArchetype = working
       ? (
         workTile?.buildingType && ['market', 'trading_post', 'storehouse', 'warehouse', 'bakery'].includes(workTile.buildingType) ? 'merchant'
@@ -1774,14 +1795,16 @@ function buildResidentPlacements(world, terrainRegions, buildings = []) {
           { ...pointFromTile(homeTile, seed + 1, 0, 0, residentClearance), role: 'home', pauseMs: 9800 + hash01(seed, 3) * 3200 },
           { ...pointFromTile(laneTile, seed + 2, 0, 0, residentClearance), role: 'path', pauseMs: 0 },
           { ...pointFromTile(workTile, seed + 3, 0, 0, residentClearance), role: 'work', pauseMs: 11800 + hash01(seed, 5) * 3600 },
-          { ...pointFromTile(plazaTile, seed + 4, 0, 0, residentClearance), role: 'common', pauseMs: 8800 + hash01(seed, 6) * 2400 },
-          { ...pointFromTile(leisureTile, seed + 5, 0, 0, residentClearance), role: 'common', pauseMs: 10800 + hash01(seed, 7) * 3200 },
+          { ...pointFromTile(plazaTile, seed + 4, 0, 0, residentClearance), role: 'common', pauseMs: 14800 + hash01(seed, 6) * 3200 },
+          { ...pointFromTile(leisureTile, seed + 5, 0, 0, residentClearance), role: 'common', pauseMs: 16200 + hash01(seed, 7) * 3600 },
+          { ...pointFromTile(wanderTile, seed + 6, 0, 0, residentClearance), role: 'common', pauseMs: 17600 + hash01(seed, 8) * 4200 },
         ]
       : [
-          { ...pointFromTile(homeTile, seed + 1, 0, 0, residentClearance), role: 'home', pauseMs: 11200 + hash01(seed, 3) * 3600 },
-          { ...pointFromTile(plazaTile, seed + 2, 0, 0, residentClearance), role: 'common', pauseMs: 9800 + hash01(seed, 4) * 3200 },
-          { ...pointFromTile(leisureTile, seed + 3, 0, 0, residentClearance), role: 'common', pauseMs: 11600 + hash01(seed, 5) * 3600 },
-          { ...pointFromTile(natureTile, seed + 4, 0, 0, residentClearance), role: 'common', pauseMs: 10800 + hash01(seed, 6) * 3200 },
+          { ...pointFromTile(homeTile, seed + 1, 0, 0, residentClearance), role: 'home', pauseMs: 16000 + hash01(seed, 3) * 4200 },
+          { ...pointFromTile(plazaTile, seed + 2, 0, 0, residentClearance), role: 'common', pauseMs: 15000 + hash01(seed, 4) * 3600 },
+          { ...pointFromTile(leisureTile, seed + 3, 0, 0, residentClearance), role: 'common', pauseMs: 17800 + hash01(seed, 5) * 4200 },
+          { ...pointFromTile(natureTile, seed + 4, 0, 0, residentClearance), role: 'common', pauseMs: 18400 + hash01(seed, 6) * 4200 },
+          { ...pointFromTile(wanderTile, seed + 6, 0, 0, residentClearance), role: 'common', pauseMs: 19200 + hash01(seed, 8) * 4600 },
           { ...pointFromTile(laneTile, seed + 5, 0, 0, residentClearance), role: 'path', pauseMs: 0 },
         ];
 
@@ -1797,7 +1820,7 @@ function buildResidentPlacements(world, terrainRegions, buildings = []) {
       linearMotion: true,
       walkCyclesPerTile: 2.4,
       route: expandResidentRoute(routePoints, seed, grid, terrainRegions, {
-        speed: 0.74,
+        speed: 0.78,
         walkOptions: RESIDENT_WALK_OPTIONS,
         pauseFacing: 2,
       }),
@@ -1857,7 +1880,17 @@ function buildAmbientFauna(world, terrainRegions, buildings = []) {
     });
   }
 
-  const mammalPool = villageAnimalTiles.length ? villageAnimalTiles : (meadowTiles.length ? meadowTiles : roamingTiles);
+  const farmyardTiles = buildings
+    .filter((building) => building.state === 'built' && ['farm', 'house'].includes(building.type || building.building_type))
+    .flatMap((building) => villageAnimalTiles.filter((tile) => {
+      const centerX = building.grid_x + building.width / 2;
+      const centerY = building.grid_y + building.height / 2;
+      return Math.abs(tile.x + 0.5 - centerX) + Math.abs(tile.y + 0.5 - centerY) <= 5;
+    }));
+  const uniqueFarmyardTiles = Array.from(new Map(farmyardTiles.map((tile) => [tileKey(tile.x, tile.y), tile])).values());
+  const mammalPool = uniqueFarmyardTiles.length
+    ? uniqueFarmyardTiles
+    : (villageAnimalTiles.length ? villageAnimalTiles : (meadowTiles.length ? meadowTiles : roamingTiles));
   const farmSpecies = ['pig', 'sheep', 'horse', 'cow', 'chicken', 'rabbit', 'fox'];
   const mammalCount = Math.min(farmSpecies.length, Math.max(3, Math.ceil((world.expansions || 0) + (world.population || 0) / 5)));
   for (let i = 0; i < mammalCount && mammalPool.length; i += 1) {
@@ -2374,8 +2407,18 @@ export default function PetWorldCanvas({
       });
     }
 
-    // buildings
+    const fenceBuildings = [];
+    const regularBuildings = [];
     buildings.forEach((building) => {
+      if ((building.type || building.building_type) === 'fence') {
+        fenceBuildings.push(building);
+      } else {
+        regularBuildings.push(building);
+      }
+    });
+
+    // buildings behind characters
+    regularBuildings.forEach((building) => {
       const screenX = building.grid_x * tileSize - camX;
       const screenY = building.grid_y * tileSize - camY;
       const width = building.width * tileSize;
@@ -2448,6 +2491,18 @@ export default function PetWorldCanvas({
         waterborne: sighting.layer === 'water',
         highlight: true,
       });
+    });
+
+    // fences in the foreground so penned animals/people sit behind them instead of visually overlapping the rails
+    fenceBuildings.forEach((building) => {
+      const screenX = building.grid_x * tileSize - camX;
+      const screenY = building.grid_y * tileSize - camY;
+      const width = building.width * tileSize;
+      const height = building.height * tileSize;
+      if (screenX + width < 0 || screenY + height < 0 || screenX > size.width || screenY > size.height) return;
+      drawBuildingSprite(ctx, world.biome, building, screenX, screenY, tileSize, selectedBuildingId === building.id);
+      if (building.state !== 'built') drawConstructionOverlay(ctx, building, screenX, screenY, tileSize, time);
+      if (selectedBuildingId === building.id) drawSelectionOutline(ctx, screenX, screenY, width, height, 'rgba(80,220,255,0.95)', time);
     });
 
     // Build entity screen-position array for tap hit-detection

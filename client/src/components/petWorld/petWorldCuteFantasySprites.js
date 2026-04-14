@@ -396,12 +396,12 @@ const ANIMALS = {
   chicken: { p: 'Animals/Chicken/Chicken_01.png', idle: { row: 0, n: 2 }, walk: { row: 1, n: 6 }, preferSideFacing: true },
   pig:     {
     p: 'Animals/Pig/Pig_01.png',
-    idle: { side: { row: 0, n: 1 }, south: { row: 1, n: 1 }, north: { row: 2, n: 1 } },
+    idle: { side: { row: 0, n: 2 }, south: { row: 1, n: 2 }, north: { row: 2, n: 2 } },
     walk: { side: { row: 3, n: 8 }, south: { row: 4, n: 8 }, north: { row: 5, n: 8 } },
   },
   sheep:   {
     p: 'Animals/Sheep/Sheep_01.png',
-    idle: { side: { row: 0, n: 1 }, south: { row: 1, n: 1 }, north: { row: 2, n: 1 } },
+    idle: { side: { row: 0, n: 2 }, south: { row: 1, n: 2 }, north: { row: 2, n: 2 } },
     walk: { side: { row: 3, n: 8 }, south: { row: 4, n: 8 }, north: { row: 5, n: 8 } },
   },
   duck:    {
@@ -412,7 +412,7 @@ const ANIMALS = {
   },
   cow:     {
     p: 'Animals/Cow/Cow_01.png',
-    idle: { side: { row: 0, n: 1 }, south: { row: 1, n: 1 }, north: { row: 2, n: 1 } },
+    idle: { side: { row: 0, n: 2 }, south: { row: 1, n: 2 }, north: { row: 2, n: 2 } },
     walk: { side: { row: 3, n: 8 }, south: { row: 4, n: 8 }, north: { row: 5, n: 8 } },
   },
   frog:    { p: 'Animals/Frog/Frog_01.png',        idle: { row: 0, n: 2 }, walk: { row: 1, n: 8 } },
@@ -430,7 +430,7 @@ const ANIMALS = {
   },
   horse:   {
     p: 'Animals/Horse/Horse_01.png',
-    idle: { side: { row: 0, n: 1 }, south: { row: 1, n: 1 }, north: { row: 2, n: 1 } },
+    idle: { side: { row: 0, n: 2 }, south: { row: 1, n: 2 }, north: { row: 2, n: 2 } },
     walk: { side: { row: 3, n: 6 }, south: { row: 4, n: 6 }, north: { row: 5, n: 6 } },
   },
 };
