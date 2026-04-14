@@ -1325,18 +1325,26 @@ export function drawCuteFantasyCritter(ctx, x, y, tileSize, species, frameOffset
   const sy = anim.row * 32;
 
   const d = tileSize * scale;
+  const idleState = options?.idleState;
+  const isSleeping = idleState === 'sleeping';
+  const isResting = idleState === 'resting';
   const verticalFloat = waterborne ? Math.sin(frameOffset * Math.PI * 2) * tileSize * 0.012 : 0;
-  const idleBreath = !moving && !waterborne ? Math.sin(frameOffset * Math.PI * 2) * tileSize * 0.01 : 0;
-  const idleSway = !moving && !waterborne ? Math.sin(frameOffset * Math.PI + mapped.length) * tileSize * 0.004 : 0;
+  const idleBreath = !moving && !waterborne && !isSleeping ? Math.sin(frameOffset * Math.PI * 2) * tileSize * 0.01 : 0;
+  const idleSway = !moving && !waterborne && !isSleeping ? Math.sin(frameOffset * Math.PI + mapped.length) * tileSize * 0.004 : 0;
+  // Sleeping animals appear slightly flattened (lying down effect)
+  const scaleY = isSleeping ? 0.72 : (isResting ? 0.88 : 1.0);
+  const ySquish = isSleeping ? d * 0.17 : (isResting ? d * 0.07 : 0);
   const drawX = x - d / 2 + idleSway;
-  const drawY = y - d * 0.6 + verticalFloat + idleBreath;
+  const drawY = y - d * 0.6 + verticalFloat + idleBreath + ySquish;
   if (!waterborne) {
-    dropShadow(ctx, x + idleSway * 0.15, y + d * 0.06, d * 0.22, d * 0.07, 0.18);
+    const shadowW = isSleeping ? d * 0.26 : d * 0.22;
+    const shadowH = isSleeping ? d * 0.1 : d * 0.07;
+    dropShadow(ctx, x + idleSway * 0.15, y + d * 0.06 + ySquish * 0.4, shadowW, shadowH, isSleeping ? 0.14 : 0.18);
   }
   return drawFrame(
     ctx, src,
     sx, sy, 32, 32,
-    drawX, drawY, d, d,
+    drawX, drawY, d, d * scaleY,
     resolvedDir === 'side' ? (fac === 1 ? -1 : 1) : undefined,
   );
 }

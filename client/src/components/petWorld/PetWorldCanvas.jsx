@@ -575,32 +575,42 @@ function buildRelocatedRoamingState(entity, tx, ty, world, terrainRegions, walkO
   const requestedAnchor = { x: tx, y: ty };
   if (!grid) return { x: tx, y: ty, route: null };
   const component = buildReachableTilePool(grid, terrainRegions, requestedAnchor, walkOptions);
-  const filtered = filterFn ? component.filter((tile) => filterFn(tile, component)) : component;
+  // For compact enclosed areas (fences), skip the strict terrain filter — the enclosure itself provides containment
+  const compactComponent = component.length > 1 && component.length <= 18;
+  const filtered = (filterFn && !compactComponent) ? component.filter((tile) => filterFn(tile, component)) : component;
   const basePool = filtered.length ? filtered : (component.length ? component : [requestedAnchor]);
-  const compactComponent = basePool.length > 1 && basePool.length <= 18;
   const poolKeySet = new Set(basePool.map((tile) => tileKey(tile.x, tile.y)));
   const comfortPool = compactComponent
     ? basePool.filter((tile) => countOpenComponentNeighbors(tile, poolKeySet) >= 2)
     : [];
   const pool = comfortPool.length ? comfortPool : basePool;
-  const requestedKey = tileKey(requestedAnchor.x, requestedAnchor.y);
-  const anchor = pool.find((tile) => tileKey(tile.x, tile.y) === requestedKey)
-    || basePool.find((tile) => tileKey(tile.x, tile.y) === requestedKey)
-    || (compactComponent ? (pickCenteredComponentTile(pool, entity.seed) || requestedAnchor) : requestedAnchor);
+  // For compact enclosed areas, prefer the centroid rather than the drop point so animals
+  // occupy the middle of the pen instead of clustering at the edge where they were placed
+  const anchor = compactComponent
+    ? (pickCenteredComponentTile(pool, entity.seed) || pool[0] || requestedAnchor)
+    : (pool.find((tile) => tileKey(tile.x, tile.y) === tileKey(requestedAnchor.x, requestedAnchor.y))
+      || basePool.find((tile) => tileKey(tile.x, tile.y) === tileKey(requestedAnchor.x, requestedAnchor.y))
+      || requestedAnchor);
   const routeConfig = compactComponent
     ? {
         stopCount: Math.min(routeOptions.stopCount ?? 3, Math.max(2, pool.length)),
         minDist: 1,
         maxDist: Math.min(3, routeOptions.maxDist ?? 3),
-        pauseBase: Math.max(routeOptions.pauseBase ?? 9000, 18000),
-        pauseVariance: Math.max(routeOptions.pauseVariance ?? 2400, 6500),
+        pauseBase: 8000 + hash01(entity.seed || 0, 91) * 4000,
+        pauseVariance: 3200 + hash01(entity.seed || 0, 92) * 2000,
       }
     : routeOptions;
+  // Give the animal a varied idle facing based on its seed instead of always south
+  const facingOptions = [-2, -1, 1, 2]; // N, W, E, S
+  const idleFacing = facingOptions[Math.abs(entity.seed || 0) % facingOptions.length];
   return {
     x: anchor.x,
     y: anchor.y,
+    idleFacing: compactComponent ? idleFacing : undefined,
+    pauseFacing: compactComponent ? idleFacing : undefined,
     route: buildRoamingTileRoute(anchor, pool, grid, terrainRegions, entity.seed, {
       ...routeConfig,
+      pauseFacing: compactComponent ? idleFacing : (routeConfig.pauseFacing ?? 2),
       walkOptions,
     }),
   };
@@ -723,10 +733,10 @@ function buildFishingShoreTiles(grid, terrainRegions, landTiles = [], buildings 
     const terrain = terrainRegions?.[y]?.[x];
     const distanceFromVillage = Math.abs(x - (villageAnchor?.x ?? x)) + Math.abs(y - (villageAnchor?.y ?? y));
     if (!hasCardinalWater(grid, x, y)
-      || distanceFromVillage < 4
-      || (terrain?.waterRatio || 0) >= 0.22
-      || (terrain?.shoreStrength || 0) <= 0.08
-      || (terrain?.shoreStrength || 0) >= 0.36) {
+      || distanceFromVillage < 3
+      || (terrain?.waterRatio || 0) >= 0.55
+      || (terrain?.shoreStrength || 0) <= 0.01
+      || (terrain?.shoreStrength || 0) >= 0.82) {
       return null;
     }
     const waterOptions = getCardinalWaterNeighbors(grid, x, y)
@@ -829,7 +839,7 @@ function selectFishingSceneSpots(grid, terrainRegions, shorePool = [], buildings
     .sort((a, b) => b.score - a.score);
 
   const spots = [];
-  const showcaseCandidates = rankedShoreTiles.filter((tile) => tile.y >= Math.floor(grid.h * 0.45));
+  const showcaseCandidates = rankedShoreTiles.filter((tile) => tile.y >= Math.floor(grid.h * 0.2));
   const showcasePool = showcaseCandidates.length ? showcaseCandidates : rankedShoreTiles;
   const showcaseTarget = { x: grid.w * 0.58, y: grid.h * 0.58 };
   const showcaseSpot = showcasePool
@@ -885,10 +895,10 @@ function buildFishingDecorations(world, terrainRegions, buildings = []) {
   const showcaseCandidates = landTiles.map(({ x, y }) => {
     const terrain = terrainRegions?.[y]?.[x];
     if (!hasCardinalWater(grid, x, y)
-      || y < Math.floor(grid.h * 0.38)
-      || (terrain?.waterRatio || 0) >= 0.38
-      || (terrain?.shoreStrength || 0) <= 0.03
-      || (terrain?.shoreStrength || 0) >= 0.62) {
+      || y < Math.floor(grid.h * 0.15)
+      || (terrain?.waterRatio || 0) >= 0.55
+      || (terrain?.shoreStrength || 0) <= 0.01
+      || (terrain?.shoreStrength || 0) >= 0.82) {
       return null;
     }
     const waterOptions = getCardinalWaterNeighbors(grid, x, y)
@@ -933,9 +943,9 @@ function buildFishingDecorations(world, terrainRegions, buildings = []) {
   const broadShoreTiles = landTiles.map(({ x, y }) => {
     const terrain = terrainRegions?.[y]?.[x];
     if (!hasCardinalWater(grid, x, y)
-      || (terrain?.waterRatio || 0) >= 0.32
-      || (terrain?.shoreStrength || 0) <= 0.05
-      || (terrain?.shoreStrength || 0) >= 0.48) {
+      || (terrain?.waterRatio || 0) >= 0.55
+      || (terrain?.shoreStrength || 0) <= 0.01
+      || (terrain?.shoreStrength || 0) >= 0.82) {
       return null;
     }
     const waterOptions = getCardinalWaterNeighbors(grid, x, y)
@@ -1156,6 +1166,7 @@ function buildDriftingCloudShadows(world) {
   if (!grid) return [];
   const heroClouds = [
     {
+      type: 'cloud_shadow',
       seed: 1001,
       variant: 0,
       startX: grid.w * 0.08,
@@ -1166,6 +1177,7 @@ function buildDriftingCloudShadows(world) {
       alpha: 0.42,
     },
     {
+      type: 'cloud_shadow',
       seed: 1038,
       variant: 1,
       startX: grid.w * 0.3,
@@ -1176,6 +1188,7 @@ function buildDriftingCloudShadows(world) {
       alpha: 0.4,
     },
     {
+      type: 'cloud_shadow',
       seed: 1079,
       variant: 2,
       startX: grid.w * 0.56,
@@ -1188,6 +1201,7 @@ function buildDriftingCloudShadows(world) {
   ];
   const count = clamp(Math.round((grid.w + grid.h) / 11), 3, 5);
   const ambientClouds = Array.from({ length: count }, (_, index) => ({
+    type: 'cloud_shadow',
     seed: 1001 + index * 37,
     variant: index % 4,
     startX: -8 + (grid.w / Math.max(1, count)) * index + hash01(index * 13, 2) * 3.2,
@@ -2143,16 +2157,55 @@ function isTileWalkable(grid, tx, ty) {
  */
 function getAnimalWanderPos(entity, time, grid) {
   if (entity.route?.length) {
-    return getTileRouteMotion(entity, time);
+    const motion = getTileRouteMotion(entity, time);
+    // For paused animals, cycle through idle states: normal idle, resting, sleeping
+    if (!motion.moving) {
+      const seed = entity.seed || 0;
+      const idleCycleMs = 45000 + (seed % 7) * 5000; // 45-80s per full idle cycle
+      const idlePhase = ((time + seed * 311) % idleCycleMs) / idleCycleMs;
+      // 0–0.5: normal idle, 0.5–0.75: resting (slower anim), 0.75–1.0: sleeping
+      if (idlePhase > 0.75) {
+        motion.idleState = 'sleeping';
+        motion.frameOffset = 0; // frozen frame for sleeping
+      } else if (idlePhase > 0.5) {
+        motion.idleState = 'resting';
+        motion.frameOffset = motion.frameOffset * 0.3; // very slow animation
+      }
+      // Vary facing during idle phases based on time + seed
+      const facingCycleMs = 22000 + (seed % 5) * 4000;
+      const facingPhase = Math.floor(((time + seed * 197) % facingCycleMs) / (facingCycleMs / 4));
+      const facingOptions = [-1, 2, 1, -2]; // W, S, E, N
+      motion.facing = entity.pauseFacing ?? facingOptions[(facingPhase + seed) % 4];
+    }
+    return motion;
   }
   if (entity.layer !== 'water') {
     const idleFrameRate = entity.idleFrameRate ?? 0.00004;
+    const seed = entity.seed || 0;
+    // Vary facing over time instead of always south
+    const facingCycleMs = 28000 + (seed % 5) * 5000;
+    const facingPhase = Math.floor(((time + seed * 197) % facingCycleMs) / (facingCycleMs / 4));
+    const facingOptions = [-1, 2, 1, -2];
+    const facing = entity.idleFacing || facingOptions[(facingPhase + seed) % 4];
+    // Cycle idle states for stationary animals too
+    const idleCycleMs = 40000 + (seed % 7) * 6000;
+    const idlePhase = ((time + seed * 311) % idleCycleMs) / idleCycleMs;
+    let idleState = 'idle';
+    let frameOffset = idleFrameRate > 0 ? (time * idleFrameRate + seed * 0.1) % 1 : 0;
+    if (idlePhase > 0.7) {
+      idleState = 'sleeping';
+      frameOffset = 0;
+    } else if (idlePhase > 0.5) {
+      idleState = 'resting';
+      frameOffset = frameOffset * 0.3;
+    }
     return {
       x: entity.x,
       y: entity.y,
-      frameOffset: idleFrameRate > 0 ? (time * idleFrameRate + (entity.seed || 0) * 0.1) % 1 : 0,
-      facing: entity.idleFacing || 2,
+      frameOffset,
+      facing,
       moving: false,
+      idleState,
     };
   }
   const seed = entity.seed || 0;
@@ -2284,16 +2337,16 @@ function buildResidentPlacements(world, terrainRegions, buildings = []) {
   const wanderTiles = landTiles.filter(({ x, y }) => {
     const terrain = terrainRegions?.[y]?.[x];
     const distanceFromVillage = Math.abs(x - (villageAnchor?.x ?? x)) + Math.abs(y - (villageAnchor?.y ?? y));
-    return distanceFromVillage >= 8
-      && (terrain?.waterRatio || 0) < 0.06;
+    return distanceFromVillage >= 5
+      && (terrain?.waterRatio || 0) < 0.08;
   });
   const inlandNatureTiles = landTiles.filter(({ x, y }) => {
     const terrain = terrainRegions?.[y]?.[x];
     const distanceFromVillage = Math.abs(x - (villageAnchor?.x ?? x)) + Math.abs(y - (villageAnchor?.y ?? y));
-    return distanceFromVillage >= 5
-      && (terrain?.meadowStrength || 0) > 0.18
-      && (terrain?.shoreStrength || 0) < 0.035
-      && (terrain?.waterRatio || 0) < 0.02;
+    return distanceFromVillage >= 3
+      && ((terrain?.meadowStrength || 0) > 0.12 || (terrain?.foliageShadow || 0) > 0.1)
+      && (terrain?.shoreStrength || 0) < 0.08
+      && (terrain?.waterRatio || 0) < 0.04;
   });
   const fishingShoreTiles = buildFishingShoreTiles(grid, terrainRegions, landTiles, buildings, 613);
 
@@ -2349,21 +2402,23 @@ function buildResidentPlacements(world, terrainRegions, buildings = []) {
     const tile = pickFromPool(pool, i * 13 + Math.floor(i / 3) * 5, pool[0]);
     const working = i < assignedWorkers;
     const seed = i * 29 + 11;
-    const homeTile = pickFromPool(homeAnchors, i * 5 + 1, tile);
-    const laneTile = pickFromPool(laneTiles, i * 7 + 2, tile);
+    // Give each resident a unique per-resident seed for diverse destination selection
+    // Previously groups of 3 shared the same socialSeedBase → identical destinations
+    const personalSeed = i * 47 + seed * 3 + 7;
+    const homeTile = pickFromPool(homeAnchors, personalSeed + 1, tile);
+    const laneTile = pickFromPool(laneTiles, personalSeed + 17, tile);
     const preferredSocial = (seed % 3) !== 0;
-    const socialGroup = Math.floor(i / 3);
-    const socialSeedBase = socialGroup * 19;
+    // Use personal seed + diverse offsets so each resident picks different social/leisure spots
     const leisureTile = preferredSocial
-      ? pickFromPool(weightedSocialAnchors, socialSeedBase + 3, pickFromPool(commonAnchors, i * 7 + 1, pickFromPool(meadowTiles, i * 11 + 5, tile)))
-      : pickFromPool(weightedQuietAnchors, socialSeedBase + 5, pickFromPool(commonAnchors, i * 7 + 1, pickFromPool(meadowTiles, i * 11 + 5, tile)));
-    const natureTile = pickFromPool(inlandNatureTiles, i * 13 + 7, pickFromPool(meadowTiles, i * 17 + 4, tile));
+      ? pickFromPool(weightedSocialAnchors, personalSeed + 31, pickFromPool(commonAnchors, personalSeed + 41, pickFromPool(meadowTiles, personalSeed + 51, tile)))
+      : pickFromPool(weightedQuietAnchors, personalSeed + 37, pickFromPool(commonAnchors, personalSeed + 43, pickFromPool(meadowTiles, personalSeed + 53, tile)));
+    const natureTile = pickFromPool(inlandNatureTiles, personalSeed + 61, pickFromPool(meadowTiles, personalSeed + 71, tile));
     const baseWorkTile = working
-      ? pickFromPool(weightedWorkAnchors, i * 3 + assignedWorkers, pickFromPool(commonAnchors, i * 6 + 1, tile))
+      ? pickFromPool(weightedWorkAnchors, personalSeed + 81, pickFromPool(commonAnchors, personalSeed + 91, tile))
       : leisureTile;
     const workTile = working && baseWorkTile?.buildingType === 'fishing_hut'
       ? (() => {
-          const fishingTile = pickFromPool(fishingShoreTiles, i * 11 + 7, baseWorkTile);
+          const fishingTile = pickFromPool(fishingShoreTiles, personalSeed + 101, baseWorkTile);
           return fishingTile
             ? {
                 ...fishingTile,
@@ -2374,8 +2429,8 @@ function buildResidentPlacements(world, terrainRegions, buildings = []) {
             : baseWorkTile;
         })()
       : baseWorkTile;
-    const plazaTile = pickFromPool(weightedSocialAnchors, socialSeedBase + 2, laneTile);
-    const wanderTile = pickFromPool(wanderTiles, i * 19 + 9, natureTile);
+    const plazaTile = pickFromPool(weightedSocialAnchors, personalSeed + 111, laneTile);
+    const wanderTile = pickFromPool(wanderTiles, personalSeed + 121, natureTile);
     const residentArchetype = working
       ? (
         workTile?.buildingType && ['market', 'trading_post', 'storehouse', 'warehouse', 'bakery'].includes(workTile.buildingType) ? 'merchant'
@@ -3112,7 +3167,26 @@ export default function PetWorldCanvas({
           scale: eff.scale,
           facing: wander.facing,
           moving: wander.moving,
+          idleState: wander.idleState,
         });
+        // Draw sleep "zzz" particles for sleeping animals
+        if (wander.idleState === 'sleeping') {
+          const zPhase = (time * 0.001 + (eff.seed || 0) * 0.5) % 3;
+          const zSize = tileSize * 0.06;
+          ctx.save();
+          ctx.font = `${Math.round(zSize + 2)}px sans-serif`;
+          ctx.textAlign = 'center';
+          for (let zi = 0; zi < 3; zi += 1) {
+            const zP = (zPhase + zi * 0.9) % 3;
+            const zAlpha = zP < 2 ? Math.min(1, zP * 0.8) * (1 - Math.max(0, zP - 1.4) / 0.6) : 0;
+            if (zAlpha > 0.02) {
+              ctx.globalAlpha = zAlpha * 0.55;
+              ctx.fillStyle = '#e8e0f0';
+              ctx.fillText('z', screenX + tileSize * (0.12 + zi * 0.06), screenY - tileSize * (0.18 + zP * 0.12));
+            }
+          }
+          ctx.restore();
+        }
       });
 
     residentStates.forEach(({ resident, motion, pose, screenX, screenY }) => {
