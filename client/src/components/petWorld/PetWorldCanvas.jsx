@@ -74,6 +74,56 @@ const RESIDENT_WALK_OPTIONS = { maxShoreStrength: 0.02, maxWaterRatio: 0.006 };
 const ROAMING_WALK_OPTIONS = { maxShoreStrength: 0.018, maxWaterRatio: 0.005 };
 const ENCOUNTER_WALK_OPTIONS = { maxShoreStrength: 0.022, maxWaterRatio: 0.008 };
 const LAND_ANIMAL_WALK_OPTIONS = { maxShoreStrength: 0.025, maxWaterRatio: 0.008 };
+const WATER_ANIMAL_SPECIES = new Set(['duck', 'fish_koi', 'fish_perch']);
+
+const GROUND_ANIMAL_PROFILES = {
+  rabbit: {
+    scale: 0.56,
+    yBias: 0.82,
+    idleFacing: -1,
+    sideOnlyFacing: true,
+    defaultSideFacing: -1,
+    walkCyclesPerTile: 1.35,
+    idleFrameRate: 0.00004,
+    route: { stopCount: 3, minDist: 1, maxDist: 3, pauseBase: 7600, pauseVariance: 2600, speed: 0.5 },
+  },
+  horse: {
+    scale: 0.68,
+    yBias: 0.82,
+    idleFacing: -1,
+    walkCyclesPerTile: 1.15,
+    idleFrameRate: 0.00002,
+    route: { stopCount: 2, minDist: 2, maxDist: 4, pauseBase: 9000, pauseVariance: 3200, speed: 0.56 },
+  },
+  pig: {
+    scale: 0.68,
+    yBias: 0.82,
+    idleFacing: -1,
+    walkCyclesPerTile: 0.9,
+    idleFrameRate: 0.00001,
+    route: { stopCount: 2, minDist: 1, maxDist: 3, pauseBase: 14000, pauseVariance: 5200, speed: 0.42 },
+  },
+  fox: {
+    scale: 0.56,
+    yBias: 0.82,
+    idleFacing: -1,
+    sideOnlyFacing: true,
+    defaultSideFacing: -1,
+    walkCyclesPerTile: 1.3,
+    idleFrameRate: 0.00005,
+    route: { stopCount: 3, minDist: 1, maxDist: 4, pauseBase: 7200, pauseVariance: 2400, speed: 0.54 },
+  },
+  goose: {
+    scale: 0.78,
+    yBias: 0.82,
+    idleFacing: -1,
+    sideOnlyFacing: true,
+    defaultSideFacing: -1,
+    walkCyclesPerTile: 0.95,
+    idleFrameRate: 0.00004,
+    route: { stopCount: 2, minDist: 1, maxDist: 2, pauseBase: 12000, pauseVariance: 3200, speed: 0.4 },
+  },
+};
 
 function getBuildingMap(buildings = []) {
   return new Map(buildings.map((building) => [building.id, building]));
@@ -109,7 +159,16 @@ function entityDisplayName(entry) {
     return names[entry.entity?.character] || 'Hero';
   }
   if (entry.type === 'animal') {
-    const names = { rabbit: 'Rabbit', deer: 'Deer', boar: 'Boar', fox: 'Fox', duck: 'Duck' };
+    const names = {
+      rabbit: 'Rabbit',
+      horse: 'Horse',
+      deer: 'Horse',
+      pig: 'Pig',
+      boar: 'Pig',
+      fox: 'Fox',
+      duck: 'Duck',
+      goose: 'Goose',
+    };
     return names[entry.entity?.species] || 'Critter';
   }
   return 'Entity';
@@ -137,14 +196,29 @@ function findNearestEntity(entityPositions, clientX, clientY, canvasRect) {
 
 /* ── Entity placement validation ── */
 
-function isEntityPlacementValid(grid, tx, ty) {
+function isEntityPlacementValid(grid, terrainRegions, tx, ty, carryingEntity = null) {
   if (!grid) return false;
   if (tx < 0 || ty < 0 || tx >= grid.w || ty >= grid.h) return false;
   const tile = grid.tiles[ty]?.[tx];
   if (!tile) return false;
   if (tile.b != null) return false;
-  if (WALK_BLOCKERS.has(tile.t)) return false;
-  return true;
+  if (carryingEntity?.type === 'animal') {
+    const species = carryingEntity.entity?.species;
+    if (WATER_ANIMAL_SPECIES.has(species)) {
+      return tile.t === 'water';
+    }
+    if (species === 'goose') {
+      return isGridTileWalkable(grid, terrainRegions, tx, ty, ROAMING_WALK_OPTIONS);
+    }
+    return isStrictInlandTile(grid, terrainRegions, { x: tx, y: ty }, LAND_ANIMAL_WALK_OPTIONS);
+  }
+  if (carryingEntity?.type === 'resident') {
+    return isGridTileWalkable(grid, terrainRegions, tx, ty, RESIDENT_WALK_OPTIONS);
+  }
+  if (carryingEntity?.type === 'pet') {
+    return isGridTileWalkable(grid, terrainRegions, tx, ty, ROAMING_WALK_OPTIONS);
+  }
+  return !WALK_BLOCKERS.has(tile.t);
 }
 
 function clamp(value, min, max) {
@@ -352,6 +426,78 @@ function buildVillageAnimalPool(grid, terrainRegions, roamTiles, buildings = [],
   const meadowNearbyTiles = nearbyTiles.filter(({ x, y }) => (terrainRegions?.[y]?.[x]?.meadowStrength || 0) > 0.2);
   const villageCoreTiles = meadowNearbyTiles.length ? meadowNearbyTiles : nearbyTiles;
   return villageCoreTiles.length ? villageCoreTiles : inlandTiles;
+}
+
+function getGroundAnimalProfile(species) {
+  return GROUND_ANIMAL_PROFILES[species] || GROUND_ANIMAL_PROFILES.rabbit;
+}
+
+function buildFaunaPools(world, terrainRegions, buildings = []) {
+  const grid = world?.grid;
+  if (!grid) {
+    return {
+      grid: null,
+      roamingTiles: [],
+      waterTiles: [],
+      meadowTiles: [],
+      woodedTiles: [],
+      shoreLandTiles: [],
+      villageAnimalTiles: [],
+    };
+  }
+  const landGraph = buildLandComponents(grid, terrainRegions, ROAMING_WALK_OPTIONS, buildings);
+  const roamingTiles = landGraph.primary?.length ? landGraph.primary : landGraph.tiles;
+  const allWaterTiles = findTilesByType(grid, 'water');
+  const waterTiles = allWaterTiles.filter(({ x, y }) => {
+    for (let dy = -1; dy <= 1; dy += 1) {
+      for (let dx = -1; dx <= 1; dx += 1) {
+        if (dx === 0 && dy === 0) continue;
+        const ny = y + dy;
+        const nx = x + dx;
+        if (ny >= 0 && ny < grid.h && nx >= 0 && nx < grid.w && grid.tiles[ny]?.[nx]?.t !== 'water') {
+          return true;
+        }
+      }
+    }
+    return false;
+  });
+  const meadowTiles = roamingTiles.filter(({ x, y }) => (terrainRegions?.[y]?.[x]?.meadowStrength || 0) > 0.28);
+  const woodedTiles = roamingTiles.filter(({ x, y }) => (terrainRegions?.[y]?.[x]?.foliageShadow || 0) > 0.18);
+  const shoreLandTiles = roamingTiles.filter(({ x, y }) => {
+    const terrain = terrainRegions?.[y]?.[x];
+    return (terrain?.shoreStrength || 0) > 0.06 && (terrain?.waterRatio || 0) < 0.02;
+  });
+  const villageAnimalTiles = buildVillageAnimalPool(grid, terrainRegions, roamingTiles, buildings, 811);
+  return {
+    grid,
+    roamingTiles,
+    waterTiles,
+    meadowTiles,
+    woodedTiles,
+    shoreLandTiles,
+    villageAnimalTiles,
+  };
+}
+
+function buildRelocatedAnimalState(entity, tx, ty, world, terrainRegions, buildings = []) {
+  const pools = buildFaunaPools(world, terrainRegions, buildings);
+  const anchor = { x: tx, y: ty };
+  if (entity.layer === 'water' || WATER_ANIMAL_SPECIES.has(entity.species)) {
+    return { x: tx, y: ty, route: null, layer: 'water' };
+  }
+  const profile = getGroundAnimalProfile(entity.species);
+  const pool = entity.species === 'goose'
+    ? (pools.shoreLandTiles.length ? pools.shoreLandTiles : (pools.meadowTiles.length ? pools.meadowTiles : pools.roamingTiles))
+    : (pools.villageAnimalTiles.length ? pools.villageAnimalTiles : (pools.meadowTiles.length ? pools.meadowTiles : pools.roamingTiles));
+  return {
+    x: tx,
+    y: ty,
+    layer: 'ground',
+    route: buildRoamingTileRoute(anchor, pool.length ? pool : [anchor], world?.grid, terrainRegions, entity.seed, {
+      ...profile.route,
+      walkOptions: ROAMING_WALK_OPTIONS,
+    }),
+  };
 }
 
 function pointFromTileCenter(tile, seed, radiusX = 0.03, radiusY = 0.025) {
@@ -1132,6 +1278,16 @@ function getAnimalWanderPos(entity, time, grid) {
   if (entity.route?.length) {
     return getTileRouteMotion(entity, time);
   }
+  if (entity.layer !== 'water') {
+    const idleFrameRate = entity.idleFrameRate ?? 0.00004;
+    return {
+      x: entity.x,
+      y: entity.y,
+      frameOffset: idleFrameRate > 0 ? (time * idleFrameRate + (entity.seed || 0) * 0.1) % 1 : 0,
+      facing: entity.idleFacing || 2,
+      moving: false,
+    };
+  }
   const seed = entity.seed || 0;
   const period = entity.period || 8000;
 
@@ -1325,17 +1481,17 @@ function buildResidentPlacements(world, terrainRegions, buildings = []) {
 
     const routePoints = working
       ? [
-          { ...pointFromTile(homeTile, seed + 1, 0, 0), role: 'home', pauseMs: 2600 + hash01(seed, 3) * 1200 },
+          { ...pointFromTile(homeTile, seed + 1, 0, 0), role: 'home', pauseMs: 6200 + hash01(seed, 3) * 2200 },
           { ...pointFromTile(laneTile, seed + 2, 0, 0), role: 'path', pauseMs: 0 },
-          { ...pointFromTile(workTile, seed + 3, 0, 0), role: 'work', pauseMs: 3000 + hash01(seed, 5) * 1800 },
-          { ...pointFromTile(plazaTile, seed + 4, 0, 0), role: 'common', pauseMs: 2100 + hash01(seed, 6) * 1300 },
-          { ...pointFromTile(leisureTile, seed + 5, 0, 0), role: 'common', pauseMs: 2400 + hash01(seed, 7) * 1400 },
+          { ...pointFromTile(workTile, seed + 3, 0, 0), role: 'work', pauseMs: 7600 + hash01(seed, 5) * 2800 },
+          { ...pointFromTile(plazaTile, seed + 4, 0, 0), role: 'common', pauseMs: 5400 + hash01(seed, 6) * 1800 },
+          { ...pointFromTile(leisureTile, seed + 5, 0, 0), role: 'common', pauseMs: 6200 + hash01(seed, 7) * 2200 },
         ]
       : [
-          { ...pointFromTile(homeTile, seed + 1, 0, 0), role: 'home', pauseMs: 2800 + hash01(seed, 3) * 1400 },
-          { ...pointFromTile(plazaTile, seed + 2, 0, 0), role: 'common', pauseMs: 2400 + hash01(seed, 4) * 1500 },
-          { ...pointFromTile(leisureTile, seed + 3, 0, 0), role: 'common', pauseMs: 2700 + hash01(seed, 5) * 1500 },
-          { ...pointFromTile(natureTile, seed + 4, 0, 0), role: 'common', pauseMs: 2200 + hash01(seed, 6) * 1200 },
+          { ...pointFromTile(homeTile, seed + 1, 0, 0), role: 'home', pauseMs: 7200 + hash01(seed, 3) * 2400 },
+          { ...pointFromTile(plazaTile, seed + 2, 0, 0), role: 'common', pauseMs: 6200 + hash01(seed, 4) * 2200 },
+          { ...pointFromTile(leisureTile, seed + 3, 0, 0), role: 'common', pauseMs: 7600 + hash01(seed, 5) * 2500 },
+          { ...pointFromTile(natureTile, seed + 4, 0, 0), role: 'common', pauseMs: 6800 + hash01(seed, 6) * 2000 },
           { ...pointFromTile(laneTile, seed + 5, 0, 0), role: 'path', pauseMs: 0 },
         ];
 
@@ -1349,7 +1505,7 @@ function buildResidentPlacements(world, terrainRegions, buildings = []) {
       idleFacing: 2,
       linearMotion: true,
       walkCyclesPerTile: 2.4,
-      route: expandResidentRoute(routePoints, seed, grid, terrainRegions, { speed: 0.82, walkOptions: RESIDENT_WALK_OPTIONS }),
+      route: expandResidentRoute(routePoints, seed, grid, terrainRegions, { speed: 0.74, walkOptions: RESIDENT_WALK_OPTIONS }),
       x: tile.x,
       y: tile.y,
     });
@@ -1358,45 +1514,46 @@ function buildResidentPlacements(world, terrainRegions, buildings = []) {
 }
 
 function buildAmbientFauna(world, terrainRegions, buildings = []) {
-  const grid = world?.grid;
+  const { grid, roamingTiles, waterTiles, meadowTiles, woodedTiles, shoreLandTiles, villageAnimalTiles } = buildFaunaPools(world, terrainRegions, buildings);
   if (!grid) return [];
-  const landGraph = buildLandComponents(grid, terrainRegions, ROAMING_WALK_OPTIONS, buildings);
-  const roamingTiles = landGraph.primary?.length ? landGraph.primary : landGraph.tiles;
-  const allWaterTiles = findTilesByType(grid, 'water');
-  // Keep ducks/fish near the village — only water tiles adjacent to land
-  const waterTiles = allWaterTiles.filter(({ x, y }) => {
-    const { tiles, w, h } = grid;
-    for (let dy = -1; dy <= 1; dy++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        if (dx === 0 && dy === 0) continue;
-        const ny = y + dy, nx = x + dx;
-        if (ny >= 0 && ny < h && nx >= 0 && nx < w && tiles[ny][nx].t !== 'water') return true;
-      }
-    }
-    return false;
-  });
-  const meadowTiles = roamingTiles.filter(({ x, y }) => (terrainRegions?.[y]?.[x]?.meadowStrength || 0) > 0.28);
-  const woodedTiles = roamingTiles.filter(({ x, y }) => (terrainRegions?.[y]?.[x]?.foliageShadow || 0) > 0.18);
-  const shoreTiles = roamingTiles.filter(({ x, y }) => (terrainRegions?.[y]?.[x]?.shoreStrength || 0) > 0.12);
-  const villageAnimalTiles = buildVillageAnimalPool(grid, terrainRegions, roamingTiles, buildings, 811);
 
   const placements = [];
   const fishCount = Math.min(7, Math.max(2, Math.floor(waterTiles.length / 18)));
   for (let i = 0; i < fishCount && waterTiles.length; i += 1) {
     const tile = waterTiles[(i * 7 + 3) % waterTiles.length];
-    const waterSpecies = i % 4 === 0 ? 'goose' : (i % 3 === 0 ? 'duck' : (i % 2 === 0 ? 'fish_koi' : 'fish_perch'));
+    const waterSpecies = i % 3 === 0 ? 'duck' : (i % 2 === 0 ? 'fish_koi' : 'fish_perch');
     placements.push({
       ...tile,
       species: waterSpecies,
       seed: 101 + i * 19,
-      rangeX: waterSpecies === 'goose' ? 0.18 : (waterSpecies === 'duck' ? 0.2 : 0.35),
-      rangeY: waterSpecies === 'goose' ? 0.1 : (waterSpecies === 'duck' ? 0.12 : 0.2),
+      rangeX: waterSpecies === 'duck' ? 0.18 : 0.35,
+      rangeY: waterSpecies === 'duck' ? 0.1 : 0.2,
       period: 2800 + i * 210,
       layer: 'water',
-      yBias: waterSpecies === 'goose' ? 0.62 : (waterSpecies === 'duck' ? 0.58 : 0.62),
-      scale: waterSpecies === 'goose' ? 0.78 : (waterSpecies === 'duck' ? 0.72 : 0.62),
-      idleFacing: waterSpecies === 'goose' ? -1 : 1,
-      idleFrameRate: waterSpecies === 'goose' ? 0.00022 : (waterSpecies === 'duck' ? 0.00026 : 0.00008),
+      yBias: waterSpecies === 'duck' ? 0.58 : 0.62,
+      scale: waterSpecies === 'duck' ? 0.72 : 0.62,
+      idleFacing: -1,
+      sideOnlyFacing: waterSpecies === 'duck',
+      defaultSideFacing: -1,
+      idleFrameRate: waterSpecies === 'duck' ? 0.00012 : 0.00008,
+    });
+  }
+
+  const goosePool = shoreLandTiles.length ? shoreLandTiles : (meadowTiles.length ? meadowTiles : roamingTiles);
+  const gooseCount = Math.min(2, goosePool.length ? 1 + (world.population > 6 ? 1 : 0) : 0);
+  for (let i = 0; i < gooseCount; i += 1) {
+    const tile = goosePool[(i * 13 + 2) % goosePool.length];
+    const profile = getGroundAnimalProfile('goose');
+    placements.push({
+      ...tile,
+      species: 'goose',
+      seed: 167 + i * 29,
+      layer: 'ground',
+      ...profile,
+      route: buildRoamingTileRoute(tile, goosePool, grid, terrainRegions, 167 + i * 29, {
+        ...profile.route,
+        walkOptions: ROAMING_WALK_OPTIONS,
+      }),
     });
   }
 
@@ -1404,29 +1561,20 @@ function buildAmbientFauna(world, terrainRegions, buildings = []) {
   const mammalCount = Math.min(6, Math.max(2, Math.ceil((world.expansions || 0) + (world.population || 0) / 5)));
   for (let i = 0; i < mammalCount && mammalPool.length; i += 1) {
     const tile = mammalPool[(i * 11 + 5) % mammalPool.length];
-      placements.push({
+    const species = ['rabbit', 'horse', 'pig', 'fox'][i % 4];
+    const profile = getGroundAnimalProfile(species);
+    placements.push({
       ...tile,
-      species: ['rabbit', 'deer', 'boar', 'fox'][i % 4],
+      species,
       seed: 203 + i * 23,
-      range: i % 2 === 0 ? 0.34 : 0.46,
-        period: 3200 + i * 250,
-        layer: 'ground',
-        yBias: 0.82,
-        scale: ['rabbit', 'fox'].includes(['rabbit', 'deer', 'boar', 'fox'][i % 4]) ? 0.56 : 0.68,
-        idleFacing: ['rabbit', 'fox'].includes(['rabbit', 'deer', 'boar', 'fox'][i % 4]) ? -1 : 2,
-        sideOnlyFacing: ['rabbit', 'fox'].includes(['rabbit', 'deer', 'boar', 'fox'][i % 4]),
-        defaultSideFacing: -1,
-        walkCyclesPerTile: 2.3,
-        idleFrameRate: 0,
-        route: buildRoamingTileRoute(tile, mammalPool, grid, terrainRegions, 203 + i * 23, {
-          stopCount: 3,
-          minDist: 1,
-          maxDist: 4,
-          pauseBase: 3400,
-          pauseVariance: 1800,
-          walkOptions: ROAMING_WALK_OPTIONS,
-        }),
-      });
+      period: 3200 + i * 250,
+      layer: 'ground',
+      ...profile,
+      route: buildRoamingTileRoute(tile, mammalPool, grid, terrainRegions, 203 + i * 23, {
+        ...profile.route,
+        walkOptions: ROAMING_WALK_OPTIONS,
+      }),
+    });
   }
 
   const birdPool = woodedTiles.length ? woodedTiles : roamingTiles;
@@ -1450,44 +1598,43 @@ function buildAmbientFauna(world, terrainRegions, buildings = []) {
 }
 
 function buildEncounterSightings(world, terrainRegions, encounters = [], buildings = []) {
-  const grid = world?.grid;
+  const { grid, roamingTiles, meadowTiles, woodedTiles, shoreLandTiles } = buildFaunaPools(world, terrainRegions, buildings);
   if (!grid || !encounters.length) return [];
-  const landGraph = buildLandComponents(grid, terrainRegions, ENCOUNTER_WALK_OPTIONS, buildings);
-  const roamingTiles = landGraph.primary?.length ? landGraph.primary : landGraph.tiles;
   if (!roamingTiles.length) return [];
-  const waterTiles = findTilesByType(grid, 'water');
-  const meadowTiles = roamingTiles.filter(({ x, y }) => (terrainRegions?.[y]?.[x]?.meadowStrength || 0) > 0.28);
-  const woodedTiles = roamingTiles.filter(({ x, y }) => (terrainRegions?.[y]?.[x]?.foliageShadow || 0) > 0.2);
-  const shoreTiles = roamingTiles.filter(({ x, y }) => (terrainRegions?.[y]?.[x]?.shoreStrength || 0) > 0.12);
 
   return encounters.map((encounter, index) => {
     const type = encounter.encounter_type;
     const pool =
-      type === 'rare_bird' ? (waterTiles.length ? waterTiles : (shoreTiles.length ? shoreTiles : meadowTiles)) :
+      type === 'rare_bird' ? (shoreLandTiles.length ? shoreLandTiles : (meadowTiles.length ? meadowTiles : woodedTiles)) :
       type === 'bear_sighting' ? (woodedTiles.length ? woodedTiles : roamingTiles) :
       type === 'wolf_pack' ? (woodedTiles.length ? woodedTiles : meadowTiles) :
       (meadowTiles.length ? meadowTiles : roamingTiles);
     const tile = pool[(index * 17 + 7) % pool.length];
+    const species = ENCOUNTER_SPECIES[type] || 'fox';
+    const groundProfile = getGroundAnimalProfile(species === 'deer' ? 'horse' : species === 'boar' ? 'pig' : species);
     return {
       ...tile,
       encounter,
-      species: ENCOUNTER_SPECIES[type] || 'fox',
+      species,
       seed: 409 + index * 37,
       range: type === 'bear_sighting' ? 0.28 : 0.4,
       period: 3000 + index * 180,
-      layer: type === 'rare_bird' ? 'water' : 'ground',
-      yBias: type === 'rare_bird' ? 0.62 : 0.8,
-      scale: type === 'rare_bird' ? 0.8 : type === 'bear_sighting' ? 0.86 : type === 'wolf_pack' ? 0.76 : 0.72,
+      layer: 'ground',
+      yBias: type === 'rare_bird' ? 0.82 : 0.8,
+      scale: type === 'rare_bird' ? 0.78 : type === 'bear_sighting' ? 0.86 : type === 'wolf_pack' ? 0.76 : 0.72,
       tileKey: `${tile.x}:${tile.y}`,
-      idleFacing: type === 'rare_bird' ? -1 : 2,
-      idleFrameRate: type === 'rare_bird' ? 0.00022 : undefined,
-      walkCyclesPerTile: 2.2,
-      route: type === 'rare_bird' ? null : buildRoamingTileRoute(tile, pool, grid, terrainRegions, 409 + index * 37, {
+      idleFacing: type === 'rare_bird' ? -1 : (groundProfile.idleFacing ?? 2),
+      sideOnlyFacing: type === 'rare_bird' ? true : groundProfile.sideOnlyFacing,
+      defaultSideFacing: type === 'rare_bird' ? -1 : groundProfile.defaultSideFacing,
+      idleFrameRate: type === 'rare_bird' ? 0.00004 : groundProfile.idleFrameRate,
+      walkCyclesPerTile: type === 'rare_bird' ? 0.95 : 2.2,
+      route: buildRoamingTileRoute(tile, pool, grid, terrainRegions, 409 + index * 37, {
         stopCount: 3,
         minDist: 1,
         maxDist: type === 'bear_sighting' ? 3 : 4,
-        pauseBase: 3200,
-        pauseVariance: 1700,
+        pauseBase: type === 'rare_bird' ? 12000 : 3200,
+        pauseVariance: type === 'rare_bird' ? 2800 : 1700,
+        speed: type === 'rare_bird' ? 0.4 : undefined,
         walkOptions: ENCOUNTER_WALK_OPTIONS,
       }),
     };
@@ -1859,7 +2006,7 @@ export default function PetWorldCanvas({
         const screenX = wander.x * tileSize - camX + tileSize / 2;
         const screenY = wander.y * tileSize - camY + tileSize * creature.yBias;
         if (screenX < -tileSize || screenY < -tileSize || screenX > size.width + tileSize || screenY > size.height + tileSize) return;
-        const floatingBird = creature.species === 'duck' || creature.species === 'goose';
+        const floatingBird = creature.species === 'duck';
         drawAmbientCritter(ctx, screenX, screenY, tileSize, creature.species, wander.frameOffset, {
           scale: creature.scale,
           facing: wander.facing,
@@ -1939,7 +2086,7 @@ export default function PetWorldCanvas({
         const aKey = animalKey(creature);
         if (aKey === carriedKey) return;
         const reloc = relocationsRef.current.get(aKey);
-        const eff = reloc ? { ...creature, x: reloc.x + 0.5, y: reloc.y + 0.5, route: null } : creature;
+        const eff = reloc ? { ...creature, ...reloc } : creature;
         const wander = getAnimalWanderPos(eff, time, world.grid);
         const screenX = wander.x * tileSize - camX + tileSize / 2;
         const screenY = wander.y * tileSize - camY + tileSize * eff.yBias;
@@ -1985,7 +2132,7 @@ export default function PetWorldCanvas({
       const screenX = wander.x * tileSize - camX + tileSize / 2;
       const screenY = wander.y * tileSize - camY + tileSize * sighting.yBias;
       if (screenX < -tileSize || screenY < -tileSize || screenX > size.width + tileSize || screenY > size.height + tileSize) return;
-      const floatingBird = sighting.layer === 'water' && (sighting.species === 'duck' || sighting.species === 'goose' || sighting.species === 'rare_bird');
+      const floatingBird = sighting.layer === 'water' && sighting.species === 'duck';
       drawAmbientCritter(ctx, screenX, screenY, tileSize, sighting.species, wander.frameOffset, {
         scale: sighting.scale,
         facing: wander.facing,
@@ -2012,7 +2159,7 @@ export default function PetWorldCanvas({
       const aKey = animalKey(creature);
       if (aKey === carriedKey) return;
       const reloc = relocationsRef.current.get(aKey);
-      const eff = reloc ? { ...creature, x: reloc.x + 0.5, y: reloc.y + 0.5, route: null } : creature;
+      const eff = reloc ? { ...creature, ...reloc } : creature;
       const wander = getAnimalWanderPos(eff, time, world.grid);
       hitEntities.push({ type: 'animal', key: aKey, screenX: wander.x * tileSize - camX + tileSize / 2, screenY: wander.y * tileSize - camY + tileSize * eff.yBias, hitRadius: tileSize * 0.45, entity: creature });
     });
@@ -2038,7 +2185,7 @@ export default function PetWorldCanvas({
     if (carryingEntity && ghostTile) {
       const gx = ghostTile.x;
       const gy = ghostTile.y;
-      const valid = isEntityPlacementValid(world.grid, gx, gy);
+      const valid = isEntityPlacementValid(world.grid, terrainRegions, gx, gy, carryingEntity);
       drawGhostFootprint(ctx, gx * tileSize - camX, gy * tileSize - camY, tileSize, 1, 1, valid, time);
       const ghostScreenX = gx * tileSize - camX + tileSize / 2;
       const ghostScreenY = gy * tileSize - camY + tileSize * 0.82;
@@ -2231,8 +2378,11 @@ export default function PetWorldCanvas({
       if (hit) {
         // If carrying an entity, try to place it
         if (carryingEntity && !readonly) {
-          if (isEntityPlacementValid(world?.grid, hit.x, hit.y)) {
-            relocationsRef.current.set(carryingEntity.key, { x: hit.x, y: hit.y });
+          if (isEntityPlacementValid(world?.grid, terrainRegions, hit.x, hit.y, carryingEntity)) {
+            const relocation = carryingEntity.type === 'animal'
+              ? buildRelocatedAnimalState(carryingEntity.entity, hit.x, hit.y, world, terrainRegions, buildings)
+              : { x: hit.x, y: hit.y };
+            relocationsRef.current.set(carryingEntity.key, relocation);
             setCarryingEntity(null);
             setHoverTile(null);
           }

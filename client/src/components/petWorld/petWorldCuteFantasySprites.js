@@ -408,7 +408,7 @@ const ANIMALS = {
     p: 'Animals/Duck/Duck_01.png',
     idle: { row: 0, n: 2 },
     walk: { row: 1, n: 5 },
-    waterIdle: { row: 6, n: 2 },
+    waterIdle: { row: 7, n: 2 },
   },
   cow:     {
     p: 'Animals/Cow/Cow_01.png',
@@ -426,7 +426,7 @@ const ANIMALS = {
     p: 'Animals/Goose/Goose_01.png',
     idle: { row: 0, n: 2 },
     walk: { row: 1, n: 6 },
-    waterIdle: { row: 0, n: 2 },
+    preferSideFacing: true,
   },
   horse:   {
     p: 'Animals/Horse/Horse_01.png',
@@ -447,7 +447,7 @@ const CRITTER_MAP = {
   butterfly: 'butterfly', bee: 'bee', frog: 'frog',
   bird: 'chicken', rabbit: 'mouse', squirrel: 'mouse',
   dragonfly: 'butterfly', ladybug: 'bee', firefly: 'bee',
-  duck: 'duck', goose: 'goose',
+  duck: 'duck', goose: 'goose', horse: 'horse', pig: 'pig',
   // Map procedural species to CF animals
   fox: 'mouse', wolf: 'cow', bear: 'cow', deer: 'horse', boar: 'pig',
   songbird: 'chicken', rare_bird: 'goose',
@@ -1001,7 +1001,7 @@ export function drawCuteFantasyResident(ctx, x, y, tileSize, paletteKey, activit
 
   const isWalking = !!moving;
   const dir = dirGroupFromFacing(facing);
-  const flipH = dir === 'side' && facing === 1;
+  const flipH = dir === 'side' && facing === -1;
   const workSet = !isWalking ? profile.work?.[activity] || null : null;
   const anim = isWalking ? profile.walk[dir] : (workSet?.[dir] || profile.idle[dir]);
   const row = anim.row;
@@ -1073,7 +1073,9 @@ export function drawCuteFantasyCritter(ctx, x, y, tileSize, species, frameOffset
   // Pick the correct animation row and frame count
   const waterAnim = an.waterIdle || an.idle;
   const animSet = waterborne ? waterAnim : (moving ? an.walk : an.idle);
-  const resolvedDir = an.preferSideFacing ? 'side' : dir;
+  const resolvedDir = (waterborne && mapped === 'duck')
+    ? 'side'
+    : (an.preferSideFacing ? 'side' : dir);
   const anim = animSet?.[resolvedDir] || animSet?.side || animSet;
   const fi = Math.floor(frameOffset * anim.n) % anim.n;
   const sx = fi * 32;
