@@ -4,7 +4,7 @@ import { RESOURCE_ICONS as RES_ICONS } from './petWorldUtils';
 import PetWorldSpriteThumbnail from './PetWorldSpriteThumbnail';
 import './petWorldCfUi.css';
 
-const CATEGORIES = ['All', 'Food', 'Wood', 'Stone', 'Cloth', 'Gold', 'Housing', 'Support', 'Storage', 'Cosmetic', 'Trade'];
+const CATEGORIES = ['All', 'Terraform', 'Food', 'Wood', 'Stone', 'Cloth', 'Gold', 'Housing', 'Support', 'Storage', 'Cosmetic', 'Trade'];
 
 const FLOWER_VARIANTS = [
   { id: 'pink', label: 'Pink', color: '#e060a0' },
@@ -12,6 +12,60 @@ const FLOWER_VARIANTS = [
   { id: 'blue', label: 'Blue', color: '#4080e0' },
   { id: 'red', label: 'Red', color: '#e04040' },
 ];
+
+// Terraform / bridge actions -- these are not real buildings but live in the
+// build menu so the player finds land-shaping tools next to their miniatures.
+const TERRAFORM_ITEMS = [
+  {
+    id: 'fill',
+    name: 'Add Land',
+    description: 'Fill water to grow your island',
+    icon: '/pet-world/cute-fantasy/Tiles/Cliff/Cliff_Tile.png',
+    comboCost: 15,
+    materials: { stone: 2 },
+  },
+  {
+    id: 'dig',
+    name: 'Dig Water',
+    description: 'Carve a pond or channel out of land',
+    icon: '/pet-world/cute-fantasy/Tiles/Water/Water_Middle.png',
+    comboCost: 10,
+    materials: {},
+  },
+  {
+    id: 'bridge_wood',
+    name: 'Wood Bridge',
+    description: 'A light wooden crossing over water',
+    icon: '/pet-world/cute-fantasy/Tiles/Bridge/Bridge_Wood_1.png',
+    comboCost: 8,
+    materials: { wood: 3 },
+  },
+  {
+    id: 'bridge_stone',
+    name: 'Stone Bridge',
+    description: 'A sturdy stone crossing over water',
+    icon: '/pet-world/cute-fantasy/Tiles/Bridge/Bridge_Stone_Horizontal.png',
+    comboCost: 12,
+    materials: { stone: 3 },
+  },
+];
+
+function TerraformThumb({ icon, size = 34 }) {
+  return (
+    <img
+      src={icon}
+      alt=""
+      width={size}
+      height={size}
+      style={{
+        imageRendering: 'pixelated',
+        objectFit: 'contain',
+        width: size,
+        height: size,
+      }}
+    />
+  );
+}
 
 function CostLine({ comboCost, materials = {} }) {
   const mats = Object.entries(materials).filter(([, v]) => v > 0);
@@ -44,20 +98,25 @@ export default function PetWorldBuildMenu({
   world,
   selectedType,
   selectedVariant,
+  terraformMode,
   layout = 'browse',
   onSelect,
+  onSelectTerraform,
   onClose,
 }) {
   const [cat, setCat] = useState('All');
 
   if (!open) return null;
 
+  const isTerraformCat = cat === 'Terraform';
   const filtered = cat === 'All'
     ? buildings
-    : buildings.filter((b) => {
-        const ui = getBuildingUi(b.id);
-        return ui.category === cat;
-      });
+    : isTerraformCat
+      ? []
+      : buildings.filter((b) => {
+          const ui = getBuildingUi(b.id);
+          return ui.category === cat;
+        });
 
   const isPeek = layout === 'peek';
   const gridCols = layout === 'expanded'
@@ -84,7 +143,43 @@ export default function PetWorldBuildMenu({
         ))}
       </div>
 
-      {isPeek ? (
+      {isTerraformCat && (
+        <div className={`grid ${gridCols} gap-1.5`} style={{ touchAction: 'pan-y' }}>
+          {TERRAFORM_ITEMS.map((item) => {
+            const selected = terraformMode === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => onSelectTerraform && onSelectTerraform(item.id)}
+                className={`cf-inset relative text-left transition-all motion-reduce:transition-none ${
+                  selected ? 'cf-select-ring' : ''
+                }`}
+                style={{ borderRadius: 4 }}
+              >
+                <div className="flex items-center gap-2 px-2.5 py-2">
+                  <span className="cf-inset flex h-10 w-10 shrink-0 items-center justify-center">
+                    <TerraformThumb icon={item.icon} size={34} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="cf-text truncate text-[11px] font-bold leading-tight">
+                      {item.name}
+                    </div>
+                    <div className="cf-text-muted mt-0.5 truncate text-[9px] font-medium leading-tight">
+                      {item.description}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between px-2.5 pb-2">
+                  <CostLine comboCost={item.comboCost} materials={item.materials} />
+                  <span className="cf-text-muted text-[8px]">1&times;1</span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {!isTerraformCat && isPeek && (
         <div
           className="flex gap-2 overflow-x-auto pb-0.5 scrollbar-none"
           style={{ overscrollBehavior: 'contain', touchAction: 'pan-x', WebkitOverflowScrolling: 'touch' }}
@@ -124,7 +219,8 @@ export default function PetWorldBuildMenu({
             );
           })}
         </div>
-      ) : (
+      )}
+      {!isTerraformCat && !isPeek && (
         <div
           className={`grid ${gridCols} gap-1.5`}
           style={{ touchAction: 'pan-y' }}

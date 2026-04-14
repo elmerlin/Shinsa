@@ -890,99 +890,55 @@ function buildFishingDecorations(world, terrainRegions, buildings = []) {
   const grid = world?.grid;
   if (!grid) return [];
 
-  const landGraph = buildLandComponents(grid, terrainRegions, RESIDENT_WALK_OPTIONS, buildings);
-  const landTiles = landGraph.primary?.length ? landGraph.primary : findClearTiles(grid);
-  const showcaseCandidates = landTiles.map(({ x, y }) => {
-    const terrain = terrainRegions?.[y]?.[x];
-    if (!hasCardinalWater(grid, x, y)
-      || y < Math.floor(grid.h * 0.15)
-      || (terrain?.waterRatio || 0) >= 0.55
-      || (terrain?.shoreStrength || 0) <= 0.01
-      || (terrain?.shoreStrength || 0) >= 0.82) {
-      return null;
+  // Collect EVERY land tile on the grid that sits next to cardinal water — no
+  // terrain strength filters, no primary-component restriction. This guarantees
+  // we find shore tiles even on small ponds or off-the-main-island water bodies.
+  const allShoreTiles = [];
+  for (let y = 0; y < grid.h; y += 1) {
+    for (let x = 0; x < grid.w; x += 1) {
+      const tile = grid.tiles?.[y]?.[x];
+      if (!tile || tile.t === 'water') continue;
+      if (tile.b != null) continue; // skip tiles with buildings on them
+      if (!hasCardinalWater(grid, x, y)) continue;
+      const waterOptions = getCardinalWaterNeighbors(grid, x, y)
+        .map((candidate) => ({
+          ...candidate,
+          openness: countNearbyWater(grid, candidate.x, candidate.y, 1),
+        }))
+        .sort((a, b) => b.openness - a.openness || a.dir.localeCompare(b.dir));
+      const target = waterOptions[0];
+      if (!target) continue;
+      const dirVector = vectorForWaterDir(target.dir);
+      const nearbyWater = collectNearbyWaterTiles(grid, x, y, 3)
+        .filter((t) => isSameWaterBank(t, { x, y, shoreDir: target.dir }))
+        .sort((a, b) => b.openWater - a.openWater || a.dist - b.dist);
+      const castTile = nearbyWater[0] || { x: target.x, y: target.y };
+      allShoreTiles.push({
+        x,
+        y,
+        fishingSpotId: tileKey(x, y),
+        fishingFacing: facingForWaterDir(target.dir),
+        pauseFacing: facingForWaterDir(target.dir),
+        castTargetX: castTile.x + 0.5 + dirVector.dx * 0.22,
+        castTargetY: castTile.y + 0.56 + dirVector.dy * 0.22,
+        shoreDir: target.dir,
+        shoreWaterX: target.x,
+        shoreWaterY: target.y,
+        opennessScore: target.openness,
+      });
     }
-    const waterOptions = getCardinalWaterNeighbors(grid, x, y)
-      .map((candidate) => ({
-        ...candidate,
-        openness: countNearbyWater(grid, candidate.x, candidate.y, 1),
-      }))
-      .sort((a, b) => b.openness - a.openness || a.dir.localeCompare(b.dir));
-    const target = waterOptions[0];
-    if (!target) return null;
-    const dirVector = vectorForWaterDir(target.dir);
-    const nearbyWater = collectNearbyWaterTiles(grid, x, y, 3)
-      .filter((tile) => isSameWaterBank(tile, { x, y, shoreDir: target.dir }))
-      .sort((a, b) => b.openWater - a.openWater || a.dist - b.dist);
-    const castTile = nearbyWater[0] || { x: target.x, y: target.y };
-    return {
-      x,
-      y,
-      fishingSpotId: tileKey(x, y),
-      fishingFacing: facingForWaterDir(target.dir),
-      pauseFacing: facingForWaterDir(target.dir),
-      castTargetX: castTile.x + 0.5 + dirVector.dx * 0.22,
-      castTargetY: castTile.y + 0.56 + dirVector.dy * 0.22,
-      shoreDir: target.dir,
-      shoreWaterX: target.x,
-      shoreWaterY: target.y,
-    };
-  }).filter(Boolean);
-  const showcaseTarget = { x: grid.w * 0.56, y: grid.h * 0.58 };
-  const explicitShowcaseSpot = showcaseCandidates
-    .map((tile) => ({
-      ...tile,
-      showcaseScore: Math.abs(tile.x - showcaseTarget.x) * 0.95 + Math.abs(tile.y - showcaseTarget.y) * 1.15,
-    }))
-    .sort((a, b) => a.showcaseScore - b.showcaseScore)[0] || null;
-  const fishingShoreTiles = selectFishingSceneSpots(
-    grid,
-    terrainRegions,
-    buildFishingShoreTiles(grid, terrainRegions, landTiles, buildings, 613),
-    buildings,
-  );
-  const broadShoreTiles = landTiles.map(({ x, y }) => {
-    const terrain = terrainRegions?.[y]?.[x];
-    if (!hasCardinalWater(grid, x, y)
-      || (terrain?.waterRatio || 0) >= 0.55
-      || (terrain?.shoreStrength || 0) <= 0.01
-      || (terrain?.shoreStrength || 0) >= 0.82) {
-      return null;
-    }
-    const waterOptions = getCardinalWaterNeighbors(grid, x, y)
-      .map((candidate) => ({
-        ...candidate,
-        openness: countNearbyWater(grid, candidate.x, candidate.y, 1),
-      }))
-      .sort((a, b) => b.openness - a.openness || a.dir.localeCompare(b.dir));
-    const target = waterOptions[0];
-    if (!target) return null;
-    const dirVector = vectorForWaterDir(target.dir);
-    const nearbyWater = collectNearbyWaterTiles(grid, x, y, 3)
-      .filter((tile) => isSameWaterBank(tile, { x, y, shoreDir: target.dir }))
-      .sort((a, b) => b.openWater - a.openWater || a.dist - b.dist);
-    const castTile = nearbyWater[0] || { x: target.x, y: target.y };
-    return {
-      x,
-      y,
-      fishingSpotId: tileKey(x, y),
-      fishingFacing: facingForWaterDir(target.dir),
-      pauseFacing: facingForWaterDir(target.dir),
-      castTargetX: castTile.x + 0.5 + dirVector.dx * 0.22,
-      castTargetY: castTile.y + 0.56 + dirVector.dy * 0.22,
-      shoreDir: target.dir,
-      shoreWaterX: target.x,
-      shoreWaterY: target.y,
-    };
-  }).filter(Boolean);
-  const shorePool = fishingShoreTiles.length >= 3
-    ? fishingShoreTiles
-    : Array.from(new Map([...fishingShoreTiles, ...broadShoreTiles].map((tile) => [tileKey(tile.x, tile.y), tile])).values());
-  if (!shorePool.length) return [];
+  }
+  if (!allShoreTiles.length) return [];
 
-  const spots = [
-    ...(explicitShowcaseSpot ? [explicitShowcaseSpot] : []),
-    ...selectFishingSceneSpots(grid, terrainRegions, shorePool, buildings),
-  ].filter((spot, index, arr) => arr.findIndex((candidate) => Math.abs(candidate.x - spot.x) + Math.abs(candidate.y - spot.y) < 2) === index);
+  // Rank by openness (deep water adjacent) + slight y-bias for showcase placement
+  allShoreTiles.sort((a, b) => b.opennessScore - a.opennessScore);
+  const desiredSpots = clamp(buildings.filter((b) => b.state === 'built' && (b.type || b.building_type) === 'fishing_hut').length + 3, 3, 6);
+  const spots = [];
+  allShoreTiles.forEach((tile) => {
+    if (spots.length >= desiredSpots) return;
+    if (spots.some((spot) => Math.abs(spot.x - tile.x) + Math.abs(spot.y - tile.y) < 5)) return;
+    spots.push(tile);
+  });
   if (!spots.length) return [];
 
   const decorations = [];

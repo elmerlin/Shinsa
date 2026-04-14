@@ -1233,10 +1233,11 @@ export default function PetWorldPage() {
           <button
             type="button"
             onClick={() => {
-              if (pendingBuildType) {
+              if (pendingBuildType || terraformMode) {
                 // Cancel placement
                 setPendingBuildType('');
                 setPendingBuildVariant(null);
+                setTerraformMode('');
                 setActiveSheet(null);
                 return;
               }
@@ -1246,14 +1247,14 @@ export default function PetWorldPage() {
               setActiveSheet('build');
             }}
             className={`pointer-events-auto cf-btn flex h-12 w-12 items-center justify-center transition-all duration-200 ease-out active:scale-95 ${
-              pendingBuildType
+              pendingBuildType || terraformMode
                 ? 'cf-btn-red'
                 : 'cf-btn-green'
             }`}
             style={{ borderRadius: '50%', padding: 0 }}
-            aria-label={pendingBuildType ? 'Cancel build' : 'Build'}
+            aria-label={(pendingBuildType || terraformMode) ? 'Cancel build' : 'Build'}
           >
-            {pendingBuildType ? (
+            {(pendingBuildType || terraformMode) ? (
               /* X icon for cancel */
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
                 <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
@@ -1311,6 +1312,72 @@ export default function PetWorldPage() {
                   setPendingBuildType('');
                   setPendingBuildVariant(null);
                   setActiveSheet(null);
+                }}
+                className="pointer-events-auto shrink-0 cf-btn cf-btn-red px-2.5 py-1.5 text-[9px] font-semibold"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ TERRAFORM TRAY (when terraform mode active) ═══ */}
+      {terraformMode && activeSheet !== 'build' && !pendingBuildType && (
+        <div
+          className="absolute inset-x-0 bottom-0 z-50 transition-all duration-200 ease-out motion-reduce:transition-none"
+          style={{ paddingBottom: 'max(8px, env(safe-area-inset-bottom))' }}
+        >
+          <div className="mx-3 flex justify-center">
+            <div className="cf-panel-dark flex w-full max-w-md items-center gap-2 px-2.5 py-2">
+              <span
+                className="cf-inset flex h-11 w-11 shrink-0 items-center justify-center"
+                style={{ background: 'rgba(232,200,138,0.25)' }}
+              >
+                <img
+                  src={
+                    terraformMode === 'fill' ? '/pet-world/cute-fantasy/Tiles/Cliff/Cliff_Tile.png'
+                      : terraformMode === 'dig' ? '/pet-world/cute-fantasy/Tiles/Water/Water_Middle.png'
+                        : terraformMode === 'bridge_wood' ? '/pet-world/cute-fantasy/Tiles/Bridge/Bridge_Wood_1.png'
+                          : '/pet-world/cute-fantasy/Tiles/Bridge/Bridge_Stone_Horizontal.png'
+                  }
+                  alt=""
+                  width={38}
+                  height={38}
+                  style={{ imageRendering: 'pixelated', objectFit: 'contain' }}
+                />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="cf-text truncate text-[12px] font-black">
+                  {terraformMode === 'fill' ? 'Adding Land'
+                    : terraformMode === 'dig' ? 'Digging Water'
+                      : terraformMode === 'bridge_wood' ? 'Placing Wood Bridge'
+                        : 'Placing Stone Bridge'}
+                </div>
+                <div className="mt-0.5 flex flex-wrap items-center gap-1 cf-text-label">
+                  <span className="cf-pill cf-pill-happy" style={{ fontSize: 8, padding: '1px 6px' }}>Ready</span>
+                </div>
+                <div className="mt-1 cf-text-muted text-[9px]">
+                  {terraformMode === 'fill' ? '15c + 2 stone · Tap water to fill'
+                    : terraformMode === 'dig' ? '10c · Tap land to carve water'
+                      : terraformMode === 'bridge_wood' ? '8c + 3 wood · Tap water to bridge'
+                        : '12c + 3 stone · Tap water to bridge'}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setBuildSheetSnap('browse');
+                  setActiveSheet('build');
+                }}
+                className="pointer-events-auto shrink-0 cf-btn cf-btn-brown px-2.5 py-1.5 text-[9px] font-semibold"
+              >
+                Change
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setTerraformMode('');
                 }}
                 className="pointer-events-auto shrink-0 cf-btn cf-btn-red px-2.5 py-1.5 text-[9px] font-semibold"
               >
@@ -1396,8 +1463,10 @@ export default function PetWorldPage() {
                 world={world}
                 selectedType={pendingBuildType}
                 selectedVariant={pendingBuildVariant}
+                terraformMode={terraformMode}
                 layout={buildSheetSnap}
                 onSelect={(type, variant) => {
+                  setTerraformMode('');
                   setPendingBuildType(type);
                   setPendingBuildVariant(variant || null);
                   setSelectedBuilding(null);
@@ -1405,6 +1474,23 @@ export default function PetWorldPage() {
                   setActiveSheet(null);
                   setHudCollapsed(true);
                   showToast('Tap to place');
+                }}
+                onSelectTerraform={(mode) => {
+                  setPendingBuildType('');
+                  setPendingBuildVariant(null);
+                  setSelectedBuilding(null);
+                  setSelectedTile(null);
+                  setTerraformMode(mode);
+                  setActiveSheet(null);
+                  setHudCollapsed(true);
+                  const label = mode === 'fill'
+                    ? 'Tap water to add land'
+                    : mode === 'dig'
+                      ? 'Tap land to dig water'
+                      : mode === 'bridge_wood'
+                        ? 'Tap water to place a wood bridge'
+                        : 'Tap water to place a stone bridge';
+                  showToast(label);
                 }}
                 onClose={() => {
                   setPendingBuildType('');
@@ -1581,45 +1667,6 @@ export default function PetWorldPage() {
                       <ExpandButtons onExpand={handleExpand} />
                     </div>
                     <div className="cf-text-muted mt-1.5 text-[10px]">Grow toward resources to shape your village.</div>
-                  </div>
-                  <div className="cf-inset p-2.5">
-                    <div className="cf-text-label">Reshape Land</div>
-                    <div className="mt-1.5 flex flex-wrap gap-1.5">
-                      {[
-                        ['fill', 'Add Land', '15 combos + 2 stone'],
-                        ['dig', 'Dig Water', '10 combos'],
-                        ['bridge_wood', 'Wood Bridge', '8 combos + 3 wood'],
-                        ['bridge_stone', 'Stone Bridge', '12 combos + 3 stone'],
-                      ].map(([mode, label, cost]) => (
-                        <button
-                          key={mode}
-                          type="button"
-                          onClick={() => {
-                            if (terraformMode === mode) {
-                              setTerraformMode('');
-                            } else {
-                              setTerraformMode(mode);
-                              setPendingBuildType('');
-                              setSelectedBuilding(null);
-                            }
-                          }}
-                          className={`px-2 py-1 text-[10px] font-semibold transition-colors rounded ${
-                            terraformMode === mode
-                              ? 'bg-amber-500 text-white'
-                              : 'cf-btn cf-btn-green'
-                          }`}
-                          title={cost}
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                    {terraformMode && (
-                      <div className="cf-text-muted mt-1 text-[10px]">
-                        Tap a tile to {terraformMode === 'fill' ? 'add land' : terraformMode === 'dig' ? 'dig water' : 'place bridge'}.
-                        <button type="button" onClick={() => setTerraformMode('')} className="ml-1 text-amber-400 underline">Cancel</button>
-                      </div>
-                    )}
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     <button
