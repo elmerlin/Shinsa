@@ -230,6 +230,140 @@ function blendEdgeTile(def, neighborType, x, y) {
   return neighborType;
 }
 
+function createMask(width, height, initial = false) {
+  return Array.from({ length: height }, () => Array.from({ length: width }, () => initial));
+}
+
+function seamDistance(direction, x, y, width, height) {
+  if (direction === 'n') return height - 1 - y;
+  if (direction === 's') return y;
+  if (direction === 'w') return width - 1 - x;
+  return x;
+}
+
+function stampEllipse(mask, cx, cy, rx, ry) {
+  for (let y = 0; y < mask.length; y += 1) {
+    for (let x = 0; x < mask[0].length; x += 1) {
+      const nx = rx <= 0 ? 0 : (x - cx) / rx;
+      const ny = ry <= 0 ? 0 : (y - cy) / ry;
+      if ((nx * nx) + (ny * ny) <= 1) {
+        mask[y][x] = true;
+      }
+    }
+  }
+}
+
+function countMaskNeighbors(mask, x, y) {
+  let count = 0;
+  for (let oy = -1; oy <= 1; oy += 1) {
+    for (let ox = -1; ox <= 1; ox += 1) {
+      if (ox === 0 && oy === 0) continue;
+      if (mask[y + oy]?.[x + ox]) count += 1;
+    }
+  }
+  return count;
+}
+
+function smoothMask(mask, passes = 1, survive = 3, birth = 4) {
+  let next = mask.map((row) => [...row]);
+  for (let pass = 0; pass < passes; pass += 1) {
+    const current = next.map((row) => [...row]);
+    next = current.map((row, y) => row.map((filled, x) => {
+      const neighbors = countMaskNeighbors(current, x, y);
+      if (filled) return neighbors >= survive;
+      return neighbors >= birth;
+    }));
+  }
+  return next;
+}
+
+function collectRuns(adjacentEdge, predicate) {
+  const runs = [];
+  let start = null;
+  for (let i = 0; i <= adjacentEdge.length; i += 1) {
+    const match = i < adjacentEdge.length && predicate(adjacentEdge[i]);
+    if (match && start == null) start = i;
+    if (!match && start != null) {
+      runs.push({ start, end: i - 1 });
+      start = null;
+    }
+  }
+  return runs;
+}
+
+function paintDirectionalCell(mask, direction, major, depth) {
+  const height = mask.length;
+  const width = mask[0].length;
+  let x = 0;
+  let y = 0;
+  if (direction === 'n') {
+    x = major;
+    y = height - 1 - depth;
+  } else if (direction === 's') {
+    x = major;
+    y = depth;
+  } else if (direction === 'w') {
+    x = width - 1 - depth;
+    y = major;
+  } else {
+    x = depth;
+    y = major;
+  }
+  if (mask[y]?.[x] != null) mask[y][x] = true;
+}
+
+function applyEdgeWaterContinuations(mask, adjacentEdge, direction, rng) {
+  const runs = collectRuns(adjacentEdge, (type) => type === 'water');
+  runs.forEach(({ start, end }) => {
+    const runLength = end - start + 1;
+    const depth = Math.min(direction === 'n' || direction === 's' ? mask.length : mask[0].length, 2 + Math.floor(runLength / 4) + Math.floor(rng() * 2));
+    for (let major = Math.max(0, start - 1); major <= Math.min(adjacentEdge.length - 1, end + 1); major += 1) {
+      for (let d = 0; d < depth; d += 1) {
+        paintDirectionalCell(mask, direction, major, d);
+        if (runLength >= 3 && d < depth - 1 && major > 0) paintDirectionalCell(mask, direction, major - 1, d);
+        if (runLength >= 3 && d < depth - 1 && major < adjacentEdge.length - 1) paintDirectionalCell(mask, direction, major + 1, d);
+      }
+    }
+  });
+}
+
+function addPatchCluster(mask, count, direction, rng, options = {}) {
+  const height = mask.length;
+  const width = mask[0].length;
+  const horizontal = direction === 'n' || direction === 's';
+  const majorLength = horizontal ? width : height;
+  const minorLength = horizontal ? height : width;
+  const {
+    majorRadius = 2.6,
+    minorRadius = 1.4,
+    majorJitter = 2.2,
+    depthMin = 1.5,
+    depthMax = minorLength - 1.2,
+  } = options;
+  for (let i = 0; i < count; i += 1) {
+    const major = 1 + rng() * Math.max(1, majorLength - 2);
+    const depth = depthMin + rng() * Math.max(0.5, depthMax - depthMin);
+    const cx = horizontal ? major : (direction === 'w' ? width - 1 - depth : depth);
+    const cy = horizontal ? (direction === 'n' ? height - 1 - depth : depth) : major;
+    stampEllipse(
+      mask,
+      cx + (rng() - 0.5) * majorJitter,
+      cy + (rng() - 0.5) * 0.8,
+      majorRadius + rng() * 1.6,
+      minorRadius + rng() * 0.9,
+    );
+  }
+}
+
+function hasNearbyTile(mask, x, y, radius = 1) {
+  for (let oy = -radius; oy <= radius; oy += 1) {
+    for (let ox = -radius; ox <= radius; ox += 1) {
+      if (mask[y + oy]?.[x + ox]) return true;
+    }
+  }
+  return false;
+}
+
 function generateExpansionChunk({ biome, direction, expansionIndex, width, height, adjacentEdge = [] }) {
   const def = getBiomeDef(biome);
   const rng = mulberry32(hashSeed(`${biome}:${direction}:${expansionIndex}`));
@@ -247,20 +381,80 @@ function generateExpansionChunk({ biome, direction, expansionIndex, width, heigh
         || (direction === 'e' && x === 0)) {
         tileType = blendEdgeTile(def, edgeNeighbor, x, y);
       }
-      const roll = rng();
-      const waterChance = profile.water + bias.water;
-      const treeChance = waterChance + profile.tree + bias.tree;
-      const rockChance = treeChance + profile.rock + bias.rock;
-      const bushChance = rockChance + profile.bush + bias.bush;
-      if (!isObstacle(tileType)) {
-        if (roll < waterChance) tileType = 'water';
-        else if (roll < treeChance) tileType = 'tree';
-        else if (roll < rockChance) tileType = 'rock';
-        else if (roll < bushChance) tileType = 'bush';
-      }
       row.push({ t: tileType, b: null });
     }
     tiles.push(row);
+  }
+
+  const waterMask = createMask(width, height);
+  applyEdgeWaterContinuations(waterMask, adjacentEdge, direction, rng);
+  const extraWaterPatches = Math.max(0, Math.round((profile.water + bias.water) * 10) - 1);
+  addPatchCluster(waterMask, extraWaterPatches, direction, rng, {
+    majorRadius: 2.4,
+    minorRadius: 1.2,
+    majorJitter: 2.8,
+    depthMin: 2,
+    depthMax: Math.max(2.5, (direction === 'n' || direction === 's' ? height : width) - 0.6),
+  });
+  const smoothedWater = smoothMask(waterMask, 1, 3, 4);
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      if (smoothedWater[y][x]) {
+        tiles[y][x].t = 'water';
+      } else if (!isObstacle(tiles[y][x].t)) {
+        const seam = seamDistance(direction, x, y, width, height);
+        tiles[y][x].t = buildGroundTile(def, expansionIndex + seam + ((x + y) % 3), x, y);
+      }
+    }
+  }
+
+  const area = width * height;
+  const treeMask = createMask(width, height);
+  const rockMask = createMask(width, height);
+  const bushMask = createMask(width, height);
+  const treePatches = Math.max(0, Math.round((profile.tree + bias.tree) * area / 18));
+  const rockPatches = Math.max(0, Math.round((profile.rock + bias.rock) * area / 22));
+  const bushPatches = Math.max(0, Math.round((profile.bush + bias.bush) * area / 20));
+  addPatchCluster(treeMask, treePatches, direction, rng, {
+    majorRadius: 2.2,
+    minorRadius: 1.4,
+    majorJitter: 2.4,
+    depthMin: 1.8,
+    depthMax: Math.max(2.2, (direction === 'n' || direction === 's' ? height : width) - 0.8),
+  });
+  addPatchCluster(rockMask, rockPatches, direction, rng, {
+    majorRadius: 1.6,
+    minorRadius: 1.1,
+    majorJitter: 2,
+    depthMin: 1.5,
+    depthMax: Math.max(2, (direction === 'n' || direction === 's' ? height : width) - 0.6),
+  });
+  addPatchCluster(bushMask, bushPatches, direction, rng, {
+    majorRadius: 1.4,
+    minorRadius: 0.9,
+    majorJitter: 2.8,
+    depthMin: 1.5,
+    depthMax: Math.max(2, (direction === 'n' || direction === 's' ? height : width) - 0.7),
+  });
+  const smoothedTrees = smoothMask(treeMask, 1, 3, 4);
+  const smoothedRocks = smoothMask(rockMask, 1, 4, 5);
+  const smoothedBushes = smoothMask(bushMask, 1, 3, 4);
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      if (tiles[y][x].t === 'water') continue;
+      const seam = seamDistance(direction, x, y, width, height);
+      if (seam <= 0) continue;
+      if (hasNearbyTile(smoothedWater, x, y, 1)) continue;
+      if (smoothedRocks[y][x] && seam >= 1) {
+        tiles[y][x].t = 'rock';
+      } else if (smoothedTrees[y][x] && seam >= 1) {
+        tiles[y][x].t = 'tree';
+      } else if (smoothedBushes[y][x] && seam >= 1 && !hasNearbyTile(smoothedTrees, x, y, 0) && !hasNearbyTile(smoothedRocks, x, y, 0)) {
+        tiles[y][x].t = 'bush';
+      }
+    }
   }
 
   // Post-generation pass: remove ALL obstacles adjacent to water.

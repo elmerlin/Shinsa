@@ -798,6 +798,19 @@ function countNearbyWater(grid, x, y, radius = 1) {
   return count;
 }
 
+function countStraightBankSupport(grid, spot) {
+  if (!spot?.shoreDir) return 0;
+  const deltas = spot.shoreDir === 'n' || spot.shoreDir === 's'
+    ? [{ dx: -1, dy: 0 }, { dx: 1, dy: 0 }]
+    : [{ dx: 0, dy: -1 }, { dx: 0, dy: 1 }];
+  return deltas.reduce((count, { dx, dy }) => {
+    const tile = grid?.tiles?.[spot.y + dy]?.[spot.x + dx];
+    if (!tile || tile.t === 'water') return count;
+    const waterNeighbors = getCardinalWaterNeighbors(grid, spot.x + dx, spot.y + dy);
+    return waterNeighbors.some((candidate) => candidate.dir === spot.shoreDir) ? count + 1 : count;
+  }, 0);
+}
+
 function collectNearbyWaterTiles(grid, x, y, radius = 3) {
   const tiles = [];
   for (let oy = -radius; oy <= radius; oy += 1) {
@@ -839,15 +852,19 @@ function selectFishingSceneSpots(grid, terrainRegions, shorePool = [], buildings
     .sort((a, b) => b.score - a.score);
 
   const spots = [];
-  const showcaseCandidates = rankedShoreTiles.filter((tile) => tile.y >= Math.floor(grid.h * 0.2));
+  const showcaseCandidates = rankedShoreTiles.filter((tile) => tile.y >= Math.floor(grid.h * 0.56));
   const showcasePool = showcaseCandidates.length ? showcaseCandidates : rankedShoreTiles;
-  const showcaseTarget = { x: grid.w * 0.58, y: grid.h * 0.58 };
+  const showcaseTarget = { x: grid.w * 0.57, y: grid.h * 0.64 };
   const showcaseSpot = showcasePool
     .map((tile) => ({
       ...tile,
+      bankSupport: countStraightBankSupport(grid, tile),
+      waterSupport: countNearbyWater(grid, tile.shoreWaterX ?? tile.x, tile.shoreWaterY ?? tile.y, 1),
       showcaseScore: Math.abs(tile.x - showcaseTarget.x) * 0.9
         + Math.abs(tile.y - showcaseTarget.y) * 1.1
-        - tile.score * 0.12,
+        - tile.score * 0.12
+        - countStraightBankSupport(grid, tile) * 1.25
+        - countNearbyWater(grid, tile.shoreWaterX ?? tile.x, tile.shoreWaterY ?? tile.y, 1) * 0.18,
     }))
     .sort((a, b) => a.showcaseScore - b.showcaseScore)[0];
   if (showcaseSpot) spots.push(showcaseSpot);
@@ -930,10 +947,27 @@ function buildFishingDecorations(world, terrainRegions, buildings = []) {
   }
   if (!allShoreTiles.length) return [];
 
-  // Rank by openness (deep water adjacent) + slight y-bias for showcase placement
-  allShoreTiles.sort((a, b) => b.opennessScore - a.opennessScore);
+  // Rank by openness (deep water adjacent) + bank quality so showcase boats pick
+  // a clean shoreline rather than a random narrow notch.
+  allShoreTiles.sort((a, b) => (
+    (b.opennessScore + countStraightBankSupport(grid, b) * 0.9)
+    - (a.opennessScore + countStraightBankSupport(grid, a) * 0.9)
+  ));
   const desiredSpots = clamp(buildings.filter((b) => b.state === 'built' && (b.type || b.building_type) === 'fishing_hut').length + 3, 3, 6);
   const spots = [];
+  const showcaseTarget = { x: grid.w * 0.57, y: grid.h * 0.64 };
+  const showcaseSpot = allShoreTiles
+    .filter((tile) => tile.y >= Math.floor(grid.h * 0.56))
+    .map((tile) => ({
+      ...tile,
+      showcaseScore: Math.abs(tile.x - showcaseTarget.x) * 0.9
+        + Math.abs(tile.y - showcaseTarget.y) * 1.1
+        - tile.opennessScore * 0.22
+        - countStraightBankSupport(grid, tile) * 1.4
+        - countNearbyWater(grid, tile.shoreWaterX ?? tile.x, tile.shoreWaterY ?? tile.y, 1) * 0.2,
+    }))
+    .sort((a, b) => a.showcaseScore - b.showcaseScore)[0];
+  if (showcaseSpot) spots.push(showcaseSpot);
   allShoreTiles.forEach((tile) => {
     if (spots.length >= desiredSpots) return;
     if (spots.some((spot) => Math.abs(spot.x - tile.x) + Math.abs(spot.y - tile.y) < 5)) return;
@@ -960,48 +994,48 @@ function buildFishingDecorations(world, terrainRegions, buildings = []) {
     const rockTile = sameBankWater.find((tile) => tileKey(tile.x, tile.y) !== tileKey(boatTile.x, boatTile.y) && tile.openWater >= 2) || fishTile;
     const cattailTile = shallowWater[2] || shallowWater[0] || boatTile;
     const dirVector = vectorForWaterDir(spot.shoreDir);
-    const boatWidthTiles = 1.88;
-    const boatHeightTiles = 1.02;
+    const boatWidthTiles = 1.76;
+    const boatHeightTiles = 0.98;
     const boatLayout = {
       n: {
-        x: boatTile.x - 0.38,
-        y: boatTile.y + 0.16,
-        postX: spot.x + 0.56,
-        postY: spot.y + 0.08,
+        x: boatTile.x - 0.34,
+        y: boatTile.y + 0.08,
+        postX: spot.x + 0.58,
+        postY: spot.y + 0.18,
         ropeX: boatTile.x + 0.56,
-        ropeY: boatTile.y + 0.86,
+        ropeY: boatTile.y + 0.74,
       },
       s: {
-        x: boatTile.x - 0.38,
-        y: boatTile.y - 0.18,
-        postX: spot.x + 0.56,
-        postY: spot.y + 0.98,
+        x: boatTile.x - 0.34,
+        y: boatTile.y - 0.08,
+        postX: spot.x + 0.58,
+        postY: spot.y + 0.82,
         ropeX: boatTile.x + 0.56,
-        ropeY: boatTile.y + 0.18,
+        ropeY: boatTile.y + 0.28,
       },
       e: {
-        x: boatTile.x - 0.68,
-        y: boatTile.y - 0.06,
-        postX: spot.x + 0.98,
-        postY: spot.y + 0.48,
-        ropeX: boatTile.x + 0.16,
+        x: boatTile.x - 0.58,
+        y: boatTile.y - 0.04,
+        postX: spot.x + 0.82,
+        postY: spot.y + 0.54,
+        ropeX: boatTile.x + 0.26,
         ropeY: boatTile.y + 0.56,
       },
       w: {
-        x: boatTile.x - 0.2,
-        y: boatTile.y - 0.06,
-        postX: spot.x + 0.02,
-        postY: spot.y + 0.48,
-        ropeX: boatTile.x + 0.84,
+        x: boatTile.x - 0.18,
+        y: boatTile.y - 0.04,
+        postX: spot.x + 0.18,
+        postY: spot.y + 0.54,
+        ropeX: boatTile.x + 0.76,
         ropeY: boatTile.y + 0.56,
       },
     }[spot.shoreDir] || {
-      x: boatTile.x - 0.38,
-      y: boatTile.y + 0.16,
-      postX: spot.x + 0.56,
-      postY: spot.y + 0.08,
+      x: boatTile.x - 0.34,
+      y: boatTile.y + 0.08,
+      postX: spot.x + 0.58,
+      postY: spot.y + 0.18,
       ropeX: boatTile.x + 0.56,
-      ropeY: boatTile.y + 0.86,
+      ropeY: boatTile.y + 0.74,
     };
     const fishBaseX = fishTile.x + 0.18 + dirVector.dx * 0.04;
     const fishBaseY = fishTile.y + 0.2 + dirVector.dy * 0.04;
