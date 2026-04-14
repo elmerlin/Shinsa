@@ -613,9 +613,9 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
       const idx = pathIdx > 0 ? pathIdx : 15;
       const [psx, psy] = PATH_WANG_LOOKUP[idx];
       drawFrame(ctx, cfp(WANG_DIRT_GRASS), psx, psy, 16, 16, x, y, size, size);
-    } else if (pathIdx > 0 && (!isShoreTransition || wangIdx >= 8)) {
-      // Adjacent to a path: draw transition on inland tiles and grass-heavy shore tiles.
-      // Skip only on mostly-water shore tiles (wangIdx < 8) to avoid dirt overlaying water.
+    } else if (pathIdx > 0 && !isShoreTransition) {
+      // Adjacent to a path: draw transition on inland tiles only.
+      // Shore tiles skip — the dirt-grass tile has opaque grass that would cover water.
       const [psx, psy] = PATH_WANG_LOOKUP[pathIdx];
       drawFrame(ctx, cfp(WANG_DIRT_GRASS), psx, psy, 16, 16, x, y, size, size, undefined, 0.88);
     }
