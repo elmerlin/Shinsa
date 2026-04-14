@@ -393,7 +393,7 @@ const BUSHES = [
 
 // Per-animal idle/walk row definitions (row = spritesheet row, n = frame count)
 const ANIMALS = {
-  chicken: { p: 'Animals/Chicken/Chicken_01.png', idle: { row: 0, n: 2 }, walk: { row: 1, n: 6 } },
+  chicken: { p: 'Animals/Chicken/Chicken_01.png', idle: { row: 0, n: 2 }, walk: { row: 1, n: 6 }, preferSideFacing: true },
   pig:     {
     p: 'Animals/Pig/Pig_01.png',
     idle: { side: { row: 0, n: 1 }, south: { row: 1, n: 1 }, north: { row: 2, n: 1 } },
@@ -1083,13 +1083,17 @@ export function drawCuteFantasyCritter(ctx, x, y, tileSize, species, frameOffset
 
   const d = tileSize * scale;
   const verticalFloat = waterborne ? Math.sin(frameOffset * Math.PI * 2) * tileSize * 0.012 : 0;
+  const idleBreath = !moving && !waterborne ? Math.sin(frameOffset * Math.PI * 2) * tileSize * 0.01 : 0;
+  const idleSway = !moving && !waterborne ? Math.sin(frameOffset * Math.PI + mapped.length) * tileSize * 0.004 : 0;
+  const drawX = x - d / 2 + idleSway;
+  const drawY = y - d * 0.6 + verticalFloat + idleBreath;
   if (!waterborne) {
-    dropShadow(ctx, x, y + d * 0.06, d * 0.22, d * 0.07, 0.18);
+    dropShadow(ctx, x + idleSway * 0.15, y + d * 0.06, d * 0.22, d * 0.07, 0.18);
   }
   return drawFrame(
     ctx, src,
     sx, sy, 32, 32,
-    x - d / 2, y - d * 0.6 + verticalFloat, d, d,
+    drawX, drawY, d, d,
     resolvedDir === 'side' ? (fac === 1 ? -1 : 1) : undefined,
   );
 }

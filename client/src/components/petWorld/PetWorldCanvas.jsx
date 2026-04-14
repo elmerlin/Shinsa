@@ -75,7 +75,7 @@ const RESIDENT_WALK_OPTIONS = { maxShoreStrength: 0.02, maxWaterRatio: 0.006 };
 const ROAMING_WALK_OPTIONS = { maxShoreStrength: 0.018, maxWaterRatio: 0.005 };
 const ENCOUNTER_WALK_OPTIONS = { maxShoreStrength: 0.022, maxWaterRatio: 0.008 };
 const LAND_ANIMAL_WALK_OPTIONS = { maxShoreStrength: 0.025, maxWaterRatio: 0.008 };
-const ENTITY_DROP_WALK_OPTIONS = { maxShoreStrength: 0.06, maxWaterRatio: 0.018 };
+const ENTITY_DROP_WALK_OPTIONS = { maxShoreStrength: 0.09, maxWaterRatio: 0.03 };
 const WATER_ANIMAL_SPECIES = new Set(['duck', 'fish_koi', 'fish_perch']);
 
 const GROUND_ANIMAL_PROFILES = {
@@ -110,6 +110,38 @@ const GROUND_ANIMAL_PROFILES = {
     walkCyclesPerTile: 0.9,
     idleFrameRate: 0.00001,
     route: { stopCount: 2, minDist: 1, maxDist: 3, pauseBase: 24000, pauseVariance: 9000, speed: 0.34 },
+  },
+  sheep: {
+    scale: 0.68,
+    yBias: 0.82,
+    idleFacing: 2,
+    pauseFacing: 2,
+    walkCyclesPerTile: 0.92,
+    idleFrameRate: 0.000012,
+    route: { stopCount: 2, minDist: 1, maxDist: 3, pauseBase: 22000, pauseVariance: 8200, speed: 0.34 },
+  },
+  cow: {
+    scale: 0.76,
+    yBias: 0.82,
+    idleFacing: 2,
+    pauseFacing: 2,
+    walkCyclesPerTile: 0.86,
+    idleFrameRate: 0.00001,
+    route: { stopCount: 2, minDist: 1, maxDist: 3, pauseBase: 26000, pauseVariance: 9000, speed: 0.32 },
+  },
+  chicken: {
+    scale: 0.56,
+    yBias: 0.82,
+    idleFacing: 2,
+    pauseFacing: 2,
+    sideOnlyFacing: true,
+    defaultSideFacing: -1,
+    walkCyclesPerTile: 1.25,
+    idleFrameRate: 0.0002,
+    route: {
+      stopCount: 3, minDist: 1, maxDist: 2, pauseBase: 16000, pauseVariance: 5200, speed: 0.42,
+      sideOnlyMovement: true, stopRadiusX: 0.06, stopRadiusY: 0.035,
+    },
   },
   fox: {
     scale: 0.56,
@@ -180,6 +212,9 @@ function entityDisplayName(entry) {
       horse: 'Horse',
       deer: 'Horse',
       pig: 'Pig',
+      sheep: 'Sheep',
+      cow: 'Cow',
+      chicken: 'Chicken',
       boar: 'Pig',
       fox: 'Fox',
       duck: 'Duck',
@@ -530,16 +565,34 @@ function buildFaunaPools(world, terrainRegions, buildings = []) {
 
 function buildRelocatedRoamingState(entity, tx, ty, world, terrainRegions, walkOptions, routeOptions = {}, filterFn = null) {
   const grid = world?.grid;
-  const anchor = { x: tx, y: ty };
+  const requestedAnchor = { x: tx, y: ty };
   if (!grid) return { x: tx, y: ty, route: null };
-  const component = buildReachableTilePool(grid, terrainRegions, anchor, walkOptions);
+  const component = buildReachableTilePool(grid, terrainRegions, requestedAnchor, walkOptions);
   const filtered = filterFn ? component.filter((tile) => filterFn(tile, component)) : component;
-  const pool = filtered.length ? filtered : (component.length ? component : [anchor]);
+  const basePool = filtered.length ? filtered : (component.length ? component : [requestedAnchor]);
+  const compactComponent = basePool.length > 1 && basePool.length <= 18;
+  const poolKeySet = new Set(basePool.map((tile) => tileKey(tile.x, tile.y)));
+  const comfortPool = compactComponent
+    ? basePool.filter((tile) => countOpenComponentNeighbors(tile, poolKeySet) >= 2)
+    : [];
+  const pool = comfortPool.length ? comfortPool : basePool;
+  const anchor = compactComponent
+    ? (pickCenteredComponentTile(pool, entity.seed) || requestedAnchor)
+    : requestedAnchor;
+  const routeConfig = compactComponent
+    ? {
+        stopCount: Math.min(routeOptions.stopCount ?? 3, Math.max(2, pool.length)),
+        minDist: 1,
+        maxDist: Math.min(3, routeOptions.maxDist ?? 3),
+        pauseBase: Math.max(routeOptions.pauseBase ?? 9000, 14000),
+        pauseVariance: Math.max(routeOptions.pauseVariance ?? 2400, 5000),
+      }
+    : routeOptions;
   return {
-    x: tx,
-    y: ty,
+    x: anchor.x,
+    y: anchor.y,
     route: buildRoamingTileRoute(anchor, pool, grid, terrainRegions, entity.seed, {
-      ...routeOptions,
+      ...routeConfig,
       walkOptions,
     }),
   };
@@ -703,6 +756,64 @@ function buildReachableTilePool(grid, terrainRegions, anchorTile, walkOptions = 
     });
   }
   return tiles;
+}
+
+function getComponentCentroid(tiles = []) {
+  if (!tiles.length) return { x: 0, y: 0 };
+  const sum = tiles.reduce((acc, tile) => {
+    acc.x += tile.x;
+    acc.y += tile.y;
+    return acc;
+  }, { x: 0, y: 0 });
+  return {
+    x: sum.x / tiles.length,
+    y: sum.y / tiles.length,
+  };
+}
+
+function countOpenComponentNeighbors(tile, componentKeySet) {
+  return (
+    (componentKeySet.has(tileKey(tile.x - 1, tile.y)) ? 1 : 0)
+    + (componentKeySet.has(tileKey(tile.x + 1, tile.y)) ? 1 : 0)
+    + (componentKeySet.has(tileKey(tile.x, tile.y - 1)) ? 1 : 0)
+    + (componentKeySet.has(tileKey(tile.x, tile.y + 1)) ? 1 : 0)
+  );
+}
+
+function pickCenteredComponentTile(component, seed = 0) {
+  if (!component?.length) return null;
+  const centroid = getComponentCentroid(component);
+  const keySet = new Set(component.map((tile) => tileKey(tile.x, tile.y)));
+  let best = component[0];
+  let bestScore = -Infinity;
+  component.forEach((tile, index) => {
+    const openness = countOpenComponentNeighbors(tile, keySet);
+    const centroidDistance = Math.abs(tile.x - centroid.x) + Math.abs(tile.y - centroid.y);
+    const score = openness * 2.2 - centroidDistance + hash01(seed + index * 13, 81) * 0.08;
+    if (score > bestScore) {
+      bestScore = score;
+      best = tile;
+    }
+  });
+  return best;
+}
+
+function pickDiverseTile(pool, usedTiles, seed, minSpacing = 0) {
+  if (!pool?.length) return null;
+  if (!usedTiles?.length) return pool[Math.abs(seed) % pool.length];
+  let best = pool[0];
+  let bestScore = -Infinity;
+  pool.forEach((tile, index) => {
+    const nearestUsed = usedTiles.reduce((bestDist, used) => (
+      Math.min(bestDist, Math.abs(tile.x - used.x) + Math.abs(tile.y - used.y))
+    ), Infinity);
+    const score = nearestUsed - Math.max(0, minSpacing - nearestUsed) * 4 + hash01(seed + index * 29, 82) * 0.25;
+    if (score > bestScore) {
+      bestScore = score;
+      best = tile;
+    }
+  });
+  return best;
 }
 
 function getPathDirections(seed) {
@@ -1564,8 +1675,9 @@ function buildResidentPlacements(world, terrainRegions, buildings = []) {
   if (!grid) return [];
   const landGraph = buildLandComponents(grid, terrainRegions, RESIDENT_WALK_OPTIONS, buildings);
   const landTiles = landGraph.primary?.length ? landGraph.primary : findClearTiles(grid);
-  const clearTiles = buildVillageCoreTiles(grid, terrainRegions, landTiles, buildings, 509, 8);
+  const clearTiles = buildVillageCoreTiles(grid, terrainRegions, landTiles, buildings, 509, 13);
   const clearTileMap = new Map(clearTiles.map((tile) => [tileKey(tile.x, tile.y), tile]));
+  const villageAnchor = pickVillageAnchor(clearTiles, buildings, 509) || clearTiles[0] || landTiles[0];
   const livedInTiles = clearTiles.filter(({ x, y }) => {
     const terrain = terrainRegions?.[y]?.[x];
     return (terrain?.laneStrength || 0) > 0.08 || (terrain?.villageWear || 0) > 0.08 || (terrain?.meadowStrength || 0) > 0.24;
@@ -1575,9 +1687,13 @@ function buildResidentPlacements(world, terrainRegions, buildings = []) {
     .filter((tile) => getTileScore(tile, terrainRegions) > 0.42)
     .sort((a, b) => getTileScore(b, terrainRegions) - getTileScore(a, terrainRegions));
   const meadowTiles = clearTiles.filter(({ x, y }) => (terrainRegions?.[y]?.[x]?.meadowStrength || 0) > 0.2);
-  const inlandNatureTiles = clearTiles.filter(({ x, y }) => {
+  const inlandNatureTiles = landTiles.filter(({ x, y }) => {
     const terrain = terrainRegions?.[y]?.[x];
-    return (terrain?.meadowStrength || 0) > 0.22 && (terrain?.shoreStrength || 0) < 0.035 && (terrain?.waterRatio || 0) < 0.02;
+    const distanceFromVillage = Math.abs(x - (villageAnchor?.x ?? x)) + Math.abs(y - (villageAnchor?.y ?? y));
+    return distanceFromVillage >= 5
+      && (terrain?.meadowStrength || 0) > 0.18
+      && (terrain?.shoreStrength || 0) < 0.035
+      && (terrain?.waterRatio || 0) < 0.02;
   });
 
   const builtBuildings = buildings.filter((building) => building.state === 'built');
@@ -1697,6 +1813,7 @@ function buildAmbientFauna(world, terrainRegions, buildings = []) {
   if (!grid) return [];
 
   const placements = [];
+  const usedLandAnimalAnchors = [];
   const fishCount = Math.min(7, Math.max(2, Math.floor(waterTiles.length / 18)));
   for (let i = 0; i < fishCount && waterTiles.length; i += 1) {
     const tile = waterTiles[(i * 7 + 3) % waterTiles.length];
@@ -1723,8 +1840,9 @@ function buildAmbientFauna(world, terrainRegions, buildings = []) {
   const goosePool = shoreLandTiles.length ? shoreLandTiles : (meadowTiles.length ? meadowTiles : roamingTiles);
   const gooseCount = Math.min(2, goosePool.length ? 1 + (world.population > 6 ? 1 : 0) : 0);
   for (let i = 0; i < gooseCount; i += 1) {
-    const tile = goosePool[(i * 13 + 2) % goosePool.length];
+    const tile = pickDiverseTile(goosePool, usedLandAnimalAnchors, 167 + i * 29, 3);
     const profile = getGroundAnimalProfile('goose');
+    usedLandAnimalAnchors.push(tile);
     placements.push({
       ...tile,
       species: 'goose',
@@ -1740,11 +1858,13 @@ function buildAmbientFauna(world, terrainRegions, buildings = []) {
   }
 
   const mammalPool = villageAnimalTiles.length ? villageAnimalTiles : (meadowTiles.length ? meadowTiles : roamingTiles);
-  const mammalCount = Math.min(6, Math.max(2, Math.ceil((world.expansions || 0) + (world.population || 0) / 5)));
+  const farmSpecies = ['pig', 'sheep', 'horse', 'cow', 'chicken', 'rabbit', 'fox'];
+  const mammalCount = Math.min(farmSpecies.length, Math.max(3, Math.ceil((world.expansions || 0) + (world.population || 0) / 5)));
   for (let i = 0; i < mammalCount && mammalPool.length; i += 1) {
-    const tile = mammalPool[(i * 11 + 5) % mammalPool.length];
-    const species = ['rabbit', 'horse', 'pig', 'fox'][i % 4];
+    const tile = pickDiverseTile(mammalPool, usedLandAnimalAnchors, 203 + i * 23, 4);
+    const species = farmSpecies[i % farmSpecies.length];
     const profile = getGroundAnimalProfile(species);
+    usedLandAnimalAnchors.push(tile);
     placements.push({
       ...tile,
       species,
