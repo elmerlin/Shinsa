@@ -1040,19 +1040,21 @@ function buildFishingDecorations(world, terrainRegions, buildings = []) {
     const fishBaseX = fishTile.x + 0.18 + dirVector.dx * 0.04;
     const fishBaseY = fishTile.y + 0.2 + dirVector.dy * 0.04;
 
-    decorations.push({
-      type: 'boat',
-      x: boatLayout.x,
-      y: boatLayout.y,
-      widthTiles: boatWidthTiles,
-      heightTiles: boatHeightTiles,
-      shoreDir: spot.shoreDir,
-      postX: boatLayout.postX,
-      postY: boatLayout.postY,
-      ropeX: boatLayout.ropeX,
-      ropeY: boatLayout.ropeY,
-      seed: spotSeed + 11,
-    });
+    if (index === 0) {
+      decorations.push({
+        type: 'boat',
+        x: boatLayout.x,
+        y: boatLayout.y,
+        widthTiles: boatWidthTiles,
+        heightTiles: boatHeightTiles,
+        shoreDir: spot.shoreDir,
+        postX: boatLayout.postX,
+        postY: boatLayout.postY,
+        ropeX: boatLayout.ropeX,
+        ropeY: boatLayout.ropeY,
+        seed: spotSeed + 11,
+      });
+    }
 
     decorations.push({
       type: 'swim_fish',
