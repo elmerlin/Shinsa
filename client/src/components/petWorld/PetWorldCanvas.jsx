@@ -88,6 +88,65 @@ function tileKey(x, y) {
   return `${x}:${y}`;
 }
 
+/* ── Entity identity keys (stable across useMemo recomputations) ── */
+
+function residentKey(resident) {
+  return `resident:${resident.palette}:${resident.seed}`;
+}
+
+function animalKey(animal) {
+  return `animal:${animal.species}:${animal.seed}`;
+}
+
+function petKey(pet) {
+  return `pet:${pet.character}:${pet.seed}`;
+}
+
+function entityDisplayName(entry) {
+  if (entry.type === 'resident') return 'Villager';
+  if (entry.type === 'pet') {
+    const names = { dojocat: 'Dojocat', buu: 'Buu', devit: 'Devit', pixiu: 'Pixiu' };
+    return names[entry.entity?.character] || 'Hero';
+  }
+  if (entry.type === 'animal') {
+    const names = { rabbit: 'Rabbit', deer: 'Deer', boar: 'Boar', fox: 'Fox', duck: 'Duck' };
+    return names[entry.entity?.species] || 'Critter';
+  }
+  return 'Entity';
+}
+
+/* ── Entity hit detection ── */
+
+function findNearestEntity(entityPositions, clientX, clientY, canvasRect) {
+  if (!canvasRect) return null;
+  const localX = clientX - canvasRect.left;
+  const localY = clientY - canvasRect.top;
+  let best = null;
+  let bestDist = Infinity;
+  for (const entry of entityPositions) {
+    const dx = entry.screenX - localX;
+    const dy = entry.screenY - localY;
+    const dist = Math.hypot(dx, dy);
+    if (dist < entry.hitRadius && dist < bestDist) {
+      bestDist = dist;
+      best = entry;
+    }
+  }
+  return best;
+}
+
+/* ── Entity placement validation ── */
+
+function isEntityPlacementValid(grid, tx, ty) {
+  if (!grid) return false;
+  if (tx < 0 || ty < 0 || tx >= grid.w || ty >= grid.h) return false;
+  const tile = grid.tiles[ty]?.[tx];
+  if (!tile) return false;
+  if (tile.b != null) return false;
+  if (WALK_BLOCKERS.has(tile.t)) return false;
+  return true;
+}
+
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
@@ -1527,6 +1586,10 @@ export default function PetWorldCanvas({
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [hoverTile, setHoverTile] = useState(null);
   const [minimapVisible, setMinimapVisible] = useState(true);
+  const [selectedEntity, setSelectedEntity] = useState(null);
+  const [carryingEntity, setCarryingEntity] = useState(null);
+  const relocationsRef = useRef(new Map());
+  const entityPositionsRef = useRef([]);
   const buildingMap = useMemo(() => getBuildingMap(buildings), [buildings]);
   const terrainRegions = useMemo(() => analyzeTerrainGrid(world?.grid, buildings), [world?.grid, buildings]);
   const residentPlacements = useMemo(() => buildResidentPlacements(world, terrainRegions, buildings), [world, terrainRegions, buildings]);
@@ -1820,17 +1883,22 @@ export default function PetWorldCanvas({
       }
     }
 
+    const carriedKey = carryingEntity?.key || null;
     const residentStates = residentPlacements.map((resident) => {
-      const motion = getRouteMotion(resident, time);
-      const pose = getResidentInteractionPose(resident, motion, time);
+      const rKey = residentKey(resident);
+      if (rKey === carriedKey) return null;
+      const reloc = relocationsRef.current.get(rKey);
+      const eff = reloc ? { ...resident, x: reloc.x, y: reloc.y, route: null } : resident;
+      const motion = getRouteMotion(eff, time);
+      const pose = getResidentInteractionPose(eff, motion, time);
       return {
-        resident,
+        resident: eff,
         motion,
         pose,
         screenX: (motion.x + pose.offsetX) * tileSize - camX + tileSize / 2,
         screenY: (motion.y + pose.offsetY) * tileSize - camY + tileSize * 0.82,
       };
-    });
+    }).filter(Boolean);
     const occupancyCounts = countBuildingOccupants(buildings, residentStates);
 
     // Pre-compute fence neighbor connectivity for auto-tiling
@@ -1868,12 +1936,16 @@ export default function PetWorldCanvas({
     ambientFauna
       .filter((creature) => creature.layer !== 'water')
       .forEach((creature) => {
-        const wander = getAnimalWanderPos(creature, time, world.grid);
+        const aKey = animalKey(creature);
+        if (aKey === carriedKey) return;
+        const reloc = relocationsRef.current.get(aKey);
+        const eff = reloc ? { ...creature, x: reloc.x + 0.5, y: reloc.y + 0.5, route: null } : creature;
+        const wander = getAnimalWanderPos(eff, time, world.grid);
         const screenX = wander.x * tileSize - camX + tileSize / 2;
-        const screenY = wander.y * tileSize - camY + tileSize * creature.yBias;
+        const screenY = wander.y * tileSize - camY + tileSize * eff.yBias;
         if (screenX < -tileSize || screenY < -tileSize || screenX > size.width + tileSize || screenY > size.height + tileSize) return;
-        drawAmbientCritter(ctx, screenX, screenY, tileSize, creature.species, wander.frameOffset, {
-          scale: creature.scale,
+        drawAmbientCritter(ctx, screenX, screenY, tileSize, eff.species, wander.frameOffset, {
+          scale: eff.scale,
           facing: wander.facing,
           moving: wander.moving,
         });
@@ -1897,11 +1969,15 @@ export default function PetWorldCanvas({
 
     // pet wandering
     petPlacements.forEach((pet) => {
-      const wander = getPetWanderPos(pet, time);
+      const pKey = petKey(pet);
+      if (pKey === carriedKey) return;
+      const reloc = relocationsRef.current.get(pKey);
+      const eff = reloc ? { ...pet, x: reloc.x + 0.5, y: reloc.y + 0.5, route: null } : pet;
+      const wander = getPetWanderPos(eff, time);
       const screenX = wander.x * tileSize - camX + tileSize / 2;
       const screenY = wander.y * tileSize - camY + tileSize * 0.80;
       if (screenX < -tileSize || screenY < -tileSize || screenX > size.width + tileSize || screenY > size.height + tileSize) return;
-      drawPetWander(ctx, screenX, screenY, tileSize, pet.character, wander.frameOffset, wander.moving, wander.facing, pet.heroScale || 1);
+      drawPetWander(ctx, screenX, screenY, tileSize, eff.character, wander.frameOffset, wander.moving, wander.facing, eff.heroScale || 1);
     });
 
     encounterSightings.forEach((sighting) => {
@@ -1919,6 +1995,29 @@ export default function PetWorldCanvas({
       });
     });
 
+    // Build entity screen-position array for tap hit-detection
+    const hitEntities = [];
+    residentStates.forEach(({ resident, screenX, screenY }) => {
+      hitEntities.push({ type: 'resident', key: residentKey(resident), screenX, screenY, hitRadius: tileSize * 0.5, entity: resident });
+    });
+    petPlacements.forEach((pet) => {
+      const pKey = petKey(pet);
+      if (pKey === carriedKey) return;
+      const reloc = relocationsRef.current.get(pKey);
+      const eff = reloc ? { ...pet, x: reloc.x + 0.5, y: reloc.y + 0.5, route: null } : pet;
+      const wander = getPetWanderPos(eff, time);
+      hitEntities.push({ type: 'pet', key: pKey, screenX: wander.x * tileSize - camX + tileSize / 2, screenY: wander.y * tileSize - camY + tileSize * 0.80, hitRadius: tileSize * 0.55, entity: pet });
+    });
+    ambientFauna.filter((c) => c.layer === 'ground').forEach((creature) => {
+      const aKey = animalKey(creature);
+      if (aKey === carriedKey) return;
+      const reloc = relocationsRef.current.get(aKey);
+      const eff = reloc ? { ...creature, x: reloc.x + 0.5, y: reloc.y + 0.5, route: null } : creature;
+      const wander = getAnimalWanderPos(eff, time, world.grid);
+      hitEntities.push({ type: 'animal', key: aKey, screenX: wander.x * tileSize - camX + tileSize / 2, screenY: wander.y * tileSize - camY + tileSize * eff.yBias, hitRadius: tileSize * 0.45, entity: creature });
+    });
+    entityPositionsRef.current = hitEntities;
+
     // selection outline on selected tile
     if (selectedTile && selectedTile.x >= 0 && selectedTile.y >= 0) {
       const color = pendingBuildType ? 'rgba(110,231,183,0.9)' : 'rgba(80,220,255,0.95)';
@@ -1933,6 +2032,29 @@ export default function PetWorldCanvas({
       const gy = ghostTile.y;
       const valid = isPlacementValid(world.grid, gx, gy, bSize.width, bSize.height, pendingBuildType);
       drawGhostFootprint(ctx, gx * tileSize - camX, gy * tileSize - camY, tileSize, bSize.width, bSize.height, valid, time);
+    }
+
+    // ghost preview for entity carry mode
+    if (carryingEntity && ghostTile) {
+      const gx = ghostTile.x;
+      const gy = ghostTile.y;
+      const valid = isEntityPlacementValid(world.grid, gx, gy);
+      drawGhostFootprint(ctx, gx * tileSize - camX, gy * tileSize - camY, tileSize, 1, 1, valid, time);
+      const ghostScreenX = gx * tileSize - camX + tileSize / 2;
+      const ghostScreenY = gy * tileSize - camY + tileSize * 0.82;
+      ctx.save();
+      ctx.globalAlpha = valid ? 0.6 : 0.3;
+      if (carryingEntity.type === 'resident') {
+        drawVillageResident(ctx, ghostScreenX, ghostScreenY, tileSize, carryingEntity.entity.palette, 'stroll', 0, 2, false);
+      } else if (carryingEntity.type === 'pet') {
+        drawPetWander(ctx, ghostScreenX, ghostScreenY, tileSize, carryingEntity.entity.character, 0, false, 2, carryingEntity.entity.heroScale || 1);
+      } else if (carryingEntity.type === 'animal') {
+        const animalScreenY = gy * tileSize - camY + tileSize * (carryingEntity.entity.yBias || 0.82);
+        drawAmbientCritter(ctx, ghostScreenX, animalScreenY, tileSize, carryingEntity.entity.species, 0, {
+          scale: carryingEntity.entity.scale || 0.6, facing: 2, moving: false,
+        });
+      }
+      ctx.restore();
     }
 
     if (placementBurst) {
@@ -1997,6 +2119,7 @@ export default function PetWorldCanvas({
     terrainRegions,
     placementBurst,
     reduceMotion,
+    carryingEntity,
   ]);
 
   // --- animation control: always running ---
@@ -2092,8 +2215,8 @@ export default function PetWorldCanvas({
         return clamped;
       });
     }
-    // update hover tile for ghost preview
-    if (pendingBuildType) {
+    // update hover tile for ghost preview (building placement OR entity carry)
+    if (pendingBuildType || carryingEntity) {
       const hit = toTilePosition(event.clientX, event.clientY);
       setHoverTile(hit ? { x: hit.x, y: hit.y } : null);
     }
@@ -2106,12 +2229,45 @@ export default function PetWorldCanvas({
     if (!pointer.dragging) {
       const hit = toTilePosition(event.clientX, event.clientY);
       if (hit) {
+        // If carrying an entity, try to place it
+        if (carryingEntity && !readonly) {
+          if (isEntityPlacementValid(world?.grid, hit.x, hit.y)) {
+            relocationsRef.current.set(carryingEntity.key, { x: hit.x, y: hit.y });
+            setCarryingEntity(null);
+            setHoverTile(null);
+          }
+          pointerRef.current = null;
+          return;
+        }
+
+        // If entity context menu is open, dismiss it on any tap
+        if (selectedEntity) {
+          setSelectedEntity(null);
+          pointerRef.current = null;
+          return;
+        }
+
         const encounterHit = !readonly && !pendingBuildType ? encounterTileMap.get(`${hit.x}:${hit.y}`) : null;
         if (encounterHit) {
           onSelectEncounter?.(encounterHit.encounter);
         } else if (elapsed >= LONG_PRESS_MS) {
           // long-press: show tile info
           onSelectTile?.({ x: hit.x, y: hit.y, tile: hit.tile });
+        } else if (!pendingBuildType && !readonly) {
+          // Try entity hit detection before building selection
+          const rect = canvasRef.current?.getBoundingClientRect();
+          const entityHit = findNearestEntity(entityPositionsRef.current, event.clientX, event.clientY, rect);
+          if (entityHit) {
+            setSelectedEntity({
+              ...entityHit,
+              menuScreenX: entityHit.screenX,
+              menuScreenY: entityHit.screenY,
+            });
+          } else if (hit.tile?.b != null) {
+            onSelectBuilding?.(buildingMap.get(hit.tile.b) || null);
+          } else {
+            onSelectTile?.({ x: hit.x, y: hit.y, tile: hit.tile });
+          }
         } else if (hit.tile?.b != null) {
           onSelectBuilding?.(buildingMap.get(hit.tile.b) || null);
         } else if (pendingBuildType && !readonly) {
@@ -2126,11 +2282,25 @@ export default function PetWorldCanvas({
 
   // --- mouse move for ghost preview ---
   const handleMouseMove = (event) => {
-    if (pendingBuildType && !pointerRef.current?.dragging) {
+    if ((pendingBuildType || carryingEntity) && !pointerRef.current?.dragging) {
       const hit = toTilePosition(event.clientX, event.clientY);
       setHoverTile(hit ? { x: hit.x, y: hit.y } : null);
     }
   };
+
+  // Cancel carry / dismiss menu on Escape key
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'Escape') { setCarryingEntity(null); setSelectedEntity(null); setHoverTile(null); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  // Carry and building placement are mutually exclusive
+  useEffect(() => {
+    if (pendingBuildType) { setCarryingEntity(null); setSelectedEntity(null); }
+  }, [pendingBuildType]);
 
   if (!world?.grid) return null;
 
@@ -2157,8 +2327,67 @@ export default function PetWorldCanvas({
             {readonlyLabel}
           </div>
         )}
+        {/* Entity context menu (Cute Fantasy styled) */}
+        {selectedEntity && !carryingEntity && !pendingBuildType && (
+          <div
+            className="cf-panel absolute z-50"
+            style={{
+              left: Math.max(60, Math.min(selectedEntity.menuScreenX, size.width - 60)),
+              top: Math.max(8, selectedEntity.menuScreenY - tileSize * 1.6),
+              transform: 'translate(-50%, -100%)',
+              minWidth: 96,
+              padding: '6px 10px',
+              pointerEvents: 'auto',
+            }}
+          >
+            <div className="mb-1 text-center text-[11px] font-bold" style={{ color: '#3a2010' }}>
+              {entityDisplayName(selectedEntity)}
+            </div>
+            <div className="flex flex-col gap-1">
+              <button
+                type="button"
+                className="cf-btn"
+                style={{ padding: '4px 10px', fontSize: 10, background: 'linear-gradient(180deg, #7abe5a 0%, #5a9e3a 100%)', borderColor: '#3a6e1a', color: '#1a3a08' }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setCarryingEntity({ type: selectedEntity.type, key: selectedEntity.key, entity: selectedEntity.entity });
+                  setSelectedEntity(null);
+                }}
+              >
+                Pick Up
+              </button>
+              <button
+                type="button"
+                className="cf-btn"
+                style={{ padding: '3px 10px', fontSize: 10, background: 'linear-gradient(180deg, rgba(139,94,43,0.15) 0%, rgba(139,94,43,0.08) 100%)', borderColor: 'rgba(139,94,43,0.35)', color: '#6a4a2a' }}
+                onClick={(e) => { e.stopPropagation(); setSelectedEntity(null); }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+        {/* Carry mode status bar */}
+        {carryingEntity && (
+          <div
+            className="cf-panel-dark absolute bottom-4 left-1/2 z-50 -translate-x-1/2 flex items-center gap-3 px-4 py-2"
+            style={{ pointerEvents: 'auto' }}
+          >
+            <span className="text-[11px] font-bold" style={{ color: '#3a2010' }}>
+              Tap to place {entityDisplayName(carryingEntity)}
+            </span>
+            <button
+              type="button"
+              className="cf-btn"
+              style={{ padding: '3px 10px', fontSize: 10, background: 'linear-gradient(180deg, rgba(139,94,43,0.15) 0%, rgba(139,94,43,0.08) 100%)', borderColor: 'rgba(139,94,43,0.35)', color: '#6a4a2a' }}
+              onClick={() => { setCarryingEntity(null); setHoverTile(null); }}
+            >
+              Cancel
+            </button>
+          </div>
+        )}
         {/* Minimap toggle button */}
-        {!pendingBuildType && (
+        {!pendingBuildType && !carryingEntity && (
           <button
             type="button"
             onClick={() => setMinimapVisible((v) => !v)}
