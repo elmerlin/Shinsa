@@ -24,6 +24,7 @@ import PetWorldBuildMenu from '../components/petWorld/PetWorldBuildMenu';
 import PetWorldBuildingInfo from '../components/petWorld/PetWorldBuildingInfo';
 import PetWorldCreateModal from '../components/petWorld/PetWorldCreateModal';
 import PetWorldTradeModal from '../components/petWorld/PetWorldTradeModal';
+import PetWorldInterior from '../components/petWorld/PetWorldInterior';
 import PetWorldSpriteThumbnail from '../components/petWorld/PetWorldSpriteThumbnail';
 import { getBuildingSize, getBuildingUi } from '../components/petWorld/petWorldBuildings';
 import { playBuildSound, playClearSound, playExpandSound, playUpgradeSound, playErrorSound, playHuntStrikeSound, playHuntSuccessSound, playHuntEscapeSound, playEncounterAlertSound } from '../components/petWorld/petWorldAudio';
@@ -743,6 +744,7 @@ export default function PetWorldPage() {
   const [pendingBuildVariant, setPendingBuildVariant] = useState(null);
   const [hudCollapsed, setHudCollapsed] = useState(true);
   const [selectedBuilding, setSelectedBuilding] = useState(null);
+  const [interiorBuilding, setInteriorBuilding] = useState(null);
   const [selectedTile, setSelectedTile] = useState(null);
   const [showTrades, setShowTrades] = useState(false);
   const [activeSheet, setActiveSheet] = useState(null);
@@ -996,6 +998,15 @@ export default function PetWorldPage() {
     setActiveSheet('inspect');
   }, []);
 
+  const handleEnterBuilding = useCallback((building) => {
+    setInteriorBuilding(building);
+    setSelectedBuilding(null);
+    setSelectedTile(null);
+    setPendingBuildType('');
+    setPendingBuildVariant(null);
+    setActiveSheet(null);
+  }, []);
+
   const handleSelectTile = useCallback((tile) => {
     setSelectedTile(tile);
     setSelectedBuilding(null);
@@ -1115,6 +1126,7 @@ export default function PetWorldPage() {
             playEncounterAlertSound();
           }}
           onSelectBuilding={handleSelectBuilding}
+          onEnterBuilding={handleEnterBuilding}
           onSelectTile={handleSelectTile}
           onPlaceBuilding={handlePlaceBuilding}
         />
@@ -1646,6 +1658,16 @@ export default function PetWorldPage() {
         busy={encounterBusy}
         buildings={buildings}
       />
+
+      {/* ── Building interior overlay ────────────────────────────── */}
+      {interiorBuilding && (
+        <PetWorldInterior
+          building={interiorBuilding}
+          buildingDef={catalog.find((b) => b.id === interiorBuilding.type)}
+          world={world}
+          onExit={() => setInteriorBuilding(null)}
+        />
+      )}
 
       {/* Inline animation keyframes */}
       <style>{`

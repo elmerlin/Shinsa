@@ -69,6 +69,7 @@ const ACTIVE_MARKER_BUILDINGS = new Set([
   'shrine',
 ]);
 
+const NO_INTERIOR_TYPES = new Set(['path', 'fence', 'well', 'garden', 'flower_bed', 'park']);
 const WALK_BLOCKERS = new Set(['water', 'rock', 'tree', 'bush', 'stump']);
 const RESIDENT_WALK_OPTIONS = { maxShoreStrength: 0.02, maxWaterRatio: 0.006 };
 const ROAMING_WALK_OPTIONS = { maxShoreStrength: 0.018, maxWaterRatio: 0.005 };
@@ -1721,6 +1722,7 @@ export default function PetWorldCanvas({
   onSelectEncounter,
   onSelectTile,
   onPlaceBuilding,
+  onEnterBuilding,
 }) {
   const containerRef = useRef(null);
   const canvasRef = useRef(null);
@@ -1734,6 +1736,7 @@ export default function PetWorldCanvas({
   const [hoverTile, setHoverTile] = useState(null);
   const [minimapVisible, setMinimapVisible] = useState(true);
   const [selectedEntity, setSelectedEntity] = useState(null);
+  const [selectedBldgMenu, setSelectedBldgMenu] = useState(null);
   const [carryingEntity, setCarryingEntity] = useState(null);
   const relocationsRef = useRef(new Map());
   const entityPositionsRef = useRef([]);
@@ -2390,6 +2393,13 @@ export default function PetWorldCanvas({
           return;
         }
 
+        // If building context menu is open, dismiss it on any tap
+        if (selectedBldgMenu) {
+          setSelectedBldgMenu(null);
+          pointerRef.current = null;
+          return;
+        }
+
         // If entity context menu is open, dismiss it on any tap
         if (selectedEntity) {
           setSelectedEntity(null);
@@ -2414,7 +2424,18 @@ export default function PetWorldCanvas({
               menuScreenY: entityHit.screenY,
             });
           } else if (hit.tile?.b != null) {
-            onSelectBuilding?.(buildingMap.get(hit.tile.b) || null);
+            const bldg = buildingMap.get(hit.tile.b) || null;
+            const bType = bldg?.type || bldg?.building_type || '';
+            if (!bldg || NO_INTERIOR_TYPES.has(bType) || bldg.state !== 'built') {
+              // Simple buildings / under construction → direct inspect
+              onSelectBuilding?.(bldg);
+            } else {
+              // Buildings with interiors → show context menu
+              const bw = (bldg.width || 1) * tileSize;
+              const bScreenX = bldg.grid_x * tileSize - camera.x + bw / 2;
+              const bScreenY = bldg.grid_y * tileSize - camera.y;
+              setSelectedBldgMenu({ building: bldg, menuScreenX: bScreenX, menuScreenY: bScreenY });
+            }
           } else {
             onSelectTile?.({ x: hit.x, y: hit.y, tile: hit.tile });
           }
@@ -2441,7 +2462,7 @@ export default function PetWorldCanvas({
   // Cancel carry / dismiss menu on Escape key
   useEffect(() => {
     const onKey = (e) => {
-      if (e.key === 'Escape') { setCarryingEntity(null); setSelectedEntity(null); setHoverTile(null); }
+      if (e.key === 'Escape') { setCarryingEntity(null); setSelectedEntity(null); setSelectedBldgMenu(null); setHoverTile(null); }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -2449,7 +2470,7 @@ export default function PetWorldCanvas({
 
   // Carry and building placement are mutually exclusive
   useEffect(() => {
-    if (pendingBuildType) { setCarryingEntity(null); setSelectedEntity(null); }
+    if (pendingBuildType) { setCarryingEntity(null); setSelectedEntity(null); setSelectedBldgMenu(null); }
   }, [pendingBuildType]);
 
   if (!world?.grid) return null;
@@ -2511,6 +2532,60 @@ export default function PetWorldCanvas({
                 className="cf-btn"
                 style={{ padding: '3px 10px', fontSize: 10, background: 'linear-gradient(180deg, rgba(139,94,43,0.15) 0%, rgba(139,94,43,0.08) 100%)', borderColor: 'rgba(139,94,43,0.35)', color: '#6a4a2a' }}
                 onClick={(e) => { e.stopPropagation(); setSelectedEntity(null); }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+        {/* Building context menu (Cute Fantasy styled) */}
+        {selectedBldgMenu && !carryingEntity && !pendingBuildType && (
+          <div
+            className="cf-panel absolute z-50"
+            style={{
+              left: Math.max(70, Math.min(selectedBldgMenu.menuScreenX, size.width - 70)),
+              top: Math.max(8, selectedBldgMenu.menuScreenY - tileSize * 1.8),
+              transform: 'translate(-50%, -100%)',
+              minWidth: 110,
+              padding: '6px 10px',
+              pointerEvents: 'auto',
+            }}
+          >
+            <div className="mb-1 text-center text-[11px] font-bold" style={{ color: '#3a2010' }}>
+              {selectedBldgMenu.building?.name || 'Building'}
+            </div>
+            <div className="flex flex-col gap-1">
+              <button
+                type="button"
+                className="cf-btn"
+                style={{ padding: '4px 10px', fontSize: 10, background: 'linear-gradient(180deg, #7abe5a 0%, #5a9e3a 100%)', borderColor: '#3a6e1a', color: '#1a3a08' }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const bldg = selectedBldgMenu.building;
+                  setSelectedBldgMenu(null);
+                  onSelectBuilding?.(bldg);
+                }}
+              >
+                Inspect
+              </button>
+              <button
+                type="button"
+                className="cf-btn"
+                style={{ padding: '4px 10px', fontSize: 10, background: 'linear-gradient(180deg, #5ab8d8 0%, #3a90b8 100%)', borderColor: '#2a6a8a', color: '#0a2838' }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const bldg = selectedBldgMenu.building;
+                  setSelectedBldgMenu(null);
+                  onEnterBuilding?.(bldg);
+                }}
+              >
+                Enter
+              </button>
+              <button
+                type="button"
+                className="cf-btn"
+                style={{ padding: '3px 10px', fontSize: 10, background: 'linear-gradient(180deg, rgba(139,94,43,0.15) 0%, rgba(139,94,43,0.08) 100%)', borderColor: 'rgba(139,94,43,0.35)', color: '#6a4a2a' }}
+                onClick={(e) => { e.stopPropagation(); setSelectedBldgMenu(null); }}
               >
                 Cancel
               </button>
