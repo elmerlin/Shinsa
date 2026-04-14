@@ -71,11 +71,11 @@ const ACTIVE_MARKER_BUILDINGS = new Set([
 
 const NO_INTERIOR_TYPES = new Set(['path', 'fence', 'well', 'garden', 'flower_bed', 'park']);
 const WALK_BLOCKERS = new Set(['water', 'rock', 'tree', 'bush', 'stump']);
-const RESIDENT_WALK_OPTIONS = { maxShoreStrength: 0.02, maxWaterRatio: 0.006 };
-const ROAMING_WALK_OPTIONS = { maxShoreStrength: 0.018, maxWaterRatio: 0.005 };
-const ENCOUNTER_WALK_OPTIONS = { maxShoreStrength: 0.022, maxWaterRatio: 0.008 };
+const RESIDENT_WALK_OPTIONS = { maxShoreStrength: 0.24, maxWaterRatio: 0.085 };
+const ROAMING_WALK_OPTIONS = { maxShoreStrength: 0.22, maxWaterRatio: 0.075 };
+const ENCOUNTER_WALK_OPTIONS = { maxShoreStrength: 0.24, maxWaterRatio: 0.09 };
 const LAND_ANIMAL_WALK_OPTIONS = { maxShoreStrength: 0.025, maxWaterRatio: 0.008 };
-const ENTITY_DROP_WALK_OPTIONS = { maxShoreStrength: 0.14, maxWaterRatio: 0.05 };
+const ENTITY_DROP_WALK_OPTIONS = { maxShoreStrength: 0.3, maxWaterRatio: 0.12 };
 const WATER_ANIMAL_SPECIES = new Set(['duck', 'fish_koi', 'fish_perch']);
 
 const GROUND_ANIMAL_PROFILES = {
@@ -666,6 +666,29 @@ function buildVillageCoreTiles(grid, terrainRegions, roamTiles, buildings = [], 
     return (terrain?.shoreStrength || 0) < 0.02 && (terrain?.waterRatio || 0) < 0.006;
   });
   return coreTiles.length ? coreTiles : roamTiles;
+}
+
+function hasCardinalWater(grid, x, y) {
+  return (
+    grid?.tiles?.[y - 1]?.[x]?.t === 'water'
+    || grid?.tiles?.[y + 1]?.[x]?.t === 'water'
+    || grid?.tiles?.[y]?.[x - 1]?.t === 'water'
+    || grid?.tiles?.[y]?.[x + 1]?.t === 'water'
+  );
+}
+
+function buildFishingShoreTiles(grid, terrainRegions, landTiles = [], buildings = [], seed = 0) {
+  if (!grid || !landTiles.length) return [];
+  const villageAnchor = pickVillageAnchor(landTiles, buildings, seed) || landTiles[0];
+  return landTiles.filter(({ x, y }) => {
+    const terrain = terrainRegions?.[y]?.[x];
+    const distanceFromVillage = Math.abs(x - (villageAnchor?.x ?? x)) + Math.abs(y - (villageAnchor?.y ?? y));
+    return hasCardinalWater(grid, x, y)
+      && distanceFromVillage >= 4
+      && (terrain?.waterRatio || 0) < 0.22
+      && (terrain?.shoreStrength || 0) > 0.08
+      && (terrain?.shoreStrength || 0) < 0.36;
+  });
 }
 
 function getTileScore(tile, terrainRegions) {
@@ -1634,14 +1657,15 @@ function buildPetPlacements(world, terrainRegions, buildings = []) {
     : (['dojocat', 'buu', 'devit', 'pixiu'].includes(world?.pet_character) ? world.pet_character : 'dojocat');
   const landGraph = buildLandComponents(grid, terrainRegions, ROAMING_WALK_OPTIONS, buildings);
   const landTiles = landGraph.primary?.length ? landGraph.primary : landGraph.tiles;
-  const roamTiles = buildVillageCoreTiles(grid, terrainRegions, landTiles, buildings, 401, 15);
-  const clearTiles = roamTiles.length ? roamTiles : findClearTiles(grid);
+  const anchorTiles = buildVillageCoreTiles(grid, terrainRegions, landTiles, buildings, 401, 15);
+  const roamTiles = landTiles.length ? landTiles : anchorTiles;
+  const clearTiles = anchorTiles.length ? anchorTiles : (roamTiles.length ? roamTiles : findClearTiles(grid));
   const pickAnchor = (targetXRatio, targetYRatio, seed) => {
     const targetX = (grid.w || 20) * targetXRatio;
     const targetY = (grid.h || 20) * targetYRatio;
-    let best = roamTiles[0] || clearTiles[0];
+    let best = clearTiles[0] || roamTiles[0];
     let bestScore = Infinity;
-    roamTiles.forEach((tile) => {
+    clearTiles.forEach((tile) => {
       const score = Math.abs(tile.x - targetX) + Math.abs(tile.y - targetY) + hash01(seed + tile.x * 13 + tile.y * 19, 1) * 0.4;
       if (score < bestScore) {
         bestScore = score;
@@ -1659,7 +1683,7 @@ function buildPetPlacements(world, terrainRegions, buildings = []) {
   };
   const [rx, ry] = heroAnchors[heroCharacter] || heroAnchors.dojocat;
   const seed = heroSeeds[heroCharacter] || heroSeeds.dojocat;
-  const heroAnchor = pickVillageAnchor(roamTiles, buildings, seed) || pickAnchor(rx, ry, seed);
+  const heroAnchor = pickVillageAnchor(clearTiles, buildings, seed) || pickAnchor(rx, ry, seed);
   return [{
     x: heroAnchor?.x ?? Math.floor((grid.w || 20) * rx),
     y: heroAnchor?.y ?? Math.floor((grid.h || 20) * ry),
@@ -1704,8 +1728,7 @@ function buildResidentPlacements(world, terrainRegions, buildings = []) {
     const terrain = terrainRegions?.[y]?.[x];
     const distanceFromVillage = Math.abs(x - (villageAnchor?.x ?? x)) + Math.abs(y - (villageAnchor?.y ?? y));
     return distanceFromVillage >= 8
-      && (terrain?.shoreStrength || 0) < 0.03
-      && (terrain?.waterRatio || 0) < 0.015;
+      && (terrain?.waterRatio || 0) < 0.06;
   });
   const inlandNatureTiles = landTiles.filter(({ x, y }) => {
     const terrain = terrainRegions?.[y]?.[x];
@@ -1715,6 +1738,7 @@ function buildResidentPlacements(world, terrainRegions, buildings = []) {
       && (terrain?.shoreStrength || 0) < 0.035
       && (terrain?.waterRatio || 0) < 0.02;
   });
+  const fishingShoreTiles = buildFishingShoreTiles(grid, terrainRegions, landTiles, buildings, 613);
 
   const builtBuildings = buildings.filter((building) => building.state === 'built');
   const homeAnchors = builtBuildings
@@ -1777,9 +1801,22 @@ function buildResidentPlacements(world, terrainRegions, buildings = []) {
       ? pickFromPool(weightedSocialAnchors, socialSeedBase + 3, pickFromPool(commonAnchors, i * 7 + 1, pickFromPool(meadowTiles, i * 11 + 5, tile)))
       : pickFromPool(weightedQuietAnchors, socialSeedBase + 5, pickFromPool(commonAnchors, i * 7 + 1, pickFromPool(meadowTiles, i * 11 + 5, tile)));
     const natureTile = pickFromPool(inlandNatureTiles, i * 13 + 7, pickFromPool(meadowTiles, i * 17 + 4, tile));
-    const workTile = working
+    const baseWorkTile = working
       ? pickFromPool(weightedWorkAnchors, i * 3 + assignedWorkers, pickFromPool(commonAnchors, i * 6 + 1, tile))
       : leisureTile;
+    const workTile = working && baseWorkTile?.buildingType === 'fishing_hut'
+      ? (() => {
+          const fishingTile = pickFromPool(fishingShoreTiles, i * 11 + 7, baseWorkTile);
+          return fishingTile
+            ? {
+                ...fishingTile,
+                role: 'work',
+                buildingType: 'fishing_hut',
+                buildingId: baseWorkTile.buildingId || null,
+              }
+            : baseWorkTile;
+        })()
+      : baseWorkTile;
     const plazaTile = pickFromPool(weightedSocialAnchors, socialSeedBase + 2, laneTile);
     const wanderTile = pickFromPool(wanderTiles, i * 19 + 9, natureTile);
     const residentArchetype = working
