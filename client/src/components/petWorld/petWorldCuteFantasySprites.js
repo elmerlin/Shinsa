@@ -755,47 +755,6 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
           const fishY = y + size * 0.08 + Math.sin(t * 0.0025 + h) * size * 0.02;
           drawFrame(ctx, cfp(WATER_FISH_ANIM), fishFi * 16, 0, 16, 16, fishX, fishY, fishSize, fishSize, h % 2 === 0 ? 1 : -1, 0.74);
         }
-        if (h % 29 === 0 && cardinalLand <= 2 && cardinalWater >= 2) {
-          const cloudFi = (h >>> 7) % CLOUD_VARIANTS.length;
-          const [cx, cy] = CLOUD_VARIANTS[cloudFi];
-          drawFrame(ctx, cfp(CLOUDS_IMG), cx, cy, 64, 64,
-            x - size * 1.25, y - size * 0.84, size * 3.5, size * 2.4, undefined, 0.22);
-        }
-        if (h % 61 === 0 && cardinalWater >= 2 && cardinalLand === 1) {
-          const boatFi = Math.floor((t * 0.0011 + h * 0.29) % BOAT_FRAMES);
-          const cloudFi = (h >>> 7) % CLOUD_VARIANTS.length;
-          const [cloudX, cloudY] = CLOUD_VARIANTS[cloudFi];
-          const shoreDir = isLand(neighbors.n) ? 'n'
-            : isLand(neighbors.s) ? 's'
-              : isLand(neighbors.e) ? 'e'
-                : 'w';
-          let boatX = x - size * 0.56;
-          let boatY = y - size * 0.3;
-          if (shoreDir === 'n') boatY = y - size * 0.42;
-          if (shoreDir === 's') boatY = y + size * 0.02;
-          if (shoreDir === 'e') boatX = x - size * 0.76;
-          if (shoreDir === 'w') boatX = x - size * 0.36;
-          drawFrame(ctx, cfp(CLOUDS_IMG), cloudX, cloudY, 64, 64,
-            boatX - size * 0.3, boatY - size * 0.26, size * 2.45, size * 1.66, undefined, 0.28);
-          const anchorPoint = {
-            n: { ax: boatX + size * 1.02, ay: y + size * 0.02, bx: boatX + size * 1.02, by: boatY + size * 0.48 },
-            s: { ax: boatX + size * 0.98, ay: y + size * 0.98, bx: boatX + size * 0.98, by: boatY + size * 0.54 },
-            e: { ax: x + size * 1.02, ay: boatY + size * 0.46, bx: boatX + size * 1.34, by: boatY + size * 0.48 },
-            w: { ax: x - size * 0.02, ay: boatY + size * 0.46, bx: boatX + size * 0.58, by: boatY + size * 0.48 },
-          }[shoreDir];
-          ctx.save();
-          ctx.strokeStyle = 'rgba(88,55,24,0.74)';
-          ctx.lineWidth = Math.max(1, size * 0.05);
-          ctx.beginPath();
-          ctx.moveTo(anchorPoint.ax, anchorPoint.ay);
-          ctx.lineTo(anchorPoint.bx, anchorPoint.by);
-          ctx.stroke();
-          ctx.fillStyle = '#7a5526';
-          ctx.fillRect(anchorPoint.ax - size * 0.04, anchorPoint.ay - size * 0.04, size * 0.08, size * 0.08);
-          ctx.restore();
-          drawFrame(ctx, cfp(BOAT_ANIM), boatFi * 48, 0, 48, 48,
-            boatX, boatY, size * 2.08, size * 1.1, undefined, 0.96);
-        }
       }
     }
     return true;
@@ -913,7 +872,7 @@ export function drawCuteFantasyFishingDecor(ctx, decor, tileSize, time = 0) {
 
   if (decor.type === 'cloud_shadow') {
     const [sx, sy] = CLOUD_VARIANTS[Math.abs(decor.variant ?? seed) % CLOUD_VARIANTS.length];
-    const drift = Math.sin(time * 0.00008 + seed * 1.17) * tileSize * 0.12;
+    const drift = decor.externalDrift ? 0 : Math.sin(time * 0.00008 + seed * 1.17) * tileSize * 0.12;
     return drawFrame(
       ctx,
       cfp(CLOUDS_IMG),
@@ -935,12 +894,19 @@ export function drawCuteFantasyFishingDecor(ctx, decor, tileSize, time = 0) {
     const width = decor.width ?? tileSize * 2.08;
     const height = decor.height ?? tileSize * 1.1;
     const shoreDir = decor.shoreDir || 'n';
-    const rope = {
-      n: { ax: x + width * 0.54, ay: y - tileSize * 0.06, bx: x + width * 0.54, by: y + height * 0.44 },
-      s: { ax: x + width * 0.48, ay: y + height + tileSize * 0.04, bx: x + width * 0.48, by: y + height * 0.56 },
-      e: { ax: x + width + tileSize * 0.06, ay: y + height * 0.44, bx: x + width * 0.76, by: y + height * 0.48 },
-      w: { ax: x - tileSize * 0.06, ay: y + height * 0.44, bx: x + width * 0.24, by: y + height * 0.48 },
-    }[shoreDir];
+    const rope = decor.postScreenX != null && decor.postScreenY != null && decor.ropeScreenX != null && decor.ropeScreenY != null
+      ? {
+          ax: decor.postScreenX,
+          ay: decor.postScreenY,
+          bx: decor.ropeScreenX,
+          by: decor.ropeScreenY,
+        }
+      : {
+          n: { ax: x + width * 0.54, ay: y - tileSize * 0.06, bx: x + width * 0.54, by: y + height * 0.44 },
+          s: { ax: x + width * 0.48, ay: y + height + tileSize * 0.04, bx: x + width * 0.48, by: y + height * 0.56 },
+          e: { ax: x + width + tileSize * 0.06, ay: y + height * 0.44, bx: x + width * 0.76, by: y + height * 0.48 },
+          w: { ax: x - tileSize * 0.06, ay: y + height * 0.44, bx: x + width * 0.24, by: y + height * 0.48 },
+        }[shoreDir];
     ctx.save();
     ctx.strokeStyle = 'rgba(88,55,24,0.7)';
     ctx.lineWidth = Math.max(1, tileSize * 0.05);

@@ -432,9 +432,15 @@ function pointFromTile(tile, seed, radiusX = 0.08, radiusY = 0.06, clearance = n
     tileX: tile.x,
     tileY: tile.y,
     role: tile.role || 'path',
+    pauseFacing: tile.pauseFacing ?? tile.fishingFacing ?? null,
     buildingType: tile.buildingType || null,
     anchorKind: tile.anchorKind || null,
     buildingId: tile.buildingId || null,
+    fishingFacing: tile.fishingFacing || null,
+    castTargetX: tile.castTargetX ?? null,
+    castTargetY: tile.castTargetY ?? null,
+    shoreDir: tile.shoreDir || null,
+    fishingSpotId: tile.fishingSpotId || null,
   };
 }
 
@@ -678,18 +684,77 @@ function hasCardinalWater(grid, x, y) {
   );
 }
 
+function facingForWaterDir(dir) {
+  if (dir === 'n') return -2;
+  if (dir === 's') return 2;
+  if (dir === 'e') return 1;
+  if (dir === 'w') return -1;
+  return 2;
+}
+
+function vectorForWaterDir(dir) {
+  if (dir === 'n') return { dx: 0, dy: -1 };
+  if (dir === 's') return { dx: 0, dy: 1 };
+  if (dir === 'e') return { dx: 1, dy: 0 };
+  if (dir === 'w') return { dx: -1, dy: 0 };
+  return { dx: 0, dy: 1 };
+}
+
+function isSameWaterBank(tile, spot) {
+  if (!tile || !spot) return false;
+  switch (spot.shoreDir) {
+    case 'n':
+      return tile.y <= spot.y - 1;
+    case 's':
+      return tile.y >= spot.y + 1;
+    case 'e':
+      return tile.x >= spot.x + 1;
+    case 'w':
+      return tile.x <= spot.x - 1;
+    default:
+      return true;
+  }
+}
+
 function buildFishingShoreTiles(grid, terrainRegions, landTiles = [], buildings = [], seed = 0) {
   if (!grid || !landTiles.length) return [];
   const villageAnchor = pickVillageAnchor(landTiles, buildings, seed) || landTiles[0];
-  return landTiles.filter(({ x, y }) => {
+  return landTiles.map(({ x, y }) => {
     const terrain = terrainRegions?.[y]?.[x];
     const distanceFromVillage = Math.abs(x - (villageAnchor?.x ?? x)) + Math.abs(y - (villageAnchor?.y ?? y));
-    return hasCardinalWater(grid, x, y)
-      && distanceFromVillage >= 4
-      && (terrain?.waterRatio || 0) < 0.22
-      && (terrain?.shoreStrength || 0) > 0.08
-      && (terrain?.shoreStrength || 0) < 0.36;
-  });
+    if (!hasCardinalWater(grid, x, y)
+      || distanceFromVillage < 4
+      || (terrain?.waterRatio || 0) >= 0.22
+      || (terrain?.shoreStrength || 0) <= 0.08
+      || (terrain?.shoreStrength || 0) >= 0.36) {
+      return null;
+    }
+    const waterOptions = getCardinalWaterNeighbors(grid, x, y)
+      .map((candidate) => ({
+        ...candidate,
+        openness: countNearbyWater(grid, candidate.x, candidate.y, 1),
+      }))
+      .sort((a, b) => b.openness - a.openness || a.dir.localeCompare(b.dir));
+    const target = waterOptions[0];
+    if (!target) return null;
+    const dirVector = vectorForWaterDir(target.dir);
+    const nearbyWater = collectNearbyWaterTiles(grid, x, y, 3)
+      .filter((tile) => isSameWaterBank(tile, { x, y, shoreDir: target.dir }))
+      .sort((a, b) => b.openWater - a.openWater || a.dist - b.dist);
+    const castTile = nearbyWater[0] || { x: target.x, y: target.y };
+    return {
+      x,
+      y,
+      fishingSpotId: tileKey(x, y),
+      fishingFacing: facingForWaterDir(target.dir),
+      pauseFacing: facingForWaterDir(target.dir),
+      castTargetX: castTile.x + 0.5 + dirVector.dx * 0.22,
+      castTargetY: castTile.y + 0.56 + dirVector.dy * 0.22,
+      shoreDir: target.dir,
+      shoreWaterX: target.x,
+      shoreWaterY: target.y,
+    };
+  }).filter(Boolean);
 }
 
 function getCardinalWaterNeighbors(grid, x, y) {
@@ -743,27 +808,11 @@ function collectNearbyWaterTiles(grid, x, y, radius = 3) {
   return tiles;
 }
 
-function buildFishingDecorations(world, terrainRegions, buildings = []) {
-  const grid = world?.grid;
-  if (!grid) return [];
-
-  const landGraph = buildLandComponents(grid, terrainRegions, RESIDENT_WALK_OPTIONS, buildings);
-  const landTiles = landGraph.primary?.length ? landGraph.primary : findClearTiles(grid);
-  const fishingShoreTiles = buildFishingShoreTiles(grid, terrainRegions, landTiles, buildings, 613);
-  const broadShoreTiles = landTiles.filter(({ x, y }) => {
-    const terrain = terrainRegions?.[y]?.[x];
-    return hasCardinalWater(grid, x, y)
-      && (terrain?.waterRatio || 0) < 0.32
-      && (terrain?.shoreStrength || 0) > 0.05
-      && (terrain?.shoreStrength || 0) < 0.48;
-  });
-  const shorePool = fishingShoreTiles.length >= 3
-    ? fishingShoreTiles
-    : Array.from(new Map([...fishingShoreTiles, ...broadShoreTiles].map((tile) => [tileKey(tile.x, tile.y), tile])).values());
-  if (!shorePool.length) return [];
-
+function selectFishingSceneSpots(grid, terrainRegions, shorePool = [], buildings = []) {
+  if (!grid || !shorePool.length) return [];
   const builtFishingHuts = buildings.filter((building) => building.state === 'built' && (building.type || building.building_type) === 'fishing_hut');
   const desiredSpots = clamp((builtFishingHuts.length || 0) + 3, 3, 6);
+  const villageAnchor = pickVillageAnchor(shorePool, buildings, 719) || { x: Math.floor(grid.w / 2), y: Math.floor(grid.h / 2) };
   const rankedShoreTiles = [...shorePool]
     .map((tile, index) => {
       const waterNeighbors = getCardinalWaterNeighbors(grid, tile.x, tile.y);
@@ -780,78 +829,187 @@ function buildFishingDecorations(world, terrainRegions, buildings = []) {
     .sort((a, b) => b.score - a.score);
 
   const spots = [];
+  if (villageAnchor) {
+    const bestNearVillage = rankedShoreTiles
+      .map((tile) => ({
+        ...tile,
+        villageScore: Math.abs(tile.x - villageAnchor.x) + Math.abs(tile.y - villageAnchor.y) - tile.score * 0.1,
+      }))
+      .sort((a, b) => a.villageScore - b.villageScore)[0];
+    if (bestNearVillage) spots.push(bestNearVillage);
+  }
+  builtFishingHuts.forEach((hut, hutIndex) => {
+    const hutCenterX = hut.grid_x + (hut.width || 1) / 2;
+    const hutCenterY = hut.grid_y + (hut.height || 1) / 2;
+    const bestNearHut = rankedShoreTiles
+      .filter((tile) => !spots.some((spot) => Math.abs(spot.x - tile.x) + Math.abs(spot.y - tile.y) < 6))
+      .map((tile) => ({
+        ...tile,
+        hutScore: Math.abs(tile.x + 0.5 - hutCenterX) + Math.abs(tile.y + 0.5 - hutCenterY) - tile.score * 0.15 + hutIndex * 0.01,
+      }))
+      .sort((a, b) => a.hutScore - b.hutScore)[0];
+    if (bestNearHut) spots.push(bestNearHut);
+  });
   rankedShoreTiles.forEach((tile) => {
     if (spots.length >= desiredSpots) return;
     if (spots.some((spot) => Math.abs(spot.x - tile.x) + Math.abs(spot.y - tile.y) < 6)) return;
     spots.push(tile);
   });
-  if (!spots.length) spots.push(rankedShoreTiles[0]);
+  if (!spots.length && rankedShoreTiles[0]) spots.push(rankedShoreTiles[0]);
+  return spots;
+}
 
-  const decorations = [];
-  const usedWater = new Set();
+function buildFishingDecorations(world, terrainRegions, buildings = []) {
+  const grid = world?.grid;
+  if (!grid) return [];
 
-  spots.forEach((spot, index) => {
-    const spotSeed = spot.x * 157 + spot.y * 263 + index * 19;
-    const waterOptions = getCardinalWaterNeighbors(grid, spot.x, spot.y)
+  const landGraph = buildLandComponents(grid, terrainRegions, RESIDENT_WALK_OPTIONS, buildings);
+  const landTiles = landGraph.primary?.length ? landGraph.primary : findClearTiles(grid);
+  const fishingShoreTiles = selectFishingSceneSpots(
+    grid,
+    terrainRegions,
+    buildFishingShoreTiles(grid, terrainRegions, landTiles, buildings, 613),
+    buildings,
+  );
+  const broadShoreTiles = landTiles.map(({ x, y }) => {
+    const terrain = terrainRegions?.[y]?.[x];
+    if (!hasCardinalWater(grid, x, y)
+      || (terrain?.waterRatio || 0) >= 0.32
+      || (terrain?.shoreStrength || 0) <= 0.05
+      || (terrain?.shoreStrength || 0) >= 0.48) {
+      return null;
+    }
+    const waterOptions = getCardinalWaterNeighbors(grid, x, y)
       .map((candidate) => ({
         ...candidate,
         openness: countNearbyWater(grid, candidate.x, candidate.y, 1),
       }))
       .sort((a, b) => b.openness - a.openness || a.dir.localeCompare(b.dir));
-    if (!waterOptions.length) return;
+    const target = waterOptions[0];
+    if (!target) return null;
+    const dirVector = vectorForWaterDir(target.dir);
+    const nearbyWater = collectNearbyWaterTiles(grid, x, y, 3)
+      .filter((tile) => isSameWaterBank(tile, { x, y, shoreDir: target.dir }))
+      .sort((a, b) => b.openWater - a.openWater || a.dist - b.dist);
+    const castTile = nearbyWater[0] || { x: target.x, y: target.y };
+    return {
+      x,
+      y,
+      fishingSpotId: tileKey(x, y),
+      fishingFacing: facingForWaterDir(target.dir),
+      pauseFacing: facingForWaterDir(target.dir),
+      castTargetX: castTile.x + 0.5 + dirVector.dx * 0.22,
+      castTargetY: castTile.y + 0.56 + dirVector.dy * 0.22,
+      shoreDir: target.dir,
+      shoreWaterX: target.x,
+      shoreWaterY: target.y,
+    };
+  }).filter(Boolean);
+  const shorePool = fishingShoreTiles.length >= 3
+    ? fishingShoreTiles
+    : Array.from(new Map([...fishingShoreTiles, ...broadShoreTiles].map((tile) => [tileKey(tile.x, tile.y), tile])).values());
+  if (!shorePool.length) return [];
 
-    const boatNeighbor = waterOptions[0];
-    const boatTile = grid?.tiles?.[boatNeighbor.y + boatNeighbor.dy]?.[boatNeighbor.x + boatNeighbor.dx]?.t === 'water'
-      ? { x: boatNeighbor.x + boatNeighbor.dx, y: boatNeighbor.y + boatNeighbor.dy, dir: boatNeighbor.dir }
-      : { x: boatNeighbor.x, y: boatNeighbor.y, dir: boatNeighbor.dir };
-    usedWater.add(tileKey(boatTile.x, boatTile.y));
+  const spots = selectFishingSceneSpots(grid, terrainRegions, shorePool, buildings);
+  if (!spots.length) return [];
 
-    const nearbyWater = collectNearbyWaterTiles(grid, spot.x, spot.y, 3)
-      .filter((tile) => !usedWater.has(tileKey(tile.x, tile.y)))
-      .sort((a, b) => (b.openWater - a.openWater) || (a.dist - b.dist));
-    const shoreWater = nearbyWater.filter((tile) => tile.shoreAdjacent);
-    const accentWater = shoreWater.length ? shoreWater : nearbyWater;
+  const decorations = [];
 
-    const fishTile = nearbyWater[0] || boatTile;
-    usedWater.add(tileKey(fishTile.x, fishTile.y));
-    const rockTile = (accentWater.find((tile) => !usedWater.has(tileKey(tile.x, tile.y))) || nearbyWater[1] || boatTile);
-    usedWater.add(tileKey(rockTile.x, rockTile.y));
-    const plantTileA = accentWater.find((tile) => !usedWater.has(tileKey(tile.x, tile.y))) || nearbyWater[2] || boatTile;
-    usedWater.add(tileKey(plantTileA.x, plantTileA.y));
-    const plantTileB = accentWater.find((tile) => !usedWater.has(tileKey(tile.x, tile.y))) || nearbyWater[3] || plantTileA;
-    usedWater.add(tileKey(plantTileB.x, plantTileB.y));
-    const cattailTile = accentWater.find((tile) => !usedWater.has(tileKey(tile.x, tile.y))) || nearbyWater[4] || plantTileB;
-    usedWater.add(tileKey(cattailTile.x, cattailTile.y));
-
-    decorations.push({
-      type: 'cloud_shadow',
-      x: boatTile.x - 0.9 + hash01(spotSeed, 1) * 0.35,
-      y: boatTile.y - 0.65 + hash01(spotSeed, 2) * 0.18,
-      widthTiles: 3.4 + hash01(spotSeed, 3) * 0.5,
-      heightTiles: 2.25 + hash01(spotSeed, 4) * 0.35,
-      alpha: 0.14 + hash01(spotSeed, 5) * 0.05,
-      variant: Math.floor(hash01(spotSeed, 6) * 4),
-      seed: spotSeed,
-    });
+  spots.forEach((spot, index) => {
+    const spotSeed = spot.x * 157 + spot.y * 263 + index * 19;
+    const sameBankWater = collectNearbyWaterTiles(grid, spot.x, spot.y, 3)
+      .filter((tile) => isSameWaterBank(tile, spot))
+      .sort((a, b) => (
+        (tileKey(a.x, a.y) === tileKey(spot.shoreWaterX, spot.shoreWaterY) ? -1 : 0)
+        - (tileKey(b.x, b.y) === tileKey(spot.shoreWaterX, spot.shoreWaterY) ? -1 : 0)
+      ) || (a.dist - b.dist) || (b.openWater - a.openWater));
+    const shallowWater = sameBankWater.filter((tile) => tile.shoreAdjacent).sort((a, b) => a.dist - b.dist || b.openWater - a.openWater);
+    const openWater = sameBankWater.filter((tile) => tile.openWater >= 4).sort((a, b) => b.openWater - a.openWater || a.dist - b.dist);
+    const boatTile = { x: spot.shoreWaterX ?? sameBankWater[0]?.x ?? spot.x, y: spot.shoreWaterY ?? sameBankWater[0]?.y ?? spot.y };
+    const fishTile = openWater[0] || sameBankWater[0] || boatTile;
+    const lilyPairTile = shallowWater[0] || sameBankWater[1] || boatTile;
+    const singleLilyTile = shallowWater[1] || sameBankWater[2] || fishTile;
+    const rockTile = sameBankWater.find((tile) => tileKey(tile.x, tile.y) !== tileKey(boatTile.x, boatTile.y) && tile.openWater >= 2) || fishTile;
+    const cattailTile = shallowWater[2] || shallowWater[0] || boatTile;
+    const dirVector = vectorForWaterDir(spot.shoreDir);
+    const boatWidthTiles = 1.88;
+    const boatHeightTiles = 1.02;
+    const boatLayout = {
+      n: {
+        x: boatTile.x - 0.38,
+        y: boatTile.y + 0.16,
+        postX: spot.x + 0.56,
+        postY: spot.y + 0.08,
+        ropeX: boatTile.x + 0.56,
+        ropeY: boatTile.y + 0.86,
+      },
+      s: {
+        x: boatTile.x - 0.38,
+        y: boatTile.y - 0.18,
+        postX: spot.x + 0.56,
+        postY: spot.y + 0.98,
+        ropeX: boatTile.x + 0.56,
+        ropeY: boatTile.y + 0.18,
+      },
+      e: {
+        x: boatTile.x - 0.68,
+        y: boatTile.y - 0.06,
+        postX: spot.x + 0.98,
+        postY: spot.y + 0.48,
+        ropeX: boatTile.x + 0.16,
+        ropeY: boatTile.y + 0.56,
+      },
+      w: {
+        x: boatTile.x - 0.2,
+        y: boatTile.y - 0.06,
+        postX: spot.x + 0.02,
+        postY: spot.y + 0.48,
+        ropeX: boatTile.x + 0.84,
+        ropeY: boatTile.y + 0.56,
+      },
+    }[spot.shoreDir] || {
+      x: boatTile.x - 0.38,
+      y: boatTile.y + 0.16,
+      postX: spot.x + 0.56,
+      postY: spot.y + 0.08,
+      ropeX: boatTile.x + 0.56,
+      ropeY: boatTile.y + 0.86,
+    };
+    const fishBaseX = fishTile.x + 0.18 + dirVector.dx * 0.04;
+    const fishBaseY = fishTile.y + 0.2 + dirVector.dy * 0.04;
 
     decorations.push({
       type: 'boat',
-      x: boatTile.x - 0.58 + (boatNeighbor.dx * 0.05),
-      y: boatTile.y - 0.3 + (boatNeighbor.dy * 0.03),
-      widthTiles: 2.08,
-      heightTiles: 1.1,
-      shoreDir: boatNeighbor.dir,
+      x: boatLayout.x,
+      y: boatLayout.y,
+      widthTiles: boatWidthTiles,
+      heightTiles: boatHeightTiles,
+      shoreDir: spot.shoreDir,
+      postX: boatLayout.postX,
+      postY: boatLayout.postY,
+      ropeX: boatLayout.ropeX,
+      ropeY: boatLayout.ropeY,
       seed: spotSeed + 11,
     });
 
     decorations.push({
       type: 'swim_fish',
-      x: fishTile.x + 0.1 + hash01(spotSeed, 7) * 0.12,
-      y: fishTile.y + 0.16 + hash01(spotSeed, 8) * 0.14,
-      widthTiles: 0.82,
-      heightTiles: 0.82,
+      x: fishBaseX,
+      y: fishBaseY,
+      widthTiles: 0.72,
+      heightTiles: 0.72,
       facing: hash01(spotSeed, 9) > 0.5 ? 1 : -1,
       seed: spotSeed + 23,
+    });
+
+    decorations.push({
+      type: 'swim_fish',
+      x: fishBaseX + 0.34,
+      y: fishBaseY + 0.12,
+      widthTiles: 0.64,
+      heightTiles: 0.64,
+      facing: hash01(spotSeed, 91) > 0.5 ? 1 : -1,
+      seed: spotSeed + 24,
     });
 
     decorations.push({
@@ -866,10 +1024,10 @@ function buildFishingDecorations(world, terrainRegions, buildings = []) {
 
     decorations.push({
       type: 'water_plant',
-      x: plantTileA.x + 0.14,
-      y: plantTileA.y + 0.16,
-      widthTiles: 0.66,
-      heightTiles: 0.66,
+      x: lilyPairTile.x + 0.18,
+      y: lilyPairTile.y + 0.2,
+      widthTiles: 0.38,
+      heightTiles: 0.38,
       variantGroup: 'default',
       variant: Math.floor(hash01(spotSeed, 11) * 5),
       seed: spotSeed + 41,
@@ -877,27 +1035,74 @@ function buildFishingDecorations(world, terrainRegions, buildings = []) {
 
     decorations.push({
       type: 'water_plant',
-      x: plantTileB.x + 0.13,
-      y: plantTileB.y + 0.12,
-      widthTiles: 0.72,
-      heightTiles: 0.72,
-      variantGroup: hash01(spotSeed, 12) > 0.56 ? 'bloom' : 'reed',
+      x: lilyPairTile.x + 0.46,
+      y: lilyPairTile.y + 0.12,
+      widthTiles: 0.42,
+      heightTiles: 0.42,
+      variantGroup: 'default',
       variant: Math.floor(hash01(spotSeed, 13) * 5),
       seed: spotSeed + 53,
     });
 
     decorations.push({
+      type: 'water_plant',
+      x: singleLilyTile.x + 0.24,
+      y: singleLilyTile.y + 0.18,
+      widthTiles: 0.4,
+      heightTiles: 0.4,
+      variantGroup: 'default',
+      variant: Math.floor(hash01(spotSeed, 15) * 5),
+      seed: spotSeed + 59,
+    });
+
+    decorations.push({
       type: 'cattail',
-      x: cattailTile.x + 0.11,
-      y: cattailTile.y + 0.1,
-      widthTiles: 0.76,
-      heightTiles: 0.76,
+      x: cattailTile.x + 0.12,
+      y: cattailTile.y + 0.02,
+      widthTiles: 0.42,
+      heightTiles: 0.62,
       variant: Math.floor(hash01(spotSeed, 14) * 4),
       seed: spotSeed + 67,
+    });
+
+    decorations.push({
+      type: 'cattail',
+      x: cattailTile.x + 0.34,
+      y: cattailTile.y + 0.1,
+      widthTiles: 0.42,
+      heightTiles: 0.62,
+      variant: Math.floor(hash01(spotSeed, 16) * 4),
+      seed: spotSeed + 71,
+    });
+
+    decorations.push({
+      type: 'cattail',
+      x: cattailTile.x + 0.56,
+      y: cattailTile.y + 0.14,
+      widthTiles: 0.42,
+      heightTiles: 0.62,
+      variant: Math.floor(hash01(spotSeed, 17) * 4),
+      seed: spotSeed + 73,
     });
   });
 
   return decorations;
+}
+
+function buildDriftingCloudShadows(world) {
+  const grid = world?.grid;
+  if (!grid) return [];
+  const count = clamp(Math.round((grid.w + grid.h) / 12), 3, 5);
+  return Array.from({ length: count }, (_, index) => ({
+    seed: 1001 + index * 37,
+    variant: index % 4,
+    startX: -6 + (grid.w / Math.max(1, count)) * index + hash01(index * 13, 2) * 2.6,
+    y: 1.8 + index * ((grid.h - 4.2) / Math.max(1, count - 1)) + hash01(index * 17, 3) * 1.1,
+    widthTiles: 5.1 + hash01(index * 19, 4) * 1.8,
+    heightTiles: 2.8 + hash01(index * 23, 5) * 0.7,
+    speed: 0.00022 + index * 0.000025,
+    alpha: 0.2 + hash01(index * 29, 6) * 0.06,
+  }));
 }
 
 function getTileScore(tile, terrainRegions) {
@@ -1117,9 +1322,15 @@ function makeRouteNode(x, y, tileX, tileY, role = 'path', pauseMs = 0, meta = nu
     tileY,
     role,
     pauseMs,
+    pauseFacing: meta?.pauseFacing ?? meta?.fishingFacing ?? null,
     buildingType: meta?.buildingType || null,
     anchorKind: meta?.anchorKind || null,
     buildingId: meta?.buildingId || null,
+    fishingFacing: meta?.fishingFacing || null,
+    castTargetX: meta?.castTargetX ?? null,
+    castTargetY: meta?.castTargetY ?? null,
+    shoreDir: meta?.shoreDir || null,
+    fishingSpotId: meta?.fishingSpotId || null,
   };
 }
 
@@ -1209,7 +1420,7 @@ function expandResidentRoute(points, seed, grid, terrainRegions, options = {}) {
       ...node,
       moveMs: Math.max(360, (distance / speed) * 1000),
       distance,
-      pauseFacing: options.pauseFacing ?? 2,
+      pauseFacing: node.pauseFacing ?? options.pauseFacing ?? 2,
       facing: Math.abs(dx) >= Math.abs(dy) && Math.abs(dx) > 0.02
         ? (dx >= 0 ? 1 : -1)
         : Math.abs(dy) > 0.02
@@ -1412,6 +1623,11 @@ function getRouteMotion(entity, time) {
         buildingType: node.buildingType || null,
         anchorKind: node.anchorKind || null,
         buildingId: node.buildingId || null,
+        castTargetX: node.castTargetX ?? null,
+        castTargetY: node.castTargetY ?? null,
+        fishingFacing: node.fishingFacing || null,
+        shoreDir: node.shoreDir || null,
+        fishingSpotId: node.fishingSpotId || null,
       };
     }
     cursor -= pauseMs;
@@ -1442,6 +1658,11 @@ function getRouteMotion(entity, time) {
         buildingType: node.buildingType || next.buildingType || null,
         anchorKind: node.anchorKind || next.anchorKind || null,
         buildingId: node.buildingId || next.buildingId || null,
+        castTargetX: node.castTargetX ?? next.castTargetX ?? null,
+        castTargetY: node.castTargetY ?? next.castTargetY ?? null,
+        fishingFacing: node.fishingFacing || next.fishingFacing || null,
+        shoreDir: node.shoreDir || next.shoreDir || null,
+        fishingSpotId: node.fishingSpotId || next.fishingSpotId || null,
       };
     }
     cursor -= moveMs;
@@ -1460,6 +1681,11 @@ function getRouteMotion(entity, time) {
     buildingType: fallback.buildingType || null,
     anchorKind: fallback.anchorKind || null,
     buildingId: fallback.buildingId || null,
+    castTargetX: fallback.castTargetX ?? null,
+    castTargetY: fallback.castTargetY ?? null,
+    fishingFacing: fallback.fishingFacing || null,
+    shoreDir: fallback.shoreDir || null,
+    fishingSpotId: fallback.fishingSpotId || null,
   };
 }
 
@@ -1593,6 +1819,9 @@ function getResidentInteractionPose(resident, motion, time) {
     kneel: false,
     sit: false,
     taskPulse: 0.4 + Math.abs(swing) * 0.6,
+    castTargetX: null,
+    castTargetY: null,
+    shoreDir: null,
   };
 
   if (!motion.paused) return pose;
@@ -1610,8 +1839,12 @@ function getResidentInteractionPose(resident, motion, time) {
       pose.tool = 'hoe';
       break;
     case 'fishing_hut':
-      pose.offsetX += (motion.facing || 1) * 0.03;
+      pose.facing = motion.fishingFacing || motion.pauseFacing || motion.facing;
+      pose.offsetX += pose.facing === 1 ? 0.035 : pose.facing === -1 ? -0.035 : 0;
       pose.tool = 'rod';
+      pose.castTargetX = motion.castTargetX ?? null;
+      pose.castTargetY = motion.castTargetY ?? null;
+      pose.shoreDir = motion.shoreDir || null;
       break;
     case 'woodcutters_hut':
     case 'lumberyard':
@@ -1749,14 +1982,34 @@ function drawResidentInteractionOverlay(ctx, screenX, screenY, tileSize, motion,
   ctx.fillStyle = 'rgba(230,210,166,0.92)';
 
   if (pose.tool === 'rod') {
+    const actorWorldX = motion.x + (pose.offsetX || 0);
+    const actorWorldY = motion.y + (pose.offsetY || 0);
+    const handX = baseX + (pose.facing === 1 ? tileSize * 0.04 : pose.facing === -1 ? -tileSize * 0.04 : 0);
+    const handY = baseY - tileSize * 0.08;
+    const defaultBobberX = handX + (pose.facing === 1 ? tileSize * 0.34 : pose.facing === -1 ? -tileSize * 0.34 : 0);
+    const defaultBobberY = baseY - tileSize * 0.04 + Math.sin(time * 0.01) * tileSize * 0.01;
+    const bobberX = pose.castTargetX != null
+      ? screenX + (pose.castTargetX - actorWorldX) * tileSize
+      : defaultBobberX;
+    const bobberY = pose.castTargetY != null
+      ? screenY + (pose.castTargetY - actorWorldY) * tileSize - tileSize * 0.08
+      : defaultBobberY;
+    const tipX = handX + clamp((bobberX - handX) * 0.38, -tileSize * 0.2, tileSize * 0.2);
+    const tipY = handY - tileSize * 0.18;
     ctx.beginPath();
-    ctx.moveTo(baseX + tileSize * 0.04, baseY - tileSize * 0.08);
-    ctx.lineTo(baseX + tileSize * 0.14, baseY - tileSize * 0.23);
+    ctx.moveTo(handX, handY);
+    ctx.lineTo(tipX, tipY);
     ctx.stroke();
+    ctx.strokeStyle = 'rgba(244,241,226,0.94)';
+    ctx.lineWidth = Math.max(1, tileSize * 0.02);
     ctx.beginPath();
-    ctx.moveTo(baseX + tileSize * 0.14, baseY - tileSize * 0.23);
-    ctx.lineTo(baseX + tileSize * 0.2, baseY - tileSize * 0.16 + Math.sin(time * 0.01) * tileSize * 0.01);
+    ctx.moveTo(tipX, tipY);
+    ctx.lineTo(bobberX, bobberY);
     ctx.stroke();
+    ctx.fillStyle = '#e75d5d';
+    ctx.beginPath();
+    ctx.arc(bobberX, bobberY, Math.max(1.3, tileSize * 0.045), 0, Math.PI * 2);
+    ctx.fill();
   } else if (pose.tool === 'axe' || pose.tool === 'pick' || pose.tool === 'hoe') {
     const lean = Math.sin(time * 0.018) * tileSize * 0.02;
     ctx.beginPath();
@@ -2331,6 +2584,7 @@ export default function PetWorldCanvas({
   const ambientFauna = useMemo(() => buildAmbientFauna(world, terrainRegions, buildings), [world, terrainRegions, buildings]);
   const encounterSightings = useMemo(() => buildEncounterSightings(world, terrainRegions, encounters, buildings), [world, terrainRegions, encounters, buildings]);
   const fishingDecorations = useMemo(() => buildFishingDecorations(world, terrainRegions, buildings), [world, terrainRegions, buildings]);
+  const driftingCloudShadows = useMemo(() => buildDriftingCloudShadows(world), [world]);
   const encounterTileMap = useMemo(
     () => new Map(encounterSightings.map((sighting) => [sighting.tileKey, sighting])),
     [encounterSightings],
@@ -2587,6 +2841,26 @@ export default function PetWorldCanvas({
       drawTile(ctx, world.biome, tile, screenX, screenY, tileSize, time, neighbors, terrain, gx, gy);
     });
 
+    const visibleCloudShadows = driftingCloudShadows
+      .map((cloud) => {
+        const wrapWidth = world.grid.w + cloud.widthTiles + 6;
+        const driftX = (((cloud.startX + time * cloud.speed) % wrapWidth) + wrapWidth) % wrapWidth - cloud.widthTiles;
+        return {
+          ...cloud,
+          x: driftX,
+        };
+      })
+      .filter((cloud) => {
+        const widthPx = cloud.widthTiles * tileSize;
+        const heightPx = cloud.heightTiles * tileSize;
+        const screenX = cloud.x * tileSize - camX;
+        const screenY = cloud.y * tileSize - camY;
+        return !(screenX + widthPx < -tileSize
+          || screenY + heightPx < -tileSize
+          || screenX > size.width + tileSize
+          || screenY > size.height + tileSize);
+      });
+
     const visibleFishingDecor = fishingDecorations.filter((decor) => {
       const widthPx = (decor.widthTiles || 1) * tileSize;
       const heightPx = (decor.heightTiles || 1) * tileSize;
@@ -2596,6 +2870,17 @@ export default function PetWorldCanvas({
         || screenY + heightPx < -tileSize
         || screenX > size.width + tileSize
         || screenY > size.height + tileSize);
+    });
+
+    visibleCloudShadows.forEach((decor) => {
+      drawCuteFantasyFishingDecor(ctx, {
+        ...decor,
+        screenX: decor.x * tileSize - camX,
+        screenY: decor.y * tileSize - camY,
+        width: decor.widthTiles * tileSize,
+        height: decor.heightTiles * tileSize,
+        externalDrift: true,
+      }, tileSize, time);
     });
 
     visibleFishingDecor
@@ -2619,6 +2904,10 @@ export default function PetWorldCanvas({
           screenY: decor.y * tileSize - camY,
           width: (decor.widthTiles || 1) * tileSize,
           height: (decor.heightTiles || 1) * tileSize,
+          postScreenX: decor.postX != null ? decor.postX * tileSize - camX : null,
+          postScreenY: decor.postY != null ? decor.postY * tileSize - camY : null,
+          ropeScreenX: decor.ropeX != null ? decor.ropeX * tileSize - camX : null,
+          ropeScreenY: decor.ropeY != null ? decor.ropeY * tileSize - camY : null,
         }, tileSize, time);
       });
 
