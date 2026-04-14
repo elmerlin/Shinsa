@@ -1002,43 +1002,43 @@ function buildFishingDecorations(world, terrainRegions, buildings = []) {
     const boatLayout = {
       n: {
         x: boatTile.x - 0.34,
-        y: boatTile.y + 0.08,
+        y: boatTile.y + 0.02,
         postX: spot.x + 0.58,
-        postY: spot.y + 0.18,
+        postY: spot.y + 0.1,
         ropeX: boatTile.x + 0.56,
-        ropeY: boatTile.y + 0.74,
+        ropeY: boatTile.y + 0.7,
       },
       s: {
-        x: boatTile.x - 0.34,
-        y: boatTile.y - 0.08,
+        x: boatTile.x - 0.32,
+        y: boatTile.y - 0.16,
         postX: spot.x + 0.58,
-        postY: spot.y + 0.82,
+        postY: spot.y + 0.94,
         ropeX: boatTile.x + 0.56,
-        ropeY: boatTile.y + 0.28,
+        ropeY: boatTile.y + 0.16,
       },
       e: {
-        x: boatTile.x - 0.58,
-        y: boatTile.y - 0.04,
-        postX: spot.x + 0.82,
+        x: boatTile.x - 0.64,
+        y: boatTile.y - 0.02,
+        postX: spot.x + 0.9,
         postY: spot.y + 0.54,
-        ropeX: boatTile.x + 0.26,
+        ropeX: boatTile.x + 0.18,
         ropeY: boatTile.y + 0.56,
       },
       w: {
-        x: boatTile.x - 0.18,
-        y: boatTile.y - 0.04,
-        postX: spot.x + 0.18,
+        x: boatTile.x - 0.12,
+        y: boatTile.y - 0.02,
+        postX: spot.x + 0.1,
         postY: spot.y + 0.54,
-        ropeX: boatTile.x + 0.76,
+        ropeX: boatTile.x + 0.82,
         ropeY: boatTile.y + 0.56,
       },
     }[spot.shoreDir] || {
       x: boatTile.x - 0.34,
-      y: boatTile.y + 0.08,
+      y: boatTile.y + 0.02,
       postX: spot.x + 0.58,
-      postY: spot.y + 0.18,
+      postY: spot.y + 0.1,
       ropeX: boatTile.x + 0.56,
-      ropeY: boatTile.y + 0.74,
+      ropeY: boatTile.y + 0.7,
     };
     const fishBaseX = fishTile.x + 0.18 + dirVector.dx * 0.04;
     const fishBaseY = fishTile.y + 0.2 + dirVector.dy * 0.04;
@@ -3019,6 +3019,22 @@ export default function PetWorldCanvas({
         || screenY > size.height + tileSize);
     });
 
+    visibleFishingDecor
+      .filter((decor) => decor.type !== 'cloud_shadow')
+      .forEach((decor) => {
+        drawCuteFantasyFishingDecor(ctx, {
+          ...decor,
+          screenX: decor.x * tileSize - camX,
+          screenY: decor.y * tileSize - camY,
+          width: (decor.widthTiles || 1) * tileSize,
+          height: (decor.heightTiles || 1) * tileSize,
+          postScreenX: decor.postX != null ? decor.postX * tileSize - camX : null,
+          postScreenY: decor.postY != null ? decor.postY * tileSize - camY : null,
+          ropeScreenX: decor.ropeX != null ? decor.ropeX * tileSize - camX : null,
+          ropeScreenY: decor.ropeY != null ? decor.ropeY * tileSize - camY : null,
+        }, tileSize, time);
+      });
+
     visibleCloudShadows.forEach((decor) => {
       drawCuteFantasyFishingDecor(ctx, {
         ...decor,
@@ -3039,22 +3055,6 @@ export default function PetWorldCanvas({
           screenY: decor.y * tileSize - camY,
           width: (decor.widthTiles || 1) * tileSize,
           height: (decor.heightTiles || 1) * tileSize,
-        }, tileSize, time);
-      });
-
-    visibleFishingDecor
-      .filter((decor) => decor.type !== 'cloud_shadow')
-      .forEach((decor) => {
-        drawCuteFantasyFishingDecor(ctx, {
-          ...decor,
-          screenX: decor.x * tileSize - camX,
-          screenY: decor.y * tileSize - camY,
-          width: (decor.widthTiles || 1) * tileSize,
-          height: (decor.heightTiles || 1) * tileSize,
-          postScreenX: decor.postX != null ? decor.postX * tileSize - camX : null,
-          postScreenY: decor.postY != null ? decor.postY * tileSize - camY : null,
-          ropeScreenX: decor.ropeX != null ? decor.ropeX * tileSize - camX : null,
-          ropeScreenY: decor.ropeY != null ? decor.ropeY * tileSize - camY : null,
         }, tileSize, time);
       });
 
