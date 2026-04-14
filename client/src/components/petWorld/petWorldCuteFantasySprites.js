@@ -647,14 +647,17 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
   // correct water-coloured pixels that blend with adjacent animated water tiles.
 
   /* ── Flower-grass overlays on ~16 % of open ground tiles ── */
-  // Suppressed on path tiles (would draw green grass blobs on dirt) and
-  // allowed on shore tiles with enough visible grass (wangIdx >= 8 ≈ 50%+ grass corners)
-  if (!hasPathBuilding && tile.t !== 'tree' && tile.t !== 'rock' && tile.t !== 'bush' && tile.t !== 'stump' && (!isShoreTransition || wangIdx >= 8)) {
+  // Only on inland grass tiles — never on shore tiles (even mostly-grass ones)
+  if (!hasPathBuilding && !isShoreTransition && tile.t !== 'tree' && tile.t !== 'rock' && tile.t !== 'bush' && tile.t !== 'stump') {
     if (h % 6 === 0) {
       const variant = (h >>> 3) % FLOWER_GRASS_COUNT + 1;
       const fi = Math.floor((t * 0.002 + h * 0.07) % FLOWER_GRASS_FRAMES);
       const file = FLOWER_GRASS_DIR + 'Flower_Grass_' + variant + '_Anim.png';
-      drawFrame(ctx, cfp(file), fi * 16, 0, 16, 16, x, y, size, size);
+      // Draw smaller than tile for less pixelated look, with deterministic offset
+      const drawSize = Math.round(size * 0.55);
+      const offX = ((h * 7) % 5) * (size - drawSize) / 4;
+      const offY = ((h * 13) % 5) * (size - drawSize) / 4;
+      drawFrame(ctx, cfp(file), fi * 16, 0, 16, 16, x + offX, y + offY, drawSize, drawSize);
     }
   }
 
