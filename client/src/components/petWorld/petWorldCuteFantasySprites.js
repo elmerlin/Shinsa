@@ -300,6 +300,13 @@ const PATH_WANG_LOOKUP = [
   [16, 32], [32, 32], [48, 16], [32, 16],   // 12-15 (mostly dirt → all dirt)
 ];
 
+const FISHING_BANK_MASK = {
+  n: 12, // north half dirt
+  s: 3,  // south half dirt
+  e: 5,  // east half dirt
+  w: 10, // west half dirt
+};
+
 /* ── Fence auto-tile lookup ── */
 // 4-directional connectivity: mask = N*8 + E*4 + S*2 + W
 // Fences.png = 64×64 = 4×4 grid of 16×16 tiles
@@ -611,6 +618,10 @@ function npcRowSet(rows, frameCount = 6) {
   };
 }
 
+function npcWorkRowSet(side, down, up) {
+  return { side, down, up };
+}
+
 const NPCS = {
   // Premade Cute Fantasy workers are grouped as:
   // 0-2 idle (down/side/up), 3-5 walk (down/side/up), 6 special downed row,
@@ -620,12 +631,12 @@ const NPCS = {
     idle: npcRowSet([0, 1, 2]),
     walk: npcRowSet([3, 4, 5]),
     work: {
-      // Use the calmer second fishing set for looped village work.
-      fish: {
-        down: { row: 10, n: 8 },
-        side: { row: 11, n: 9 },
-        up: { row: 12, n: 8 },
-      },
+      // Premade worker sheets expose profession rows as side / down / up.
+      fish: npcWorkRowSet(
+        { row: 10, n: 9 },
+        { row: 11, n: 9 },
+        { row: 12, n: 8 },
+      ),
     },
   },
   berry: {
@@ -639,8 +650,16 @@ const NPCS = {
     idle: npcRowSet([0, 1, 2]),
     walk: npcRowSet([3, 4, 5]),
     work: {
-      farm_till: npcRowSet([7, 8, 9]),
-      farm_water: npcRowSet([10, 11, 12]),
+      farm_till: npcWorkRowSet(
+        { row: 7, n: 6 },
+        { row: 8, n: 6 },
+        { row: 9, n: 6 },
+      ),
+      farm_water: npcWorkRowSet(
+        { row: 10, n: 6 },
+        { row: 11, n: 6 },
+        { row: 12, n: 6 },
+      ),
     },
   },
   slate: {
@@ -648,7 +667,11 @@ const NPCS = {
     idle: npcRowSet([0, 1, 2]),
     walk: npcRowSet([3, 4, 5]),
     work: {
-      mine: npcRowSet([7, 8, 9]),
+      mine: npcWorkRowSet(
+        { row: 7, n: 6 },
+        { row: 8, n: 6 },
+        { row: 9, n: 6 },
+      ),
     },
   },
   moss: {
@@ -656,7 +679,11 @@ const NPCS = {
     idle: npcRowSet([0, 1, 2]),
     walk: npcRowSet([3, 4, 5]),
     work: {
-      chop: npcRowSet([7, 8, 9]),
+      chop: npcWorkRowSet(
+        { row: 7, n: 6 },
+        { row: 8, n: 6 },
+        { row: 9, n: 6 },
+      ),
     },
   },
   plum: {
@@ -979,6 +1006,37 @@ export function drawCuteFantasyFishingDecor(ctx, decor, tileSize, time = 0) {
       undefined,
       decor.alpha ?? 0.96,
     );
+  }
+
+  if (decor.type === 'fishing_bank') {
+    const bankIdx = FISHING_BANK_MASK[decor.shoreDir || 'n'] ?? 12;
+    const [sx, sy] = PATH_WANG_LOOKUP[bankIdx];
+    const width = decor.width ?? tileSize;
+    const height = decor.height ?? tileSize;
+    const drawn = drawFrame(
+      ctx,
+      cfp(WANG_DIRT_GRASS),
+      sx,
+      sy,
+      16,
+      16,
+      x,
+      y,
+      width,
+      height,
+      undefined,
+      decor.alpha ?? 0.95,
+    );
+    if (!drawn) return false;
+    ctx.save();
+    ctx.globalAlpha = decor.glowAlpha ?? 0.22;
+    ctx.fillStyle = '#f4dfa6';
+    if ((decor.shoreDir || 'n') === 'n') ctx.fillRect(x, y, width, height * 0.18);
+    else if ((decor.shoreDir || 'n') === 's') ctx.fillRect(x, y + height * 0.82, width, height * 0.18);
+    else if ((decor.shoreDir || 'n') === 'e') ctx.fillRect(x + width * 0.82, y, width * 0.18, height);
+    else ctx.fillRect(x, y, width * 0.18, height);
+    ctx.restore();
+    return true;
   }
 
   if (decor.type === 'swim_fish') {

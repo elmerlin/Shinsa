@@ -793,7 +793,7 @@ function facingFromVector(dx, dy, fallback = 2) {
 }
 
 function buildWoodcuttingTaskTiles(grid, terrainRegions, landTiles = [], buildings = [], seed = 0) {
-  if (!grid || !landTiles.length) return [];
+  if (!grid) return [];
   const villageAnchor = pickVillageAnchor(landTiles, buildings, seed) || landTiles[0];
   const dirs = [
     { dx: 1, dy: 0 },
@@ -802,47 +802,94 @@ function buildWoodcuttingTaskTiles(grid, terrainRegions, landTiles = [], buildin
     { dx: 0, dy: 1 },
   ];
 
-  return landTiles
-    .map(({ x, y }, index) => {
+  const slots = [];
+  for (let y = 0; y < grid.h; y += 1) {
+    for (let x = 0; x < grid.w; x += 1) {
+      const tile = grid.tiles?.[y]?.[x];
+      if (!tile || (tile.t !== 'tree' && tile.t !== 'stump')) continue;
       const terrain = terrainRegions?.[y]?.[x];
       const distanceFromVillage = Math.abs(x - (villageAnchor?.x ?? x)) + Math.abs(y - (villageAnchor?.y ?? y));
-      if (distanceFromVillage < 4) return null;
-      if ((terrain?.shoreStrength || 0) > 0.08 || (terrain?.waterRatio || 0) > 0.04) return null;
+      if (distanceFromVillage < 4) continue;
+      if ((terrain?.shoreStrength || 0) > 0.08 || (terrain?.waterRatio || 0) > 0.04) continue;
 
-      const neighborTrees = dirs
-        .map(({ dx, dy }) => ({
-          dx,
-          dy,
-          tile: grid.tiles?.[y + dy]?.[x + dx] || null,
-        }))
-        .filter(({ tile }) => tile && (tile.t === 'tree' || tile.t === 'stump'));
+      const nearbyTreeCount = dirs.reduce((total, { dx, dy }) => {
+        const neighbor = grid.tiles?.[y + dy]?.[x + dx];
+        return total + ((neighbor?.t === 'tree' || neighbor?.t === 'stump') ? 1 : 0);
+      }, 0);
 
-      const horizontalFocus = neighborTrees.find(({ dx }) => dx !== 0) || null;
-      const focus = horizontalFocus || null;
-      if (!focus) return null;
-      const pauseFacing = focus
-        ? facingFromVector(focus.dx, focus.dy, 2)
-        : (hash01(seed + index * 17, 111) > 0.5 ? -1 : 1);
-      const foliageScore = terrain?.foliageShadow || 0;
-      const score = neighborTrees.length * 2.2 + foliageScore * 3.2 + 1.8 + hash01(seed + index * 19, 112);
-      return {
-        x,
-        y,
-        role: 'work',
-        buildingType: 'woodcutters_hut',
-        pauseFacing,
-        standX: x + 0.5 + focus.dx * 0.18,
-        standY: y + 0.56 + focus.dy * 0.08,
-        strikeTargetX: focus ? (x + focus.dx + 0.5) : (x + 0.5 + (pauseFacing === 1 ? 0.65 : pauseFacing === -1 ? -0.65 : 0)),
-        strikeTargetY: focus ? (y + focus.dy + 0.66) : (y + 0.62 + (pauseFacing === 2 ? 0.65 : pauseFacing === -2 ? -0.65 : 0)),
-        score,
-      };
-    })
-    .filter(Boolean)
-    .sort((a, b) => b.score - a.score);
+      dirs.forEach(({ dx, dy }, slotIndex) => {
+        const sx = x + dx;
+        const sy = y + dy;
+        if (!isGridTileWalkable(grid, terrainRegions, sx, sy, RESIDENT_WALK_OPTIONS)) return;
+        const standTerrain = terrainRegions?.[sy]?.[sx];
+        if ((standTerrain?.shoreStrength || 0) > 0.12 || (standTerrain?.waterRatio || 0) > 0.04) return;
+        const focusDx = x - sx;
+        const focusDy = y - sy;
+        const pauseFacing = facingFromVector(focusDx, focusDy, 2);
+        const score = nearbyTreeCount * 1.9
+          + (terrain?.foliageShadow || 0) * 2.8
+          + hash01(seed + x * 73 + y * 29 + slotIndex * 11, 112);
+        slots.push({
+          x: sx,
+          y: sy,
+          role: 'work',
+          buildingType: 'woodcutters_hut',
+          pauseFacing,
+          standX: sx + 0.5 + focusDx * 0.24,
+          standY: sy + 0.58 + focusDy * 0.12,
+          strikeTargetX: x + 0.5,
+          strikeTargetY: y + 0.66,
+          taskSlotId: `${tileKey(x, y)}:${tileKey(sx, sy)}`,
+          workSpotId: tileKey(x, y),
+          score,
+        });
+      });
+    }
+  }
+
+  return slots.sort((a, b) => b.score - a.score);
 }
 
-function pickResidentTaskTarget(pool, currentTile, seed, grid, terrainRegions, walkOptions = RESIDENT_WALK_OPTIONS) {
+function incrementReservation(map, key) {
+  if (!key) return;
+  map.set(key, (map.get(key) || 0) + 1);
+}
+
+function buildResidentTaskReservations(relocations, currentKey = null) {
+  const reservations = {
+    fishingSlots: new Map(),
+    woodSlots: new Map(),
+    woodSpots: new Map(),
+  };
+  if (!relocations) return reservations;
+  relocations.forEach((state, key) => {
+    if (!state || key === currentKey || !state.assignedTask) return;
+    if (state.assignedTask === 'fish') {
+      incrementReservation(reservations.fishingSlots, state.taskSlotId || state.fishingSpotId);
+      return;
+    }
+    if (state.assignedTask === 'chop') {
+      incrementReservation(reservations.woodSlots, state.taskSlotId);
+      incrementReservation(reservations.woodSpots, state.workSpotId);
+    }
+  });
+  return reservations;
+}
+
+function getReservationCount(map, key) {
+  if (!map || !key) return 0;
+  return map.get(key) || 0;
+}
+
+function pickResidentTaskTarget(
+  pool,
+  currentTile,
+  seed,
+  grid,
+  terrainRegions,
+  walkOptions = RESIDENT_WALK_OPTIONS,
+  scoreAdjuster = null,
+) {
   if (!pool?.length || !currentTile || !grid) return null;
   let best = null;
   let bestScore = -Infinity;
@@ -853,7 +900,8 @@ function pickResidentTaskTarget(pool, currentTile, seed, grid, terrainRegions, w
     const score = (candidate.score || 0)
       - Math.abs(distance - 6) * 0.55
       + Math.min(distance, 12) * 0.08
-      + hash01(seed + index * 23, 113) * 0.12;
+      + hash01(seed + index * 23, 113) * 0.12
+      + (typeof scoreAdjuster === 'function' ? Number(scoreAdjuster(candidate, path, distance, index) || 0) : 0);
     if (score > bestScore) {
       bestScore = score;
       best = candidate;
@@ -940,7 +988,16 @@ function buildResidentTaskLoop(targetTile, seed, grid, terrainRegions, meta, opt
   }, true);
 }
 
-function buildResidentTaskState(entity, motion, taskKind, world, terrainRegions, buildings = [], assignedAt = performance.now()) {
+function buildResidentTaskState(
+  entity,
+  motion,
+  taskKind,
+  world,
+  terrainRegions,
+  buildings = [],
+  assignedAt = performance.now(),
+  reservations = null,
+) {
   const grid = world?.grid;
   if (!grid || !entity || !motion) return null;
   const landGraph = buildLandComponents(grid, terrainRegions, RESIDENT_WALK_OPTIONS, buildings);
@@ -952,28 +1009,29 @@ function buildResidentTaskState(entity, motion, taskKind, world, terrainRegions,
 
   let target = null;
   if (taskKind === 'fish') {
-    const shoreTiles = buildFishingShoreTiles(grid, terrainRegions, landTiles, buildings, entity.seed + 613);
-    const scenicSpots = selectFishingSceneSpots(grid, terrainRegions, shoreTiles, buildings);
-    const primaryScenicSpot = scenicSpots.find((spot) => findTilePath(
+    const fishingTaskTiles = buildFishingTaskTiles(world, terrainRegions, buildings);
+    target = pickResidentTaskTarget(
+      fishingTaskTiles,
+      startTile,
+      entity.seed + 617,
       grid,
       terrainRegions,
-      startTile,
-      spot,
-      entity.seed + 615,
       RESIDENT_WALK_OPTIONS,
-    ));
-    const preferredPool = primaryScenicSpot
-      ? [{ ...primaryScenicSpot, score: (primaryScenicSpot.score || 0) + 5 }, ...scenicSpots.filter((spot) => spot !== primaryScenicSpot)]
-      : (scenicSpots.length ? scenicSpots : shoreTiles);
-    target = pickResidentTaskTarget(preferredPool, startTile, entity.seed + 617, grid, terrainRegions, RESIDENT_WALK_OPTIONS);
+      (candidate) => {
+        const slotLoad = getReservationCount(reservations?.fishingSlots, candidate.taskSlotId || candidate.fishingSpotId);
+        return (candidate.fishingSpotId ? 4.5 : 0) - slotLoad * 12;
+      },
+    );
     if (!target) return null;
     const intro = buildResidentTaskIntroRoute(motion, target, entity.seed + 619, grid, terrainRegions, target, {
       speed: 0.78,
       walkOptions: RESIDENT_WALK_OPTIONS,
     });
     return {
-      x: startTile.x,
-      y: startTile.y,
+      x: motion.x,
+      y: motion.y,
+      tileX: startTile.x,
+      tileY: startTile.y,
       workBuildingType: 'fishing_hut',
       routeIntro: intro,
       routeIntroStartAt: assignedAt,
@@ -989,20 +1047,37 @@ function buildResidentTaskState(entity, motion, taskKind, world, terrainRegions,
         walkOptions: RESIDENT_WALK_OPTIONS,
       }),
       assignedTask: 'fish',
+      taskSlotId: target.taskSlotId || target.fishingSpotId || null,
+      workSpotId: target.workSpotId || target.fishingSpotId || null,
+      fishingSpotId: target.fishingSpotId || null,
     };
   }
 
   if (taskKind === 'chop') {
     const chopTiles = buildWoodcuttingTaskTiles(grid, terrainRegions, landTiles, buildings, entity.seed + 641);
-    target = pickResidentTaskTarget(chopTiles, startTile, entity.seed + 647, grid, terrainRegions, RESIDENT_WALK_OPTIONS);
+    target = pickResidentTaskTarget(
+      chopTiles,
+      startTile,
+      entity.seed + 647,
+      grid,
+      terrainRegions,
+      RESIDENT_WALK_OPTIONS,
+      (candidate) => {
+        const slotLoad = getReservationCount(reservations?.woodSlots, candidate.taskSlotId);
+        const spotLoad = getReservationCount(reservations?.woodSpots, candidate.workSpotId);
+        return -slotLoad * 12 - spotLoad * 2.6;
+      },
+    );
     if (!target) return null;
     const intro = buildResidentTaskIntroRoute(motion, target, entity.seed + 653, grid, terrainRegions, target, {
       speed: 0.8,
       walkOptions: RESIDENT_WALK_OPTIONS,
     });
     return {
-      x: startTile.x,
-      y: startTile.y,
+      x: motion.x,
+      y: motion.y,
+      tileX: startTile.x,
+      tileY: startTile.y,
       workBuildingType: 'woodcutters_hut',
       routeIntro: intro,
       routeIntroStartAt: assignedAt,
@@ -1018,6 +1093,8 @@ function buildResidentTaskState(entity, motion, taskKind, world, terrainRegions,
         walkOptions: RESIDENT_WALK_OPTIONS,
       }),
       assignedTask: 'chop',
+      taskSlotId: target.taskSlotId || null,
+      workSpotId: target.workSpotId || null,
     };
   }
 
@@ -1109,9 +1186,9 @@ function selectFishingSceneSpots(grid, terrainRegions, shorePool = [], buildings
     .sort((a, b) => b.score - a.score);
 
   const spots = [];
-  const showcaseCandidates = rankedShoreTiles.filter((tile) => tile.y >= Math.floor(grid.h * 0.56));
+  const showcaseCandidates = rankedShoreTiles.filter((tile) => tile.y >= Math.floor(grid.h * 0.68));
   const showcasePool = showcaseCandidates.length ? showcaseCandidates : rankedShoreTiles;
-  const showcaseTarget = { x: grid.w * 0.57, y: grid.h * 0.64 };
+  const showcaseTarget = { x: grid.w * 0.7, y: grid.h * 0.76 };
   const showcaseSpot = showcasePool
     .map((tile) => ({
       ...tile,
@@ -1204,32 +1281,7 @@ function buildFishingDecorations(world, terrainRegions, buildings = []) {
   }
   if (!allShoreTiles.length) return [];
 
-  // Rank by openness (deep water adjacent) + bank quality so showcase boats pick
-  // a clean shoreline rather than a random narrow notch.
-  allShoreTiles.sort((a, b) => (
-    (b.opennessScore + countStraightBankSupport(grid, b) * 0.9)
-    - (a.opennessScore + countStraightBankSupport(grid, a) * 0.9)
-  ));
-  const desiredSpots = clamp(buildings.filter((b) => b.state === 'built' && (b.type || b.building_type) === 'fishing_hut').length + 3, 3, 6);
-  const spots = [];
-  const showcaseTarget = { x: grid.w * 0.57, y: grid.h * 0.64 };
-  const showcaseSpot = allShoreTiles
-    .filter((tile) => tile.y >= Math.floor(grid.h * 0.56))
-    .map((tile) => ({
-      ...tile,
-      showcaseScore: Math.abs(tile.x - showcaseTarget.x) * 0.9
-        + Math.abs(tile.y - showcaseTarget.y) * 1.1
-        - tile.opennessScore * 0.22
-        - countStraightBankSupport(grid, tile) * 1.4
-        - countNearbyWater(grid, tile.shoreWaterX ?? tile.x, tile.shoreWaterY ?? tile.y, 1) * 0.2,
-    }))
-    .sort((a, b) => a.showcaseScore - b.showcaseScore)[0];
-  if (showcaseSpot) spots.push(showcaseSpot);
-  allShoreTiles.forEach((tile) => {
-    if (spots.length >= desiredSpots) return;
-    if (spots.some((spot) => Math.abs(spot.x - tile.x) + Math.abs(spot.y - tile.y) < 5)) return;
-    spots.push(tile);
-  });
+  const spots = selectFishingSceneSpots(grid, terrainRegions, allShoreTiles, buildings);
   if (!spots.length) return [];
 
   const decorations = [];
@@ -1299,6 +1351,43 @@ function buildFishingDecorations(world, terrainRegions, buildings = []) {
     };
     const fishBaseX = fishTile.x + 0.18 + dirVector.dx * 0.04;
     const fishBaseY = fishTile.y + 0.2 + dirVector.dy * 0.04;
+    const tangent = (spot.shoreDir === 'n' || spot.shoreDir === 's')
+      ? { dx: 1, dy: 0 }
+      : { dx: 0, dy: 1 };
+    const standSlots = [-0.16, 0.16].map((offset, slotIndex) => ({
+      x: spot.x,
+      y: spot.y,
+      role: 'work',
+      buildingType: 'fishing_hut',
+      fishingSpotId: spot.fishingSpotId,
+      taskSlotId: `${spot.fishingSpotId}:bank:${slotIndex}`,
+      workSpotId: spot.fishingSpotId,
+      pauseFacing: spot.pauseFacing,
+      fishingFacing: spot.fishingFacing,
+      standX: spot.x + 0.5 + dirVector.dx * 0.26 + tangent.dx * offset,
+      standY: spot.y + 0.58 + dirVector.dy * 0.16 + tangent.dy * offset,
+      castTargetX: fishBaseX + 0.2,
+      castTargetY: fishBaseY + 0.18,
+      shoreDir: spot.shoreDir,
+      score: 6.4 - Math.abs(offset) * 2 + countStraightBankSupport(grid, spot) * 0.4,
+    }));
+
+    decorations.push({
+      type: 'fishing_bank',
+      x: spot.x,
+      y: spot.y,
+      widthTiles: 1,
+      heightTiles: 1,
+      shoreDir: spot.shoreDir,
+      fishingSpotId: spot.fishingSpotId,
+      standSlots,
+      fishingFacing: spot.fishingFacing,
+      pauseFacing: spot.pauseFacing,
+      castTargetX: fishBaseX + 0.2,
+      castTargetY: fishBaseY + 0.18,
+      featured: index === 0,
+      seed: spotSeed + 5,
+    });
 
     if (index === 0) {
       decorations.push({
@@ -1312,6 +1401,14 @@ function buildFishingDecorations(world, terrainRegions, buildings = []) {
         postY: boatLayout.postY,
         ropeX: boatLayout.ropeX,
         ropeY: boatLayout.ropeY,
+        bankTileX: spot.x,
+        bankTileY: spot.y,
+        fishingSpotId: spot.fishingSpotId,
+        standSlots,
+        fishingFacing: spot.fishingFacing,
+        pauseFacing: spot.pauseFacing,
+        castTargetX: fishBaseX + 0.2,
+        castTargetY: fishBaseY + 0.18,
         seed: spotSeed + 11,
       });
     }
@@ -1411,6 +1508,21 @@ function buildFishingDecorations(world, terrainRegions, buildings = []) {
   });
 
   return decorations;
+}
+
+function buildFishingTaskTiles(world, terrainRegions, buildings = []) {
+  const decorations = buildFishingDecorations(world, terrainRegions, buildings);
+  return decorations
+    .filter((decor) => decor.type === 'fishing_bank' && Array.isArray(decor.standSlots) && decor.standSlots.length)
+    .flatMap((decor) => decor.standSlots.map((slot, index) => ({
+      ...slot,
+      score: (slot.score || 0) + (decor.featured ? 5.5 : 2.4) - index * 0.08,
+      boatX: decor.x,
+      boatY: decor.y,
+      fishingSpotId: decor.fishingSpotId,
+      taskSlotId: slot.taskSlotId || `${decor.fishingSpotId}:bank:${index}`,
+      workSpotId: slot.workSpotId || decor.fishingSpotId,
+    })));
 }
 
 function buildDriftingCloudShadows(world) {
@@ -1635,6 +1747,66 @@ function getPathDirections(seed) {
   return dirs.slice(offset).concat(dirs.slice(0, offset));
 }
 
+function estimateTileDistance(ax, ay, bx, by) {
+  return Math.abs(ax - bx) + Math.abs(ay - by);
+}
+
+function getPathTilePenalty(grid, terrainRegions, tx, ty, options = {}) {
+  let penalty = 0;
+  if (typeof options.tilePenalty === 'function') {
+    penalty += Number(options.tilePenalty(tx, ty, grid, terrainRegions) || 0);
+  }
+  if (!options.allowShore) {
+    const terrain = terrainRegions?.[ty]?.[tx];
+    penalty += (terrain?.shoreStrength || 0) * 0.28;
+    penalty += (terrain?.waterRatio || 0) * 0.45;
+  }
+  return penalty;
+}
+
+function hasTileLineOfSight(grid, terrainRegions, start, end, options = {}) {
+  if (!grid || !start || !end) return false;
+  let x0 = Math.floor(start.x);
+  let y0 = Math.floor(start.y);
+  const x1 = Math.floor(end.x);
+  const y1 = Math.floor(end.y);
+  const dx = Math.abs(x1 - x0);
+  const sx = x0 < x1 ? 1 : -1;
+  const dy = -Math.abs(y1 - y0);
+  const sy = y0 < y1 ? 1 : -1;
+  let err = dx + dy;
+
+  while (true) {
+    if (!isGridTileWalkable(grid, terrainRegions, x0, y0, options)) return false;
+    if (x0 === x1 && y0 === y1) return true;
+    const e2 = err * 2;
+    if (e2 >= dy) {
+      err += dy;
+      x0 += sx;
+    }
+    if (e2 <= dx) {
+      err += dx;
+      y0 += sy;
+    }
+  }
+}
+
+function smoothTilePath(path, grid, terrainRegions, options = {}) {
+  if (!path?.length || path.length <= 2) return path || [];
+  const smoothed = [path[0]];
+  let anchorIndex = 0;
+  while (anchorIndex < path.length - 1) {
+    let nextIndex = path.length - 1;
+    while (nextIndex > anchorIndex + 1) {
+      if (hasTileLineOfSight(grid, terrainRegions, path[anchorIndex], path[nextIndex], options)) break;
+      nextIndex -= 1;
+    }
+    smoothed.push(path[nextIndex]);
+    anchorIndex = nextIndex;
+  }
+  return smoothed;
+}
+
 function findTilePath(grid, terrainRegions, start, goal, seed = 0, options = {}) {
   if (!grid || !start || !goal) return null;
   const sx = Math.floor(start.x);
@@ -1646,21 +1818,62 @@ function findTilePath(grid, terrainRegions, start, goal, seed = 0, options = {})
 
   const startKey = tileKey(sx, sy);
   const goalKey = tileKey(gx, gy);
-  const queue = [{ x: sx, y: sy }];
+  const open = [{ x: sx, y: sy }];
+  const openKeys = new Set([startKey]);
   const previous = new Map([[startKey, null]]);
+  const gScore = new Map([[startKey, 0]]);
+  const fScore = new Map([[startKey, estimateTileDistance(sx, sy, gx, gy)]]);
 
-  for (let cursor = 0; cursor < queue.length; cursor += 1) {
-    const current = queue[cursor];
+  while (open.length) {
+    let bestIndex = 0;
+    for (let i = 1; i < open.length; i += 1) {
+      const currentKey = tileKey(open[i].x, open[i].y);
+      const bestKey = tileKey(open[bestIndex].x, open[bestIndex].y);
+      const currentF = fScore.get(currentKey) ?? Infinity;
+      const bestF = fScore.get(bestKey) ?? Infinity;
+      if (currentF < bestF) {
+        bestIndex = i;
+        continue;
+      }
+      if (currentF === bestF) {
+        const currentH = estimateTileDistance(open[i].x, open[i].y, gx, gy);
+        const bestH = estimateTileDistance(open[bestIndex].x, open[bestIndex].y, gx, gy);
+        if (currentH < bestH) {
+          bestIndex = i;
+        }
+      }
+    }
+
+    const current = open.splice(bestIndex, 1)[0];
+    const currentKey = tileKey(current.x, current.y);
+    openKeys.delete(currentKey);
     if (current.x === gx && current.y === gy) break;
+
+    const currentPrev = previous.get(currentKey);
+    const prevDir = currentPrev
+      ? { dx: current.x - currentPrev.x, dy: current.y - currentPrev.y }
+      : null;
     const dirs = getPathDirections(seed + current.x * 17 + current.y * 31);
     dirs.forEach(([dx, dy]) => {
       const nx = current.x + dx;
       const ny = current.y + dy;
       const key = tileKey(nx, ny);
-      if (previous.has(key)) return;
       if (!isGridTileWalkable(grid, terrainRegions, nx, ny, options)) return;
+
+      const turnPenalty = prevDir && (prevDir.dx !== dx || prevDir.dy !== dy) ? 0.06 : 0;
+      const tentativeScore = (gScore.get(currentKey) ?? Infinity)
+        + 1
+        + turnPenalty
+        + getPathTilePenalty(grid, terrainRegions, nx, ny, options);
+      if (tentativeScore >= (gScore.get(key) ?? Infinity)) return;
+
       previous.set(key, current);
-      queue.push({ x: nx, y: ny });
+      gScore.set(key, tentativeScore);
+      fScore.set(key, tentativeScore + estimateTileDistance(nx, ny, gx, gy));
+      if (!openKeys.has(key)) {
+        open.push({ x: nx, y: ny });
+        openKeys.add(key);
+      }
     });
   }
 
@@ -1672,7 +1885,7 @@ function findTilePath(grid, terrainRegions, start, goal, seed = 0, options = {})
     path.push(cursor);
     cursor = previous.get(tileKey(cursor.x, cursor.y));
   }
-  return path.reverse();
+  return smoothTilePath(path.reverse(), grid, terrainRegions, options);
 }
 
 function makeRouteNode(x, y, tileX, tileY, role = 'path', pauseMs = 0, meta = null) {
@@ -2647,7 +2860,7 @@ function buildResidentPlacements(world, terrainRegions, buildings = []) {
       && (terrain?.shoreStrength || 0) < 0.08
       && (terrain?.waterRatio || 0) < 0.04;
   });
-  const fishingShoreTiles = buildFishingShoreTiles(grid, terrainRegions, landTiles, buildings, 613);
+  const fishingTaskTiles = buildFishingTaskTiles(world, terrainRegions, buildings);
 
   const builtBuildings = buildings.filter((building) => building.state === 'built');
   const homeAnchors = builtBuildings
@@ -2717,7 +2930,7 @@ function buildResidentPlacements(world, terrainRegions, buildings = []) {
       : leisureTile;
     const workTile = working && baseWorkTile?.buildingType === 'fishing_hut'
       ? (() => {
-          const fishingTile = pickFromPool(fishingShoreTiles, personalSeed + 101, baseWorkTile);
+          const fishingTile = pickFromPool(fishingTaskTiles, personalSeed + 101, baseWorkTile);
           return fishingTile
             ? {
                 ...fishingTile,
@@ -3046,6 +3259,7 @@ export default function PetWorldCanvas({
   );
   const handleResidentTaskCommand = useCallback((entry, taskKind) => {
     if (!entry || entry.type !== 'resident') return;
+    const reservations = buildResidentTaskReservations(relocationsRef.current, entry.key);
     const taskState = buildResidentTaskState(
       entry.entity,
       entry.motion,
@@ -3054,6 +3268,7 @@ export default function PetWorldCanvas({
       terrainRegions,
       buildings,
       timeRef.current || performance.now(),
+      reservations,
     );
     if (!taskState) {
       setSelectedEntity(null);
