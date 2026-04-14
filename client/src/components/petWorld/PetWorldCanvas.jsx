@@ -985,14 +985,17 @@ function buildFishingDecorations(world, terrainRegions, buildings = []) {
         (tileKey(a.x, a.y) === tileKey(spot.shoreWaterX, spot.shoreWaterY) ? -1 : 0)
         - (tileKey(b.x, b.y) === tileKey(spot.shoreWaterX, spot.shoreWaterY) ? -1 : 0)
       ) || (a.dist - b.dist) || (b.openWater - a.openWater));
-    const shallowWater = sameBankWater.filter((tile) => tile.shoreAdjacent).sort((a, b) => a.dist - b.dist || b.openWater - a.openWater);
-    const openWater = sameBankWater.filter((tile) => tile.openWater >= 4).sort((a, b) => b.openWater - a.openWater || a.dist - b.dist);
     const boatTile = { x: spot.shoreWaterX ?? sameBankWater[0]?.x ?? spot.x, y: spot.shoreWaterY ?? sameBankWater[0]?.y ?? spot.y };
+    const decorWater = sameBankWater.filter((tile) => Math.abs(tile.x - boatTile.x) + Math.abs(tile.y - boatTile.y) >= 2);
+    const shallowWater = sameBankWater.filter((tile) => tile.shoreAdjacent).sort((a, b) => a.dist - b.dist || b.openWater - a.openWater);
+    const safeShallowWater = decorWater.filter((tile) => tile.shoreAdjacent).sort((a, b) => a.dist - b.dist || b.openWater - a.openWater);
+    const openWater = sameBankWater.filter((tile) => tile.openWater >= 4).sort((a, b) => b.openWater - a.openWater || a.dist - b.dist);
+    const safeOpenWater = decorWater.filter((tile) => tile.openWater >= 4).sort((a, b) => b.openWater - a.openWater || a.dist - b.dist);
     const fishTile = openWater[0] || sameBankWater[0] || boatTile;
-    const lilyPairTile = shallowWater[0] || sameBankWater[1] || boatTile;
-    const singleLilyTile = shallowWater[1] || sameBankWater[2] || fishTile;
+    const lilyPairTile = safeShallowWater[0] || safeOpenWater[0] || shallowWater[1] || decorWater[0] || fishTile;
+    const singleLilyTile = safeShallowWater[1] || safeOpenWater[1] || shallowWater[2] || decorWater[1] || fishTile;
     const rockTile = sameBankWater.find((tile) => tileKey(tile.x, tile.y) !== tileKey(boatTile.x, boatTile.y) && tile.openWater >= 2) || fishTile;
-    const cattailTile = shallowWater[2] || shallowWater[0] || boatTile;
+    const cattailTile = safeShallowWater[2] || safeShallowWater[0] || shallowWater[3] || lilyPairTile;
     const dirVector = vectorForWaterDir(spot.shoreDir);
     const boatWidthTiles = 1.76;
     const boatHeightTiles = 0.98;
