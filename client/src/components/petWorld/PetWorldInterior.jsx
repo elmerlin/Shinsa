@@ -2,380 +2,396 @@ import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { getBuildingUi, getBuildingLabel } from './petWorldBuildings';
 import './petWorldCfUi.css';
 
-/* ═══ Image cache ═══ */
-const IMAGE_CACHE = new Map();
-function getImage(src) {
+/* ═══════════════════════════════════════════════════
+   Cute Fantasy Interior Renderer – V4
+   Seamless-pattern walls, flat wood floors,
+   wall-mounted + floor items, horizontal-strip anims
+   ═══════════════════════════════════════════════════ */
+
+/* ─── image cache ─── */
+const IC = new Map();
+function ld(src) {
   if (typeof Image === 'undefined') return null;
-  if (IMAGE_CACHE.has(src)) return IMAGE_CACHE.get(src);
+  if (IC.has(src)) return IC.get(src);
   const img = new Image();
-  const entry = { image: img, loaded: false };
-  img.onload = () => { entry.loaded = true; };
+  const e = { img, ok: false };
+  img.onload = () => { e.ok = true; };
   img.src = src;
-  IMAGE_CACHE.set(src, entry);
-  return entry;
+  IC.set(src, e);
+  return e;
 }
-function draw(ctx, src, sx, sy, sw, sh, dx, dy, dw, dh) {
-  const entry = getImage(src);
-  if (!entry?.loaded) return false;
-  ctx.save();
+
+/* ─── asset paths ─── */
+const P = '/pet-world/cute-fantasy/Buildings';
+const _W = `${P}/Houses_Interiors`;
+const _D = `${P}/House_Decor`;
+
+const S_BRICK = `${_W}/Brick_Wall_Fillers.png`;
+const S_STONE = `${_W}/Stone_Wall_Fillers.png`;
+const S_WOOD  = `${_W}/Wood_Wall_Fillers.png`;
+const S_FLOOR = `${_W}/Wood_Floor_Tiles.png`;
+
+const S_BED   = `${_D}/Beds.png`;
+const S_TBL   = `${_D}/Tables.png`;
+const S_CHR   = `${_D}/Chairs.png`;
+const S_SHF   = `${_D}/BookShelves.png`;
+const S_DOOR  = `${_D}/Doors.png`;
+const S_WIN   = `${_D}/Windows_Single.png`;
+const S_DECO  = `${_D}/Indoor_Decor.png`;
+const S_ART   = `${_D}/Placeable_Decoration.png`;
+const S_LAMP  = `${_D}/Standing_Lamps.png`;
+const S_DRW   = `${_D}/Drawers.png`;
+const S_PLT   = `${_D}/Planters.png`;
+const S_FURN  = `${_D}/Furnace_Anim.png`;
+const S_ANVL  = `${_D}/Anvil_Anim.png`;
+const S_CHST  = `${_D}/Chest_Anim.png`;
+const S_GCHST = `${_D}/Golden_Chest_Anim.png`;
+
+const T = 16;
+
+/* ─── pattern fill (tile a source rect across dest area) ─── */
+function fillPat(ctx, src, sx, sy, sw, sh, dx, dy, dw, dh, sc) {
+  const e = ld(src);
+  if (!e?.ok) return;
   ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(entry.image, sx, sy, sw, sh, dx, dy, dw, dh);
-  ctx.restore();
-  return true;
+  const tw = Math.round(sw * sc);
+  const th = Math.round(sh * sc);
+  if (tw < 1 || th < 1) return;
+  for (let py = 0; py < dh; py += th) {
+    for (let px = 0; px < dw; px += tw) {
+      const rw = Math.min(tw, dw - px);
+      const rh = Math.min(th, dh - py);
+      ctx.drawImage(e.img, sx, sy, sw * (rw / tw), sh * (rh / th), dx + px, dy + py, rw, rh);
+    }
+  }
 }
 
-/* ═══ Spritesheet paths ═══ */
-const ST = 16;
-const M  = '/pet-world/interior/Fantasy%20RPG%20Interior%20Pack%20(16x16%20grid).png';
-const XW = '/pet-world/interior/Expansion_Workshop.png';
-const XA = '/pet-world/interior/Expansion_AlchemyLab.png';
-const XB = '/pet-world/interior/Expansion_Bedroom.png';
-const XM = '/pet-world/interior/Expansion_Music.png';
-const XF = '/pet-world/interior/Expansion_ClockworkFactory.png';
-const XS = '/pet-world/interior/Expansion_School.png';
-
-const AF = '/pet-world/interior/animated/Fireplace.png';
-const AC = '/pet-world/interior/animated/Candle.png';
-const AU = '/pet-world/interior/animated/Furnace.png';
-const AQ = '/pet-world/interior/animated/Cauldron%20(purple).png';
-const AK = '/pet-world/interior/animated/CandelabrumStand.png';
-const AT = '/pet-world/interior/animated/TorchFront.png';
-const AL = '/pet-world/interior/animated/Lamp.png';
-const AG = '/pet-world/interior/animated/Gramophone.png';
-
-/* ═══ Drawing helpers ═══ */
-function til(ctx, c, r, dx, dy, ts) {
-  return draw(ctx, M, c * ST, r * ST, ST, ST, dx, dy, ts, ts);
-}
-function spr(ctx, sheet, c, r, tw, th, dx, dy, ts) {
-  return draw(ctx, sheet, c * ST, r * ST, tw * ST, th * ST, dx, dy, tw * ts, th * ts);
-}
-
-/* ═══ Wall palettes: [col, row] for 3×2 colored wall block ═══ */
+/* ─── wall / floor pattern defs ─── */
 const WP = {
-  red: [15, 0], beige: [15, 2], blue: [18, 0], pink: [18, 2],
-  orange: [21, 0], bright: [21, 2], brown: [24, 0], green: [24, 2],
-  brick: [27, 0],
+  brick: { src: S_BRICK, x: 0, y: 0, w: 32, h: 32 },
+  stone: { src: S_STONE, x: 0, y: 0, w: 32, h: 32 },
+  wood:  { src: S_WOOD,  x: 0, y: 0, w: 32, h: 32 },
 };
+// Floor tiles from S_FLOOR (128×96, 4×3 grid of 32×32)
+const FP = [
+  [0,0],[32,0],[64,0],[96,0],
+  [0,32],[32,32],[64,32],[96,32],
+  [0,64],[32,64],[64,64],[96,64],
+];
 
-/* ═══ Named item constructors ═══ */
-function I(name, s, c, r, tw, th, x, y) { return { name, s, c, r, tw, th, x, y }; }
-function A(name, s, tw, th, frames, x, y) { return { name, s, tw, th, anim: frames, x, y }; }
+/* ─── sprite source rects [sx,sy,sw,sh] ─── */
+const BED    = (c) => [0, c*32, 32, 32];
+const TBL_L  = [0, 0, 48, 32];
+const TBL_S  = [96, 0, 32, 32];
+const CR     = 48;
+const CHR_F  = (c) => [32, c*CR, 32, 32];
+const ARM_F  = (c) => [96, c*CR, 32, 32];
+const SOFA_F = (c) => [160, c*CR, 48, 32];
+const SH_S   = [0, 0, 32, 32];
+const SH_M   = [32, 0, 32, 48];
+const SH_W   = [96, 0, 64, 48];
+const WIN_A  = [0, 0, 32, 32];
+const WIN_B  = [64, 0, 32, 32];
+const WIN_C  = [0, 192, 32, 32];
+const WIN_D  = [64, 192, 32, 32];
+const DOOR_B = [0, 0, 16, 32];
+const DOOR_G = [0, 128, 16, 32];
+const ART_1  = [0, 0, 16, 16];
+const ART_2  = [16, 0, 16, 16];
+const ART_3  = [32, 0, 16, 16];
+const LMP    = [0, 0, 16, 32];
+const LMP2   = [16, 0, 16, 32];
+const DRW_1  = [0, 0, 32, 32];
+const DRW_2  = [32, 0, 32, 32];
+const BAREL  = [0, 176, 16, 16];
+const CRATE  = [16, 176, 16, 16];
+const POT_1  = [0, 48, 16, 32];
+const POT_2  = [32, 48, 16, 32];
 
-/* ═══ Building room config ═══ */
+/* ─── item constructors ─── */
+function FI(n,s,sx,sy,sw,sh,x,y){return{n,s,sx,sy,sw,sh,x,y,z:'f'};}
+function WI(n,s,sx,sy,sw,sh,x,y){return{n,s,sx,sy,sw,sh,x,y,z:'w'};}
+function AN(n,s,fw,fh,fc,x,y,z='f'){return{n,s,fw,fh,fc,x,y,z,anim:true};}
+
+/* ─── building configs ─── */
 const CFG = {
-  house:           { base: [7, 5],  grow: [1, 1], walls: [WP.brown, WP.beige, WP.blue],   floors: [3, 0, 0] },
-  large_house:     { base: [10, 7], grow: [1, 1], walls: [WP.beige, WP.blue, WP.green],    floors: [0, 0, 0] },
-  farm:            { base: [7, 5],  grow: [1, 1], walls: [WP.brown, WP.brown, WP.orange],   floors: [3, 3, 0] },
-  fishing_hut:     { base: [6, 4],  grow: [1, 1], walls: [WP.brown, WP.brown, WP.beige],    floors: [3, 3, 0] },
-  bakery:          { base: [7, 5],  grow: [1, 1], walls: [WP.brick, WP.orange, WP.red],     floors: [0, 0, 0] },
-  woodcutters_hut: { base: [5, 4],  grow: [1, 1], walls: [WP.brown, WP.brown, WP.beige],    floors: [3, 3, 0] },
-  stone_pit:       { base: [5, 4],  grow: [1, 1], walls: [WP.brick, WP.brick, WP.brown],    floors: [3, 3, 3] },
-  lumberyard:      { base: [7, 5],  grow: [1, 1], walls: [WP.brown, WP.brown, WP.orange],   floors: [3, 3, 0] },
-  quarry:          { base: [7, 5],  grow: [1, 1], walls: [WP.brick, WP.brick, WP.brown],    floors: [3, 3, 3] },
-  weaving_hut:     { base: [7, 5],  grow: [1, 1], walls: [WP.pink, WP.pink, WP.bright],     floors: [0, 0, 0] },
-  market:          { base: [7, 5],  grow: [1, 1], walls: [WP.brick, WP.red, WP.orange],     floors: [0, 0, 0] },
-  trading_post:    { base: [7, 5],  grow: [1, 1], walls: [WP.brown, WP.beige, WP.blue],     floors: [3, 0, 0] },
-  storehouse:      { base: [7, 5],  grow: [1, 1], walls: [WP.brown, WP.brown, WP.beige],    floors: [3, 3, 0] },
-  warehouse:       { base: [9, 6],  grow: [1, 1], walls: [WP.brick, WP.brick, WP.brown],    floors: [3, 3, 3] },
-  town_hall:       { base: [10, 8], grow: [1, 1], walls: [WP.blue, WP.blue, WP.green],      floors: [0, 0, 0] },
-  shrine:          { base: [7, 5],  grow: [1, 1], walls: [WP.green, WP.green, WP.blue],     floors: [3, 0, 0] },
-  watchtower:      { base: [5, 4],  grow: [1, 1], walls: [WP.brown, WP.brown, WP.brick],    floors: [3, 3, 3] },
-  tavern:          { base: [7, 5],  grow: [1, 1], walls: [WP.brick, WP.brick, WP.brown],    floors: [0, 0, 0] },
+  house:           {b:[8,5],  g:[1,1],wH:3,wp:['brick','brick','stone'], fp:[0,1,4]},
+  large_house:     {b:[12,7], g:[1,1],wH:4,wp:['brick','stone','stone'], fp:[0,4,5]},
+  farm:            {b:[8,5],  g:[1,1],wH:3,wp:['wood','wood','brick'],   fp:[4,4,0]},
+  fishing_hut:     {b:[7,4],  g:[1,1],wH:3,wp:['wood','wood','wood'],    fp:[4,4,1]},
+  bakery:          {b:[8,5],  g:[1,1],wH:3,wp:['brick','brick','stone'], fp:[0,7,7]},
+  woodcutters_hut: {b:[6,4],  g:[1,1],wH:3,wp:['wood','wood','wood'],    fp:[4,5,5]},
+  stone_pit:       {b:[6,4],  g:[1,1],wH:3,wp:['stone','stone','stone'], fp:[11,11,11]},
+  lumberyard:      {b:[8,5],  g:[1,1],wH:3,wp:['wood','wood','brick'],   fp:[4,5,0]},
+  quarry:          {b:[8,5],  g:[1,1],wH:3,wp:['stone','stone','stone'], fp:[11,11,11]},
+  weaving_hut:     {b:[8,5],  g:[1,1],wH:3,wp:['brick','brick','stone'], fp:[7,0,4]},
+  market:          {b:[8,5],  g:[1,1],wH:3,wp:['brick','brick','stone'], fp:[0,0,4]},
+  trading_post:    {b:[8,5],  g:[1,1],wH:3,wp:['wood','brick','stone'],  fp:[0,1,4]},
+  storehouse:      {b:[8,5],  g:[1,1],wH:3,wp:['wood','wood','brick'],   fp:[4,5,0]},
+  warehouse:       {b:[10,6], g:[1,1],wH:3,wp:['brick','brick','stone'], fp:[4,5,0]},
+  town_hall:       {b:[12,8], g:[1,1],wH:4,wp:['stone','stone','stone'], fp:[6,6,11]},
+  shrine:          {b:[8,5],  g:[1,1],wH:3,wp:['stone','stone','stone'], fp:[6,11,11]},
+  watchtower:      {b:[6,4],  g:[1,1],wH:3,wp:['stone','stone','stone'], fp:[11,11,11]},
+  tavern:          {b:[8,5],  g:[1,1],wH:3,wp:['brick','brick','wood'],  fp:[0,1,5]},
 };
 
-/* ═══ Item generators per building type ═══ */
+/* ─── bed color per level: 0=blue 1=teal 2=brown 3=red 4=green 5=yellow ─── */
+const BLC = [0, 2, 3];
 
-function genHouse(w, h, lv) {
-  const it = [];
-  const br = [23, 25, 27][lv - 1];
-  // 2 beds against back wall
-  it.push(I('Bed', M, 0, br, 3, 2, 0, 0));
-  it.push(I('Bed', M, 6, br, 3, 2, w - 3, 0));
-  // Candle between beds (lv1) or fireplace (lv2+)
-  if (lv === 1) {
-    it.push(A('Candle', AC, 1, 1, 4, 3, 0));
-  } else {
-    it.push(A('Fireplace', AF, 2, 4, 4, Math.floor(w / 2) - 1, -2));
-  }
-  // Table center
-  it.push(I('Table', M, [6, 10, 0][lv - 1], 12, 2, 3, Math.floor(w / 2) - 1, 2));
-  // Cabinet right side (lv2+)
-  if (lv >= 2) it.push(I('Cabinet', M, [0, 4, 0][lv - 1], 15, 2, 4, w - 2, 2));
-  // Sofa front-left (lv2+)
-  if (lv >= 2) it.push(I('Sofa', M, [0, 0, 3][lv - 1], 29, 3, 3, 0, h - 3));
-  // Lighting
-  if (lv === 1) it.push(A('Lamp', AL, 1, 1, 4, w - 1, 2));
-  else if (lv === 2) it.push(A('Lamp', AL, 1, 1, 4, 3, 2));
-  else { it.push(A('Candelabrum', AK, 1, 2, 4, 0, 2)); it.push(A('Lamp', AL, 1, 1, 4, 5, 2)); }
+/* ═══ ITEM GENERATORS ═══ */
+
+function genHouse(c, f, wH, lv) {
+  const it = [], m = c >> 1, bc = BLC[lv-1];
+  it.push(WI('Window', S_WIN, ...WIN_A, m-1, 0.5));
+  if (lv>=2) it.push(WI('Painting', S_ART, ...ART_1, 1, 1));
+  if (lv>=3) it.push(WI('Painting', S_ART, ...ART_2, c-2, 1));
+  it.push(FI('Bed', S_BED, ...BED(bc), 0, 0));
+  it.push(FI('Bed', S_BED, ...BED(bc), c-2, 0));
+  it.push(FI('Table', S_TBL, ...TBL_S, m-1, 2));
+  it.push(FI('Lamp', S_LAMP, ...LMP, c-1, f-2));
+  if (lv>=2) it.push(FI('Drawer', S_DRW, ...DRW_1, 0, f-2));
+  if (lv>=3) it.push(FI('Chair', S_CHR, ...CHR_F(0), m+1, 2));
   return it;
 }
 
-function genLargeHouse(w, h, lv) {
-  const it = [];
-  const br = [23, 25, 27][lv - 1];
-  // 4 beds: 2 back wall, 2 second row
-  it.push(I('Bed', M, 0, br, 3, 2, 0, 0));
-  it.push(I('Bed', M, 3, br, 3, 2, w - 3, 0));
-  it.push(I('Bed', M, 6, br, 3, 2, 0, 2));
-  it.push(I('Bed', M, 9, br, 3, 2, w - 3, 2));
-  // Bookshelves between beds
-  const sx = Math.floor(w / 2) - 1;
-  it.push(I('Bookshelf', M, 16, 20, 1, 3, sx, 0));
-  it.push(I('Bookshelf', M, 17, 20, 1, 3, sx + 1, 0));
-  // Fireplace (lv2+)
-  if (lv >= 2) it.push(A('Fireplace', AF, 2, 4, 4, sx, -2));
-  // Table lower area
-  it.push(I('Table', M, [8, 10, 0][lv - 1], 12, 2, 3, sx, 4));
-  // Sofas front
-  if (lv >= 2) it.push(I('Sofa', M, 3, 29, 3, 3, 0, h - 3));
-  if (lv === 3) it.push(I('Sofa', M, 3, 29, 3, 3, w - 3, h - 3));
-  // Cabinet (lv2+)
-  if (lv >= 2) it.push(I('Cabinet', M, 6, 15, 2, 4, w - 2, 4));
-  if (lv === 3) it.push(I('Cushioned Chair', M, 12, 15, 2, 4, 0, 4));
-  // Lighting
-  if (lv === 1) {
-    it.push(A('Candle', AC, 1, 1, 4, 3, 2));
-    it.push(A('Candle', AC, 1, 1, 4, w - 4, 2));
-  } else {
-    it.push(A('Candelabrum', AK, 1, 2, 4, 3, 2));
-    it.push(A('Candelabrum', AK, 1, 2, 4, w - 4, 2));
-  }
+function genLargeHouse(c, f, wH, lv) {
+  const it = [], m = c >> 1, bc = BLC[lv-1];
+  it.push(WI('Window', S_WIN, ...WIN_B, 2, 1));
+  it.push(WI('Window', S_WIN, ...WIN_B, c-4, 1));
+  it.push(WI('Door', S_DOOR, ...DOOR_B, m, 1));
+  if (lv>=2) { it.push(WI('Window', S_WIN, ...WIN_A, 0, 1)); it.push(WI('Window', S_WIN, ...WIN_A, c-2, 1)); }
+  if (lv>=3) it.push(WI('Painting', S_ART, ...ART_3, m-2, 1));
+  it.push(FI('Bed', S_BED, ...BED(bc), 0, 0));
+  it.push(FI('Bed', S_BED, ...BED(bc), c-2, 0));
+  it.push(FI('Bed', S_BED, ...BED(bc), 0, 2));
+  it.push(FI('Bed', S_BED, ...BED(bc), c-2, 2));
+  it.push(FI('Bookshelf', S_SHF, ...SH_M, m-1, 0));
+  it.push(FI('Table', S_TBL, ...TBL_L, m-1, 4));
+  it.push(FI('Lamp', S_LAMP, ...LMP, 2, f-2));
+  it.push(FI('Lamp', S_LAMP, ...LMP2, c-3, f-2));
+  if (lv>=2) it.push(FI('Sofa', S_CHR, ...SOFA_F(0), 0, f-2));
+  if (lv>=3) it.push(FI('Sofa', S_CHR, ...SOFA_F(0), c-3, f-2));
   return it;
 }
 
-function genFarm(w, h, lv) {
-  const it = [];
-  it.push(I('Workshop Table', XW, 0, 8, 3, 3, 0, 0));
-  it.push(I('Table', M, [6, 10, 0][lv - 1], 12, 2, 3, w - 2, 0));
-  it.push(I('Cabinet', M, [4, 6, 8][lv - 1], 15, 2, 4, Math.floor(w / 2), 0));
-  if (lv >= 2) it.push(I('Work Table', M, 4, 12, 2, 3, 0, h - 3));
-  if (lv === 3) it.push(I('Storage', M, 2, 15, 2, 4, w - 2, h - 4));
-  it.push(A('Lamp', AL, 1, 1, 4, w - 1, Math.floor(h / 2)));
-  if (lv >= 3) it.push(A('Candle', AC, 1, 1, 4, 0, h - 1));
+function genFarm(c, f, wH, lv) {
+  const it = [], m = c >> 1;
+  it.push(WI('Window', S_WIN, ...WIN_C, m-1, 0.5));
+  it.push(FI('Work Table', S_TBL, ...TBL_L, 0, 0));
+  it.push(FI('Barrel', S_DECO, ...BAREL, c-1, 0));
+  it.push(FI('Barrel', S_DECO, ...BAREL, c-2, 0));
+  it.push(FI('Crate', S_DECO, ...CRATE, c-1, 1));
+  it.push(FI('Lamp', S_LAMP, ...LMP, c-1, f-2));
+  if (lv>=2) it.push(FI('Cabinet', S_DRW, ...DRW_1, m, 0));
+  if (lv>=3) it.push(AN('Chest', S_CHST, 16, 16, 6, m, f-1));
   return it;
 }
 
-function genFishingHut(w, h, lv) {
-  const it = [];
-  it.push(I('Table', M, [6, 10, 0][lv - 1], 12, 2, 3, 0, 0));
-  it.push(I('Cabinet', M, [4, 6, 0][lv - 1], 15, 2, 4, w - 2, 0));
-  if (lv >= 2) it.push(I('Table', M, 8, 12, 2, 3, Math.floor(w / 2) - 1, h - 3));
-  if (lv === 3) it.push(I('Storage', M, 2, 15, 2, 4, 2, 0));
-  it.push(A('Lamp', AL, 1, 1, 4, Math.floor(w / 2), 0));
-  if (lv >= 3) it.push(A('Candle', AC, 1, 1, 4, w - 1, h - 1));
+function genFishingHut(c, f, wH, lv) {
+  const it = [], m = c >> 1;
+  it.push(WI('Window', S_WIN, ...WIN_C, m-1, 0.5));
+  it.push(FI('Table', S_TBL, ...TBL_S, 0, 0));
+  it.push(FI('Barrel', S_DECO, ...BAREL, c-1, 0));
+  it.push(FI('Barrel', S_DECO, ...BAREL, c-2, 0));
+  it.push(FI('Plant', S_PLT, ...POT_1, 0, f-2));
+  it.push(FI('Lamp', S_LAMP, ...LMP, c-1, f-2));
+  if (lv>=2) it.push(FI('Drawer', S_DRW, ...DRW_2, m, 0));
+  if (lv>=3) it.push(FI('Crate', S_DECO, ...CRATE, m+2, f-1));
   return it;
 }
 
-function genBakery(w, h, lv) {
-  const it = [];
-  it.push(A('Furnace', AU, 2, 3, 4, 0, -1));
-  it.push(I('Prep Table', M, [6, 2, 12][lv - 1], 12, 2, 3, 3, 0));
-  it.push(I('Counter', M, [4, 6, 0][lv - 1], 12, 2, 3, Math.floor(w / 2), h - 3));
-  it.push(I('Cabinet', M, [4, 6, 0][lv - 1], 15, 2, 4, w - 2, 0));
-  if (lv >= 2) it.push(I('Storage', M, 8, 15, 2, 4, w - 2, h - 4));
-  if (lv === 3) it.push(I('Display', M, 2, 15, 2, 4, 0, h - 4));
-  it.push(A('Candle', AC, 1, 1, 4, Math.floor(w / 2) + 1, 0));
-  if (lv >= 3) it.push(A('Lamp', AL, 1, 1, 4, w - 1, h - 1));
+function genBakery(c, f, wH, lv) {
+  const it = [], m = c >> 1;
+  it.push(WI('Window', S_WIN, ...WIN_A, m-1, 0.5));
+  if (lv>=3) it.push(WI('Painting', S_ART, ...ART_1, c-2, 1));
+  it.push(AN('Furnace', S_FURN, 16, 32, 5, 0, 0));
+  it.push(FI('Prep Table', S_TBL, ...TBL_L, 3, 0));
+  it.push(FI('Counter', S_TBL, ...TBL_S, m, f-2));
+  it.push(FI('Cabinet', S_DRW, ...DRW_1, c-2, 0));
+  it.push(FI('Lamp', S_LAMP, ...LMP, c-1, f-2));
+  if (lv>=2) it.push(FI('Barrel', S_DECO, ...BAREL, c-1, 1));
+  if (lv>=3) it.push(FI('Shelf', S_SHF, ...SH_S, 0, f-2));
   return it;
 }
 
-function genWoodcuttersHut(w, h, lv) {
-  const it = [];
-  it.push(I('Workbench', XW, 0, 5, 3, 3, 0, 0));
-  it.push(I('Table', M, [6, 10, 0][lv - 1], 12, 2, 3, w - 2, 0));
-  if (lv >= 2) it.push(I('Cabinet', M, 4, 15, 2, 4, Math.floor(w / 2) - 1, h - 4));
-  if (lv === 3) it.push(I('Tool Rack', M, 8, 15, 2, 4, w - 2, h - 4));
-  it.push(A('Lamp', AL, 1, 1, 4, w - 1, 0));
+function genWoodcuttersHut(c, f, wH, lv) {
+  const it = [], m = c >> 1;
+  it.push(WI('Window', S_WIN, ...WIN_C, m-1, 0.5));
+  it.push(AN('Anvil', S_ANVL, 16, 16, 8, 0, 0));
+  it.push(FI('Table', S_TBL, ...TBL_S, c-2, 0));
+  it.push(FI('Barrel', S_DECO, ...BAREL, 0, 1));
+  it.push(FI('Lamp', S_LAMP, ...LMP, c-1, f-2));
+  if (lv>=2) it.push(FI('Drawer', S_DRW, ...DRW_1, m-1, f-2));
+  if (lv>=3) it.push(FI('Crate', S_DECO, ...CRATE, 0, f-1));
   return it;
 }
 
-function genStonePit(w, h, lv) {
-  const it = [];
-  it.push(I('Table', M, [6, 8, 0][lv - 1], 12, 2, 3, 0, 0));
-  it.push(I('Cabinet', M, [4, 2, 0][lv - 1], 15, 2, 4, w - 2, 0));
-  if (lv >= 2) it.push(I('Workbench', XW, 0, 5, 3, 3, 0, h - 3));
-  if (lv === 3) it.push(I('Tool Rack', M, 6, 15, 2, 4, w - 2, h - 4));
-  it.push(A('Torch', AT, 1, 2, 4, Math.floor(w / 2), -1));
+function genStonePit(c, f, wH, lv) {
+  const it = [], m = c >> 1;
+  if (lv>=2) it.push(WI('Window', S_WIN, ...WIN_D, m-1, 0.5));
+  it.push(FI('Table', S_TBL, ...TBL_S, 0, 0));
+  it.push(FI('Barrel', S_DECO, ...BAREL, c-1, 0));
+  it.push(FI('Crate', S_DECO, ...CRATE, c-2, 0));
+  it.push(FI('Lamp', S_LAMP, ...LMP, c-1, f-2));
+  if (lv>=2) it.push(FI('Barrel', S_DECO, ...BAREL, 0, f-1));
+  if (lv>=3) it.push(FI('Drawer', S_DRW, ...DRW_2, m-1, f-2));
   return it;
 }
 
-function genLumberyard(w, h, lv) {
-  const it = [];
-  it.push(I('Workbench', XW, 0, 5, 3, 3, 0, 0));
-  it.push(I('Workshop Table', XW, 0, 8, 3, 3, 0, h - 3));
-  it.push(I('Table', M, [6, 10, 0][lv - 1], 12, 2, 3, 3, 0));
-  it.push(I('Cabinet', M, [4, 6, 8][lv - 1], 15, 2, 4, w - 2, 0));
-  if (lv >= 2) it.push(I('Storage', M, 2, 15, 2, 4, w - 2, h - 4));
-  if (lv === 3) it.push(I('Workbench', XW, 0, 5, 3, 3, 3, h - 3));
-  it.push(A('Lamp', AL, 1, 1, 4, Math.floor(w / 2), 0));
-  if (lv >= 3) it.push(A('Lamp', AL, 1, 1, 4, w - 1, h - 1));
+function genLumberyard(c, f, wH, lv) {
+  const it = [], m = c >> 1;
+  it.push(WI('Window', S_WIN, ...WIN_C, m-1, 0.5));
+  if (lv>=3) it.push(WI('Window', S_WIN, ...WIN_C, 1, 0.5));
+  it.push(AN('Anvil', S_ANVL, 16, 16, 8, 0, 0));
+  it.push(FI('Work Table', S_TBL, ...TBL_L, 2, 0));
+  it.push(FI('Cabinet', S_DRW, ...DRW_1, c-2, 0));
+  it.push(FI('Barrel', S_DECO, ...BAREL, c-1, 2));
+  it.push(FI('Lamp', S_LAMP, ...LMP, c-1, f-2));
+  if (lv>=2) it.push(FI('Crate', S_DECO, ...CRATE, 0, f-1));
+  if (lv>=3) it.push(FI('Barrel', S_DECO, ...BAREL, 1, f-1));
   return it;
 }
 
-function genQuarry(w, h, lv) {
-  const it = [];
-  it.push(I('Workshop Table', XW, 0, 8, 3, 3, 0, 0));
-  it.push(I('Workbench', XW, 0, 5, 3, 3, w - 3, 0));
-  it.push(I('Table', M, [6, 8, 0][lv - 1], 12, 2, 3, Math.floor(w / 2) - 1, h - 3));
-  if (lv >= 2) it.push(I('Cabinet', M, 2, 15, 2, 4, w - 2, h - 4));
-  if (lv === 3) it.push(I('Tool Rack', M, 4, 15, 2, 4, 0, h - 4));
-  it.push(A('Torch', AT, 1, 2, 4, Math.floor(w / 2), -1));
-  if (lv >= 3) it.push(A('Lamp', AL, 1, 1, 4, w - 1, 0));
+function genQuarry(c, f, wH, lv) {
+  const it = [], m = c >> 1;
+  if (lv>=2) it.push(WI('Window', S_WIN, ...WIN_D, m-1, 0.5));
+  it.push(FI('Work Table', S_TBL, ...TBL_L, 0, 0));
+  it.push(FI('Table', S_TBL, ...TBL_S, c-2, 0));
+  it.push(FI('Barrel', S_DECO, ...BAREL, m, f-1));
+  it.push(FI('Crate', S_DECO, ...CRATE, m+1, f-1));
+  it.push(FI('Lamp', S_LAMP, ...LMP, c-1, f-2));
+  if (lv>=2) it.push(FI('Drawer', S_DRW, ...DRW_2, c-2, f-2));
+  if (lv>=3) it.push(AN('Chest', S_CHST, 16, 16, 6, 0, f-1));
   return it;
 }
 
-function genWeavingHut(w, h, lv) {
-  const it = [];
-  it.push(I('Loom', M, 16, 15, 2, 4, 0, 0));
-  it.push(I('Loom', M, 14, 15, 2, 4, w - 2, 0));
-  it.push(I('Table', M, [6, 0, 2][lv - 1], 12, 2, 3, Math.floor(w / 2) - 1, 1));
-  if (lv >= 2) it.push(I('Sofa', M, 12, 29, 3, 3, 0, h - 3));
-  if (lv === 3) {
-    it.push(I('Cabinet', M, 0, 15, 2, 4, w - 2, h - 4));
-    it.push(I('Sofa', M, 9, 29, 3, 3, Math.floor(w / 2) - 1, h - 3));
-  }
-  it.push(A('Candle', AC, 1, 1, 4, Math.floor(w / 2), 0));
-  if (lv >= 3) it.push(A('Lamp', AL, 1, 1, 4, Math.floor(w / 2), h - 1));
+function genWeavingHut(c, f, wH, lv) {
+  const it = [], m = c >> 1;
+  it.push(WI('Window', S_WIN, ...WIN_A, m-1, 0.5));
+  if (lv>=2) it.push(WI('Painting', S_ART, ...ART_2, 1, 1));
+  it.push(FI('Loom', S_TBL, ...TBL_L, 0, 0));
+  it.push(FI('Loom', S_TBL, ...TBL_L, c-3, 0));
+  it.push(FI('Cabinet', S_DRW, ...DRW_1, m-1, f-2));
+  it.push(FI('Lamp', S_LAMP, ...LMP, c-1, f-2));
+  if (lv>=2) it.push(FI('Plant', S_PLT, ...POT_1, 0, f-2));
+  if (lv>=3) it.push(FI('Sofa', S_CHR, ...SOFA_F(5), 0, f-2));
   return it;
 }
 
-function genMarket(w, h, lv) {
-  const it = [];
-  it.push(I('Counter', M, [0, 2, 12][lv - 1], 12, 2, 3, 0, 0));
-  it.push(I('Counter', M, [4, 6, 0][lv - 1], 12, 2, 3, 2, 0));
-  it.push(I('Cabinet', M, [4, 0, 0][lv - 1], 15, 2, 4, w - 2, 0));
-  it.push(I('Display', M, [6, 4, 2][lv - 1], 12, 2, 3, 0, h - 3));
-  if (lv >= 2) it.push(I('Display', M, 8, 12, 2, 3, Math.floor(w / 2), h - 3));
-  if (lv === 3) it.push(I('Display', M, 10, 12, 2, 3, w - 2, h - 3));
-  it.push(A('Lamp', AL, 1, 1, 4, Math.floor(w / 2), 0));
-  if (lv >= 3) it.push(A('Candle', AC, 1, 1, 4, w - 1, h - 1));
+function genMarket(c, f, wH, lv) {
+  const it = [], m = c >> 1;
+  it.push(WI('Window', S_WIN, ...WIN_A, m-1, 0.5));
+  if (lv>=2) it.push(WI('Window', S_WIN, ...WIN_B, 1, 0.5));
+  if (lv>=3) it.push(WI('Painting', S_ART, ...ART_3, c-2, 1));
+  it.push(FI('Counter', S_TBL, ...TBL_L, 0, 0));
+  it.push(FI('Display', S_SHF, ...SH_S, c-2, 0));
+  it.push(FI('Display', S_SHF, ...SH_S, c-2, 2));
+  it.push(FI('Counter', S_TBL, ...TBL_S, m-1, f-2));
+  it.push(FI('Lamp', S_LAMP, ...LMP, c-1, f-2));
+  if (lv>=2) it.push(FI('Barrel', S_DECO, ...BAREL, 0, f-1));
+  if (lv>=3) it.push(FI('Crate', S_DECO, ...CRATE, 1, f-1));
   return it;
 }
 
-function genTradingPost(w, h, lv) {
-  const it = [];
-  it.push(I('Desk', M, [6, 10, 0][lv - 1], 12, 2, 3, Math.floor(w / 2) - 1, 1));
-  it.push(I('Bookshelf', M, 16, 20, 1, 3, 0, 0));
-  it.push(I('Bookshelf', M, 17, 20, 1, 3, 1, 0));
-  it.push(I('Bookshelf', M, 16, 20, 1, 3, w - 2, 0));
-  it.push(I('Bookshelf', M, 17, 20, 1, 3, w - 1, 0));
-  it.push(I('Cushioned Chair', M, 12, 15, 2, 4, w - 2, Math.floor(h / 2)));
-  if (lv >= 2) it.push(I('Sofa', M, 6, 29, 3, 3, 0, h - 3));
-  if (lv === 3) it.push(I('Sofa', M, 6, 29, 3, 3, w - 3, h - 3));
-  it.push(A('Candelabrum', AK, 1, 2, 4, Math.floor(w / 2) + 1, 0));
-  if (lv >= 3) it.push(A('Candelabrum', AK, 1, 2, 4, 2, h - 2));
+function genTradingPost(c, f, wH, lv) {
+  const it = [], m = c >> 1;
+  it.push(WI('Window', S_WIN, ...WIN_B, m-1, 0.5));
+  if (lv>=3) it.push(WI('Window', S_WIN, ...WIN_A, 1, 0.5));
+  it.push(FI('Desk', S_TBL, ...TBL_L, m-1, 1));
+  it.push(FI('Bookshelf', S_SHF, ...SH_M, 0, 0));
+  it.push(FI('Bookshelf', S_SHF, ...SH_M, c-2, 0));
+  it.push(FI('Lamp', S_LAMP, ...LMP, 2, f-2));
+  if (lv>=2) it.push(AN('Chest', S_CHST, 16, 16, 6, m, f-1));
+  if (lv>=3) it.push(FI('Chair', S_CHR, ...ARM_F(0), m+2, 2));
   return it;
 }
 
-function genStorehouse(w, h, lv) {
-  const it = [];
-  it.push(I('Cabinet', M, 0, 15, 2, 4, 0, 0));
-  it.push(I('Cabinet', M, 2, 15, 2, 4, 2, 0));
-  it.push(I('Cabinet', M, 4, 15, 2, 4, w - 2, 0));
-  it.push(I('Table', M, [6, 10, 0][lv - 1], 12, 2, 3, Math.floor(w / 2), h - 3));
-  if (lv >= 2) it.push(I('Cabinet', M, 6, 15, 2, 4, Math.floor(w / 2), 0));
-  if (lv === 3) {
-    it.push(I('Cabinet', M, 8, 15, 2, 4, 0, h - 4));
-    it.push(I('Cabinet', M, 0, 15, 2, 4, w - 2, h - 4));
-  }
-  it.push(A('Torch', AT, 1, 2, 4, w - 1, -1));
-  if (lv >= 3) it.push(A('Lamp', AL, 1, 1, 4, 0, h - 1));
+function genStorehouse(c, f, wH, lv) {
+  const it = [], m = c >> 1;
+  it.push(WI('Window', S_WIN, ...WIN_C, m-1, 0.5));
+  it.push(FI('Cabinet', S_DRW, ...DRW_1, 0, 0));
+  it.push(FI('Cabinet', S_DRW, ...DRW_2, 2, 0));
+  it.push(FI('Cabinet', S_DRW, ...DRW_1, c-2, 0));
+  it.push(FI('Lamp', S_LAMP, ...LMP, c-1, f-2));
+  it.push(AN('Chest', S_CHST, 16, 16, 6, m, f-1));
+  if (lv>=2) it.push(FI('Cabinet', S_DRW, ...DRW_2, m, 0));
+  if (lv>=3) { it.push(FI('Barrel', S_DECO, ...BAREL, 0, f-1)); it.push(FI('Barrel', S_DECO, ...BAREL, c-1, f-1)); }
   return it;
 }
 
-function genWarehouse(w, h, lv) {
-  const it = [];
-  it.push(I('Cabinet', M, 0, 15, 2, 4, 0, 0));
-  it.push(I('Cabinet', M, 2, 15, 2, 4, 2, 0));
-  it.push(I('Cabinet', M, 4, 15, 2, 4, 4, 0));
-  it.push(I('Cabinet', M, 6, 15, 2, 4, w - 2, 0));
-  it.push(I('Table', M, [6, 10, 0][lv - 1], 12, 2, 3, Math.floor(w / 2), h - 3));
-  it.push(I('Table', M, [8, 6, 2][lv - 1], 12, 2, 3, 0, h - 3));
-  if (lv >= 2) it.push(I('Cabinet', M, 8, 15, 2, 4, Math.floor(w / 2), 0));
-  if (lv === 3) {
-    it.push(I('Cabinet', M, 0, 15, 2, 4, 0, h - 4));
-    it.push(I('Cabinet', M, 2, 15, 2, 4, w - 2, h - 4));
-  }
-  it.push(A('Lamp', AL, 1, 1, 4, w - 1, Math.floor(h / 2)));
-  if (lv >= 3) it.push(A('Torch', AT, 1, 2, 4, 0, -1));
+function genWarehouse(c, f, wH, lv) {
+  const it = [], m = c >> 1;
+  it.push(WI('Window', S_WIN, ...WIN_C, m-1, 0.5));
+  if (lv>=3) it.push(WI('Window', S_WIN, ...WIN_D, 1, 0.5));
+  it.push(FI('Cabinet', S_DRW, ...DRW_1, 0, 0));
+  it.push(FI('Cabinet', S_DRW, ...DRW_2, 2, 0));
+  it.push(FI('Cabinet', S_DRW, ...DRW_1, 4, 0));
+  it.push(FI('Cabinet', S_DRW, ...DRW_2, c-2, 0));
+  it.push(FI('Barrel', S_DECO, ...BAREL, m, f-1));
+  it.push(FI('Barrel', S_DECO, ...BAREL, m+1, f-1));
+  it.push(FI('Lamp', S_LAMP, ...LMP, c-1, f-2));
+  if (lv>=2) it.push(AN('Chest', S_CHST, 16, 16, 6, m-1, f-1));
+  if (lv>=3) it.push(AN('Chest', S_GCHST, 16, 16, 6, m+2, f-1));
   return it;
 }
 
-function genTownHall(w, h, lv) {
-  const it = [];
-  const mid = Math.floor(w / 2);
-  // Bookshelves along back wall
-  it.push(I('Bookshelf', M, 16, 20, 1, 3, 0, 0));
-  it.push(I('Bookshelf', M, 17, 20, 1, 3, 1, 0));
-  it.push(I('Bookshelf', M, 16, 20, 1, 3, w - 2, 0));
-  it.push(I('Bookshelf', M, 17, 20, 1, 3, w - 1, 0));
-  if (lv >= 2) {
-    it.push(I('Bookshelf', M, 18, 20, 1, 3, 2, 0));
-    it.push(I('Bookshelf', M, 19, 20, 1, 3, w - 3, 0));
-  }
-  // Conference tables
-  it.push(I('Table', M, [0, 2, 0][lv - 1], 12, 2, 3, mid - 2, 1));
-  it.push(I('Table', M, [2, 0, 2][lv - 1], 12, 2, 3, mid, 1));
-  // Cushioned chairs
-  it.push(I('Cushioned Chair', M, [14, 12, 12][lv - 1], 15, 2, 4, mid - 1, 4));
-  if (lv === 3) {
-    it.push(I('Cushioned Chair', M, 14, 15, 2, 4, 0, 4));
-    it.push(I('Cushioned Chair', M, 12, 15, 2, 4, w - 2, 4));
-  }
-  // Sofas at front
-  it.push(I('Sofa', M, 3, 29, 3, 3, 0, h - 3));
-  it.push(I('Sofa', M, 3, 29, 3, 3, w - 3, h - 3));
-  if (lv === 3) it.push(I('Sofa', M, 6, 29, 3, 3, mid - 1, h - 3));
-  // Grand lighting
-  it.push(A('Candelabrum', AK, 1, 2, 4, 2, 1));
-  it.push(A('Candelabrum', AK, 1, 2, 4, w - 3, 1));
-  if (lv >= 2) it.push(A('Candelabrum', AK, 1, 2, 4, mid, h - 2));
-  if (lv === 3) {
-    it.push(A('Candelabrum', AK, 1, 2, 4, 0, h - 2));
-    it.push(A('Candelabrum', AK, 1, 2, 4, w - 1, h - 2));
-  }
+function genTownHall(c, f, wH, lv) {
+  const it = [], m = c >> 1;
+  it.push(WI('Window', S_WIN, ...WIN_B, 2, 1));
+  it.push(WI('Window', S_WIN, ...WIN_B, c-4, 1));
+  if (lv>=2) { it.push(WI('Window', S_WIN, ...WIN_A, 0, 1)); it.push(WI('Window', S_WIN, ...WIN_A, c-2, 1)); }
+  if (lv>=3) it.push(WI('Painting', S_ART, ...ART_3, m-1, 1));
+  it.push(FI('Bookshelf', S_SHF, ...SH_M, 0, 0));
+  it.push(FI('Bookshelf', S_SHF, ...SH_M, c-2, 0));
+  it.push(FI('Table', S_TBL, ...TBL_L, m-2, 2));
+  it.push(FI('Table', S_TBL, ...TBL_L, m+1, 2));
+  it.push(FI('Chair', S_CHR, ...ARM_F(2), m-1, 4));
+  it.push(FI('Chair', S_CHR, ...ARM_F(2), m+1, 4));
+  it.push(FI('Lamp', S_LAMP, ...LMP, 2, f-2));
+  it.push(FI('Lamp', S_LAMP, ...LMP2, c-3, f-2));
+  if (lv>=2) it.push(FI('Sofa', S_CHR, ...SOFA_F(2), 0, f-2));
+  if (lv>=3) it.push(FI('Sofa', S_CHR, ...SOFA_F(2), c-3, f-2));
   return it;
 }
 
-function genShrine(w, h, lv) {
-  const it = [];
-  it.push(I('Alchemy Shelf', XA, 11, 0, 3, 3, 0, -1));
-  it.push(I('Alchemy Shelf', XA, 11, 0, 3, 3, w - 3, -1));
-  it.push(I('Altar', M, 12, 29, 3, 3, Math.floor(w / 2) - 1, h - 3));
-  it.push(A('Cauldron', AQ, 1, 1, 4, Math.floor(w / 2), 1));
-  if (lv >= 2) it.push(I('Bookshelf', M, 19, 20, 1, 3, 3, 0));
-  if (lv === 3) it.push(I('Bookshelf', M, 18, 20, 1, 3, w - 4, 0));
-  it.push(A('Candle', AC, 1, 1, 4, Math.floor(w / 2) - 1, 0));
-  it.push(A('Candle', AC, 1, 1, 4, w - 1, 0));
-  if (lv >= 2) it.push(A('Candle', AC, 1, 1, 4, 0, h - 1));
-  if (lv >= 3) it.push(A('Candle', AC, 1, 1, 4, w - 1, h - 1));
+function genShrine(c, f, wH, lv) {
+  const it = [], m = c >> 1;
+  it.push(WI('Window', S_WIN, ...WIN_B, m-1, 0.5));
+  if (lv>=2) it.push(WI('Painting', S_ART, ...ART_1, 1, 1));
+  if (lv>=3) it.push(WI('Painting', S_ART, ...ART_2, c-2, 1));
+  it.push(FI('Bookshelf', S_SHF, ...SH_M, 0, 0));
+  it.push(FI('Bookshelf', S_SHF, ...SH_M, c-2, 0));
+  it.push(AN('Golden Chest', S_GCHST, 16, 16, 6, m, 2));
+  it.push(FI('Plant', S_PLT, ...POT_1, 0, f-2));
+  it.push(FI('Plant', S_PLT, ...POT_2, c-1, f-2));
+  it.push(FI('Lamp', S_LAMP, ...LMP, 2, f-2));
+  if (lv>=3) it.push(FI('Lamp', S_LAMP, ...LMP2, c-3, f-2));
   return it;
 }
 
-function genWatchtower(w, h, lv) {
-  const it = [];
-  it.push(I('Table', M, [6, 8, 0][lv - 1], 12, 2, 3, 0, 0));
-  it.push(I('Cabinet', M, [2, 4, 0][lv - 1], 15, 2, 4, w - 2, 0));
-  if (lv >= 2) it.push(I('Table', M, 10, 12, 2, 3, Math.floor(w / 2) - 1, h - 3));
-  if (lv === 3) it.push(I('Bookshelf', M, 16, 20, 1, 3, 2, 0));
-  it.push(A('Torch', AT, 1, 2, 4, Math.floor(w / 2), -1));
-  if (lv >= 3) it.push(A('Torch', AT, 1, 2, 4, w - 1, -1));
+function genWatchtower(c, f, wH, lv) {
+  const it = [], m = c >> 1;
+  it.push(WI('Window', S_WIN, ...WIN_D, m-1, 0.5));
+  it.push(FI('Table', S_TBL, ...TBL_S, 0, 0));
+  it.push(FI('Cabinet', S_DRW, ...DRW_1, c-2, 0));
+  it.push(FI('Lamp', S_LAMP, ...LMP, c-1, f-2));
+  if (lv>=2) it.push(FI('Barrel', S_DECO, ...BAREL, 0, f-1));
+  if (lv>=3) it.push(FI('Crate', S_DECO, ...CRATE, 1, f-1));
   return it;
 }
 
-function genTavern(w, h, lv) {
-  const it = [];
-  it.push(I('Bar Counter', M, [0, 2, 0][lv - 1], 12, 2, 3, 0, 0));
-  it.push(I('Bar Counter', M, [2, 0, 2][lv - 1], 12, 2, 3, 2, 0));
-  it.push(A('Fireplace', AF, 2, 4, 4, w - 3, -2));
-  it.push(I('Cabinet', M, [4, 6, 0][lv - 1], 15, 2, 4, w - 2, 0));
-  it.push(I('Dining Table', M, [4, 6, 0][lv - 1], 12, 2, 3, 0, h - 3));
-  it.push(I('Dining Table', M, [6, 8, 2][lv - 1], 12, 2, 3, Math.floor(w / 2), h - 3));
-  if (lv === 3) it.push(I('Dining Table', M, 10, 12, 2, 3, w - 2, h - 3));
-  it.push(A('Candle', AC, 1, 1, 4, Math.floor(w / 2), 0));
-  if (lv >= 2) it.push(A('Lamp', AL, 1, 1, 4, 0, h - 1));
-  if (lv >= 3) it.push(A('Candle', AC, 1, 1, 4, w - 1, h - 1));
+function genTavern(c, f, wH, lv) {
+  const it = [], m = c >> 1;
+  it.push(WI('Window', S_WIN, ...WIN_C, m-1, 0.5));
+  if (lv>=2) it.push(WI('Window', S_WIN, ...WIN_D, 1, 0.5));
+  it.push(FI('Bar Counter', S_TBL, ...TBL_L, 0, 0));
+  it.push(FI('Cabinet', S_DRW, ...DRW_1, c-2, 0));
+  it.push(FI('Dining Table', S_TBL, ...TBL_S, 0, f-2));
+  it.push(FI('Dining Table', S_TBL, ...TBL_S, m, f-2));
+  it.push(FI('Chair', S_CHR, ...CHR_F(0), 2, f-2));
+  it.push(FI('Lamp', S_LAMP, ...LMP, c-1, f-2));
+  if (lv>=2) it.push(FI('Barrel', S_DECO, ...BAREL, c-1, 1));
+  if (lv>=3) it.push(FI('Dining Table', S_TBL, ...TBL_S, c-2, f-2));
   return it;
 }
 
@@ -388,103 +404,122 @@ const GENS = {
   shrine: genShrine, watchtower: genWatchtower, tavern: genTavern,
 };
 
-/* ═══ Room builder ═══ */
+/* ═══ build room ═══ */
 function buildRoom(type, level) {
   const cfg = CFG[type] || CFG.house;
   const lv = Math.min(3, Math.max(1, level || 1));
   const li = lv - 1;
-  const w = cfg.base[0] + cfg.grow[0] * li;
-  const h = cfg.base[1] + cfg.grow[1] * li;
+  const cols = cfg.b[0] + cfg.g[0] * li;
+  const fRows = cfg.b[1] + cfg.g[1] * li;
+  const wH = cfg.wH;
   const gen = GENS[type] || GENS.house;
-  return { w, h, wall: cfg.walls[li], floor: cfg.floors[li], items: gen(w, h, lv) };
+  return { cols, wH, fRows, wallPat: cfg.wp[li], floorIdx: cfg.fp[li], items: gen(cols, fRows, wH, lv) };
 }
 
-/* ═══ Layout geometry ═══ */
-function layout(room, ts, cw, ch) {
-  const fw = room.w, fh = room.h;
-  const tw = fw + 2, th = fh + 3;
-  const ox = Math.round((cw - tw * ts) / 2);
-  const oy = Math.round((ch - th * ts) / 2);
-  return { fw, fh, tw, th, ox, oy, fx: ox + ts, fy: oy + 3 * ts };
+/* ═══ render helpers ═══ */
+function renderItem(ctx, it, ox, oy, sc, time) {
+  const dx = ox + it.x * T * sc;
+  const dy = oy + it.y * T * sc;
+  if (it.anim) {
+    const e = ld(it.s);
+    if (!e?.ok) return;
+    const fi = Math.floor(time / 220) % it.fc;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(e.img, fi * it.fw, 0, it.fw, it.fh, dx, dy, Math.round(it.fw * sc), Math.round(it.fh * sc));
+  } else {
+    const e = ld(it.s);
+    if (!e?.ok) return;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(e.img, it.sx, it.sy, it.sw, it.sh, dx, dy, Math.round(it.sw * sc), Math.round(it.sh * sc));
+  }
 }
 
-function hitBoxes(room, ts, cw, ch) {
-  const { fx, fy } = layout(room, ts, cw, ch);
-  return (room.items || []).map((item) => ({
-    name: item.name,
-    x: fx + item.x * ts, y: fy + item.y * ts,
-    w: item.tw * ts, h: item.th * ts,
-  }));
-}
+function renderRoom(ctx, room, sc, cw, ch, time) {
+  const { cols, wH, fRows, wallPat, floorIdx, items } = room;
+  const ts = T * sc;
+  const roomW = cols * ts;
+  const wallH = wH * ts;
+  const floorH = fRows * ts;
+  const roomH = wallH + floorH;
+  const trimSz = Math.max(2, Math.round(ts * 0.25));
 
-/* ═══ Room rendering ═══ */
-function renderRoom(ctx, room, ts, cw, ch, time) {
-  const { fw, fh, tw, th, ox, oy, fx, fy } = layout(room, ts, cw, ch);
+  const ox = Math.round((cw - roomW) / 2);
+  const oy = Math.round((ch - roomH) / 2);
+  const fOy = oy + wallH;
 
-  // 1. Background
+  /* 1. dark bg */
   ctx.fillStyle = '#080612';
   ctx.fillRect(0, 0, cw, ch);
 
-  // 2. Side walls
-  for (let r = 0; r < th; r++) {
-    til(ctx, 1, 4, ox, oy + r * ts, ts);
-    til(ctx, 1, 4, ox + (tw - 1) * ts, oy + r * ts, ts);
-  }
+  /* 2. back wall */
+  const wp = WP[wallPat];
+  if (wp) fillPat(ctx, wp.src, wp.x, wp.y, wp.w, wp.h, ox, oy, roomW, wallH, sc);
 
-  // 3. Back wall (3 colored rows)
-  const [wc, wr] = room.wall;
-  for (let x = 0; x < fw; x++) {
-    const c = x === 0 ? wc : x === fw - 1 ? wc + 2 : wc + 1;
-    til(ctx, c, wr,     fx + x * ts, oy,          ts);
-    til(ctx, c, wr + 1, fx + x * ts, oy + ts,     ts);
-    til(ctx, c, wr,     fx + x * ts, oy + 2 * ts, ts);
-  }
-
-  // 4. Ceiling shadow
-  const cg = ctx.createLinearGradient(fx, oy, fx, oy + ts * 1.4);
-  cg.addColorStop(0, 'rgba(8,6,18,0.72)');
+  /* 3. ceiling shadow */
+  const cg = ctx.createLinearGradient(ox, oy, ox, oy + ts * 1.2);
+  cg.addColorStop(0, 'rgba(8,6,18,0.55)');
   cg.addColorStop(1, 'rgba(8,6,18,0)');
   ctx.fillStyle = cg;
-  ctx.fillRect(fx, oy, fw * ts, ts * 1.4);
+  ctx.fillRect(ox, oy, roomW, ts * 1.2);
 
-  // 5. Floor
-  const fr = room.floor;
-  for (let y = 0; y < fh; y++) {
-    for (let x = 0; x < fw; x++) {
-      const tc = x === 0 ? 6 : x === fw - 1 ? 8 : 7;
-      const tr = y === 0 ? fr : y === fh - 1 ? fr + 2 : fr + 1;
-      til(ctx, tc, tr, fx + x * ts, fy + y * ts, ts);
-    }
-  }
+  /* 4. wall items */
+  for (const it of items) if (it.z === 'w') renderItem(ctx, it, ox, oy, sc, time);
 
-  // 6. Wall-to-floor shadow
-  const sg = ctx.createLinearGradient(fx, fy, fx, fy + ts * 1.5);
-  sg.addColorStop(0, 'rgba(0,0,0,0.16)');
+  /* 5. floor */
+  const fp = FP[floorIdx] || FP[0];
+  fillPat(ctx, S_FLOOR, fp[0], fp[1], 32, 32, ox, fOy, roomW, floorH, sc);
+
+  /* 6. wall-floor shadow */
+  const sg = ctx.createLinearGradient(ox, fOy, ox, fOy + ts * 1.2);
+  sg.addColorStop(0, 'rgba(0,0,0,0.22)');
   sg.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.fillStyle = sg;
-  ctx.fillRect(fx, fy, fw * ts, ts * 1.5);
+  ctx.fillRect(ox, fOy, roomW, ts * 1.2);
 
-  // 7. Furniture (sorted by bottom edge for depth)
-  const sorted = [...(room.items || [])].sort((a, b) => (a.y + a.th) - (b.y + b.th));
-  for (const item of sorted) {
-    const dx = fx + item.x * ts;
-    const dy = fy + item.y * ts;
-    if (item.anim) {
-      const frameW = item.tw * ST;
-      const fi = Math.floor(time / 200) % item.anim;
-      draw(ctx, item.s, fi * frameW, 0, frameW, item.th * ST, dx, dy, item.tw * ts, item.th * ts);
-    } else {
-      spr(ctx, item.s, item.c, item.r, item.tw, item.th, dx, dy, ts);
-    }
-  }
+  /* 7. thin wood trim (left, right, bottom) */
+  ctx.fillStyle = '#7a5a30';
+  ctx.fillRect(ox - trimSz, oy, trimSz, roomH + trimSz);
+  ctx.fillRect(ox + roomW, oy, trimSz, roomH + trimSz);
+  ctx.fillRect(ox - trimSz, oy + roomH, roomW + 2 * trimSz, trimSz);
+  ctx.fillStyle = '#a08060';
+  ctx.fillRect(ox - 1, oy, 1, roomH);
+  ctx.fillRect(ox + roomW, oy, 1, roomH);
+  ctx.fillRect(ox, oy + roomH, roomW, 1);
 
-  // 8. Frame
+  /* 8. floor items (depth sorted) */
+  const fi = items.filter(i => i.z === 'f');
+  fi.sort((a, b) => {
+    const ah = a.y + (a.anim ? a.fh / T : a.sh / T);
+    const bh = b.y + (b.anim ? b.fh / T : b.sh / T);
+    return ah - bh;
+  });
+  for (const it of fi) renderItem(ctx, it, ox, fOy, sc, time);
+
+  /* 9. frame */
   ctx.strokeStyle = 'rgba(0,0,0,0.35)';
   ctx.lineWidth = 2;
-  ctx.strokeRect(ox, oy, tw * ts, th * ts);
+  ctx.strokeRect(ox - trimSz - 1, oy - 1, roomW + trimSz * 2 + 2, roomH + trimSz + 2);
 }
 
-/* ═══ Component ═══ */
+function computeHits(room, sc, cw, ch) {
+  const ts = T * sc;
+  const roomW = room.cols * ts;
+  const wallH = room.wH * ts;
+  const roomH = wallH + room.fRows * ts;
+  const ox = Math.round((cw - roomW) / 2);
+  const oy = Math.round((ch - roomH) / 2);
+  const fOy = oy + wallH;
+  return room.items.map(it => {
+    const bx = ox, by = it.z === 'w' ? oy : fOy;
+    const dx = bx + it.x * ts;
+    const dy = by + it.y * ts;
+    const w = it.anim ? Math.round(it.fw * sc) : Math.round(it.sw * sc);
+    const h = it.anim ? Math.round(it.fh * sc) : Math.round(it.sh * sc);
+    return { name: it.n, x: dx, y: dy, w, h };
+  });
+}
+
+/* ═══ component ═══ */
 export default function PetWorldInterior({ building, buildingDef, world, onExit }) {
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
@@ -498,7 +533,6 @@ export default function PetWorldInterior({ building, buildingDef, world, onExit 
   const level = building?.level || 1;
   const room = useMemo(() => buildRoom(buildingType, level), [buildingType, level]);
 
-  /* Responsive resize */
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -512,17 +546,14 @@ export default function PetWorldInterior({ building, buildingDef, world, onExit 
     return () => obs.disconnect();
   }, []);
 
-  /* Tile scale (integer for crisp pixels) */
-  const ts = useMemo(() => {
-    if (!size.width || !size.height) return ST * 3;
-    const tw = room.w + 2;
-    const th = room.h + 3;
-    const sx = (size.width * 0.92) / (tw * ST);
-    const sy = (size.height * 0.88) / (th * ST);
-    return ST * Math.max(1, Math.floor(Math.min(sx, sy)));
+  const sc = useMemo(() => {
+    if (!size.width || !size.height) return 3;
+    const totalRows = room.wH + room.fRows;
+    const sx = (size.width * 0.90) / (room.cols * T);
+    const sy = (size.height * 0.85) / (totalRows * T);
+    return Math.max(1, Math.floor(Math.min(sx, sy)));
   }, [size, room]);
 
-  /* Render loop */
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !size.width || !size.height) return;
@@ -533,24 +564,23 @@ export default function PetWorldInterior({ building, buildingDef, world, onExit 
     canvas.style.height = `${size.height}px`;
     const ctx = canvas.getContext('2d');
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    hitsRef.current = hitBoxes(room, ts, size.width, size.height);
+    hitsRef.current = computeHits(room, sc, size.width, size.height);
     const tick = () => {
-      renderRoom(ctx, room, ts, size.width, size.height, performance.now());
+      renderRoom(ctx, room, sc, size.width, size.height, performance.now());
       animRef.current = requestAnimationFrame(tick);
     };
     animRef.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(animRef.current);
-  }, [size, room, ts]);
+  }, [size, room, sc]);
 
-  /* Preload sheets */
   useEffect(() => {
-    getImage(M);
+    Object.values(WP).forEach(p => ld(p.src));
+    ld(S_FLOOR); ld(S_WOOD);
     const sheets = new Set();
-    for (const item of room.items || []) if (item.s) sheets.add(item.s);
-    sheets.forEach((s) => getImage(s));
+    for (const it of room.items) if (it.s) sheets.add(it.s);
+    sheets.forEach(s => ld(s));
   }, [room]);
 
-  /* Click/tap handler for item labels */
   const handleTap = useCallback((e) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -568,7 +598,6 @@ export default function PetWorldInterior({ building, buildingDef, world, onExit 
     setTooltip(null);
   }, []);
 
-  /* Auto-dismiss tooltip */
   useEffect(() => {
     if (!tooltip) return;
     const t = setTimeout(() => setTooltip(null), 2500);
@@ -589,7 +618,6 @@ export default function PetWorldInterior({ building, buildingDef, world, onExit 
 
   return (
     <div className="fixed inset-0 z-[60] flex flex-col bg-[#08060a]" style={{ overscrollBehavior: 'none' }}>
-      {/* Header */}
       <div
         className="cf-panel-dark flex items-center gap-3 px-3"
         style={{ paddingTop: 'max(8px, env(safe-area-inset-top))', paddingBottom: 6, borderRadius: 0, borderTop: 'none', borderLeft: 'none', borderRight: 'none' }}
@@ -609,7 +637,6 @@ export default function PetWorldInterior({ building, buildingDef, world, onExit 
         </button>
       </div>
 
-      {/* Canvas */}
       <div ref={containerRef} className="relative flex-1 min-h-0 overflow-hidden">
         <canvas
           ref={canvasRef}
@@ -635,7 +662,6 @@ export default function PetWorldInterior({ building, buildingDef, world, onExit 
         </div>
       </div>
 
-      {/* Info bar */}
       <div
         className="cf-panel-dark px-3 py-2"
         style={{ paddingBottom: 'max(8px, env(safe-area-inset-bottom))', borderRadius: 0, borderBottom: 'none', borderLeft: 'none', borderRight: 'none' }}
