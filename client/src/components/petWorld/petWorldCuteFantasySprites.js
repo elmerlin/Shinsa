@@ -877,8 +877,9 @@ export function drawCuteFantasyFishingDecor(ctx, decor, tileSize, time = 0) {
     if (!entry?.loaded) return false;
     ctx.save();
     ctx.imageSmoothingEnabled = false;
-    ctx.globalAlpha = decor.alpha ?? 0.28;
+    ctx.globalAlpha = decor.alpha ?? 0.34;
     ctx.globalCompositeOperation = 'multiply';
+    ctx.filter = 'brightness(0) opacity(1)';
     ctx.drawImage(
       entry.image,
       sx,

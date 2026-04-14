@@ -829,10 +829,23 @@ function selectFishingSceneSpots(grid, terrainRegions, shorePool = [], buildings
     .sort((a, b) => b.score - a.score);
 
   const spots = [];
+  const showcaseCandidates = rankedShoreTiles.filter((tile) => tile.y >= Math.floor(grid.h * 0.45));
+  const showcasePool = showcaseCandidates.length ? showcaseCandidates : rankedShoreTiles;
+  const showcaseTarget = { x: grid.w * 0.58, y: grid.h * 0.58 };
+  const showcaseSpot = showcasePool
+    .map((tile) => ({
+      ...tile,
+      showcaseScore: Math.abs(tile.x - showcaseTarget.x) * 0.9
+        + Math.abs(tile.y - showcaseTarget.y) * 1.1
+        - tile.score * 0.12,
+    }))
+    .sort((a, b) => a.showcaseScore - b.showcaseScore)[0];
+  if (showcaseSpot) spots.push(showcaseSpot);
   if (villageAnchor) {
     const villageBand = rankedShoreTiles.filter((tile) => tile.y >= villageAnchor.y - 1);
     const villageCandidates = villageBand.length ? villageBand : rankedShoreTiles;
     const bestNearVillage = villageCandidates
+      .filter((tile) => !spots.some((spot) => Math.abs(spot.x - tile.x) + Math.abs(spot.y - tile.y) < 6))
       .map((tile) => ({
         ...tile,
         villageScore: Math.abs(tile.x - villageAnchor.x) * 0.8
