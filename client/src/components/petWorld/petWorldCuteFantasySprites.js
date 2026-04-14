@@ -397,26 +397,41 @@ const ANIMALS = {
   pig:     {
     p: 'Animals/Pig/Pig_01.png',
     idle: { side: { row: 0, n: 1 }, south: { row: 1, n: 1 }, north: { row: 2, n: 1 } },
-    walk: { side: { row: 3, n: 8 }, south: { row: 4, n: 8 }, north: { row: 4, n: 8 } },
+    walk: { side: { row: 3, n: 8 }, south: { row: 4, n: 8 }, north: { row: 5, n: 8 } },
   },
   sheep:   {
     p: 'Animals/Sheep/Sheep_01.png',
     idle: { side: { row: 0, n: 1 }, south: { row: 1, n: 1 }, north: { row: 2, n: 1 } },
-    walk: { side: { row: 3, n: 8 }, south: { row: 4, n: 8 }, north: { row: 4, n: 8 } },
+    walk: { side: { row: 3, n: 8 }, south: { row: 4, n: 8 }, north: { row: 5, n: 8 } },
   },
-  duck:    { p: 'Animals/Duck/Duck_01.png',        idle: { row: 0, n: 2 }, walk: { row: 1, n: 5 } },
+  duck:    {
+    p: 'Animals/Duck/Duck_01.png',
+    idle: { row: 0, n: 2 },
+    walk: { row: 1, n: 5 },
+    waterIdle: { row: 6, n: 2 },
+  },
   cow:     {
     p: 'Animals/Cow/Cow_01.png',
     idle: { side: { row: 0, n: 1 }, south: { row: 1, n: 1 }, north: { row: 2, n: 1 } },
-    walk: { side: { row: 3, n: 8 }, south: { row: 4, n: 8 }, north: { row: 4, n: 8 } },
+    walk: { side: { row: 3, n: 8 }, south: { row: 4, n: 8 }, north: { row: 5, n: 8 } },
   },
   frog:    { p: 'Animals/Frog/Frog_01.png',        idle: { row: 0, n: 2 }, walk: { row: 1, n: 8 } },
-  mouse:   { p: 'Animals/Mouse/Mouse_01.png',      idle: { row: 0, n: 2 }, walk: { row: 1, n: 6 } },
-  goose:   { p: 'Animals/Goose/Goose_01.png',      idle: { row: 0, n: 2 }, walk: { row: 2, n: 6 } },
+  mouse:   {
+    p: 'Animals/Mouse/Mouse_01.png',
+    idle: { row: 0, n: 2 },
+    walk: { row: 1, n: 6 },
+    preferSideFacing: true,
+  },
+  goose:   {
+    p: 'Animals/Goose/Goose_01.png',
+    idle: { row: 0, n: 2 },
+    walk: { row: 1, n: 6 },
+    waterIdle: { row: 0, n: 2 },
+  },
   horse:   {
     p: 'Animals/Horse/Horse_01.png',
     idle: { side: { row: 0, n: 1 }, south: { row: 1, n: 1 }, north: { row: 2, n: 1 } },
-    walk: { side: { row: 3, n: 6 }, south: { row: 4, n: 6 }, north: { row: 4, n: 6 } },
+    walk: { side: { row: 3, n: 6 }, south: { row: 4, n: 6 }, north: { row: 5, n: 6 } },
   },
 };
 
@@ -1025,6 +1040,7 @@ export function drawCuteFantasyCritter(ctx, x, y, tileSize, species, frameOffset
   const fac = options?.facing || 1;
   const scale = options?.scale || 0.6;
   const moving = options?.moving || false;
+  const waterborne = !!options?.waterborne;
   const dir = fac === -1 || fac === 1 ? 'side' : (fac === -2 ? 'north' : 'south');
 
   // Small creatures (butterfly, bee) — special layouts
@@ -1055,19 +1071,24 @@ export function drawCuteFantasyCritter(ctx, x, y, tileSize, species, frameOffset
   if (!entry?.loaded) return true; // suppress fallback
 
   // Pick the correct animation row and frame count
-  const animSet = moving ? an.walk : an.idle;
-  const anim = animSet?.[dir] || animSet?.side || animSet;
+  const waterAnim = an.waterIdle || an.idle;
+  const animSet = waterborne ? waterAnim : (moving ? an.walk : an.idle);
+  const resolvedDir = an.preferSideFacing ? 'side' : dir;
+  const anim = animSet?.[resolvedDir] || animSet?.side || animSet;
   const fi = Math.floor(frameOffset * anim.n) % anim.n;
   const sx = fi * 32;
   const sy = anim.row * 32;
 
   const d = tileSize * scale;
-  dropShadow(ctx, x, y + d * 0.06, d * 0.22, d * 0.07, 0.18);
+  const verticalFloat = waterborne ? Math.sin(frameOffset * Math.PI * 2) * tileSize * 0.012 : 0;
+  if (!waterborne) {
+    dropShadow(ctx, x, y + d * 0.06, d * 0.22, d * 0.07, 0.18);
+  }
   return drawFrame(
     ctx, src,
     sx, sy, 32, 32,
-    x - d / 2, y - d * 0.6, d, d,
-    dir === 'side' ? fac : undefined,
+    x - d / 2, y - d * 0.6 + verticalFloat, d, d,
+    resolvedDir === 'side' ? (fac === -1 ? -1 : 1) : undefined,
   );
 }
 
@@ -1083,8 +1104,19 @@ export function drawCuteFantasyPet(ctx, x, y, tileSize, character, frameOffset, 
   if (heroPet) {
     const dir = petDirFromFacing(facing);
     const d = tileSize * heroPet.baseScale * scaleMultiplier;
-    const bob = moving ? Math.sin(frameOffset * Math.PI * 2) * d * 0.025 : 0;
-    dropShadow(ctx, x, y + d * 0.16, d * 0.22, d * 0.07, 0.18);
+    const idlePhase = frameOffset * Math.PI * 2;
+    const bob = moving
+      ? Math.sin(idlePhase) * d * 0.025
+      : Math.sin(idlePhase) * d * 0.018;
+    const swayX = !moving && dir === 'south'
+      ? Math.sin(idlePhase * 0.5) * d * 0.012
+      : 0;
+    const breath = !moving
+      ? Math.sin(idlePhase) * 0.018
+      : 0;
+    const drawW = d * (1 - breath * 0.35);
+    const drawH = d * (1 + breath * 0.55);
+    dropShadow(ctx, x, y + d * 0.16, drawW * 0.22, drawW * 0.07, 0.18);
 
     const animSrc = moving ? heroPet.walk[dir] : heroPet.idle[dir];
     const animEntry = getImage(animSrc);
@@ -1094,14 +1126,14 @@ export function drawCuteFantasyPet(ctx, x, y, tileSize, character, frameOffset, 
       return drawFrame(
         ctx, animSrc,
         fi * heroPet.fw, 0, heroPet.fw, heroPet.fh,
-        x - d / 2, y - d * 0.76 + bob, d, d,
+        x - drawW / 2 + swayX, y - drawH * 0.76 + bob, drawW, drawH,
       );
     }
 
     const baseEntry = getImage(heroPet.base);
     if (!baseEntry?.loaded) return true;
     const drawFacing = dir === 'west' ? -1 : 1;
-    return drawImg(ctx, heroPet.base, x - d / 2, y - d * 0.76 + bob, d, d, drawFacing);
+    return drawImg(ctx, heroPet.base, x - drawW / 2 + swayX, y - drawH * 0.76 + bob, drawW, drawH, drawFacing);
   }
 
   // ── Custom pet sprites (directional 48×48) ──

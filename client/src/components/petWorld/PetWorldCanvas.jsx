@@ -627,6 +627,22 @@ function smoothStep(value) {
   return value * value * (3 - 2 * value);
 }
 
+function resolveFacingFromDelta(dx, dy, fallback = 1, options = {}) {
+  const validFallback = [-2, -1, 1, 2].includes(fallback) ? fallback : 1;
+  if (options.sideOnly) {
+    if (Math.abs(dx) > 0.02) return dx >= 0 ? 1 : -1;
+    if (validFallback === -1 || validFallback === 1) return validFallback;
+    return options.defaultSideFacing || 1;
+  }
+  if (Math.abs(dx) >= Math.abs(dy) && Math.abs(dx) > 0.02) {
+    return dx >= 0 ? 1 : -1;
+  }
+  if (Math.abs(dy) > 0.02) {
+    return dy >= 0 ? 2 : -2;
+  }
+  return validFallback;
+}
+
 function getRouteMotion(entity, time) {
   const route = entity.route;
   if (!route?.length) {
@@ -642,7 +658,7 @@ function getRouteMotion(entity, time) {
 
   const cycleMs = route.reduce((total, node) => total + node.pauseMs + node.moveMs, 0) || 1;
   let cursor = (time + entity.seed * 173) % cycleMs;
-  let lastFacing = route.find((node) => node.facing)?.facing || 1;
+  let lastFacing = route.find((node) => node.facing)?.facing || entity.idleFacing || 1;
   // Very slow idle frame cycle — almost static to prevent any visible jitter
   const idleFrameRate = entity.idleFrameRate ?? 0.00008;
   const idleFrame = idleFrameRate > 0 ? (time * idleFrameRate + entity.seed * 0.1) % 1 : 0;
@@ -683,14 +699,10 @@ function getRouteMotion(entity, time) {
       const dx = next.x - node.x;
       const dy = next.y - node.y;
       // 4-direction facing: derive from actual movement vector
-      let facing;
-      if (Math.abs(dx) >= Math.abs(dy) && Math.abs(dx) > 0.02) {
-        facing = dx >= 0 ? 1 : -1;
-      } else if (Math.abs(dy) > 0.02) {
-        facing = dy >= 0 ? 2 : -2;  // 2 = down, -2 = up
-      } else {
-        facing = node.facing || lastFacing || 1;
-      }
+      const facing = resolveFacingFromDelta(dx, dy, node.facing || lastFacing || 1, {
+        sideOnly: entity.sideOnlyFacing,
+        defaultSideFacing: entity.defaultSideFacing || 1,
+      });
       return {
         x: node.x + dx * eased,
         y: node.y + dy * eased,
@@ -763,11 +775,10 @@ function getTileRouteMotion(entity, time) {
       const progress = node.moveMs > 0 ? cursor / node.moveMs : 1;
       const dx = next.x - node.x;
       const dy = next.y - node.y;
-      const facing = Math.abs(dx) >= Math.abs(dy) && Math.abs(dx) > 0.02
-        ? (dx >= 0 ? 1 : -1)
-        : Math.abs(dy) > 0.02
-          ? (dy >= 0 ? 2 : -2)
-          : entity.idleFacing || node.facing || lastFacing || 2;
+      const facing = resolveFacingFromDelta(dx, dy, entity.idleFacing || node.facing || lastFacing || 2, {
+        sideOnly: entity.sideOnlyFacing,
+        defaultSideFacing: entity.defaultSideFacing || 1,
+      });
       return {
         x: node.x + dx * progress,
         y: node.y + dy * progress,
@@ -1090,9 +1101,10 @@ function getAnimalWanderPos(entity, time, grid) {
 
   // Stable facing based on current drift direction
   const facing = moving
-    ? (Math.abs(dx) >= Math.abs(dy)
-    ? (dx >= 0 ? 1 : -1)
-    : (dy >= 0 ? 2 : -2))
+    ? resolveFacingFromDelta(dx, dy, entity.idleFacing || 2, {
+      sideOnly: entity.sideOnlyFacing,
+      defaultSideFacing: entity.defaultSideFacing || 1,
+    })
     : (entity.idleFacing || 2);
 
   // Very slow idle frame — almost static
@@ -1152,7 +1164,7 @@ function buildPetPlacements(world, terrainRegions, buildings = []) {
     heroScale: 1.0,
     idleFacing: 2,
     walkCyclesPerTile: 2.8,
-    idleFrameRate: 0.00006,
+    idleFrameRate: 0.00026,
     route: buildRoamingTileRoute(heroAnchor, roamTiles, grid, terrainRegions, seed, {
       stopCount: 4,
       minDist: 2,
@@ -1313,16 +1325,19 @@ function buildAmbientFauna(world, terrainRegions, buildings = []) {
   const fishCount = Math.min(7, Math.max(2, Math.floor(waterTiles.length / 18)));
   for (let i = 0; i < fishCount && waterTiles.length; i += 1) {
     const tile = waterTiles[(i * 7 + 3) % waterTiles.length];
+    const waterSpecies = i % 4 === 0 ? 'goose' : (i % 3 === 0 ? 'duck' : (i % 2 === 0 ? 'fish_koi' : 'fish_perch'));
     placements.push({
       ...tile,
-      species: i % 3 === 0 ? 'duck' : (i % 2 === 0 ? 'fish_koi' : 'fish_perch'),
+      species: waterSpecies,
       seed: 101 + i * 19,
-      rangeX: i % 3 === 0 ? 0.2 : 0.35,
-      rangeY: i % 3 === 0 ? 0.12 : 0.2,
+      rangeX: waterSpecies === 'goose' ? 0.18 : (waterSpecies === 'duck' ? 0.2 : 0.35),
+      rangeY: waterSpecies === 'goose' ? 0.1 : (waterSpecies === 'duck' ? 0.12 : 0.2),
       period: 2800 + i * 210,
       layer: 'water',
-      yBias: i % 3 === 0 ? 0.58 : 0.62,
-      scale: i % 3 === 0 ? 0.72 : 0.62,
+      yBias: waterSpecies === 'goose' ? 0.62 : (waterSpecies === 'duck' ? 0.58 : 0.62),
+      scale: waterSpecies === 'goose' ? 0.78 : (waterSpecies === 'duck' ? 0.72 : 0.62),
+      idleFacing: waterSpecies === 'goose' ? -1 : 1,
+      idleFrameRate: waterSpecies === 'goose' ? 0.00022 : (waterSpecies === 'duck' ? 0.00026 : 0.00008),
     });
   }
 
@@ -1339,7 +1354,9 @@ function buildAmbientFauna(world, terrainRegions, buildings = []) {
         layer: 'ground',
         yBias: 0.82,
         scale: ['rabbit', 'fox'].includes(['rabbit', 'deer', 'boar', 'fox'][i % 4]) ? 0.56 : 0.68,
-        idleFacing: 2,
+        idleFacing: ['rabbit', 'fox'].includes(['rabbit', 'deer', 'boar', 'fox'][i % 4]) ? -1 : 2,
+        sideOnlyFacing: ['rabbit', 'fox'].includes(['rabbit', 'deer', 'boar', 'fox'][i % 4]),
+        defaultSideFacing: -1,
         walkCyclesPerTile: 2.3,
         idleFrameRate: 0,
         route: buildRoamingTileRoute(tile, mammalPool, grid, terrainRegions, 203 + i * 23, {
@@ -1353,13 +1370,13 @@ function buildAmbientFauna(world, terrainRegions, buildings = []) {
       });
   }
 
-  const birdPool = shoreTiles.length ? shoreTiles : (woodedTiles.length ? woodedTiles : roamingTiles);
+  const birdPool = woodedTiles.length ? woodedTiles : roamingTiles;
   const birdCount = Math.min(5, Math.max(2, Math.ceil(((world.population || 0) + 2) / 4)));
   for (let i = 0; i < birdCount && birdPool.length; i += 1) {
     const tile = birdPool[(i * 9 + 1) % birdPool.length];
     placements.push({
       ...tile,
-      species: i % 4 === 0 ? 'rare_bird' : 'songbird',
+      species: 'songbird',
       seed: 307 + i * 31,
       rangeX: 0.28,
       rangeY: 0.22,
@@ -1379,6 +1396,7 @@ function buildEncounterSightings(world, terrainRegions, encounters = [], buildin
   const landGraph = buildLandComponents(grid, terrainRegions, ENCOUNTER_WALK_OPTIONS, buildings);
   const roamingTiles = landGraph.primary?.length ? landGraph.primary : landGraph.tiles;
   if (!roamingTiles.length) return [];
+  const waterTiles = findTilesByType(grid, 'water');
   const meadowTiles = roamingTiles.filter(({ x, y }) => (terrainRegions?.[y]?.[x]?.meadowStrength || 0) > 0.28);
   const woodedTiles = roamingTiles.filter(({ x, y }) => (terrainRegions?.[y]?.[x]?.foliageShadow || 0) > 0.2);
   const shoreTiles = roamingTiles.filter(({ x, y }) => (terrainRegions?.[y]?.[x]?.shoreStrength || 0) > 0.12);
@@ -1386,7 +1404,7 @@ function buildEncounterSightings(world, terrainRegions, encounters = [], buildin
   return encounters.map((encounter, index) => {
     const type = encounter.encounter_type;
     const pool =
-      type === 'rare_bird' ? (shoreTiles.length ? shoreTiles : meadowTiles) :
+      type === 'rare_bird' ? (waterTiles.length ? waterTiles : (shoreTiles.length ? shoreTiles : meadowTiles)) :
       type === 'bear_sighting' ? (woodedTiles.length ? woodedTiles : roamingTiles) :
       type === 'wolf_pack' ? (woodedTiles.length ? woodedTiles : meadowTiles) :
       (meadowTiles.length ? meadowTiles : roamingTiles);
@@ -1398,11 +1416,12 @@ function buildEncounterSightings(world, terrainRegions, encounters = [], buildin
       seed: 409 + index * 37,
       range: type === 'bear_sighting' ? 0.28 : 0.4,
       period: 3000 + index * 180,
-      layer: type === 'rare_bird' ? 'air' : 'ground',
-      yBias: type === 'rare_bird' ? 0.46 : 0.8,
-      scale: type === 'bear_sighting' ? 0.86 : type === 'wolf_pack' ? 0.76 : 0.72,
+      layer: type === 'rare_bird' ? 'water' : 'ground',
+      yBias: type === 'rare_bird' ? 0.62 : 0.8,
+      scale: type === 'rare_bird' ? 0.8 : type === 'bear_sighting' ? 0.86 : type === 'wolf_pack' ? 0.76 : 0.72,
       tileKey: `${tile.x}:${tile.y}`,
-      idleFacing: 2,
+      idleFacing: type === 'rare_bird' ? -1 : 2,
+      idleFrameRate: type === 'rare_bird' ? 0.00022 : undefined,
       walkCyclesPerTile: 2.2,
       route: type === 'rare_bird' ? null : buildRoamingTileRoute(tile, pool, grid, terrainRegions, 409 + index * 37, {
         stopCount: 3,
@@ -1777,10 +1796,12 @@ export default function PetWorldCanvas({
         const screenX = wander.x * tileSize - camX + tileSize / 2;
         const screenY = wander.y * tileSize - camY + tileSize * creature.yBias;
         if (screenX < -tileSize || screenY < -tileSize || screenX > size.width + tileSize || screenY > size.height + tileSize) return;
+        const floatingBird = creature.species === 'duck' || creature.species === 'goose';
         drawAmbientCritter(ctx, screenX, screenY, tileSize, creature.species, wander.frameOffset, {
           scale: creature.scale,
           facing: wander.facing,
-          moving: wander.moving,
+          moving: floatingBird ? false : wander.moving,
+          waterborne: true,
         });
       });
 
@@ -1888,10 +1909,12 @@ export default function PetWorldCanvas({
       const screenX = wander.x * tileSize - camX + tileSize / 2;
       const screenY = wander.y * tileSize - camY + tileSize * sighting.yBias;
       if (screenX < -tileSize || screenY < -tileSize || screenX > size.width + tileSize || screenY > size.height + tileSize) return;
+      const floatingBird = sighting.layer === 'water' && (sighting.species === 'duck' || sighting.species === 'goose' || sighting.species === 'rare_bird');
       drawAmbientCritter(ctx, screenX, screenY, tileSize, sighting.species, wander.frameOffset, {
         scale: sighting.scale,
         facing: wander.facing,
-        moving: wander.moving,
+        moving: floatingBird ? false : wander.moving,
+        waterborne: sighting.layer === 'water',
         highlight: true,
       });
     });
