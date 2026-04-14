@@ -72,8 +72,8 @@ const ACTIVE_MARKER_BUILDINGS = new Set([
 
 const NO_INTERIOR_TYPES = new Set(['path', 'fence', 'well', 'garden', 'flower_bed', 'park']);
 const WALK_BLOCKERS = new Set(['water', 'rock', 'tree', 'bush', 'stump']);
-const RESIDENT_WALK_OPTIONS = { maxShoreStrength: 0.24, maxWaterRatio: 0.085 };
-const ROAMING_WALK_OPTIONS = { maxShoreStrength: 0.22, maxWaterRatio: 0.075 };
+const RESIDENT_WALK_OPTIONS = { maxShoreStrength: 0.32, maxWaterRatio: 0.11 };
+const ROAMING_WALK_OPTIONS = { maxShoreStrength: 0.28, maxWaterRatio: 0.095 };
 const ENCOUNTER_WALK_OPTIONS = { maxShoreStrength: 0.24, maxWaterRatio: 0.09 };
 const LAND_ANIMAL_WALK_OPTIONS = { maxShoreStrength: 0.025, maxWaterRatio: 0.008 };
 const ENTITY_DROP_WALK_OPTIONS = { maxShoreStrength: 0.3, maxWaterRatio: 0.12 };
@@ -798,8 +798,6 @@ function buildWoodcuttingTaskTiles(grid, terrainRegions, landTiles = [], buildin
   const dirs = [
     { dx: 1, dy: 0 },
     { dx: -1, dy: 0 },
-    { dx: 0, dy: -1 },
-    { dx: 0, dy: 1 },
   ];
 
   const slots = [];
@@ -835,10 +833,10 @@ function buildWoodcuttingTaskTiles(grid, terrainRegions, landTiles = [], buildin
           role: 'work',
           buildingType: 'woodcutters_hut',
           pauseFacing,
-          standX: sx + 0.5 + focusDx * 0.24,
-          standY: sy + 0.58 + focusDy * 0.12,
+          standX: sx + 0.5 + focusDx * 0.34,
+          standY: sy + 0.6 + focusDy * 0.02,
           strikeTargetX: x + 0.5,
-          strikeTargetY: y + 0.66,
+          strikeTargetY: y + 0.62,
           taskSlotId: `${tileKey(x, y)}:${tileKey(sx, sy)}`,
           workSpotId: tileKey(x, y),
           score,
@@ -1512,11 +1510,15 @@ function buildFishingDecorations(world, terrainRegions, buildings = []) {
 
 function buildFishingTaskTiles(world, terrainRegions, buildings = []) {
   const decorations = buildFishingDecorations(world, terrainRegions, buildings);
-  return decorations
+  const bankDecorations = decorations.filter((decor) => decor.type === 'fishing_bank' && Array.isArray(decor.standSlots) && decor.standSlots.length);
+  const featuredBanks = bankDecorations.filter((decor) => decor.featured);
+  const sourceDecorations = featuredBanks.length ? featuredBanks : bankDecorations;
+  return sourceDecorations
     .filter((decor) => decor.type === 'fishing_bank' && Array.isArray(decor.standSlots) && decor.standSlots.length)
     .flatMap((decor) => decor.standSlots.map((slot, index) => ({
       ...slot,
-      score: (slot.score || 0) + (decor.featured ? 5.5 : 2.4) - index * 0.08,
+      score: (slot.score || 0) + (decor.featured ? 12 : 2.4) - index * 0.08,
+      featured: !!decor.featured,
       boatX: decor.x,
       boatY: decor.y,
       fishingSpotId: decor.fishingSpotId,
@@ -2631,8 +2633,10 @@ function drawResidentInteractionOverlay(ctx, screenX, screenY, tileSize, motion,
       ? screenY + (pose.strikeTargetY - actorWorldY) * tileSize - tileSize * 0.06
       : baseY - tileSize * 0.14;
     const pulseSwing = Math.sin(time * 0.018) * tileSize * 0.02;
-    const tipX = handX + clamp((targetX - handX) * 0.52, -tileSize * 0.26, tileSize * 0.26);
-    const tipY = handY + clamp((targetY - handY) * 0.52, -tileSize * 0.24, tileSize * 0.16) + pulseSwing;
+    const tipX = handX + clamp((targetX - handX) * 0.34, -tileSize * 0.18, tileSize * 0.18);
+    const tipY = handY + clamp((targetY - handY) * 0.34, -tileSize * 0.16, tileSize * 0.08) + pulseSwing;
+    ctx.strokeStyle = 'rgba(124,88,46,0.92)';
+    ctx.lineWidth = Math.max(1, tileSize * 0.025);
     ctx.beginPath();
     ctx.moveTo(handX, handY);
     ctx.lineTo(tipX, tipY);
@@ -4161,28 +4165,42 @@ export default function PetWorldCanvas({
             {readonlyLabel}
           </div>
         )}
-        {/* Entity context menu (Cute Fantasy styled) */}
+        {/* Entity context panel */}
         {selectedEntity && !carryingEntity && !pendingBuildType && (
           <div
-            className="cf-panel absolute z-50"
+            className="cf-panel-dark absolute left-1/2 z-50 flex -translate-x-1/2 flex-col gap-2 px-3 py-2"
             style={{
-              left: Math.max(60, Math.min(selectedEntity.menuScreenX, size.width - 60)),
-              top: Math.max(8, selectedEntity.menuScreenY - tileSize * 1.6),
-              transform: 'translate(-50%, -100%)',
-              minWidth: 96,
-              padding: '6px 10px',
+              bottom: minimapVisible ? 92 : 8,
+              width: Math.min(size.width - 16, 520),
               pointerEvents: 'auto',
             }}
           >
-            <div className="mb-1 text-center text-[11px] font-bold" style={{ color: '#3a2010' }}>
-              {entityDisplayName(selectedEntity)}
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="truncate text-[11px] font-bold" style={{ color: '#3a2010' }}>
+                  {entityDisplayName(selectedEntity)}
+                </div>
+                {selectedEntity.type === 'resident' && (
+                  <div className="truncate text-[9px] uppercase tracking-[0.12em]" style={{ color: '#6a4a2a' }}>
+                    {(selectedEntity.entity?.workBuildingType || 'villager').replace(/_/g, ' ')}
+                  </div>
+                )}
+              </div>
+              <button
+                type="button"
+                className="cf-btn"
+                style={{ padding: '3px 9px', fontSize: 10, whiteSpace: 'nowrap', background: 'linear-gradient(180deg, rgba(139,94,43,0.15) 0%, rgba(139,94,43,0.08) 100%)', borderColor: 'rgba(139,94,43,0.35)', color: '#6a4a2a' }}
+                onClick={(e) => { e.stopPropagation(); setSelectedEntity(null); }}
+              >
+                Close
+              </button>
             </div>
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-wrap gap-2">
               {selectedEntity.type === 'resident' && residentCanFish(selectedEntity.entity) && (
                 <button
                   type="button"
                   className="cf-btn"
-                  style={{ padding: '4px 10px', fontSize: 10, background: 'linear-gradient(180deg, #73b7df 0%, #4d8fbb 100%)', borderColor: '#2e658a', color: '#0d2f4a' }}
+                  style={{ padding: '4px 10px', fontSize: 10, whiteSpace: 'nowrap', background: 'linear-gradient(180deg, #73b7df 0%, #4d8fbb 100%)', borderColor: '#2e658a', color: '#0d2f4a' }}
                   onClick={(e) => {
                     e.stopPropagation();
                     handleResidentTaskCommand(selectedEntity, 'fish');
@@ -4195,7 +4213,7 @@ export default function PetWorldCanvas({
                 <button
                   type="button"
                   className="cf-btn"
-                  style={{ padding: '4px 10px', fontSize: 10, background: 'linear-gradient(180deg, #c49a63 0%, #9e7540 100%)', borderColor: '#6f4e24', color: '#36210b' }}
+                  style={{ padding: '4px 10px', fontSize: 10, whiteSpace: 'nowrap', background: 'linear-gradient(180deg, #c49a63 0%, #9e7540 100%)', borderColor: '#6f4e24', color: '#36210b' }}
                   onClick={(e) => {
                     e.stopPropagation();
                     handleResidentTaskCommand(selectedEntity, 'chop');
@@ -4207,7 +4225,7 @@ export default function PetWorldCanvas({
               <button
                 type="button"
                 className="cf-btn"
-                style={{ padding: '4px 10px', fontSize: 10, background: 'linear-gradient(180deg, #7abe5a 0%, #5a9e3a 100%)', borderColor: '#3a6e1a', color: '#1a3a08' }}
+                style={{ padding: '4px 10px', fontSize: 10, whiteSpace: 'nowrap', background: 'linear-gradient(180deg, #7abe5a 0%, #5a9e3a 100%)', borderColor: '#3a6e1a', color: '#1a3a08' }}
                 onClick={(e) => {
                   e.stopPropagation();
                   setCarryingEntity({ type: selectedEntity.type, key: selectedEntity.key, entity: selectedEntity.entity });
@@ -4215,14 +4233,6 @@ export default function PetWorldCanvas({
                 }}
               >
                 Pick Up
-              </button>
-              <button
-                type="button"
-                className="cf-btn"
-                style={{ padding: '3px 10px', fontSize: 10, background: 'linear-gradient(180deg, rgba(139,94,43,0.15) 0%, rgba(139,94,43,0.08) 100%)', borderColor: 'rgba(139,94,43,0.35)', color: '#6a4a2a' }}
-                onClick={(e) => { e.stopPropagation(); setSelectedEntity(null); }}
-              >
-                Cancel
               </button>
             </div>
           </div>
