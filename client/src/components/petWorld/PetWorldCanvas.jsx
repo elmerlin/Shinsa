@@ -226,6 +226,14 @@ function entityDisplayName(entry) {
   return 'Entity';
 }
 
+function residentCanFish(resident) {
+  return resident?.workBuildingType === 'fishing_hut';
+}
+
+function residentCanChopWood(resident) {
+  return ['woodcutters_hut', 'lumberyard'].includes(resident?.workBuildingType || '');
+}
+
 /* ── Entity hit detection ── */
 
 function findNearestEntity(entityPositions, clientX, clientY, canvasRect) {
@@ -765,6 +773,226 @@ function buildFishingShoreTiles(grid, terrainRegions, landTiles = [], buildings 
       shoreWaterY: target.y,
     };
   }).filter(Boolean);
+}
+
+function facingFromVector(dx, dy, fallback = 2) {
+  if (Math.abs(dx) >= Math.abs(dy) && Math.abs(dx) > 0) return dx >= 0 ? 1 : -1;
+  if (Math.abs(dy) > 0) return dy >= 0 ? 2 : -2;
+  return fallback;
+}
+
+function buildWoodcuttingTaskTiles(grid, terrainRegions, landTiles = [], buildings = [], seed = 0) {
+  if (!grid || !landTiles.length) return [];
+  const villageAnchor = pickVillageAnchor(landTiles, buildings, seed) || landTiles[0];
+  const dirs = [
+    { dx: 0, dy: -1 },
+    { dx: 1, dy: 0 },
+    { dx: 0, dy: 1 },
+    { dx: -1, dy: 0 },
+  ];
+
+  return landTiles
+    .map(({ x, y }, index) => {
+      const terrain = terrainRegions?.[y]?.[x];
+      const distanceFromVillage = Math.abs(x - (villageAnchor?.x ?? x)) + Math.abs(y - (villageAnchor?.y ?? y));
+      if (distanceFromVillage < 4) return null;
+      if ((terrain?.shoreStrength || 0) > 0.08 || (terrain?.waterRatio || 0) > 0.04) return null;
+
+      const neighborTrees = dirs
+        .map(({ dx, dy }) => ({
+          dx,
+          dy,
+          tile: grid.tiles?.[y + dy]?.[x + dx] || null,
+        }))
+        .filter(({ tile }) => tile && (tile.t === 'tree' || tile.t === 'stump'));
+
+      const foliageScore = terrain?.foliageShadow || 0;
+      if (!neighborTrees.length && foliageScore < 0.16) return null;
+
+      const focus = neighborTrees[0];
+      const pauseFacing = focus
+        ? facingFromVector(focus.dx, focus.dy, 2)
+        : (hash01(seed + index * 17, 111) > 0.5 ? -1 : 1);
+      const score = neighborTrees.length * 2.2 + foliageScore * 3 + hash01(seed + index * 19, 112);
+      return {
+        x,
+        y,
+        role: 'work',
+        buildingType: 'woodcutters_hut',
+        pauseFacing,
+        score,
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.score - a.score);
+}
+
+function pickResidentTaskTarget(pool, currentTile, seed, grid, terrainRegions, walkOptions = RESIDENT_WALK_OPTIONS) {
+  if (!pool?.length || !currentTile || !grid) return null;
+  let best = null;
+  let bestScore = -Infinity;
+  pool.forEach((candidate, index) => {
+    const path = findTilePath(grid, terrainRegions, currentTile, candidate, seed + index * 13, walkOptions);
+    if (!path?.length) return;
+    const distance = path.length - 1;
+    const score = (candidate.score || 0)
+      - Math.abs(distance - 6) * 0.55
+      + Math.min(distance, 12) * 0.08
+      + hash01(seed + index * 23, 113) * 0.12;
+    if (score > bestScore) {
+      bestScore = score;
+      best = candidate;
+    }
+  });
+  return best;
+}
+
+function buildResidentTaskIntroRoute(startMotion, targetTile, seed, grid, terrainRegions, meta, options = {}) {
+  if (!startMotion || !targetTile || !grid) return [];
+  const startTile = {
+    x: Math.floor(startMotion.tileX ?? startMotion.x),
+    y: Math.floor(startMotion.tileY ?? startMotion.y),
+  };
+  const tilePath = findTilePath(grid, terrainRegions, startTile, targetTile, seed + 211, options.walkOptions || RESIDENT_WALK_OPTIONS);
+  if (!tilePath?.length || tilePath.length === 1) return [];
+
+  const clearance = {
+    grid,
+    terrainRegions,
+    walkOptions: options.walkOptions || RESIDENT_WALK_OPTIONS,
+    padding: options.clearancePadding ?? 0.12,
+  };
+  const nodes = [
+    makeRouteNode(
+      startMotion.x,
+      startMotion.y,
+      startTile.x,
+      startTile.y,
+      'path',
+      0,
+      { pauseFacing: startMotion.facing || 2 },
+    ),
+  ];
+
+  tilePath.slice(1).forEach((tile, index) => {
+    const isGoal = index === tilePath.length - 2;
+    const point = pointFromTileCenter(tile, seed + 223 + index * 17, 0, 0, clearance);
+    nodes.push(
+      makeRouteNode(
+        point?.x ?? tile.x + 0.5,
+        point?.y ?? tile.y + 0.5,
+        tile.x,
+        tile.y,
+        isGoal ? 'work' : 'path',
+        0,
+        isGoal ? meta : null,
+      ),
+    );
+  });
+
+  return finalizeRouteNodes(nodes, seed + 227, {
+    speed: options.speed ?? 0.78,
+    pauseFacing: meta?.pauseFacing ?? 2,
+  }, false);
+}
+
+function buildResidentTaskLoop(targetTile, seed, grid, terrainRegions, meta, options = {}) {
+  if (!targetTile || !grid) return [];
+  const clearance = {
+    grid,
+    terrainRegions,
+    walkOptions: options.walkOptions || RESIDENT_WALK_OPTIONS,
+    padding: options.clearancePadding ?? 0.12,
+  };
+  const point = pointFromTileCenter(targetTile, seed + 241, 0, 0, clearance);
+  return finalizeRouteNodes([
+    makeRouteNode(
+      point?.x ?? targetTile.x + 0.5,
+      point?.y ?? targetTile.y + 0.5,
+      targetTile.x,
+      targetTile.y,
+      'work',
+      options.pauseMs ?? 28000,
+      meta,
+    ),
+  ], seed + 251, {
+    speed: options.speed ?? 0.76,
+    pauseFacing: meta?.pauseFacing ?? 2,
+  }, true);
+}
+
+function buildResidentTaskState(entity, motion, taskKind, world, terrainRegions, buildings = [], assignedAt = performance.now()) {
+  const grid = world?.grid;
+  if (!grid || !entity || !motion) return null;
+  const landGraph = buildLandComponents(grid, terrainRegions, RESIDENT_WALK_OPTIONS, buildings);
+  const landTiles = landGraph.primary?.length ? landGraph.primary : landGraph.tiles;
+  const startTile = {
+    x: Math.floor(motion.tileX ?? motion.x),
+    y: Math.floor(motion.tileY ?? motion.y),
+  };
+
+  let target = null;
+  if (taskKind === 'fish') {
+    const shoreTiles = buildFishingShoreTiles(grid, terrainRegions, landTiles, buildings, entity.seed + 613);
+    const scenicSpots = selectFishingSceneSpots(grid, terrainRegions, shoreTiles, buildings);
+    const preferredPool = scenicSpots.length ? scenicSpots : shoreTiles;
+    target = pickResidentTaskTarget(preferredPool, startTile, entity.seed + 617, grid, terrainRegions, RESIDENT_WALK_OPTIONS);
+    if (!target) return null;
+    const intro = buildResidentTaskIntroRoute(motion, target, entity.seed + 619, grid, terrainRegions, target, {
+      speed: 0.78,
+      walkOptions: RESIDENT_WALK_OPTIONS,
+    });
+    return {
+      x: startTile.x,
+      y: startTile.y,
+      workBuildingType: 'fishing_hut',
+      routeIntro: intro,
+      routeIntroStartAt: assignedAt,
+      routeIntroDurationMs: intro.reduce((total, node, index) => {
+        const isLast = index === intro.length - 1;
+        return total + (node.pauseMs || 0) + (isLast ? 0 : (node.moveMs || 0));
+      }, 0),
+      route: buildResidentTaskLoop(target, entity.seed + 631, grid, terrainRegions, {
+        ...target,
+        buildingType: 'fishing_hut',
+      }, {
+        pauseMs: 36000,
+        walkOptions: RESIDENT_WALK_OPTIONS,
+      }),
+      assignedTask: 'fish',
+    };
+  }
+
+  if (taskKind === 'chop') {
+    const chopTiles = buildWoodcuttingTaskTiles(grid, terrainRegions, landTiles, buildings, entity.seed + 641);
+    target = pickResidentTaskTarget(chopTiles, startTile, entity.seed + 647, grid, terrainRegions, RESIDENT_WALK_OPTIONS);
+    if (!target) return null;
+    const intro = buildResidentTaskIntroRoute(motion, target, entity.seed + 653, grid, terrainRegions, target, {
+      speed: 0.8,
+      walkOptions: RESIDENT_WALK_OPTIONS,
+    });
+    return {
+      x: startTile.x,
+      y: startTile.y,
+      workBuildingType: 'woodcutters_hut',
+      routeIntro: intro,
+      routeIntroStartAt: assignedAt,
+      routeIntroDurationMs: intro.reduce((total, node, index) => {
+        const isLast = index === intro.length - 1;
+        return total + (node.pauseMs || 0) + (isLast ? 0 : (node.moveMs || 0));
+      }, 0),
+      route: buildResidentTaskLoop(target, entity.seed + 659, grid, terrainRegions, {
+        ...target,
+        buildingType: 'woodcutters_hut',
+      }, {
+        pauseMs: 34000,
+        walkOptions: RESIDENT_WALK_OPTIONS,
+      }),
+      assignedTask: 'chop',
+    };
+  }
+
+  return null;
 }
 
 function getCardinalWaterNeighbors(grid, x, y) {
@@ -1438,6 +1666,28 @@ function makeRouteNode(x, y, tileX, tileY, role = 'path', pauseMs = 0, meta = nu
   };
 }
 
+function finalizeRouteNodes(nodes, seed, options = {}, loop = true) {
+  if (!nodes?.length) return [];
+  const speed = options.speed ?? (0.72 + hash01(seed, 7) * 0.18);
+  return nodes.map((node, index) => {
+    const next = loop ? nodes[(index + 1) % nodes.length] : (nodes[index + 1] || null);
+    const dx = next ? (next.x - node.x) : 0;
+    const dy = next ? (next.y - node.y) : 0;
+    const distance = Math.hypot(dx, dy);
+    return {
+      ...node,
+      moveMs: next ? Math.max(360, (distance / speed) * 1000) : 0,
+      distance,
+      pauseFacing: node.pauseFacing ?? options.pauseFacing ?? 2,
+      facing: Math.abs(dx) >= Math.abs(dy) && Math.abs(dx) > 0.02
+        ? (dx >= 0 ? 1 : -1)
+        : Math.abs(dy) > 0.02
+          ? (dy >= 0 ? 2 : -2)
+          : null,
+    };
+  });
+}
+
 function pushRouteNode(nodes, node) {
   const last = nodes[nodes.length - 1];
   if (
@@ -1514,24 +1764,7 @@ function expandResidentRoute(points, seed, grid, terrainRegions, options = {}) {
     }
   }
 
-  const speed = options.speed ?? (0.72 + hash01(seed, 7) * 0.18);
-  return nodes.map((node, index) => {
-    const next = nodes[(index + 1) % nodes.length];
-    const dx = next.x - node.x;
-    const dy = next.y - node.y;
-    const distance = Math.hypot(dx, dy);
-    return {
-      ...node,
-      moveMs: Math.max(360, (distance / speed) * 1000),
-      distance,
-      pauseFacing: node.pauseFacing ?? options.pauseFacing ?? 2,
-      facing: Math.abs(dx) >= Math.abs(dy) && Math.abs(dx) > 0.02
-        ? (dx >= 0 ? 1 : -1)
-        : Math.abs(dy) > 0.02
-          ? (dy >= 0 ? 2 : -2)
-          : null,
-    };
-  });
+  return finalizeRouteNodes(nodes, seed, options, true);
 }
 
 function buildRoamingTileRoute(anchorTile, pool, grid, terrainRegions, seed, options = {}) {
@@ -1682,37 +1915,29 @@ function resolveFacingFromDelta(dx, dy, fallback = 1, options = {}) {
   return validFallback;
 }
 
-function getRouteMotion(entity, time) {
-  const route = entity.route;
-  if (!route?.length) {
-    return {
-      x: entity.x + 0.5,
-      y: entity.y + 0.5,
-      frameOffset: 0,
-      facing: 1,
-      moving: false,
-      buildingId: entity.buildingId || null,
-    };
-  }
+function getRouteDuration(route, loop = true) {
+  if (!route?.length) return 0;
+  return route.reduce((total, node, index) => {
+    const includeMove = loop || index < route.length - 1;
+    return total + (node.pauseMs || 0) + (includeMove ? (node.moveMs || 0) : 0);
+  }, 0);
+}
 
-  const cycleMs = route.reduce((total, node) => total + node.pauseMs + node.moveMs, 0) || 1;
-  let cursor = (time + entity.seed * 173) % cycleMs;
+function sampleRouteMotion(route, entity, timeCursor, loop = true) {
+  if (!route?.length) return null;
+  let cursor = timeCursor;
   let lastFacing = route.find((node) => node.facing)?.facing || entity.idleFacing || 1;
-  // Very slow idle frame cycle — almost static to prevent any visible jitter
   const idleFrameRate = entity.idleFrameRate ?? 0.00008;
-  const idleFrame = idleFrameRate > 0 ? (time * idleFrameRate + entity.seed * 0.1) % 1 : 0;
-  // Moderate work animation cycle (~3s per loop) — visible tool swinging
+  const idleFrame = idleFrameRate > 0 ? (timeCursor * idleFrameRate + entity.seed * 0.1) % 1 : 0;
   const workFrameRate = entity.workFrameRate ?? 0.00035;
-  const workFrame = workFrameRate > 0 ? (time * workFrameRate + entity.seed * 0.1) % 1 : 0;
+  const workFrame = workFrameRate > 0 ? (timeCursor * workFrameRate + entity.seed * 0.1) % 1 : 0;
 
   for (let index = 0; index < route.length; index += 1) {
     const node = route[index];
-    const next = route[(index + 1) % route.length];
+    const next = loop ? route[(index + 1) % route.length] : (route[index + 1] || null);
     const pauseMs = node.pauseMs || 0;
     if (cursor < pauseMs) {
-      // Idle: hold position and facing completely stable — no loiter, no drift, no facing changes
       const stableFacing = entity.pauseFacing || entity.idleFacing || node.pauseFacing || node.facing || lastFacing || 2;
-      // Use faster frame rate for NPCs paused at work buildings (tool swing animation)
       const bt = node.buildingType || '';
       const isWorkBuilding = ['farm', 'fishing_hut', 'woodcutters_hut', 'lumberyard',
         'quarry', 'stone_pit', 'watchtower', 'shrine', 'town_hall', 'weaving_hut'].includes(bt);
@@ -1736,13 +1961,12 @@ function getRouteMotion(entity, time) {
     }
     cursor -= pauseMs;
 
-    const moveMs = node.moveMs || 0;
-    if (cursor < moveMs) {
+    const moveMs = next ? (node.moveMs || 0) : 0;
+    if (next && cursor < moveMs) {
       const progress = moveMs > 0 ? cursor / moveMs : 1;
       const eased = entity.linearMotion === false ? smoothStep(progress) : progress;
       const dx = next.x - node.x;
       const dy = next.y - node.y;
-      // 4-direction facing: derive from actual movement vector
       const facing = resolveFacingFromDelta(dx, dy, node.facing || lastFacing || 1, {
         sideOnly: entity.sideOnlyFacing,
         defaultSideFacing: entity.defaultSideFacing || 1,
@@ -1750,8 +1974,6 @@ function getRouteMotion(entity, time) {
       return {
         x: node.x + dx * eased,
         y: node.y + dy * eased,
-        // Walk frame: tied to movement progress so stride matches body speed
-        // Multiplier 2.0 = ~2 full walk cycles per tile (8 frames each)
         frameOffset: node.distance > 0.02
           ? (eased * Math.max(node.distance, 0.3) * (entity.walkCyclesPerTile || 2.2) + entity.seed * 0.1) % 1
           : idleFrame,
@@ -1769,7 +1991,7 @@ function getRouteMotion(entity, time) {
         fishingSpotId: node.fishingSpotId || next.fishingSpotId || null,
       };
     }
-    cursor -= moveMs;
+    if (next) cursor -= moveMs;
     if (node.facing) lastFacing = node.facing;
   }
 
@@ -1778,7 +2000,7 @@ function getRouteMotion(entity, time) {
     x: fallback.x,
     y: fallback.y,
     frameOffset: 0,
-    facing: fallback.facing || 1,
+    facing: fallback.facing || entity.pauseFacing || entity.idleFacing || 1,
     moving: false,
     paused: true,
     role: fallback.role || 'path',
@@ -1791,6 +2013,35 @@ function getRouteMotion(entity, time) {
     shoreDir: fallback.shoreDir || null,
     fishingSpotId: fallback.fishingSpotId || null,
   };
+}
+
+function getRouteMotion(entity, time) {
+  const introRoute = entity.routeIntro;
+  const introStartAt = entity.routeIntroStartAt;
+  if (introRoute?.length && Number.isFinite(introStartAt)) {
+    const introElapsed = Math.max(0, time - introStartAt);
+    const introDuration = entity.routeIntroDurationMs ?? getRouteDuration(introRoute, false);
+    if (introElapsed < introDuration) {
+      const introMotion = sampleRouteMotion(introRoute, entity, introElapsed, false);
+      if (introMotion) return introMotion;
+    }
+  }
+
+  const route = entity.route;
+  if (!route?.length) {
+    return {
+      x: entity.x + 0.5,
+      y: entity.y + 0.5,
+      frameOffset: 0,
+      facing: 1,
+      moving: false,
+      buildingId: entity.buildingId || null,
+    };
+  }
+
+  const cycleMs = getRouteDuration(route, true) || 1;
+  const cursor = (time + entity.seed * 173) % cycleMs;
+  return sampleRouteMotion(route, entity, cursor, true);
 }
 
 function getTileRouteMotion(entity, time) {
@@ -2740,6 +2991,28 @@ export default function PetWorldCanvas({
     () => (typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)').matches : false),
     [],
   );
+  const handleResidentTaskCommand = useCallback((entry, taskKind) => {
+    if (!entry || entry.type !== 'resident') return;
+    const taskState = buildResidentTaskState(
+      entry.entity,
+      entry.motion,
+      taskKind,
+      world,
+      terrainRegions,
+      buildings,
+      timeRef.current || performance.now(),
+    );
+    if (!taskState) {
+      setSelectedEntity(null);
+      return;
+    }
+    const currentRelocation = relocationsRef.current.get(entry.key) || {};
+    relocationsRef.current.set(entry.key, {
+      ...currentRelocation,
+      ...taskState,
+    });
+    setSelectedEntity(null);
+  }, [world, terrainRegions, buildings]);
 
   const tileSize = Math.round(BASE_TILE_SIZE * FIXED_ZOOM);
 
@@ -3244,8 +3517,8 @@ export default function PetWorldCanvas({
 
     // Build entity screen-position array for tap hit-detection
     const hitEntities = [];
-    residentStates.forEach(({ resident, screenX, screenY }) => {
-      hitEntities.push({ type: 'resident', key: residentKey(resident), screenX, screenY, hitRadius: tileSize * 0.5, entity: resident });
+    residentStates.forEach(({ resident, motion, screenX, screenY }) => {
+      hitEntities.push({ type: 'resident', key: residentKey(resident), screenX, screenY, hitRadius: tileSize * 0.5, entity: resident, motion });
     });
     petPlacements.forEach((pet) => {
       const pKey = petKey(pet);
@@ -3637,6 +3910,32 @@ export default function PetWorldCanvas({
               {entityDisplayName(selectedEntity)}
             </div>
             <div className="flex flex-col gap-1">
+              {selectedEntity.type === 'resident' && residentCanFish(selectedEntity.entity) && (
+                <button
+                  type="button"
+                  className="cf-btn"
+                  style={{ padding: '4px 10px', fontSize: 10, background: 'linear-gradient(180deg, #73b7df 0%, #4d8fbb 100%)', borderColor: '#2e658a', color: '#0d2f4a' }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleResidentTaskCommand(selectedEntity, 'fish');
+                  }}
+                >
+                  Go Fishing
+                </button>
+              )}
+              {selectedEntity.type === 'resident' && residentCanChopWood(selectedEntity.entity) && (
+                <button
+                  type="button"
+                  className="cf-btn"
+                  style={{ padding: '4px 10px', fontSize: 10, background: 'linear-gradient(180deg, #c49a63 0%, #9e7540 100%)', borderColor: '#6f4e24', color: '#36210b' }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleResidentTaskCommand(selectedEntity, 'chop');
+                  }}
+                >
+                  Chop Wood
+                </button>
+              )}
               <button
                 type="button"
                 className="cf-btn"
