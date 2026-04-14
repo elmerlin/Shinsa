@@ -613,11 +613,32 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
       const idx = pathIdx > 0 ? pathIdx : 15;
       const [psx, psy] = PATH_WANG_LOOKUP[idx];
       drawFrame(ctx, cfp(WANG_DIRT_GRASS), psx, psy, 16, 16, x, y, size, size);
-    } else if (pathIdx > 0 && !isShoreTransition) {
-      // Adjacent to a path: draw transition on inland tiles only.
-      // Shore tiles skip — the dirt-grass tile has opaque grass that would cover water.
-      const [psx, psy] = PATH_WANG_LOOKUP[pathIdx];
-      drawFrame(ctx, cfp(WANG_DIRT_GRASS), psx, psy, 16, 16, x, y, size, size, undefined, 0.88);
+    } else if (pathIdx > 0) {
+      if (!isShoreTransition) {
+        // Inland tile: draw full dirt-grass transition
+        const [psx, psy] = PATH_WANG_LOOKUP[pathIdx];
+        drawFrame(ctx, cfp(WANG_DIRT_GRASS), psx, psy, 16, 16, x, y, size, size, undefined, 0.88);
+      } else {
+        // Shore tile: only draw path transition in grass quadrants.
+        // maskedIdx strips dirt from corners that are water in the base tile.
+        // Canvas clip restricts drawing to grass quadrants so opaque pixels
+        // from the dirt-grass tile never cover the water in the wang base.
+        const maskedIdx = pathIdx & wangIdx;
+        if (maskedIdx > 0) {
+          const halfW = size / 2;
+          const halfH = size / 2;
+          ctx.save();
+          ctx.beginPath();
+          if (wangIdx & 8) ctx.rect(x, y, halfW, halfH);
+          if (wangIdx & 4) ctx.rect(x + halfW, y, halfW, halfH);
+          if (wangIdx & 2) ctx.rect(x, y + halfH, halfW, halfH);
+          if (wangIdx & 1) ctx.rect(x + halfW, y + halfH, halfW, halfH);
+          ctx.clip();
+          const [psx, psy] = PATH_WANG_LOOKUP[maskedIdx];
+          drawFrame(ctx, cfp(WANG_DIRT_GRASS), psx, psy, 16, 16, x, y, size, size, undefined, 0.88);
+          ctx.restore();
+        }
+      }
     }
   }
 
