@@ -2162,6 +2162,12 @@ export function drawBuildingThumbnail(type, biome = 'grasslands', size = 48) {
   const ox = (size - w) / 2;
   const oy = (size - h) / 2 + size * 0.05; // slight down offset for shadow room
 
+  // Try Cute Fantasy sprites first (renders actual building art)
+  if (drawCuteFantasyBuilding(ctx, type, ox, oy, w, h)) {
+    _thumbCache.set(key, canvas);
+    return canvas;
+  }
+
   const drawer = SPRITE_DRAWERS[type];
   if (drawer) {
     drawer(ctx, ox, oy, w, h, ui, tileSize);

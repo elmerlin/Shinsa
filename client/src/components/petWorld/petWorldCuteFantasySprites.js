@@ -93,7 +93,7 @@ function dropShadow(ctx, cx, cy, rx, ry, a) {
   ctx.restore();
 }
 
-/* ═══ Building type resolver ═══ */
+/* ═══ Building type / level resolver ═══ */
 
 function bType(buildingOrType) {
   if (!buildingOrType) return '';
@@ -101,41 +101,123 @@ function bType(buildingOrType) {
   return buildingOrType.type || buildingOrType.building_type || '';
 }
 
+function bLevel(buildingOrType) {
+  if (!buildingOrType || typeof buildingOrType === 'string') return 1;
+  return Math.max(1, Number(buildingOrType.level) || 1);
+}
+
+/** Get the sprite definition for a building type at a given level. */
+function getBuildingSprite(type, level) {
+  const entry = BUILDINGS[type];
+  if (!entry) return null;
+  if (Array.isArray(entry)) {
+    const idx = Math.min(Math.max(0, (level || 1) - 1), entry.length - 1);
+    return entry[idx];
+  }
+  return entry;
+}
+
 /* ═══════════════════════════════════════════════════════
    SPRITE DATA
    ═══════════════════════════════════════════════════════ */
 
-/* ── Building sprites ── */
+/* ── Building sprites (level-aware: arrays = [L1, L2, L3]) ── */
+// Houses: Wood → Stone → Limestone (material progression)
+// Unique buildings: Base → Green → Red (painted trim progression)
+// Spritesheets: different frame for each level (e.g. Church lit windows)
 
 const BB = 'Buildings/Buildings';
 const UB = BB + '/Unique_Buildings';
 const HW = BB + '/Houses/Wood';
+const HS = BB + '/Houses/Stone';
+const HL = BB + '/Houses/Limestone';
 const OD = 'Outdoor decoration';
 
 const BUILDINGS = {
-  house:           { p: HW + '/House_1_Wood_Base_Blue.png', w: 96, h: 128 },
-  large_house:     { p: UB + '/Inn/Inn_Blue.png', w: 240, h: 192 },
-  bakery:          { p: HW + '/House_3_Wood_Base_Blue.png', w: 144, h: 128 },
-  weaving_hut:     { p: HW + '/House_2_Wood_Base_Blue.png', w: 144, h: 128 },
-  tavern:          { p: HW + '/House_4_Wood_Base_Blue.png', w: 112, h: 96 },
-  farm:            { p: UB + '/Barn/Barn_Base_Blue.png', w: 128, h: 144 },
-  storehouse:      { p: UB + '/Barn/Barn_Green_Blue.png', w: 128, h: 144 },
-  warehouse:       { p: UB + '/Greenhouse/Greenhouse_Green.png', f: [0, 0, 128, 128] },
-  woodcutters_hut: { p: UB + '/Shed/Shed_Base_Blue.png', w: 96, h: 112 },
-  lumberyard:      { p: UB + '/Shed/Shed_Green_Blue.png', w: 96, h: 112 },
-  fishing_hut:     { p: UB + '/Fisherman_House/Fisherman_House_Base_Blue.png', w: 96, h: 112 },
-  quarry:          { p: UB + '/Blacksmith_House/Blacksmith_House_Blue.png', w: 160, h: 128 },
-  stone_pit:       { p: UB + '/Silo/Silo.png', w: 48, h: 80 },
-  watchtower:      { p: UB + '/Silo/Silo.png', w: 48, h: 80 },
-  market:          { p: UB + '/Stalls/Market_Stalls.png', w: 192, h: 48 },
-  trading_post:    { p: UB + '/Stalls/Market_Stalls.png', w: 192, h: 48 },
-  shrine:          { p: UB + '/Windmill/Windmill.png', w: 128, h: 112 },
-  town_hall:       { p: UB + '/Church/Church_Blue.png', f: [0, 0, 112, 144] },
-  well:            { p: OD + '/Well.png', w: 32, h: 48 },
-  park:            { p: OD + '/Fountain.png', w: 32, h: 80 },
-  garden:          { p: OD + '/Flowers.png', f: [0, 0, 32, 32] },
-  flower_bed:      { p: OD + '/Flowers.png', f: [0, 0, 32, 32] },
-  path:            { p: 'Tiles/Grass/Path_Middle.png', w: 16, h: 16, tile: true },
+  // ── Housing ──
+  house: [
+    { p: HW + '/House_1_Wood_Base_Blue.png', w: 96, h: 128 },
+    { p: HS + '/House_1_Stone_Base_Blue.png', w: 96, h: 128 },
+    { p: HL + '/House_1_Limestone_Base_Blue.png', w: 96, h: 128 },
+  ],
+  large_house: [
+    { p: HW + '/House_5_Wood_Base_Blue.png', w: 192, h: 128 },
+    { p: HS + '/House_5_Stone_Base_Blue.png', w: 192, h: 128 },
+    { p: UB + '/Inn/Inn_Blue.png', w: 240, h: 192 },
+  ],
+  // ── Food ──
+  farm: [
+    { p: UB + '/Barn/Barn_Base_Blue.png', w: 128, h: 144 },
+    { p: UB + '/Barn/Barn_Green_Blue.png', w: 128, h: 144 },
+    { p: UB + '/Barn/Barn_Red_Blue.png', w: 128, h: 144 },
+  ],
+  fishing_hut: [
+    { p: UB + '/Fisherman_House/Fisherman_House_Base_Blue.png', w: 96, h: 112 },
+    { p: UB + '/Fisherman_House/Fisherman_House_Green_Blue.png', w: 96, h: 112 },
+    { p: UB + '/Fisherman_House/Fisherman_House_Red_Blue.png', w: 96, h: 112 },
+  ],
+  bakery: [
+    { p: HW + '/House_3_Wood_Base_Blue.png', w: 144, h: 128 },
+    { p: HS + '/House_3_Stone_Base_Blue.png', w: 144, h: 128 },
+    { p: HL + '/House_3_Limestone_Base_Blue.png', w: 144, h: 128 },
+  ],
+  // ── Wood ──
+  woodcutters_hut: [
+    { p: UB + '/Shed/Shed_Base_Blue.png', w: 96, h: 112 },
+    { p: UB + '/Shed/Shed_Green_Blue.png', w: 96, h: 112 },
+    { p: UB + '/Shed/Shed_Red_Blue.png', w: 96, h: 112 },
+  ],
+  lumberyard: [
+    { p: UB + '/Shed/Shed_Green_Blue.png', w: 96, h: 112 },
+    { p: UB + '/Shed/Shed_Green_Red.png', w: 96, h: 112 },
+    { p: UB + '/Shed/Shed_Red_Red.png', w: 96, h: 112 },
+  ],
+  // ── Stone ──
+  stone_pit: { p: UB + '/Silo/Silo.png', w: 48, h: 80 },
+  quarry: [
+    { p: UB + '/Blacksmith_House/Blacksmith_House_Blue.png', w: 160, h: 128 },
+    { p: UB + '/Blacksmith_House/Blacksmith_House_Black.png', w: 160, h: 128 },
+    { p: UB + '/Blacksmith_House/Blacksmith_House_Red.png', w: 160, h: 128 },
+  ],
+  // ── Cloth ──
+  weaving_hut: [
+    { p: HW + '/House_2_Wood_Base_Blue.png', w: 144, h: 128 },
+    { p: HS + '/House_2_Stone_Base_Blue.png', w: 144, h: 128 },
+    { p: HL + '/House_2_Limestone_Base_Blue.png', w: 144, h: 128 },
+  ],
+  // ── Commerce & Social ──
+  market:       { p: UB + '/Stalls/Market_Stalls.png', f: [0, 0, 48, 48] },
+  trading_post: { p: UB + '/Stalls/Market_Stalls.png', f: [96, 0, 48, 48] },
+  tavern: [
+    { p: HW + '/House_4_Wood_Base_Blue.png', w: 112, h: 96 },
+    { p: HS + '/House_4_Stone_Base_Blue.png', w: 112, h: 96 },
+    { p: HL + '/House_4_Limestone_Base_Blue.png', w: 112, h: 96 },
+  ],
+  // ── Storage ──
+  storehouse: [
+    { p: UB + '/Barn/Barn_Green_Blue.png', w: 128, h: 144 },
+    { p: UB + '/Barn/Barn_Green_Red.png', w: 128, h: 144 },
+    { p: UB + '/Barn/Barn_Red_Red.png', w: 128, h: 144 },
+  ],
+  warehouse: [
+    { p: UB + '/Greenhouse/GreenHouse_Wood.png', f: [0, 0, 96, 128] },
+    { p: UB + '/Greenhouse/GreenHouse_Green.png', f: [0, 0, 96, 128] },
+    { p: UB + '/Greenhouse/GreenHouse_Metal.png', f: [0, 0, 96, 128] },
+  ],
+  // ── Special ──
+  shrine: { p: UB + '/Windmill/Windmill.png', w: 128, h: 112 },
+  town_hall: [
+    { p: UB + '/Church/Church_Blue.png', f: [0, 0, 112, 144] },
+    { p: UB + '/Church/Church_Blue.png', f: [112, 0, 112, 144] },
+    { p: UB + '/Church/Church_Blue.png', f: [336, 0, 112, 144] },
+  ],
+  watchtower: { p: UB + '/Silo/Silo.png', w: 48, h: 80 },
+  // ── Cosmetic / Support ──
+  well:       { p: OD + '/Well.png', w: 32, h: 48 },
+  park:       { p: OD + '/Fountain.png', w: 32, h: 80 },
+  garden:     { p: OD + '/Flowers.png', f: [0, 0, 32, 32] },
+  flower_bed: { p: OD + '/Flowers.png', f: [0, 0, 32, 32] },
+  path:       { p: 'Tiles/Grass/Path_Middle.png', w: 16, h: 16, tile: true },
 };
 
 /* ── Tree sprites ── */
@@ -752,7 +834,8 @@ export function drawCuteFantasyTerrain(ctx, biome, tile, x, y, size, seed, terra
  */
 export function drawCuteFantasyBuilding(ctx, buildingOrType, x, y, width, height) {
   const type = bType(buildingOrType);
-  const b = BUILDINGS[type];
+  const level = bLevel(buildingOrType);
+  const b = getBuildingSprite(type, level);
   if (!b) return false;
 
   // Special: flower garden (both 'garden' and 'flower_bed' building types)
