@@ -760,6 +760,38 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
     return true;
   }
 
+  /* ── Bridge tiles: render on top of water base ── */
+  if (tile.t === 'bridge_wood' || tile.t === 'bridge_stone') {
+    // Draw water underneath first
+    const [wsx, wsy] = WANG_LOOKUP[0];
+    drawFrame(ctx, cfp(WANG_WATER_GRASS), wsx, wsy, 16, 16, x, y, size, size);
+    const fi = Math.floor((t * 0.003 + h * 0.1) % WATER_CONN_FRAMES);
+    drawFrame(ctx, cfp(WATER_CONN_ANIM), fi * WATER_CONN_FRAME_W + 16, 16, 16, 16, x, y, size, size, undefined, 0.2);
+    // Determine orientation: if neighbors N/S are bridge or land → vertical, else horizontal
+    const isLandOrBridge = (tt) => tt && tt !== 'water';
+    const hasNS = isLandOrBridge(neighbors?.n) || isLandOrBridge(neighbors?.s);
+    const hasEW = isLandOrBridge(neighbors?.e) || isLandOrBridge(neighbors?.w);
+    const vertical = hasNS && !hasEW;
+    if (tile.t === 'bridge_wood') {
+      // Bridge_Wood_1.png is 96×64 = 3 columns of 32×32 tiles (2 rows)
+      // Col 0 = vertical rail, Col 1 = deck with rails, Col 2 = deck variant
+      // Use col 1 (middle section) for the bridge surface
+      const srcX = vertical ? 0 : 32;
+      const srcY = 0;
+      drawFrame(ctx, cfp('Tiles/Bridge/Bridge_Wood_1.png'), srcX, srcY, 32, 32, x, y, size, size);
+    } else {
+      // Bridge_Stone_Vertical.png 64×96 for vertical, Bridge_Stone_Horizontal.png for horizontal
+      if (vertical) {
+        // 64×96 = 2 cols × 3 rows of 32×32. Use col 0, row 1 (middle section)
+        drawFrame(ctx, cfp('Tiles/Bridge/Bridge_Stone_Vertical.png'), 0, 32, 32, 32, x, y, size, size);
+      } else {
+        // 192×112 = 6 cols × 3.5 rows. Use col 1, row 0 (center section)
+        drawFrame(ctx, cfp('Tiles/Bridge/Bridge_Stone_Horizontal.png'), 64, 0, 32, 32, x, y, size, size);
+      }
+    }
+    return true;
+  }
+
   /* ── Non-water tiles: Wang auto-tiling for water↔grass ── */
   let wangDrawn = false;
   let wangIdx = 15; // default = pure grass

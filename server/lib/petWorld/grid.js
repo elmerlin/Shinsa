@@ -1,6 +1,7 @@
 const { generateExpansionChunk } = require('./biomes');
 
 const OBSTACLE_TILES = new Set(['water', 'rock', 'tree', 'bush', 'stump']);
+const BRIDGE_TILES = new Set(['bridge_wood', 'bridge_stone']);
 
 function parseGridData(gridData) {
   if (!gridData) return { v: 1, w: 12, h: 12, tiles: [] };
@@ -33,6 +34,10 @@ function isObstacleTile(type) {
 
 function isWaterTile(type) {
   return type === 'water';
+}
+
+function isBridgeTile(type) {
+  return BRIDGE_TILES.has(type);
 }
 
 function isShoreTile(grid, tx, ty) {
@@ -144,8 +149,8 @@ function expandGrid(grid, biome, direction, expansionIndex) {
   }
   const newWidth = direction === 'e' || direction === 'w' ? next.w + 6 : next.w;
   const newHeight = direction === 'n' || direction === 's' ? next.h + 6 : next.h;
-  if (newWidth > 30 || newHeight > 30) {
-    throw new Error('Expansion would exceed the 30x30 cap');
+  if (newWidth > 60 || newHeight > 60) {
+    throw new Error('Expansion would exceed the 60x60 cap');
   }
   const chunk = generateExpansionChunk({
     biome,
@@ -183,15 +188,81 @@ function expandGrid(grid, biome, direction, expansionIndex) {
   };
 }
 
+/**
+ * Terraform a tile: convert between land and water.
+ * action: 'fill' (water→ground), 'dig' (ground→water)
+ * Returns the modified grid.
+ */
+function terraformTile(grid, x, y, action, biomeGroundType = 'grass') {
+  const tile = grid.tiles[y]?.[x];
+  if (!tile) throw new Error('Tile is out of bounds');
+  if (tile.b != null) throw new Error('Remove the building first');
+  if (action === 'fill') {
+    if (tile.t !== 'water') throw new Error('Can only fill water tiles');
+    tile.t = biomeGroundType;
+  } else if (action === 'dig') {
+    if (isWaterTile(tile.t)) throw new Error('Tile is already water');
+    if (isBridgeTile(tile.t)) throw new Error('Remove the bridge first');
+    tile.t = 'water';
+  } else {
+    throw new Error('Invalid terraform action');
+  }
+  return grid;
+}
+
+/**
+ * Place a bridge tile on water.
+ * bridgeType: 'bridge_wood' or 'bridge_stone'
+ * Must be on a water tile, and must be adjacent to a land tile or another bridge.
+ */
+function placeBridge(grid, x, y, bridgeType) {
+  if (!BRIDGE_TILES.has(bridgeType)) throw new Error('Invalid bridge type');
+  const tile = grid.tiles[y]?.[x];
+  if (!tile) throw new Error('Tile is out of bounds');
+  if (tile.t !== 'water') throw new Error('Bridges can only be placed on water');
+  // Must be adjacent to a non-water tile (land or another bridge) to anchor
+  let hasAnchor = false;
+  for (let dy = -1; dy <= 1; dy += 1) {
+    for (let dx = -1; dx <= 1; dx += 1) {
+      if (dx === 0 && dy === 0) continue;
+      const neighbor = grid.tiles[y + dy]?.[x + dx];
+      if (neighbor && !isWaterTile(neighbor.t)) {
+        hasAnchor = true;
+        break;
+      }
+    }
+    if (hasAnchor) break;
+  }
+  if (!hasAnchor) throw new Error('Bridge must be adjacent to land or another bridge');
+  tile.t = bridgeType;
+  return grid;
+}
+
+/**
+ * Remove a bridge tile, reverting it to water.
+ */
+function removeBridge(grid, x, y) {
+  const tile = grid.tiles[y]?.[x];
+  if (!tile) throw new Error('Tile is out of bounds');
+  if (!isBridgeTile(tile.t)) throw new Error('No bridge on this tile');
+  if (tile.b != null) throw new Error('Remove the building first');
+  tile.t = 'water';
+  return grid;
+}
+
 module.exports = {
   parseGridData,
   serializeGridData,
   cloneGrid,
   isObstacleTile,
   isWaterTile,
+  isBridgeTile,
   canPlace,
   sanitizeGrid,
   setBuildingOccupancy,
   clearBuildingOccupancy,
   expandGrid,
+  terraformTile,
+  placeBridge,
+  removeBridge,
 };

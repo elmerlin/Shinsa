@@ -9,6 +9,9 @@ import {
   assignPetWorldWorkers,
   expandPetWorld,
   clearPetWorldTile,
+  terraformPetWorld,
+  placePetWorldBridge,
+  removePetWorldBridge,
   getPetWorldTrades,
   acceptPetWorldTrade,
   declinePetWorldTrade,
@@ -742,6 +745,7 @@ export default function PetWorldPage() {
   const [selectedBiome, setSelectedBiome] = useState('grasslands');
   const [pendingBuildType, setPendingBuildType] = useState('');
   const [pendingBuildVariant, setPendingBuildVariant] = useState(null);
+  const [terraformMode, setTerraformMode] = useState(''); // '', 'fill', 'dig', 'bridge_wood', 'bridge_stone'
   const [hudCollapsed, setHudCollapsed] = useState(true);
   const [selectedBuilding, setSelectedBuilding] = useState(null);
   const [interiorBuilding, setInteriorBuilding] = useState(null);
@@ -932,6 +936,33 @@ export default function PetWorldPage() {
     }
   };
 
+  const handleTerraformTile = async (tile) => {
+    if (!terraformMode) return;
+    try {
+      if (terraformMode === 'bridge_wood' || terraformMode === 'bridge_stone') {
+        const next = await placePetWorldBridge(tile.x, tile.y, terraformMode);
+        setBundle(next);
+        showToast('Bridge placed');
+      } else {
+        const next = await terraformPetWorld(tile.x, tile.y, terraformMode);
+        setBundle(next);
+        showToast(terraformMode === 'fill' ? 'Land added' : 'Water created');
+      }
+    } catch (error) {
+      showToast(error.message || 'Could not terraform');
+    }
+  };
+
+  const handleRemoveBridge = async (tile) => {
+    try {
+      const next = await removePetWorldBridge(tile.x, tile.y);
+      setBundle(next);
+      showToast('Bridge removed');
+    } catch (error) {
+      showToast(error.message || 'Could not remove bridge');
+    }
+  };
+
   const handleAcceptTrade = async (tradeId) => {
     try {
       const response = await acceptPetWorldTrade(tradeId);
@@ -1119,6 +1150,7 @@ export default function PetWorldPage() {
           selectedBuildingId={selectedBuilding?.id}
           selectedTile={selectedTile}
           pendingBuildType={pendingBuildType}
+          terraformMode={terraformMode}
           placementBurst={placementBurst}
           onSelectEncounter={(encounter) => {
             setActiveSheet(null);
@@ -1129,6 +1161,7 @@ export default function PetWorldPage() {
           onEnterBuilding={handleEnterBuilding}
           onSelectTile={handleSelectTile}
           onPlaceBuilding={handlePlaceBuilding}
+          onTerraformTile={handleTerraformTile}
         />
       </div>
 
@@ -1548,6 +1581,45 @@ export default function PetWorldPage() {
                       <ExpandButtons onExpand={handleExpand} />
                     </div>
                     <div className="cf-text-muted mt-1.5 text-[10px]">Grow toward resources to shape your village.</div>
+                  </div>
+                  <div className="cf-inset p-2.5">
+                    <div className="cf-text-label">Reshape Land</div>
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      {[
+                        ['fill', 'Add Land', '15 combos + 2 stone'],
+                        ['dig', 'Dig Water', '10 combos'],
+                        ['bridge_wood', 'Wood Bridge', '8 combos + 3 wood'],
+                        ['bridge_stone', 'Stone Bridge', '12 combos + 3 stone'],
+                      ].map(([mode, label, cost]) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          onClick={() => {
+                            if (terraformMode === mode) {
+                              setTerraformMode('');
+                            } else {
+                              setTerraformMode(mode);
+                              setPendingBuildType('');
+                              setSelectedBuilding(null);
+                            }
+                          }}
+                          className={`px-2 py-1 text-[10px] font-semibold transition-colors rounded ${
+                            terraformMode === mode
+                              ? 'bg-amber-500 text-white'
+                              : 'cf-btn cf-btn-green'
+                          }`}
+                          title={cost}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    {terraformMode && (
+                      <div className="cf-text-muted mt-1 text-[10px]">
+                        Tap a tile to {terraformMode === 'fill' ? 'add land' : terraformMode === 'dig' ? 'dig water' : 'place bridge'}.
+                        <button type="button" onClick={() => setTerraformMode('')} className="ml-1 text-amber-400 underline">Cancel</button>
+                      </div>
+                    )}
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     <button

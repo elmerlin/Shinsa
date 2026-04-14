@@ -2702,6 +2702,7 @@ export default function PetWorldCanvas({
   selectedBuildingId,
   selectedTile,
   pendingBuildType,
+  terraformMode = '',
   readonly = false,
   readonlyLabel = 'Visiting',
   placementBurst = null,
@@ -2710,6 +2711,7 @@ export default function PetWorldCanvas({
   onSelectTile,
   onPlaceBuilding,
   onEnterBuilding,
+  onTerraformTile,
 }) {
   const containerRef = useRef(null);
   const canvasRef = useRef(null);
@@ -3284,6 +3286,25 @@ export default function PetWorldCanvas({
       drawGhostFootprint(ctx, gx * tileSize - camX, gy * tileSize - camY, tileSize, bSize.width, bSize.height, valid, time);
     }
 
+    // ghost preview for terraform mode
+    if (terraformMode && ghostTile) {
+      const gx = ghostTile.x;
+      const gy = ghostTile.y;
+      const tile = world.grid?.tiles?.[gy]?.[gx];
+      const isValid = terraformMode === 'fill' ? tile?.t === 'water'
+        : terraformMode === 'dig' ? tile?.t !== 'water' && tile?.b == null
+        : (terraformMode === 'bridge_wood' || terraformMode === 'bridge_stone') ? tile?.t === 'water'
+        : false;
+      const color = isValid ? 'rgba(110,231,183,0.35)' : 'rgba(239,68,68,0.25)';
+      ctx.save();
+      ctx.fillStyle = color;
+      ctx.fillRect(gx * tileSize - camX, gy * tileSize - camY, tileSize, tileSize);
+      ctx.strokeStyle = isValid ? 'rgba(110,231,183,0.7)' : 'rgba(239,68,68,0.5)';
+      ctx.lineWidth = Math.max(1, tileSize * 0.04);
+      ctx.strokeRect(gx * tileSize - camX + 1, gy * tileSize - camY + 1, tileSize - 2, tileSize - 2);
+      ctx.restore();
+    }
+
     // ghost preview for entity carry mode
     if (carryingEntity && ghostTile) {
       const gx = ghostTile.x;
@@ -3545,6 +3566,8 @@ export default function PetWorldCanvas({
           }
         } else if (hit.tile?.b != null) {
           onSelectBuilding?.(buildingMap.get(hit.tile.b) || null);
+        } else if (terraformMode && !readonly) {
+          onTerraformTile?.({ x: hit.x, y: hit.y, tile: hit.tile });
         } else if (pendingBuildType && !readonly) {
           onPlaceBuilding?.(hit.x, hit.y);
         } else {

@@ -23,6 +23,10 @@ const {
   clearBuildingOccupancy,
   expandGrid,
   isObstacleTile,
+  terraformTile,
+  placeBridge,
+  removeBridge,
+  isBridgeTile,
 } = require('../lib/petWorld/grid');
 const {
   GLOBAL_POP_CAP,
@@ -844,9 +848,9 @@ router.post('/expand', requireAuth, (req, res) => {
     const world = simulation.world;
     const buildings = simulation.buildings;
     const expansionIndex = safeNumber(world.expansions, 0) + 1;
-    const comboCostMap = { 1: 50, 2: 75, 3: 100, 4: 150, 5: 200, 6: 300 };
-    const comboCost = comboCostMap[expansionIndex];
-    if (!comboCost) throw new Error('Maximum planned expansions reached');
+    const comboCostMap = { 1: 50, 2: 75, 3: 100, 4: 150, 5: 200, 6: 300, 7: 400, 8: 500, 9: 600, 10: 750, 11: 900, 12: 1100, 13: 1300, 14: 1500, 15: 1800, 16: 2100 };
+    const comboCost = comboCostMap[expansionIndex] || Math.min(5000, 1800 + (expansionIndex - 16) * 350);
+    if (expansionIndex > 32) throw new Error('Maximum world size reached');
     const grid = parseGridData(world.grid_data);
     const { grid: expanded, shiftX, shiftY } = expandGrid(grid, world.biome, direction, expansionIndex);
     if (!spendCombos(db, req.user.id, comboCost)) throw new Error('Not enough combos');
@@ -901,6 +905,107 @@ router.post('/clear-tile', requireAuth, (req, res) => {
     res.json(txn());
   } catch (err) {
     res.status(400).json({ error: err.message || 'Could not clear tile' });
+  }
+});
+
+// ─── Terraform: add or remove land ───
+router.post('/terraform', requireAuth, (req, res) => {
+  const db = getDb();
+  ensurePetWorldTables(db);
+  const x = safeNumber(req.body?.x, -1);
+  const y = safeNumber(req.body?.y, -1);
+  const action = String(req.body?.action || '').trim().toLowerCase(); // 'fill' or 'dig'
+  if (!['fill', 'dig'].includes(action)) return res.status(400).json({ error: 'Action must be "fill" or "dig"' });
+  const txn = db.transaction(() => {
+    const simulation = runCatchup(db, req.user.id, new Date());
+    if (!simulation) throw new Error('Create a world first');
+    const world = simulation.world;
+    const grid = parseGridData(world.grid_data);
+    const biomeDef = getBiomeDef(world.biome);
+    const fillCost = action === 'fill' ? 15 : 10; // filling water costs more than digging
+    const materialCost = action === 'fill' ? { stone: 2 } : {};
+    if (!spendCombos(db, req.user.id, fillCost)) throw new Error('Not enough combos');
+    // Check material costs
+    for (const [key, amount] of Object.entries(materialCost)) {
+      if ((world[key] || 0) < amount) throw new Error(`Not enough ${key}`);
+    }
+    for (const [key, amount] of Object.entries(materialCost)) {
+      world[key] = (world[key] || 0) - amount;
+    }
+    terraformTile(grid, x, y, action, biomeDef.grounds[0]);
+    // Clean up obstacles adjacent to new water
+    if (action === 'dig') {
+      sanitizeGrid(grid);
+    }
+    world.grid_data = serializeGridData(grid);
+    saveWorld(db, world);
+    return formatWorldBundle(db, world, simulation.buildings, { viewerId: req.user.id });
+  });
+  try {
+    res.json(txn());
+  } catch (err) {
+    res.status(400).json({ error: err.message || 'Could not terraform' });
+  }
+});
+
+// ─── Place bridge on water ───
+router.post('/place-bridge', requireAuth, (req, res) => {
+  const db = getDb();
+  ensurePetWorldTables(db);
+  const x = safeNumber(req.body?.x, -1);
+  const y = safeNumber(req.body?.y, -1);
+  const bridgeType = String(req.body?.bridgeType || 'bridge_wood').trim().toLowerCase();
+  if (!['bridge_wood', 'bridge_stone'].includes(bridgeType)) return res.status(400).json({ error: 'Invalid bridge type' });
+  const txn = db.transaction(() => {
+    const simulation = runCatchup(db, req.user.id, new Date());
+    if (!simulation) throw new Error('Create a world first');
+    const world = simulation.world;
+    const grid = parseGridData(world.grid_data);
+    const materialCost = bridgeType === 'bridge_stone' ? { stone: 3, combos: 12 } : { wood: 3, combos: 8 };
+    if (!spendCombos(db, req.user.id, materialCost.combos)) throw new Error('Not enough combos');
+    for (const key of RESOURCE_KEYS) {
+      if (materialCost[key] && (world[key] || 0) < materialCost[key]) throw new Error(`Not enough ${key}`);
+    }
+    for (const key of RESOURCE_KEYS) {
+      if (materialCost[key]) world[key] = (world[key] || 0) - materialCost[key];
+    }
+    placeBridge(grid, x, y, bridgeType);
+    world.grid_data = serializeGridData(grid);
+    saveWorld(db, world);
+    return formatWorldBundle(db, world, simulation.buildings, { viewerId: req.user.id });
+  });
+  try {
+    res.json(txn());
+  } catch (err) {
+    res.status(400).json({ error: err.message || 'Could not place bridge' });
+  }
+});
+
+// ─── Remove bridge ───
+router.post('/remove-bridge', requireAuth, (req, res) => {
+  const db = getDb();
+  ensurePetWorldTables(db);
+  const x = safeNumber(req.body?.x, -1);
+  const y = safeNumber(req.body?.y, -1);
+  const txn = db.transaction(() => {
+    const simulation = runCatchup(db, req.user.id, new Date());
+    if (!simulation) throw new Error('Create a world first');
+    const world = simulation.world;
+    const grid = parseGridData(world.grid_data);
+    const tile = grid.tiles[y]?.[x];
+    if (!tile || !isBridgeTile(tile.t)) throw new Error('No bridge on this tile');
+    // Refund half materials
+    const refund = tile.t === 'bridge_stone' ? { stone: 1 } : { wood: 1 };
+    removeBridge(grid, x, y);
+    addResources(world, refund);
+    world.grid_data = serializeGridData(grid);
+    saveWorld(db, world);
+    return formatWorldBundle(db, world, simulation.buildings, { viewerId: req.user.id });
+  });
+  try {
+    res.json(txn());
+  } catch (err) {
+    res.status(400).json({ error: err.message || 'Could not remove bridge' });
   }
 });
 

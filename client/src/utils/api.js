@@ -1516,6 +1516,9 @@ export const upgradePetWorldBuilding = (buildingId) => request('/pet-world/upgra
 export const assignPetWorldWorkers = (buildingId, count) => request('/pet-world/assign-worker', { method: 'POST', body: JSON.stringify({ buildingId, count }) });
 export const expandPetWorld = (direction) => request('/pet-world/expand', { method: 'POST', body: JSON.stringify({ direction }) });
 export const clearPetWorldTile = (x, y) => request('/pet-world/clear-tile', { method: 'POST', body: JSON.stringify({ x, y }) });
+export const terraformPetWorld = (x, y, action) => request('/pet-world/terraform', { method: 'POST', body: JSON.stringify({ x, y, action }) });
+export const placePetWorldBridge = (x, y, bridgeType) => request('/pet-world/place-bridge', { method: 'POST', body: JSON.stringify({ x, y, bridgeType }) });
+export const removePetWorldBridge = (x, y) => request('/pet-world/remove-bridge', { method: 'POST', body: JSON.stringify({ x, y }) });
 export const getPetWorldTrades = () => request('/pet-world/trades');
 export const createPetWorldTrade = ({ toUserId, offerResource, offerAmount, requestResource, requestAmount }) =>
   request('/pet-world/trade/offer', {
