@@ -1013,6 +1013,35 @@ export function drawCuteFantasyFishingDecor(ctx, decor, tileSize, time = 0) {
     const [sx, sy] = PATH_WANG_LOOKUP[bankIdx];
     const width = decor.width ?? tileSize;
     const height = decor.height ?? tileSize;
+    const shoreDir = decor.shoreDir || 'n';
+    const inset = Math.max(1, tileSize * 0.06);
+    const stripDepth = height * (decor.featured ? 0.36 : 0.3);
+    const taper = width * 0.12;
+    ctx.save();
+    ctx.beginPath();
+    if (shoreDir === 'n') {
+      ctx.moveTo(x + inset, y);
+      ctx.lineTo(x + width - inset, y);
+      ctx.lineTo(x + width - taper, y + stripDepth);
+      ctx.lineTo(x + taper, y + stripDepth);
+    } else if (shoreDir === 's') {
+      ctx.moveTo(x + taper, y + height - stripDepth);
+      ctx.lineTo(x + width - taper, y + height - stripDepth);
+      ctx.lineTo(x + width - inset, y + height);
+      ctx.lineTo(x + inset, y + height);
+    } else if (shoreDir === 'e') {
+      ctx.moveTo(x + width - stripDepth, y + taper);
+      ctx.lineTo(x + width, y + inset);
+      ctx.lineTo(x + width, y + height - inset);
+      ctx.lineTo(x + width - stripDepth, y + height - taper);
+    } else {
+      ctx.moveTo(x, y + inset);
+      ctx.lineTo(x + stripDepth, y + taper);
+      ctx.lineTo(x + stripDepth, y + height - taper);
+      ctx.lineTo(x, y + height - inset);
+    }
+    ctx.closePath();
+    ctx.clip();
     const drawn = drawFrame(
       ctx,
       cfp(WANG_DIRT_GRASS),
@@ -1025,16 +1054,25 @@ export function drawCuteFantasyFishingDecor(ctx, decor, tileSize, time = 0) {
       width,
       height,
       undefined,
-      decor.alpha ?? 0.95,
+      decor.alpha ?? 0.78,
     );
+    ctx.restore();
     if (!drawn) return false;
     ctx.save();
-    ctx.globalAlpha = decor.glowAlpha ?? 0.22;
-    ctx.fillStyle = '#f4dfa6';
-    if ((decor.shoreDir || 'n') === 'n') ctx.fillRect(x, y, width, height * 0.18);
-    else if ((decor.shoreDir || 'n') === 's') ctx.fillRect(x, y + height * 0.82, width, height * 0.18);
-    else if ((decor.shoreDir || 'n') === 'e') ctx.fillRect(x + width * 0.82, y, width * 0.18, height);
-    else ctx.fillRect(x, y, width * 0.18, height);
+    ctx.globalAlpha = decor.glowAlpha ?? 0.14;
+    let gradient = null;
+    if (shoreDir === 'n') gradient = ctx.createLinearGradient(x, y, x, y + stripDepth);
+    else if (shoreDir === 's') gradient = ctx.createLinearGradient(x, y + height, x, y + height - stripDepth);
+    else if (shoreDir === 'e') gradient = ctx.createLinearGradient(x + width, y, x + width - stripDepth, y);
+    else gradient = ctx.createLinearGradient(x, y, x + stripDepth, y);
+    gradient.addColorStop(0, '#f0d79a');
+    gradient.addColorStop(0.45, '#e2bf75');
+    gradient.addColorStop(1, 'rgba(226,191,117,0)');
+    ctx.fillStyle = gradient;
+    if (shoreDir === 'n') ctx.fillRect(x, y, width, stripDepth);
+    else if (shoreDir === 's') ctx.fillRect(x, y + height - stripDepth, width, stripDepth);
+    else if (shoreDir === 'e') ctx.fillRect(x + width - stripDepth, y, stripDepth, height);
+    else ctx.fillRect(x, y, stripDepth, height);
     ctx.restore();
     return true;
   }
