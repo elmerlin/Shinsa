@@ -447,7 +447,7 @@ const CRITTER_MAP = {
   butterfly: 'butterfly', bee: 'bee', frog: 'frog',
   bird: 'chicken', rabbit: 'mouse', squirrel: 'mouse',
   dragonfly: 'butterfly', ladybug: 'bee', firefly: 'bee',
-  duck: 'duck', goose: 'goose', horse: 'horse', pig: 'pig',
+  duck: 'duck', goose: 'goose', horse: 'horse', pig: 'pig', sheep: 'sheep', cow: 'cow', chicken: 'chicken',
   // Map procedural species to CF animals
   fox: 'mouse', wolf: 'cow', bear: 'cow', deer: 'horse', boar: 'pig',
   songbird: 'chicken', rare_bird: 'goose',
