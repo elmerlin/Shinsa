@@ -83,10 +83,13 @@ const FP = [
 const BED    = (c) => [0, c*32, 32, 32];
 const TBL_L  = [0, 0, 48, 32];
 const TBL_S  = [96, 0, 32, 32];
-const CR     = 48;
-const CHR_F  = (c) => [32, c*CR, 32, 32];
+const CR     = 50;
+const CHR_F  = (c) => [32, c*CR, 32, 32];   // south-facing (front view, seat visible)
+const CHR_L  = (c) => [16, c*CR, 16, 32];   // left-facing
+const CHR_R  = (c) => [64, c*CR, 16, 32];   // right-facing
 const ARM_F  = (c) => [96, c*CR, 32, 32];
 const SOFA_F = (c) => [160, c*CR, 48, 32];
+const TPLNT  = [0, 0, 32, 16];              // flower planter from S_PLT for table-top
 const SH_S   = [0, 0, 32, 32];
 const SH_M   = [32, 0, 32, 48];
 const SH_W   = [96, 0, 64, 48];
@@ -142,15 +145,25 @@ const BLC = [0, 2, 3];
 
 function genHouse(c, f, wH, lv) {
   const it = [], m = c >> 1, bc = BLC[lv-1];
+  // Wall
   it.push(WI('Window', S_WIN, ...WIN_A, m-1, 0.5));
   if (lv>=2) it.push(WI('Painting', S_ART, ...ART_1, 1, 1));
   if (lv>=3) it.push(WI('Painting', S_ART, ...ART_2, c-2, 1));
+  // Beds against back wall
   it.push(FI('Bed', S_BED, ...BED(bc), 0, 0));
   it.push(FI('Bed', S_BED, ...BED(bc), c-2, 0));
-  it.push(FI('Table', S_TBL, ...TBL_S, m-1, 2));
+  // Desk against wall (lv2+, replaces L-cabinet)
+  if (lv>=2) it.push(FI('Desk', S_TBL, ...TBL_L, 2, -1));
+  // Table in center + plant on top
+  it.push(FI('Table', S_TBL, ...TBL_S, m-1, 1));
+  it.push(FI('Plant', S_PLT, ...TPLNT, m-1, 2.5));
+  // Chairs around table (no backs-to-south)
+  it.push(FI('Chair', S_CHR, ...CHR_R(0), m-2, 1.5));   // right-facing, left of table
+  it.push(FI('Chair', S_CHR, ...CHR_L(0), m+1, 1.5));   // left-facing, right of table
+  it.push(FI('Chair', S_CHR, ...CHR_F(0), m-1, 3));      // south-facing, below table
+  // Lamp
   it.push(FI('Lamp', S_LAMP, ...LMP, c-1, f-2));
-  if (lv>=2) it.push(FI('Drawer', S_DRW, ...DRW_1, 0, f-2));
-  if (lv>=3) it.push(FI('Chair', S_CHR, ...CHR_F(0), m+1, 2));
+  if (lv>=3) it.push(FI('Bookshelf', S_SHF, ...SH_M, c-2, f-3));
   return it;
 }
 
@@ -176,13 +189,26 @@ function genLargeHouse(c, f, wH, lv) {
 
 function genFarm(c, f, wH, lv) {
   const it = [], m = c >> 1;
+  // Wall
   it.push(WI('Window', S_WIN, ...WIN_C, m-1, 0.5));
-  it.push(FI('Work Table', S_TBL, ...TBL_L, 0, 0));
-  it.push(FI('Barrel', S_DECO, ...BAREL, c-1, 0));
-  it.push(FI('Barrel', S_DECO, ...BAREL, c-2, 0));
-  it.push(FI('Crate', S_DECO, ...CRATE, c-1, 1));
+  // Desk against back wall (straight edge flush with wall)
+  it.push(FI('Desk', S_TBL, ...TBL_L, c-3, -1));
+  // Barrels pressed against back wall
+  it.push(FI('Barrel', S_DECO, ...BAREL, 0, -0.5));
+  it.push(FI('Barrel', S_DECO, ...BAREL, 1, -0.5));
+  if (lv>=3) it.push(FI('Barrel', S_DECO, ...BAREL, 2, -0.5));
+  // Table in center + supplies on it
+  it.push(FI('Table', S_TBL, ...TBL_S, m-1, 2));
+  it.push(FI('Supplies', S_DECO, ...CRATE, m-0.5, 3.5));
+  // Chairs around table
+  it.push(FI('Chair', S_CHR, ...CHR_R(0), m-2, 2.5));   // right-facing, left of table
+  it.push(FI('Chair', S_CHR, ...CHR_L(0), m+1, 2.5));   // left-facing, right of table
+  if (lv>=2) it.push(FI('Chair', S_CHR, ...CHR_F(0), m-1, 4)); // south-facing, below table
+  // Flower pots
+  it.push(FI('Flower Pot', S_PLT, ...POT_1, 0, f-2));
+  if (lv>=2) it.push(FI('Flower Pot', S_PLT, ...POT_2, c-1, f-2));
+  // Lamp
   it.push(FI('Lamp', S_LAMP, ...LMP, c-1, f-2));
-  if (lv>=2) it.push(FI('Cabinet', S_DRW, ...DRW_1, m, 0));
   if (lv>=3) it.push(AN('Chest', S_CHST, 16, 16, 6, m, f-1));
   return it;
 }
