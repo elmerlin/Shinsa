@@ -234,6 +234,15 @@ function residentCanChopWood(resident) {
   return ['woodcutters_hut', 'lumberyard'].includes(resident?.workBuildingType || '');
 }
 
+function pickResidentPalette(index, workBuildingType = null) {
+  if (workBuildingType === 'fishing_hut') return 'teal';
+  if (['woodcutters_hut', 'lumberyard'].includes(workBuildingType || '')) return 'moss';
+  if (workBuildingType === 'farm') return 'ochre';
+  if (['quarry', 'stone_pit'].includes(workBuildingType || '')) return 'slate';
+  const civilianPalettes = ['berry', 'plum', 'ochre', 'slate'];
+  return civilianPalettes[index % civilianPalettes.length];
+}
+
 /* ── Entity hit detection ── */
 
 function findNearestEntity(entityPositions, clientX, clientY, canvasRect) {
@@ -820,6 +829,8 @@ function buildWoodcuttingTaskTiles(grid, terrainRegions, landTiles = [], buildin
         role: 'work',
         buildingType: 'woodcutters_hut',
         pauseFacing,
+        strikeTargetX: focus ? (x + focus.dx + 0.5) : (x + 0.5 + (pauseFacing === 1 ? 0.65 : pauseFacing === -1 ? -0.65 : 0)),
+        strikeTargetY: focus ? (y + focus.dy + 0.66) : (y + 0.62 + (pauseFacing === 2 ? 0.65 : pauseFacing === -2 ? -0.65 : 0)),
         score,
       };
     })
@@ -1661,6 +1672,8 @@ function makeRouteNode(x, y, tileX, tileY, role = 'path', pauseMs = 0, meta = nu
     fishingFacing: meta?.fishingFacing || null,
     castTargetX: meta?.castTargetX ?? null,
     castTargetY: meta?.castTargetY ?? null,
+    strikeTargetX: meta?.strikeTargetX ?? null,
+    strikeTargetY: meta?.strikeTargetY ?? null,
     shoreDir: meta?.shoreDir || null,
     fishingSpotId: meta?.fishingSpotId || null,
   };
@@ -1954,6 +1967,8 @@ function sampleRouteMotion(route, entity, timeCursor, loop = true) {
         buildingId: node.buildingId || null,
         castTargetX: node.castTargetX ?? null,
         castTargetY: node.castTargetY ?? null,
+        strikeTargetX: node.strikeTargetX ?? null,
+        strikeTargetY: node.strikeTargetY ?? null,
         fishingFacing: node.fishingFacing || null,
         shoreDir: node.shoreDir || null,
         fishingSpotId: node.fishingSpotId || null,
@@ -1986,6 +2001,8 @@ function sampleRouteMotion(route, entity, timeCursor, loop = true) {
         buildingId: node.buildingId || next.buildingId || null,
         castTargetX: node.castTargetX ?? next.castTargetX ?? null,
         castTargetY: node.castTargetY ?? next.castTargetY ?? null,
+        strikeTargetX: node.strikeTargetX ?? next.strikeTargetX ?? null,
+        strikeTargetY: node.strikeTargetY ?? next.strikeTargetY ?? null,
         fishingFacing: node.fishingFacing || next.fishingFacing || null,
         shoreDir: node.shoreDir || next.shoreDir || null,
         fishingSpotId: node.fishingSpotId || next.fishingSpotId || null,
@@ -2009,6 +2026,8 @@ function sampleRouteMotion(route, entity, timeCursor, loop = true) {
     buildingId: fallback.buildingId || null,
     castTargetX: fallback.castTargetX ?? null,
     castTargetY: fallback.castTargetY ?? null,
+    strikeTargetX: fallback.strikeTargetX ?? null,
+    strikeTargetY: fallback.strikeTargetY ?? null,
     fishingFacing: fallback.fishingFacing || null,
     shoreDir: fallback.shoreDir || null,
     fishingSpotId: fallback.fishingSpotId || null,
@@ -2176,6 +2195,8 @@ function getResidentInteractionPose(resident, motion, time) {
     taskPulse: 0.4 + Math.abs(swing) * 0.6,
     castTargetX: null,
     castTargetY: null,
+    strikeTargetX: null,
+    strikeTargetY: null,
     shoreDir: null,
   };
 
@@ -2205,6 +2226,8 @@ function getResidentInteractionPose(resident, motion, time) {
     case 'lumberyard':
       pose.tool = 'axe';
       pose.offsetX += swing * 0.02;
+      pose.strikeTargetX = motion.strikeTargetX ?? null;
+      pose.strikeTargetY = motion.strikeTargetY ?? null;
       break;
     case 'quarry':
     case 'stone_pit':
@@ -2366,13 +2389,25 @@ function drawResidentInteractionOverlay(ctx, screenX, screenY, tileSize, motion,
     ctx.arc(bobberX, bobberY, Math.max(1.3, tileSize * 0.045), 0, Math.PI * 2);
     ctx.fill();
   } else if (pose.tool === 'axe' || pose.tool === 'pick' || pose.tool === 'hoe') {
-    const lean = Math.sin(time * 0.018) * tileSize * 0.02;
+    const actorWorldX = motion.x + (pose.offsetX || 0);
+    const actorWorldY = motion.y + (pose.offsetY || 0);
+    const handX = baseX + (pose.facing === 1 ? tileSize * 0.03 : pose.facing === -1 ? -tileSize * 0.03 : 0);
+    const handY = baseY - tileSize * 0.1;
+    const targetX = pose.strikeTargetX != null
+      ? screenX + (pose.strikeTargetX - actorWorldX) * tileSize
+      : handX + (pose.facing === 1 ? tileSize * 0.24 : pose.facing === -1 ? -tileSize * 0.24 : 0);
+    const targetY = pose.strikeTargetY != null
+      ? screenY + (pose.strikeTargetY - actorWorldY) * tileSize - tileSize * 0.06
+      : baseY - tileSize * 0.14;
+    const pulseSwing = Math.sin(time * 0.018) * tileSize * 0.02;
+    const tipX = handX + clamp((targetX - handX) * 0.52, -tileSize * 0.26, tileSize * 0.26);
+    const tipY = handY + clamp((targetY - handY) * 0.52, -tileSize * 0.24, tileSize * 0.16) + pulseSwing;
     ctx.beginPath();
-    ctx.moveTo(baseX - tileSize * 0.02, baseY - tileSize * 0.1);
-    ctx.lineTo(baseX + tileSize * 0.08, baseY - tileSize * 0.24 + lean);
+    ctx.moveTo(handX, handY);
+    ctx.lineTo(tipX, tipY);
     ctx.stroke();
     ctx.fillStyle = pose.tool === 'hoe' ? '#b9914b' : '#bfc6cf';
-    ctx.fillRect(Math.round(baseX + tileSize * 0.06), Math.round(baseY - tileSize * 0.26 + lean), Math.max(1, Math.round(tileSize * 0.06)), Math.max(1, Math.round(tileSize * 0.03)));
+    ctx.fillRect(Math.round(tipX - tileSize * 0.01), Math.round(tipY - tileSize * 0.02), Math.max(1, Math.round(tileSize * 0.06)), Math.max(1, Math.round(tileSize * 0.03)));
   } else if (pose.tool === 'crate') {
     drawTinyProp(ctx, baseX - tileSize * 0.06, baseY - tileSize * 0.12, '#af7a4a', tileSize * 0.12, tileSize * 0.1);
   }
@@ -2705,7 +2740,7 @@ function buildResidentPlacements(world, terrainRegions, buildings = []) {
 
     placements.push({
       ...homeTile,
-      palette: RESIDENT_STYLES[i % RESIDENT_STYLES.length],
+      palette: pickResidentPalette(i, workTile?.buildingType || null),
       activity: working ? ['gather', 'carry', 'build'][i % 3] : ['stroll', 'play', 'stroll'][i % 3],
       archetype: residentArchetype,
       workBuildingType: workTile?.buildingType || null,
