@@ -11,6 +11,7 @@ import {
   drawVillageResident,
   drawAmbientCritter,
 } from './petWorldSprites';
+import { drawCuteFantasyFishingDecor } from './petWorldCuteFantasySprites';
 import { getBuildingSize, getBuildingUi } from './petWorldBuildings';
 import { getBiomeUi } from './petWorldTiles';
 
@@ -689,6 +690,214 @@ function buildFishingShoreTiles(grid, terrainRegions, landTiles = [], buildings 
       && (terrain?.shoreStrength || 0) > 0.08
       && (terrain?.shoreStrength || 0) < 0.36;
   });
+}
+
+function getCardinalWaterNeighbors(grid, x, y) {
+  const dirs = [
+    { dx: 0, dy: -1, dir: 'n' },
+    { dx: 1, dy: 0, dir: 'e' },
+    { dx: 0, dy: 1, dir: 's' },
+    { dx: -1, dy: 0, dir: 'w' },
+  ];
+  return dirs
+    .map(({ dx, dy, dir }) => ({ x: x + dx, y: y + dy, dir, dx, dy, tile: grid?.tiles?.[y + dy]?.[x + dx] || null }))
+    .filter(({ tile }) => tile?.t === 'water');
+}
+
+function hasCardinalLand(grid, x, y) {
+  return (
+    !!grid?.tiles?.[y - 1]?.[x] && grid.tiles[y - 1][x].t !== 'water'
+    || !!grid?.tiles?.[y + 1]?.[x] && grid.tiles[y + 1][x].t !== 'water'
+    || !!grid?.tiles?.[y]?.[x - 1] && grid.tiles[y][x - 1].t !== 'water'
+    || !!grid?.tiles?.[y]?.[x + 1] && grid.tiles[y][x + 1].t !== 'water'
+  );
+}
+
+function countNearbyWater(grid, x, y, radius = 1) {
+  let count = 0;
+  for (let oy = -radius; oy <= radius; oy += 1) {
+    for (let ox = -radius; ox <= radius; ox += 1) {
+      if (grid?.tiles?.[y + oy]?.[x + ox]?.t === 'water') count += 1;
+    }
+  }
+  return count;
+}
+
+function collectNearbyWaterTiles(grid, x, y, radius = 3) {
+  const tiles = [];
+  for (let oy = -radius; oy <= radius; oy += 1) {
+    for (let ox = -radius; ox <= radius; ox += 1) {
+      const tx = x + ox;
+      const ty = y + oy;
+      if (grid?.tiles?.[ty]?.[tx]?.t !== 'water') continue;
+      const dist = Math.abs(ox) + Math.abs(oy);
+      tiles.push({
+        x: tx,
+        y: ty,
+        dist,
+        shoreAdjacent: hasCardinalLand(grid, tx, ty),
+        openWater: countNearbyWater(grid, tx, ty, 1),
+      });
+    }
+  }
+  return tiles;
+}
+
+function buildFishingDecorations(world, terrainRegions, buildings = []) {
+  const grid = world?.grid;
+  if (!grid) return [];
+
+  const landGraph = buildLandComponents(grid, terrainRegions, RESIDENT_WALK_OPTIONS, buildings);
+  const landTiles = landGraph.primary?.length ? landGraph.primary : findClearTiles(grid);
+  const fishingShoreTiles = buildFishingShoreTiles(grid, terrainRegions, landTiles, buildings, 613);
+  const broadShoreTiles = landTiles.filter(({ x, y }) => {
+    const terrain = terrainRegions?.[y]?.[x];
+    return hasCardinalWater(grid, x, y)
+      && (terrain?.waterRatio || 0) < 0.32
+      && (terrain?.shoreStrength || 0) > 0.05
+      && (terrain?.shoreStrength || 0) < 0.48;
+  });
+  const shorePool = fishingShoreTiles.length >= 3
+    ? fishingShoreTiles
+    : Array.from(new Map([...fishingShoreTiles, ...broadShoreTiles].map((tile) => [tileKey(tile.x, tile.y), tile])).values());
+  if (!shorePool.length) return [];
+
+  const builtFishingHuts = buildings.filter((building) => building.state === 'built' && (building.type || building.building_type) === 'fishing_hut');
+  const desiredSpots = clamp((builtFishingHuts.length || 0) + 3, 3, 6);
+  const rankedShoreTiles = [...shorePool]
+    .map((tile, index) => {
+      const waterNeighbors = getCardinalWaterNeighbors(grid, tile.x, tile.y);
+      const scenic = waterNeighbors.reduce((best, candidate) => {
+        const openness = countNearbyWater(grid, candidate.x, candidate.y, 1);
+        return Math.max(best, openness);
+      }, 0);
+      const terrain = terrainRegions?.[tile.y]?.[tile.x];
+      return {
+        ...tile,
+        score: scenic * 3 + (terrain?.shoreStrength || 0) * 4 + hash01(tile.x * 31 + tile.y * 17 + index, 81),
+      };
+    })
+    .sort((a, b) => b.score - a.score);
+
+  const spots = [];
+  rankedShoreTiles.forEach((tile) => {
+    if (spots.length >= desiredSpots) return;
+    if (spots.some((spot) => Math.abs(spot.x - tile.x) + Math.abs(spot.y - tile.y) < 6)) return;
+    spots.push(tile);
+  });
+  if (!spots.length) spots.push(rankedShoreTiles[0]);
+
+  const decorations = [];
+  const usedWater = new Set();
+
+  spots.forEach((spot, index) => {
+    const spotSeed = spot.x * 157 + spot.y * 263 + index * 19;
+    const waterOptions = getCardinalWaterNeighbors(grid, spot.x, spot.y)
+      .map((candidate) => ({
+        ...candidate,
+        openness: countNearbyWater(grid, candidate.x, candidate.y, 1),
+      }))
+      .sort((a, b) => b.openness - a.openness || a.dir.localeCompare(b.dir));
+    if (!waterOptions.length) return;
+
+    const boatNeighbor = waterOptions[0];
+    const boatTile = grid?.tiles?.[boatNeighbor.y + boatNeighbor.dy]?.[boatNeighbor.x + boatNeighbor.dx]?.t === 'water'
+      ? { x: boatNeighbor.x + boatNeighbor.dx, y: boatNeighbor.y + boatNeighbor.dy, dir: boatNeighbor.dir }
+      : { x: boatNeighbor.x, y: boatNeighbor.y, dir: boatNeighbor.dir };
+    usedWater.add(tileKey(boatTile.x, boatTile.y));
+
+    const nearbyWater = collectNearbyWaterTiles(grid, spot.x, spot.y, 3)
+      .filter((tile) => !usedWater.has(tileKey(tile.x, tile.y)))
+      .sort((a, b) => (b.openWater - a.openWater) || (a.dist - b.dist));
+    const shoreWater = nearbyWater.filter((tile) => tile.shoreAdjacent);
+    const accentWater = shoreWater.length ? shoreWater : nearbyWater;
+
+    const fishTile = nearbyWater[0] || boatTile;
+    usedWater.add(tileKey(fishTile.x, fishTile.y));
+    const rockTile = (accentWater.find((tile) => !usedWater.has(tileKey(tile.x, tile.y))) || nearbyWater[1] || boatTile);
+    usedWater.add(tileKey(rockTile.x, rockTile.y));
+    const plantTileA = accentWater.find((tile) => !usedWater.has(tileKey(tile.x, tile.y))) || nearbyWater[2] || boatTile;
+    usedWater.add(tileKey(plantTileA.x, plantTileA.y));
+    const plantTileB = accentWater.find((tile) => !usedWater.has(tileKey(tile.x, tile.y))) || nearbyWater[3] || plantTileA;
+    usedWater.add(tileKey(plantTileB.x, plantTileB.y));
+    const cattailTile = accentWater.find((tile) => !usedWater.has(tileKey(tile.x, tile.y))) || nearbyWater[4] || plantTileB;
+    usedWater.add(tileKey(cattailTile.x, cattailTile.y));
+
+    decorations.push({
+      type: 'cloud_shadow',
+      x: boatTile.x - 0.9 + hash01(spotSeed, 1) * 0.35,
+      y: boatTile.y - 0.65 + hash01(spotSeed, 2) * 0.18,
+      widthTiles: 3.4 + hash01(spotSeed, 3) * 0.5,
+      heightTiles: 2.25 + hash01(spotSeed, 4) * 0.35,
+      alpha: 0.14 + hash01(spotSeed, 5) * 0.05,
+      variant: Math.floor(hash01(spotSeed, 6) * 4),
+      seed: spotSeed,
+    });
+
+    decorations.push({
+      type: 'boat',
+      x: boatTile.x - 0.58 + (boatNeighbor.dx * 0.05),
+      y: boatTile.y - 0.3 + (boatNeighbor.dy * 0.03),
+      widthTiles: 2.08,
+      heightTiles: 1.1,
+      shoreDir: boatNeighbor.dir,
+      seed: spotSeed + 11,
+    });
+
+    decorations.push({
+      type: 'swim_fish',
+      x: fishTile.x + 0.1 + hash01(spotSeed, 7) * 0.12,
+      y: fishTile.y + 0.16 + hash01(spotSeed, 8) * 0.14,
+      widthTiles: 0.82,
+      heightTiles: 0.82,
+      facing: hash01(spotSeed, 9) > 0.5 ? 1 : -1,
+      seed: spotSeed + 23,
+    });
+
+    decorations.push({
+      type: 'water_rock',
+      x: rockTile.x + 0.13,
+      y: rockTile.y + 0.18,
+      widthTiles: 0.68,
+      heightTiles: 0.68,
+      variant: Math.floor(hash01(spotSeed, 10) * 7),
+      seed: spotSeed + 31,
+    });
+
+    decorations.push({
+      type: 'water_plant',
+      x: plantTileA.x + 0.14,
+      y: plantTileA.y + 0.16,
+      widthTiles: 0.66,
+      heightTiles: 0.66,
+      variantGroup: 'default',
+      variant: Math.floor(hash01(spotSeed, 11) * 5),
+      seed: spotSeed + 41,
+    });
+
+    decorations.push({
+      type: 'water_plant',
+      x: plantTileB.x + 0.13,
+      y: plantTileB.y + 0.12,
+      widthTiles: 0.72,
+      heightTiles: 0.72,
+      variantGroup: hash01(spotSeed, 12) > 0.56 ? 'bloom' : 'reed',
+      variant: Math.floor(hash01(spotSeed, 13) * 5),
+      seed: spotSeed + 53,
+    });
+
+    decorations.push({
+      type: 'cattail',
+      x: cattailTile.x + 0.11,
+      y: cattailTile.y + 0.1,
+      widthTiles: 0.76,
+      heightTiles: 0.76,
+      variant: Math.floor(hash01(spotSeed, 14) * 4),
+      seed: spotSeed + 67,
+    });
+  });
+
+  return decorations;
 }
 
 function getTileScore(tile, terrainRegions) {
@@ -2121,6 +2330,7 @@ export default function PetWorldCanvas({
   const petPlacements = useMemo(() => buildPetPlacements(world, terrainRegions, buildings), [world, terrainRegions, buildings]);
   const ambientFauna = useMemo(() => buildAmbientFauna(world, terrainRegions, buildings), [world, terrainRegions, buildings]);
   const encounterSightings = useMemo(() => buildEncounterSightings(world, terrainRegions, encounters, buildings), [world, terrainRegions, encounters, buildings]);
+  const fishingDecorations = useMemo(() => buildFishingDecorations(world, terrainRegions, buildings), [world, terrainRegions, buildings]);
   const encounterTileMap = useMemo(
     () => new Map(encounterSightings.map((sighting) => [sighting.tileKey, sighting])),
     [encounterSightings],
@@ -2376,6 +2586,41 @@ export default function PetWorldCanvas({
     visibleTiles.forEach(({ tile, x: gx, y: gy, screenX, screenY, neighbors, terrain }) => {
       drawTile(ctx, world.biome, tile, screenX, screenY, tileSize, time, neighbors, terrain, gx, gy);
     });
+
+    const visibleFishingDecor = fishingDecorations.filter((decor) => {
+      const widthPx = (decor.widthTiles || 1) * tileSize;
+      const heightPx = (decor.heightTiles || 1) * tileSize;
+      const screenX = decor.x * tileSize - camX;
+      const screenY = decor.y * tileSize - camY;
+      return !(screenX + widthPx < -tileSize
+        || screenY + heightPx < -tileSize
+        || screenX > size.width + tileSize
+        || screenY > size.height + tileSize);
+    });
+
+    visibleFishingDecor
+      .filter((decor) => decor.type === 'cloud_shadow')
+      .forEach((decor) => {
+        drawCuteFantasyFishingDecor(ctx, {
+          ...decor,
+          screenX: decor.x * tileSize - camX,
+          screenY: decor.y * tileSize - camY,
+          width: (decor.widthTiles || 1) * tileSize,
+          height: (decor.heightTiles || 1) * tileSize,
+        }, tileSize, time);
+      });
+
+    visibleFishingDecor
+      .filter((decor) => decor.type !== 'cloud_shadow')
+      .forEach((decor) => {
+        drawCuteFantasyFishingDecor(ctx, {
+          ...decor,
+          screenX: decor.x * tileSize - camX,
+          screenY: decor.y * tileSize - camY,
+          width: (decor.widthTiles || 1) * tileSize,
+          height: (decor.heightTiles || 1) * tileSize,
+        }, tileSize, time);
+      });
 
     ambientFauna
       .filter((creature) => creature.layer === 'water')

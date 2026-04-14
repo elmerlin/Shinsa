@@ -360,9 +360,38 @@ const WATER_LILLYPADS = [
   'Lillypad_Green_5_Anim.png',
 ];
 const WATER_LILLYPAD_FRAMES = 8;
+const WATER_LILYPAD_BLOOMS = [
+  'Lillypad_Red_1_Anim.png',
+  'Lillypad_Purple_1_Anim.png',
+];
+const WATER_CATTAILS = [
+  'Cattail_1_Anim.png',
+  'Cattail_3_Anim.png',
+];
+const WATER_GRASS_CLUMPS = [
+  'Water_Grass_1_Anim.png',
+  'Water_Grass_2_Anim.png',
+];
+const WATER_ROCKS_DIR = 'Outdoor decoration/Outdoor_Decor_Animations/Water_Decor_Animations/Water_Rocks/';
+const WATER_ROCKS = [
+  'Rock_3_Water_Anim.png',
+  'Rock_5_Water_Anim.png',
+  'Rock_8_Water_Anim.png',
+];
 // Animated pure water overlay for richer shimmer
 const WATER_MIDDLE_ANIM = 'Tiles/Water/Water_Middle_Anim_1.png';
 const WATER_MIDDLE_FRAMES = 8;
+const WATER_FISH_ANIM = 'Tiles/Water/Fish_Animated_Tile.png';
+const WATER_FISH_FRAMES = 16;
+const BOAT_ANIM = 'Outdoor decoration/Outdoor_Decor_Animations/Other_Animations/Boat_Anim.png';
+const BOAT_FRAMES = 4;
+const CLOUDS_IMG = 'Weather effects/Clouds.png';
+const CLOUD_VARIANTS = [
+  [0, 0],
+  [64, 0],
+  [0, 64],
+  [64, 64],
+];
 
 /* ── Animated flower garden sprites ── */
 // Flowers_1-5_Anim.png in Not_Potted = 96x160 = 6cols×10rows of 16x16 frames
@@ -672,15 +701,101 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
     const fi2 = Math.floor((t * 0.0025 + h * 0.3 + 3) % WATER_MIDDLE_FRAMES);
     drawFrame(ctx, cfp(WATER_MIDDLE_ANIM), fi2 * 16, 0, 16, 16, x, y, size, size, undefined, 0.15);
 
-    // Lillypad decorations on ~12% of shore-adjacent water tiles
+    // Shore-adjacent water scenes: lily pads, fish, rocks, reeds, cloud shadows, and the occasional boat
     if (neighbors) {
       const isLand = (tt) => tt && tt !== 'water';
-      const nearShore = isLand(neighbors.n) || isLand(neighbors.s) || isLand(neighbors.e) || isLand(neighbors.w);
-      if (nearShore && h % 8 === 0) {
-        const padIdx = (h >>> 5) % WATER_LILLYPADS.length;
+      const cardinalLand = [
+        neighbors.n,
+        neighbors.s,
+        neighbors.e,
+        neighbors.w,
+      ].filter(isLand).length;
+      const cardinalWater = [
+        neighbors.n,
+        neighbors.s,
+        neighbors.e,
+        neighbors.w,
+      ].filter((tt) => tt === 'water').length;
+      const nearShore = cardinalLand > 0;
+      if (nearShore) {
         const padFi = Math.floor((t * 0.0015 + h * 0.2) % WATER_LILLYPAD_FRAMES);
-        drawFrame(ctx, cfp(WATER_DECOR_DIR + WATER_LILLYPADS[padIdx]),
-          padFi * 16, 0, 16, 16, x, y, size, size, undefined, 0.7);
+        const smallDecorSize = size * 0.68;
+        const mediumDecorSize = size * 0.76;
+        const smallInset = (size - smallDecorSize) / 2;
+        const mediumInset = (size - mediumDecorSize) / 2;
+        if (h % 6 === 0) {
+          const padIdx = (h >>> 5) % WATER_LILLYPADS.length;
+          drawFrame(ctx, cfp(WATER_DECOR_DIR + WATER_LILLYPADS[padIdx]),
+            padFi * 16, 0, 16, 16, x + smallInset, y + smallInset, smallDecorSize, smallDecorSize, undefined, 0.76);
+        }
+        if (h % 13 === 0) {
+          const bloomIdx = (h >>> 3) % WATER_LILYPAD_BLOOMS.length;
+          drawFrame(ctx, cfp(WATER_DECOR_DIR + WATER_LILYPAD_BLOOMS[bloomIdx]),
+            padFi * 16, 0, 16, 16, x + smallInset, y + smallInset, smallDecorSize, smallDecorSize, undefined, 0.82);
+        }
+        if (h % 17 === 0) {
+          const reedIdx = (h >>> 4) % WATER_GRASS_CLUMPS.length;
+          drawFrame(ctx, cfp(WATER_DECOR_DIR + WATER_GRASS_CLUMPS[reedIdx]),
+            padFi * 16, 0, 16, 16, x + mediumInset, y + mediumInset, mediumDecorSize, mediumDecorSize, undefined, 0.9);
+        }
+        if (h % 19 === 0) {
+          const cattailIdx = (h >>> 2) % WATER_CATTAILS.length;
+          drawFrame(ctx, cfp(WATER_DECOR_DIR + WATER_CATTAILS[cattailIdx]),
+            padFi * 16, 0, 16, 16, x + mediumInset, y + mediumInset, mediumDecorSize, mediumDecorSize, undefined, 0.92);
+        }
+        if (h % 23 === 0) {
+          const rockIdx = (h >>> 6) % WATER_ROCKS.length;
+          drawFrame(ctx, cfp(WATER_ROCKS_DIR + WATER_ROCKS[rockIdx]),
+            padFi * 16, 0, 16, 16, x + smallInset, y + smallInset, smallDecorSize, smallDecorSize, undefined, 0.86);
+        }
+        if (h % 29 === 0) {
+          const fishFi = Math.floor((t * 0.0022 + h * 0.41) % WATER_FISH_FRAMES);
+          const fishSize = size * 0.94;
+          const fishX = x + size * 0.04;
+          const fishY = y + size * 0.08 + Math.sin(t * 0.0025 + h) * size * 0.02;
+          drawFrame(ctx, cfp(WATER_FISH_ANIM), fishFi * 16, 0, 16, 16, fishX, fishY, fishSize, fishSize, h % 2 === 0 ? 1 : -1, 0.74);
+        }
+        if (h % 29 === 0 && cardinalLand <= 2 && cardinalWater >= 2) {
+          const cloudFi = (h >>> 7) % CLOUD_VARIANTS.length;
+          const [cx, cy] = CLOUD_VARIANTS[cloudFi];
+          drawFrame(ctx, cfp(CLOUDS_IMG), cx, cy, 64, 64,
+            x - size * 1.25, y - size * 0.84, size * 3.5, size * 2.4, undefined, 0.22);
+        }
+        if (h % 61 === 0 && cardinalWater >= 2 && cardinalLand === 1) {
+          const boatFi = Math.floor((t * 0.0011 + h * 0.29) % BOAT_FRAMES);
+          const cloudFi = (h >>> 7) % CLOUD_VARIANTS.length;
+          const [cloudX, cloudY] = CLOUD_VARIANTS[cloudFi];
+          const shoreDir = isLand(neighbors.n) ? 'n'
+            : isLand(neighbors.s) ? 's'
+              : isLand(neighbors.e) ? 'e'
+                : 'w';
+          let boatX = x - size * 0.56;
+          let boatY = y - size * 0.3;
+          if (shoreDir === 'n') boatY = y - size * 0.42;
+          if (shoreDir === 's') boatY = y + size * 0.02;
+          if (shoreDir === 'e') boatX = x - size * 0.76;
+          if (shoreDir === 'w') boatX = x - size * 0.36;
+          drawFrame(ctx, cfp(CLOUDS_IMG), cloudX, cloudY, 64, 64,
+            boatX - size * 0.3, boatY - size * 0.26, size * 2.45, size * 1.66, undefined, 0.28);
+          const anchorPoint = {
+            n: { ax: boatX + size * 1.02, ay: y + size * 0.02, bx: boatX + size * 1.02, by: boatY + size * 0.48 },
+            s: { ax: boatX + size * 0.98, ay: y + size * 0.98, bx: boatX + size * 0.98, by: boatY + size * 0.54 },
+            e: { ax: x + size * 1.02, ay: boatY + size * 0.46, bx: boatX + size * 1.34, by: boatY + size * 0.48 },
+            w: { ax: x - size * 0.02, ay: boatY + size * 0.46, bx: boatX + size * 0.58, by: boatY + size * 0.48 },
+          }[shoreDir];
+          ctx.save();
+          ctx.strokeStyle = 'rgba(88,55,24,0.74)';
+          ctx.lineWidth = Math.max(1, size * 0.05);
+          ctx.beginPath();
+          ctx.moveTo(anchorPoint.ax, anchorPoint.ay);
+          ctx.lineTo(anchorPoint.bx, anchorPoint.by);
+          ctx.stroke();
+          ctx.fillStyle = '#7a5526';
+          ctx.fillRect(anchorPoint.ax - size * 0.04, anchorPoint.ay - size * 0.04, size * 0.08, size * 0.08);
+          ctx.restore();
+          drawFrame(ctx, cfp(BOAT_ANIM), boatFi * 48, 0, 48, 48,
+            boatX, boatY, size * 2.08, size * 1.1, undefined, 0.96);
+        }
       }
     }
     return true;
@@ -788,6 +903,152 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
 
   // Return 2 for shore transitions to suppress procedural shore glow in drawTile
   return isShoreTransition ? 2 : true;
+}
+
+export function drawCuteFantasyFishingDecor(ctx, decor, tileSize, time = 0) {
+  if (!decor?.type) return false;
+  const x = decor.screenX ?? 0;
+  const y = decor.screenY ?? 0;
+  const seed = decor.seed ?? 0;
+
+  if (decor.type === 'cloud_shadow') {
+    const [sx, sy] = CLOUD_VARIANTS[Math.abs(decor.variant ?? seed) % CLOUD_VARIANTS.length];
+    const drift = Math.sin(time * 0.00008 + seed * 1.17) * tileSize * 0.12;
+    return drawFrame(
+      ctx,
+      cfp(CLOUDS_IMG),
+      sx,
+      sy,
+      64,
+      64,
+      x + drift,
+      y,
+      decor.width ?? tileSize * 3.8,
+      decor.height ?? tileSize * 2.6,
+      undefined,
+      decor.alpha ?? 0.18,
+    );
+  }
+
+  if (decor.type === 'boat') {
+    const frame = Math.floor((time * 0.0011 + seed * 0.29) % BOAT_FRAMES);
+    const width = decor.width ?? tileSize * 2.08;
+    const height = decor.height ?? tileSize * 1.1;
+    const shoreDir = decor.shoreDir || 'n';
+    const rope = {
+      n: { ax: x + width * 0.54, ay: y - tileSize * 0.06, bx: x + width * 0.54, by: y + height * 0.44 },
+      s: { ax: x + width * 0.48, ay: y + height + tileSize * 0.04, bx: x + width * 0.48, by: y + height * 0.56 },
+      e: { ax: x + width + tileSize * 0.06, ay: y + height * 0.44, bx: x + width * 0.76, by: y + height * 0.48 },
+      w: { ax: x - tileSize * 0.06, ay: y + height * 0.44, bx: x + width * 0.24, by: y + height * 0.48 },
+    }[shoreDir];
+    ctx.save();
+    ctx.strokeStyle = 'rgba(88,55,24,0.7)';
+    ctx.lineWidth = Math.max(1, tileSize * 0.05);
+    ctx.beginPath();
+    ctx.moveTo(rope.ax, rope.ay);
+    ctx.lineTo(rope.bx, rope.by);
+    ctx.stroke();
+    ctx.fillStyle = '#7a5526';
+    ctx.fillRect(rope.ax - tileSize * 0.04, rope.ay - tileSize * 0.04, tileSize * 0.08, tileSize * 0.08);
+    ctx.restore();
+    return drawFrame(
+      ctx,
+      cfp(BOAT_ANIM),
+      frame * 48,
+      0,
+      48,
+      48,
+      x,
+      y,
+      width,
+      height,
+      undefined,
+      decor.alpha ?? 0.96,
+    );
+  }
+
+  if (decor.type === 'swim_fish') {
+    const frame = Math.floor((time * 0.0022 + seed * 0.41) % WATER_FISH_FRAMES);
+    const wobbleY = Math.sin(time * 0.0025 + seed) * tileSize * 0.02;
+    return drawFrame(
+      ctx,
+      cfp(WATER_FISH_ANIM),
+      frame * 16,
+      0,
+      16,
+      16,
+      x,
+      y + wobbleY,
+      decor.width ?? tileSize * 0.88,
+      decor.height ?? tileSize * 0.88,
+      decor.facing ?? 1,
+      decor.alpha ?? 0.72,
+    );
+  }
+
+  if (decor.type === 'water_rock') {
+    const src = WATER_ROCKS_DIR + WATER_ROCKS[Math.abs(decor.variant ?? seed) % WATER_ROCKS.length];
+    const frame = Math.floor((time * 0.0014 + seed * 0.17) % WATER_LILLYPAD_FRAMES);
+    return drawFrame(
+      ctx,
+      cfp(src),
+      frame * 16,
+      0,
+      16,
+      16,
+      x,
+      y,
+      decor.width ?? tileSize * 0.92,
+      decor.height ?? tileSize * 0.92,
+      undefined,
+      decor.alpha ?? 0.88,
+    );
+  }
+
+  if (decor.type === 'water_plant') {
+    const variants = decor.variantGroup === 'bloom'
+      ? WATER_LILYPAD_BLOOMS
+      : decor.variantGroup === 'reed'
+        ? WATER_GRASS_CLUMPS
+        : WATER_LILLYPADS;
+    const src = WATER_DECOR_DIR + variants[Math.abs(decor.variant ?? seed) % variants.length];
+    const frame = Math.floor((time * 0.0015 + seed * 0.21) % WATER_LILLYPAD_FRAMES);
+    return drawFrame(
+      ctx,
+      cfp(src),
+      frame * 16,
+      0,
+      16,
+      16,
+      x,
+      y,
+      decor.width ?? tileSize,
+      decor.height ?? tileSize,
+      undefined,
+      decor.alpha ?? 0.86,
+    );
+  }
+
+  if (decor.type === 'cattail') {
+    const src = WATER_DECOR_DIR + WATER_CATTAILS[Math.abs(decor.variant ?? seed) % WATER_CATTAILS.length];
+    const frame = Math.floor((time * 0.0012 + seed * 0.11) % WATER_LILLYPAD_FRAMES);
+    return drawFrame(
+      ctx,
+      cfp(src),
+      frame * 16,
+      0,
+      16,
+      16,
+      x,
+      y,
+      decor.width ?? tileSize * 0.98,
+      decor.height ?? tileSize * 0.98,
+      undefined,
+      decor.alpha ?? 0.92,
+    );
+  }
+
+  return false;
 }
 
 /**
