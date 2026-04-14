@@ -1157,6 +1157,11 @@ export default function PetWorldPage() {
             setActiveEncounter(encounter);
             playEncounterAlertSound();
           }}
+          onClearInspect={() => {
+            setSelectedBuilding(null);
+            setSelectedTile(null);
+            if (activeSheet === 'inspect') setActiveSheet(null);
+          }}
           onSelectBuilding={handleSelectBuilding}
           onEnterBuilding={handleEnterBuilding}
           onSelectTile={handleSelectTile}

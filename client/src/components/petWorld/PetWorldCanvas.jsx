@@ -397,6 +397,50 @@ function pickFromPool(pool, index, fallback = null) {
   return fallback;
 }
 
+function pickSpreadTile(pool, seed, usageMap, fallback = null, windowSize = 7) {
+  if (!pool?.length) return fallback;
+  const uniqueCandidates = [];
+  const seen = new Set();
+  let best = null;
+  let bestScore = Infinity;
+  const start = Math.abs(seed) % pool.length;
+  for (let i = 0; i < pool.length && uniqueCandidates.length < Math.min(windowSize, pool.length); i += 1) {
+    const candidate = pool[(start + i) % pool.length];
+    if (!candidate) continue;
+    const key = tileKey(candidate.tileX ?? candidate.x, candidate.tileY ?? candidate.y);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    uniqueCandidates.push({ candidate, key, offset: i });
+  }
+
+  uniqueCandidates.forEach(({ candidate, key, offset }) => {
+    const usage = usageMap.get(key) || 0;
+    const cx = candidate.tileX ?? candidate.x;
+    const cy = candidate.tileY ?? candidate.y;
+    let nearbyUsage = 0;
+    usageMap.forEach((count, usedKey) => {
+      if (!count) return;
+      const [uxRaw, uyRaw] = usedKey.split(':');
+      const ux = Number(uxRaw);
+      const uy = Number(uyRaw);
+      if (!Number.isFinite(ux) || !Number.isFinite(uy)) return;
+      const dist = Math.abs(ux - cx) + Math.abs(uy - cy);
+      if (dist > 5) return;
+      nearbyUsage += count * Math.max(0, 6 - dist);
+    });
+    const score = usage * 16 + nearbyUsage * 1.3 + offset * 0.45 + hash01(seed + offset * 17, 301) * 0.5;
+    if (score < bestScore) {
+      bestScore = score;
+      best = candidate;
+    }
+  });
+  const chosen = best || pickFromPool(pool, seed, fallback);
+  if (!chosen) return fallback;
+  const key = tileKey(chosen.tileX ?? chosen.x, chosen.tileY ?? chosen.y);
+  usageMap.set(key, (usageMap.get(key) || 0) + 1);
+  return chosen;
+}
+
 function expandWeightedStops(stops, weightFn) {
   const expanded = [];
   stops.forEach((stop) => {
@@ -440,6 +484,28 @@ function getTileClearanceOffset(tile, clearance) {
 
 function pointFromTile(tile, seed, radiusX = 0.08, radiusY = 0.06, clearance = null) {
   if (!tile) return null;
+  if (Number.isFinite(tile.standX) && Number.isFinite(tile.standY)) {
+    return {
+      x: tile.standX,
+      y: tile.standY,
+      tileX: tile.x,
+      tileY: tile.y,
+      role: tile.role || 'path',
+      pauseFacing: tile.pauseFacing ?? tile.fishingFacing ?? null,
+      buildingType: tile.buildingType || null,
+      anchorKind: tile.anchorKind || null,
+      buildingId: tile.buildingId || null,
+      fishingFacing: tile.fishingFacing || null,
+      castTargetX: tile.castTargetX ?? null,
+      castTargetY: tile.castTargetY ?? null,
+      strikeTargetX: tile.strikeTargetX ?? null,
+      strikeTargetY: tile.strikeTargetY ?? null,
+      shoreDir: tile.shoreDir || null,
+      fishingSpotId: tile.fishingSpotId || null,
+      taskSlotId: tile.taskSlotId || null,
+      workSpotId: tile.workSpotId || null,
+    };
+  }
   const clearanceOffset = getTileClearanceOffset(tile, clearance);
   const offsetX = (hash01(seed, 1) - 0.5) * radiusX * 2;
   const offsetY = (hash01(seed, 2) - 0.5) * radiusY * 2;
@@ -456,8 +522,12 @@ function pointFromTile(tile, seed, radiusX = 0.08, radiusY = 0.06, clearance = n
     fishingFacing: tile.fishingFacing || null,
     castTargetX: tile.castTargetX ?? null,
     castTargetY: tile.castTargetY ?? null,
+    strikeTargetX: tile.strikeTargetX ?? null,
+    strikeTargetY: tile.strikeTargetY ?? null,
     shoreDir: tile.shoreDir || null,
     fishingSpotId: tile.fishingSpotId || null,
+    taskSlotId: tile.taskSlotId || null,
+    workSpotId: tile.workSpotId || null,
   };
 }
 
@@ -1015,9 +1085,12 @@ function buildResidentTaskState(
       grid,
       terrainRegions,
       RESIDENT_WALK_OPTIONS,
-      (candidate) => {
+      (candidate, path, distance) => {
         const slotLoad = getReservationCount(reservations?.fishingSlots, candidate.taskSlotId || candidate.fishingSpotId);
-        return (candidate.fishingSpotId ? 4.5 : 0) - slotLoad * 12;
+        return (candidate.fishingSpotId ? 6.5 : 0)
+          + (candidate.featured ? 3.5 : 0)
+          + Math.min(distance, 18) * 0.55
+          - slotLoad * 12;
       },
     );
     if (!target) return null;
@@ -1060,10 +1133,10 @@ function buildResidentTaskState(
       grid,
       terrainRegions,
       RESIDENT_WALK_OPTIONS,
-      (candidate) => {
+      (candidate, path, distance) => {
         const slotLoad = getReservationCount(reservations?.woodSlots, candidate.taskSlotId);
         const spotLoad = getReservationCount(reservations?.woodSpots, candidate.workSpotId);
-        return -slotLoad * 12 - spotLoad * 2.6;
+        return Math.min(distance, 14) * 0.28 - slotLoad * 12 - spotLoad * 2.6;
       },
     );
     if (!target) return null;
@@ -1387,7 +1460,7 @@ function buildFishingDecorations(world, terrainRegions, buildings = []) {
       seed: spotSeed + 5,
     });
 
-    if (index === 0) {
+    if (index < Math.min(4, spots.length)) {
       decorations.push({
         type: 'boat',
         x: boatLayout.x,
@@ -1510,14 +1583,13 @@ function buildFishingDecorations(world, terrainRegions, buildings = []) {
 
 function buildFishingTaskTiles(world, terrainRegions, buildings = []) {
   const decorations = buildFishingDecorations(world, terrainRegions, buildings);
+  const boatDecorations = decorations.filter((decor) => decor.type === 'boat' && Array.isArray(decor.standSlots) && decor.standSlots.length);
   const bankDecorations = decorations.filter((decor) => decor.type === 'fishing_bank' && Array.isArray(decor.standSlots) && decor.standSlots.length);
-  const featuredBanks = bankDecorations.filter((decor) => decor.featured);
-  const sourceDecorations = featuredBanks.length ? featuredBanks : bankDecorations;
+  const sourceDecorations = boatDecorations.length ? boatDecorations : bankDecorations;
   return sourceDecorations
-    .filter((decor) => decor.type === 'fishing_bank' && Array.isArray(decor.standSlots) && decor.standSlots.length)
     .flatMap((decor) => decor.standSlots.map((slot, index) => ({
       ...slot,
-      score: (slot.score || 0) + (decor.featured ? 12 : 2.4) - index * 0.08,
+      score: (slot.score || 0) + (decor.featured ? 12 : 4.8) - index * 0.08,
       featured: !!decor.featured,
       boatX: decor.x,
       boatY: decor.y,
@@ -1909,6 +1981,8 @@ function makeRouteNode(x, y, tileX, tileY, role = 'path', pauseMs = 0, meta = nu
     strikeTargetY: meta?.strikeTargetY ?? null,
     shoreDir: meta?.shoreDir || null,
     fishingSpotId: meta?.fishingSpotId || null,
+    taskSlotId: meta?.taskSlotId || null,
+    workSpotId: meta?.workSpotId || null,
   };
 }
 
@@ -2185,8 +2259,11 @@ function sampleRouteMotion(route, entity, timeCursor, loop = true) {
     if (cursor < pauseMs) {
       const stableFacing = entity.pauseFacing || entity.idleFacing || node.pauseFacing || node.facing || lastFacing || 2;
       const bt = node.buildingType || '';
-      const isWorkBuilding = ['farm', 'fishing_hut', 'woodcutters_hut', 'lumberyard',
-        'quarry', 'stone_pit', 'watchtower', 'shrine', 'town_hall', 'weaving_hut'].includes(bt);
+      const hasTaskTarget = node.castTargetX != null || node.castTargetY != null || node.strikeTargetX != null || node.strikeTargetY != null;
+      const isWorkBuilding = node.role === 'work' && (
+        hasTaskTarget
+        || ['farm', 'quarry', 'stone_pit', 'watchtower', 'shrine', 'town_hall', 'weaving_hut'].includes(bt)
+      );
       return {
         x: node.x,
         y: node.y,
@@ -2205,6 +2282,8 @@ function sampleRouteMotion(route, entity, timeCursor, loop = true) {
         fishingFacing: node.fishingFacing || null,
         shoreDir: node.shoreDir || null,
         fishingSpotId: node.fishingSpotId || null,
+        taskSlotId: node.taskSlotId || null,
+        workSpotId: node.workSpotId || null,
       };
     }
     cursor -= pauseMs;
@@ -2239,6 +2318,8 @@ function sampleRouteMotion(route, entity, timeCursor, loop = true) {
         fishingFacing: node.fishingFacing || next.fishingFacing || null,
         shoreDir: node.shoreDir || next.shoreDir || null,
         fishingSpotId: node.fishingSpotId || next.fishingSpotId || null,
+        taskSlotId: node.taskSlotId || next.taskSlotId || null,
+        workSpotId: node.workSpotId || next.workSpotId || null,
       };
     }
     if (next) cursor -= moveMs;
@@ -2264,6 +2345,8 @@ function sampleRouteMotion(route, entity, timeCursor, loop = true) {
     fishingFacing: fallback.fishingFacing || null,
     shoreDir: fallback.shoreDir || null,
     fishingSpotId: fallback.fishingSpotId || null,
+    taskSlotId: fallback.taskSlotId || null,
+    workSpotId: fallback.workSpotId || null,
   };
 }
 
@@ -2448,19 +2531,23 @@ function getResidentInteractionPose(resident, motion, time) {
       pose.tool = 'hoe';
       break;
     case 'fishing_hut':
-      pose.facing = motion.fishingFacing || motion.pauseFacing || motion.facing;
-      pose.offsetX += pose.facing === 1 ? 0.035 : pose.facing === -1 ? -0.035 : 0;
-      pose.tool = 'rod';
-      pose.castTargetX = motion.castTargetX ?? null;
-      pose.castTargetY = motion.castTargetY ?? null;
-      pose.shoreDir = motion.shoreDir || null;
+      if (motion.role === 'work' && (motion.castTargetX != null || motion.castTargetY != null)) {
+        pose.facing = motion.fishingFacing || motion.pauseFacing || motion.facing;
+        pose.offsetX += pose.facing === 1 ? 0.035 : pose.facing === -1 ? -0.035 : 0;
+        pose.tool = 'rod';
+        pose.castTargetX = motion.castTargetX ?? null;
+        pose.castTargetY = motion.castTargetY ?? null;
+        pose.shoreDir = motion.shoreDir || null;
+      }
       break;
     case 'woodcutters_hut':
     case 'lumberyard':
-      pose.tool = 'axe';
-      pose.offsetX += swing * 0.02;
-      pose.strikeTargetX = motion.strikeTargetX ?? null;
-      pose.strikeTargetY = motion.strikeTargetY ?? null;
+      if (motion.role === 'work' && (motion.strikeTargetX != null || motion.strikeTargetY != null)) {
+        pose.tool = 'axe';
+        pose.offsetX += swing * 0.02;
+        pose.strikeTargetX = motion.strikeTargetX ?? null;
+        pose.strikeTargetY = motion.strikeTargetY ?? null;
+      }
       break;
     case 'quarry':
     case 'stone_pit':
@@ -2904,6 +2991,11 @@ function buildResidentPlacements(world, terrainRegions, buildings = []) {
   const quietAnchors = commonAnchors.filter((anchor) => anchor.anchorKind === 'quiet');
   const weightedSocialAnchors = expandWeightedStops(socialAnchors, (anchor) => (anchor.buildingType === 'town_hall' ? 3 : anchor.buildingType === 'market' ? 4 : 2));
   const weightedQuietAnchors = expandWeightedStops(quietAnchors, () => 2);
+  const woodcuttingTaskTiles = buildWoodcuttingTaskTiles(grid, terrainRegions, landTiles, buildings, 887);
+  const homeUsage = new Map();
+  const laneUsage = new Map();
+  const commonUsage = new Map();
+  const workUsage = new Map();
   const residentClearance = {
     grid,
     terrainRegions,
@@ -2921,32 +3013,43 @@ function buildResidentPlacements(world, terrainRegions, buildings = []) {
     // Give each resident a unique per-resident seed for diverse destination selection
     // Previously groups of 3 shared the same socialSeedBase → identical destinations
     const personalSeed = i * 47 + seed * 3 + 7;
-    const homeTile = pickFromPool(homeAnchors, personalSeed + 1, tile);
-    const laneTile = pickFromPool(laneTiles, personalSeed + 17, tile);
+    const homeTile = pickSpreadTile(homeAnchors, personalSeed + 1, homeUsage, pickFromPool(homeAnchors, personalSeed + 1, tile), 9);
+    const laneTile = pickSpreadTile(laneTiles, personalSeed + 17, laneUsage, pickFromPool(laneTiles, personalSeed + 17, tile), 11);
     const preferredSocial = (seed % 3) !== 0;
     // Use personal seed + diverse offsets so each resident picks different social/leisure spots
     const leisureTile = preferredSocial
-      ? pickFromPool(weightedSocialAnchors, personalSeed + 31, pickFromPool(commonAnchors, personalSeed + 41, pickFromPool(meadowTiles, personalSeed + 51, tile)))
-      : pickFromPool(weightedQuietAnchors, personalSeed + 37, pickFromPool(commonAnchors, personalSeed + 43, pickFromPool(meadowTiles, personalSeed + 53, tile)));
-    const natureTile = pickFromPool(inlandNatureTiles, personalSeed + 61, pickFromPool(meadowTiles, personalSeed + 71, tile));
+      ? pickSpreadTile(weightedSocialAnchors, personalSeed + 31, commonUsage, pickFromPool(commonAnchors, personalSeed + 41, pickFromPool(meadowTiles, personalSeed + 51, tile)), 13)
+      : pickSpreadTile(weightedQuietAnchors, personalSeed + 37, commonUsage, pickFromPool(commonAnchors, personalSeed + 43, pickFromPool(meadowTiles, personalSeed + 53, tile)), 11);
+    const natureTile = pickSpreadTile(inlandNatureTiles, personalSeed + 61, commonUsage, pickFromPool(meadowTiles, personalSeed + 71, tile), 13);
     const baseWorkTile = working
-      ? pickFromPool(weightedWorkAnchors, personalSeed + 81, pickFromPool(commonAnchors, personalSeed + 91, tile))
+      ? pickSpreadTile(weightedWorkAnchors, personalSeed + 81, workUsage, pickFromPool(commonAnchors, personalSeed + 91, tile))
       : leisureTile;
-    const workTile = working && baseWorkTile?.buildingType === 'fishing_hut'
+    const workTile = working && (baseWorkTile?.buildingType === 'fishing_hut' || ['woodcutters_hut', 'lumberyard'].includes(baseWorkTile?.buildingType || ''))
       ? (() => {
-          const fishingTile = pickFromPool(fishingTaskTiles, personalSeed + 101, baseWorkTile);
-          return fishingTile
+          if (baseWorkTile?.buildingType === 'fishing_hut') {
+            const fishingTile = pickSpreadTile(fishingTaskTiles, personalSeed + 101, workUsage, baseWorkTile, 13);
+            return fishingTile
+              ? {
+                  ...fishingTile,
+                  role: 'work',
+                  buildingType: 'fishing_hut',
+                  buildingId: baseWorkTile.buildingId || null,
+                }
+              : baseWorkTile;
+          }
+          const woodTile = pickSpreadTile(woodcuttingTaskTiles, personalSeed + 103, workUsage, baseWorkTile, 13);
+          return woodTile
             ? {
-                ...fishingTile,
+                ...woodTile,
                 role: 'work',
-                buildingType: 'fishing_hut',
+                buildingType: baseWorkTile.buildingType,
                 buildingId: baseWorkTile.buildingId || null,
               }
             : baseWorkTile;
         })()
       : baseWorkTile;
-    const plazaTile = pickFromPool(weightedSocialAnchors, personalSeed + 111, laneTile);
-    const wanderTile = pickFromPool(wanderTiles, personalSeed + 121, natureTile);
+    const plazaTile = pickSpreadTile(weightedSocialAnchors, personalSeed + 111, commonUsage, laneTile, 13);
+    const wanderTile = pickSpreadTile(wanderTiles, personalSeed + 121, commonUsage, natureTile, 15);
     const residentArchetype = working
       ? (
         workTile?.buildingType && ['market', 'trading_post', 'storehouse', 'warehouse', 'bakery'].includes(workTile.buildingType) ? 'merchant'
@@ -3225,6 +3328,7 @@ export default function PetWorldCanvas({
   onSelectBuilding,
   onSelectEncounter,
   onSelectTile,
+  onClearInspect,
   onPlaceBuilding,
   onEnterBuilding,
   onTerraformTile,
@@ -4083,6 +4187,7 @@ export default function PetWorldCanvas({
           const rect = canvasRef.current?.getBoundingClientRect();
           const entityHit = findNearestEntity(entityPositionsRef.current, event.clientX, event.clientY, rect);
           if (entityHit) {
+            onClearInspect?.();
             setSelectedEntity({
               ...entityHit,
               menuScreenX: entityHit.screenX,
@@ -4096,6 +4201,7 @@ export default function PetWorldCanvas({
               onSelectBuilding?.(bldg);
             } else {
               // Buildings with interiors → show context menu
+              onClearInspect?.();
               const bw = (bldg.width || 1) * tileSize;
               const bScreenX = bldg.grid_x * tileSize - camera.x + bw / 2;
               const bScreenY = bldg.grid_y * tileSize - camera.y;
