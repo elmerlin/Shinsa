@@ -218,6 +218,7 @@ const BUILDINGS = {
   garden:     { p: OD + '/Flowers.png', f: [0, 0, 32, 32] },
   flower_bed: { p: OD + '/Flowers.png', f: [0, 0, 32, 32] },
   path:       { p: 'Tiles/Grass/Path_Middle.png', w: 16, h: 16, tile: true },
+  fence:      { p: OD + '/Fences.png', w: 64, h: 64, fence: true },
 };
 
 /* ── Tree sprites ── */
@@ -297,6 +298,29 @@ const PATH_WANG_LOOKUP = [
   [0, 32],  [16, 0],  [32, 48], [16, 16],   //  4-7
   [48, 48], [0, 16],  [48, 32], [32, 0],    //  8-11
   [16, 32], [32, 32], [48, 16], [32, 16],   // 12-15 (mostly dirt → all dirt)
+];
+
+/* ── Fence auto-tile lookup ── */
+// 4-directional connectivity: mask = N*8 + E*4 + S*2 + W
+// Fences.png = 64×64 = 4×4 grid of 16×16 tiles
+// Standard tileset layout: rows go from S-connections (top) to N-connections (bottom)
+const FENCE_TILE_LOOKUP = [
+  [48, 48], //  0: isolated (no connections)
+  [32, 48], //  1: W
+  [48,  0], //  2: S
+  [32,  0], //  3: SW
+  [ 0, 48], //  4: E
+  [16, 48], //  5: EW (horizontal)
+  [ 0,  0], //  6: ES
+  [16,  0], //  7: ESW
+  [48, 32], //  8: N
+  [32, 32], //  9: NW
+  [48, 16], // 10: NS (vertical)
+  [32, 16], // 11: NSW
+  [ 0, 32], // 12: NE
+  [16, 32], // 13: NEW
+  [ 0, 16], // 14: NES
+  [16, 16], // 15: NESW (cross)
 ];
 
 /* ── Grass variation tiles (16x16 each) ── */
@@ -848,6 +872,18 @@ export function drawCuteFantasyBuilding(ctx, buildingOrType, x, y, width, height
   // creates a flat tan square that overwrites the proper transitions.
   if (type === 'path') {
     return true; // claim handled so procedural fallback doesn't kick in
+  }
+
+  // Fence tiles: auto-tile based on 4-directional neighbor connectivity
+  if (type === 'fence') {
+    let mask;
+    if (typeof buildingOrType === 'object') {
+      mask = buildingOrType._fenceNeighbors ?? 0;
+    } else {
+      mask = 5; // EW horizontal for thumbnail preview
+    }
+    const [sx, sy] = FENCE_TILE_LOOKUP[mask];
+    return drawFrame(ctx, cfp(OD + '/Fences.png'), sx, sy, 16, 16, x, y, width, height);
   }
 
   const src = cfp(b.p);

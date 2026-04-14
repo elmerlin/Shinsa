@@ -1812,6 +1812,24 @@ export default function PetWorldCanvas({
     });
     const occupancyCounts = countBuildingOccupants(buildings, residentStates);
 
+    // Pre-compute fence neighbor connectivity for auto-tiling
+    const fenceTiles = new Set();
+    buildings.forEach((b) => {
+      if ((b.type || b.building_type) === 'fence') fenceTiles.add(`${b.grid_x}:${b.grid_y}`);
+    });
+    if (fenceTiles.size > 0) {
+      buildings.forEach((b) => {
+        if ((b.type || b.building_type) !== 'fence') return;
+        const gx = b.grid_x;
+        const gy = b.grid_y;
+        b._fenceNeighbors =
+          (fenceTiles.has(`${gx}:${gy - 1}`) ? 8 : 0) |  // N
+          (fenceTiles.has(`${gx + 1}:${gy}`) ? 4 : 0) |  // E
+          (fenceTiles.has(`${gx}:${gy + 1}`) ? 2 : 0) |  // S
+          (fenceTiles.has(`${gx - 1}:${gy}`) ? 1 : 0);   // W
+      });
+    }
+
     // buildings
     buildings.forEach((building) => {
       const screenX = building.grid_x * tileSize - camX;
