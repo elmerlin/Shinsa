@@ -1574,6 +1574,48 @@ export default function PetWorldPage() {
                       </span>
                     </div>
                     <div className="mt-1 cf-text-muted text-[9px]">{pendingBuildDef.comboCost}c · Tap the ground to place</div>
+                    {pendingBuildDef.id === 'path' && (
+                      <div className="mt-1 flex items-center gap-1">
+                        {[
+                          { id: 'stone', label: 'Pavement', icon: '/pet-world/cute-fantasy/Tiles/wang_grass_path.png' },
+                          { id: 'dirt', label: 'Dust', icon: '/pet-world/cute-fantasy/Tiles/wang_dirt_grass.png' },
+                        ].map((v) => {
+                          const active = (pendingBuildVariant || 'stone') === v.id;
+                          return (
+                            <button
+                              key={v.id}
+                              type="button"
+                              onClick={() => setPendingBuildVariant(v.id)}
+                              className={`flex h-6 items-center gap-1 rounded-sm px-1.5 text-[8px] font-bold transition-all motion-reduce:transition-none ${
+                                active ? 'cf-select-ring' : ''
+                              }`}
+                              style={{
+                                background: active ? 'rgba(232,200,138,0.85)' : 'rgba(232,200,138,0.4)',
+                                border: active ? '2px solid #8b5e2b' : '2px solid rgba(139,94,43,0.3)',
+                                color: '#5a3a18',
+                              }}
+                              aria-pressed={active}
+                              title={v.label}
+                            >
+                              <span
+                                aria-hidden
+                                style={{
+                                  display: 'inline-block',
+                                  width: 16,
+                                  height: 16,
+                                  backgroundImage: `url(${v.icon})`,
+                                  backgroundPosition: '-32px -16px',
+                                  backgroundRepeat: 'no-repeat',
+                                  imageRendering: 'pixelated',
+                                  borderRadius: 2,
+                                }}
+                              />
+                              {v.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 </>
               )}

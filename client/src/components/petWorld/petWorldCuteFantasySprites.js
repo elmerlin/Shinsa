@@ -296,15 +296,25 @@ const WANG_LOOKUP = [
 ];
 const WANG_WATER_GRASS = 'Tiles/wang_water_grass.png';
 
-// Cute Fantasy pedestrian path Wang set. This keeps the village walkways in the
-// same art family as the reference town paths instead of the rough dirt variant.
-const WANG_DIRT_GRASS  = 'Tiles/wang_grass_path.png';
+// Path wang lookup: pathIdx uses 1=path, 0=grass — inverted from PixelLab's
+// 0=lower(path), 1=upper(grass) convention, so we map via 15-pathIdx.
+// Both wang tilesets follow the same 4×4 layout. Default ('stone'/Pavement)
+// is the cute fantasy pedestrian walkway used for the village reference town
+// paths; alternate ('dirt'/Dust) is the rougher original dirt texture.
+const WANG_PATH_STONE = 'Tiles/wang_grass_path.png';
+const WANG_PATH_DIRT  = 'Tiles/wang_dirt_grass.png';
 const PATH_WANG_LOOKUP = [
   [0, 48],  [16, 48], [0, 0],   [48, 0],   //  0-3  (all grass → mostly grass)
   [0, 32],  [16, 0],  [32, 48], [16, 16],   //  4-7
   [48, 48], [0, 16],  [48, 32], [32, 0],    //  8-11
-  [16, 32], [32, 32], [48, 16], [32, 16],   // 12-15 (mostly dirt → all dirt)
+  [16, 32], [32, 32], [48, 16], [32, 16],   // 12-15 (mostly path → all path)
 ];
+
+function pathTextureForVariant(variant) {
+  // Default (no variant) and 'stone' both render the cleaner village walkway
+  // so existing paths placed before variants existed keep their look.
+  return variant === 'dirt' ? WANG_PATH_DIRT : WANG_PATH_STONE;
+}
 
 const FISHING_BANK_MASK = {
   n: 12, // north half dirt
@@ -870,44 +880,63 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
   /* ── Shore transition flag (computed early — used by path + water sections) ── */
   const isShoreTransition = wangIdx > 0 && wangIdx < 15;
 
-  /* ── Path auto-tiling (dirt↔grass Wang transitions) ── */
+  /* ── Path auto-tiling (path↔grass Wang transitions) ── */
+  // Each variant (dirt, stone) has its own wang texture and is computed separately,
+  // so a stone path next to a dirt path gives a clean tile-edge seam between them.
   const hasPathBuilding = tile.b != null && terrain?.isPathBuilding;
+  const ownVariant = terrain?.pathVariant || null;
   if (neighbors) {
-    const isPath = (dir) => neighbors[dir + '_path'] || false;
-    const pNW = (isPath('n') || isPath('w') || isPath('nw')) ? 1 : 0;
-    const pNE = (isPath('n') || isPath('e') || isPath('ne')) ? 1 : 0;
-    const pSW = (isPath('s') || isPath('w') || isPath('sw')) ? 1 : 0;
-    const pSE = (isPath('s') || isPath('e') || isPath('se')) ? 1 : 0;
-    const pathIdx = pNW * 8 + pNE * 4 + pSW * 2 + pSE;
-    if (hasPathBuilding) {
-      // Path building: always draw dirt (even on shore tiles)
-      const idx = pathIdx > 0 ? pathIdx : 15;
+    // Compute a wang index for one variant — counts only neighbors of that variant.
+    const wangIdxForVariant = (variant) => {
+      const matches = (dir) => neighbors[dir + '_pathVariant'] === variant;
+      const nNW = (matches('n') || matches('w') || matches('nw')) ? 1 : 0;
+      const nNE = (matches('n') || matches('e') || matches('ne')) ? 1 : 0;
+      const nSW = (matches('s') || matches('w') || matches('sw')) ? 1 : 0;
+      const nSE = (matches('s') || matches('e') || matches('se')) ? 1 : 0;
+      return nNW * 8 + nNE * 4 + nSW * 2 + nSE;
+    };
+
+    const drawPathTile = (variant, idx, alpha = 1) => {
       const [psx, psy] = PATH_WANG_LOOKUP[idx];
-      drawFrame(ctx, cfp(WANG_DIRT_GRASS), psx, psy, 16, 16, x, y, size, size);
-    } else if (pathIdx > 0) {
-      if (!isShoreTransition) {
-        // Inland tile: draw full dirt-grass transition
-        const [psx, psy] = PATH_WANG_LOOKUP[pathIdx];
-        drawFrame(ctx, cfp(WANG_DIRT_GRASS), psx, psy, 16, 16, x, y, size, size, undefined, 0.88);
-      } else {
-        // Shore tile: only draw path transition in grass quadrants.
-        // maskedIdx strips dirt from corners that are water in the base tile.
-        // Canvas clip restricts drawing to grass quadrants so opaque pixels
-        // from the dirt-grass tile never cover the water in the wang base.
-        const maskedIdx = pathIdx & wangIdx;
-        if (maskedIdx > 0) {
-          const halfW = size / 2;
-          const halfH = size / 2;
-          ctx.save();
-          ctx.beginPath();
-          if (wangIdx & 8) ctx.rect(x, y, halfW, halfH);
-          if (wangIdx & 4) ctx.rect(x + halfW, y, halfW, halfH);
-          if (wangIdx & 2) ctx.rect(x, y + halfH, halfW, halfH);
-          if (wangIdx & 1) ctx.rect(x + halfW, y + halfH, halfW, halfH);
-          ctx.clip();
-          const [psx, psy] = PATH_WANG_LOOKUP[maskedIdx];
-          drawFrame(ctx, cfp(WANG_DIRT_GRASS), psx, psy, 16, 16, x, y, size, size, undefined, 0.88);
-          ctx.restore();
+      drawFrame(ctx, cfp(pathTextureForVariant(variant)), psx, psy, 16, 16, x, y, size, size, undefined, alpha);
+    };
+
+    const drawPathTileClipped = (variant, idx, alpha = 1) => {
+      const halfW = size / 2;
+      const halfH = size / 2;
+      ctx.save();
+      ctx.beginPath();
+      if (wangIdx & 8) ctx.rect(x, y, halfW, halfH);
+      if (wangIdx & 4) ctx.rect(x + halfW, y, halfW, halfH);
+      if (wangIdx & 2) ctx.rect(x, y + halfH, halfW, halfH);
+      if (wangIdx & 1) ctx.rect(x + halfW, y + halfH, halfW, halfH);
+      ctx.clip();
+      drawPathTile(variant, idx, alpha);
+      ctx.restore();
+    };
+
+    if (hasPathBuilding) {
+      // Path building: draw using own variant. The wang index counts ONLY
+      // matching-variant neighbors; opposite-variant neighbors render as grass
+      // edges so the two path styles meet with a clean tile-boundary seam.
+      const variant = ownVariant || 'dirt';
+      const sameIdx = wangIdxForVariant(variant);
+      const idx = sameIdx > 0 ? sameIdx : 15;
+      drawPathTile(variant, idx);
+    } else {
+      // Grass / shore tile: render dirt and stone transitions separately so
+      // a tile diagonal to BOTH variants gets both halos painted.
+      const variants = ['dirt', 'stone'];
+      for (const variant of variants) {
+        const variantIdx = wangIdxForVariant(variant);
+        if (variantIdx <= 0) continue;
+        if (!isShoreTransition) {
+          drawPathTile(variant, variantIdx, 0.88);
+        } else {
+          // Shore tile: clip transitions to grass quadrants only, so the
+          // path texture never covers the water portion of the wang base.
+          const maskedIdx = variantIdx & wangIdx;
+          if (maskedIdx > 0) drawPathTileClipped(variant, maskedIdx, 0.88);
         }
       }
     }

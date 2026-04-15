@@ -13,6 +13,44 @@ const FLOWER_VARIANTS = [
   { id: 'red', label: 'Red', color: '#e04040' },
 ];
 
+const PATH_VARIANTS = [
+  { id: 'stone', label: 'Pavement', icon: '/pet-world/cute-fantasy/Tiles/wang_grass_path.png', sx: '-32px', sy: '-16px' },
+  { id: 'dirt', label: 'Dust', icon: '/pet-world/cute-fantasy/Tiles/wang_dirt_grass.png', sx: '-32px', sy: '-16px' },
+];
+
+function PathVariantSwatch({ variant, selected, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      className={`flex h-6 items-center gap-1 rounded-sm px-1 text-[8px] font-bold transition-all motion-reduce:transition-none ${
+        selected ? 'cf-select-ring' : ''
+      }`}
+      style={{
+        background: 'rgba(232,200,138,0.55)',
+        border: selected ? '2px solid #8b5e2b' : '2px solid rgba(139,94,43,0.3)',
+        color: '#5a3a18',
+      }}
+      title={variant.label}
+    >
+      <span
+        aria-hidden
+        style={{
+          display: 'inline-block',
+          width: 16,
+          height: 16,
+          backgroundImage: `url(${variant.icon})`,
+          backgroundPosition: `${variant.sx} ${variant.sy}`,
+          backgroundRepeat: 'no-repeat',
+          imageRendering: 'pixelated',
+          borderRadius: 2,
+        }}
+      />
+      {variant.label}
+    </button>
+  );
+}
+
 // Terraform / bridge actions -- these are not real buildings but live in the
 // build menu so the player finds land-shaping tools next to their miniatures.
 const TERRAFORM_ITEMS = [
@@ -275,6 +313,20 @@ export default function PetWorldBuildMenu({
                           border: selectedVariant === v.id ? '2px solid #8b5e2b' : '2px solid rgba(139,94,43,0.3)',
                         }}
                         title={v.label}
+                      />
+                    ))}
+                  </div>
+                )}
+
+                {selected && building.id === 'path' && (
+                  <div className="flex items-center gap-1.5 px-2.5 pb-2">
+                    <span className="cf-text-muted mr-0.5 text-[8px]">Style:</span>
+                    {PATH_VARIANTS.map((v) => (
+                      <PathVariantSwatch
+                        key={v.id}
+                        variant={v}
+                        selected={(selectedVariant || 'stone') === v.id}
+                        onClick={() => onSelect(building.id, v.id)}
                       />
                     ))}
                   </div>

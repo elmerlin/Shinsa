@@ -145,16 +145,25 @@ export function analyzeTerrainGrid(grid, buildings = []) {
   const occupancy = Array.from({ length: height }, (_, y) => (
     Array.from({ length: width }, (_, x) => {
       const tile = grid.tiles[y]?.[x] || null;
-      const buildingType = tile?.b != null ? buildingMap.get(tile.b)?.type || null : null;
+      const building = tile?.b != null ? buildingMap.get(tile.b) || null : null;
+      const buildingType = building?.type || null;
       const tileType = tile?.t || 'ground';
       const isObstacle = tileType === 'tree' || tileType === 'rock' || tileType === 'bush' || tileType === 'stump';
+      const isPath = buildingType === 'path';
+      // Variant: 'dirt' for the rough dust path, otherwise 'stone' (default
+      // pavement). Existing path tiles have no variant set, so they default
+      // to the production walkway texture and keep their look.
+      const pathVariant = isPath
+        ? (building?.variant === 'dirt' ? 'dirt' : 'stone')
+        : null;
       return {
         tileType,
         buildingType,
         isWater: tileType === 'water',
         isFoliage: tileType === 'tree' || tileType === 'bush' || tileType === 'stump',
         isRock: tileType === 'rock',
-        isPath: buildingType === 'path',
+        isPath,
+        pathVariant,
         openGround: tile?.b == null && !isObstacle && tileType !== 'water',
       };
     })
@@ -267,6 +276,7 @@ export function analyzeTerrainGrid(grid, buildings = []) {
         isWater: tile.isWater,
         isFoliage: tile.isFoliage,
         isPathBuilding: tile.isPath,
+        pathVariant: tile.pathVariant,
         villageWear,
         waterRatio,
         foliageRatio,
