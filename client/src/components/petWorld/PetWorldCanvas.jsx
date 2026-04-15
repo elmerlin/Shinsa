@@ -3759,7 +3759,19 @@ export default function PetWorldCanvas({
   // --- main render ---
   const render = useCallback((timestamp) => {
     const canvas = canvasRef.current;
-    if (!canvas || !world?.grid || !size.width || !size.height) return;
+    if (!canvas || !world?.grid || !size.width || !size.height) {
+      // Keep the rAF loop alive even when we can't draw this frame — e.g.
+      // canvas or grid is transiently null during a re-mount, or size is 0
+      // mid-resize. If we returned without rescheduling, the loop would die
+      // silently because animatingRef stays true and nothing would restart it
+      // until a memoized dep changed. This was the cause of the "world freezes
+      // when tab is backgrounded" bug: rAF pauses while hidden, then fires one
+      // stale frame on resume that hit the early-return path.
+      if (animatingRef.current) {
+        animationFrameRef.current = requestAnimationFrame(render);
+      }
+      return;
+    }
     const time = timestamp || performance.now();
     timeRef.current = time;
 
@@ -4322,6 +4334,22 @@ export default function PetWorldCanvas({
       cancelAnimationFrame(animationFrameRef.current);
       animatingRef.current = false;
     };
+  }, [startAnimating]);
+
+  // Re-kick the animation loop when the tab becomes visible again. Browsers
+  // pause rAF for hidden tabs; normally it resumes on its own, but if the
+  // first resumed frame hit the early-return path (see render()), the loop
+  // would be dead. Force-restart on visibilitychange as a safety net.
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animatingRef.current = false;
+        startAnimating();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [startAnimating]);
 
   // re-render when deps change (single frame if idle)
