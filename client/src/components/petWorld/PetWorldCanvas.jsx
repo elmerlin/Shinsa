@@ -3713,7 +3713,8 @@ export default function PetWorldCanvas({
           sw: world.grid.tiles[y + 1]?.[x - 1]?.t || null,
           // Path neighbor flags for Wang grass↔path auto-tiling
           // Only actual path buildings count — ambient laneStrength was bleeding
-          // cobblestone texture onto grass tiles near non-path buildings
+          // cobblestone texture onto grass tiles near non-path buildings.
+          // Variant flags let stone/dirt paths render with different textures.
           n_path:  !!terrainRegions?.[y - 1]?.[x]?.isPathBuilding,
           s_path:  !!terrainRegions?.[y + 1]?.[x]?.isPathBuilding,
           e_path:  !!terrainRegions?.[y]?.[x + 1]?.isPathBuilding,
@@ -3722,6 +3723,14 @@ export default function PetWorldCanvas({
           nw_path: !!terrainRegions?.[y - 1]?.[x - 1]?.isPathBuilding,
           se_path: !!terrainRegions?.[y + 1]?.[x + 1]?.isPathBuilding,
           sw_path: !!terrainRegions?.[y + 1]?.[x - 1]?.isPathBuilding,
+          n_pathVariant:  terrainRegions?.[y - 1]?.[x]?.pathVariant || null,
+          s_pathVariant:  terrainRegions?.[y + 1]?.[x]?.pathVariant || null,
+          e_pathVariant:  terrainRegions?.[y]?.[x + 1]?.pathVariant || null,
+          w_pathVariant:  terrainRegions?.[y]?.[x - 1]?.pathVariant || null,
+          ne_pathVariant: terrainRegions?.[y - 1]?.[x + 1]?.pathVariant || null,
+          nw_pathVariant: terrainRegions?.[y - 1]?.[x - 1]?.pathVariant || null,
+          se_pathVariant: terrainRegions?.[y + 1]?.[x + 1]?.pathVariant || null,
+          sw_pathVariant: terrainRegions?.[y + 1]?.[x - 1]?.pathVariant || null,
         };
         visibleTiles.push({
           x,
