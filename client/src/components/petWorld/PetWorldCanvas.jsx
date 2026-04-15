@@ -1143,11 +1143,11 @@ function buildResidentTaskState(
       entity.seed + 617,
       grid,
       terrainRegions,
-      RESIDENT_WALK_OPTIONS,
+      FISHING_TASK_WALK_OPTIONS,
       (candidate, path, distance) => {
         const slotLoad = getReservationCount(reservations?.fishingSlots, candidate.taskSlotId || candidate.fishingSpotId);
         return (candidate.fishingSpotId ? 8.5 : 0)
-          + (candidate.featured ? 3.5 : 0)
+          + (candidate.featured ? (manual ? 7.5 : 3.5) : 0)
           + Math.min(distance, 18) * 0.55
           - (manual && candidate.fishingSpotId === currentFishingSpotId ? 28 : 0)
           - (manual && distance < 2 ? 16 : 0)
@@ -2739,18 +2739,100 @@ function countBuildingOccupants(buildings, residentStates) {
     if (building.state !== 'built') return;
     if (!ACTIVE_MARKER_BUILDINGS.has(building.type)) return;
     if (!counts.has(building.id) && building.workers > 0) {
-      counts.set(building.id, Math.max(1, Math.min(3, building.workers)));
+      counts.set(building.id, Math.max(1, Number(building.workers) || 0));
     }
   });
   return counts;
 }
 
-function drawTinyProp(ctx, x, y, color, width, height, shadow = 'rgba(0,0,0,0.16)') {
+function getWorkerBadgePalette(buildingType) {
+  switch (buildingType) {
+    case 'fishing_hut':
+      return {
+        fill: '#dff5f2',
+        stroke: '#4b8f98',
+        accent: '#74b8c2',
+        text: '#123943',
+      };
+    case 'woodcutters_hut':
+    case 'lumberyard':
+      return {
+        fill: '#f0d9ba',
+        stroke: '#8f6336',
+        accent: '#b58146',
+        text: '#3b240f',
+      };
+    case 'farm':
+      return {
+        fill: '#f5e6a8',
+        stroke: '#9f7c2b',
+        accent: '#d4b35a',
+        text: '#46340a',
+      };
+    case 'quarry':
+    case 'stone_pit':
+      return {
+        fill: '#e2e7ee',
+        stroke: '#6e7a8a',
+        accent: '#a4afbc',
+        text: '#253143',
+      };
+    case 'market':
+    case 'trading_post':
+      return {
+        fill: '#f6e0cf',
+        stroke: '#9a6540',
+        accent: '#d88a53',
+        text: '#4a2512',
+      };
+    default:
+      return {
+        fill: '#f4e2c6',
+        stroke: '#94663d',
+        accent: '#d0a569',
+        text: '#3a2010',
+      };
+  }
+}
+
+function drawWorkerBadge(ctx, x, y, count, tileSize, buildingType) {
+  const palette = getWorkerBadgePalette(buildingType);
+  const label = count > 9 ? '9+' : String(Math.max(1, count));
+  const width = tileSize * (label.length > 1 ? 0.66 : 0.56);
+  const height = tileSize * 0.34;
+  const radius = height * 0.38;
+  const px = Math.round(x);
+  const py = Math.round(y);
+
   ctx.save();
-  ctx.fillStyle = shadow;
-  ctx.fillRect(Math.round(x), Math.round(y + height * 0.2), Math.max(1, Math.round(width)), Math.max(1, Math.round(height * 0.32)));
-  ctx.fillStyle = color;
-  ctx.fillRect(Math.round(x), Math.round(y), Math.max(1, Math.round(width)), Math.max(1, Math.round(height)));
+  ctx.shadowColor = 'rgba(0,0,0,0.22)';
+  ctx.shadowBlur = Math.max(2, tileSize * 0.06);
+  ctx.shadowOffsetY = Math.max(1, tileSize * 0.04);
+
+  ctx.beginPath();
+  ctx.roundRect(px, py, Math.round(width), Math.round(height), radius);
+  ctx.fillStyle = palette.fill;
+  ctx.fill();
+  ctx.lineWidth = Math.max(1.25, tileSize * 0.045);
+  ctx.strokeStyle = palette.stroke;
+  ctx.stroke();
+
+  const accentSize = height * 0.44;
+  const accentX = px + tileSize * 0.08;
+  const accentY = py + height * 0.28;
+  ctx.beginPath();
+  ctx.ellipse(accentX + accentSize * 0.18, accentY + accentSize * 0.16, accentSize * 0.18, accentSize * 0.2, 0, 0, Math.PI * 2);
+  ctx.fillStyle = palette.accent;
+  ctx.fill();
+  ctx.beginPath();
+  ctx.roundRect(accentX, accentY + accentSize * 0.22, accentSize * 0.38, accentSize * 0.34, accentSize * 0.14);
+  ctx.fill();
+
+  ctx.fillStyle = palette.text;
+  ctx.font = `bold ${Math.round(tileSize * 0.18)}px "Trebuchet MS", sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, px + width * 0.68, py + height * 0.55);
   ctx.restore();
 }
 
@@ -2766,47 +2848,9 @@ function drawOccupancyMarkers(ctx, buildings, occupancyCounts, tileSize, camera,
     const height = building.height * tileSize;
     if (baseX + width < -tileSize || baseY + height < -tileSize || baseX > viewport.width + tileSize || baseY > viewport.height + tileSize) return;
 
-    const markerCount = clamp(occupancy, 1, 3);
-    for (let i = 0; i < markerCount; i += 1) {
-      const px = baseX + width * (0.16 + i * 0.18);
-      const py = baseY + height * 0.76 + (i % 2) * tileSize * 0.03;
-      switch (building.type) {
-        case 'farm':
-          drawTinyProp(ctx, px, py, '#d9b85c', tileSize * 0.13, tileSize * 0.09);
-          break;
-        case 'fishing_hut':
-          drawTinyProp(ctx, px, py, '#62a9c6', tileSize * 0.12, tileSize * 0.06);
-          drawTinyProp(ctx, px + tileSize * 0.06, py - tileSize * 0.03, '#d2d8b8', tileSize * 0.08, tileSize * 0.04);
-          break;
-        case 'woodcutters_hut':
-        case 'lumberyard':
-          drawTinyProp(ctx, px, py, '#94663d', tileSize * 0.15, tileSize * 0.07);
-          break;
-        case 'quarry':
-        case 'stone_pit':
-          drawTinyProp(ctx, px, py, '#9aa1ab', tileSize * 0.14, tileSize * 0.08);
-          break;
-        case 'market':
-        case 'trading_post':
-          drawTinyProp(ctx, px, py, i % 2 === 0 ? '#d35a52' : '#d9b85c', tileSize * 0.1, tileSize * 0.1);
-          break;
-        case 'storehouse':
-        case 'warehouse':
-          drawTinyProp(ctx, px, py, '#a9764b', tileSize * 0.11, tileSize * 0.11);
-          break;
-        case 'tavern':
-          drawTinyProp(ctx, px, py, '#8e6644', tileSize * 0.09, tileSize * 0.12);
-          break;
-        case 'watchtower':
-          drawTinyProp(ctx, baseX + width * 0.55, baseY + height * 0.18, '#d95454', tileSize * 0.06, tileSize * 0.12, 'rgba(0,0,0,0)');
-          break;
-        case 'shrine':
-          drawTinyProp(ctx, px, py, '#e2d7b6', tileSize * 0.08, tileSize * 0.12);
-          break;
-        default:
-          break;
-      }
-    }
+    const badgeX = baseX + width * 0.54;
+    const badgeY = baseY + Math.max(tileSize * 0.08, height * 0.12);
+    drawWorkerBadge(ctx, badgeX, badgeY, occupancy, tileSize, building.type);
   });
 }
 

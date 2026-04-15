@@ -296,9 +296,9 @@ const WANG_LOOKUP = [
 ];
 const WANG_WATER_GRASS = 'Tiles/wang_water_grass.png';
 
-// Path wang lookup: pathIdx uses 1=path(dirt), 0=grass — inverted from PixelLab's
-// 0=lower(dirt), 1=upper(grass) convention, so we map via 15-pathIdx.
-const WANG_DIRT_GRASS  = 'Tiles/wang_dirt_grass.png';
+// Cute Fantasy pedestrian path Wang set. This keeps the village walkways in the
+// same art family as the reference town paths instead of the rough dirt variant.
+const WANG_DIRT_GRASS  = 'Tiles/wang_grass_path.png';
 const PATH_WANG_LOOKUP = [
   [0, 48],  [16, 48], [0, 0],   [48, 0],   //  0-3  (all grass → mostly grass)
   [0, 32],  [16, 0],  [32, 48], [16, 16],   //  4-7

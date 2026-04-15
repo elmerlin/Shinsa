@@ -50,11 +50,163 @@ const BUILD_SHEET_HEIGHTS = {
   browse: 'min(27rem, 33vh)',
   expanded: 'min(36rem, 58vh)',
 };
+const PATH_CONNECTABLE_BUILDINGS = new Set([
+  'house',
+  'large_house',
+  'farm',
+  'market',
+  'storehouse',
+  'trading_post',
+  'town_hall',
+  'bakery',
+  'shrine',
+  'warehouse',
+  'tavern',
+  'woodcutters_hut',
+  'lumberyard',
+  'weaving_hut',
+  'quarry',
+]);
+const PATH_BLOCKERS = new Set(['water', 'rock', 'tree', 'bush', 'stump']);
+const AUTO_PATH_CONNECT_MAX_STEPS = 3;
 
 function stepBuildSnap(current, direction) {
   const index = BUILD_SHEET_SNAPS.indexOf(current);
   const nextIndex = Math.max(0, Math.min(BUILD_SHEET_SNAPS.length - 1, index + direction));
   return BUILD_SHEET_SNAPS[nextIndex];
+}
+
+function getBuildingType(building) {
+  return building?.type || building?.building_type || '';
+}
+
+function getBuiltPathKeys(bundle) {
+  return new Set(
+    (bundle?.buildings || [])
+      .filter((building) => building.state === 'built' && getBuildingType(building) === 'path')
+      .map((building) => `${building.grid_x}:${building.grid_y}`),
+  );
+}
+
+function hasAdjacentWater(grid, x, y) {
+  for (let ny = -1; ny <= 1; ny += 1) {
+    for (let nx = -1; nx <= 1; nx += 1) {
+      if (nx === 0 && ny === 0) continue;
+      if (grid?.tiles?.[y + ny]?.[x + nx]?.t === 'water') return true;
+    }
+  }
+  return false;
+}
+
+function isPathBuildable(bundle, x, y, pathKeys) {
+  const grid = bundle?.world?.grid;
+  if (!grid) return false;
+  if (x < 0 || y < 0 || x >= grid.w || y >= grid.h) return false;
+  const key = `${x}:${y}`;
+  if (pathKeys.has(key)) return true;
+  const tile = grid.tiles?.[y]?.[x];
+  if (!tile) return false;
+  if (tile.b != null) return false;
+  if (PATH_BLOCKERS.has(tile.t)) return false;
+  if (hasAdjacentWater(grid, x, y)) return false;
+  return true;
+}
+
+function getDoorCandidates(building) {
+  if (!building || building.state !== 'built') return [];
+  const type = getBuildingType(building);
+  if (!PATH_CONNECTABLE_BUILDINGS.has(type)) return [];
+  const width = Math.max(1, Number(building.width) || getBuildingSize(type).width || 1);
+  const height = Math.max(1, Number(building.height) || getBuildingSize(type).height || 1);
+  const gx = Number(building.grid_x) || 0;
+  const gy = Number(building.grid_y) || 0;
+  const bottomXs = width === 1
+    ? [gx]
+    : width % 2 === 0
+      ? [gx + width / 2 - 1, gx + width / 2]
+      : [gx + Math.floor(width / 2)];
+  const candidates = [
+    ...bottomXs.map((x, index) => ({ x, y: gy + height, priority: index })),
+    { x: gx - 1, y: gy + Math.floor(height / 2), priority: 5 },
+    { x: gx + width, y: gy + Math.floor(height / 2), priority: 5 },
+    { x: gx + Math.floor(width / 2), y: gy - 1, priority: 8 },
+  ];
+  const unique = new Map();
+  candidates.forEach((candidate) => {
+    const key = `${candidate.x}:${candidate.y}`;
+    if (!unique.has(key) || unique.get(key).priority > candidate.priority) {
+      unique.set(key, candidate);
+    }
+  });
+  return Array.from(unique.values()).sort((a, b) => a.priority - b.priority);
+}
+
+function findShortestDoorPath(bundle, startCandidates, pathKeys, maxSteps = AUTO_PATH_CONNECT_MAX_STEPS) {
+  const grid = bundle?.world?.grid;
+  if (!grid || !startCandidates.length || !pathKeys.size) return null;
+  const seen = new Set();
+  const queue = [];
+
+  startCandidates.forEach((candidate) => {
+    if (!isPathBuildable(bundle, candidate.x, candidate.y, pathKeys)) return;
+    const key = `${candidate.x}:${candidate.y}`;
+    seen.add(key);
+    queue.push({ x: candidate.x, y: candidate.y, route: [candidate] });
+  });
+
+  while (queue.length) {
+    const current = queue.shift();
+    const currentKey = `${current.x}:${current.y}`;
+    if (pathKeys.has(currentKey)) {
+      return current.route.slice(0, -1);
+    }
+    if (current.route.length > maxSteps) continue;
+    const neighbors = [
+      { x: current.x + 1, y: current.y },
+      { x: current.x - 1, y: current.y },
+      { x: current.x, y: current.y + 1 },
+      { x: current.x, y: current.y - 1 },
+    ];
+    neighbors.forEach((neighbor) => {
+      const key = `${neighbor.x}:${neighbor.y}`;
+      if (seen.has(key)) return;
+      if (!isPathBuildable(bundle, neighbor.x, neighbor.y, pathKeys)) return;
+      seen.add(key);
+      queue.push({ x: neighbor.x, y: neighbor.y, route: [...current.route, neighbor] });
+    });
+  }
+
+  return null;
+}
+
+function collectDoorConnectorRoutes(bundle, placedPathKey) {
+  const pathKeys = getBuiltPathKeys(bundle);
+  if (placedPathKey) pathKeys.add(placedPathKey);
+  if (!pathKeys.size) return [];
+
+  const routes = [];
+  const buildings = (bundle?.buildings || []).filter((building) => building.state === 'built');
+  buildings.forEach((building) => {
+    const doorCandidates = getDoorCandidates(building);
+    if (!doorCandidates.length) return;
+    const alreadyConnected = doorCandidates.some((candidate) => {
+      const key = `${candidate.x}:${candidate.y}`;
+      if (pathKeys.has(key)) return true;
+      return (
+        pathKeys.has(`${candidate.x + 1}:${candidate.y}`)
+        || pathKeys.has(`${candidate.x - 1}:${candidate.y}`)
+        || pathKeys.has(`${candidate.x}:${candidate.y + 1}`)
+        || pathKeys.has(`${candidate.x}:${candidate.y - 1}`)
+      );
+    });
+    if (alreadyConnected) return;
+
+    const route = findShortestDoorPath(bundle, doorCandidates, pathKeys, AUTO_PATH_CONNECT_MAX_STEPS);
+    if (!route?.length) return;
+    routes.push({ buildingId: building.id, route });
+    route.forEach((tile) => pathKeys.add(`${tile.x}:${tile.y}`));
+  });
+  return routes;
 }
 
 function getTileInspectCopy(tileType, inspectedObstacle) {
@@ -941,7 +1093,22 @@ export default function PetWorldPage() {
     try {
       const placedType = pendingBuildType;
       const placedSize = getBuildingSize(placedType);
-      const next = await buildPetWorldBuilding({ type: pendingBuildType, x, y, variant: pendingBuildVariant });
+      let next = await buildPetWorldBuilding({ type: pendingBuildType, x, y, variant: pendingBuildVariant });
+      let autoConnectedTiles = 0;
+      if (placedType === 'path') {
+        const routes = collectDoorConnectorRoutes(next, `${x}:${y}`);
+        const placedConnectorKeys = new Set();
+        for (const { route } of routes) {
+          for (const step of route) {
+            const key = `${step.x}:${step.y}`;
+            if (placedConnectorKeys.has(key)) continue;
+            if (getBuiltPathKeys(next).has(key)) continue;
+            next = await buildPetWorldBuilding({ type: 'path', x: step.x, y: step.y, variant: pendingBuildVariant });
+            placedConnectorKeys.add(key);
+            autoConnectedTiles += 1;
+          }
+        }
+      }
       playBuildSound();
       setBundle(next);
       setPlacementBurst({
@@ -955,7 +1122,7 @@ export default function PetWorldPage() {
       setPendingBuildVariant(null);
       setActiveSheet(null);
       setSelectedTile(null);
-      showToast('Building placed');
+      showToast(autoConnectedTiles > 0 ? `Path connected (${autoConnectedTiles} tiles)` : 'Building placed');
     } catch (error) {
       showToast(error.message || 'Could not place building');
     }
@@ -1276,10 +1443,6 @@ export default function PetWorldPage() {
           onTerraformTile={handleTerraformTile}
         />
       </div>
-
-      {/* Reduced gradient overlays — warm parchment tones */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-20 h-16 cf-top-bar" />
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-20 cf-bottom-bar" />
 
       {/* ═══ TOP HUD STRIP ═══ */}
       <div
