@@ -10,31 +10,30 @@ const MODE_PREFIX = { Single: 'S', Double: 'D', CoOp: 'C' };
 const MODE_LABEL = { Single: 'Singles', Double: 'Doubles', CoOp: 'Co-Op' };
 
 // Pump It Up color conventions: Singles = red, Doubles = green, Co-Op = yellow.
+// `accent` is the full-saturation stripe color, mirroring the TIER_STYLE shape so
+// the sticky header's mode pill matches the tier banner design language.
 const MODE_STYLE = {
   Single: {
-    border: 'border-piu-accent/30',
-    bg: 'bg-piu-accent/[0.07]',
-    hoverBg: 'hover:bg-piu-accent/[0.12]',
-    hoverBorder: 'hover:border-piu-accent/50',
-    activeBg: 'active:bg-piu-accent/[0.16]',
+    bg: 'bg-piu-accent/[0.08]',
+    hoverBg: 'hover:bg-piu-accent/[0.14]',
+    activeBg: 'active:bg-piu-accent/[0.18]',
+    accent: 'bg-piu-accent',
     text: 'text-piu-accent',
     hoverText: 'group-hover:text-piu-accent',
   },
   Double: {
-    border: 'border-emerald-400/30',
-    bg: 'bg-emerald-500/[0.07]',
-    hoverBg: 'hover:bg-emerald-500/[0.12]',
-    hoverBorder: 'hover:border-emerald-400/50',
-    activeBg: 'active:bg-emerald-500/[0.16]',
+    bg: 'bg-emerald-500/[0.08]',
+    hoverBg: 'hover:bg-emerald-500/[0.14]',
+    activeBg: 'active:bg-emerald-500/[0.18]',
+    accent: 'bg-emerald-400',
     text: 'text-emerald-300',
     hoverText: 'group-hover:text-emerald-200',
   },
   CoOp: {
-    border: 'border-amber-400/30',
-    bg: 'bg-amber-500/[0.07]',
-    hoverBg: 'hover:bg-amber-500/[0.12]',
-    hoverBorder: 'hover:border-amber-400/50',
-    activeBg: 'active:bg-amber-500/[0.16]',
+    bg: 'bg-amber-500/[0.08]',
+    hoverBg: 'hover:bg-amber-500/[0.14]',
+    activeBg: 'active:bg-amber-500/[0.18]',
+    accent: 'bg-amber-400',
     text: 'text-amber-200',
     hoverText: 'group-hover:text-amber-100',
   },
@@ -757,17 +756,17 @@ export default function TiersPage() {
         </div>
       )}
 
-      <div className={`${captureMode ? 'hidden' : 'sticky top-[56px] sm:top-[64px] z-30'} rounded-xl border border-piu-border/50 bg-piu-card/90 backdrop-blur-sm px-2 py-2 sm:px-3 sm:py-2.5`}>
+      <div className={`${captureMode ? 'hidden' : 'sticky top-[56px] sm:top-[64px] z-30'} rounded-xl border border-piu-border/30 bg-piu-card/85 backdrop-blur-sm px-2 py-1.5 sm:px-3 sm:py-2`}>
         <div className="grid grid-cols-[96px_auto_96px] items-center">
           <div className="flex items-center gap-0.5">
             <button
               type="button"
               onClick={goPrevLevel}
               disabled={!canGoPrev}
-              className="w-11 h-11 rounded-lg text-gray-400 hover:text-white hover:bg-white/[0.04] active:bg-white/[0.08] disabled:opacity-25 disabled:hover:bg-transparent disabled:hover:text-gray-400 transition-colors flex items-center justify-center"
+              className="w-11 h-11 rounded-md text-gray-500 hover:text-white hover:bg-white/[0.05] active:bg-white/[0.08] disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-gray-500 transition-colors flex items-center justify-center"
               aria-label="Previous level"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-[22px] h-[22px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.25}>
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
               </svg>
             </button>
@@ -775,11 +774,11 @@ export default function TiersPage() {
               type="button"
               onClick={captureTierImage}
               disabled={captureBusy}
-              className="w-11 h-11 rounded-lg text-gray-400 hover:text-white hover:bg-white/[0.04] active:bg-white/[0.08] disabled:opacity-25 disabled:hover:bg-transparent disabled:hover:text-gray-400 transition-colors flex items-center justify-center"
+              className="w-11 h-11 rounded-md text-gray-500 hover:text-white hover:bg-white/[0.05] active:bg-white/[0.08] disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-gray-500 transition-colors flex items-center justify-center"
               aria-label="Download tier image"
               title="Download tier image"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-[22px] h-[22px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
               </svg>
             </button>
@@ -788,13 +787,14 @@ export default function TiersPage() {
           <button
             type="button"
             onClick={handleModeCycle}
-            className={`group justify-self-center flex items-baseline gap-2 px-4 py-1.5 rounded-lg border ${modeStyle.border} ${modeStyle.bg} ${modeStyle.hoverBg} ${modeStyle.hoverBorder} ${modeStyle.activeBg} transition-colors`}
+            className={`group justify-self-center relative flex items-baseline gap-2.5 pl-4 pr-3.5 py-1.5 rounded-md overflow-hidden ${modeStyle.bg} ${modeStyle.hoverBg} ${modeStyle.activeBg} transition-colors`}
             title="Switch mode"
           >
-            <span className={`font-display font-semibold text-[10px] uppercase tracking-[0.24em] ${modeStyle.text} ${modeStyle.hoverText}`}>
+            <span aria-hidden="true" className={`absolute left-0 top-0 bottom-0 w-[3px] ${modeStyle.accent}`} />
+            <span className={`font-display font-semibold text-[11px] uppercase tracking-[0.22em] ${modeStyle.text} ${modeStyle.hoverText}`}>
               {MODE_LABEL[mode] || '—'}
             </span>
-            <span className="font-display font-black text-2xl leading-none tracking-wide text-white tabular-nums">
+            <span className="font-display font-extrabold text-[22px] leading-none tracking-tight text-white tabular-nums">
               {level || '-'}
             </span>
           </button>
@@ -803,10 +803,10 @@ export default function TiersPage() {
             <button
               type="button"
               onClick={() => setSettingsOpen(true)}
-              className="w-11 h-11 rounded-lg text-gray-400 hover:text-white hover:bg-white/[0.04] active:bg-white/[0.08] transition-colors flex items-center justify-center"
+              className="w-11 h-11 rounded-md text-gray-500 hover:text-white hover:bg-white/[0.05] active:bg-white/[0.08] transition-colors flex items-center justify-center"
               aria-label="Tier settings"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-[22px] h-[22px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
               </svg>
             </button>
@@ -814,10 +814,10 @@ export default function TiersPage() {
               type="button"
               onClick={goNextLevel}
               disabled={!canGoNext}
-              className="w-11 h-11 rounded-lg text-gray-400 hover:text-white hover:bg-white/[0.04] active:bg-white/[0.08] disabled:opacity-25 disabled:hover:bg-transparent disabled:hover:text-gray-400 transition-colors flex items-center justify-center"
+              className="w-11 h-11 rounded-md text-gray-500 hover:text-white hover:bg-white/[0.05] active:bg-white/[0.08] disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-gray-500 transition-colors flex items-center justify-center"
               aria-label="Next level"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-[22px] h-[22px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.25}>
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
               </svg>
             </button>
