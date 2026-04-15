@@ -467,6 +467,41 @@ function compareRecords(a, b) {
   return a;
 }
 
+function compareReplayRecords(a, b) {
+  if (!a) return b || null;
+  if (!b) return a || null;
+
+  const aScore = scoreValue(a.score);
+  const bScore = scoreValue(b.score);
+  if (aScore !== bScore) return bScore > aScore ? b : a;
+
+  const aDate = parseDateMs(a.date_played || '');
+  const bDate = parseDateMs(b.date_played || '');
+  if (aDate !== bDate) return bDate > aDate ? b : a;
+
+  const aId = parseInt(a.play_id || a.id, 10) || 0;
+  const bId = parseInt(b.play_id || b.id, 10) || 0;
+  if (aId !== bId) return bId > aId ? b : a;
+
+  return a;
+}
+
+function pickHighestReplayRecord(rows = []) {
+  let best = null;
+  for (const row of rows) {
+    const replayUrl = String(row?.replay_embed_url || '').trim();
+    if (!replayUrl) continue;
+    best = compareReplayRecords(best, {
+      play_id: row.id,
+      score: scoreValue(row.score),
+      grade: getGrade(row),
+      date_played: row.date_played || '',
+      replay_url: replayUrl,
+    });
+  }
+  return best;
+}
+
 // toCanonicalTitle, makeChartKey → imported from ../lib/chartKeys
 
 function levelModeSort(a, b) {
@@ -3302,7 +3337,7 @@ router.get('/chart/:chartId', optionalAuth, (req, res) => {
     `).all(targetUserId, chart.mode, chart.level);
     const recentRows = db.prepare(`
       SELECT id, user_id, song_title, mode, level, score, grade, plate, background_url, date_played,
-             perfect, great, good, bad, miss, max_combo
+             perfect, great, good, bad, miss, max_combo, replay_embed_url
       FROM user_recently_played
       WHERE user_id = ? AND mode = ? AND level = ?
       ORDER BY id DESC
@@ -3312,6 +3347,7 @@ router.get('/chart/:chartId', optionalAuth, (req, res) => {
       .filter((row) => makeChartKey(row.song_title, row.mode, row.level, aliases) === chart.key);
     const historyRows = recentRows
       .filter((row) => makeChartKey(row.song_title, row.mode, row.level, aliases) === chart.key);
+    const highestReplay = pickHighestReplayRecord(historyRows);
 
     history = historyRows.map((row) => {
       const grade = getGrade(row);
@@ -3393,6 +3429,12 @@ router.get('/chart/:chartId', optionalAuth, (req, res) => {
         ...personalBest,
         rating: calculateRating(chart.level, personalBest.grade, !!personalBest.is_pass),
       } : null,
+      highest_replay: highestReplay ? {
+        url: highestReplay.replay_url,
+        score: highestReplay.score,
+        grade: highestReplay.grade,
+        play_id: highestReplay.play_id,
+      } : null,
     };
   }
 
@@ -3434,15 +3476,26 @@ router.get('/chart/:chartId', optionalAuth, (req, res) => {
       `).all(...followIds, chart.mode, chart.level);
       const recentRows = db.prepare(`
         SELECT id, user_id, song_title, mode, level, score, grade, plate, background_url, date_played,
-               perfect, great, good, bad, miss, max_combo
+               perfect, great, good, bad, miss, max_combo, replay_embed_url
         FROM user_recently_played
         WHERE user_id IN (${placeholders}) AND mode = ? AND level = ?
       `).all(...followIds, chart.mode, chart.level);
 
       const byUserPass = new Map();
       const byUserFail = new Map();
+      const highestReplayByUser = new Map();
       const maybeAssign = (row, source) => {
         if (makeChartKey(row.song_title, row.mode, row.level, aliases) !== chart.key) return;
+        const replayUrl = String(row.replay_embed_url || '').trim();
+        if (replayUrl) {
+          highestReplayByUser.set(row.user_id, compareReplayRecords(highestReplayByUser.get(row.user_id), {
+            play_id: row.id,
+            score: scoreValue(row.score),
+            grade: getGrade(row),
+            date_played: row.date_played || '',
+            replay_url: replayUrl,
+          }));
+        }
         const score = scoreValue(row.score);
         const grade = getGrade(row);
         const shaped = {
@@ -3485,6 +3538,12 @@ router.get('/chart/:chartId', optionalAuth, (req, res) => {
             ...record,
             rating: calculateRating(chart.level, record.grade, record.is_pass),
           },
+          highest_replay: highestReplayByUser.get(friend.id) ? {
+            url: highestReplayByUser.get(friend.id).replay_url,
+            score: highestReplayByUser.get(friend.id).score,
+            grade: highestReplayByUser.get(friend.id).grade,
+            play_id: highestReplayByUser.get(friend.id).play_id,
+          } : null,
         };
       }).filter(Boolean);
 

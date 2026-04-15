@@ -552,6 +552,11 @@ export default function SongChartPage() {
   const userSummary = detail.user_summary || null;
   const personalBest = userSummary?.best || null;
   const personalBestGrade = personalBest?.grade || getRank(personalBest?.score).label;
+  const highestReplay = userSummary?.highest_replay || null;
+  const highestReplayUrl = String(highestReplay?.url || '').trim();
+  const showHighestReplayButton = !!highestReplayUrl
+    && highestReplayUrl !== youtubeUrl
+    && highestReplayUrl !== sessionYoutubeUrl;
   const chartChallengeCard = buildChartChallengeCard({
     chartId: chart.chart_id,
     chartTitle: chart.title,
@@ -773,6 +778,27 @@ export default function SongChartPage() {
                     <YouTubeBadgeIcon className="w-4 h-4 text-red-400" />
                   </a>
                 )}
+                {showHighestReplayButton && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveReplay({
+                      url: highestReplayUrl,
+                      title: buildReplayModalTitle({
+                        song_title: chart.title,
+                        mode: chart.mode,
+                        level: chart.level,
+                        grade: highestReplay?.grade || personalBestGrade,
+                        score: highestReplay?.score || 0,
+                      }),
+                      playId: highestReplay?.play_id || '',
+                      ownerId: user?.id || personalBest?.user_id || '',
+                    })}
+                    className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-fuchsia-400/40 bg-fuchsia-500/15 hover:bg-fuchsia-500/30 transition-colors"
+                    title="Open highest replayed score clip"
+                  >
+                    <YouTubeBadgeIcon className="w-4 h-4 text-fuchsia-300" />
+                  </button>
+                )}
                 {sessionYoutubeUrl && (
                   <button
                     type="button"
@@ -975,6 +1001,29 @@ export default function SongChartPage() {
                         <YouTubeBadgeIcon className="w-3.5 h-3.5 text-red-400" />
                       </a>
                     )}
+                    {entry.highest_replay?.url
+                      && entry.highest_replay.url !== entry.youtube_url
+                      && entry.highest_replay.url !== entry.session_youtube_url && (
+                        <button
+                          type="button"
+                          onClick={() => setActiveReplay({
+                            url: entry.highest_replay.url,
+                            title: buildReplayModalTitle({
+                              song_title: chart.title,
+                              mode: chart.mode,
+                              level: chart.level,
+                              grade: entry.highest_replay.grade || grade,
+                              score: entry.highest_replay.score || 0,
+                            }),
+                            playId: entry.highest_replay.play_id || '',
+                            ownerId: entry.user?.id || '',
+                          })}
+                          className="inline-flex items-center justify-center w-7 h-7 rounded-md border border-fuchsia-400/30 bg-fuchsia-500/10 hover:bg-fuchsia-500/25 transition-colors"
+                          title="Open highest replayed score clip"
+                        >
+                          <YouTubeBadgeIcon className="w-3.5 h-3.5 text-fuchsia-300" />
+                        </button>
+                      )}
                     {entry.session_youtube_url && (
                       <button
                         type="button"

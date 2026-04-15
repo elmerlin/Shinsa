@@ -2262,14 +2262,12 @@ export default function ProfilePage() {
         ? 'singles'
         : 'overall';
   const activeTopProfilePumbility = activeTopProfileMetricMode === 'singles' ? singlesProfilePumbility : overallProfilePumbility;
-  const canShowOverallProfilePumbilityBreakdown = computedOverallProfilePumbility > 0
-    && computedOverallProfilePumbility === overallProfilePumbility;
+  const overallTopProfilePumbilityRows = songAnalytics?.pumbility_breakdown?.overall_top50 || [];
+  const singlesTopProfilePumbilityRows = songAnalytics?.pumbility_breakdown?.singles_top50 || [];
   const activeTopProfilePumbilityRows = activeTopProfileMetricMode === 'singles'
-    ? songAnalytics?.pumbility_breakdown?.singles_top50 || []
-    : canShowOverallProfilePumbilityBreakdown
-      ? songAnalytics?.pumbility_breakdown?.overall_top50 || []
-      : [];
-  const canOpenTopProfilePumbilityModal = activeTopProfilePumbility > 0 && activeTopProfilePumbilityRows.length > 0;
+    ? singlesTopProfilePumbilityRows
+    : overallTopProfilePumbilityRows;
+  const canOpenTopProfilePumbilityModal = activeTopProfilePumbilityRows.length > 0;
   const pumbilityTopScores = Array.isArray(piuPumbility?.scores) ? piuPumbility.scores : [];
   const pumbilityAvgScore = pumbilityTopScores.length > 0
     ? Math.round(pumbilityTopScores.reduce((sum, row) => sum + (parseInt(row.score, 10) || 0), 0) / pumbilityTopScores.length)
