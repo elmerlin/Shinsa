@@ -14,6 +14,21 @@ export const RESOURCE_ICONS = {
   gold:  '\uD83E\uDE99',
 };
 
+// --- Resource sprites from the Cute Fantasy icon atlases ---
+// Each entry points at a 16×16 cell inside an outline sprite sheet so the
+// HUD (and anywhere else that wants pixel-art resource icons) can render
+// them with a single <span> + CSS background-image.
+const FOOD_SHEET = '/pet-world/cute-fantasy/Icons/Outline/Food_Icons_Outline.png';
+const RES_SHEET  = '/pet-world/cute-fantasy/Icons/Outline/Resources_Icons_Outline.png';
+
+export const RESOURCE_SPRITES = {
+  food:  { src: FOOD_SHEET, sheetW: 128, sheetH: 192, sx: 0,  sy: 0  }, // drumstick
+  wood:  { src: RES_SHEET,  sheetW: 96,  sheetH: 96,  sx: 0,  sy: 64 }, // log (end-on)
+  stone: { src: RES_SHEET,  sheetW: 96,  sheetH: 96,  sx: 0,  sy: 80 }, // gray stones
+  cloth: { src: RES_SHEET,  sheetW: 96,  sheetH: 96,  sx: 32, sy: 16 }, // cream bar (bolt of fabric)
+  gold:  { src: RES_SHEET,  sheetW: 96,  sheetH: 96,  sx: 80, sy: 16 }, // gold ingot
+};
+
 // --- Timing ring helpers (hunt / encounter mini-game) ---
 
 /**
