@@ -15,7 +15,7 @@ const FLOWER_VARIANTS = [
 
 const PATH_VARIANTS = [
   { id: 'dirt', label: 'Dust', icon: '/pet-world/cute-fantasy/Tiles/wang_dirt_grass.png', sx: '-32px', sy: '-16px' },
-  { id: 'stone', label: 'Pavement', icon: '/pet-world/cute-fantasy/Tiles/wang_grass_path.png', sx: '-32px', sy: '-16px' },
+  { id: 'stone', label: 'Pavement', icon: '/pet-world/cute-fantasy/Tiles/Pavement_Tiles.png', sx: '-16px', sy: '-16px' },
 ];
 
 function PathVariantSwatch({ variant, selected, onClick }) {

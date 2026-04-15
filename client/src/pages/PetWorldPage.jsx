@@ -1302,7 +1302,7 @@ export default function PetWorldPage() {
                       <div className="mt-1 flex items-center gap-1">
                         {[
                           { id: 'dirt', label: 'Dust', icon: '/pet-world/cute-fantasy/Tiles/wang_dirt_grass.png' },
-                          { id: 'stone', label: 'Pavement', icon: '/pet-world/cute-fantasy/Tiles/wang_grass_path.png' },
+                          { id: 'stone', label: 'Pavement', icon: '/pet-world/cute-fantasy/Tiles/Pavement_Tiles.png' },
                         ].map((v) => {
                           const active = (pendingBuildVariant || 'dirt') === v.id;
                           return (
