@@ -14,14 +14,16 @@ const JACKET_OPACITY_MAX = 100;
 const SONGS_PER_ROW_OPTIONS = [4, 5, 6, 7];
 
 const TIER_STYLE = {
-  Overrated: 'bg-indigo-500 text-white',
-  VeryEasy: 'bg-cyan-500 text-white',
-  Easy: 'bg-emerald-500 text-white',
-  Medium: 'bg-yellow-500 text-black',
-  Hard: 'bg-orange-500 text-white',
-  VeryHard: 'bg-rose-500 text-white',
-  Underrated: 'bg-red-700 text-white',
+  Overrated:  { bg: 'bg-indigo-500/[0.09]',  accent: 'bg-indigo-400',  text: 'text-indigo-200'  },
+  VeryEasy:   { bg: 'bg-cyan-500/[0.09]',    accent: 'bg-cyan-400',    text: 'text-cyan-200'    },
+  Easy:       { bg: 'bg-emerald-500/[0.09]', accent: 'bg-emerald-400', text: 'text-emerald-200' },
+  Medium:     { bg: 'bg-yellow-500/[0.10]',  accent: 'bg-yellow-400',  text: 'text-yellow-100'  },
+  Hard:       { bg: 'bg-orange-500/[0.10]',  accent: 'bg-orange-400',  text: 'text-orange-200'  },
+  VeryHard:   { bg: 'bg-rose-500/[0.10]',    accent: 'bg-rose-400',    text: 'text-rose-200'    },
+  Underrated: { bg: 'bg-red-500/[0.12]',     accent: 'bg-red-500',     text: 'text-red-300'     },
 };
+
+const TIER_STYLE_FALLBACK = { bg: 'bg-slate-500/10', accent: 'bg-slate-400', text: 'text-slate-200' };
 
 const TIER_LABEL = {
   Overrated: 'Overrated',
@@ -47,7 +49,7 @@ function parseIntSafe(value, fallback = null) {
 }
 
 function clampOverlaySize(value) {
-  const parsed = parseIntSafe(value, 65);
+  const parsed = parseIntSafe(value, 52);
   return Math.min(OVERLAY_MAX, Math.max(OVERLAY_MIN, parsed));
 }
 
@@ -378,7 +380,7 @@ function JacketOverlayText({
             transform: `scale(${fitScale})`,
             transformOrigin: 'center center',
             lineHeight: 1,
-            textShadow: '0 0 8px rgba(0,0,0,0.95), 0 1px 2px rgba(0,0,0,0.95)',
+            textShadow: '0 1px 2px rgba(0,0,0,0.9), 0 0 12px rgba(0,0,0,0.75), 0 0 24px rgba(0,0,0,0.5)',
           }}
         >
           {text}
@@ -775,11 +777,14 @@ export default function TiersPage() {
       )}
 
       {!loadingMeta && !loadingTier && !error && tiersForRender.map((tier) => {
-        const style = TIER_STYLE[tier.name] || 'bg-slate-600 text-white';
+        const style = TIER_STYLE[tier.name] || TIER_STYLE_FALLBACK;
         return (
           <section key={tier.name} className="rounded-xl overflow-hidden border border-piu-border/60 bg-piu-card/40">
-            <div className={`px-3 py-2 font-display font-bold text-lg text-center ${style}`}>
-              {TIER_LABEL[tier.name] || tier.name}
+            <div className={`relative flex items-center px-3.5 sm:px-4 py-2 border-b border-piu-border/40 ${style.bg}`}>
+              <span aria-hidden="true" className={`absolute left-0 top-0 bottom-0 w-[3px] ${style.accent}`} />
+              <span className={`font-display text-[11px] sm:text-xs font-semibold uppercase tracking-[0.22em] ${style.text}`}>
+                {TIER_LABEL[tier.name] || tier.name}
+              </span>
             </div>
             <div className="p-2 sm:p-3 bg-[#061327]">
               <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${songsPerRow}, minmax(0, 1fr))` }}>
