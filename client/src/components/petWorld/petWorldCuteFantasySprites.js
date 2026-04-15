@@ -27,7 +27,9 @@ function getImage(src) {
 
 const CF = '/pet-world/cute-fantasy';
 const HERO = '/pet-world/heroes';
+const PXL = '/pet-world/pixellab';
 const HERO_ASSET_VERSION = '20260413b';
+const FISHING_BANK_ASSET_VERSION = '20260415a';
 
 function cfp(...parts) {
   return (CF + '/' + parts.join('/')).replace(/ /g, '%20');
@@ -35,6 +37,10 @@ function cfp(...parts) {
 
 function hfp(...parts) {
   return `${(HERO + '/' + parts.join('/')).replace(/ /g, '%20')}?v=${HERO_ASSET_VERSION}`;
+}
+
+function pfp(...parts) {
+  return `${(PXL + '/' + parts.join('/')).replace(/ /g, '%20')}?v=${FISHING_BANK_ASSET_VERSION}`;
 }
 
 /* ═══ Draw helpers ═══ */
@@ -305,6 +311,12 @@ const FISHING_BANK_MASK = {
   s: 3,  // south half dirt
   e: 5,  // east half dirt
   w: 10, // west half dirt
+};
+const PIXELLAB_FISHING_BANK = {
+  n: { src: pfp('fishing-bank', 'bank_n.png'), facing: 1 },
+  s: { src: pfp('fishing-bank', 'bank_s.png'), facing: 1 },
+  e: { src: pfp('fishing-bank', 'bank_e.png'), facing: 1 },
+  w: { src: pfp('fishing-bank', 'bank_e.png'), facing: -1 },
 };
 
 /* ── Fence auto-tile lookup ── */
@@ -1009,7 +1021,17 @@ export function drawCuteFantasyFishingDecor(ctx, decor, tileSize, time = 0) {
   }
 
   if (decor.type === 'fishing_bank') {
-    return true;
+    const bank = PIXELLAB_FISHING_BANK[decor.shoreDir || 'n'] || PIXELLAB_FISHING_BANK.n;
+    return drawImg(
+      ctx,
+      bank.src,
+      x,
+      y,
+      decor.width ?? tileSize,
+      decor.height ?? tileSize,
+      bank.facing,
+      decor.alpha ?? 0.96,
+    );
   }
 
   if (decor.type === 'swim_fish') {

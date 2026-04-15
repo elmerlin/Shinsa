@@ -1460,29 +1460,28 @@ function buildFishingDecorations(world, terrainRegions, buildings = []) {
       seed: spotSeed + 5,
     });
 
-    if (index < Math.min(4, spots.length)) {
-      decorations.push({
-        type: 'boat',
-        x: boatLayout.x,
-        y: boatLayout.y,
-        widthTiles: boatWidthTiles,
-        heightTiles: boatHeightTiles,
-        shoreDir: spot.shoreDir,
-        postX: boatLayout.postX,
-        postY: boatLayout.postY,
-        ropeX: boatLayout.ropeX,
-        ropeY: boatLayout.ropeY,
-        bankTileX: spot.x,
-        bankTileY: spot.y,
-        fishingSpotId: spot.fishingSpotId,
-        standSlots,
-        fishingFacing: spot.fishingFacing,
-        pauseFacing: spot.pauseFacing,
-        castTargetX: fishBaseX + 0.2,
-        castTargetY: fishBaseY + 0.18,
-        seed: spotSeed + 11,
-      });
-    }
+    decorations.push({
+      type: 'boat',
+      x: boatLayout.x,
+      y: boatLayout.y,
+      widthTiles: boatWidthTiles,
+      heightTiles: boatHeightTiles,
+      shoreDir: spot.shoreDir,
+      postX: boatLayout.postX,
+      postY: boatLayout.postY,
+      ropeX: boatLayout.ropeX,
+      ropeY: boatLayout.ropeY,
+      bankTileX: spot.x,
+      bankTileY: spot.y,
+      fishingSpotId: spot.fishingSpotId,
+      standSlots,
+      fishingFacing: spot.fishingFacing,
+      pauseFacing: spot.pauseFacing,
+      castTargetX: fishBaseX + 0.2,
+      castTargetY: fishBaseY + 0.18,
+      featured: index === 0,
+      seed: spotSeed + 11,
+    });
 
     decorations.push({
       type: 'swim_fish',
