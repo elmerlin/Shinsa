@@ -1,0 +1,986 @@
+[
+  {
+    "name": "Pale Rider",
+    "filename": "ba58494e4209f88d185a1b8078aa66da.png",
+    "owned": true,
+    "price": null
+  },
+  {
+    "name": "3D Alien Cat",
+    "filename": "634fc8494577c9bd57b8f59683398751.png",
+    "owned": false,
+    "price": "100"
+  },
+  {
+    "name": "Paper Farmer",
+    "filename": "f039ec2acf0e57da779feab8432c53aa.png",
+    "owned": false,
+    "price": "100"
+  },
+  {
+    "name": "Clara",
+    "filename": "33ecd96b847c0f8433ca999e63ba6c75.png",
+    "owned": false,
+    "price": "100"
+  },
+  {
+    "name": "Eleanor",
+    "filename": "5449f88cb052ab1dd2908c33fc0766b2.png",
+    "owned": true,
+    "price": null
+  },
+  {
+    "name": "Excessive drinking",
+    "filename": "c71a2b2037c95c604208db7cc94ca9ef.png",
+    "owned": false,
+    "price": "100"
+  },
+  {
+    "name": "Successor of Lore",
+    "filename": "eede9451b5f58ff561d7f0ccc269cb84.png",
+    "owned": false,
+    "price": "100"
+  },
+  {
+    "name": "Super Akuma Emperor",
+    "filename": "0928474b9770d80cc5d1669bd0f3259b.png",
+    "owned": true,
+    "price": null
+  },
+  {
+    "name": "RIP",
+    "filename": "6b0cc0ae9243bb3c5c91931db9c3d92b.png",
+    "owned": false,
+    "price": "800"
+  },
+  {
+    "name": "Jordan",
+    "filename": "a0277469778f8fe0282f4fdc84db1b9c.png",
+    "owned": false,
+    "price": "250"
+  },
+  {
+    "name": "Lightning",
+    "filename": "a3b9583104258d96d9b163d03e749eec.png",
+    "owned": false,
+    "price": "100"
+  },
+  {
+    "name": "Devit's Despair",
+    "filename": "59cee2e0df4c4be1d318e986d491cc47.png",
+    "owned": true,
+    "price": null
+  },
+  {
+    "name": "Devit's Hope",
+    "filename": "1df54cb299773ae8dfda2959e76e5009.png",
+    "owned": true,
+    "price": null
+  },
+  {
+    "name": "Alic!ta",
+    "filename": "d412300fc63b1b72d65d4b51606d827d.png",
+    "owned": true,
+    "price": null
+  },
+  {
+    "name": "Sento Yamada",
+    "filename": "4cd29544336be400a4e06251c5d39b1c.png",
+    "owned": false,
+    "price": "100"
+  },
+  {
+    "name": "Lacie",
+    "filename": "7c44a40f70400bccfcb78b9f9c0106cf.png",
+    "owned": false,
+    "price": "50"
+  },
+  {
+    "name": "Revy",
+    "filename": "96cd716cbfe11087778f655ff299c472.png",
+    "owned": true,
+    "price": null
+  },
+  {
+    "name": "Tina",
+    "filename": "759bb6007aa0a3a771c4424f1151a0a6.png",
+    "owned": false,
+    "price": "50"
+  },
+  {
+    "name": "Pincho",
+    "filename": "45a87f2672521f65c49bf603447e7357.png",
+    "owned": false,
+    "price": "50"
+  },
+  {
+    "name": "Judgment of the 'Motte'",
+    "filename": "306444d5a305a3662a04d07613042865.png",
+    "owned": false,
+    "price": "100"
+  },
+  {
+    "name": "Alter ego",
+    "filename": "c66dcf2d509b2fccab8896b3c21f0579.png",
+    "owned": false,
+    "price": "50"
+  },
+  {
+    "name": "Sonic boom protocol",
+    "filename": "ce319fff536d3ecec1088e64693a2f5f.png",
+    "owned": false,
+    "price": "300"
+  },
+  {
+    "name": "Executing the Apocalypse",
+    "filename": "55c827f5c851b85c5e3b3c896932fa52.png",
+    "owned": false,
+    "price": "300"
+  },
+  {
+    "name": "Lyrica",
+    "filename": "767d1a3db8c5b1dbb6ea631cf8684acb.png",
+    "owned": false,
+    "price": "50"
+  },
+  {
+    "name": "Aria",
+    "filename": "bf1cbf325b3468dd652b37cefb8394e3.png",
+    "owned": false,
+    "price": "50"
+  },
+  {
+    "name": "Stella",
+    "filename": "b9c0e4060ec640614964c6ec3b9ec3d7.png",
+    "owned": false,
+    "price": "100"
+  },
+  {
+    "name": "Armillary Sphere",
+    "filename": "484172adaa042f3cec843c4c253463a9.png",
+    "owned": false,
+    "price": "300"
+  },
+  {
+    "name": "Loser MURDOCH",
+    "filename": "5ac5db4aa3aaeb7320eb7c2eb687b37a.png",
+    "owned": false,
+    "price": "100"
+  },
+  {
+    "name": "TEDDY",
+    "filename": "420b610d3688cd7d3335fe59e1a1ce15.png",
+    "owned": false,
+    "price": "50"
+  },
+  {
+    "name": "HWANY",
+    "filename": "f8cbb833459f7737016a587dc0e21b5c.png",
+    "owned": false,
+    "price": "50"
+  },
+  {
+    "name": "HWANG DONG",
+    "filename": "6d256dba90fbc01f3c9228f94f3023f0.png",
+    "owned": false,
+    "price": "50"
+  },
+  {
+    "name": "Explosion of passion",
+    "filename": "d6caab7ea7c0d48a9bfb78aff3000a5d.png",
+    "owned": false,
+    "price": "100"
+  },
+  {
+    "name": "Beethoven' Previous life",
+    "filename": "27db599503b6bd92d0dfc1b6cf5dafab.png",
+    "owned": false,
+    "price": "50"
+  },
+  {
+    "name": "Althera",
+    "filename": "c1b8599053c4797ff01025a4cb3574f6.png",
+    "owned": false,
+    "price": "300"
+  },
+  {
+    "name": "JRV-042",
+    "filename": "2a0d7b807254b39e58039addbbd8d2ab.png",
+    "owned": false,
+    "price": "100"
+  },
+  {
+    "name": "Neon Rocket",
+    "filename": "6ac06e7ec80e7f360f340d6bcadcd2bc.png",
+    "owned": false,
+    "price": "50"
+  },
+  {
+    "name": "silvia",
+    "filename": "f1bfe263a3db5354d319ca4fc052f8aa.png",
+    "owned": false,
+    "price": "100"
+  },
+  {
+    "name": "Kyouka",
+    "filename": "1d9ff5173d639249d63ee9901637b2cb.png",
+    "owned": false,
+    "price": "50"
+  },
+  {
+    "name": "Hercules",
+    "filename": "59fa5655e1c010800677e43911822570.png",
+    "owned": false,
+    "price": "100"
+  },
+  {
+    "name": "Gran",
+    "filename": "02dcbe95815975c92aa48b065fa54b5b.png",
+    "owned": false,
+    "price": "300"
+  },
+  {
+    "name": "Laimu",
+    "filename": "8f47a1af5f7065226a073dc7ee278e84.png",
+    "owned": false,
+    "price": "100"
+  },
+  {
+    "name": "Ayumu",
+    "filename": "b8096be8f0d76986739bfe1256046e48.png",
+    "owned": false,
+    "price": "50"
+  },
+  {
+    "name": "Unknown Alchemist",
+    "filename": "72df055536cc5fa3edf706d83a38f82b.png",
+    "owned": false,
+    "price": "300"
+  },
+  {
+    "name": "Simon",
+    "filename": "0809327fb056c528294a1d20e22760d1.png",
+    "owned": false,
+    "price": "50"
+  },
+  {
+    "name": "Maya",
+    "filename": "739d0710f8115b5bdb0b4c92175ff6a5.png",
+    "owned": false,
+    "price": "50"
+  },
+  {
+    "name": "Saya",
+    "filename": "062d771f9ce22260f0a39f29b7256e6f.png",
+    "owned": false,
+    "price": "50"
+  },
+  {
+    "name": "Munchkins",
+    "filename": "eba954f0f25b5f67e1fbd8665c1586ee.png",
+    "owned": false,
+    "price": "50"
+  },
+  {
+    "name": "AM Corporation Research Team",
+    "filename": "e40030248735bd374bb35d00d6a67a31.png",
+    "owned": false,
+    "price": "100"
+  },
+  {
+    "name": "Luana",
+    "filename": "45cbafcb6d086d5b0d10c09b95965ab1.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Kumomo",
+    "filename": "be67afb724f7176d1888f87b46e01066.png",
+    "owned": false,
+    "price": "300"
+  },
+  {
+    "name": "CIDER",
+    "filename": "e39bc9c053ae6428c55be2239a5ae725.png",
+    "owned": false,
+    "price": "300"
+  },
+  {
+    "name": "MoMo & Rua",
+    "filename": "6ad16ac7c91e1fab89d4d31fcee8be65.png",
+    "owned": false,
+    "price": "100"
+  },
+  {
+    "name": "NaNa",
+    "filename": "9fe9b4d9676344500d74aead729e4770.png",
+    "owned": false,
+    "price": "100"
+  },
+  {
+    "name": "Syndi",
+    "filename": "9113471082ffeb962d01752f3c1ea7f8.png",
+    "owned": false,
+    "price": "100"
+  },
+  {
+    "name": "Berry",
+    "filename": "4c8827d805d35224ee1651ded58c24e1.png",
+    "owned": false,
+    "price": "100"
+  },
+  {
+    "name": "PIU-NX-02 Lapin",
+    "filename": "62d107b0127ce4a03909575ff1823bd3.png",
+    "owned": false,
+    "price": "300"
+  },
+  {
+    "name": "PIU-NX-01 Phenix",
+    "filename": "7e48efd1edbffa7926364726dd92fb01.png",
+    "owned": false,
+    "price": "500"
+  },
+  {
+    "name": "Robber Rider",
+    "filename": "44939ce38e58a0e852f518f321efadaf.png",
+    "owned": false,
+    "price": "50"
+  },
+  {
+    "name": "Michael",
+    "filename": "34125cc217989582d2d80c2051961154.png",
+    "owned": false,
+    "price": "100"
+  },
+  {
+    "name": "Kiro & Kira",
+    "filename": "2b37a1ac5c881384cb1f79d94ec20185.png",
+    "owned": false,
+    "price": "300"
+  },
+  {
+    "name": "Hidden Fortress",
+    "filename": "7943a785cb4372305284879af49cdbc3.png",
+    "owned": false,
+    "price": "50"
+  },
+  {
+    "name": "The Harbinger",
+    "filename": "7c21a530a20ebfb81431a0ee1b50364c.png",
+    "owned": false,
+    "price": "300"
+  },
+  {
+    "name": "Jack P. MURDOCH",
+    "filename": "8f820f8a6c5457264ea6b4e4b9b8ccbc.png",
+    "owned": false,
+    "price": "100"
+  },
+  {
+    "name": "Assistant Admin",
+    "filename": "ca28fe88daf82a3aae0aa9d44ddb5afd.png",
+    "owned": false,
+    "price": "50"
+  },
+  {
+    "name": "General Admin",
+    "filename": "41933c642e404a1f1abece4a6185cfb6.png",
+    "owned": false,
+    "price": "50"
+  },
+  {
+    "name": "KUGUTSU",
+    "filename": "adc053f1797b03b8d6348f5af65d5dea.png",
+    "owned": false,
+    "price": "300"
+  },
+  {
+    "name": "Hibiscus",
+    "filename": "39ee85e4119925edff462559b97dc54c.png",
+    "owned": false,
+    "price": "300"
+  },
+  {
+    "name": "Researcher",
+    "filename": "2f52b0799bb4a61064983ca8237cd317.png",
+    "owned": false,
+    "price": "50"
+  },
+  {
+    "name": "CoCo",
+    "filename": "7d4dcf81315460c5012e8bbe21ec0066.png",
+    "owned": false,
+    "price": "100"
+  },
+  {
+    "name": "Devit Showdown",
+    "filename": "97a2dc0bb5a4702a0f11ce879407d657.png",
+    "owned": true,
+    "price": null
+  },
+  {
+    "name": "Sister's Death",
+    "filename": "41b7d75b8f2ef1be9e16a1acae6bdd4e.png",
+    "owned": false,
+    "price": "50"
+  },
+  {
+    "name": "The Truth Faced",
+    "filename": "0015ee3f24b5766ad193eee77d6e2a4e.png",
+    "owned": false,
+    "price": "50"
+  },
+  {
+    "name": "Phantom Thief M & Detective P",
+    "filename": "174eccf2c98ec77dfb83d8b53b38f902.png",
+    "owned": false,
+    "price": "100"
+  },
+  {
+    "name": "Detective Jupin",
+    "filename": "cd5a74ed10b9e84620882b501fe3797b.png",
+    "owned": false,
+    "price": "50"
+  },
+  {
+    "name": "Downi",
+    "filename": "3d930dcd746314e94542b763a2805504.png",
+    "owned": false,
+    "price": "100"
+  },
+  {
+    "name": "Melt",
+    "filename": "0b88ff1250d7520bbeb6c1ee355dd791.png",
+    "owned": true,
+    "price": null
+  },
+  {
+    "name": "Loar",
+    "filename": "3471d6874d5ec26b2e334ab9b60ee2b6.png",
+    "owned": false,
+    "price": "300"
+  },
+  {
+    "name": "Escape",
+    "filename": "4c38402fbef1c19aaa8f3157d4f7ae13.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "The Quick Brown Fox",
+    "filename": "b6d9fd3c725ed872e35c455f53544943.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Jonathan",
+    "filename": "204ecece3614788dec728d8e817949d8.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Melissa",
+    "filename": "82916c6df504442fb3affe9228d98510.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Hero",
+    "filename": "ddb083f04b880856a0345904272b63d6.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Phantom",
+    "filename": "26860366a60c910aa9e95f430926f855.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Rakha",
+    "filename": "ce0e9f464be0c2b2d01adccfbab031f8.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Dalpros",
+    "filename": "79b22cb277ede285557000e5aa8ef670.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Aya",
+    "filename": "6a9a7ebdd28cb686c36fac43b55754fd.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "The Cutie",
+    "filename": "148ed61b8a006a930286c8cbacc5eb65.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Matsuri (HEY)",
+    "filename": "910a2d692b335d5ae4f641d693afa5f5.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Matsuri",
+    "filename": "901d48ef538745431eaa94cef7676758.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Denis",
+    "filename": "205a409f6fbe7cbd6130d6084e65b491.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Little Lamb",
+    "filename": "7d91cd79d7304d7b8ba1ae5479b6cf75.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Century of Limitation",
+    "filename": "e0dd6b4234ed867c128ae26a16b75b04.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Dasom",
+    "filename": "f9bf2e38ba1894b9ec9f7c74b0e64142.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Alice",
+    "filename": "32136145f509e1ed81ff067c00b4b034.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Na YuRee",
+    "filename": "02ec651ce5550094cbfc3c0f6624d667.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Youyuu Sumire",
+    "filename": "c4e46603a5c931efda0dfe3945000b37.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Takalook",
+    "filename": "87f3e27e545447b14c9a5fa6c31dc475.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Hannah",
+    "filename": "56c51d772d63baa4ddc385090a498dcc.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "King Scorpion",
+    "filename": "1c4a2cb7f5945470b611e700cfc86fa5.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Great Teachers",
+    "filename": "e947839f4dabdcbf70388e06165b5dbd.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Violet Perfume",
+    "filename": "af39c915995c6ebc88bbfb978e02c3a7.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Everybody Loves Chicken",
+    "filename": "0ef99263b1db831b138aa50a1de1a409.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Guild Savior",
+    "filename": "5cadcb1cf596b499b579f39001c5bf07.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Mental Cube",
+    "filename": "2af9cc524bc5e63a03706b093344fee8.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Lucent",
+    "filename": "7da9639b2ed2e16d06621734d80946af.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Nashor. Laurence",
+    "filename": "b82ad4ad4c15026be6ef5c4a542d0539.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Native Magic",
+    "filename": "3dbd4b75cc14a338e2253a708c77a5b8.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Phou",
+    "filename": "b4ff9b32acb099631c93c60b031271f4.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Rae A",
+    "filename": "6afa50fff54b07adb0eaf8bfa841e05c.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Natalia",
+    "filename": "b7feb4f1758089808a9d73ec45ba6df0.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Ailee",
+    "filename": "38be9d13894a90c796c6dba77a72c49d.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Electronic Cat",
+    "filename": "514210469242393201a5b8986f341cd8.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Lightning Green",
+    "filename": "943b70763e08c39475d5438384ea2bf4.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "DENEBOLA",
+    "filename": "6992859b696b2a0e4bd5b607454a5906.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Rhyth",
+    "filename": "e0d5b798263e278dd487795e175cd838.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Arca",
+    "filename": "990ccbdf6fed014063980ddf93419faf.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Tritium",
+    "filename": "43d10b867ed9653cadc1b3218e52dfbe.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Hellfire",
+    "filename": "1714cb21061955169a6e39b765339a7a.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Music Warrior",
+    "filename": "876697a6cbfb2388981a4285b130638d.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Ghost Tree",
+    "filename": "3b1f557fa939dbb0443dcaa8748ae11b.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Mode G",
+    "filename": "d8567e37c73dcac59a568c75c260d1a1.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "CanCan Rangers",
+    "filename": "2c862079eee6be3bac006f385a683460.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Meteor",
+    "filename": "7c9cae2720b196047ee881b934c3870a.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Alien Pig",
+    "filename": "ccf1e801a6b3b3ac591c8590d60db263.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "ABT-1",
+    "filename": "617a39ab8b600e929af6b9dda48b7581.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Princess Choco & Candy Girl",
+    "filename": "b1fcbf39b1aec9779ec42166fc8c6824.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Wonder & World",
+    "filename": "9a54da27d2667430d57096bc61e80d91.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Jeanne",
+    "filename": "4ecfdcfe096e5d5f2ac973b0522aa274.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Synt. H. Wulf",
+    "filename": "007b34c60785c9f12ec8473e354402f6.png",
+    "owned": true,
+    "price": null
+  },
+  {
+    "name": "Mikazuki",
+    "filename": "d24da21a69e2b4a267d43cdaa88fd015.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Amami Satoko",
+    "filename": "eb97120913378496d00f0332453a863c.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Lyra, the Awaken",
+    "filename": "baf2178281bd447ce8424ad965131894.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Lyra D. Fersen",
+    "filename": "2393f33b3d8dc6b4ec03fb7d3b7ce845.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Christos T Elias",
+    "filename": "e9fc73f96b327c5611ff8c80fd06b9a5.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Gargoyle",
+    "filename": "0f5cbf9469906bbdb4a07deb62d02b4a.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Freedom of the Dead",
+    "filename": "725c122975eb058fde280919f181e456.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "The Grim Reaper",
+    "filename": "77ebac59a8a18e91a62c580b546797cc.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Human Faced Being",
+    "filename": "9516a7cc69a1b2b86c6a3541283ca495.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Yeong Dong",
+    "filename": "0ca2fb923c7f6d173feb8ae38996053f.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Miya",
+    "filename": "be13a36baf0d31974b5324cd8637383b.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Vermilion & Azure",
+    "filename": "e87fe3d25615e9b514dfb2727f73df1e.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Devit",
+    "filename": "ac3ff7cb65ee80c99ff09f4354f1674b.png",
+    "owned": true,
+    "price": null
+  },
+  {
+    "name": "Unique Duo",
+    "filename": "a5ac58c84170a622f8adb8c4e8e30257.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Rio & Rou",
+    "filename": "81bef6381fab9640e6b4975ac28f10c0.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Aki & Erue",
+    "filename": "edd6b161a7bff3f240aa3049c4f57367.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Amil",
+    "filename": "1c99229e0c024d45ec3b35317ee5730a.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Stranger",
+    "filename": "7a0f025f362dd2153172f4a2e10b57f9.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "The Crawling Chaos",
+    "filename": "bc24509984b53ee82c23578d6ce16e44.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Onpiov",
+    "filename": "9b4be2c8f25ab1c2e89442bae71164bb.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Sarabande",
+    "filename": "07c16aaee00d066c17f388653f375509.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "MERKER",
+    "filename": "6ed01094850e66d34aa4831f567363d4.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Mir",
+    "filename": "69bf5806515af7919e1a9dd76246e3d9.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "fuyu",
+    "filename": "89ed1c4662baae04fc8f30f992aa3110.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "hero",
+    "filename": "5f71d39281932f4428cf0fd135a35d72.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "PanPan",
+    "filename": "066f504c65fd3611e081b2a70c39c147.png",
+    "owned": true,
+    "price": null
+  },
+  {
+    "name": "MingMing",
+    "filename": "75f90236ea58c1c27f5dda7ae85c0d10.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Mari",
+    "filename": "3ca47f5df09ac01a7678df53d39533e6.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Clotho",
+    "filename": "02e4f84bca65611e254a134cd864971c.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Seulki",
+    "filename": "7aae77ee552c2c0985c678778ceda0bd.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Taeho",
+    "filename": "67217161e1a00f1cea4ac9e702cce061.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Hanna",
+    "filename": "3efae2202bc24e85c22bf1280801f982.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Emily",
+    "filename": "901ceb863fc221f3e704143c7177e1b3.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "MIYA",
+    "filename": "7d83b199e654fb10f2bbb09fff0bf5c8.png",
+    "owned": false,
+    "price": "10"
+  },
+  {
+    "name": "Azura",
+    "filename": "4f617606e7751b2dc2559d80f09c40bf.png",
+    "owned": true,
+    "price": null
+  }
+]

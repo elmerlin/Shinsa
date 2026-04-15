@@ -590,9 +590,17 @@ export default function AdminPanel() {
     <div className="max-w-5xl mx-auto px-4 py-8 overflow-x-hidden">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <h1 className="text-2xl sm:text-3xl font-display font-bold tracking-wider">ADMIN PANEL</h1>
-        <Link to="/" className="text-sm text-gray-400 hover:text-white transition-colors font-display">
-          Back to site
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            to="/piumon"
+            className="inline-flex items-center gap-2 rounded-lg border border-fuchsia-400/20 bg-fuchsia-400/10 px-3 py-2 text-sm font-display font-bold text-fuchsia-100 transition-colors hover:bg-fuchsia-400/15"
+          >
+            Open Piumon Forge
+          </Link>
+          <Link to="/" className="text-sm text-gray-400 hover:text-white transition-colors font-display">
+            Back to site
+          </Link>
+        </div>
       </div>
 
       {/* Tabs */}

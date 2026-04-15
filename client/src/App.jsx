@@ -73,6 +73,7 @@ const PetGuidePage = lazy(() => import('./pages/PetGuidePage'));
 const PetWorldPage = lazy(() => import('./pages/PetWorldPage'));
 const PetWorldVisitPage = lazy(() => import('./pages/PetWorldVisitPage'));
 const PetBomberRoom = lazy(() => import('./pages/PetBomberRoom'));
+const PiumonPage = lazy(() => import('./pages/PiumonPage'));
 const TranslationEditorDrawer = lazy(() => import('./components/TranslationEditorDrawer'));
 
 const KOREAN_LOCALE_ENABLED = import.meta.env.VITE_ENABLE_KR_LOCALE === 'true';
@@ -1525,6 +1526,7 @@ export default function App() {
             <Route path="/pet/world" element={<PetWorldPage />} />
             <Route path="/pet/world/:userId" element={<PetWorldVisitPage />} />
             <Route path="/pet/bomber/:roomId" element={<PetBomberRoom />} />
+            <Route path="/piumon" element={canAccessAdmin ? <PiumonPage /> : <Navigate to="/admin" replace />} />
             <Route path="/fun" element={<FunPage />} />
             <Route path="/fantasy-match" element={<Navigate to="/fun?tab=fantasy" replace />} />
             <Route path="/motion" element={<Navigate to="/fun?tab=motion" replace />} />
