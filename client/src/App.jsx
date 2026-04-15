@@ -1107,6 +1107,7 @@ export default function App() {
   const isMessagesConversationRoute = /^\/messages\/[^/]+(?:\/|$)/.test(location.pathname);
   const hideMobileHeader = isMessagesInboxRoute || isMessagesConversationRoute;
   const hideMobileBottomNav = isMessagesConversationRoute;
+  const canAccessAdmin = !!user?.is_admin;
   const canAccessCheckin = !!(user?.is_admin || user?.feature_access?.checkin || user?.feature_access?.dojo_admin);
   const canAccessDojo = !!user?.feature_access?.dojo_admin;
   const canShowDojoPopup = canAccessCheckin && isPumpDojoMember(user);
