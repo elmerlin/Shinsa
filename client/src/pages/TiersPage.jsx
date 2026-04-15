@@ -7,6 +7,39 @@ import { parseGrade } from '../utils/grades';
 const TIER_LIST_TYPE = 'Pass';
 const MODE_ORDER = ['Single', 'Double', 'CoOp'];
 const MODE_PREFIX = { Single: 'S', Double: 'D', CoOp: 'C' };
+const MODE_LABEL = { Single: 'Singles', Double: 'Doubles', CoOp: 'Co-Op' };
+
+// Pump It Up color conventions: Singles = red, Doubles = green, Co-Op = yellow.
+const MODE_STYLE = {
+  Single: {
+    border: 'border-piu-accent/30',
+    bg: 'bg-piu-accent/[0.07]',
+    hoverBg: 'hover:bg-piu-accent/[0.12]',
+    hoverBorder: 'hover:border-piu-accent/50',
+    activeBg: 'active:bg-piu-accent/[0.16]',
+    text: 'text-piu-accent',
+    hoverText: 'group-hover:text-piu-accent',
+  },
+  Double: {
+    border: 'border-emerald-400/30',
+    bg: 'bg-emerald-500/[0.07]',
+    hoverBg: 'hover:bg-emerald-500/[0.12]',
+    hoverBorder: 'hover:border-emerald-400/50',
+    activeBg: 'active:bg-emerald-500/[0.16]',
+    text: 'text-emerald-300',
+    hoverText: 'group-hover:text-emerald-200',
+  },
+  CoOp: {
+    border: 'border-amber-400/30',
+    bg: 'bg-amber-500/[0.07]',
+    hoverBg: 'hover:bg-amber-500/[0.12]',
+    hoverBorder: 'hover:border-amber-400/50',
+    activeBg: 'active:bg-amber-500/[0.16]',
+    text: 'text-amber-200',
+    hoverText: 'group-hover:text-amber-100',
+  },
+};
+const MODE_STYLE_FALLBACK = MODE_STYLE.Single;
 const OVERLAY_MIN = 20;
 const OVERLAY_MAX = 100;
 const JACKET_OPACITY_MIN = 10;
@@ -49,7 +82,7 @@ function parseIntSafe(value, fallback = null) {
 }
 
 function clampOverlaySize(value) {
-  const parsed = parseIntSafe(value, 52);
+  const parsed = parseIntSafe(value, 78);
   return Math.min(OVERLAY_MAX, Math.max(OVERLAY_MIN, parsed));
 }
 
@@ -59,7 +92,7 @@ function clampSongsPerRow(value) {
 }
 
 function clampJacketOpacity(value) {
-  const parsed = parseIntSafe(value, 90);
+  const parsed = parseIntSafe(value, 60);
   return Math.min(JACKET_OPACITY_MAX, Math.max(JACKET_OPACITY_MIN, parsed));
 }
 
@@ -302,6 +335,9 @@ function JacketOverlayText({
   const measureRef = useRef(null);
   const [fitScale, setFitScale] = useState(1);
 
+  const hasPlus = typeof text === 'string' && text.endsWith('+') && text.length > 1;
+  const mainText = hasPlus ? text.slice(0, -1) : text;
+
   useEffect(() => {
     const frameEl = frameRef.current;
     const widthEl = widthRef.current;
@@ -373,17 +409,36 @@ function JacketOverlayText({
           {fitTemplate}
         </span>
         <span
-          className={`inline-flex items-center justify-center whitespace-nowrap text-center font-display font-black ${colorClass} ${isBroken ? 'grade-broken' : ''}`}
+          className={`inline-flex items-start justify-center whitespace-nowrap text-center font-display font-black italic ${colorClass} ${isBroken ? 'grade-broken' : ''}`}
           data-grade={text}
           style={{
             fontSize: `${baseFontRem}rem`,
             transform: `scale(${fitScale})`,
             transformOrigin: 'center center',
             lineHeight: 1,
-            textShadow: '0 1px 2px rgba(0,0,0,0.9), 0 0 12px rgba(0,0,0,0.75), 0 0 24px rgba(0,0,0,0.5)',
+            letterSpacing: '-0.12em',
+            WebkitTextStroke: '4px rgba(20,10,0,0.95)',
+            paintOrder: 'stroke fill',
+            filter: 'drop-shadow(0 3px 3px rgba(0,0,0,0.65)) drop-shadow(0 0 5px rgba(0,0,0,0.35))',
           }}
         >
-          {text}
+          <span style={{ lineHeight: 1 }}>{mainText}</span>
+          {hasPlus && (
+            <span
+              style={{
+                fontSize: '0.6em',
+                lineHeight: 1,
+                marginLeft: '-0.05em',
+                marginTop: '-0.05em',
+                color: 'rgb(239, 68, 68)',
+                letterSpacing: 'normal',
+                WebkitTextStroke: '2.5px rgba(20,10,0,0.95)',
+                paintOrder: 'stroke fill',
+              }}
+            >
+              +
+            </span>
+          )}
         </span>
       </div>
     </div>
@@ -682,42 +737,50 @@ export default function TiersPage() {
     }
   };
 
+  const modeStyle = MODE_STYLE[mode] || MODE_STYLE_FALLBACK;
+
   return (
     <div ref={captureRef} className="max-w-6xl mx-auto px-3 sm:px-4 py-4 sm:py-6 space-y-4">
       {captureMode && (
-        <div className="rounded-xl border border-piu-border/60 bg-piu-card/80 p-3 text-center">
-          <h1 className="font-display font-black text-2xl tracking-wide text-white">
-            {(MODE_PREFIX[mode] || '?')}{level || '-'} Scores
+        <div className="rounded-xl border border-piu-border/60 bg-piu-card/80 px-4 py-3 text-center">
+          <h1 className="font-display inline-flex items-baseline justify-center gap-2">
+            <span className={`text-[11px] font-bold uppercase tracking-[0.28em] ${modeStyle.text}`}>
+              {MODE_LABEL[mode] || '—'}
+            </span>
+            <span className="text-3xl font-black leading-none tracking-wide text-white">
+              {level || '-'}
+            </span>
+            <span className="text-[11px] font-bold uppercase tracking-[0.28em] text-gray-400">
+              Scores
+            </span>
           </h1>
         </div>
       )}
 
-      <div className={`${captureMode ? 'hidden' : 'sticky top-[56px] sm:top-[64px] z-30'} rounded-xl border border-piu-border bg-piu-card/90 backdrop-blur-sm p-3 sm:p-4`}>
-        <div className="grid grid-cols-[100px_auto_100px] items-center">
-          <div className="flex items-center gap-2">
+      <div className={`${captureMode ? 'hidden' : 'sticky top-[56px] sm:top-[64px] z-30'} rounded-xl border border-piu-border/50 bg-piu-card/90 backdrop-blur-sm px-2 py-2 sm:px-3 sm:py-2.5`}>
+        <div className="grid grid-cols-[96px_auto_96px] items-center">
+          <div className="flex items-center gap-0.5">
             <button
               type="button"
               onClick={goPrevLevel}
               disabled={!canGoPrev}
-              className="w-11 h-11 rounded-lg bg-piu-dark border border-piu-border text-gray-300 hover:text-white disabled:opacity-40 flex items-center justify-center"
+              className="w-11 h-11 rounded-lg text-gray-400 hover:text-white hover:bg-white/[0.04] active:bg-white/[0.08] disabled:opacity-25 disabled:hover:bg-transparent disabled:hover:text-gray-400 transition-colors flex items-center justify-center"
               aria-label="Previous level"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.75}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-[22px] h-[22px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.25}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
               </svg>
             </button>
             <button
               type="button"
               onClick={captureTierImage}
               disabled={captureBusy}
-              className="w-11 h-11 rounded-lg bg-piu-dark border border-piu-border text-gray-300 hover:text-white disabled:opacity-40 flex items-center justify-center"
+              className="w-11 h-11 rounded-lg text-gray-400 hover:text-white hover:bg-white/[0.04] active:bg-white/[0.08] disabled:opacity-25 disabled:hover:bg-transparent disabled:hover:text-gray-400 transition-colors flex items-center justify-center"
               aria-label="Download tier image"
               title="Download tier image"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 7.5A2.5 2.5 0 015.5 5h13A2.5 2.5 0 0121 7.5v9a2.5 2.5 0 01-2.5 2.5h-13A2.5 2.5 0 013 16.5v-9z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M7 8.5h2.5l1-1.5h3l1 1.5H17" />
-                <circle cx="12" cy="13" r="3.25" />
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-[22px] h-[22px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
               </svg>
             </button>
           </div>
@@ -725,33 +788,37 @@ export default function TiersPage() {
           <button
             type="button"
             onClick={handleModeCycle}
-            className="justify-self-center px-4 py-1.5 rounded-lg bg-piu-dark border border-piu-border font-display font-black text-2xl tracking-wide"
+            className={`group justify-self-center flex items-baseline gap-2 px-4 py-1.5 rounded-lg border ${modeStyle.border} ${modeStyle.bg} ${modeStyle.hoverBg} ${modeStyle.hoverBorder} ${modeStyle.activeBg} transition-colors`}
             title="Switch mode"
           >
-            {(MODE_PREFIX[mode] || '?')}{level || '-'}
+            <span className={`font-display font-semibold text-[10px] uppercase tracking-[0.24em] ${modeStyle.text} ${modeStyle.hoverText}`}>
+              {MODE_LABEL[mode] || '—'}
+            </span>
+            <span className="font-display font-black text-2xl leading-none tracking-wide text-white tabular-nums">
+              {level || '-'}
+            </span>
           </button>
 
-          <div className="flex items-center justify-end gap-2">
+          <div className="flex items-center justify-end gap-0.5">
             <button
               type="button"
               onClick={() => setSettingsOpen(true)}
-              className="w-11 h-11 rounded-lg bg-piu-dark border border-piu-border text-gray-300 hover:text-white flex items-center justify-center"
+              className="w-11 h-11 rounded-lg text-gray-400 hover:text-white hover:bg-white/[0.04] active:bg-white/[0.08] transition-colors flex items-center justify-center"
               aria-label="Tier settings"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317a1 1 0 011.9 0l.31 1.24a1 1 0 00.95.757h1.3a1 1 0 01.75 1.66l-.97 1.11a1 1 0 000 1.318l.97 1.11a1 1 0 01-.75 1.66h-1.3a1 1 0 00-.95.757l-.31 1.24a1 1 0 01-1.9 0l-.31-1.24a1 1 0 00-.95-.757h-1.3a1 1 0 01-.75-1.66l.97-1.11a1 1 0 000-1.318l-.97-1.11a1 1 0 01.75-1.66h1.3a1 1 0 00.95-.757l.31-1.24z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9.75a2.25 2.25 0 100 4.5 2.25 2.25 0 000-4.5z" />
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-[22px] h-[22px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
               </svg>
             </button>
             <button
               type="button"
               onClick={goNextLevel}
               disabled={!canGoNext}
-              className="w-11 h-11 rounded-lg bg-piu-dark border border-piu-border text-gray-300 hover:text-white disabled:opacity-40 flex items-center justify-center"
+              className="w-11 h-11 rounded-lg text-gray-400 hover:text-white hover:bg-white/[0.04] active:bg-white/[0.08] disabled:opacity-25 disabled:hover:bg-transparent disabled:hover:text-gray-400 transition-colors flex items-center justify-center"
               aria-label="Next level"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.75}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-[22px] h-[22px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.25}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
               </svg>
             </button>
           </div>
