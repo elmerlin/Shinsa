@@ -227,29 +227,34 @@ function getDerivedCharacterGroups(character) {
   return [...new Set([...manualGroups, ...splitNames])];
 }
 
-function SectionShell({ eyebrow, title, children, aside }) {
+function SectionShell({ eyebrow, index, title, children, aside }) {
   return (
-    <section className="grid gap-4 rounded-[26px] border border-piu-border/50 bg-piu-card/70 p-4 shadow-[0_20px_80px_rgba(0,0,0,0.35)] backdrop-blur-sm lg:grid-cols-[minmax(0,1fr)_280px] lg:gap-5 lg:p-5">
-      <div>
-        <div className="text-[10px] font-black uppercase tracking-[0.34em] text-piu-accent/80">{eyebrow}</div>
-        <h2 className="mt-1.5 font-display text-2xl font-black tracking-tight text-white">{title}</h2>
-        <div className="mt-3">{children}</div>
+    <section className="relative grid gap-5 border-t border-white/10 pt-5 lg:grid-cols-[minmax(0,1fr)_260px] lg:gap-8 lg:pt-6">
+      <div className="min-w-0">
+        <div className="flex items-baseline gap-3">
+          {index ? (
+            <span className="font-mono text-[10px] font-bold tracking-[0.2em] text-cyan-300/70">{index}</span>
+          ) : null}
+          <span className="text-[10px] font-bold uppercase tracking-[0.32em] text-cyan-300/70">{eyebrow}</span>
+        </div>
+        <h2 className="mt-2 font-display text-[1.75rem] font-black leading-[1.05] tracking-tight text-white sm:text-[2rem]">{title}</h2>
+        <div className="mt-5">{children}</div>
       </div>
-      {aside ? <aside className="rounded-[22px] border border-white/8 bg-black/20 p-3.5">{aside}</aside> : null}
+      {aside ? <aside className="lg:pt-[3.1rem]">{aside}</aside> : null}
     </section>
   );
 }
 
 function WeightPill({ children, tone = 'cyan' }) {
   const toneClasses = {
-    cyan: 'border-cyan-400/20 bg-cyan-400/10 text-cyan-100',
-    amber: 'border-amber-400/20 bg-amber-400/10 text-amber-100',
-    pink: 'border-pink-400/20 bg-pink-400/10 text-pink-100',
-    emerald: 'border-emerald-400/20 bg-emerald-400/10 text-emerald-100',
-    slate: 'border-white/10 bg-white/5 text-gray-200',
+    cyan: 'border-cyan-400/25 bg-cyan-400/[0.08] text-cyan-200',
+    amber: 'border-amber-400/25 bg-amber-400/[0.08] text-amber-200',
+    pink: 'border-pink-400/25 bg-pink-400/[0.08] text-pink-200',
+    emerald: 'border-emerald-400/25 bg-emerald-400/[0.08] text-emerald-200',
+    slate: 'border-white/10 bg-white/[0.04] text-gray-300',
   };
   return (
-    <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-semibold ${toneClasses[tone] || toneClasses.slate}`}>
+    <span className={`inline-flex items-center rounded-md border px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-[0.12em] ${toneClasses[tone] || toneClasses.slate}`}>
       {children}
     </span>
   );
@@ -272,169 +277,152 @@ function CharacterCard({
 
   return (
     <article
-      className={`rounded-[26px] border px-4 py-4 transition-colors ${
+      className={`group/card rounded-2xl border p-4 transition-colors ${
         character.removed
-          ? 'border-rose-300/20 bg-rose-300/[0.05]'
-          : 'border-white/8 bg-white/[0.035]'
+          ? 'border-rose-300/20 bg-rose-300/[0.04]'
+          : 'border-white/[0.08] bg-white/[0.025] hover:border-white/[0.14] hover:bg-white/[0.035]'
       }`}
     >
-      <div className="flex items-start gap-4">
-        <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-[20px] border border-white/10 bg-[#0c0a16] p-2">
-          <img src={character.preview} alt={character.name} className="h-full w-full object-contain" />
+      <div className="flex items-start gap-3.5">
+        <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/[0.08] bg-[#0a0915] p-1.5">
+          <img src={character.preview} alt={character.name} className="h-full w-full object-contain" style={{ imageRendering: 'pixelated' }} />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="text-[10px] uppercase tracking-[0.26em] text-gray-500">{character.source}</div>
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <div className="font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-gray-500">{character.source === 'PIUGAME Avatar Shop' ? 'PIUGAME' : 'Custom Hero'}</div>
               <input
                 type="text"
                 value={character.name}
                 disabled={character.lockedName}
                 onChange={(event) => onUpdate(character.id, { name: event.target.value })}
-                className={`mt-2 w-full border-b border-white/10 bg-transparent pb-1 font-display text-[1.75rem] font-black leading-none text-white outline-none ${
-                  character.lockedName ? 'cursor-default opacity-95' : 'focus:border-piu-accent'
+                className={`mt-1 w-full bg-transparent font-display text-[18px] font-black leading-tight tracking-tight text-white outline-none ${
+                  character.lockedName ? 'cursor-default' : 'focus:text-cyan-200'
                 }`}
               />
               {character.officialName && character.name !== character.officialName ? (
-                <div className="mt-2 text-[11px] text-gray-500">
-                  Official source name: <span className="text-gray-300">{character.officialName}</span>
+                <div className="mt-0.5 text-[10px] text-gray-600">
+                  Official: <span className="text-gray-400">{character.officialName}</span>
                 </div>
               ) : null}
             </div>
-            <label className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-xs text-gray-200">
+            <label className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-gray-500 hover:text-gray-300">
               <input
                 type="checkbox"
                 checked={character.active !== false}
                 onChange={(event) => onUpdate(character.id, { active: event.target.checked })}
-                className="h-4 w-4 rounded border-white/20 bg-black/20 text-piu-accent focus:ring-piu-accent"
+                className="h-3.5 w-3.5 rounded-sm border-white/20 bg-black/30 text-cyan-400 focus:ring-1 focus:ring-cyan-400/40 focus:ring-offset-0"
               />
               Live
             </label>
           </div>
 
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-2.5 flex flex-wrap gap-1">
             <WeightPill tone={character.generationStatus === 'Ready' ? 'emerald' : 'amber'}>
               {character.generationStatus}
             </WeightPill>
-            <WeightPill tone="slate">{formatEstimate(estimate)} est.</WeightPill>
+            <WeightPill tone="slate">{formatEstimate(estimate)} est</WeightPill>
             {character.source === 'PIUGAME Avatar Shop' ? (
               <WeightPill tone={character.ownedInShop ? 'emerald' : 'amber'}>
-                {character.ownedInShop ? 'Owned in source shop' : `${character.sourcePrice || '?'} PP`}
+                {character.ownedInShop ? 'Owned' : `${character.sourcePrice || '?'} PP`}
               </WeightPill>
             ) : null}
-            {character.multiCharacter ? <WeightPill tone="pink">Multi-character</WeightPill> : null}
-            {character.removed ? <WeightPill tone="amber">Removed from prep</WeightPill> : null}
+            {character.multiCharacter ? <WeightPill tone="pink">Multi</WeightPill> : null}
           </div>
 
-          <p className="mt-3 max-w-[32ch] text-sm leading-relaxed text-gray-300">{character.sourceNote}</p>
+          <p className="mt-2.5 text-[11px] leading-snug text-gray-500">{character.sourceNote}</p>
         </div>
       </div>
 
-      <div className="mt-4 border-t border-white/8 pt-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <div className="text-[10px] font-black uppercase tracking-[0.24em] text-gray-500">Character Groups</div>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {characterGroups.length ? characterGroups.map((groupName) => {
-                const removable = !(character.multiCharacter && String(character.name || '').split(';').map(normalizeGroupName).includes(groupName));
-                return (
-                  <span
-                    key={groupName}
-                    className="inline-flex items-center gap-2 rounded-full border border-cyan-400/15 bg-cyan-400/10 px-2.5 py-1 text-xs font-semibold text-cyan-100"
-                  >
-                    {groupName}
-                    {removable ? (
-                      <button
-                        type="button"
-                        onClick={() => onRemoveGroup(character.id, groupName)}
-                        className="text-cyan-100/70 transition hover:text-cyan-100"
-                        aria-label={`Remove ${groupName} from character group`}
-                      >
-                        ×
-                      </button>
-                    ) : null}
-                  </span>
-                );
-              }) : (
-                <span className="text-xs text-gray-500">No group links yet.</span>
-              )}
-            </div>
-          </div>
-
-          <div className="flex min-w-[16rem] flex-1 flex-wrap justify-end gap-2">
-            <input
-              type="text"
-              value={groupDraft}
-              onChange={(event) => onGroupDraftChange(character.id, event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault();
-                  onAddGroup(character.id);
-                }
-              }}
-              list="piumon-character-groups"
-              placeholder="Add to character group"
-              className="min-w-[12rem] flex-1 rounded-2xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white outline-none placeholder:text-gray-600 focus:border-piu-accent"
-            />
-            <button
-              type="button"
-              onClick={() => onAddGroup(character.id)}
-              className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-bold text-white transition hover:border-piu-accent/35 hover:bg-piu-accent/10"
-            >
-              Add To Character Group
-            </button>
-          </div>
-        </div>
-
-        {character.source === 'PIUGAME Avatar Shop' ? (
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-            <label className="inline-flex max-w-[32rem] items-start gap-2 text-xs text-gray-300">
-              <input
-                type="checkbox"
-                checked={character.multiCharacter === true}
-                onChange={(event) => onUpdate(character.id, { multiCharacter: event.target.checked })}
-                className="mt-0.5 h-4 w-4 rounded border-white/20 bg-black/20 text-piu-accent focus:ring-piu-accent"
-              />
-              <span>
-                <span className="block font-semibold text-white">Contains more than one character</span>
-                <span className="mt-1 block text-gray-500">
-                  Use <span className="font-semibold text-gray-300">name1;name2</span> so the furthest-left figure is first. Those names auto-link into matching character groups.
-                </span>
-              </span>
-            </label>
-
-            <button
-              type="button"
-              onClick={() => onUpdate(character.id, { removed: !character.removed, active: character.removed ? character.active : false })}
-              className={`rounded-2xl border px-3 py-2 text-xs font-bold transition ${
-                character.removed
-                  ? 'border-emerald-300/20 bg-emerald-300/10 text-emerald-100 hover:bg-emerald-300/15'
-                  : 'border-rose-300/20 bg-rose-300/10 text-rose-100 hover:bg-rose-300/15'
-              }`}
-            >
-              {character.removed ? 'Restore To Prep' : 'Remove From Prep'}
-            </button>
-          </div>
-        ) : null}
-
-        {character.source === 'PIUGAME Avatar Shop' && character.multiCharacter ? (
-          <div className="mt-4 text-xs leading-relaxed text-pink-100/90">
-            Ordered multi-character example:
-            <span className="ml-1 font-semibold text-white">NameLeft;NameRight</span>
-          </div>
-        ) : null}
-
-        <div className="mt-4 flex items-center justify-between border-t border-white/8 pt-4">
-          <span className="text-xs text-gray-400">Distribution weight</span>
+      <div className="mt-3 border-t border-white/[0.06] pt-3">
+        <div className="flex items-center justify-between gap-3">
+          <span className="font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-gray-500">Groups</span>
           <input
             type="number"
             min="0"
             max="999"
             value={character.weight}
             onChange={(event) => onUpdate(character.id, { weight: clampWeight(event.target.value) })}
-            className="w-20 rounded-xl border border-white/10 bg-black/30 px-2 py-1 text-right text-sm text-white outline-none focus:border-piu-accent"
+            className="h-7 w-16 rounded-md border border-white/[0.08] bg-black/30 px-2 text-right font-mono text-[12px] tabular-nums text-white outline-none focus:border-cyan-400/60"
+            aria-label="Distribution weight"
           />
         </div>
+        <div className="mt-2 flex flex-wrap gap-1">
+          {characterGroups.length ? characterGroups.map((groupName) => {
+            const removable = !(character.multiCharacter && String(character.name || '').split(';').map(normalizeGroupName).includes(groupName));
+            return (
+              <span
+                key={groupName}
+                className="inline-flex items-center gap-1 rounded-md border border-cyan-400/20 bg-cyan-400/[0.08] px-1.5 py-0.5 text-[10px] font-semibold text-cyan-200"
+              >
+                {groupName}
+                {removable ? (
+                  <button
+                    type="button"
+                    onClick={() => onRemoveGroup(character.id, groupName)}
+                    className="text-cyan-300/60 transition hover:text-cyan-200"
+                    aria-label={`Remove ${groupName} from character group`}
+                  >
+                    ×
+                  </button>
+                ) : null}
+              </span>
+            );
+          }) : (
+            <span className="text-[10px] text-gray-600">—</span>
+          )}
+        </div>
+        <div className="mt-2 flex gap-1">
+          <input
+            type="text"
+            value={groupDraft}
+            onChange={(event) => onGroupDraftChange(character.id, event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                onAddGroup(character.id);
+              }
+            }}
+            list="piumon-character-groups"
+            placeholder="Add group…"
+            className="h-7 flex-1 rounded-md border border-white/[0.08] bg-black/20 px-2 text-[11px] text-white outline-none placeholder:text-gray-600 focus:border-cyan-400/60"
+          />
+          <button
+            type="button"
+            onClick={() => onAddGroup(character.id)}
+            className="h-7 rounded-md border border-white/[0.08] bg-white/[0.04] px-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-gray-300 transition hover:border-cyan-400/40 hover:bg-cyan-400/[0.06] hover:text-cyan-200"
+          >
+            Add
+          </button>
+        </div>
+
+        {character.source === 'PIUGAME Avatar Shop' ? (
+          <div className="mt-3 flex items-start justify-between gap-2">
+            <label className="inline-flex cursor-pointer items-start gap-1.5 text-[10px] text-gray-500">
+              <input
+                type="checkbox"
+                checked={character.multiCharacter === true}
+                onChange={(event) => onUpdate(character.id, { multiCharacter: event.target.checked })}
+                className="mt-px h-3.5 w-3.5 rounded-sm border-white/20 bg-black/30 text-cyan-400 focus:ring-1 focus:ring-cyan-400/40 focus:ring-offset-0"
+              />
+              <span className="leading-tight">
+                <span className="font-semibold text-gray-300">Multi-char</span>
+                <span className="mt-0.5 block font-mono text-[9px] text-gray-600">name1;name2</span>
+              </span>
+            </label>
+            <button
+              type="button"
+              onClick={() => onUpdate(character.id, { removed: !character.removed, active: character.removed ? character.active : false })}
+              className={`h-7 rounded-md border px-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] transition ${
+                character.removed
+                  ? 'border-emerald-300/30 bg-emerald-300/[0.08] text-emerald-200 hover:bg-emerald-300/[0.14]'
+                  : 'border-rose-300/25 bg-rose-300/[0.06] text-rose-200 hover:bg-rose-300/[0.12]'
+              }`}
+            >
+              {character.removed ? 'Restore' : 'Remove'}
+            </button>
+          </div>
+        ) : null}
       </div>
     </article>
   );
@@ -443,79 +431,78 @@ function CharacterCard({
 function TraitCard({ group, items, onToggle, onWeightChange }) {
   const totalWeight = sumActiveWeight(items);
   return (
-    <div className="rounded-[22px] border border-white/8 bg-black/20 p-3.5">
+    <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="font-display text-lg font-black text-white">{group.title}</h3>
-          <p className="mt-1 text-xs leading-relaxed text-gray-400">{group.note}</p>
+          <h3 className="font-display text-[15px] font-black tracking-tight text-white">{group.title}</h3>
+          <p className="mt-1 text-[11px] leading-snug text-gray-500">{group.note}</p>
         </div>
-        <WeightPill tone="amber">{totalWeight} total weight</WeightPill>
+        <div className="shrink-0 text-right">
+          <div className="font-mono text-[9px] font-bold uppercase tracking-[0.16em] text-gray-500">Total</div>
+          <div className="mt-0.5 font-display text-lg font-black leading-none tabular-nums text-amber-200">{totalWeight}</div>
+        </div>
       </div>
-      <div className="mt-3 space-y-2">
-        {items.map((item) => (
-          <div key={item.id} className="grid grid-cols-[1fr_auto_auto] items-center gap-3 rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-1.5">
-            <label className="flex items-center gap-2 text-sm text-white">
+      <div className="mt-4 divide-y divide-white/[0.05] border-y border-white/[0.05]">
+        {items.map((item) => {
+          const active = item.active !== false;
+          return (
+            <div key={item.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 py-2">
+              <label className="flex cursor-pointer items-center gap-2.5 text-[13px]">
+                <input
+                  type="checkbox"
+                  checked={active}
+                  onChange={(event) => onToggle(group.key, item.id, event.target.checked)}
+                  className="h-3.5 w-3.5 rounded-sm border-white/20 bg-black/30 text-cyan-400 focus:ring-1 focus:ring-cyan-400/40 focus:ring-offset-0"
+                />
+                <span className={active ? 'text-white' : 'text-gray-600 line-through'}>{item.name}</span>
+              </label>
               <input
-                type="checkbox"
-                checked={item.active !== false}
-                onChange={(event) => onToggle(group.key, item.id, event.target.checked)}
-                className="h-4 w-4 rounded border-white/20 bg-black/20 text-piu-accent focus:ring-piu-accent"
+                type="number"
+                min="0"
+                max="999"
+                value={item.weight}
+                onChange={(event) => onWeightChange(group.key, item.id, event.target.value)}
+                className="h-7 w-14 rounded-md border border-white/[0.08] bg-black/30 px-2 text-right font-mono text-[11px] tabular-nums text-white outline-none focus:border-cyan-400/60"
               />
-              <span>{item.name}</span>
-            </label>
-            <span className="text-[11px] text-gray-400">weight</span>
-            <input
-              type="number"
-              min="0"
-              max="999"
-              value={item.weight}
-              onChange={(event) => onWeightChange(group.key, item.id, event.target.value)}
-              className="w-16 rounded-xl border border-white/10 bg-black/30 px-2 py-1 text-right text-sm text-white outline-none focus:border-piu-accent"
-            />
-          </div>
-        ))}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
 }
 
 function HabitatCard({ habitat, onToggle, onWeightChange }) {
+  const active = habitat.active !== false;
   return (
-    <div className={`rounded-[24px] border ${habitat.border} bg-gradient-to-br ${habitat.accent} p-[1px]`}>
-      <div className="rounded-[23px] bg-piu-card/95 p-3.5">
+    <div className={`relative overflow-hidden rounded-2xl border ${habitat.border} bg-white/[0.02]`}>
+      <div className={`absolute inset-x-0 top-0 h-16 bg-gradient-to-b ${habitat.accent} opacity-60`} />
+      <div className="relative p-4">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h3 className="font-display text-lg font-black text-white">{habitat.name}</h3>
-            <p className="mt-1 text-xs leading-relaxed text-gray-400">{habitat.note}</p>
+            <div className="font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-white/60">{habitat.id}</div>
+            <h3 className="mt-1 font-display text-[15px] font-black tracking-tight text-white">{habitat.name}</h3>
           </div>
-          <label className="inline-flex items-center gap-2 text-xs text-gray-300">
+          <label className="inline-flex cursor-pointer items-center gap-1.5 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-gray-400 hover:text-gray-200">
             <input
               type="checkbox"
-              checked={habitat.active !== false}
+              checked={active}
               onChange={(event) => onToggle(habitat.id, event.target.checked)}
-              className="h-4 w-4 rounded border-white/20 bg-black/20 text-piu-accent focus:ring-piu-accent"
+              className="h-3.5 w-3.5 rounded-sm border-white/20 bg-black/30 text-cyan-400 focus:ring-1 focus:ring-cyan-400/40 focus:ring-offset-0"
             />
             Live
           </label>
         </div>
-        <div className="mt-3 h-24 overflow-hidden rounded-[18px] border border-white/8 bg-black/20 p-3">
-          <div className="relative h-full rounded-[14px] bg-black/20">
-            <div className={`absolute inset-0 rounded-[14px] bg-gradient-to-br ${habitat.accent}`} />
-            <div className="absolute left-0 right-0 bottom-0 h-10 rounded-b-[14px] bg-black/25" />
-            <div className="absolute left-3 bottom-4 h-6 w-10 rounded-full border border-white/10 bg-white/10 blur-[1px]" />
-            <div className="absolute right-5 top-4 h-5 w-5 rounded-full bg-white/10 blur-[2px]" />
-            <div className="absolute left-1/2 top-1/2 h-8 w-8 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/10 bg-white/10 backdrop-blur-[2px]" />
-          </div>
-        </div>
-        <div className="mt-3 flex items-center justify-between">
-          <span className="text-xs text-gray-400">Weight</span>
+        <p className="mt-3 text-[11px] leading-snug text-gray-500">{habitat.note}</p>
+        <div className="mt-4 flex items-center justify-between border-t border-white/[0.06] pt-3">
+          <span className="font-mono text-[9px] font-bold uppercase tracking-[0.16em] text-gray-500">Weight</span>
           <input
             type="number"
             min="0"
             max="999"
             value={habitat.weight}
             onChange={(event) => onWeightChange(habitat.id, event.target.value)}
-            className="w-20 rounded-xl border border-white/10 bg-black/30 px-2 py-1 text-right text-sm text-white outline-none focus:border-piu-accent"
+            className="h-7 w-16 rounded-md border border-white/[0.08] bg-black/30 px-2 text-right font-mono text-[12px] tabular-nums text-white outline-none focus:border-cyan-400/60"
           />
         </div>
       </div>
@@ -634,193 +621,203 @@ export default function PiumonPage() {
     setHabitats((current) => current.map((item) => (item.id === id ? { ...item, ...updates } : item)));
   }
 
+  const totalTraitLayers = activeTraitCounts.reduce((sum, item) => sum + item.active, 0);
+
   return (
-    <div className="min-h-screen bg-[#090814] text-white">
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute inset-x-0 top-0 h-80 bg-[radial-gradient(circle_at_top,rgba(49,196,255,0.18),transparent_58%)]" />
-        <div className="absolute right-0 top-24 h-72 w-72 rounded-full bg-fuchsia-500/10 blur-3xl" />
-        <div className="absolute left-[-6rem] top-[28rem] h-96 w-96 rounded-full bg-cyan-400/10 blur-3xl" />
+    <div className="relative min-h-screen bg-[#070610] text-white">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-[520px] overflow-hidden">
+        <div className="absolute inset-x-0 top-0 h-[420px] bg-[radial-gradient(ellipse_at_top,rgba(49,196,255,0.14),transparent_60%)]" />
+        <div className="absolute left-1/2 top-[-8rem] h-[520px] w-[520px] -translate-x-1/2 rounded-full bg-cyan-500/[0.06] blur-[120px]" />
       </div>
 
-      <div className="relative mx-auto max-w-7xl px-4 pb-14 pt-6 sm:px-6 lg:px-8">
-        <div className="mb-6 flex items-start justify-between gap-3">
-          <div>
-            <Link to="/" className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.24em] text-piu-accent/80 transition hover:text-piu-accent">
-              <span className="text-lg leading-none">←</span>
-              Back to Shinsa
-            </Link>
-            <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.28em] text-cyan-100">
-              Preparation Phase
-            </div>
-            <h1 className="mt-3 font-display text-4xl font-black tracking-tight text-white sm:text-5xl">
-              PIUMON FORGE
-            </h1>
-            <p className="mt-3 max-w-3xl text-sm leading-relaxed text-gray-300 sm:text-base">
-              Define the collectible pipeline before minting: take PIUGAME avatar identities and regenerate them with PixelLab into one
-              consistent full-body style, then layer hats, glasses, necklaces, clothes, and elemental habitats on top.
-            </p>
-          </div>
+      <div className="relative mx-auto max-w-[1240px] px-5 pb-20 pt-7 sm:px-8">
+        <div className="flex items-center justify-between gap-6 text-[11px] font-semibold uppercase tracking-[0.24em] text-gray-400">
+          <Link to="/" className="inline-flex items-center gap-1.5 transition hover:text-cyan-300">
+            <span className="text-base leading-none">←</span>
+            Shinsa
+          </Link>
           <a
             href={SOURCE_URL}
             target="_blank"
             rel="noreferrer"
-            className="hidden rounded-2xl border border-piu-accent/20 bg-piu-accent/10 px-4 py-3 text-right text-xs text-piu-accent transition hover:border-piu-accent/40 hover:bg-piu-accent/15 sm:block"
+            className="inline-flex items-center gap-1.5 transition hover:text-cyan-300"
           >
-            <div className="font-black uppercase tracking-[0.22em]">Source</div>
-            <div className="mt-1 text-[11px] text-gray-200">PIUGAME Avatar Shop</div>
+            PIUGAME Avatar Shop
+            <span className="text-base leading-none">↗</span>
           </a>
         </div>
 
-        <div className="mb-6 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-[24px] border border-white/8 bg-white/[0.03] p-3.5">
-            <div className="text-[10px] uppercase tracking-[0.28em] text-gray-500">Mint Size</div>
-            <div className="mt-1.5 font-display text-3xl font-black text-white">{mintSize}</div>
-            <div className="mt-2 text-xs text-gray-400">Planned claim ceiling before the full distribution is exhausted.</div>
-          </div>
-          <div className="rounded-[24px] border border-white/8 bg-white/[0.03] p-3.5">
-            <div className="text-[10px] uppercase tracking-[0.28em] text-gray-500">Identity Seeds</div>
-            <div className="mt-1.5 font-display text-3xl font-black text-white">{visibleBaseCount}</div>
-            <div className="mt-2 text-xs text-gray-400">
-              {activeBases.length} currently active in the mint pool
-              {removedBaseCount ? ` · ${removedBaseCount} removed from prep` : '.'}
+        <header className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+          <div className="max-w-3xl">
+            <div className="font-mono text-[10px] font-bold uppercase tracking-[0.32em] text-cyan-300/80">
+              Piumon · Preparation Phase
             </div>
+            <h1 className="mt-3 font-display text-[3.25rem] font-black leading-[0.88] tracking-[-0.02em] text-white sm:text-[4.25rem]">
+              PIUMON
+              <br />
+              <span className="text-cyan-300">FORGE</span>
+            </h1>
+            <p className="mt-5 max-w-2xl text-sm leading-relaxed text-gray-400 sm:text-[15px]">
+              Pipeline prep before the 1K mint. Import PIUGAME identities, regenerate them in one consistent PixelLab body, then layer reusable wearables and elemental habitats on top.
+            </p>
           </div>
-          <div className="rounded-[24px] border border-white/8 bg-white/[0.03] p-3.5">
-            <div className="text-[10px] uppercase tracking-[0.28em] text-gray-500">Trait Layers</div>
-            <div className="mt-1.5 font-display text-3xl font-black text-white">{activeTraitCounts.reduce((sum, item) => sum + item.active, 0)}</div>
-            <div className="mt-2 text-xs text-gray-400">Reusable wearable variants across hats, eyewear, neckwear, and clothes.</div>
-          </div>
-          <div className="rounded-[24px] border border-white/8 bg-white/[0.03] p-3.5">
-            <div className="text-[10px] uppercase tracking-[0.28em] text-gray-500">Possible Combos</div>
-            <div className="mt-1.5 font-display text-3xl font-black text-white">{formatComboCount(theoreticalCombos)}</div>
-            <div className="mt-2 text-xs text-gray-400">Enough room to hide the final 1k distribution until claims play out.</div>
-          </div>
-        </div>
+        </header>
 
-        <div className="space-y-6">
+        <dl className="mt-10 grid grid-cols-2 gap-x-6 gap-y-5 border-y border-white/[0.08] py-5 sm:grid-cols-4 sm:gap-x-0 sm:divide-x sm:divide-white/[0.08]">
+          <div className="sm:px-6 sm:first:pl-0">
+            <dt className="font-mono text-[9px] font-bold uppercase tracking-[0.22em] text-gray-500">Mint Size</dt>
+            <dd className="mt-2 font-display text-[2.25rem] font-black leading-none tracking-tight text-white tabular-nums">{mintSize}</dd>
+            <dd className="mt-2 text-[11px] leading-snug text-gray-500">Hard claim ceiling.</dd>
+          </div>
+          <div className="sm:px-6">
+            <dt className="font-mono text-[9px] font-bold uppercase tracking-[0.22em] text-gray-500">Identity Seeds</dt>
+            <dd className="mt-2 font-display text-[2.25rem] font-black leading-none tracking-tight text-white tabular-nums">{visibleBaseCount}</dd>
+            <dd className="mt-2 text-[11px] leading-snug text-gray-500">
+              <span className="text-cyan-300">{activeBases.length}</span> live in pool{removedBaseCount ? <> · <span className="text-amber-300">{removedBaseCount}</span> removed</> : null}
+            </dd>
+          </div>
+          <div className="sm:px-6">
+            <dt className="font-mono text-[9px] font-bold uppercase tracking-[0.22em] text-gray-500">Trait Layers</dt>
+            <dd className="mt-2 font-display text-[2.25rem] font-black leading-none tracking-tight text-white tabular-nums">{totalTraitLayers}</dd>
+            <dd className="mt-2 text-[11px] leading-snug text-gray-500">Across hats, eyes, neck, clothes.</dd>
+          </div>
+          <div className="sm:px-6 sm:last:pr-0">
+            <dt className="font-mono text-[9px] font-bold uppercase tracking-[0.22em] text-gray-500">Possible Combos</dt>
+            <dd className="mt-2 font-display text-[2.25rem] font-black leading-none tracking-tight text-white tabular-nums">{formatComboCount(theoreticalCombos)}</dd>
+            <dd className="mt-2 text-[11px] leading-snug text-gray-500">Room to hide the 1K distribution.</dd>
+          </div>
+        </dl>
+
+        <div className="mt-10 space-y-10 lg:mt-12 lg:space-y-12">
         <SectionShell
+          index="01"
           eyebrow="Generation Contract"
-          title="One consistent body, many swappable layers"
+          title="One body. Many swappable layers."
           aside={
             <div>
-              <div className="text-[10px] uppercase tracking-[0.28em] text-gray-500">Style Reference</div>
-              <div className="mt-2.5 rounded-[22px] border border-white/8 bg-black/20 p-3">
-                <div className="overflow-hidden rounded-[18px] bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.1),transparent_55%),linear-gradient(180deg,#12111f_0%,#0a0916_100%)] p-3">
-                  <img
-                    src={heroReference?.preview || '/pet-world/heroes/dojocat/base.png'}
-                    alt={heroReference?.name || 'Dojocat'}
-                    className="mx-auto h-52 w-auto object-contain drop-shadow-[0_14px_30px_rgba(0,0,0,0.45)]"
-                  />
-                </div>
+              <div className="font-mono text-[9px] font-bold uppercase tracking-[0.22em] text-gray-500">Style Reference</div>
+              <div className="mt-3 overflow-hidden rounded-2xl border border-white/[0.06] bg-gradient-to-b from-[#13111e] to-[#09081a]">
+                <img
+                  src={heroReference?.preview || '/pet-world/heroes/dojocat/base.png'}
+                  alt={heroReference?.name || 'Dojocat'}
+                  className="mx-auto block h-56 w-auto object-contain"
+                />
               </div>
-              <div className="mt-2.5 text-xs leading-relaxed text-gray-400">
-                The final collectible art should match this crisp full-body pixel density: front-facing, fixed stance, clean head and torso anchors, with enough negative space to swap wearables without redrawing the whole character.
-              </div>
+              <p className="mt-3 text-[11px] leading-relaxed text-gray-500">
+                Target density: front-facing, fixed stance, clean head and torso anchors — enough negative space to swap wearables without redrawing.
+              </p>
             </div>
           }
         >
-          <div className="grid gap-2.5 md:grid-cols-2">
+          <ol className="divide-y divide-white/[0.06] border-y border-white/[0.06]">
             {PIPELINE_STEPS.map((step, index) => (
-              <div key={step.title} className="rounded-[22px] border border-white/8 bg-black/20 p-3.5">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-cyan-400/15 bg-cyan-400/10 font-display text-lg font-black text-cyan-100">
-                    {index + 1}
-                  </div>
-                  <h3 className="font-display text-lg font-black text-white">{step.title}</h3>
+              <li key={step.title} className="group grid grid-cols-[auto_minmax(0,1fr)] gap-x-5 gap-y-1 py-4 sm:grid-cols-[3rem_minmax(0,14rem)_minmax(0,1fr)] sm:gap-x-6">
+                <span className="font-mono text-[11px] font-bold tracking-[0.12em] text-cyan-300/60 sm:pt-1">
+                  {String(index + 1).padStart(2, '0')}
+                </span>
+                <h3 className="col-start-2 font-display text-[15px] font-black tracking-tight text-white">
+                  {step.title}
+                </h3>
+                <p className="col-span-2 text-[13px] leading-relaxed text-gray-400 sm:col-span-1 sm:col-start-3 sm:row-start-1">
+                  {step.body}
+                </p>
+              </li>
+            ))}
+          </ol>
+          <div className="mt-6">
+            <div className="mb-3 flex items-baseline justify-between">
+              <div className="font-mono text-[9px] font-bold uppercase tracking-[0.22em] text-amber-200/70">Attribute Axes</div>
+              <div className="text-[10px] uppercase tracking-[0.18em] text-gray-500">Rarity-agnostic rank dimensions</div>
+            </div>
+            <div className="grid gap-x-5 gap-y-3 sm:grid-cols-2 lg:grid-cols-5">
+              {ATTRIBUTE_AXES.map((axis) => (
+                <div key={axis.id} className="border-l border-amber-200/20 pl-3">
+                  <div className="font-display text-[11px] font-black uppercase tracking-[0.14em] text-amber-100">{axis.name}</div>
+                  <div className="mt-1 text-[11px] leading-snug text-gray-500">{axis.note}</div>
                 </div>
-                <p className="mt-2.5 text-sm leading-relaxed text-gray-300">{step.body}</p>
-              </div>
-            ))}
-          </div>
-          <div className="mt-3 grid gap-2.5 rounded-[22px] border border-amber-300/15 bg-amber-300/[0.06] p-3.5 lg:grid-cols-5">
-            {ATTRIBUTE_AXES.map((axis) => (
-              <div key={axis.id}>
-                <div className="text-[11px] font-black uppercase tracking-[0.16em] text-amber-100">{axis.name}</div>
-                <div className="mt-1 text-xs leading-relaxed text-gray-300">{axis.note}</div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </SectionShell>
 
         <SectionShell
+          index="02"
           eyebrow="Base Roster"
-          title="Identity sources to regenerate with PixelLab"
+          title="Identity sources to regenerate"
           aside={
             <div>
-              <div className="text-[10px] uppercase tracking-[0.28em] text-gray-500">Import Status</div>
-              <div className="mt-2.5 overflow-hidden rounded-[20px] border border-white/8 bg-white/[0.03]">
-                <div className="px-3 py-3">
-                  <div className="font-display text-sm font-black text-white">PIUGAME avatars</div>
-                  <div className="mt-1 text-xs leading-relaxed text-gray-400">
-                    Images and official names are imported from the authenticated PIUGAME avatar shop and matched against Shinsa&apos;s local avatar cache, so these are real source identities ready for PixelLab regeneration.
-                  </div>
+              <div className="font-mono text-[9px] font-bold uppercase tracking-[0.22em] text-gray-500">Import Status</div>
+              <dl className="mt-3 space-y-4">
+                <div>
+                  <dt className="font-display text-[11px] font-black uppercase tracking-[0.14em] text-white">PIUGAME avatars</dt>
+                  <dd className="mt-1 text-[11px] leading-snug text-gray-500">Authenticated shop import matched against Shinsa&apos;s local avatar cache.</dd>
                 </div>
-                <div className="border-t border-white/8 px-3 py-3">
-                  <div className="font-display text-sm font-black text-white">Multi-character handling</div>
-                  <div className="mt-1 text-xs leading-relaxed text-gray-400">
-                    If an avatar contains more than one figure, mark it as multi-character and rename it using
-                    <span className="mx-1 font-semibold text-white">name1;name2</span>
-                    so the furthest-left figure is always first.
-                  </div>
+                <div>
+                  <dt className="font-display text-[11px] font-black uppercase tracking-[0.14em] text-white">Multi-character</dt>
+                  <dd className="mt-1 text-[11px] leading-snug text-gray-500">Rename as <span className="font-mono text-gray-300">name1;name2</span>. Left-most figure first.</dd>
                 </div>
-                <div className="border-t border-white/8 px-3 py-3">
-                  <div className="font-display text-sm font-black text-white">Custom heroes</div>
-                  <div className="mt-1 text-xs leading-relaxed text-gray-400">
-                    Buu and Dojocat use approved source art. Devit and Pixiu now use curated sticker references instead of the broken generated hero previews.
-                  </div>
+                <div>
+                  <dt className="font-display text-[11px] font-black uppercase tracking-[0.14em] text-white">Custom heroes</dt>
+                  <dd className="mt-1 text-[11px] leading-snug text-gray-500">Buu and Dojocat use approved source art. Devit and Pixiu use curated sticker references.</dd>
                 </div>
-                <div className="border-t border-white/8 px-3 py-3">
-                  <div className="font-display text-sm font-black text-white">Rarity model</div>
-                  <div className="mt-1 text-xs leading-relaxed text-gray-400">
-                    Character rarity comes from weight in this pool. Trait rarity comes from overlap with every enabled wearable and habitat in the other pools.
-                  </div>
+                <div>
+                  <dt className="font-display text-[11px] font-black uppercase tracking-[0.14em] text-white">Rarity model</dt>
+                  <dd className="mt-1 text-[11px] leading-snug text-gray-500">Character rarity = pool weight. Trait rarity = overlap with enabled wearables and habitats.</dd>
                 </div>
-                <div className="border-t border-white/8 px-3 py-3">
-                  <div className="font-display text-sm font-black text-white">Character groups</div>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {characterGroups.length ? characterGroups.slice(0, 18).map((group) => (
-                      <span
-                        key={group.name}
-                        className="inline-flex items-center gap-2 rounded-full border border-cyan-400/15 bg-cyan-400/10 px-2.5 py-1 text-[11px] font-semibold text-cyan-100"
-                        title={group.characters.join(', ')}
-                      >
-                        {group.name}
-                        <span className="rounded-full bg-black/25 px-1.5 py-0.5 text-[10px] text-cyan-100/80">{group.count}</span>
-                      </span>
-                    )) : (
-                      <span className="text-xs text-gray-500">No character groups defined yet.</span>
-                    )}
-                  </div>
+              </dl>
+              <div className="mt-5 border-t border-white/[0.06] pt-4">
+                <div className="font-mono text-[9px] font-bold uppercase tracking-[0.22em] text-gray-500">Character Groups</div>
+                <div className="mt-2.5 flex flex-wrap gap-1.5">
+                  {characterGroups.length ? characterGroups.slice(0, 18).map((group) => (
+                    <span
+                      key={group.name}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-cyan-400/15 bg-cyan-400/[0.06] px-2 py-0.5 text-[10px] font-semibold text-cyan-200"
+                      title={group.characters.join(', ')}
+                    >
+                      {group.name}
+                      <span className="font-mono text-cyan-300/60">×{group.count}</span>
+                    </span>
+                  )) : (
+                    <span className="text-[11px] text-gray-600">None defined yet.</span>
+                  )}
                 </div>
               </div>
             </div>
           }
         >
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex flex-wrap gap-2">
-              {['all', 'PIUGAME Avatar Shop', 'Custom Hero', 'removed'].map((filter) => (
-                <button
-                  key={filter}
-                  type="button"
-                  onClick={() => setBaseFilter(filter)}
-                  className={`rounded-full border px-3 py-1.5 text-xs font-bold transition ${
-                    baseFilter === filter
-                      ? 'border-piu-accent/40 bg-piu-accent/15 text-piu-accent'
-                      : 'border-white/10 bg-white/[0.03] text-gray-300 hover:border-white/20'
-                  }`}
-                >
-                  {filter === 'all' ? 'All Sources' : filter === 'removed' ? 'Removed' : filter}
-                </button>
-              ))}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap gap-1.5">
+              {[
+                { key: 'all', label: 'All' },
+                { key: 'PIUGAME Avatar Shop', label: 'PIUGAME' },
+                { key: 'Custom Hero', label: 'Custom' },
+                { key: 'removed', label: 'Removed' },
+              ].map(({ key, label }) => {
+                const active = baseFilter === key;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setBaseFilter(key)}
+                    className={`h-8 rounded-md border px-3 font-mono text-[10px] font-bold uppercase tracking-[0.16em] transition ${
+                      active
+                        ? 'border-cyan-300/40 bg-cyan-300/[0.08] text-cyan-200'
+                        : 'border-white/[0.08] bg-transparent text-gray-500 hover:border-white/20 hover:text-gray-300'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
             </div>
-            <div className="flex items-center gap-2 rounded-2xl border border-white/8 bg-black/20 px-3 py-2">
-              <span className="text-xs text-gray-500">Search</span>
+            <div className="flex h-8 items-center gap-2 rounded-md border border-white/[0.08] bg-black/20 px-3 sm:w-64">
+              <span className="font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-gray-600">Search</span>
               <input
                 type="text"
                 value={baseQuery}
                 onChange={(event) => setBaseQuery(event.target.value)}
                 placeholder="Name or source note"
-                className="min-w-0 bg-transparent text-sm text-white outline-none placeholder:text-gray-600"
+                className="min-w-0 flex-1 bg-transparent text-[12px] text-white outline-none placeholder:text-gray-600"
               />
             </div>
           </div>
@@ -829,7 +826,7 @@ export default function PiumonPage() {
               <option key={groupName} value={groupName} />
             ))}
           </datalist>
-          <div className="mt-4 grid max-h-[38rem] gap-3 overflow-y-auto pr-1 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="mt-5 grid max-h-[42rem] gap-3 overflow-y-auto pr-1 sm:grid-cols-2 xl:grid-cols-3">
             {filteredCharacters.map((character) => (
               <CharacterCard
                 key={character.id}
@@ -847,24 +844,23 @@ export default function PiumonPage() {
         </SectionShell>
 
         <SectionShell
+          index="03"
           eyebrow="Trait Pools"
           title="Reusable accessories and clothes"
           aside={
             <div>
-              <div className="text-[10px] uppercase tracking-[0.28em] text-gray-500">Layer Order</div>
-              <div className="mt-2.5 overflow-hidden rounded-[20px] border border-white/8 bg-white/[0.03]">
+              <div className="font-mono text-[9px] font-bold uppercase tracking-[0.22em] text-gray-500">Layer Order</div>
+              <ol className="mt-3 divide-y divide-white/[0.05] border-y border-white/[0.05]">
                 {['Base body', 'Clothes', 'Neckwear', 'Eyewear', 'Headwear'].map((label, index) => (
-                  <div key={label} className="flex items-center gap-3 border-b border-white/8 px-3 py-2 last:border-b-0">
-                    <div className="flex h-7 w-7 items-center justify-center rounded-full border border-piu-accent/20 bg-piu-accent/10 text-xs font-black text-piu-accent">
-                      {index + 1}
-                    </div>
-                    <span className="text-sm text-white">{label}</span>
-                  </div>
+                  <li key={label} className="flex items-center justify-between py-2">
+                    <span className="text-[12px] text-white">{label}</span>
+                    <span className="font-mono text-[10px] font-bold tracking-[0.1em] text-cyan-300/60">{String(index + 1).padStart(2, '0')}</span>
+                  </li>
                 ))}
-              </div>
-              <div className="mt-3 text-xs leading-relaxed text-gray-400">
-                If a PixelLab generation breaks this layer order, the collectible stops being composable. This page is meant to catch that before any final mint batch is generated.
-              </div>
+              </ol>
+              <p className="mt-3 text-[11px] leading-snug text-gray-500">
+                Break this stack and the collectible stops being composable. Catch it before the final mint batch generates.
+              </p>
             </div>
           }
         >
@@ -882,22 +878,23 @@ export default function PiumonPage() {
         </SectionShell>
 
         <SectionShell
+          index="04"
           eyebrow="Habitats"
           title="Elemental background distributions"
           aside={
             <div>
-              <div className="text-[10px] uppercase tracking-[0.28em] text-gray-500">Habitat Logic</div>
-              <div className="mt-2.5 text-sm leading-relaxed text-gray-300">
-                Habitats are a full rarity axis, not a background afterthought. They should reuse one consistent composition grid so boats, rocks, clouds, crystals, or firelight can vary while the character pose stays untouched.
-              </div>
-              <div className="mt-3 rounded-[20px] border border-white/8 bg-white/[0.03] px-3 py-2.5">
-                <div className="text-[11px] font-black uppercase tracking-[0.18em] text-gray-400">Active habitat weight</div>
-                <div className="mt-1.5 font-display text-3xl font-black text-white">{totalHabitatWeight}</div>
+              <div className="font-mono text-[9px] font-bold uppercase tracking-[0.22em] text-gray-500">Habitat Logic</div>
+              <p className="mt-3 text-[12px] leading-relaxed text-gray-400">
+                Habitats are a rarity axis, not a background. Reuse one composition grid so boats, rocks, crystals, or firelight can vary while the pose stays untouched.
+              </p>
+              <div className="mt-4 border-t border-white/[0.06] pt-3">
+                <div className="font-mono text-[9px] font-bold uppercase tracking-[0.22em] text-gray-500">Active habitat weight</div>
+                <div className="mt-1.5 font-display text-[2rem] font-black leading-none tabular-nums text-white">{totalHabitatWeight}</div>
               </div>
             </div>
           }
         >
-          <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {habitats.map((habitat) => (
               <HabitatCard
                 key={habitat.id}
@@ -910,68 +907,78 @@ export default function PiumonPage() {
         </SectionShell>
 
         <SectionShell
+          index="05"
           eyebrow="Distribution Readout"
           title="What the current weights imply"
           aside={
             <div>
-              <div className="text-[10px] uppercase tracking-[0.28em] text-gray-500">Why this matters</div>
-              <div className="mt-3 text-sm leading-relaxed text-gray-300">
-                Cards will mint out progressively until all {mintSize} are claimed, so this prep page should make it hard to accidentally overproduce a trait or underrepresent a base character before the live claim window opens.
-              </div>
+              <div className="font-mono text-[9px] font-bold uppercase tracking-[0.22em] text-gray-500">Why this matters</div>
+              <p className="mt-3 text-[12px] leading-relaxed text-gray-400">
+                Cards mint progressively until all {mintSize} are claimed. This page should make it hard to accidentally overproduce a trait or underrepresent a base before the claim window opens.
+              </p>
             </div>
           }
         >
-          <div className="grid gap-3 xl:grid-cols-[1.1fr_0.9fr]">
-            <div className="rounded-[24px] border border-white/8 bg-black/20 p-3.5">
-              <div className="flex items-center justify-between gap-3">
+          <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+            <div>
+              <div className="flex items-end justify-between gap-3">
                 <div>
-                  <div className="text-[10px] uppercase tracking-[0.22em] text-gray-500">Top projected identities</div>
-                  <div className="mt-1 font-display text-lg font-black text-white">Estimated share of the 1k mint</div>
+                  <div className="font-mono text-[9px] font-bold uppercase tracking-[0.22em] text-gray-500">Top Projected Identities</div>
+                  <div className="mt-1 font-display text-[15px] font-black tracking-tight text-white">Share of the {mintSize} mint</div>
                 </div>
-                <input
-                  type="number"
-                  min="100"
-                  max="10000"
-                  step="100"
-                  value={mintSize}
-                  onChange={(event) => setMintSize(Math.max(100, Math.min(10000, clampWeight(event.target.value))))}
-                  className="w-24 rounded-xl border border-white/10 bg-black/30 px-2 py-1 text-right text-sm text-white outline-none focus:border-piu-accent"
-                />
+                <label className="flex items-center gap-2">
+                  <span className="font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-gray-500">Mint</span>
+                  <input
+                    type="number"
+                    min="100"
+                    max="10000"
+                    step="100"
+                    value={mintSize}
+                    onChange={(event) => setMintSize(Math.max(100, Math.min(10000, clampWeight(event.target.value))))}
+                    className="h-8 w-24 rounded-md border border-white/[0.08] bg-black/30 px-2 text-right font-mono text-[12px] tabular-nums text-white outline-none focus:border-cyan-400/60"
+                  />
+                </label>
               </div>
-              <div className="mt-3 space-y-2">
-                {projectedTopBases.map((item) => (
-                  <div key={item.id} className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2">
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-semibold text-white">{item.name}</div>
-                      <div className="text-[11px] text-gray-500">{item.source}</div>
+              <div className="mt-4 divide-y divide-white/[0.05] border-y border-white/[0.05]">
+                {projectedTopBases.map((item) => {
+                  const share = Math.round((item.weight / totalBaseWeight) * 100);
+                  return (
+                    <div key={item.id} className="grid grid-cols-[minmax(0,1fr)_auto_3rem] items-center gap-4 py-2.5">
+                      <div className="min-w-0">
+                        <div className="truncate text-[13px] font-semibold text-white">{item.name}</div>
+                        <div className="font-mono text-[9px] uppercase tracking-[0.14em] text-gray-600">{item.source === 'PIUGAME Avatar Shop' ? 'PIUGAME' : 'Custom Hero'}</div>
+                      </div>
+                      <div className="font-display text-[15px] font-black tabular-nums text-cyan-300">{formatEstimate(item.estimate)}</div>
+                      <div className="text-right font-mono text-[11px] tabular-nums text-gray-500">{share}%</div>
                     </div>
-                    <div className="text-sm font-bold text-cyan-100">{formatEstimate(item.estimate)}</div>
-                    <div className="text-[11px] text-gray-500">{Math.round((item.weight / totalBaseWeight) * 100)}%</div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
-            <div className="grid gap-3">
-              <div className="rounded-[24px] border border-white/8 bg-black/20 p-3.5">
-                <div className="text-[10px] uppercase tracking-[0.22em] text-gray-500">Trait readiness</div>
-                <div className="mt-2.5 space-y-2">
+            <div className="space-y-5">
+              <div>
+                <div className="font-mono text-[9px] font-bold uppercase tracking-[0.22em] text-gray-500">Trait Readiness</div>
+                <div className="mt-3 divide-y divide-white/[0.05] border-y border-white/[0.05]">
                   {activeTraitCounts.map((group) => (
-                    <div key={group.key} className="rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2">
-                      <div className="flex items-center justify-between text-sm text-white">
-                        <span>{TRAIT_GROUPS.find((item) => item.key === group.key)?.title}</span>
-                        <span className="font-bold">{group.active} live</span>
+                    <div key={group.key} className="flex items-baseline justify-between gap-3 py-2.5">
+                      <div className="min-w-0">
+                        <div className="text-[13px] font-semibold text-white">{TRAIT_GROUPS.find((item) => item.key === group.key)?.title}</div>
+                        <div className="font-mono text-[10px] text-gray-600">{group.totalWeight} total weight</div>
                       </div>
-                      <div className="mt-1 text-[11px] text-gray-500">{group.totalWeight} total weight</div>
+                      <div className="shrink-0 text-right">
+                        <span className="font-display text-[15px] font-black tabular-nums text-cyan-300">{group.active}</span>
+                        <span className="ml-1 font-mono text-[9px] uppercase tracking-[0.14em] text-gray-500">live</span>
+                      </div>
                     </div>
                   ))}
                 </div>
               </div>
-              <div className="rounded-[24px] border border-white/8 bg-black/20 p-3.5">
-                <div className="text-[10px] uppercase tracking-[0.22em] text-gray-500">Next step</div>
-                <div className="mt-2 text-sm leading-relaxed text-gray-300">
-                  Once the identity names are fully imported from the logged-in PIUGAME shop, this page can drive the first PixelLab batch: generate standardized base bodies, then split out swappable wearables and elemental habitat backgrounds from the approved layer system.
-                </div>
+              <div className="border-l-2 border-cyan-300/40 pl-4">
+                <div className="font-mono text-[9px] font-bold uppercase tracking-[0.22em] text-cyan-300/80">Next Step</div>
+                <p className="mt-2 text-[12px] leading-relaxed text-gray-400">
+                  Once identities are fully imported from the logged-in PIUGAME shop, this page drives the first PixelLab batch: generate standardized base bodies, then split swappable wearables and habitats from the approved layer system.
+                </p>
               </div>
             </div>
           </div>
