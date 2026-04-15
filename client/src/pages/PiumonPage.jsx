@@ -9,12 +9,13 @@ const CUSTOM_HEROES = [
   {
     id: 'hero-dojocat',
     name: 'Dojocat',
-    preview: '/pet-world/heroes/dojocat/base.png',
+    preview: '/piumon/dojocat-reference.jpeg',
     source: 'Custom Hero',
-    sourceNote: 'Approved Shinsa hero reference',
+    sourceNote: 'Approved Shinsa hero reference · exact source preview',
     generationStatus: 'Ready',
     weight: 12,
     lockedName: true,
+    characterGroups: ['Dojocat'],
   },
   {
     id: 'hero-buu',
@@ -25,26 +26,29 @@ const CUSTOM_HEROES = [
     generationStatus: 'Ready',
     weight: 12,
     lockedName: true,
+    characterGroups: ['Buu'],
   },
   {
     id: 'hero-devit',
     name: 'Devit',
-    preview: '/pet-world/heroes/devit/base.png',
+    preview: '/emojis/devit/idle.png',
     source: 'Custom Hero',
-    sourceNote: 'Sticker / emoji source',
-    generationStatus: 'Ready',
+    sourceNote: 'Sticker / emoji source · curated clean reference',
+    generationStatus: 'Curated',
     weight: 10,
     lockedName: true,
+    characterGroups: ['Devit'],
   },
   {
     id: 'hero-pixiu',
     name: 'Pixiu',
-    preview: '/pet-world/heroes/pixiu/base.png',
+    preview: '/emojis/dojocat_pixiu/dojocat-pixiu-traditional-10.png',
     source: 'Custom Hero',
-    sourceNote: 'Sticker / emoji source',
-    generationStatus: 'Ready',
+    sourceNote: 'Sticker / emoji source · curated clean reference',
+    generationStatus: 'Curated',
     weight: 10,
     lockedName: true,
+    characterGroups: ['Pixiu'],
   },
 ];
 
@@ -180,6 +184,7 @@ function createShopSeeds() {
     sourcePrice: item.price,
     multiCharacter: false,
     removed: false,
+    characterGroups: [],
   }));
 }
 
@@ -203,6 +208,23 @@ function formatComboCount(value) {
   if (value > 999999) return `${(value / 1000000).toFixed(1)}M`;
   if (value > 9999) return `${(value / 1000).toFixed(1)}k`;
   return new Intl.NumberFormat('en-GB').format(Math.round(value));
+}
+
+function normalizeGroupName(value) {
+  return String(value || '').trim().replace(/\s+/g, ' ');
+}
+
+function getDerivedCharacterGroups(character) {
+  const manualGroups = Array.isArray(character.characterGroups)
+    ? character.characterGroups.map(normalizeGroupName).filter(Boolean)
+    : [];
+  const splitNames = character.multiCharacter
+    ? String(character.name || '')
+      .split(';')
+      .map(normalizeGroupName)
+      .filter(Boolean)
+    : [];
+  return [...new Set([...manualGroups, ...splitNames])];
 }
 
 function SectionShell({ eyebrow, title, children, aside }) {
@@ -230,6 +252,191 @@ function WeightPill({ children, tone = 'cyan' }) {
     <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-semibold ${toneClasses[tone] || toneClasses.slate}`}>
       {children}
     </span>
+  );
+}
+
+function CharacterCard({
+  character,
+  mintSize,
+  totalBaseWeight,
+  onUpdate,
+  groupDraft,
+  onGroupDraftChange,
+  onAddGroup,
+  onRemoveGroup,
+}) {
+  const estimate = totalBaseWeight > 0 && character.active !== false && character.weight > 0
+    ? (character.weight / totalBaseWeight) * mintSize
+    : 0;
+  const characterGroups = getDerivedCharacterGroups(character);
+
+  return (
+    <article
+      className={`rounded-[26px] border px-4 py-4 transition-colors ${
+        character.removed
+          ? 'border-rose-300/20 bg-rose-300/[0.05]'
+          : 'border-white/8 bg-white/[0.035]'
+      }`}
+    >
+      <div className="flex items-start gap-4">
+        <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-[20px] border border-white/10 bg-[#0c0a16] p-2">
+          <img src={character.preview} alt={character.name} className="h-full w-full object-contain" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-[10px] uppercase tracking-[0.26em] text-gray-500">{character.source}</div>
+              <input
+                type="text"
+                value={character.name}
+                disabled={character.lockedName}
+                onChange={(event) => onUpdate(character.id, { name: event.target.value })}
+                className={`mt-2 w-full border-b border-white/10 bg-transparent pb-1 font-display text-[1.75rem] font-black leading-none text-white outline-none ${
+                  character.lockedName ? 'cursor-default opacity-95' : 'focus:border-piu-accent'
+                }`}
+              />
+              {character.officialName && character.name !== character.officialName ? (
+                <div className="mt-2 text-[11px] text-gray-500">
+                  Official source name: <span className="text-gray-300">{character.officialName}</span>
+                </div>
+              ) : null}
+            </div>
+            <label className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-xs text-gray-200">
+              <input
+                type="checkbox"
+                checked={character.active !== false}
+                onChange={(event) => onUpdate(character.id, { active: event.target.checked })}
+                className="h-4 w-4 rounded border-white/20 bg-black/20 text-piu-accent focus:ring-piu-accent"
+              />
+              Live
+            </label>
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            <WeightPill tone={character.generationStatus === 'Ready' ? 'emerald' : 'amber'}>
+              {character.generationStatus}
+            </WeightPill>
+            <WeightPill tone="slate">{formatEstimate(estimate)} est.</WeightPill>
+            {character.source === 'PIUGAME Avatar Shop' ? (
+              <WeightPill tone={character.ownedInShop ? 'emerald' : 'amber'}>
+                {character.ownedInShop ? 'Owned in source shop' : `${character.sourcePrice || '?'} PP`}
+              </WeightPill>
+            ) : null}
+            {character.multiCharacter ? <WeightPill tone="pink">Multi-character</WeightPill> : null}
+            {character.removed ? <WeightPill tone="amber">Removed from prep</WeightPill> : null}
+          </div>
+
+          <p className="mt-3 max-w-[32ch] text-sm leading-relaxed text-gray-300">{character.sourceNote}</p>
+        </div>
+      </div>
+
+      <div className="mt-4 border-t border-white/8 pt-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="text-[10px] font-black uppercase tracking-[0.24em] text-gray-500">Character Groups</div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {characterGroups.length ? characterGroups.map((groupName) => {
+                const removable = !(character.multiCharacter && String(character.name || '').split(';').map(normalizeGroupName).includes(groupName));
+                return (
+                  <span
+                    key={groupName}
+                    className="inline-flex items-center gap-2 rounded-full border border-cyan-400/15 bg-cyan-400/10 px-2.5 py-1 text-xs font-semibold text-cyan-100"
+                  >
+                    {groupName}
+                    {removable ? (
+                      <button
+                        type="button"
+                        onClick={() => onRemoveGroup(character.id, groupName)}
+                        className="text-cyan-100/70 transition hover:text-cyan-100"
+                        aria-label={`Remove ${groupName} from character group`}
+                      >
+                        ×
+                      </button>
+                    ) : null}
+                  </span>
+                );
+              }) : (
+                <span className="text-xs text-gray-500">No group links yet.</span>
+              )}
+            </div>
+          </div>
+
+          <div className="flex min-w-[16rem] flex-1 flex-wrap justify-end gap-2">
+            <input
+              type="text"
+              value={groupDraft}
+              onChange={(event) => onGroupDraftChange(character.id, event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  onAddGroup(character.id);
+                }
+              }}
+              list="piumon-character-groups"
+              placeholder="Add to character group"
+              className="min-w-[12rem] flex-1 rounded-2xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white outline-none placeholder:text-gray-600 focus:border-piu-accent"
+            />
+            <button
+              type="button"
+              onClick={() => onAddGroup(character.id)}
+              className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-bold text-white transition hover:border-piu-accent/35 hover:bg-piu-accent/10"
+            >
+              Add To Character Group
+            </button>
+          </div>
+        </div>
+
+        {character.source === 'PIUGAME Avatar Shop' ? (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <label className="inline-flex max-w-[32rem] items-start gap-2 text-xs text-gray-300">
+              <input
+                type="checkbox"
+                checked={character.multiCharacter === true}
+                onChange={(event) => onUpdate(character.id, { multiCharacter: event.target.checked })}
+                className="mt-0.5 h-4 w-4 rounded border-white/20 bg-black/20 text-piu-accent focus:ring-piu-accent"
+              />
+              <span>
+                <span className="block font-semibold text-white">Contains more than one character</span>
+                <span className="mt-1 block text-gray-500">
+                  Use <span className="font-semibold text-gray-300">name1;name2</span> so the furthest-left figure is first. Those names auto-link into matching character groups.
+                </span>
+              </span>
+            </label>
+
+            <button
+              type="button"
+              onClick={() => onUpdate(character.id, { removed: !character.removed, active: character.removed ? character.active : false })}
+              className={`rounded-2xl border px-3 py-2 text-xs font-bold transition ${
+                character.removed
+                  ? 'border-emerald-300/20 bg-emerald-300/10 text-emerald-100 hover:bg-emerald-300/15'
+                  : 'border-rose-300/20 bg-rose-300/10 text-rose-100 hover:bg-rose-300/15'
+              }`}
+            >
+              {character.removed ? 'Restore To Prep' : 'Remove From Prep'}
+            </button>
+          </div>
+        ) : null}
+
+        {character.source === 'PIUGAME Avatar Shop' && character.multiCharacter ? (
+          <div className="mt-4 text-xs leading-relaxed text-pink-100/90">
+            Ordered multi-character example:
+            <span className="ml-1 font-semibold text-white">NameLeft;NameRight</span>
+          </div>
+        ) : null}
+
+        <div className="mt-4 flex items-center justify-between border-t border-white/8 pt-4">
+          <span className="text-xs text-gray-400">Distribution weight</span>
+          <input
+            type="number"
+            min="0"
+            max="999"
+            value={character.weight}
+            onChange={(event) => onUpdate(character.id, { weight: clampWeight(event.target.value) })}
+            className="w-20 rounded-xl border border-white/10 bg-black/30 px-2 py-1 text-right text-sm text-white outline-none focus:border-piu-accent"
+          />
+        </div>
+      </div>
+    </article>
   );
 }
 
@@ -321,6 +528,7 @@ export default function PiumonPage() {
   const [baseQuery, setBaseQuery] = useState('');
   const [baseFilter, setBaseFilter] = useState('all');
   const [baseCharacters, setBaseCharacters] = useState(() => [...CUSTOM_HEROES, ...createShopSeeds()].map((item) => ({ ...item, active: true })));
+  const [groupDrafts, setGroupDrafts] = useState({});
   const [traits, setTraits] = useState(() => Object.fromEntries(
     TRAIT_GROUPS.map((group) => [group.key, group.items.map((item) => ({ ...item, active: true }))])
   ));
@@ -355,6 +563,22 @@ export default function PiumonPage() {
   }, [traits]);
   const activeHabitats = useMemo(() => habitats.filter((item) => item.active !== false && item.weight > 0), [habitats]);
   const totalHabitatWeight = useMemo(() => sumActiveWeight(habitats), [habitats]);
+  const characterGroups = useMemo(() => {
+    const groupMap = new Map();
+    baseCharacters.forEach((character) => {
+      if (character.removed) return;
+      getDerivedCharacterGroups(character).forEach((groupName) => {
+        const next = groupMap.get(groupName) || { count: 0, characters: [] };
+        next.count += 1;
+        next.characters.push(character.name);
+        groupMap.set(groupName, next);
+      });
+    });
+    return [...groupMap.entries()]
+      .map(([name, value]) => ({ name, ...value }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  }, [baseCharacters]);
+  const groupSuggestions = useMemo(() => characterGroups.map((group) => group.name), [characterGroups]);
   const theoreticalCombos = useMemo(() => {
     const traitProduct = activeTraitCounts.reduce((product, group) => product * Math.max(1, group.active), 1);
     return activeBases.length * Math.max(1, activeHabitats.length) * traitProduct;
@@ -375,6 +599,28 @@ export default function PiumonPage() {
 
   function updateBaseCharacter(id, updates) {
     setBaseCharacters((current) => current.map((item) => (item.id === id ? { ...item, ...updates } : item)));
+  }
+
+  function updateGroupDraft(id, value) {
+    setGroupDrafts((current) => ({ ...current, [id]: value }));
+  }
+
+  function addCharacterGroup(id) {
+    const nextGroup = normalizeGroupName(groupDrafts[id]);
+    if (!nextGroup) return;
+    const target = baseCharacters.find((item) => item.id === id);
+    const nextGroups = [...new Set([...(target?.characterGroups || []), nextGroup])];
+    updateBaseCharacter(id, { characterGroups: nextGroups });
+    updateGroupDraft(id, '');
+  }
+
+  function removeCharacterGroup(id, groupName) {
+    const target = baseCharacters.find((item) => item.id === id);
+    if (!target) return;
+    updateBaseCharacter(
+      id,
+      { characterGroups: (target.characterGroups || []).filter((item) => item !== groupName) }
+    );
   }
 
   function updateTrait(groupKey, id, updates) {
@@ -521,13 +767,30 @@ export default function PiumonPage() {
                 <div className="rounded-[20px] border border-white/8 bg-white/[0.03] p-3">
                   <div className="font-display text-sm font-black text-white">Custom heroes</div>
                   <div className="mt-1 text-xs leading-relaxed text-gray-400">
-                    Buu, Dojocat, Devit, and Pixiu are already seeded as locked identity sources so they share the same collectible system as the PIUGAME cast.
+                    Buu and Dojocat use approved source art. Devit and Pixiu now use curated sticker references instead of the broken generated hero previews.
                   </div>
                 </div>
                 <div className="rounded-[20px] border border-white/8 bg-white/[0.03] p-3">
                   <div className="font-display text-sm font-black text-white">Rarity model</div>
                   <div className="mt-1 text-xs leading-relaxed text-gray-400">
                     Character rarity comes from weight in this pool. Trait rarity comes from overlap with every enabled wearable and habitat in the other pools.
+                  </div>
+                </div>
+                <div className="rounded-[20px] border border-white/8 bg-white/[0.03] p-3">
+                  <div className="font-display text-sm font-black text-white">Character groups</div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {characterGroups.length ? characterGroups.slice(0, 18).map((group) => (
+                      <span
+                        key={group.name}
+                        className="inline-flex items-center gap-2 rounded-full border border-cyan-400/15 bg-cyan-400/10 px-2.5 py-1 text-[11px] font-semibold text-cyan-100"
+                        title={group.characters.join(', ')}
+                      >
+                        {group.name}
+                        <span className="rounded-full bg-black/25 px-1.5 py-0.5 text-[10px] text-cyan-100/80">{group.count}</span>
+                      </span>
+                    )) : (
+                      <span className="text-xs text-gray-500">No character groups defined yet.</span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -562,119 +825,25 @@ export default function PiumonPage() {
               />
             </div>
           </div>
+          <datalist id="piumon-character-groups">
+            {groupSuggestions.map((groupName) => (
+              <option key={groupName} value={groupName} />
+            ))}
+          </datalist>
           <div className="mt-4 grid max-h-[38rem] gap-3 overflow-y-auto pr-1 sm:grid-cols-2 xl:grid-cols-3">
-            {filteredCharacters.map((character) => {
-              const estimate = totalBaseWeight > 0 && character.active !== false && character.weight > 0
-                ? (character.weight / totalBaseWeight) * mintSize
-                : 0;
-              return (
-                <div
-                  key={character.id}
-                  className={`rounded-[24px] border p-4 ${
-                    character.removed
-                      ? 'border-rose-300/20 bg-rose-300/[0.05]'
-                      : 'border-white/8 bg-black/20'
-                  }`}
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-[18px] border border-white/8 bg-[#0d0b17] p-2">
-                      <img src={character.preview} alt={character.name} className="h-full w-full object-contain" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <div className="text-[10px] uppercase tracking-[0.24em] text-gray-500">{character.source}</div>
-                          <input
-                            type="text"
-                            value={character.name}
-                            disabled={character.lockedName}
-                            onChange={(event) => updateBaseCharacter(character.id, { name: event.target.value })}
-                            className={`mt-2 w-full border-b border-white/10 bg-transparent pb-1 font-display text-lg font-black text-white outline-none ${
-                              character.lockedName ? 'cursor-default opacity-90' : 'focus:border-piu-accent'
-                            }`}
-                          />
-                          {character.officialName && character.name !== character.officialName ? (
-                            <div className="mt-1 text-[11px] text-gray-500">
-                              Official source name: <span className="text-gray-300">{character.officialName}</span>
-                            </div>
-                          ) : null}
-                        </div>
-                        <label className="inline-flex items-center gap-2 text-xs text-gray-300">
-                          <input
-                            type="checkbox"
-                            checked={character.active !== false}
-                            onChange={(event) => updateBaseCharacter(character.id, { active: event.target.checked })}
-                            className="h-4 w-4 rounded border-white/20 bg-black/20 text-piu-accent focus:ring-piu-accent"
-                          />
-                          Live
-                        </label>
-                      </div>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        <WeightPill tone={character.generationStatus === 'Ready' ? 'emerald' : 'pink'}>{character.generationStatus}</WeightPill>
-                        <WeightPill tone="slate">{formatEstimate(estimate)} est.</WeightPill>
-                        {character.source === 'PIUGAME Avatar Shop' ? (
-                          <WeightPill tone={character.ownedInShop ? 'emerald' : 'amber'}>
-                            {character.ownedInShop ? 'Owned in source shop' : `${character.sourcePrice || '?'} PP`}
-                          </WeightPill>
-                        ) : null}
-                        {character.multiCharacter ? <WeightPill tone="pink">Multi-character</WeightPill> : null}
-                        {character.removed ? <WeightPill tone="amber">Removed from prep</WeightPill> : null}
-                      </div>
-                      <div className="mt-3 text-xs leading-relaxed text-gray-400">{character.sourceNote}</div>
-                    </div>
-                  </div>
-                  {character.source === 'PIUGAME Avatar Shop' ? (
-                    <div className="mt-4 grid gap-3 rounded-[20px] border border-white/8 bg-white/[0.03] px-3 py-3 sm:grid-cols-[1fr_auto] sm:items-center">
-                      <label className="inline-flex items-start gap-2 text-xs text-gray-300">
-                        <input
-                          type="checkbox"
-                          checked={character.multiCharacter === true}
-                          onChange={(event) => updateBaseCharacter(character.id, { multiCharacter: event.target.checked })}
-                          className="mt-0.5 h-4 w-4 rounded border-white/20 bg-black/20 text-piu-accent focus:ring-piu-accent"
-                        />
-                        <span>
-                          <span className="block font-semibold text-white">Contains more than one character</span>
-                          <span className="mt-1 block text-gray-500">
-                            Use <span className="font-semibold text-gray-300">name1;name2</span> so the furthest-left figure is first.
-                          </span>
-                        </span>
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => updateBaseCharacter(character.id, { removed: !character.removed, active: character.removed ? character.active : false })}
-                        className={`rounded-2xl border px-3 py-2 text-xs font-bold transition ${
-                          character.removed
-                            ? 'border-emerald-300/20 bg-emerald-300/10 text-emerald-100 hover:bg-emerald-300/15'
-                            : 'border-rose-300/20 bg-rose-300/10 text-rose-100 hover:bg-rose-300/15'
-                        }`}
-                      >
-                        {character.removed ? 'Restore To Prep' : 'Remove From Prep'}
-                      </button>
-                    </div>
-                  ) : null}
-                  {character.source !== 'PIUGAME Avatar Shop' && !character.lockedName ? (
-                    <div className="mt-4 text-[11px] text-gray-500">Custom source names can still be refined later if needed.</div>
-                  ) : null}
-                  {character.source === 'PIUGAME Avatar Shop' && character.multiCharacter ? (
-                    <div className="mt-3 rounded-2xl border border-pink-300/15 bg-pink-300/[0.07] px-3 py-2 text-[11px] leading-relaxed text-pink-100/90">
-                      Multi-character names should stay ordered left-to-right. Example:
-                      <span className="mx-1 font-semibold text-white">NameLeft;NameRight</span>
-                    </div>
-                  ) : null}
-                  <div className="mt-4 flex items-center justify-between rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2">
-                    <span className="text-xs text-gray-400">Distribution weight</span>
-                    <input
-                      type="number"
-                      min="0"
-                      max="999"
-                      value={character.weight}
-                      onChange={(event) => updateBaseCharacter(character.id, { weight: clampWeight(event.target.value) })}
-                      className="w-20 rounded-xl border border-white/10 bg-black/30 px-2 py-1 text-right text-sm text-white outline-none focus:border-piu-accent"
-                    />
-                  </div>
-                </div>
-              );
-            })}
+            {filteredCharacters.map((character) => (
+              <CharacterCard
+                key={character.id}
+                character={character}
+                mintSize={mintSize}
+                totalBaseWeight={totalBaseWeight}
+                onUpdate={updateBaseCharacter}
+                groupDraft={groupDrafts[character.id] || ''}
+                onGroupDraftChange={updateGroupDraft}
+                onAddGroup={addCharacterGroup}
+                onRemoveGroup={removeCharacterGroup}
+              />
+            ))}
           </div>
         </SectionShell>
 
