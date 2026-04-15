@@ -135,29 +135,44 @@ describe('productionRate', () => {
     assert.equal(productionRate({ level: 1, workers: 2 }), null);
   });
 
-  it('computes rate = base * level * max(workers, 0.25)', () => {
+  it('computes rate = scaled base * (1 + workers * 0.5) for flat production maps', () => {
     const building = { production: { food: 10 }, level: 2, workers: 3 };
     const result = productionRate(building);
     assert.equal(result.resource, 'food');
-    assert.equal(result.rate, 60); // 10 * 2 * 3
+    assert.equal(result.rate, 37.5); // 10 * 1.5 * (1 + 1.5)
   });
 
-  it('uses 0.25 floor when workers is 0', () => {
+  it('uses base production even when workers is 0', () => {
     const building = { production: { wood: 8 }, level: 1, workers: 0 };
     const result = productionRate(building);
-    assert.equal(result.rate, 2); // 8 * 1 * 0.25
+    assert.equal(result.rate, 8); // 8 * 1.0
   });
 
   it('defaults level to 1 when missing', () => {
     const building = { production: { stone: 4 }, workers: 2 };
     const result = productionRate(building);
-    assert.equal(result.rate, 8); // 4 * 1 * 2
+    assert.equal(result.rate, 8); // 4 * (1 + 1.0)
   });
 
   it('rounds to two decimal places', () => {
-    const building = { production: { gold: 3 }, level: 1, workers: 1 };
+    const building = { production: { gold: 3.333 }, level: 1, workers: 1 };
     const result = productionRate(building);
-    assert.equal(result.rate, 3); // 3 * 1 * 1 = exact
+    assert.equal(result.rate, 5); // 3.333 * 1.5 = 4.9995 -> 5
+  });
+
+  it('supports nested server preview production objects', () => {
+    const building = {
+      production: {
+        production: { food: 2.25 },
+        housing: 0,
+        happiness: 0,
+      },
+      level: 2,
+      workers: 1,
+    };
+    const result = productionRate(building);
+    assert.equal(result.resource, 'food');
+    assert.equal(result.rate, 3.38); // 2.25 * 1.5
   });
 });
 

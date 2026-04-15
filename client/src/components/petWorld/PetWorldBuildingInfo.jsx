@@ -1,8 +1,60 @@
 import React, { useState } from 'react';
 import { getBuildingUi } from './petWorldBuildings';
-import { RESOURCE_ICONS as RES_ICONS, productionRate, formatMaterials, buildTimeRemaining } from './petWorldUtils';
+import {
+  RESOURCE_ICONS as RES_ICONS,
+  productionRate,
+  formatMaterials,
+  buildTimeRemaining,
+  getLevelMultiplier,
+  getScaledProductionBase,
+} from './petWorldUtils';
 import PetWorldSpriteThumbnail from './PetWorldSpriteThumbnail';
 import './petWorldCfUi.css';
+
+function getResourceAmount(world, key) {
+  if (!world) return 0;
+  if (key === 'combo') return Math.floor(world.combo_balance || 0);
+  return Math.floor(world[key] || 0);
+}
+
+function getWorkerBehavior(building) {
+  switch (building?.type) {
+    case 'fishing_hut':
+      return {
+        title: 'Workers & Fishing',
+        body: 'Assigned villagers stop being free workers and spend more time travelling to boat-side fishing spots, casting into the water, then returning to normal village roaming between jobs.',
+      };
+    case 'woodcutters_hut':
+    case 'lumberyard':
+      return {
+        title: 'Workers & Wood',
+        body: 'Assigned villagers become woodcutters. They still roam the village, but they prioritise forest-edge work spots and spend more time chopping at nearby trees and stumps.',
+      };
+    case 'farm':
+      return {
+        title: 'Workers & Farming',
+        body: 'Assigned villagers work this farm instead of staying fully free-roaming. They spend more time tending fields and watering spots, then drift back into village life between tasks.',
+      };
+    case 'stone_pit':
+    case 'quarry':
+      return {
+        title: 'Workers & Stone',
+        body: 'Assigned villagers become quarry workers. They keep living in the world, but they prioritise rocky work spots and spend more time mining stone.',
+      };
+    case 'weaving_hut':
+      return {
+        title: 'Workers & Cloth',
+        body: 'Assigned villagers spend more time at this hut processing cloth materials. They are taken from the pool of free workers while assigned here.',
+      };
+    case 'trading_post':
+      return {
+        title: 'Workers & Trade',
+        body: 'Assigned villagers operate the trading post. They are no longer counted as free workers while staffed here, and this building converts combo energy into gold each cycle.',
+      };
+    default:
+      return null;
+  }
+}
 
 function Btn({ children, onClick, disabled, tone = 'default', className = '' }) {
   const toneClass = {
@@ -64,28 +116,39 @@ export default function PetWorldBuildingInfo({
     || building.description
     || (prod ? `Produces ${RES_ICONS[prod.resource] || prod.resource} over time.` : 'A village structure with its own role in the settlement.');
 
-  const nextLevelProd = prod && building.production
+  const currentBase = getScaledProductionBase(building);
+  const nextLevelProd = prod && buildingDef?.production?.[prod.resource] != null
     ? (() => {
-        const [res, base] = Object.entries(building.production)[0] || [];
-        if (!res) return null;
-        const nextRate = base * (level + 1) * Math.max(building.workers || 0, 0.25);
-        return { resource: res, rate: Math.round(nextRate * 100) / 100 };
+        const base = Number(buildingDef.production[prod.resource]);
+        if (!Number.isFinite(base)) return null;
+        const nextRate = base * getLevelMultiplier(level + 1) * (1 + Math.max(0, Number(building.workers) || 0) * 0.5);
+        return { resource: prod.resource, rate: Math.round(nextRate * 100) / 100 };
       })()
     : null;
 
-  const nextWorkerProd = prod && building.production && building.workers < building.max_workers
+  const nextWorkerProd = prod && currentBase && building.workers < building.max_workers
     ? (() => {
-        const [res, base] = Object.entries(building.production)[0] || [];
-        if (!res) return null;
-        const nextRate = base * level * (building.workers + 1);
-        return { resource: res, rate: Math.round(nextRate * 100) / 100 };
+        const nextRate = currentBase.baseRate * (1 + (Math.max(0, Number(building.workers) || 0) + 1) * 0.5);
+        return { resource: currentBase.resource, rate: Math.round(nextRate * 100) / 100 };
       })()
     : null;
+  const workerBehavior = getWorkerBehavior(building);
+  const availableWorkers = Math.max(0, Number(world?.available_workers) || 0);
 
   const refundCombo = buildingDef ? Math.floor((buildingDef.comboCost || 0) * 0.5) : 0;
   const refundMats = buildingDef?.materials
     ? Object.fromEntries(Object.entries(buildingDef.materials).map(([k, v]) => [k, Math.floor(v * 0.5)]))
     : {};
+  const comboNeed = upgradeCost?.comboCost || 0;
+  const comboHave = getResourceAmount(world, 'combo');
+  const missingUpgrade = [];
+  if (level < maxLevel && upgradeCost) {
+    if (comboHave < comboNeed) missingUpgrade.push(`${comboNeed - comboHave}c`);
+    Object.entries(upgradeCost.materials || {}).forEach(([key, amount]) => {
+      const have = getResourceAmount(world, key);
+      if (have < amount) missingUpgrade.push(`${amount - have} ${RES_ICONS[key] || key}`);
+    });
+  }
 
   function handleDemolish() {
     if (!confirmDemolish) {
@@ -174,6 +237,17 @@ export default function PetWorldBuildingInfo({
           <span style={{ fontWeight: 700 }}>Combo Converter</span> · Converts combos into gold each tick.
         </div>
       )}
+      {!readonly && workerBehavior && building.max_workers > 0 && (
+        <div className="cf-inset-light" style={{ padding: '8px 10px', fontSize: 10, color: '#30546a' }}>
+          <div style={{ fontWeight: 700 }}>{workerBehavior.title}</div>
+          <div className="mt-1">
+            {workerBehavior.body}
+          </div>
+          <div className="mt-1.5" style={{ color: '#506c7a' }}>
+            Free workers: <strong>{availableWorkers}</strong>. Staffing this building removes villagers from that free pool until you unassign them.
+          </div>
+        </div>
+      )}
 
       {prod && !readonly && (nextWorkerProd || (nextLevelProd && level < maxLevel)) && (
         <div className="cf-text-muted flex flex-wrap gap-x-3 gap-y-0.5 text-[10px]">
@@ -188,6 +262,49 @@ export default function PetWorldBuildingInfo({
 
       {!readonly && (
         <div className="cf-inset" style={{ padding: '8px 12px' }}>
+          {upgradeCost && level < maxLevel && (
+            <div className="mb-2 space-y-1.5">
+              <div className="cf-text-label">Upgrade Cost</div>
+              <div className="flex flex-wrap gap-1.5">
+                {comboNeed > 0 && (
+                  <span
+                    className="cf-inset-light inline-flex items-center gap-1.5"
+                    style={{
+                      padding: '4px 7px',
+                      fontSize: 10,
+                      color: comboHave >= comboNeed ? '#2a6a2a' : '#a83030',
+                    }}
+                  >
+                    <strong>{comboNeed}c</strong>
+                    <span style={{ opacity: 0.72 }}>have {comboHave}c</span>
+                  </span>
+                )}
+                {Object.entries(upgradeCost.materials || {}).map(([key, amount]) => {
+                  const have = getResourceAmount(world, key);
+                  const enough = have >= amount;
+                  return (
+                    <span
+                      key={key}
+                      className="cf-inset-light inline-flex items-center gap-1.5"
+                      style={{
+                        padding: '4px 7px',
+                        fontSize: 10,
+                        color: enough ? '#2a6a2a' : '#a83030',
+                      }}
+                    >
+                      <strong>{amount} {RES_ICONS[key] || key}</strong>
+                      <span style={{ opacity: 0.72 }}>have {have}</span>
+                    </span>
+                  );
+                })}
+              </div>
+              {missingUpgrade.length > 0 && (
+                <div className="cf-text-muted text-[10px]" style={{ color: '#a83030' }}>
+                  Missing: {missingUpgrade.join(' · ')}
+                </div>
+              )}
+            </div>
+          )}
           <div className="flex flex-wrap items-center gap-1.5">
           {building.max_workers > 0 && (
               <div className="mr-auto flex items-center gap-1">
@@ -212,7 +329,7 @@ export default function PetWorldBuildingInfo({
               disabled={!canUpgrade}
               tone="good"
             >
-              {level >= maxLevel ? 'Max' : 'Upgrade'}
+              {level >= maxLevel ? 'Max' : comboNeed > 0 ? `Upgrade · ${comboNeed}c` : 'Upgrade'}
             </Btn>
             <Btn
               onClick={handleDemolish}
@@ -231,7 +348,9 @@ export default function PetWorldBuildingInfo({
             <span>Upgrade: {upgradeCost.comboCost || 0}c{upgradeCost.materials ? ` + ${formatMaterials(upgradeCost.materials)}` : ''}</span>
           )}
           {!canUpgrade && level < maxLevel && !isBuilding && (
-            <span style={{ color: '#a83030' }}>Not enough resources</span>
+            <span style={{ color: '#a83030' }}>
+              {missingUpgrade.length > 0 ? `Need ${missingUpgrade.join(' + ')}` : 'Not enough resources'}
+            </span>
           )}
           {isStarter ? (
             <span>Starter · no refund</span>

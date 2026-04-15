@@ -14,6 +14,10 @@ export const RESOURCE_ICONS = {
   gold:  '\uD83E\uDE99',
 };
 
+function roundRate(value) {
+  return Math.round((Number(value) || 0) * 100) / 100;
+}
+
 // --- Timing ring helpers (hunt / encounter mini-game) ---
 
 /**
@@ -47,6 +51,33 @@ export function getTimingBonus(progress) {
   return 0.1;
 }
 
+export function getLevelMultiplier(level = 1) {
+  return 1 + (Math.max(1, Number(level) || 1) - 1) * 0.5;
+}
+
+export function getProductionMap(building) {
+  const preview = building?.production;
+  if (!preview || typeof preview !== 'object') return null;
+  if (preview.production && typeof preview.production === 'object') return preview.production;
+  return preview;
+}
+
+export function getScaledProductionBase(building) {
+  const production = getProductionMap(building);
+  if (!production) return null;
+  const [resource, rawValue] = Object.entries(production)[0] || [];
+  const numericValue = Number(rawValue);
+  if (!resource || !Number.isFinite(numericValue)) return null;
+  const nestedPreview = building?.production && typeof building.production === 'object' && building.production.production;
+  const baseRate = nestedPreview
+    ? numericValue
+    : numericValue * getLevelMultiplier(building?.level || 1);
+  return {
+    resource,
+    baseRate: roundRate(baseRate),
+  };
+}
+
 // --- Building helpers (extracted from PetWorldBuildingInfo) ---
 
 /**
@@ -54,11 +85,14 @@ export function getTimingBonus(progress) {
  * Returns `{ resource, rate }` or `null`.
  */
 export function productionRate(building) {
-  if (!building.production) return null;
-  const [res, base] = Object.entries(building.production)[0] || [];
-  if (!res) return null;
-  const rate = base * (building.level || 1) * Math.max(building.workers || 0, 0.25);
-  return { resource: res, rate: Math.round(rate * 100) / 100 };
+  const scaled = getScaledProductionBase(building);
+  if (!scaled) return null;
+  const workers = Math.max(0, Number(building?.workers) || 0);
+  const rate = scaled.baseRate * (1 + workers * 0.5);
+  return {
+    resource: scaled.resource,
+    rate: roundRate(rate),
+  };
 }
 
 /**

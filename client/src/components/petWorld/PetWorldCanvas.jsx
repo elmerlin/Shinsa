@@ -23,6 +23,7 @@ const MINIMAP_W = 120;
 const MINIMAP_H = 80;
 const MINIMAP_PADDING = 8;
 const LERP_SPEED = 0.15;
+const ENTITY_INTERACTION_MS = 900;
 // Only pro-generated pets: one Dojocat + one Buu per world
 const RESIDENT_STYLES = ['teal', 'berry', 'ochre', 'slate', 'moss', 'plum'];
 const ENCOUNTER_SPECIES = {
@@ -102,6 +103,7 @@ const GROUND_ANIMAL_PROFILES = {
     pauseFacing: 2,
     walkCyclesPerTile: 1.15,
     idleFrameRate: 0.00002,
+    idlePhases: { restStart: 0.72, sleepStart: 0.9, idleFacing: 2 },
     route: { stopCount: 2, minDist: 3, maxDist: 6, pauseBase: 18000, pauseVariance: 6800, speed: 0.48 },
   },
   pig: {
@@ -111,6 +113,7 @@ const GROUND_ANIMAL_PROFILES = {
     pauseFacing: 2,
     walkCyclesPerTile: 0.9,
     idleFrameRate: 0.00001,
+    idlePhases: { restStart: 0.34, sleepStart: 0.62, idleFacing: 2 },
     route: { stopCount: 2, minDist: 1, maxDist: 3, pauseBase: 24000, pauseVariance: 9000, speed: 0.34 },
   },
   sheep: {
@@ -120,6 +123,7 @@ const GROUND_ANIMAL_PROFILES = {
     pauseFacing: 2,
     walkCyclesPerTile: 0.92,
     idleFrameRate: 0.000012,
+    idlePhases: { restStart: 0.42, sleepStart: 0.72, idleFacing: 2 },
     route: { stopCount: 2, minDist: 1, maxDist: 3, pauseBase: 22000, pauseVariance: 8200, speed: 0.34 },
   },
   cow: {
@@ -129,6 +133,7 @@ const GROUND_ANIMAL_PROFILES = {
     pauseFacing: 2,
     walkCyclesPerTile: 0.86,
     idleFrameRate: 0.00001,
+    idlePhases: { restStart: 0.38, sleepStart: 0.68, idleFacing: 2 },
     route: { stopCount: 2, minDist: 1, maxDist: 3, pauseBase: 26000, pauseVariance: 9000, speed: 0.32 },
   },
   chicken: {
@@ -200,6 +205,47 @@ function animalKey(animal) {
 
 function petKey(pet) {
   return `pet:${pet.character}:${pet.seed}`;
+}
+
+function getAnimalIdleProfile(entity) {
+  const phases = entity?.idlePhases || {};
+  return {
+    restStart: phases.restStart ?? 0.5,
+    sleepStart: phases.sleepStart ?? 0.75,
+    idleFacing: phases.idleFacing ?? entity?.pauseFacing ?? entity?.idleFacing ?? 2,
+  };
+}
+
+function drawEntitySelectionMarker(ctx, x, y, tileSize, time, { selected = false, interaction = 0 } = {}) {
+  const emphasis = selected ? 1 : Math.max(0, 1 - interaction);
+  if (emphasis <= 0.02) return;
+  const pulse = 1 + Math.sin((time * 0.012) + interaction * Math.PI * 2) * 0.06;
+  const radiusX = tileSize * (selected ? 0.24 : 0.2) * pulse;
+  const radiusY = tileSize * (selected ? 0.1 : 0.08) * pulse;
+  const fillAlpha = selected ? 0.18 : 0.12 * emphasis;
+  const strokeAlpha = selected ? 0.92 : 0.45 * emphasis;
+  const yBase = y + tileSize * 0.07;
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.ellipse(x, yBase, radiusX, radiusY, 0, 0, Math.PI * 2);
+  ctx.fillStyle = `rgba(155, 255, 173, ${fillAlpha.toFixed(3)})`;
+  ctx.fill();
+  ctx.lineWidth = selected ? 2 : 1.5;
+  ctx.strokeStyle = `rgba(119, 246, 143, ${strokeAlpha.toFixed(3)})`;
+  ctx.stroke();
+
+  if (selected) {
+    ctx.beginPath();
+    ctx.ellipse(x, yBase, radiusX * 1.22, radiusY * 1.22, 0, 0, Math.PI * 2);
+    ctx.setLineDash([4, 4]);
+    ctx.lineDashOffset = -(time * 0.03);
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = 'rgba(255, 248, 192, 0.7)';
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  ctx.restore();
 }
 
 function entityDisplayName(entry) {
@@ -2861,13 +2907,13 @@ function getAnimalWanderPos(entity, time, grid) {
     // For paused animals, cycle through idle states: normal idle, resting, sleeping
     if (!motion.moving) {
       const seed = entity.seed || 0;
+      const idleProfile = getAnimalIdleProfile(entity);
       const idleCycleMs = 45000 + (seed % 7) * 5000; // 45-80s per full idle cycle
       const idlePhase = ((time + seed * 311) % idleCycleMs) / idleCycleMs;
-      // 0–0.5: normal idle, 0.5–0.75: resting (slower anim), 0.75–1.0: sleeping
-      if (idlePhase > 0.75) {
+      if (idlePhase > idleProfile.sleepStart) {
         motion.idleState = 'sleeping';
         motion.frameOffset = 0; // frozen frame for sleeping
-      } else if (idlePhase > 0.5) {
+      } else if (idlePhase > idleProfile.restStart) {
         motion.idleState = 'resting';
         motion.frameOffset = motion.frameOffset * 0.3; // very slow animation
       }
@@ -2875,27 +2921,31 @@ function getAnimalWanderPos(entity, time, grid) {
       const facingCycleMs = 22000 + (seed % 5) * 4000;
       const facingPhase = Math.floor(((time + seed * 197) % facingCycleMs) / (facingCycleMs / 4));
       const facingOptions = [-1, 2, 1, -2]; // W, S, E, N
-      motion.facing = entity.pauseFacing ?? facingOptions[(facingPhase + seed) % 4];
+      const cycledFacing = facingOptions[(facingPhase + seed) % 4];
+      motion.facing = motion.idleState === 'idle'
+        ? (entity.pauseFacing ?? cycledFacing)
+        : idleProfile.idleFacing;
     }
     return motion;
   }
   if (entity.layer !== 'water') {
     const idleFrameRate = entity.idleFrameRate ?? 0.00004;
     const seed = entity.seed || 0;
+    const idleProfile = getAnimalIdleProfile(entity);
     // Vary facing over time instead of always south
     const facingCycleMs = 28000 + (seed % 5) * 5000;
     const facingPhase = Math.floor(((time + seed * 197) % facingCycleMs) / (facingCycleMs / 4));
     const facingOptions = [-1, 2, 1, -2];
-    const facing = entity.idleFacing || facingOptions[(facingPhase + seed) % 4];
+    const cycledFacing = entity.idleFacing || facingOptions[(facingPhase + seed) % 4];
     // Cycle idle states for stationary animals too
     const idleCycleMs = 40000 + (seed % 7) * 6000;
     const idlePhase = ((time + seed * 311) % idleCycleMs) / idleCycleMs;
     let idleState = 'idle';
     let frameOffset = idleFrameRate > 0 ? (time * idleFrameRate + seed * 0.1) % 1 : 0;
-    if (idlePhase > 0.7) {
+    if (idlePhase > idleProfile.sleepStart) {
       idleState = 'sleeping';
       frameOffset = 0;
-    } else if (idlePhase > 0.5) {
+    } else if (idlePhase > idleProfile.restStart) {
       idleState = 'resting';
       frameOffset = frameOffset * 0.3;
     }
@@ -2903,7 +2953,7 @@ function getAnimalWanderPos(entity, time, grid) {
       x: entity.x,
       y: entity.y,
       frameOffset,
-      facing,
+      facing: idleState === 'idle' ? cycledFacing : idleProfile.idleFacing,
       moving: false,
       idleState,
     };
@@ -3445,6 +3495,7 @@ export default function PetWorldCanvas({
   const [selectedBldgMenu, setSelectedBldgMenu] = useState(null);
   const [carryingEntity, setCarryingEntity] = useState(null);
   const relocationsRef = useRef(new Map());
+  const interactionPulseRef = useRef(new Map());
   const entityPositionsRef = useRef([]);
   const buildingMap = useMemo(() => getBuildingMap(buildings), [buildings]);
   const terrainRegions = useMemo(() => analyzeTerrainGrid(world?.grid, buildings), [world?.grid, buildings]);
@@ -3495,6 +3546,23 @@ export default function PetWorldCanvas({
     });
     setSelectedEntity(null);
   }, [world, terrainRegions, buildings]);
+
+  const markEntityInteraction = useCallback((key) => {
+    if (!key) return;
+    interactionPulseRef.current.set(key, performance.now());
+  }, []);
+
+  const getInteractionProgress = useCallback((key, now) => {
+    if (!key) return null;
+    const startedAt = interactionPulseRef.current.get(key);
+    if (startedAt == null) return null;
+    const elapsed = now - startedAt;
+    if (elapsed >= ENTITY_INTERACTION_MS) {
+      interactionPulseRef.current.delete(key);
+      return null;
+    }
+    return Math.max(0, Math.min(1, elapsed / ENTITY_INTERACTION_MS));
+  }, []);
 
   const tileSize = Math.round(BASE_TILE_SIZE * FIXED_ZOOM);
 
@@ -3816,17 +3884,26 @@ export default function PetWorldCanvas({
     ambientFauna
       .filter((creature) => creature.layer === 'water')
       .forEach((creature) => {
+        const aKey = animalKey(creature);
         const wander = getAnimalWanderPos(creature, time, null); // water creatures skip land checks
         const screenX = wander.x * tileSize - camX + tileSize / 2;
         const screenY = wander.y * tileSize - camY + tileSize * creature.yBias;
         if (screenX < -tileSize || screenY < -tileSize || screenX > size.width + tileSize || screenY > size.height + tileSize) return;
+        const interactionProgress = getInteractionProgress(aKey, time);
+        const displayFrame = interactionProgress != null ? interactionProgress : wander.frameOffset;
         const floatingBird = creature.species === 'duck';
-        drawAmbientCritter(ctx, screenX, screenY, tileSize, creature.species, wander.frameOffset, {
+        drawAmbientCritter(ctx, screenX, screenY, tileSize, creature.species, displayFrame, {
           scale: creature.scale,
           facing: wander.facing,
           moving: floatingBird ? false : wander.moving,
           waterborne: true,
         });
+        if ((selectedEntity?.type === 'animal' && selectedEntity?.key === aKey) || interactionProgress != null) {
+          drawEntitySelectionMarker(ctx, screenX, screenY, tileSize, time, {
+            selected: selectedEntity?.type === 'animal' && selectedEntity?.key === aKey,
+            interaction: interactionProgress ?? 0,
+          });
+        }
       });
 
     // atmospheric depth: distant tiles (top of grid) slightly hazier
@@ -3915,14 +3992,22 @@ export default function PetWorldCanvas({
         const screenX = wander.x * tileSize - camX + tileSize / 2;
         const screenY = wander.y * tileSize - camY + tileSize * eff.yBias;
         if (screenX < -tileSize || screenY < -tileSize || screenX > size.width + tileSize || screenY > size.height + tileSize) return;
-        drawAmbientCritter(ctx, screenX, screenY, tileSize, eff.species, wander.frameOffset, {
+        const interactionProgress = getInteractionProgress(aKey, time);
+        const displayFrame = !wander.moving && interactionProgress != null ? interactionProgress : wander.frameOffset;
+        drawAmbientCritter(ctx, screenX, screenY, tileSize, eff.species, displayFrame, {
           scale: eff.scale,
           facing: wander.facing,
           moving: wander.moving,
-          idleState: wander.idleState,
+          idleState: interactionProgress != null ? 'idle' : wander.idleState,
         });
+        if ((selectedEntity?.type === 'animal' && selectedEntity?.key === aKey) || interactionProgress != null) {
+          drawEntitySelectionMarker(ctx, screenX, screenY, tileSize, time, {
+            selected: selectedEntity?.type === 'animal' && selectedEntity?.key === aKey,
+            interaction: interactionProgress ?? 0,
+          });
+        }
         // Draw sleep "zzz" particles for sleeping animals
-        if (wander.idleState === 'sleeping') {
+        if ((interactionProgress == null) && wander.idleState === 'sleeping') {
           const zPhase = (time * 0.001 + (eff.seed || 0) * 0.5) % 3;
           const zSize = tileSize * 0.06;
           ctx.save();
@@ -3943,6 +4028,8 @@ export default function PetWorldCanvas({
 
     residentStates.forEach(({ resident, motion, pose, screenX, screenY }) => {
       if (screenX < -tileSize || screenY < -tileSize || screenX > size.width + tileSize || screenY > size.height + tileSize) return;
+      const rKey = residentKey(resident);
+      const interactionProgress = getInteractionProgress(rKey, time);
       drawVillageResident(
         ctx,
         screenX,
@@ -3950,11 +4037,17 @@ export default function PetWorldCanvas({
         tileSize,
         resident.palette,
         getResidentDisplayActivity(resident, motion),
-        motion.frameOffset,
+        !motion.moving && interactionProgress != null ? interactionProgress : motion.frameOffset,
         pose.facing || motion.facing,
         motion.moving,
       );
       drawResidentInteractionOverlay(ctx, screenX, screenY, tileSize, motion, pose, time);
+      if ((selectedEntity?.type === 'resident' && selectedEntity?.key === rKey) || interactionProgress != null) {
+        drawEntitySelectionMarker(ctx, screenX, screenY, tileSize, time, {
+          selected: selectedEntity?.type === 'resident' && selectedEntity?.key === rKey,
+          interaction: interactionProgress ?? 0,
+        });
+      }
     });
 
     // pet wandering
@@ -3967,7 +4060,24 @@ export default function PetWorldCanvas({
       const screenX = wander.x * tileSize - camX + tileSize / 2;
       const screenY = wander.y * tileSize - camY + tileSize * 0.80;
       if (screenX < -tileSize || screenY < -tileSize || screenX > size.width + tileSize || screenY > size.height + tileSize) return;
-      drawPetWander(ctx, screenX, screenY, tileSize, eff.character, wander.frameOffset, wander.moving, wander.facing, eff.heroScale || 1);
+      const interactionProgress = getInteractionProgress(pKey, time);
+      drawPetWander(
+        ctx,
+        screenX,
+        screenY,
+        tileSize,
+        eff.character,
+        !wander.moving && interactionProgress != null ? interactionProgress : wander.frameOffset,
+        wander.moving,
+        wander.facing,
+        eff.heroScale || 1,
+      );
+      if ((selectedEntity?.type === 'pet' && selectedEntity?.key === pKey) || interactionProgress != null) {
+        drawEntitySelectionMarker(ctx, screenX, screenY, tileSize, time, {
+          selected: selectedEntity?.type === 'pet' && selectedEntity?.key === pKey,
+          interaction: interactionProgress ?? 0,
+        });
+      }
     });
 
     encounterSightings.forEach((sighting) => {
@@ -4010,7 +4120,7 @@ export default function PetWorldCanvas({
       const wander = getPetWanderPos(eff, time);
       hitEntities.push({ type: 'pet', key: pKey, screenX: wander.x * tileSize - camX + tileSize / 2, screenY: wander.y * tileSize - camY + tileSize * 0.80, hitRadius: tileSize * 0.55, entity: pet });
     });
-    ambientFauna.filter((c) => c.layer === 'ground').forEach((creature) => {
+    ambientFauna.forEach((creature) => {
       const aKey = animalKey(creature);
       if (aKey === carriedKey) return;
       const reloc = relocationsRef.current.get(aKey);
@@ -4141,6 +4251,8 @@ export default function PetWorldCanvas({
     placementBurst,
     reduceMotion,
     carryingEntity,
+    selectedEntity,
+    getInteractionProgress,
   ]);
 
   // --- animation control: always running ---
@@ -4294,6 +4406,7 @@ export default function PetWorldCanvas({
           const entityHit = findNearestEntity(entityPositionsRef.current, event.clientX, event.clientY, rect);
           if (entityHit) {
             onClearInspect?.();
+            markEntityInteraction(entityHit.key);
             setSelectedEntity({
               ...entityHit,
               menuScreenX: entityHit.screenX,
@@ -4451,18 +4564,24 @@ export default function PetWorldCanvas({
         )}
         {/* Building context menu (Cute Fantasy styled) */}
         {selectedBldgMenu && !carryingEntity && !pendingBuildType && (() => {
+          const menuWidth = 132;
+          const menuHeight = 122;
           const showBelow = (selectedBldgMenu.menuScreenY || 0) < tileSize * 2.7;
+          const menuLeft = Math.max(
+            menuWidth / 2 + 10,
+            Math.min(selectedBldgMenu.menuScreenX, size.width - menuWidth / 2 - 10),
+          );
           const menuTop = showBelow
-            ? Math.min(size.height - 118, selectedBldgMenu.menuScreenY + tileSize * 0.8)
-            : Math.max(8, selectedBldgMenu.menuScreenY - tileSize * 1.8);
+            ? Math.min(size.height - menuHeight - 10, selectedBldgMenu.menuScreenY + tileSize * 0.42)
+            : Math.max(10, selectedBldgMenu.menuScreenY - menuHeight - tileSize * 0.15);
           return (
           <div
             className="cf-panel absolute z-50"
             style={{
-              left: Math.max(70, Math.min(selectedBldgMenu.menuScreenX, size.width - 70)),
+              left: menuLeft,
               top: menuTop,
-              transform: showBelow ? 'translate(-50%, 0)' : 'translate(-50%, -100%)',
-              minWidth: 110,
+              transform: 'translate(-50%, 0)',
+              minWidth: menuWidth,
               padding: '6px 10px',
               pointerEvents: 'auto',
             }}

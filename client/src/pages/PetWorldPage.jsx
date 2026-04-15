@@ -67,6 +67,87 @@ function getTileInspectCopy(tileType, inspectedObstacle) {
   return 'Open ground with enough room for the next miniature structure.';
 }
 
+function describeEventBonuses(event) {
+  if (!event) return [];
+  const lines = [];
+  const production = Object.entries(event.productionBonuses || {});
+  if (production.length) {
+    const boosted = production
+      .map(([key, value]) => `${key.replace(/_/g, ' ')} +${Math.round(value * 100)}%`)
+      .join(' · ');
+    lines.push(`Production boosts: ${boosted}`);
+  }
+  if (event.happinessBonus) {
+    lines.push(`Village mood +${event.happinessBonus}`);
+  }
+  if (event.encounterBoost) {
+    lines.push(`Wild encounters +${Math.round(event.encounterBoost * 100)}%`);
+  }
+  if (event.specialReward) {
+    lines.push(`Special reward: ${event.specialReward}`);
+  }
+  return lines;
+}
+
+function getHudExplainer(topic, world, activeEvents) {
+  const currentEvent = activeEvents?.[0] || null;
+  switch (topic) {
+    case 'population':
+      return {
+        label: 'Village',
+        title: 'Village Population',
+        summary: 'This shows how many villagers currently live in your world and how much room you have for more.',
+        bullets: [
+          `Current population: ${world?.population || 0}/${world?.housing_capacity || 0}`,
+          `Phase cap: ${world?.population_cap || world?.housing_capacity || 0}`,
+          'Build Houses or Large Houses to increase space and attract new arrivals.',
+        ],
+      };
+    case 'mood':
+      return {
+        label: 'Mood',
+        title: 'Village Mood',
+        summary: 'Mood represents how happy and comfortable your villagers feel. Happier villages grow better and feel more lively.',
+        bullets: [
+          `Current mood: ${Math.round(world?.happiness || 0)}`,
+          'Food, events, and comfortable village layouts help keep mood high.',
+          'Low mood makes the village feel strained and slows its momentum.',
+        ],
+      };
+    case 'food':
+      return {
+        label: 'Food',
+        title: 'Food Stores',
+        summary: 'Food is your village buffer. If it gets too low compared with population, the village starts to feel unstable.',
+        bullets: [
+          `Current food: ${Math.floor(world?.food || 0)}`,
+          `Safe rule of thumb: keep more than ${(world?.population || 0) * 2} food stored.`,
+          'Farms and food-focused buildings help keep growth sustainable.',
+        ],
+      };
+    case 'combos':
+      return {
+        label: 'Combos',
+        title: 'Combo Balance',
+        summary: 'Combos are the main spendable currency for building, upgrading, terraforming, and shaping your world.',
+        bullets: [
+          `Current combos: ${Math.floor(world?.combo_balance || 0).toLocaleString()}`,
+          'Most actions spend combos first, then any extra materials such as wood or stone.',
+          'If an upgrade fails, check the building inspect panel for the exact combo and material shortage.',
+        ],
+      };
+    case 'event':
+      return {
+        label: 'Event',
+        title: currentEvent?.name || 'World Event',
+        summary: currentEvent?.description || 'Seasonal world events temporarily change the village and can boost production, mood, or encounters.',
+        bullets: currentEvent ? describeEventBonuses(currentEvent) : ['No active event right now.'],
+      };
+    default:
+      return null;
+  }
+}
+
 /* ─── Encounter Scene Drawing Helpers ──────────────────────────── */
 
 function _epx(ctx, x, y, w, h, fill, alpha = 1) {
@@ -752,6 +833,7 @@ export default function PetWorldPage() {
   const [selectedTile, setSelectedTile] = useState(null);
   const [showTrades, setShowTrades] = useState(false);
   const [activeSheet, setActiveSheet] = useState(null);
+  const [hudTopic, setHudTopic] = useState(null);
   const [buildSheetSnap, setBuildSheetSnap] = useState('browse');
   const [villageTab, setVillageTab] = useState('overview');
   const [placementBurst, setPlacementBurst] = useState(null);
@@ -828,6 +910,7 @@ export default function PetWorldPage() {
   const buildings = bundle?.buildings || [];
   const catalog = bundle?.building_catalog || [];
   const activeEvents = bundle?.active_events || [];
+  const hudExplainer = useMemo(() => getHudExplainer(hudTopic, world, activeEvents), [hudTopic, world, activeEvents]);
   const inspectedObstacle = ['tree', 'rock', 'bush'].includes(selectedTile?.tile?.t);
 
   const refreshAndSelectBuilding = useCallback((nextBundle, buildingId = null) => {
@@ -890,7 +973,7 @@ export default function PetWorldPage() {
     }
   };
 
-  const handleUpgrade = async () => {
+  const handleUpgrade = useCallback(async () => {
     if (!selectedBuilding) return;
     try {
       const next = await upgradePetWorldBuilding(selectedBuilding.id);
@@ -898,9 +981,23 @@ export default function PetWorldPage() {
       refreshAndSelectBuilding(next, selectedBuilding.id);
       showToast('Building upgraded');
     } catch (error) {
-      showToast(error.message || 'Could not upgrade building');
+      const selectedDef = catalog.find((item) => item.id === selectedBuilding.type);
+      const upgradeCost = selectedDef?.upgradeCosts?.[selectedBuilding.level || 1];
+      if (upgradeCost) {
+        const missing = [];
+        const comboNeed = upgradeCost.comboCost || 0;
+        const comboHave = Math.floor(world?.combo_balance || 0);
+        if (comboHave < comboNeed) missing.push(`${comboNeed - comboHave} combos`);
+        Object.entries(upgradeCost.materials || {}).forEach(([key, amount]) => {
+          const have = Math.floor(world?.[key] || 0);
+          if (have < amount) missing.push(`${amount - have} ${RESOURCE_ICONS[key] || key}`);
+        });
+        showToast(missing.length ? `Need ${missing.join(' + ')} to upgrade` : (error.message || 'Could not upgrade building'));
+      } else {
+        showToast(error.message || 'Could not upgrade building');
+      }
     }
-  };
+  }, [catalog, refreshAndSelectBuilding, selectedBuilding, showToast, world]);
 
   const handleSetWorkers = async (count) => {
     if (!selectedBuilding) return;
@@ -1024,6 +1121,7 @@ export default function PetWorldPage() {
   const handleSelectBuilding = useCallback((building) => {
     setSelectedBuilding(building);
     setSelectedTile(null);
+    setHudTopic(null);
     setPendingBuildType('');
     setPendingBuildVariant(null);
     setActiveSheet('inspect');
@@ -1033,6 +1131,7 @@ export default function PetWorldPage() {
     setInteriorBuilding(building);
     setSelectedBuilding(null);
     setSelectedTile(null);
+    setHudTopic(null);
     setPendingBuildType('');
     setPendingBuildVariant(null);
     setActiveSheet(null);
@@ -1041,9 +1140,17 @@ export default function PetWorldPage() {
   const handleSelectTile = useCallback((tile) => {
     setSelectedTile(tile);
     setSelectedBuilding(null);
+    setHudTopic(null);
     // Only open inspect if not in placement mode
     if (!pendingBuildType) setActiveSheet('inspect');
   }, [pendingBuildType]);
+
+  const handleOpenHudExplainer = useCallback((topic) => {
+    setSelectedBuilding(null);
+    setSelectedTile(null);
+    setHudTopic(topic);
+    setActiveSheet('hud-help');
+  }, []);
 
   const handleBuildHandlePointerDown = useCallback((event) => {
     buildSheetGestureRef.current = {
@@ -1193,7 +1300,13 @@ export default function PetWorldPage() {
 
         {/* Resource pills row */}
         <div className="min-w-0 flex-1">
-          <PetWorldHUD world={world} activeEvents={activeEvents} collapsed={hudCollapsed} onToggle={() => setHudCollapsed(c => !c)} />
+          <PetWorldHUD
+            world={world}
+            activeEvents={activeEvents}
+            collapsed={hudCollapsed}
+            onToggle={() => setHudCollapsed(c => !c)}
+            onExplain={handleOpenHudExplainer}
+          />
         </div>
 
         {/* Encounter badge */}
@@ -1579,6 +1692,53 @@ export default function PetWorldPage() {
               ) : (
                 <div className="py-4 text-center text-[11px] text-white/35">Select a building or tile to inspect it.</div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeSheet === 'hud-help' && hudExplainer && (
+        <div
+          className="absolute inset-x-0 bottom-0 z-50 px-3 pb-3 transition-all duration-200 ease-out motion-reduce:transition-none"
+          style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}
+        >
+          <div className="cf-panel-dark mx-auto w-full max-w-lg overflow-hidden">
+            <div className="flex justify-center pt-2 pb-1">
+              <div className="h-1 w-9 rounded-full" style={{ background: 'rgba(139,94,43,0.35)' }} />
+            </div>
+            <div className="flex items-center justify-between px-3 pb-2">
+              <div>
+                <div className="cf-text-label">{hudExplainer.label}</div>
+                <div className="mt-0.5 cf-text text-[13px] font-black">{hudExplainer.title}</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setHudTopic(null);
+                  setActiveSheet(null);
+                }}
+                className="cf-btn cf-btn-brown flex h-8 w-8 items-center justify-center text-[11px]"
+                style={{ padding: 0 }}
+                aria-label="Close help"
+              >
+                &times;
+              </button>
+            </div>
+            <div className="space-y-2 px-3 pb-3">
+              <div className="cf-inset" style={{ padding: '10px 12px' }}>
+                <div className="cf-text-muted text-[11px] leading-relaxed">
+                  {hudExplainer.summary}
+                </div>
+              </div>
+              {hudExplainer.bullets?.length ? (
+                <div className="space-y-1.5">
+                  {hudExplainer.bullets.map((line) => (
+                    <div key={line} className="cf-inset-light text-[10px]" style={{ padding: '7px 9px', color: '#4a2a10' }}>
+                      {line}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
             </div>
           </div>
         </div>

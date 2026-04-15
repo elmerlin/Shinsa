@@ -1,15 +1,30 @@
 import React from 'react';
 import './petWorldCfUi.css';
 
-function Pill({ label, value, tone = 'neutral' }) {
+function Pill({ label, value, tone = 'neutral', onClick, title }) {
   const tones = {
     neutral: 'cf-pill',
     accent: 'cf-pill cf-pill-accent',
     happy: 'cf-pill cf-pill-happy',
     warn: 'cf-pill cf-pill-warn',
   };
+  const className = tones[tone] || tones.neutral;
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        className={className}
+        title={title}
+        onClick={onClick}
+        style={{ cursor: 'pointer' }}
+      >
+        <span style={{ fontSize: 7, textTransform: 'uppercase', letterSpacing: '0.12em', opacity: 0.55 }}>{label}</span>
+        <span style={{ fontSize: 10, fontWeight: 800 }}>{value}</span>
+      </button>
+    );
+  }
   return (
-    <span className={tones[tone] || tones.neutral}>
+    <span className={className} title={title}>
       <span style={{ fontSize: 7, textTransform: 'uppercase', letterSpacing: '0.12em', opacity: 0.55 }}>{label}</span>
       <span style={{ fontSize: 10, fontWeight: 800 }}>{value}</span>
     </span>
@@ -33,6 +48,7 @@ export default function PetWorldHUD({
   activeEvents,
   collapsed,
   onToggle,
+  onExplain,
 }) {
   if (!world) return null;
 
@@ -74,12 +90,42 @@ export default function PetWorldHUD({
 
   return (
     <div className="pointer-events-auto flex items-center gap-1 overflow-x-auto scrollbar-none" style={{ maxHeight: 36 }}>
-      <Pill label="Pets" value={`${pop}/${popCap}`} tone="accent" />
-      <Pill label="Mood" value={Math.round(happy)} tone={happy >= 70 ? 'happy' : happy >= 45 ? 'neutral' : 'warn'} />
-      <Pill label="Food" value={Math.floor(food)} tone={food <= pop * 2 ? 'warn' : 'neutral'} />
-      <Pill label="Combos" value={combos.toLocaleString()} tone="neutral" />
+      <Pill
+        label="Village"
+        value={`${pop}/${popCap}`}
+        tone="accent"
+        onClick={onExplain ? () => onExplain('population') : undefined}
+        title="Population and housing"
+      />
+      <Pill
+        label="Mood"
+        value={Math.round(happy)}
+        tone={happy >= 70 ? 'happy' : happy >= 45 ? 'neutral' : 'warn'}
+        onClick={onExplain ? () => onExplain('mood') : undefined}
+        title="Village happiness"
+      />
+      <Pill
+        label="Food"
+        value={Math.floor(food)}
+        tone={food <= pop * 2 ? 'warn' : 'neutral'}
+        onClick={onExplain ? () => onExplain('food') : undefined}
+        title="Food stores"
+      />
+      <Pill
+        label="Combos"
+        value={combos.toLocaleString()}
+        tone="neutral"
+        onClick={onExplain ? () => onExplain('combos') : undefined}
+        title="Combo currency"
+      />
       {currentEvent ? (
-        <Pill label="Event" value={currentEvent.name} tone="happy" />
+        <Pill
+          label="Event"
+          value={currentEvent.name}
+          tone="happy"
+          onClick={onExplain ? () => onExplain('event') : undefined}
+          title={currentEvent.description || currentEvent.name}
+        />
       ) : null}
       {onToggle && (
         <button
