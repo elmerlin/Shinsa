@@ -1066,9 +1066,11 @@ function buildResidentTaskState(
   buildings = [],
   assignedAt = performance.now(),
   reservations = null,
+  options = {},
 ) {
   const grid = world?.grid;
   if (!grid || !entity || !motion) return null;
+  const manual = !!options.manual;
   const landGraph = buildLandComponents(grid, terrainRegions, RESIDENT_WALK_OPTIONS, buildings);
   const landTiles = landGraph.primary?.length ? landGraph.primary : landGraph.tiles;
   const startTile = {
@@ -1079,8 +1081,18 @@ function buildResidentTaskState(
   let target = null;
   if (taskKind === 'fish') {
     const fishingTaskTiles = buildFishingTaskTiles(world, terrainRegions, buildings);
+    const currentFishingSpotId = motion.fishingSpotId || motion.workSpotId || null;
+    const preferredFishingTiles = manual
+      ? fishingTaskTiles.filter((candidate) => {
+          const standDx = (candidate.standX ?? candidate.x + 0.5) - motion.x;
+          const standDy = (candidate.standY ?? candidate.y + 0.5) - motion.y;
+          const standDistance = Math.hypot(standDx, standDy);
+          return candidate.fishingSpotId !== currentFishingSpotId && standDistance >= 1.5;
+        })
+      : fishingTaskTiles;
+    const fishingPool = preferredFishingTiles.length ? preferredFishingTiles : fishingTaskTiles;
     target = pickResidentTaskTarget(
-      fishingTaskTiles,
+      fishingPool,
       startTile,
       entity.seed + 617,
       grid,
@@ -1091,6 +1103,8 @@ function buildResidentTaskState(
         return (candidate.fishingSpotId ? 8.5 : 0)
           + (candidate.featured ? 3.5 : 0)
           + Math.min(distance, 18) * 0.55
+          - (manual && candidate.fishingSpotId === currentFishingSpotId ? 28 : 0)
+          - (manual && distance < 2 ? 16 : 0)
           - slotLoad * 12;
       },
     );
@@ -1127,8 +1141,18 @@ function buildResidentTaskState(
 
   if (taskKind === 'chop') {
     const chopTiles = buildWoodcuttingTaskTiles(grid, terrainRegions, landTiles, buildings, entity.seed + 641);
+    const currentWoodSpotId = motion.workSpotId || null;
+    const preferredWoodTiles = manual
+      ? chopTiles.filter((candidate) => {
+          const standDx = (candidate.standX ?? candidate.x + 0.5) - motion.x;
+          const standDy = (candidate.standY ?? candidate.y + 0.5) - motion.y;
+          const standDistance = Math.hypot(standDx, standDy);
+          return candidate.workSpotId !== currentWoodSpotId && standDistance >= 1.35;
+        })
+      : chopTiles;
+    const woodPool = preferredWoodTiles.length ? preferredWoodTiles : chopTiles;
     target = pickResidentTaskTarget(
-      chopTiles,
+      woodPool,
       startTile,
       entity.seed + 647,
       grid,
@@ -1137,7 +1161,11 @@ function buildResidentTaskState(
       (candidate, path, distance) => {
         const slotLoad = getReservationCount(reservations?.woodSlots, candidate.taskSlotId);
         const spotLoad = getReservationCount(reservations?.woodSpots, candidate.workSpotId);
-        return Math.min(distance, 14) * 0.28 - slotLoad * 12 - spotLoad * 2.6;
+        return Math.min(distance, 14) * 0.28
+          - (manual && candidate.workSpotId === currentWoodSpotId ? 22 : 0)
+          - (manual && distance < 2 ? 10 : 0)
+          - slotLoad * 12
+          - spotLoad * 2.6;
       },
     );
     if (!target) return null;
@@ -2513,17 +2541,18 @@ function getTileRouteMotion(entity, time) {
 function getResidentDisplayActivity(resident, motion) {
   if (!motion) return resident.activity || 'stroll';
   const buildingType = motion.buildingType || null;
+  const isWorkStop = motion.role === 'work';
   if (!motion.moving || motion.paused) {
-    if (buildingType === 'farm') {
+    if (isWorkStop && buildingType === 'farm') {
       return (resident.seed % 2 === 0) ? 'farm_till' : 'farm_water';
     }
-    if (buildingType === 'fishing_hut') {
+    if (isWorkStop && buildingType === 'fishing_hut') {
       return 'fish';
     }
-    if (buildingType && ['woodcutters_hut', 'lumberyard'].includes(buildingType)) {
+    if (isWorkStop && buildingType && ['woodcutters_hut', 'lumberyard'].includes(buildingType)) {
       return 'chop';
     }
-    if (buildingType && ['quarry', 'stone_pit'].includes(buildingType)) {
+    if (isWorkStop && buildingType && ['quarry', 'stone_pit'].includes(buildingType)) {
       return 'mine';
     }
     if (buildingType && ['market', 'trading_post', 'storehouse', 'warehouse', 'bakery'].includes(buildingType)) {
@@ -3425,14 +3454,6 @@ export default function PetWorldCanvas({
   const encounterSightings = useMemo(() => buildEncounterSightings(world, terrainRegions, encounters, buildings), [world, terrainRegions, encounters, buildings]);
   const fishingDecorations = useMemo(() => buildFishingDecorations(world, terrainRegions, buildings), [world, terrainRegions, buildings]);
   const driftingCloudShadows = useMemo(() => buildDriftingCloudShadows(world), [world]);
-  const hasBuiltFishingHut = useMemo(
-    () => buildings.some((building) => building.state === 'built' && (building.type || building.building_type) === 'fishing_hut'),
-    [buildings],
-  );
-  const hasBuiltWoodcuttingCamp = useMemo(
-    () => buildings.some((building) => building.state === 'built' && ['woodcutters_hut', 'lumberyard'].includes(building.type || building.building_type)),
-    [buildings],
-  );
   const encounterTileMap = useMemo(
     () => new Map(encounterSightings.map((sighting) => [sighting.tileKey, sighting])),
     [encounterSightings],
@@ -3443,6 +3464,14 @@ export default function PetWorldCanvas({
   );
   const handleResidentTaskCommand = useCallback((entry, taskKind) => {
     if (!entry || entry.type !== 'resident') return;
+    if (taskKind === 'fish' && !residentCanFish(entry.entity)) {
+      setSelectedEntity(null);
+      return;
+    }
+    if (taskKind === 'chop' && !residentCanChopWood(entry.entity)) {
+      setSelectedEntity(null);
+      return;
+    }
     const reservations = buildResidentTaskReservations(relocationsRef.current, entry.key);
     const taskState = buildResidentTaskState(
       entry.entity,
@@ -3453,6 +3482,7 @@ export default function PetWorldCanvas({
       buildings,
       timeRef.current || performance.now(),
       reservations,
+      { manual: true },
     );
     if (!taskState) {
       setSelectedEntity(null);
@@ -4378,7 +4408,7 @@ export default function PetWorldCanvas({
               </button>
             </div>
             <div className="flex flex-wrap gap-2">
-              {selectedEntity.type === 'resident' && (residentCanFish(selectedEntity.entity) || hasBuiltFishingHut) && (
+              {selectedEntity.type === 'resident' && residentCanFish(selectedEntity.entity) && (
                 <button
                   type="button"
                   className="cf-btn"
@@ -4391,7 +4421,7 @@ export default function PetWorldCanvas({
                   Go Fishing
                 </button>
               )}
-              {selectedEntity.type === 'resident' && (residentCanChopWood(selectedEntity.entity) || hasBuiltWoodcuttingCamp) && (
+              {selectedEntity.type === 'resident' && residentCanChopWood(selectedEntity.entity) && (
                 <button
                   type="button"
                   className="cf-btn"
