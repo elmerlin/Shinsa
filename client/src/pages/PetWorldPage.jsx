@@ -1577,8 +1577,8 @@ export default function PetWorldPage() {
                     {pendingBuildDef.id === 'path' && (
                       <div className="mt-1 flex items-center gap-1">
                         {[
-                          { id: 'stone', label: 'Pavement', icon: '/pet-world/cute-fantasy/Tiles/wang_grass_path.png' },
                           { id: 'dirt', label: 'Dust', icon: '/pet-world/cute-fantasy/Tiles/wang_dirt_grass.png' },
+                          { id: 'stone', label: 'Pavement', icon: '/pet-world/cute-fantasy/Tiles/Pavement_Tiles.png' },
                         ].map((v) => {
                           const active = (pendingBuildVariant || 'stone') === v.id;
                           return (
