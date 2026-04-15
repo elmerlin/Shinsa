@@ -313,8 +313,8 @@ const FISHING_BANK_MASK = {
   w: 10, // west half dirt
 };
 const PIXELLAB_FISHING_BANK = {
-  n: { src: pfp('fishing-bank', 'bank_n.png'), facing: 1 },
-  s: { src: pfp('fishing-bank', 'bank_s.png'), facing: 1 },
+  n: { src: pfp('fishing-bank', 'bank_s.png'), facing: 1 },
+  s: { src: pfp('fishing-bank', 'bank_n.png'), facing: 1 },
   e: { src: pfp('fishing-bank', 'bank_e.png'), facing: 1 },
   w: { src: pfp('fishing-bank', 'bank_e.png'), facing: -1 },
 };
