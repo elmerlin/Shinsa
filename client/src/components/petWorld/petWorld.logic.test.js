@@ -9,6 +9,7 @@ import {
   productionRate,
   formatMaterials,
   buildTimeRemaining,
+  normalizeUpgradeCost,
 } from './petWorldUtils.js';
 
 // --- petWorldBuildings ---
@@ -206,6 +207,34 @@ describe('formatMaterials', () => {
   it('uses the key name as fallback for unknown resources', () => {
     const result = formatMaterials({ mana: 3 });
     assert.ok(result.includes('3 mana'));
+  });
+});
+
+describe('normalizeUpgradeCost', () => {
+  it('supports the client comboCost shape', () => {
+    const result = normalizeUpgradeCost({
+      comboCost: 15,
+      materials: { wood: 3, stone: 0 },
+    });
+    assert.deepEqual(result, {
+      comboCost: 15,
+      materials: { wood: 3 },
+    });
+  });
+
+  it('supports the server combos shape used in pet world payloads', () => {
+    const result = normalizeUpgradeCost({
+      combos: 22,
+      materials: { stone: 5 },
+    });
+    assert.deepEqual(result, {
+      comboCost: 22,
+      materials: { stone: 5 },
+    });
+  });
+
+  it('returns null for missing values', () => {
+    assert.equal(normalizeUpgradeCost(null), null);
   });
 });
 

@@ -78,6 +78,23 @@ export function getScaledProductionBase(building) {
   };
 }
 
+export function normalizeUpgradeCost(rawCost) {
+  if (!rawCost || typeof rawCost !== 'object') return null;
+  const comboValue = Number(rawCost.comboCost ?? rawCost.combos ?? 0);
+  const comboCost = Number.isFinite(comboValue) ? comboValue : 0;
+  const materials = rawCost.materials && typeof rawCost.materials === 'object'
+    ? Object.fromEntries(
+        Object.entries(rawCost.materials)
+          .map(([key, value]) => [key, Number(value) || 0])
+          .filter(([, value]) => value > 0)
+      )
+    : {};
+  return {
+    comboCost,
+    materials,
+  };
+}
+
 // --- Building helpers (extracted from PetWorldBuildingInfo) ---
 
 /**

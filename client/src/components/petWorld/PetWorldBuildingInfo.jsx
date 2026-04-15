@@ -7,6 +7,7 @@ import {
   buildTimeRemaining,
   getLevelMultiplier,
   getScaledProductionBase,
+  normalizeUpgradeCost,
 } from './petWorldUtils';
 import PetWorldSpriteThumbnail from './PetWorldSpriteThumbnail';
 import './petWorldCfUi.css';
@@ -106,7 +107,11 @@ export default function PetWorldBuildingInfo({
   const level = building.level || 1;
   const maxLevel = buildingDef?.maxLevel || 5;
   const canUpgrade = building.can_upgrade && !isBuilding && level < maxLevel;
-  const upgradeCost = buildingDef?.upgradeCosts?.[level];
+  const upgradeCost = normalizeUpgradeCost(
+    building?.upgrade_cost
+      || buildingDef?.upgradeCosts?.[level]
+      || buildingDef?.upgradeCost
+  );
   const isStarter = building.is_starter;
   const previewBiome = world?.biome || 'grasslands';
   const categoryLabel = ui.category || 'Village';
