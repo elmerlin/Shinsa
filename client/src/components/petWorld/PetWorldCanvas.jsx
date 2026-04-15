@@ -1216,6 +1216,31 @@ function countStraightBankSupport(grid, spot) {
   }, 0);
 }
 
+function countLandDepthBehindSpot(grid, spot, depth = 2) {
+  if (!grid || !spot?.shoreDir) return 0;
+  const vec = vectorForWaterDir(spot.shoreDir);
+  const backDx = -vec.dx;
+  const backDy = -vec.dy;
+  let count = 0;
+  for (let step = 1; step <= depth; step += 1) {
+    const tx = spot.x + backDx * step;
+    const ty = spot.y + backDy * step;
+    const tile = grid?.tiles?.[ty]?.[tx];
+    if (!tile || tile.t === 'water' || tile.b != null) break;
+    count += 1;
+  }
+  return count;
+}
+
+function isCleanFishingBankSpot(grid, spot) {
+  if (!grid || !spot) return false;
+  const cardinalWater = getCardinalWaterNeighbors(grid, spot.x, spot.y);
+  if (cardinalWater.length !== 1) return false;
+  if (countStraightBankSupport(grid, spot) < 2) return false;
+  if (countLandDepthBehindSpot(grid, spot, 2) < 2) return false;
+  return true;
+}
+
 function collectNearbyWaterTiles(grid, x, y, radius = 3) {
   const tiles = [];
   for (let oy = -radius; oy <= radius; oy += 1) {
@@ -1241,7 +1266,8 @@ function selectFishingSceneSpots(grid, terrainRegions, shorePool = [], buildings
   const builtFishingHuts = buildings.filter((building) => building.state === 'built' && (building.type || building.building_type) === 'fishing_hut');
   const desiredSpots = clamp((builtFishingHuts.length || 0) + 3, 3, 6);
   const villageAnchor = pickVillageAnchor(shorePool, buildings, 719) || { x: Math.floor(grid.w / 2), y: Math.floor(grid.h / 2) };
-  const rankedShoreTiles = [...shorePool]
+  const candidatePool = shorePool.filter((tile) => isCleanFishingBankSpot(grid, tile));
+  const rankedShoreTiles = [...(candidatePool.length ? candidatePool : shorePool)]
     .map((tile, index) => {
       const waterNeighbors = getCardinalWaterNeighbors(grid, tile.x, tile.y);
       const scenic = waterNeighbors.reduce((best, candidate) => {
@@ -1251,7 +1277,11 @@ function selectFishingSceneSpots(grid, terrainRegions, shorePool = [], buildings
       const terrain = terrainRegions?.[tile.y]?.[tile.x];
       return {
         ...tile,
-        score: scenic * 3 + (terrain?.shoreStrength || 0) * 4 + hash01(tile.x * 31 + tile.y * 17 + index, 81),
+        score: scenic * 3
+          + (terrain?.shoreStrength || 0) * 4
+          + countStraightBankSupport(grid, tile) * 2.4
+          + countLandDepthBehindSpot(grid, tile, 2) * 1.8
+          + hash01(tile.x * 31 + tile.y * 17 + index, 81),
       };
     })
     .sort((a, b) => b.score - a.score);
