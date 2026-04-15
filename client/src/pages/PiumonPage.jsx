@@ -229,13 +229,13 @@ function getDerivedCharacterGroups(character) {
 
 function SectionShell({ eyebrow, title, children, aside }) {
   return (
-    <section className="grid gap-4 rounded-[28px] border border-piu-border/50 bg-piu-card/70 p-4 shadow-[0_20px_80px_rgba(0,0,0,0.35)] backdrop-blur-sm lg:grid-cols-[minmax(0,1fr)_300px] lg:p-6">
+    <section className="grid gap-4 rounded-[26px] border border-piu-border/50 bg-piu-card/70 p-4 shadow-[0_20px_80px_rgba(0,0,0,0.35)] backdrop-blur-sm lg:grid-cols-[minmax(0,1fr)_280px] lg:gap-5 lg:p-5">
       <div>
         <div className="text-[10px] font-black uppercase tracking-[0.34em] text-piu-accent/80">{eyebrow}</div>
-        <h2 className="mt-2 font-display text-2xl font-black tracking-tight text-white">{title}</h2>
-        <div className="mt-4">{children}</div>
+        <h2 className="mt-1.5 font-display text-2xl font-black tracking-tight text-white">{title}</h2>
+        <div className="mt-3">{children}</div>
       </div>
-      {aside ? <aside className="rounded-[24px] border border-white/8 bg-black/20 p-4">{aside}</aside> : null}
+      {aside ? <aside className="rounded-[22px] border border-white/8 bg-black/20 p-3.5">{aside}</aside> : null}
     </section>
   );
 }
@@ -443,7 +443,7 @@ function CharacterCard({
 function TraitCard({ group, items, onToggle, onWeightChange }) {
   const totalWeight = sumActiveWeight(items);
   return (
-    <div className="rounded-[22px] border border-white/8 bg-black/20 p-4">
+    <div className="rounded-[22px] border border-white/8 bg-black/20 p-3.5">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="font-display text-lg font-black text-white">{group.title}</h3>
@@ -451,9 +451,9 @@ function TraitCard({ group, items, onToggle, onWeightChange }) {
         </div>
         <WeightPill tone="amber">{totalWeight} total weight</WeightPill>
       </div>
-      <div className="mt-4 space-y-2">
+      <div className="mt-3 space-y-2">
         {items.map((item) => (
-          <div key={item.id} className="grid grid-cols-[1fr_auto_auto] items-center gap-3 rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2">
+          <div key={item.id} className="grid grid-cols-[1fr_auto_auto] items-center gap-3 rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-1.5">
             <label className="flex items-center gap-2 text-sm text-white">
               <input
                 type="checkbox"
@@ -482,7 +482,7 @@ function TraitCard({ group, items, onToggle, onWeightChange }) {
 function HabitatCard({ habitat, onToggle, onWeightChange }) {
   return (
     <div className={`rounded-[24px] border ${habitat.border} bg-gradient-to-br ${habitat.accent} p-[1px]`}>
-      <div className="rounded-[23px] bg-piu-card/95 p-4">
+      <div className="rounded-[23px] bg-piu-card/95 p-3.5">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h3 className="font-display text-lg font-black text-white">{habitat.name}</h3>
@@ -498,7 +498,7 @@ function HabitatCard({ habitat, onToggle, onWeightChange }) {
             Live
           </label>
         </div>
-        <div className="mt-4 h-24 overflow-hidden rounded-[18px] border border-white/8 bg-black/20 p-3">
+        <div className="mt-3 h-24 overflow-hidden rounded-[18px] border border-white/8 bg-black/20 p-3">
           <div className="relative h-full rounded-[14px] bg-black/20">
             <div className={`absolute inset-0 rounded-[14px] bg-gradient-to-br ${habitat.accent}`} />
             <div className="absolute left-0 right-0 bottom-0 h-10 rounded-b-[14px] bg-black/25" />
@@ -507,7 +507,7 @@ function HabitatCard({ habitat, onToggle, onWeightChange }) {
             <div className="absolute left-1/2 top-1/2 h-8 w-8 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/10 bg-white/10 backdrop-blur-[2px]" />
           </div>
         </div>
-        <div className="mt-4 flex items-center justify-between">
+        <div className="mt-3 flex items-center justify-between">
           <span className="text-xs text-gray-400">Weight</span>
           <input
             type="number"
@@ -642,20 +642,20 @@ export default function PiumonPage() {
         <div className="absolute left-[-6rem] top-[28rem] h-96 w-96 rounded-full bg-cyan-400/10 blur-3xl" />
       </div>
 
-      <div className="relative mx-auto max-w-7xl px-4 pb-16 pt-8 sm:px-6 lg:px-8">
-        <div className="mb-8 flex items-start justify-between gap-4">
+      <div className="relative mx-auto max-w-7xl px-4 pb-14 pt-6 sm:px-6 lg:px-8">
+        <div className="mb-6 flex items-start justify-between gap-3">
           <div>
             <Link to="/" className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.24em] text-piu-accent/80 transition hover:text-piu-accent">
               <span className="text-lg leading-none">←</span>
               Back to Shinsa
             </Link>
-            <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.28em] text-cyan-100">
+            <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.28em] text-cyan-100">
               Preparation Phase
             </div>
-            <h1 className="mt-4 font-display text-4xl font-black tracking-tight text-white sm:text-5xl">
+            <h1 className="mt-3 font-display text-4xl font-black tracking-tight text-white sm:text-5xl">
               PIUMON FORGE
             </h1>
-            <p className="mt-4 max-w-3xl text-sm leading-relaxed text-gray-300 sm:text-base">
+            <p className="mt-3 max-w-3xl text-sm leading-relaxed text-gray-300 sm:text-base">
               Define the collectible pipeline before minting: take PIUGAME avatar identities and regenerate them with PixelLab into one
               consistent full-body style, then layer hats, glasses, necklaces, clothes, and elemental habitats on top.
             </p>
@@ -671,40 +671,41 @@ export default function PiumonPage() {
           </a>
         </div>
 
-        <div className="mb-8 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-[24px] border border-white/8 bg-white/[0.03] p-4">
+        <div className="mb-6 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-[24px] border border-white/8 bg-white/[0.03] p-3.5">
             <div className="text-[10px] uppercase tracking-[0.28em] text-gray-500">Mint Size</div>
-            <div className="mt-2 font-display text-3xl font-black text-white">{mintSize}</div>
-            <div className="mt-3 text-xs text-gray-400">Planned claim ceiling before the full distribution is exhausted.</div>
+            <div className="mt-1.5 font-display text-3xl font-black text-white">{mintSize}</div>
+            <div className="mt-2 text-xs text-gray-400">Planned claim ceiling before the full distribution is exhausted.</div>
           </div>
-          <div className="rounded-[24px] border border-white/8 bg-white/[0.03] p-4">
+          <div className="rounded-[24px] border border-white/8 bg-white/[0.03] p-3.5">
             <div className="text-[10px] uppercase tracking-[0.28em] text-gray-500">Identity Seeds</div>
-            <div className="mt-2 font-display text-3xl font-black text-white">{visibleBaseCount}</div>
-            <div className="mt-3 text-xs text-gray-400">
+            <div className="mt-1.5 font-display text-3xl font-black text-white">{visibleBaseCount}</div>
+            <div className="mt-2 text-xs text-gray-400">
               {activeBases.length} currently active in the mint pool
               {removedBaseCount ? ` · ${removedBaseCount} removed from prep` : '.'}
             </div>
           </div>
-          <div className="rounded-[24px] border border-white/8 bg-white/[0.03] p-4">
+          <div className="rounded-[24px] border border-white/8 bg-white/[0.03] p-3.5">
             <div className="text-[10px] uppercase tracking-[0.28em] text-gray-500">Trait Layers</div>
-            <div className="mt-2 font-display text-3xl font-black text-white">{activeTraitCounts.reduce((sum, item) => sum + item.active, 0)}</div>
-            <div className="mt-3 text-xs text-gray-400">Reusable wearable variants across hats, eyewear, neckwear, and clothes.</div>
+            <div className="mt-1.5 font-display text-3xl font-black text-white">{activeTraitCounts.reduce((sum, item) => sum + item.active, 0)}</div>
+            <div className="mt-2 text-xs text-gray-400">Reusable wearable variants across hats, eyewear, neckwear, and clothes.</div>
           </div>
-          <div className="rounded-[24px] border border-white/8 bg-white/[0.03] p-4">
+          <div className="rounded-[24px] border border-white/8 bg-white/[0.03] p-3.5">
             <div className="text-[10px] uppercase tracking-[0.28em] text-gray-500">Possible Combos</div>
-            <div className="mt-2 font-display text-3xl font-black text-white">{formatComboCount(theoreticalCombos)}</div>
-            <div className="mt-3 text-xs text-gray-400">Enough room to hide the final 1k distribution until claims play out.</div>
+            <div className="mt-1.5 font-display text-3xl font-black text-white">{formatComboCount(theoreticalCombos)}</div>
+            <div className="mt-2 text-xs text-gray-400">Enough room to hide the final 1k distribution until claims play out.</div>
           </div>
         </div>
 
+        <div className="space-y-6">
         <SectionShell
           eyebrow="Generation Contract"
           title="One consistent body, many swappable layers"
           aside={
             <div>
               <div className="text-[10px] uppercase tracking-[0.28em] text-gray-500">Style Reference</div>
-              <div className="mt-3 rounded-[24px] border border-white/8 bg-black/20 p-3">
-                <div className="overflow-hidden rounded-[18px] bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.1),transparent_55%),linear-gradient(180deg,#12111f_0%,#0a0916_100%)] p-4">
+              <div className="mt-2.5 rounded-[22px] border border-white/8 bg-black/20 p-3">
+                <div className="overflow-hidden rounded-[18px] bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.1),transparent_55%),linear-gradient(180deg,#12111f_0%,#0a0916_100%)] p-3">
                   <img
                     src={heroReference?.preview || '/pet-world/heroes/dojocat/base.png'}
                     alt={heroReference?.name || 'Dojocat'}
@@ -712,26 +713,26 @@ export default function PiumonPage() {
                   />
                 </div>
               </div>
-              <div className="mt-3 text-xs leading-relaxed text-gray-400">
+              <div className="mt-2.5 text-xs leading-relaxed text-gray-400">
                 The final collectible art should match this crisp full-body pixel density: front-facing, fixed stance, clean head and torso anchors, with enough negative space to swap wearables without redrawing the whole character.
               </div>
             </div>
           }
         >
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid gap-2.5 md:grid-cols-2">
             {PIPELINE_STEPS.map((step, index) => (
-              <div key={step.title} className="rounded-[22px] border border-white/8 bg-black/20 p-4">
+              <div key={step.title} className="rounded-[22px] border border-white/8 bg-black/20 p-3.5">
                 <div className="flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-cyan-400/15 bg-cyan-400/10 font-display text-lg font-black text-cyan-100">
                     {index + 1}
                   </div>
                   <h3 className="font-display text-lg font-black text-white">{step.title}</h3>
                 </div>
-                <p className="mt-3 text-sm leading-relaxed text-gray-300">{step.body}</p>
+                <p className="mt-2.5 text-sm leading-relaxed text-gray-300">{step.body}</p>
               </div>
             ))}
           </div>
-          <div className="mt-4 grid gap-3 rounded-[22px] border border-amber-300/15 bg-amber-300/[0.06] p-4 lg:grid-cols-5">
+          <div className="mt-3 grid gap-2.5 rounded-[22px] border border-amber-300/15 bg-amber-300/[0.06] p-3.5 lg:grid-cols-5">
             {ATTRIBUTE_AXES.map((axis) => (
               <div key={axis.id}>
                 <div className="text-[11px] font-black uppercase tracking-[0.16em] text-amber-100">{axis.name}</div>
@@ -741,22 +742,20 @@ export default function PiumonPage() {
           </div>
         </SectionShell>
 
-        <div className="mt-8" />
-
         <SectionShell
           eyebrow="Base Roster"
           title="Identity sources to regenerate with PixelLab"
           aside={
             <div>
               <div className="text-[10px] uppercase tracking-[0.28em] text-gray-500">Import Status</div>
-              <div className="mt-3 space-y-3">
-                <div className="rounded-[20px] border border-white/8 bg-white/[0.03] p-3">
+              <div className="mt-2.5 overflow-hidden rounded-[20px] border border-white/8 bg-white/[0.03]">
+                <div className="px-3 py-3">
                   <div className="font-display text-sm font-black text-white">PIUGAME avatars</div>
                   <div className="mt-1 text-xs leading-relaxed text-gray-400">
                     Images and official names are imported from the authenticated PIUGAME avatar shop and matched against Shinsa&apos;s local avatar cache, so these are real source identities ready for PixelLab regeneration.
                   </div>
                 </div>
-                <div className="rounded-[20px] border border-white/8 bg-white/[0.03] p-3">
+                <div className="border-t border-white/8 px-3 py-3">
                   <div className="font-display text-sm font-black text-white">Multi-character handling</div>
                   <div className="mt-1 text-xs leading-relaxed text-gray-400">
                     If an avatar contains more than one figure, mark it as multi-character and rename it using
@@ -764,19 +763,19 @@ export default function PiumonPage() {
                     so the furthest-left figure is always first.
                   </div>
                 </div>
-                <div className="rounded-[20px] border border-white/8 bg-white/[0.03] p-3">
+                <div className="border-t border-white/8 px-3 py-3">
                   <div className="font-display text-sm font-black text-white">Custom heroes</div>
                   <div className="mt-1 text-xs leading-relaxed text-gray-400">
                     Buu and Dojocat use approved source art. Devit and Pixiu now use curated sticker references instead of the broken generated hero previews.
                   </div>
                 </div>
-                <div className="rounded-[20px] border border-white/8 bg-white/[0.03] p-3">
+                <div className="border-t border-white/8 px-3 py-3">
                   <div className="font-display text-sm font-black text-white">Rarity model</div>
                   <div className="mt-1 text-xs leading-relaxed text-gray-400">
                     Character rarity comes from weight in this pool. Trait rarity comes from overlap with every enabled wearable and habitat in the other pools.
                   </div>
                 </div>
-                <div className="rounded-[20px] border border-white/8 bg-white/[0.03] p-3">
+                <div className="border-t border-white/8 px-3 py-3">
                   <div className="font-display text-sm font-black text-white">Character groups</div>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {characterGroups.length ? characterGroups.slice(0, 18).map((group) => (
@@ -847,17 +846,15 @@ export default function PiumonPage() {
           </div>
         </SectionShell>
 
-        <div className="mt-8" />
-
         <SectionShell
           eyebrow="Trait Pools"
           title="Reusable accessories and clothes"
           aside={
             <div>
               <div className="text-[10px] uppercase tracking-[0.28em] text-gray-500">Layer Order</div>
-              <div className="mt-3 space-y-2">
+              <div className="mt-2.5 overflow-hidden rounded-[20px] border border-white/8 bg-white/[0.03]">
                 {['Base body', 'Clothes', 'Neckwear', 'Eyewear', 'Headwear'].map((label, index) => (
-                  <div key={label} className="flex items-center gap-3 rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2">
+                  <div key={label} className="flex items-center gap-3 border-b border-white/8 px-3 py-2 last:border-b-0">
                     <div className="flex h-7 w-7 items-center justify-center rounded-full border border-piu-accent/20 bg-piu-accent/10 text-xs font-black text-piu-accent">
                       {index + 1}
                     </div>
@@ -865,13 +862,13 @@ export default function PiumonPage() {
                   </div>
                 ))}
               </div>
-              <div className="mt-4 text-xs leading-relaxed text-gray-400">
+              <div className="mt-3 text-xs leading-relaxed text-gray-400">
                 If a PixelLab generation breaks this layer order, the collectible stops being composable. This page is meant to catch that before any final mint batch is generated.
               </div>
             </div>
           }
         >
-          <div className="grid gap-4 xl:grid-cols-2">
+          <div className="grid gap-3 xl:grid-cols-2">
             {TRAIT_GROUPS.map((group) => (
               <TraitCard
                 key={group.key}
@@ -884,25 +881,23 @@ export default function PiumonPage() {
           </div>
         </SectionShell>
 
-        <div className="mt-8" />
-
         <SectionShell
           eyebrow="Habitats"
           title="Elemental background distributions"
           aside={
             <div>
               <div className="text-[10px] uppercase tracking-[0.28em] text-gray-500">Habitat Logic</div>
-              <div className="mt-3 text-sm leading-relaxed text-gray-300">
+              <div className="mt-2.5 text-sm leading-relaxed text-gray-300">
                 Habitats are a full rarity axis, not a background afterthought. They should reuse one consistent composition grid so boats, rocks, clouds, crystals, or firelight can vary while the character pose stays untouched.
               </div>
-              <div className="mt-4 rounded-[20px] border border-white/8 bg-white/[0.03] p-3">
+              <div className="mt-3 rounded-[20px] border border-white/8 bg-white/[0.03] px-3 py-2.5">
                 <div className="text-[11px] font-black uppercase tracking-[0.18em] text-gray-400">Active habitat weight</div>
-                <div className="mt-2 font-display text-3xl font-black text-white">{totalHabitatWeight}</div>
+                <div className="mt-1.5 font-display text-3xl font-black text-white">{totalHabitatWeight}</div>
               </div>
             </div>
           }
         >
-          <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
             {habitats.map((habitat) => (
               <HabitatCard
                 key={habitat.id}
@@ -913,8 +908,6 @@ export default function PiumonPage() {
             ))}
           </div>
         </SectionShell>
-
-        <div className="mt-8" />
 
         <SectionShell
           eyebrow="Distribution Readout"
@@ -928,8 +921,8 @@ export default function PiumonPage() {
             </div>
           }
         >
-          <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-            <div className="rounded-[24px] border border-white/8 bg-black/20 p-4">
+          <div className="grid gap-3 xl:grid-cols-[1.1fr_0.9fr]">
+            <div className="rounded-[24px] border border-white/8 bg-black/20 p-3.5">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <div className="text-[10px] uppercase tracking-[0.22em] text-gray-500">Top projected identities</div>
@@ -945,7 +938,7 @@ export default function PiumonPage() {
                   className="w-24 rounded-xl border border-white/10 bg-black/30 px-2 py-1 text-right text-sm text-white outline-none focus:border-piu-accent"
                 />
               </div>
-              <div className="mt-4 space-y-2">
+              <div className="mt-3 space-y-2">
                 {projectedTopBases.map((item) => (
                   <div key={item.id} className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2">
                     <div className="min-w-0">
@@ -959,10 +952,10 @@ export default function PiumonPage() {
               </div>
             </div>
 
-            <div className="grid gap-4">
-              <div className="rounded-[24px] border border-white/8 bg-black/20 p-4">
+            <div className="grid gap-3">
+              <div className="rounded-[24px] border border-white/8 bg-black/20 p-3.5">
                 <div className="text-[10px] uppercase tracking-[0.22em] text-gray-500">Trait readiness</div>
-                <div className="mt-3 space-y-3">
+                <div className="mt-2.5 space-y-2">
                   {activeTraitCounts.map((group) => (
                     <div key={group.key} className="rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2">
                       <div className="flex items-center justify-between text-sm text-white">
@@ -974,7 +967,7 @@ export default function PiumonPage() {
                   ))}
                 </div>
               </div>
-              <div className="rounded-[24px] border border-white/8 bg-black/20 p-4">
+              <div className="rounded-[24px] border border-white/8 bg-black/20 p-3.5">
                 <div className="text-[10px] uppercase tracking-[0.22em] text-gray-500">Next step</div>
                 <div className="mt-2 text-sm leading-relaxed text-gray-300">
                   Once the identity names are fully imported from the logged-in PIUGAME shop, this page can drive the first PixelLab batch: generate standardized base bodies, then split out swappable wearables and elemental habitat backgrounds from the approved layer system.
@@ -983,6 +976,7 @@ export default function PiumonPage() {
             </div>
           </div>
         </SectionShell>
+        </div>
       </div>
     </div>
   );
