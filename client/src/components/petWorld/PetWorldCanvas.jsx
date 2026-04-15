@@ -51,9 +51,9 @@ const WORK_BUILDINGS = new Set([
 ]);
 
 const HOME_BUILDINGS = new Set(['house', 'large_house']);
-const COMMON_BUILDINGS = new Set(['well', 'market', 'town_hall', 'shrine', 'park', 'tavern', 'trading_post']);
+const COMMON_BUILDINGS = new Set(['market', 'town_hall', 'shrine', 'park', 'tavern', 'trading_post']);
 const SOCIAL_BUILDINGS = new Set(['market', 'tavern', 'park', 'town_hall', 'trading_post']);
-const QUIET_BUILDINGS = new Set(['well', 'shrine']);
+const QUIET_BUILDINGS = new Set(['shrine']);
 const ACTIVE_MARKER_BUILDINGS = new Set([
   'farm',
   'fishing_hut',
@@ -73,6 +73,7 @@ const ACTIVE_MARKER_BUILDINGS = new Set([
 const NO_INTERIOR_TYPES = new Set(['path', 'fence', 'well', 'garden', 'flower_bed', 'park']);
 const WALK_BLOCKERS = new Set(['water', 'rock', 'tree', 'bush', 'stump']);
 const RESIDENT_WALK_OPTIONS = { maxShoreStrength: 0.32, maxWaterRatio: 0.11 };
+const FISHING_TASK_WALK_OPTIONS = { maxShoreStrength: 0.42, maxWaterRatio: 0.17 };
 const ROAMING_WALK_OPTIONS = { maxShoreStrength: 0.28, maxWaterRatio: 0.095 };
 const ENCOUNTER_WALK_OPTIONS = { maxShoreStrength: 0.24, maxWaterRatio: 0.09 };
 const LAND_ANIMAL_WALK_OPTIONS = { maxShoreStrength: 0.025, maxWaterRatio: 0.008 };
@@ -397,7 +398,7 @@ function pickFromPool(pool, index, fallback = null) {
   return fallback;
 }
 
-function pickSpreadTile(pool, seed, usageMap, fallback = null, windowSize = 7) {
+function pickSpreadTile(pool, seed, usageMap, fallback = null, windowSize = 9) {
   if (!pool?.length) return fallback;
   const uniqueCandidates = [];
   const seen = new Set();
@@ -425,8 +426,8 @@ function pickSpreadTile(pool, seed, usageMap, fallback = null, windowSize = 7) {
       const uy = Number(uyRaw);
       if (!Number.isFinite(ux) || !Number.isFinite(uy)) return;
       const dist = Math.abs(ux - cx) + Math.abs(uy - cy);
-      if (dist > 5) return;
-      nearbyUsage += count * Math.max(0, 6 - dist);
+      if (dist > 7) return;
+      nearbyUsage += count * Math.max(0, 8 - dist);
     });
     const score = usage * 16 + nearbyUsage * 1.3 + offset * 0.45 + hash01(seed + offset * 17, 301) * 0.5;
     if (score < bestScore) {
@@ -1087,7 +1088,7 @@ function buildResidentTaskState(
       RESIDENT_WALK_OPTIONS,
       (candidate, path, distance) => {
         const slotLoad = getReservationCount(reservations?.fishingSlots, candidate.taskSlotId || candidate.fishingSpotId);
-        return (candidate.fishingSpotId ? 6.5 : 0)
+        return (candidate.fishingSpotId ? 8.5 : 0)
           + (candidate.featured ? 3.5 : 0)
           + Math.min(distance, 18) * 0.55
           - slotLoad * 12;
@@ -1096,7 +1097,7 @@ function buildResidentTaskState(
     if (!target) return null;
     const intro = buildResidentTaskIntroRoute(motion, target, entity.seed + 619, grid, terrainRegions, target, {
       speed: 0.78,
-      walkOptions: RESIDENT_WALK_OPTIONS,
+      walkOptions: FISHING_TASK_WALK_OPTIONS,
     });
     return {
       x: motion.x,
@@ -1115,7 +1116,7 @@ function buildResidentTaskState(
         buildingType: 'fishing_hut',
       }, {
         pauseMs: 36000,
-        walkOptions: RESIDENT_WALK_OPTIONS,
+        walkOptions: FISHING_TASK_WALK_OPTIONS,
       }),
       assignedTask: 'fish',
       taskSlotId: target.taskSlotId || target.fishingSpotId || null,
@@ -1232,12 +1233,28 @@ function countLandDepthBehindSpot(grid, spot, depth = 2) {
   return count;
 }
 
+function hasFishingBankShoulders(grid, spot, depth = 1) {
+  if (!grid || !spot?.shoreDir) return false;
+  const vec = vectorForWaterDir(spot.shoreDir);
+  const tangent = spot.shoreDir === 'n' || spot.shoreDir === 's'
+    ? [{ dx: -1, dy: 0 }, { dx: 1, dy: 0 }]
+    : [{ dx: 0, dy: -1 }, { dx: 0, dy: 1 }];
+  const anchorX = spot.x - vec.dx * depth;
+  const anchorY = spot.y - vec.dy * depth;
+  return tangent.every(({ dx, dy }) => {
+    const tile = grid?.tiles?.[anchorY + dy]?.[anchorX + dx];
+    return !!tile && tile.t !== 'water' && tile.b == null && !WALK_BLOCKERS.has(tile.t);
+  });
+}
+
 function isCleanFishingBankSpot(grid, spot) {
   if (!grid || !spot) return false;
   const cardinalWater = getCardinalWaterNeighbors(grid, spot.x, spot.y);
   if (cardinalWater.length !== 1) return false;
   if (countStraightBankSupport(grid, spot) < 2) return false;
-  if (countLandDepthBehindSpot(grid, spot, 2) < 2) return false;
+  if (countLandDepthBehindSpot(grid, spot, 3) < 3) return false;
+  if (!hasFishingBankShoulders(grid, spot, 1)) return false;
+  if (!hasFishingBankShoulders(grid, spot, 2)) return false;
   return true;
 }
 
@@ -1266,8 +1283,17 @@ function selectFishingSceneSpots(grid, terrainRegions, shorePool = [], buildings
   const builtFishingHuts = buildings.filter((building) => building.state === 'built' && (building.type || building.building_type) === 'fishing_hut');
   const desiredSpots = clamp((builtFishingHuts.length || 0) + 3, 3, 6);
   const villageAnchor = pickVillageAnchor(shorePool, buildings, 719) || { x: Math.floor(grid.w / 2), y: Math.floor(grid.h / 2) };
-  const candidatePool = shorePool.filter((tile) => isCleanFishingBankSpot(grid, tile));
-  const rankedShoreTiles = [...(candidatePool.length ? candidatePool : shorePool)]
+  const strictCandidates = shorePool.filter((tile) => isCleanFishingBankSpot(grid, tile));
+  const relaxedCandidates = strictCandidates.length
+    ? strictCandidates
+    : shorePool.filter((tile) => {
+        const cardinalWater = getCardinalWaterNeighbors(grid, tile.x, tile.y);
+        return cardinalWater.length === 1
+          && countStraightBankSupport(grid, tile) >= 2
+          && countLandDepthBehindSpot(grid, tile, 2) >= 2
+          && hasFishingBankShoulders(grid, tile, 1);
+      });
+  const rankedShoreTiles = [...relaxedCandidates]
     .map((tile, index) => {
       const waterNeighbors = getCardinalWaterNeighbors(grid, tile.x, tile.y);
       const scenic = waterNeighbors.reduce((best, candidate) => {
@@ -1285,6 +1311,7 @@ function selectFishingSceneSpots(grid, terrainRegions, shorePool = [], buildings
       };
     })
     .sort((a, b) => b.score - a.score);
+  if (!rankedShoreTiles.length) return [];
 
   const spots = [];
   const showcaseCandidates = rankedShoreTiles.filter((tile) => tile.y >= Math.floor(grid.h * 0.68));
@@ -1407,48 +1434,59 @@ function buildFishingDecorations(world, terrainRegions, buildings = []) {
     const rockTile = sameBankWater.find((tile) => tileKey(tile.x, tile.y) !== tileKey(boatTile.x, boatTile.y) && tile.openWater >= 2) || fishTile;
     const cattailTile = safeShallowWater[2] || safeShallowWater[0] || shallowWater[3] || lilyPairTile;
     const dirVector = vectorForWaterDir(spot.shoreDir);
-    const boatWidthTiles = 1.76;
-    const boatHeightTiles = 0.98;
+    const bankLayout = {
+      n: { x: spot.x + 0.08, y: spot.y - 0.02, widthTiles: 0.84, heightTiles: 0.32 },
+      s: { x: spot.x + 0.08, y: spot.y + 0.7, widthTiles: 0.84, heightTiles: 0.26 },
+      e: { x: spot.x + 0.7, y: spot.y + 0.08, widthTiles: 0.26, heightTiles: 0.84 },
+      w: { x: spot.x + 0.04, y: spot.y + 0.08, widthTiles: 0.26, heightTiles: 0.84 },
+    }[spot.shoreDir] || { x: spot.x + 0.08, y: spot.y - 0.02, widthTiles: 0.84, heightTiles: 0.32 };
+    const boatWidthTiles = spot.shoreDir === 'e' || spot.shoreDir === 'w' ? 0.98 : 1.76;
+    const boatHeightTiles = spot.shoreDir === 'e' || spot.shoreDir === 'w' ? 1.76 : 0.98;
     const boatLayout = {
       n: {
-        x: boatTile.x - 0.34,
-        y: boatTile.y + 0.02,
-        postX: spot.x + 0.58,
-        postY: spot.y + 0.1,
-        ropeX: boatTile.x + 0.56,
-        ropeY: boatTile.y + 0.7,
+        x: spot.x - 0.38,
+        y: spot.y - 0.8,
+        postX: spot.x + 0.54,
+        postY: spot.y + 0.08,
+        ropeX: spot.x + 0.54,
+        ropeY: spot.y - 0.1,
+        vertical: false,
       },
       s: {
-        x: boatTile.x - 0.32,
-        y: boatTile.y - 0.16,
-        postX: spot.x + 0.58,
-        postY: spot.y + 0.94,
-        ropeX: boatTile.x + 0.56,
-        ropeY: boatTile.y + 0.16,
+        x: spot.x - 0.38,
+        y: spot.y + 0.06,
+        postX: spot.x + 0.54,
+        postY: spot.y + 0.92,
+        ropeX: spot.x + 0.54,
+        ropeY: spot.y + 0.86,
+        vertical: false,
       },
       e: {
-        x: boatTile.x - 0.64,
-        y: boatTile.y - 0.02,
+        x: spot.x + 0.08,
+        y: spot.y - 0.36,
         postX: spot.x + 0.9,
         postY: spot.y + 0.54,
-        ropeX: boatTile.x + 0.18,
-        ropeY: boatTile.y + 0.56,
+        ropeX: spot.x + 0.82,
+        ropeY: spot.y + 0.54,
+        vertical: true,
       },
       w: {
-        x: boatTile.x - 0.12,
-        y: boatTile.y - 0.02,
+        x: spot.x - 0.06,
+        y: spot.y - 0.36,
         postX: spot.x + 0.1,
         postY: spot.y + 0.54,
-        ropeX: boatTile.x + 0.82,
-        ropeY: boatTile.y + 0.56,
+        ropeX: spot.x + 0.18,
+        ropeY: spot.y + 0.54,
+        vertical: true,
       },
     }[spot.shoreDir] || {
-      x: boatTile.x - 0.34,
-      y: boatTile.y + 0.02,
-      postX: spot.x + 0.58,
-      postY: spot.y + 0.1,
-      ropeX: boatTile.x + 0.56,
-      ropeY: boatTile.y + 0.7,
+      x: spot.x - 0.38,
+      y: spot.y - 0.8,
+      postX: spot.x + 0.54,
+      postY: spot.y + 0.08,
+      ropeX: spot.x + 0.54,
+      ropeY: spot.y - 0.1,
+      vertical: false,
     };
     const fishBaseX = fishTile.x + 0.18 + dirVector.dx * 0.04;
     const fishBaseY = fishTile.y + 0.2 + dirVector.dy * 0.04;
@@ -1475,10 +1513,10 @@ function buildFishingDecorations(world, terrainRegions, buildings = []) {
 
     decorations.push({
       type: 'fishing_bank',
-      x: spot.x,
-      y: spot.y,
-      widthTiles: 1,
-      heightTiles: 1,
+      x: bankLayout.x,
+      y: bankLayout.y,
+      widthTiles: bankLayout.widthTiles,
+      heightTiles: bankLayout.heightTiles,
       shoreDir: spot.shoreDir,
       fishingSpotId: spot.fishingSpotId,
       standSlots,
@@ -1497,6 +1535,7 @@ function buildFishingDecorations(world, terrainRegions, buildings = []) {
       widthTiles: boatWidthTiles,
       heightTiles: boatHeightTiles,
       shoreDir: spot.shoreDir,
+      vertical: !!boatLayout.vertical,
       postX: boatLayout.postX,
       postY: boatLayout.postY,
       ropeX: boatLayout.ropeX,
@@ -3386,6 +3425,14 @@ export default function PetWorldCanvas({
   const encounterSightings = useMemo(() => buildEncounterSightings(world, terrainRegions, encounters, buildings), [world, terrainRegions, encounters, buildings]);
   const fishingDecorations = useMemo(() => buildFishingDecorations(world, terrainRegions, buildings), [world, terrainRegions, buildings]);
   const driftingCloudShadows = useMemo(() => buildDriftingCloudShadows(world), [world]);
+  const hasBuiltFishingHut = useMemo(
+    () => buildings.some((building) => building.state === 'built' && (building.type || building.building_type) === 'fishing_hut'),
+    [buildings],
+  );
+  const hasBuiltWoodcuttingCamp = useMemo(
+    () => buildings.some((building) => building.state === 'built' && ['woodcutters_hut', 'lumberyard'].includes(building.type || building.building_type)),
+    [buildings],
+  );
   const encounterTileMap = useMemo(
     () => new Map(encounterSightings.map((sighting) => [sighting.tileKey, sighting])),
     [encounterSightings],
@@ -4331,7 +4378,7 @@ export default function PetWorldCanvas({
               </button>
             </div>
             <div className="flex flex-wrap gap-2">
-              {selectedEntity.type === 'resident' && residentCanFish(selectedEntity.entity) && (
+              {selectedEntity.type === 'resident' && (residentCanFish(selectedEntity.entity) || hasBuiltFishingHut) && (
                 <button
                   type="button"
                   className="cf-btn"
@@ -4344,7 +4391,7 @@ export default function PetWorldCanvas({
                   Go Fishing
                 </button>
               )}
-              {selectedEntity.type === 'resident' && residentCanChopWood(selectedEntity.entity) && (
+              {selectedEntity.type === 'resident' && (residentCanChopWood(selectedEntity.entity) || hasBuiltWoodcuttingCamp) && (
                 <button
                   type="button"
                   className="cf-btn"
@@ -4373,13 +4420,18 @@ export default function PetWorldCanvas({
           </div>
         )}
         {/* Building context menu (Cute Fantasy styled) */}
-        {selectedBldgMenu && !carryingEntity && !pendingBuildType && (
+        {selectedBldgMenu && !carryingEntity && !pendingBuildType && (() => {
+          const showBelow = (selectedBldgMenu.menuScreenY || 0) < tileSize * 2.7;
+          const menuTop = showBelow
+            ? Math.min(size.height - 118, selectedBldgMenu.menuScreenY + tileSize * 0.8)
+            : Math.max(8, selectedBldgMenu.menuScreenY - tileSize * 1.8);
+          return (
           <div
             className="cf-panel absolute z-50"
             style={{
               left: Math.max(70, Math.min(selectedBldgMenu.menuScreenX, size.width - 70)),
-              top: Math.max(8, selectedBldgMenu.menuScreenY - tileSize * 1.8),
-              transform: 'translate(-50%, -100%)',
+              top: menuTop,
+              transform: showBelow ? 'translate(-50%, 0)' : 'translate(-50%, -100%)',
               minWidth: 110,
               padding: '6px 10px',
               pointerEvents: 'auto',
@@ -4425,7 +4477,8 @@ export default function PetWorldCanvas({
               </button>
             </div>
           </div>
-        )}
+          );
+        })()}
         {/* Carry mode status bar */}
         {carryingEntity && (
           <div

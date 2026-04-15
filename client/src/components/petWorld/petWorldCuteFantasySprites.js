@@ -977,10 +977,13 @@ export function drawCuteFantasyFishingDecor(ctx, decor, tileSize, time = 0) {
   }
 
   if (decor.type === 'boat') {
+    const entry = getImage(cfp(BOAT_ANIM));
+    if (!entry?.loaded) return false;
     const frame = Math.floor((time * 0.0011 + seed * 0.29) % BOAT_FRAMES);
     const width = decor.width ?? tileSize * 2.08;
     const height = decor.height ?? tileSize * 1.1;
     const shoreDir = decor.shoreDir || 'n';
+    const vertical = !!decor.vertical || shoreDir === 'e' || shoreDir === 'w';
     const rope = decor.postScreenX != null && decor.postScreenY != null && decor.ropeScreenX != null && decor.ropeScreenY != null
       ? {
           ax: decor.postScreenX,
@@ -1004,20 +1007,18 @@ export function drawCuteFantasyFishingDecor(ctx, decor, tileSize, time = 0) {
     ctx.fillStyle = '#7a5526';
     ctx.fillRect(rope.ax - tileSize * 0.04, rope.ay - tileSize * 0.04, tileSize * 0.08, tileSize * 0.08);
     ctx.restore();
-    return drawFrame(
-      ctx,
-      cfp(BOAT_ANIM),
-      frame * 48,
-      0,
-      48,
-      48,
-      x,
-      y,
-      width,
-      height,
-      undefined,
-      decor.alpha ?? 0.96,
-    );
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    if (decor.alpha != null) ctx.globalAlpha = decor.alpha;
+    if (vertical) {
+      ctx.translate(x + width / 2, y + height / 2);
+      ctx.rotate(shoreDir === 'e' ? Math.PI / 2 : -Math.PI / 2);
+      ctx.drawImage(entry.image, frame * 48, 0, 48, 48, -height / 2, -width / 2, height, width);
+    } else {
+      ctx.drawImage(entry.image, frame * 48, 0, 48, 48, x, y, width, height);
+    }
+    ctx.restore();
+    return true;
   }
 
   if (decor.type === 'fishing_bank') {
@@ -1030,7 +1031,7 @@ export function drawCuteFantasyFishingDecor(ctx, decor, tileSize, time = 0) {
       decor.width ?? tileSize,
       decor.height ?? tileSize,
       bank.facing,
-      decor.alpha ?? 0.96,
+      decor.alpha ?? 0.9,
     );
   }
 

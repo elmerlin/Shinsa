@@ -364,6 +364,17 @@ function hasNearbyTile(mask, x, y, radius = 1) {
   return false;
 }
 
+function countMaskNeighbors(mask, x, y, radius = 1) {
+  let count = 0;
+  for (let oy = -radius; oy <= radius; oy += 1) {
+    for (let ox = -radius; ox <= radius; ox += 1) {
+      if (ox === 0 && oy === 0) continue;
+      if (mask[y + oy]?.[x + ox]) count += 1;
+    }
+  }
+  return count;
+}
+
 function generateExpansionChunk({ biome, direction, expansionIndex, width, height, adjacentEdge = [] }) {
   const def = getBiomeDef(biome);
   const rng = mulberry32(hashSeed(`${biome}:${direction}:${expansionIndex}`));
@@ -413,9 +424,9 @@ function generateExpansionChunk({ biome, direction, expansionIndex, width, heigh
   const treeMask = createMask(width, height);
   const rockMask = createMask(width, height);
   const bushMask = createMask(width, height);
-  const treePatches = Math.max(0, Math.round((profile.tree + bias.tree) * area / 18));
-  const rockPatches = Math.max(0, Math.round((profile.rock + bias.rock) * area / 22));
-  const bushPatches = Math.max(0, Math.round((profile.bush + bias.bush) * area / 20));
+  const treePatches = Math.max(1, Math.round((profile.tree + bias.tree) * area / 14));
+  const rockPatches = Math.max(1, Math.round((profile.rock + bias.rock) * area / 18));
+  const bushPatches = Math.max(1, Math.round((profile.bush + bias.bush) * area / 16));
   addPatchCluster(treeMask, treePatches, direction, rng, {
     majorRadius: 2.2,
     minorRadius: 1.4,
@@ -447,11 +458,20 @@ function generateExpansionChunk({ biome, direction, expansionIndex, width, heigh
       const seam = seamDistance(direction, x, y, width, height);
       if (seam <= 0) continue;
       if (hasNearbyTile(smoothedWater, x, y, 1)) continue;
+      const treeDensity = countMaskNeighbors(smoothedTrees, x, y, 1);
+      const rockDensity = countMaskNeighbors(smoothedRocks, x, y, 1);
       if (smoothedRocks[y][x] && seam >= 1) {
         tiles[y][x].t = 'rock';
       } else if (smoothedTrees[y][x] && seam >= 1) {
-        tiles[y][x].t = 'tree';
+        const edgeForest = treeDensity >= 2 && treeDensity <= 4;
+        if (edgeForest && seam >= 2 && hashSeed(`${biome}:${direction}:${expansionIndex}:stump:${x}:${y}`) % 11 === 0) {
+          tiles[y][x].t = 'stump';
+        } else {
+          tiles[y][x].t = 'tree';
+        }
       } else if (smoothedBushes[y][x] && seam >= 1 && !hasNearbyTile(smoothedTrees, x, y, 0) && !hasNearbyTile(smoothedRocks, x, y, 0)) {
+        tiles[y][x].t = 'bush';
+      } else if (rockDensity >= 4 && seam >= 2 && hashSeed(`${biome}:${direction}:${expansionIndex}:bush:${x}:${y}`) % 9 === 0) {
         tiles[y][x].t = 'bush';
       }
     }
