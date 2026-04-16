@@ -238,38 +238,64 @@ router.get('/generate/job/:jobId', requireAuth, requireAdmin, async (req, res) =
 
   const { jobId } = req.params;
   const tracked = activeJobs.get(jobId);
+  const characterId = tracked?.characterId || req.query.characterId || 'unknown';
+  const safeId = String(characterId).replace(/[^a-zA-Z0-9_-]/g, '');
 
   try {
     const job = await pixellabGet(`/background-jobs/${jobId}`);
     const status = job.status || 'unknown';
 
-    if (status === 'completed' && job.last_response?.images?.length) {
-      // Save the south-facing image (first in the array) as the body
-      const southImage = job.last_response.images[0];
-      const characterId = tracked?.characterId || req.query.characterId || 'unknown';
-      const safeId = String(characterId).replace(/[^a-zA-Z0-9_-]/g, '');
+    console.log(`[Piumon] poll ${jobId} (${safeId}): status=${status}, keys=${Object.keys(job).join(',')}`);
 
-      if (southImage.image) {
-        const base64Data = southImage.image.replace(/^data:image\/\w+;base64,/, '');
+    if (status === 'completed') {
+      // Try multiple response structures
+      const images = job.last_response?.images || job.images || job.result?.images || [];
+      console.log(`[Piumon] completed: ${images.length} images, image keys=${images[0] ? Object.keys(images[0]).join(',') : 'none'}`);
+
+      let saved = false;
+      if (images.length > 0) {
+        const southImage = images[0];
         const outPath = path.join(PIUMON_DIR, 'bodies', `${safeId}.png`);
-        await fs.promises.writeFile(outPath, Buffer.from(base64Data, 'base64'));
+
+        if (southImage.image && typeof southImage.image === 'string') {
+          // base64 data URI
+          const base64Data = southImage.image.replace(/^data:image\/[^;]+;base64,/, '');
+          await fs.promises.writeFile(outPath, Buffer.from(base64Data, 'base64'));
+          saved = true;
+        } else if (southImage.image && southImage.image.base64) {
+          // {type: "base64", base64: "..."} object
+          await fs.promises.writeFile(outPath, Buffer.from(southImage.image.base64, 'base64'));
+          saved = true;
+        } else if (southImage.url) {
+          // URL - download it
+          const imgRes = await fetch(southImage.url);
+          const imgBuf = Buffer.from(await imgRes.arrayBuffer());
+          await fs.promises.writeFile(outPath, imgBuf);
+          saved = true;
+        } else if (southImage.base64) {
+          // plain base64 string on the image object
+          await fs.promises.writeFile(outPath, Buffer.from(southImage.base64, 'base64'));
+          saved = true;
+        }
+
+        if (!saved) {
+          console.error(`[Piumon] could not extract image data. Image object sample:`, JSON.stringify(southImage).slice(0, 500));
+        }
       }
 
-      if (tracked) {
-        tracked.status = 'completed';
-        tracked.result = { savedAs: `${safeId}.png`, imageCount: job.last_response.images.length };
-      }
+      if (tracked) tracked.status = 'completed';
 
       res.json({
         status: 'completed',
+        saved,
         characterId: safeId,
         filename: `${safeId}.png`,
         path: `/piumon-assets/bodies/${safeId}.png`,
-        imageCount: job.last_response.images.length,
+        imageCount: images.length,
       });
     } else if (status === 'failed' || status === 'error') {
       if (tracked) tracked.status = 'failed';
-      res.json({ status: 'failed', error: job.error || 'Generation failed' });
+      res.json({ status: 'failed', error: job.error || job.message || 'Generation failed' });
     } else {
       res.json({ status: 'processing' });
     }
