@@ -145,6 +145,7 @@ export default function PetBattleModal({ open, onClose, character, onComplete, s
   const [mode, setMode] = useState('idle');
   const [selectedWorld, setSelectedWorld] = useState('grassland');
   const [uiState, setUiState] = useState(game.getState());
+  const [lbExpanded, setLbExpanded] = useState(false);
   const completedRef = useRef(false);
 
   useEffect(() => {
@@ -297,10 +298,9 @@ export default function PetBattleModal({ open, onClose, character, onComplete, s
       {isPlaying ? (
         <div className="bg-black/70 backdrop-blur-sm border-t border-white/[0.06] shrink-0 px-2 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
           {/* ── Status bar + upgrades row ── */}
-          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none">
+          <div className="flex flex-wrap items-center gap-1 mb-1">
             {/* Aura readout */}
-            <div className="shrink-0 flex items-center gap-1 rounded-md border border-amber-400/15 bg-amber-500/[0.06] px-1.5 py-1">
-              <span className="text-[10px] font-bold text-amber-300/70">Aura</span>
+            <div className="flex items-center gap-1 rounded-md border border-amber-400/15 bg-amber-500/[0.06] px-1.5 py-0.5">
               <span className="text-[11px] font-black tabular-nums text-amber-200">{Math.floor(uiState.aura || 0)}<span className="text-amber-200/40">/{uiState.auraMax || 520}</span></span>
               <span className="text-[9px] text-amber-300/50 tabular-nums">+{uiState.auraRate || 14}/s</span>
             </div>
@@ -327,7 +327,7 @@ export default function PetBattleModal({ open, onClose, character, onComplete, s
             })}
 
             {/* Stage / wave pill */}
-            <div className="shrink-0 ml-auto rounded-md border border-white/[0.06] bg-white/[0.03] px-1.5 py-1 text-[10px] text-white/50 font-medium whitespace-nowrap tabular-nums">
+            <div className="ml-auto rounded-md border border-white/[0.06] bg-white/[0.03] px-1.5 py-0.5 text-[10px] text-white/50 font-medium whitespace-nowrap tabular-nums">
               {uiState.stage > 10 ? 'Surv' : 'Stg'} {uiState.stage || 1}<span className="text-white/25 mx-0.5">{'\u00B7'}</span>W{uiState.wave || 1}
             </div>
           </div>
@@ -398,6 +398,15 @@ export default function PetBattleModal({ open, onClose, character, onComplete, s
             </div>
           </div>
 
+          <div className="mb-2 rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 py-2">
+            <div className="text-[10px] font-black tracking-[0.18em] uppercase text-white/35 mb-1">How to play</div>
+            <div className="space-y-0.5 text-[10px] text-white/55 leading-relaxed">
+              <div><span className="text-amber-300/80 font-bold">1-5</span> Deploy units · <span className="text-sky-300/80 font-bold">6</span> Burst skill</div>
+              <div><span className="text-amber-300/80 font-bold">7-9</span> Upgrade Flow (+aura/s), Reserve (max aura), Rhythm (faster cooldowns)</div>
+              <div className="text-white/40">Skyguard targets air first · Fliers bypass ground · Tank does splash</div>
+            </div>
+          </div>
+
           <button
             onClick={handleStart}
             className="w-full h-12 rounded-xl border border-orange-400/30 bg-orange-500/15 text-orange-100 font-black tracking-wide hover:bg-orange-500/20 active:scale-[0.99] transition-all"
@@ -426,8 +435,8 @@ export default function PetBattleModal({ open, onClose, character, onComplete, s
               </div>
             )}
 
-            <div className="mt-3 max-h-[min(32svh,19rem)] space-y-2 overflow-y-auto px-3 pb-3 pr-2">
-              {topEntries.length > 0 ? topEntries.map((entry) => (
+            <div className="mt-2 space-y-1.5 px-3 pb-2">
+              {(lbExpanded ? topEntries : topEntries.slice(0, 3)).map((entry) => (
                 <div key={`${entry.user_id || entry.username}-${entry.rank}`} className={`flex items-center gap-2 rounded-lg px-2 py-1.5 ${entry.is_me ? 'bg-orange-400/[0.08]' : 'bg-black/20'}`}>
                   <div className={`w-6 text-[10px] font-black tabular-nums ${entry.rank === 1 ? 'text-amber-300' : entry.rank === 2 ? 'text-slate-300' : 'text-orange-300'}`}>#{entry.rank}</div>
                   <div className="rounded-md border border-white/[0.06] bg-white/[0.03] px-1 py-0.5 shrink-0">
@@ -448,16 +457,19 @@ export default function PetBattleModal({ open, onClose, character, onComplete, s
                     <div className="truncate text-[11px] font-semibold text-white/90">
                       {entry.nickname || entry.username || 'Unknown'}
                     </div>
-                    <div className="truncate text-[9px] text-gray-500">Stage {entry.best_stage || 0} {'\u00B7'} {entry.bosses_defeated || 0} bosses</div>
+                    <div className="truncate text-[9px] text-gray-500">Stage {entry.best_stage || 0} · {entry.bosses_defeated || 0} bosses</div>
                   </div>
                   <div className="text-right shrink-0">
                     <div className="text-[12px] font-black tabular-nums text-orange-200">{entry.high_score || 0}</div>
-                    <div className="text-[9px] text-gray-600 tabular-nums">{entry.total_enemies_defeated || 0} defeats</div>
                   </div>
                 </div>
-              )) : (
-                <div className="text-[10px] text-gray-500">Loading leaderboard...</div>
+              ))}
+              {topEntries.length > 3 && (
+                <button onClick={() => setLbExpanded(!lbExpanded)} className="w-full py-1 text-[10px] font-bold text-white/40 hover:text-white/60 transition-colors">
+                  {lbExpanded ? 'Show less' : `See all ${topEntries.length} players ▾`}
+                </button>
               )}
+              {topEntries.length === 0 && <div className="text-[10px] text-gray-500 px-1">Loading leaderboard...</div>}
             </div>
           </div>
         </div>

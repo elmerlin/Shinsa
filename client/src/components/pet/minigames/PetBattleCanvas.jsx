@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useRef } from 'react';
 import { loadAllSprites, loadAllEnemySprites } from './petBattleSpriteLoader';
 import {
-  drawAuraMeter,
   drawBattlefield,
   drawCountdown,
   drawEnemyBase,
@@ -12,7 +11,6 @@ import {
   drawPlayerUnit,
   drawProjectile,
   drawResults,
-  drawSpawnButtons,
   drawStageClearBanner,
   drawStartScreen,
   drawDeathPoof,
@@ -97,15 +95,13 @@ export default function PetBattleCanvas({ game, character, reducedMotion, world 
       else drawDeathPoof(ctx, screenX, fxY + 4, fxSize, fx.progress);
     });
 
-    // Only draw the canvas HUD for non-playing modes (the React UI status bar handles it during play)
-    if (state.mode !== 'playing') {
+    // Only draw the canvas HUD for non-playing/non-idle modes (React UI handles it during play & idle)
+    if (state.mode !== 'playing' && state.mode !== 'idle') {
       drawHUD(ctx, w, h, state);
     }
 
     if (state.mode === 'idle') {
       drawStartScreen(ctx, w, h, state.character || character || 'dojocat');
-      drawSpawnButtons(ctx, 12, h - 28, 140, state, state.character || character || 'dojocat');
-      drawAuraMeter(ctx, 12, h - 42, 120, state.aura, state.auraMax, state.upgrades?.income || 0);
       return;
     }
 
