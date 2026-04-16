@@ -1,4 +1,5 @@
 import { CHAR_COLORS } from './miniPumpSprites';
+import { isLoaded, getAnimationFrame, getRotation, drawSprite, getAnimationLength } from './petBattleSpriteLoader';
 
 // ━━━ Palette ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 const SMB_PALETTE = {
@@ -1028,6 +1029,30 @@ export function drawPlayerUnit(ctx, unit, x, groundY, scale, character, animFram
   const atk = unit.attackFlash > 0;
   const atkP = atk ? Math.max(0, Math.min(1, (180 - unit.attackFlash) / 180)) : 0;
 
+  if (isLoaded(character, unit.type)) {
+    const spriteH = ps * (unit.type === 'tank' ? 28 : unit.type === 'brawler' ? 24 : 20);
+    const dir = 'east';
+    let img = null;
+    if (atk) {
+      const animType = unit.type === 'ranged' ? 'fireball' : 'attack';
+      const len = getAnimationLength(character, unit.type, animType);
+      const fi = len > 0 ? Math.floor(atkP * (len - 1)) : 0;
+      img = getAnimationFrame(character, unit.type, animType, dir, fi);
+    }
+    if (!img) {
+      const walkLen = getAnimationLength(character, unit.type, 'walk');
+      if (walkLen > 0) {
+        const fi = Math.floor((unitAnim * 0.15) % walkLen);
+        img = getAnimationFrame(character, unit.type, 'walk', dir, fi);
+      }
+    }
+    if (!img) img = getRotation(character, unit.type, dir);
+    if (img && drawSprite(ctx, img, x, fy, spriteH, false)) {
+      drawPlayerUnitOverlay(ctx, unit, x, fy, ps);
+      return;
+    }
+  }
+
   switch (unit.type) {
     case 'meatshield': drawMeatshieldBody(ctx, x, fy, ps, c, character, walkPhase, atk, atkP); break;
     case 'brawler': drawBrawlerBody(ctx, x, fy, ps, c, character, walkPhase, atk, atkP); break;
@@ -1036,6 +1061,10 @@ export function drawPlayerUnit(ctx, unit, x, groundY, scale, character, animFram
     default: drawMeatshieldBody(ctx, x, fy, ps, c, character, walkPhase, atk, atkP);
   }
 
+  drawPlayerUnitOverlay(ctx, unit, x, fy, ps);
+}
+
+function drawPlayerUnitOverlay(ctx, unit, x, fy, ps) {
   // HP bar
   const barW = Math.max(20, ps * 16);
   const hpRatio = unit.hp / Math.max(1, unit.maxHp);

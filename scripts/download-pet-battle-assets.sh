@@ -23,12 +23,12 @@ declare -A CHARS=(
   ["devit-meatshield"]="09c0c64c-5c33-498f-b268-8a46aabbd4cd"
   ["devit-brawler"]="66c96b1d-3627-439c-9d65-45554734a041"
   ["devit-ranged"]="660b98aa-f598-4749-a404-d5dbd6958c4b"
-  # ["devit-tank"]=""  # TODO: generate
+  ["devit-tank"]="f3014b90-ed33-4594-b629-e1e3e9a846a2"
   # Pixiu variants
-  ["pixiu-meatshield"]="8de4fded-a827-40c3-981d-af1d1739afae"
-  ["pixiu-brawler"]="afa39141-c426-4f6a-9a61-248673db1877"
-  # ["pixiu-ranged"]=""  # TODO: generate
-  # ["pixiu-tank"]=""    # TODO: generate
+  ["pixiu-meatshield"]="c17f0f99-0daf-47d3-adc1-4ddf1ae2f4af"
+  ["pixiu-brawler"]="451a85a8-50cb-4c2a-b331-e5b4ae7e277c"
+  ["pixiu-ranged"]="61cd5a60-1baa-4909-aa47-641f1c834552"
+  ["pixiu-tank"]="4fb41b27-d463-4f5b-a816-3a133f54451a"
 )
 
 DIRECTIONS=("south" "east" "north" "west")

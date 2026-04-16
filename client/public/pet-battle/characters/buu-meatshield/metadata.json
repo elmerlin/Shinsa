@@ -1,0 +1,53 @@
+{
+  "character": {
+    "id": "f1768794-39a9-474e-a279-5cb617908e76",
+    "name": "Buu Meatshield",
+    "prompt": "tiny cute pink blob creature, small and round, bouncy, simple face, pixel art battle character",
+    "size": {
+      "width": 48,
+      "height": 48
+    },
+    "template_id": "mannequin",
+    "directions": 4,
+    "view": "side",
+    "created_at": "2026-04-16T02:35:23.132118+00:00"
+  },
+  "frames": {
+    "rotations": {
+      "south": "rotations/south.png",
+      "west": "rotations/west.png",
+      "east": "rotations/east.png",
+      "north": "rotations/north.png"
+    },
+    "animations": {
+      "animating-434324e1": {
+        "east": [
+          "animations/animating-434324e1/east/frame_000.png",
+          "animations/animating-434324e1/east/frame_001.png",
+          "animations/animating-434324e1/east/frame_002.png",
+          "animations/animating-434324e1/east/frame_003.png"
+        ],
+        "south": [
+          "animations/animating-434324e1/south/frame_000.png",
+          "animations/animating-434324e1/south/frame_001.png",
+          "animations/animating-434324e1/south/frame_002.png",
+          "animations/animating-434324e1/south/frame_003.png"
+        ],
+        "north": [
+          "animations/animating-434324e1/north/frame_000.png",
+          "animations/animating-434324e1/north/frame_001.png",
+          "animations/animating-434324e1/north/frame_002.png",
+          "animations/animating-434324e1/north/frame_003.png"
+        ],
+        "west": [
+          "animations/animating-434324e1/west/frame_000.png",
+          "animations/animating-434324e1/west/frame_001.png",
+          "animations/animating-434324e1/west/frame_002.png",
+          "animations/animating-434324e1/west/frame_003.png"
+        ]
+      }
+    }
+  },
+  "export_version": "2.0",
+  "export_date": "2026-04-16T04:04:18.442701"
+}

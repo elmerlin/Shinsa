@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef } from 'react';
+import { loadAllSprites } from './petBattleSpriteLoader';
 import {
   drawAuraMeter,
   drawBattlefield,
@@ -120,6 +121,10 @@ export default function PetBattleCanvas({ game, character, reducedMotion, world 
     game.setOnRender(render);
     render(game.getState());
   }, [game, render]);
+
+  useEffect(() => {
+    loadAllSprites().then(() => renderRef.current?.(game.getState()));
+  }, [game]);
 
   useEffect(() => {
     resize();

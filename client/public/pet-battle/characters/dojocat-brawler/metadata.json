@@ -1,0 +1,53 @@
+{
+  "character": {
+    "id": "cd6eb028-35eb-445c-8eb6-d875deff9280",
+    "name": "Dojocat Brawler",
+    "prompt": "orange cat warrior with nunchucks, medium muscular build, fighting gi, battle-ready stance, pixel art",
+    "size": {
+      "width": 48,
+      "height": 48
+    },
+    "template_id": "mannequin",
+    "directions": 4,
+    "view": "side",
+    "created_at": "2026-04-16T02:35:17.342927+00:00"
+  },
+  "frames": {
+    "rotations": {
+      "south": "rotations/south.png",
+      "west": "rotations/west.png",
+      "east": "rotations/east.png",
+      "north": "rotations/north.png"
+    },
+    "animations": {
+      "animating-b22dd00e": {
+        "east": [
+          "animations/animating-b22dd00e/east/frame_000.png",
+          "animations/animating-b22dd00e/east/frame_001.png",
+          "animations/animating-b22dd00e/east/frame_002.png",
+          "animations/animating-b22dd00e/east/frame_003.png"
+        ],
+        "south": [
+          "animations/animating-b22dd00e/south/frame_000.png",
+          "animations/animating-b22dd00e/south/frame_001.png",
+          "animations/animating-b22dd00e/south/frame_002.png",
+          "animations/animating-b22dd00e/south/frame_003.png"
+        ],
+        "west": [
+          "animations/animating-b22dd00e/west/frame_000.png",
+          "animations/animating-b22dd00e/west/frame_001.png",
+          "animations/animating-b22dd00e/west/frame_002.png",
+          "animations/animating-b22dd00e/west/frame_003.png"
+        ],
+        "north": [
+          "animations/animating-b22dd00e/north/frame_000.png",
+          "animations/animating-b22dd00e/north/frame_001.png",
+          "animations/animating-b22dd00e/north/frame_002.png",
+          "animations/animating-b22dd00e/north/frame_003.png"
+        ]
+      }
+    }
+  },
+  "export_version": "2.0",
+  "export_date": "2026-04-16T04:04:04.860576"
+}

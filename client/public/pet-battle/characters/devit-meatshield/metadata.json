@@ -1,0 +1,201 @@
+{
+  "character": {
+    "id": "09c0c64c-5c33-498f-b268-8a46aabbd4cd",
+    "name": "Devit Meatshield",
+    "prompt": "small red imp demon with tiny horns, light leather armor, fast mischievous stance, pixel art battle character",
+    "size": {
+      "width": 48,
+      "height": 48
+    },
+    "template_id": "mannequin",
+    "directions": 4,
+    "view": "side",
+    "created_at": "2026-04-16T02:36:23.811113+00:00"
+  },
+  "frames": {
+    "rotations": {
+      "south": "rotations/south.png",
+      "west": "rotations/west.png",
+      "east": "rotations/east.png",
+      "north": "rotations/north.png"
+    },
+    "animations": {
+      "animating-71344760": {
+        "north": [
+          "animations/animating-71344760/north/frame_000.png",
+          "animations/animating-71344760/north/frame_001.png",
+          "animations/animating-71344760/north/frame_002.png",
+          "animations/animating-71344760/north/frame_003.png"
+        ],
+        "west": [
+          "animations/animating-71344760/west/frame_000.png",
+          "animations/animating-71344760/west/frame_001.png",
+          "animations/animating-71344760/west/frame_002.png",
+          "animations/animating-71344760/west/frame_003.png"
+        ],
+        "south": [
+          "animations/animating-71344760/south/frame_000.png",
+          "animations/animating-71344760/south/frame_001.png",
+          "animations/animating-71344760/south/frame_002.png",
+          "animations/animating-71344760/south/frame_003.png"
+        ],
+        "east": [
+          "animations/animating-71344760/east/frame_000.png",
+          "animations/animating-71344760/east/frame_001.png",
+          "animations/animating-71344760/east/frame_002.png",
+          "animations/animating-71344760/east/frame_003.png"
+        ]
+      },
+      "cross_punch_attack-433d45bc": {
+        "south": [
+          "animations/cross_punch_attack-433d45bc/south/frame_000.png",
+          "animations/cross_punch_attack-433d45bc/south/frame_001.png",
+          "animations/cross_punch_attack-433d45bc/south/frame_002.png",
+          "animations/cross_punch_attack-433d45bc/south/frame_003.png",
+          "animations/cross_punch_attack-433d45bc/south/frame_004.png",
+          "animations/cross_punch_attack-433d45bc/south/frame_005.png"
+        ],
+        "east": [
+          "animations/cross_punch_attack-433d45bc/east/frame_000.png",
+          "animations/cross_punch_attack-433d45bc/east/frame_001.png",
+          "animations/cross_punch_attack-433d45bc/east/frame_002.png",
+          "animations/cross_punch_attack-433d45bc/east/frame_003.png",
+          "animations/cross_punch_attack-433d45bc/east/frame_004.png",
+          "animations/cross_punch_attack-433d45bc/east/frame_005.png"
+        ],
+        "north": [
+          "animations/cross_punch_attack-433d45bc/north/frame_000.png",
+          "animations/cross_punch_attack-433d45bc/north/frame_001.png",
+          "animations/cross_punch_attack-433d45bc/north/frame_002.png",
+          "animations/cross_punch_attack-433d45bc/north/frame_003.png",
+          "animations/cross_punch_attack-433d45bc/north/frame_004.png",
+          "animations/cross_punch_attack-433d45bc/north/frame_005.png"
+        ],
+        "west": [
+          "animations/cross_punch_attack-433d45bc/west/frame_000.png",
+          "animations/cross_punch_attack-433d45bc/west/frame_001.png",
+          "animations/cross_punch_attack-433d45bc/west/frame_002.png",
+          "animations/cross_punch_attack-433d45bc/west/frame_003.png",
+          "animations/cross_punch_attack-433d45bc/west/frame_004.png",
+          "animations/cross_punch_attack-433d45bc/west/frame_005.png"
+        ]
+      },
+      "casting_a_fireball-f3bc12b3": {
+        "north": [
+          "animations/casting_a_fireball-f3bc12b3/north/frame_000.png",
+          "animations/casting_a_fireball-f3bc12b3/north/frame_001.png",
+          "animations/casting_a_fireball-f3bc12b3/north/frame_002.png",
+          "animations/casting_a_fireball-f3bc12b3/north/frame_003.png",
+          "animations/casting_a_fireball-f3bc12b3/north/frame_004.png",
+          "animations/casting_a_fireball-f3bc12b3/north/frame_005.png"
+        ],
+        "east": [
+          "animations/casting_a_fireball-f3bc12b3/east/frame_000.png",
+          "animations/casting_a_fireball-f3bc12b3/east/frame_001.png",
+          "animations/casting_a_fireball-f3bc12b3/east/frame_002.png",
+          "animations/casting_a_fireball-f3bc12b3/east/frame_003.png",
+          "animations/casting_a_fireball-f3bc12b3/east/frame_004.png",
+          "animations/casting_a_fireball-f3bc12b3/east/frame_005.png"
+        ],
+        "south": [
+          "animations/casting_a_fireball-f3bc12b3/south/frame_000.png",
+          "animations/casting_a_fireball-f3bc12b3/south/frame_001.png",
+          "animations/casting_a_fireball-f3bc12b3/south/frame_002.png",
+          "animations/casting_a_fireball-f3bc12b3/south/frame_003.png",
+          "animations/casting_a_fireball-f3bc12b3/south/frame_004.png",
+          "animations/casting_a_fireball-f3bc12b3/south/frame_005.png"
+        ],
+        "west": [
+          "animations/casting_a_fireball-f3bc12b3/west/frame_000.png",
+          "animations/casting_a_fireball-f3bc12b3/west/frame_001.png",
+          "animations/casting_a_fireball-f3bc12b3/west/frame_002.png",
+          "animations/casting_a_fireball-f3bc12b3/west/frame_003.png",
+          "animations/casting_a_fireball-f3bc12b3/west/frame_004.png",
+          "animations/casting_a_fireball-f3bc12b3/west/frame_005.png"
+        ]
+      },
+      "animating-f0762945": {
+        "north": [
+          "animations/animating-f0762945/north/frame_000.png",
+          "animations/animating-f0762945/north/frame_001.png",
+          "animations/animating-f0762945/north/frame_002.png",
+          "animations/animating-f0762945/north/frame_003.png",
+          "animations/animating-f0762945/north/frame_004.png",
+          "animations/animating-f0762945/north/frame_005.png",
+          "animations/animating-f0762945/north/frame_006.png",
+          "animations/animating-f0762945/north/frame_007.png"
+        ],
+        "west": [
+          "animations/animating-f0762945/west/frame_000.png",
+          "animations/animating-f0762945/west/frame_001.png",
+          "animations/animating-f0762945/west/frame_002.png",
+          "animations/animating-f0762945/west/frame_003.png",
+          "animations/animating-f0762945/west/frame_004.png",
+          "animations/animating-f0762945/west/frame_005.png",
+          "animations/animating-f0762945/west/frame_006.png",
+          "animations/animating-f0762945/west/frame_007.png"
+        ],
+        "east": [
+          "animations/animating-f0762945/east/frame_000.png",
+          "animations/animating-f0762945/east/frame_001.png",
+          "animations/animating-f0762945/east/frame_002.png",
+          "animations/animating-f0762945/east/frame_003.png",
+          "animations/animating-f0762945/east/frame_004.png",
+          "animations/animating-f0762945/east/frame_005.png",
+          "animations/animating-f0762945/east/frame_006.png",
+          "animations/animating-f0762945/east/frame_007.png"
+        ],
+        "south": [
+          "animations/animating-f0762945/south/frame_000.png",
+          "animations/animating-f0762945/south/frame_001.png",
+          "animations/animating-f0762945/south/frame_002.png",
+          "animations/animating-f0762945/south/frame_003.png",
+          "animations/animating-f0762945/south/frame_004.png",
+          "animations/animating-f0762945/south/frame_005.png",
+          "animations/animating-f0762945/south/frame_006.png",
+          "animations/animating-f0762945/south/frame_007.png"
+        ]
+      },
+      "falling_backward-30527d21": {
+        "north": [
+          "animations/falling_backward-30527d21/north/frame_000.png",
+          "animations/falling_backward-30527d21/north/frame_001.png",
+          "animations/falling_backward-30527d21/north/frame_002.png",
+          "animations/falling_backward-30527d21/north/frame_003.png",
+          "animations/falling_backward-30527d21/north/frame_004.png",
+          "animations/falling_backward-30527d21/north/frame_005.png",
+          "animations/falling_backward-30527d21/north/frame_006.png"
+        ],
+        "south": [
+          "animations/falling_backward-30527d21/south/frame_000.png",
+          "animations/falling_backward-30527d21/south/frame_001.png",
+          "animations/falling_backward-30527d21/south/frame_002.png",
+          "animations/falling_backward-30527d21/south/frame_003.png",
+          "animations/falling_backward-30527d21/south/frame_004.png",
+          "animations/falling_backward-30527d21/south/frame_005.png",
+          "animations/falling_backward-30527d21/south/frame_006.png"
+        ],
+        "west": [
+          "animations/falling_backward-30527d21/west/frame_000.png",
+          "animations/falling_backward-30527d21/west/frame_001.png",
+          "animations/falling_backward-30527d21/west/frame_002.png",
+          "animations/falling_backward-30527d21/west/frame_003.png",
+          "animations/falling_backward-30527d21/west/frame_004.png",
+          "animations/falling_backward-30527d21/west/frame_005.png",
+          "animations/falling_backward-30527d21/west/frame_006.png"
+        ],
+        "east": [
+          "animations/falling_backward-30527d21/east/frame_000.png",
+          "animations/falling_backward-30527d21/east/frame_001.png",
+          "animations/falling_backward-30527d21/east/frame_002.png",
+          "animations/falling_backward-30527d21/east/frame_003.png",
+          "animations/falling_backward-30527d21/east/frame_004.png",
+          "animations/falling_backward-30527d21/east/frame_005.png",
+          "animations/falling_backward-30527d21/east/frame_006.png"
+        ]
+      }
+    }
+  },
+  "export_version": "2.0",
+  "export_date": "2026-04-16T04:04:49.445613"
+}
