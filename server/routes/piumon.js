@@ -139,30 +139,51 @@ function resolvePreviewPath(previewUrl) {
   return path.join(CLIENT_PUBLIC, relative);
 }
 
+const PIXELLAB_MAX_CONCEPT_PX = 1024;
+
 async function imageToBase64Payload(filePath) {
-  const buf = await fs.promises.readFile(filePath);
-  const meta = await sharp(buf).metadata();
+  let img = sharp(await fs.promises.readFile(filePath));
+  const meta = await img.metadata();
+  let { width, height } = meta;
+
+  // Resize if either dimension exceeds PixelLab's 1024px limit
+  if (width > PIXELLAB_MAX_CONCEPT_PX || height > PIXELLAB_MAX_CONCEPT_PX) {
+    const scale = PIXELLAB_MAX_CONCEPT_PX / Math.max(width, height);
+    width = Math.round(width * scale);
+    height = Math.round(height * scale);
+    img = img.resize(width, height, { fit: 'inside' });
+  }
+
+  const buf = await img.png().toBuffer();
   return {
     image: { type: 'base64', base64: buf.toString('base64') },
-    width: meta.width,
-    height: meta.height,
+    width,
+    height,
   };
 }
 
-async function pixellabPost(endpoint, body) {
-  const res = await fetch(`${PIXELLAB_BASE}${endpoint}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${PIXELLAB_API_KEY}`,
-    },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`PixelLab ${endpoint} ${res.status}: ${text}`);
+async function pixellabPost(endpoint, body, retries = 5) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const res = await fetch(`${PIXELLAB_BASE}${endpoint}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${PIXELLAB_API_KEY}`,
+      },
+      body: JSON.stringify(body),
+    });
+    if (res.status === 429 && attempt < retries) {
+      const wait = Math.min(15000, 5000 * (attempt + 1));
+      console.log(`[Piumon] 429 rate limited, waiting ${wait / 1000}s (attempt ${attempt + 1}/${retries})`);
+      await new Promise((r) => setTimeout(r, wait));
+      continue;
+    }
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`PixelLab ${endpoint} ${res.status}: ${text}`);
+    }
+    return res.json();
   }
-  return res.json();
 }
 
 async function pixellabGet(endpoint) {

@@ -673,7 +673,7 @@ export default function PiumonPage() {
       // Start polling
       const poll = async () => {
         try {
-          const pollRes = await fetch(`/api/piumon/generate/job/${jobId}`, {
+          const pollRes = await fetch(`/api/piumon/generate/job/${jobId}?characterId=${encodeURIComponent(character.id)}`, {
             headers: { Authorization: `Bearer ${token}` },
           });
           const data = await pollRes.json();
@@ -1074,10 +1074,12 @@ export default function PiumonPage() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => {
-                    activeBases
-                      .filter((c) => !getAssetUrl('bodies', c.id) && !genJobs[c.id]?.status?.match(/starting|processing/))
-                      .forEach((c, i) => setTimeout(() => startGeneration(c), i * 2000));
+                  onClick={async () => {
+                    const pending = activeBases.filter((c) => !getAssetUrl('bodies', c.id) && !genJobs[c.id]?.status?.match(/starting|processing/));
+                    for (const c of pending) {
+                      await startGeneration(c);
+                      await new Promise((r) => setTimeout(r, 4000));
+                    }
                   }}
                   className="w-full rounded-lg border border-cyan-300/30 bg-cyan-300/[0.08] py-2 font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-cyan-200 transition hover:bg-cyan-300/[0.14]"
                 >
