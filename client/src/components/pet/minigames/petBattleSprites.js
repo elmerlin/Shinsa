@@ -1348,6 +1348,138 @@ function drawFlierBody(ctx, x, fy, groundY, ps, c, character, walk, atk, atkP, u
   ctx.fillRect(x + 2 * ps + tailSwing, bodyY + 4 * ps, 2 * ps, 2 * ps);
 }
 
+// ━━━ Veterancy visual effects ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function drawVeterancyEffects(ctx, unit, x, fy, spriteH, character, animFrame) {
+  const vet = unit.veterancy || 0;
+  if (vet <= 0) return;
+  const c = CHAR_COLORS[character] || CHAR_COLORS.dojocat;
+  const centerY = fy - spriteH * 0.5;
+
+  // Vet 1+: subtle white outline glow
+  ctx.save();
+  ctx.globalAlpha = 0.2 + vet * 0.04;
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.ellipse(x, centerY, spriteH * 0.32, spriteH * 0.45, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+
+  // Vet 2+: colored energy aura that pulses
+  if (vet >= 2) {
+    ctx.save();
+    ctx.globalAlpha = 0.15 + Math.sin(animFrame * 0.1) * 0.08;
+    ctx.beginPath();
+    ctx.arc(x, centerY, spriteH * 0.45, 0, Math.PI * 2);
+    ctx.fillStyle = c.accent;
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // Vet 3+: orbiting sparkle particles
+  if (vet >= 3) {
+    const numParticles = Math.min(vet - 1, 4);
+    for (let i = 0; i < numParticles; i++) {
+      const angle = animFrame * 0.06 + (i * Math.PI * 2) / numParticles;
+      const orbitRx = spriteH * 0.4;
+      const orbitRy = spriteH * 0.25;
+      const sparkX = x + Math.cos(angle) * orbitRx;
+      const sparkY = centerY + Math.sin(angle) * orbitRy;
+      const sparkAlpha = 0.6 + Math.sin(animFrame * 0.15 + i * 1.8) * 0.3;
+      const sparkSize = 1.5 + Math.sin(animFrame * 0.12 + i) * 0.5;
+      ctx.save();
+      ctx.globalAlpha = sparkAlpha;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(sparkX, sparkY, sparkSize, 0, Math.PI * 2);
+      ctx.fill();
+      // Tiny glow ring
+      ctx.globalAlpha = sparkAlpha * 0.4;
+      ctx.fillStyle = c.accent;
+      ctx.beginPath();
+      ctx.arc(sparkX, sparkY, sparkSize * 2.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  // Vet 4+: golden crown/halo above head
+  if (vet >= 4) {
+    const haloY = fy - spriteH - 2;
+    const haloR = spriteH * 0.22;
+    const haloPulse = 0.55 + Math.sin(animFrame * 0.08) * 0.15;
+    ctx.save();
+    ctx.globalAlpha = haloPulse;
+    ctx.strokeStyle = '#ffd700';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.ellipse(x, haloY, haloR, haloR * 0.35, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    // Inner bright ring
+    ctx.globalAlpha = haloPulse * 0.5;
+    ctx.strokeStyle = '#fff8d0';
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.ellipse(x, haloY, haloR * 0.7, haloR * 0.25, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // Vet 5: legendary flame aura - rising flame particles
+  if (vet === 5) {
+    ctx.save();
+    // Bigger background glow
+    ctx.globalAlpha = 0.1 + Math.sin(animFrame * 0.07) * 0.05;
+    ctx.beginPath();
+    ctx.arc(x, centerY, spriteH * 0.6, 0, Math.PI * 2);
+    const grad = ctx.createRadialGradient(x, centerY, 0, x, centerY, spriteH * 0.6);
+    grad.addColorStop(0, c.accent);
+    grad.addColorStop(1, 'transparent');
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // Rising flame particles
+    ctx.globalAlpha = 1;
+    for (let i = 0; i < 5; i++) {
+      const seed = i * 137.5;
+      const life = ((animFrame * 1.8 + seed) % 60) / 60; // 0..1 lifecycle
+      const flameX = x + Math.sin(seed) * spriteH * 0.3 + Math.sin(animFrame * 0.1 + i) * 2;
+      const flameY = fy - life * spriteH * 0.8;
+      const flameAlpha = (1 - life) * 0.6;
+      const flameSize = (1 - life) * 2.5 + 0.5;
+      ctx.globalAlpha = flameAlpha;
+      ctx.fillStyle = life < 0.4 ? '#ffd700' : life < 0.7 ? '#ff8c00' : '#ff4500';
+      ctx.beginPath();
+      ctx.arc(flameX, flameY, flameSize, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+}
+
+// ━━━ Attack impact lines for high-vet units ━━━━━━━━━━━━━━━━━━━━
+function drawAttackImpactLines(ctx, x, fy, spriteH, ps, c, vet, animFrame) {
+  ctx.save();
+  const numLines = Math.min(vet, 5);
+  const len = spriteH * 0.3 + vet * ps;
+  for (let i = 0; i < numLines; i++) {
+    const seed = i * 73.7;
+    const angle = (seed + animFrame * 0.2) % (Math.PI * 2);
+    const dist = spriteH * 0.35;
+    const ox = x + Math.cos(angle) * dist;
+    const oy = fy - spriteH * 0.5 + Math.sin(angle) * dist * 0.6;
+    const lineAngle = angle + Math.PI * 0.25;
+    ctx.globalAlpha = 0.35 + Math.sin(animFrame * 0.3 + i) * 0.2;
+    ctx.strokeStyle = vet >= 4 ? '#ffd700' : c.accent;
+    ctx.lineWidth = vet >= 4 ? 1.5 : 1;
+    ctx.beginPath();
+    ctx.moveTo(ox - Math.cos(lineAngle) * len * 0.5, oy - Math.sin(lineAngle) * len * 0.5);
+    ctx.lineTo(ox + Math.cos(lineAngle) * len * 0.5, oy + Math.sin(lineAngle) * len * 0.5);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
 export function drawPlayerUnit(ctx, unit, x, groundY, scale, character, animFrame) {
   const unitAnim = animFrame + (unit.animOffset || 0);
   const layerLift = getLayerLift(unit.layer, unitAnim, unit.flightBobOffset || 0);
@@ -1368,9 +1500,19 @@ export function drawPlayerUnit(ctx, unit, x, groundY, scale, character, animFram
   if (vet > 0) drawPixelEllipse(ctx, x, fy - 8 * ps, Math.max(3, ps * 1.4), Math.max(2, ps * 0.8), ps, c.accent, 0.12 + vet * 0.03);
 
   if (isLoaded(character, unit.type)) {
-    const spriteH = ps * (unit.type === 'tank' ? 22 : unit.type === 'brawler' ? 18 : 16);
+    const SPRITE_H_MAP = { tank: 26, brawler: 20, meatshield: 14, ranged: 16, flier: 16 };
+    const spriteH = ps * (SPRITE_H_MAP[unit.type] || 16);
     const dir = 'east';
     let img = null;
+
+    // Vet 2+ attack jitter
+    let jx = x, jy = fy;
+    if (atk && vet >= 2) {
+      const jitter = Math.min(2, vet * 0.5);
+      jx += (Math.random() - 0.5) * jitter * ps;
+      jy += (Math.random() - 0.5) * jitter * ps * 0.5;
+    }
+
     if (atk) {
       const animType = unit.type === 'ranged' ? 'fireball' : 'attack';
       const len = getAnimationLength(character, unit.type, animType);
@@ -1386,8 +1528,10 @@ export function drawPlayerUnit(ctx, unit, x, groundY, scale, character, animFram
     }
     if (!img) img = getRotation(character, unit.type, dir);
     // Sprites have ~20% bottom padding; shift down so feet touch ground
-    if (img && drawSprite(ctx, img, x, fy + spriteH * 0.18, spriteH, false)) {
-      drawPlayerUnitOverlay(ctx, unit, x, fy, ps);
+    if (img && drawSprite(ctx, img, jx, jy + spriteH * 0.18, spriteH, false)) {
+      drawVeterancyEffects(ctx, unit, x, fy, spriteH, character, unitAnim);
+      if (atk && vet >= 3) drawAttackImpactLines(ctx, x, fy, spriteH, ps, c, vet, unitAnim);
+      drawPlayerUnitOverlay(ctx, unit, x, fy, ps, vet, unitAnim);
       return;
     }
   }
@@ -1403,26 +1547,31 @@ export function drawPlayerUnit(ctx, unit, x, groundY, scale, character, animFram
 
   if (unit.type !== 'flier') drawAccessoryTrim(ctx, unit, x, fy, ps, c);
   drawVeterancyTrim(ctx, unit, x, fy, ps, c);
-  drawPlayerUnitOverlay(ctx, unit, x, fy, ps, vet);
+  const fallbackSpriteH = ps * ({ tank: 26, brawler: 20, meatshield: 14, ranged: 16, flier: 16 }[unit.type] || 16);
+  drawVeterancyEffects(ctx, unit, x, fy, fallbackSpriteH, character, unitAnim);
+  if (atk && vet >= 3) drawAttackImpactLines(ctx, x, fy, fallbackSpriteH, ps, c, vet, unitAnim);
+  drawPlayerUnitOverlay(ctx, unit, x, fy, ps, vet, unitAnim);
 }
 
-function drawPlayerUnitOverlay(ctx, unit, x, fy, ps, vet = unit.veterancy || 0) {
+function drawPlayerUnitOverlay(ctx, unit, x, fy, ps, vet = unit.veterancy || 0, animFrame = 0) {
   // HP bar
   const barW = Math.max(20, ps * 16);
   const hpRatio = unit.hp / Math.max(1, unit.maxHp);
   const barColor = hpRatio > 0.5 ? '#58e17c' : hpRatio > 0.25 ? '#f7d55b' : '#ff6a5a';
-  const barY = fy - (unit.type === 'tank' ? 30 : unit.type === 'brawler' ? 26 : unit.type === 'ranged' ? 26 : unit.type === 'flier' ? 28 : 22) * ps;
+  const BAR_Y_MAP = { tank: 34, brawler: 28, ranged: 26, flier: 28, meatshield: 22 };
+  const barY = fy - (BAR_Y_MAP[unit.type] || 22) * ps;
   ctx.fillStyle = 'rgba(0,0,0,0.4)';
   ctx.fillRect(x - barW / 2, barY, barW, 3);
   ctx.fillStyle = barColor;
   ctx.fillRect(x - barW / 2, barY, barW * hpRatio, 3);
 
-  // Veterancy stars
-  if (vet > 0) {
+  // Veterancy indicators
+  if (vet > 0 && vet < 4) {
+    // Stars for vet 1-3
     const starY = barY - 6;
     const starSize = Math.max(2, ps * 1.2);
     ctx.fillStyle = '#ffd700';
-    for (let i = 0; i < Math.min(vet, 5); i++) {
+    for (let i = 0; i < Math.min(vet, 3); i++) {
       const sx = x - (vet - 1) * starSize * 0.6 + i * starSize * 1.2;
       ctx.beginPath();
       for (let p = 0; p < 5; p++) {
@@ -1435,6 +1584,44 @@ function drawPlayerUnitOverlay(ctx, unit, x, fy, ps, vet = unit.veterancy || 0) 
       }
       ctx.closePath();
       ctx.fill();
+    }
+  } else if (vet >= 4) {
+    // Rank badge for vet 4+
+    const badgeY = barY - 8;
+    const bw = Math.max(12, ps * 6);
+    const bh = Math.max(7, ps * 3.5);
+    const pulse = vet === 5 ? 0.08 * Math.sin(animFrame * 0.1) : 0;
+
+    // Badge background
+    ctx.fillStyle = vet === 5 ? '#ffd700' : '#c0a040';
+    ctx.beginPath();
+    ctx.roundRect(x - bw / 2, badgeY - bh / 2, bw, bh, 2);
+    ctx.fill();
+
+    // Badge outline
+    ctx.strokeStyle = vet === 5 ? '#fff8e0' : '#e8d080';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(x - bw / 2, badgeY - bh / 2, bw, bh, 2);
+    ctx.stroke();
+
+    // Roman numeral text
+    ctx.fillStyle = vet === 5 ? '#4a2000' : '#3a2800';
+    ctx.font = `bold ${Math.max(6, Math.floor(bh * 0.75))}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(vet === 5 ? 'V' : 'IV', x, badgeY);
+
+    // Vet 5 glow pulse around badge
+    if (vet === 5) {
+      ctx.save();
+      ctx.globalAlpha = 0.2 + pulse;
+      ctx.strokeStyle = '#ffd700';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(x - bw / 2 - 1, badgeY - bh / 2 - 1, bw + 2, bh + 2, 3);
+      ctx.stroke();
+      ctx.restore();
     }
   }
 }
