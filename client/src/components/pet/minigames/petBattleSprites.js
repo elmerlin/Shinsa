@@ -1353,129 +1353,106 @@ function drawVeterancyEffects(ctx, unit, x, fy, spriteH, character, animFrame) {
   const vet = unit.veterancy || 0;
   if (vet <= 0) return;
   const c = CHAR_COLORS[character] || CHAR_COLORS.dojocat;
-  const centerY = fy - spriteH * 0.5;
+  const ps = Math.max(1, Math.round(spriteH / 16)); // pixel scale matching sprite
 
-  // Vet 1+: subtle white outline glow
-  ctx.save();
-  ctx.globalAlpha = 0.2 + vet * 0.04;
-  ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.ellipse(x, centerY, spriteH * 0.32, spriteH * 0.45, 0, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.restore();
-
-  // Vet 2+: colored energy aura that pulses
-  if (vet >= 2) {
-    ctx.save();
-    ctx.globalAlpha = 0.15 + Math.sin(animFrame * 0.1) * 0.08;
-    ctx.beginPath();
-    ctx.arc(x, centerY, spriteH * 0.45, 0, Math.PI * 2);
-    ctx.fillStyle = c.accent;
-    ctx.fill();
-    ctx.restore();
-  }
-
-  // Vet 3+: orbiting sparkle particles
-  if (vet >= 3) {
-    const numParticles = Math.min(vet - 1, 4);
-    for (let i = 0; i < numParticles; i++) {
-      const angle = animFrame * 0.06 + (i * Math.PI * 2) / numParticles;
-      const orbitRx = spriteH * 0.4;
-      const orbitRy = spriteH * 0.25;
-      const sparkX = x + Math.cos(angle) * orbitRx;
-      const sparkY = centerY + Math.sin(angle) * orbitRy;
-      const sparkAlpha = 0.6 + Math.sin(animFrame * 0.15 + i * 1.8) * 0.3;
-      const sparkSize = 1.5 + Math.sin(animFrame * 0.12 + i) * 0.5;
-      ctx.save();
-      ctx.globalAlpha = sparkAlpha;
+  // Vet 1+: small pixel sparkles around unit (2-3 white dots that blink)
+  if (vet >= 1) {
+    const numDots = vet;
+    for (let i = 0; i < numDots; i++) {
+      const phase = (animFrame * 0.12 + i * 2.1) % 6.28;
+      if (Math.sin(phase) < 0.3) continue; // blink off sometimes
+      const dx = Math.round(Math.cos(i * 2.4 + animFrame * 0.03) * spriteH * 0.35);
+      const dy = Math.round(Math.sin(i * 1.7 + animFrame * 0.04) * spriteH * 0.3);
       ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.arc(sparkX, sparkY, sparkSize, 0, Math.PI * 2);
-      ctx.fill();
-      // Tiny glow ring
-      ctx.globalAlpha = sparkAlpha * 0.4;
-      ctx.fillStyle = c.accent;
-      ctx.beginPath();
-      ctx.arc(sparkX, sparkY, sparkSize * 2.2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
+      ctx.globalAlpha = 0.5 + Math.sin(phase) * 0.3;
+      ctx.fillRect(x + dx - ps * 0.5, fy - spriteH * 0.5 + dy - ps * 0.5, ps, ps);
     }
-  }
-
-  // Vet 4+: golden crown/halo above head
-  if (vet >= 4) {
-    const haloY = fy - spriteH - 2;
-    const haloR = spriteH * 0.22;
-    const haloPulse = 0.55 + Math.sin(animFrame * 0.08) * 0.15;
-    ctx.save();
-    ctx.globalAlpha = haloPulse;
-    ctx.strokeStyle = '#ffd700';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.ellipse(x, haloY, haloR, haloR * 0.35, 0, 0, Math.PI * 2);
-    ctx.stroke();
-    // Inner bright ring
-    ctx.globalAlpha = haloPulse * 0.5;
-    ctx.strokeStyle = '#fff8d0';
-    ctx.lineWidth = 0.8;
-    ctx.beginPath();
-    ctx.ellipse(x, haloY, haloR * 0.7, haloR * 0.25, 0, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  // Vet 5: legendary flame aura - rising flame particles
-  if (vet === 5) {
-    ctx.save();
-    // Bigger background glow
-    ctx.globalAlpha = 0.1 + Math.sin(animFrame * 0.07) * 0.05;
-    ctx.beginPath();
-    ctx.arc(x, centerY, spriteH * 0.6, 0, Math.PI * 2);
-    const grad = ctx.createRadialGradient(x, centerY, 0, x, centerY, spriteH * 0.6);
-    grad.addColorStop(0, c.accent);
-    grad.addColorStop(1, 'transparent');
-    ctx.fillStyle = grad;
-    ctx.fill();
-
-    // Rising flame particles
     ctx.globalAlpha = 1;
-    for (let i = 0; i < 5; i++) {
-      const seed = i * 137.5;
-      const life = ((animFrame * 1.8 + seed) % 60) / 60; // 0..1 lifecycle
-      const flameX = x + Math.sin(seed) * spriteH * 0.3 + Math.sin(animFrame * 0.1 + i) * 2;
-      const flameY = fy - life * spriteH * 0.8;
-      const flameAlpha = (1 - life) * 0.6;
-      const flameSize = (1 - life) * 2.5 + 0.5;
-      ctx.globalAlpha = flameAlpha;
-      ctx.fillStyle = life < 0.4 ? '#ffd700' : life < 0.7 ? '#ff8c00' : '#ff4500';
-      ctx.beginPath();
-      ctx.arc(flameX, flameY, flameSize, 0, Math.PI * 2);
-      ctx.fill();
+  }
+
+  // Vet 2+: colored pixel outline flash (every ~30 frames, brief flash of colored pixels at feet)
+  if (vet >= 2) {
+    const flashCycle = (animFrame % 40);
+    if (flashCycle < 4) {
+      ctx.fillStyle = c.accent;
+      ctx.globalAlpha = 0.5 * (1 - flashCycle / 4);
+      // Small cross pattern at feet
+      const bx = x, by = fy - ps;
+      ctx.fillRect(bx - ps, by, ps * 3, ps);
+      ctx.fillRect(bx, by - ps, ps, ps * 3);
+      ctx.globalAlpha = 1;
     }
-    ctx.restore();
+  }
+
+  // Vet 3+: rising pixel motes (tiny colored squares that float up and fade)
+  if (vet >= 3) {
+    const moteCount = vet - 1;
+    for (let i = 0; i < moteCount; i++) {
+      const seed = i * 97.3;
+      const life = ((animFrame * 0.8 + seed) % 50) / 50;
+      const mx = x + Math.round(Math.sin(seed) * spriteH * 0.25);
+      const my = fy - life * spriteH * 0.7;
+      const mAlpha = (1 - life) * 0.6;
+      ctx.globalAlpha = mAlpha;
+      ctx.fillStyle = i % 2 === 0 ? c.accent : '#ffffff';
+      ctx.fillRect(Math.round(mx) - ps * 0.5, Math.round(my) - ps * 0.5, ps, ps);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // Vet 4+: pixel crown above head (3 small squares forming a simple crown shape)
+  if (vet >= 4) {
+    const crownY = fy - spriteH - ps * 3;
+    const crownBlink = Math.sin(animFrame * 0.06) > -0.3;
+    if (crownBlink) {
+      ctx.fillStyle = '#ffd700';
+      ctx.fillRect(x - ps * 2, crownY + ps, ps, ps);     // left base
+      ctx.fillRect(x + ps, crownY + ps, ps, ps);          // right base
+      ctx.fillRect(x - ps * 2, crownY, ps, ps);           // left point
+      ctx.fillRect(x + ps, crownY, ps, ps);               // right point
+      ctx.fillRect(x - ps * 0.5, crownY - ps, ps, ps);   // center point (tallest)
+      ctx.fillRect(x - ps * 2, crownY + ps * 2, ps * 4, ps); // crown base bar
+    }
+  }
+
+  // Vet 5: legendary - all above plus golden pixel aura outline
+  if (vet >= 5) {
+    const auraCycle = (animFrame % 20);
+    if (auraCycle < 10) {
+      ctx.globalAlpha = 0.25 * (1 - auraCycle / 10);
+      ctx.fillStyle = '#ffd700';
+      // Pixel border around unit (simple rectangle outline)
+      const hw = spriteH * 0.35, hh = spriteH * 0.5;
+      const ax = Math.round(x - hw), ay = Math.round(fy - spriteH);
+      const aw = Math.round(hw * 2), ah = Math.round(hh * 2);
+      ctx.fillRect(ax, ay, aw, ps);          // top
+      ctx.fillRect(ax, ay + ah, aw, ps);     // bottom
+      ctx.fillRect(ax, ay, ps, ah);          // left
+      ctx.fillRect(ax + aw, ay, ps, ah);     // right
+      ctx.globalAlpha = 1;
+    }
   }
 }
 
 // ━━━ Attack impact lines for high-vet units ━━━━━━━━━━━━━━━━━━━━
 function drawAttackImpactLines(ctx, x, fy, spriteH, ps, c, vet, animFrame) {
+  // Simple pixel slash marks for high-vet attacks
+  if (vet < 3) return;
+  const flashFrame = animFrame % 8;
+  if (flashFrame > 3) return; // brief flash only
   ctx.save();
-  const numLines = Math.min(vet, 5);
-  const len = spriteH * 0.3 + vet * ps;
-  for (let i = 0; i < numLines; i++) {
-    const seed = i * 73.7;
-    const angle = (seed + animFrame * 0.2) % (Math.PI * 2);
-    const dist = spriteH * 0.35;
-    const ox = x + Math.cos(angle) * dist;
-    const oy = fy - spriteH * 0.5 + Math.sin(angle) * dist * 0.6;
-    const lineAngle = angle + Math.PI * 0.25;
-    ctx.globalAlpha = 0.35 + Math.sin(animFrame * 0.3 + i) * 0.2;
-    ctx.strokeStyle = vet >= 4 ? '#ffd700' : c.accent;
-    ctx.lineWidth = vet >= 4 ? 1.5 : 1;
-    ctx.beginPath();
-    ctx.moveTo(ox - Math.cos(lineAngle) * len * 0.5, oy - Math.sin(lineAngle) * len * 0.5);
-    ctx.lineTo(ox + Math.cos(lineAngle) * len * 0.5, oy + Math.sin(lineAngle) * len * 0.5);
-    ctx.stroke();
+  ctx.globalAlpha = 0.6 * (1 - flashFrame / 4);
+  ctx.fillStyle = vet >= 4 ? '#ffd700' : c.accent;
+  // Two diagonal pixel lines
+  for (let i = 0; i < 3; i++) {
+    const ox = x + spriteH * 0.3 + i * ps;
+    const oy = fy - spriteH * 0.6 + i * ps;
+    ctx.fillRect(ox, oy, ps, ps);
+  }
+  for (let i = 0; i < 3; i++) {
+    const ox = x + spriteH * 0.3 + i * ps;
+    const oy = fy - spriteH * 0.3 - i * ps;
+    ctx.fillRect(ox, oy, ps, ps);
   }
   ctx.restore();
 }
@@ -1586,42 +1563,23 @@ function drawPlayerUnitOverlay(ctx, unit, x, fy, ps, vet = unit.veterancy || 0, 
       ctx.fill();
     }
   } else if (vet >= 4) {
-    // Rank badge for vet 4+
-    const badgeY = barY - 8;
-    const bw = Math.max(12, ps * 6);
-    const bh = Math.max(7, ps * 3.5);
-    const pulse = vet === 5 ? 0.08 * Math.sin(animFrame * 0.1) : 0;
-
-    // Badge background
-    ctx.fillStyle = vet === 5 ? '#ffd700' : '#c0a040';
-    ctx.beginPath();
-    ctx.roundRect(x - bw / 2, badgeY - bh / 2, bw, bh, 2);
-    ctx.fill();
-
-    // Badge outline
-    ctx.strokeStyle = vet === 5 ? '#fff8e0' : '#e8d080';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.roundRect(x - bw / 2, badgeY - bh / 2, bw, bh, 2);
-    ctx.stroke();
-
-    // Roman numeral text
-    ctx.fillStyle = vet === 5 ? '#4a2000' : '#3a2800';
-    ctx.font = `bold ${Math.max(6, Math.floor(bh * 0.75))}px monospace`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(vet === 5 ? 'V' : 'IV', x, badgeY);
-
-    // Vet 5 glow pulse around badge
-    if (vet === 5) {
-      ctx.save();
-      ctx.globalAlpha = 0.2 + pulse;
-      ctx.strokeStyle = '#ffd700';
-      ctx.lineWidth = 2;
+    // Gold stars for vet 4-5 (same star rendering, gold-colored)
+    const starY = barY - 6;
+    const starSize = Math.max(2, ps * 1.2);
+    ctx.fillStyle = '#ffd700';
+    for (let i = 0; i < vet; i++) {
+      const sx = x - (vet - 1) * starSize * 0.6 + i * starSize * 1.2;
       ctx.beginPath();
-      ctx.roundRect(x - bw / 2 - 1, badgeY - bh / 2 - 1, bw + 2, bh + 2, 3);
-      ctx.stroke();
-      ctx.restore();
+      for (let p = 0; p < 5; p++) {
+        const angle = -Math.PI / 2 + (p * 2 * Math.PI) / 5;
+        const r = p % 2 === 0 ? starSize : starSize * 0.4;
+        const method = p === 0 ? 'moveTo' : 'lineTo';
+        ctx[method](sx + Math.cos(angle) * r, starY + Math.sin(angle) * r);
+        const innerAngle = angle + Math.PI / 5;
+        ctx.lineTo(sx + Math.cos(innerAngle) * starSize * 0.4, starY + Math.sin(innerAngle) * starSize * 0.4);
+      }
+      ctx.closePath();
+      ctx.fill();
     }
   }
 }
