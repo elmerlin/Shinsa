@@ -1,0 +1,87 @@
+{
+  "character": {
+    "id": "795c5427-15dd-4b66-81a5-5ac97c1caa00",
+    "name": "Grassland Tank",
+    "prompt": "ancient treant, massive living tree guardian, bark armor, moss-covered, enormous wooden limbs, pixel art enemy tank",
+    "size": {
+      "width": 96,
+      "height": 96
+    },
+    "template_id": "mannequin",
+    "directions": 4,
+    "view": "low top-down",
+    "created_at": "2026-04-16T04:29:39.431353+00:00"
+  },
+  "frames": {
+    "rotations": {
+      "south": "rotations/south.png",
+      "west": "rotations/west.png",
+      "east": "rotations/east.png",
+      "north": "rotations/north.png"
+    },
+    "animations": {
+      "animating-7e0f6d57": {
+        "west": [
+          "animations/animating-7e0f6d57/west/frame_000.png",
+          "animations/animating-7e0f6d57/west/frame_001.png",
+          "animations/animating-7e0f6d57/west/frame_002.png",
+          "animations/animating-7e0f6d57/west/frame_003.png"
+        ],
+        "south": [
+          "animations/animating-7e0f6d57/south/frame_000.png",
+          "animations/animating-7e0f6d57/south/frame_001.png",
+          "animations/animating-7e0f6d57/south/frame_002.png",
+          "animations/animating-7e0f6d57/south/frame_003.png"
+        ],
+        "east": [
+          "animations/animating-7e0f6d57/east/frame_000.png",
+          "animations/animating-7e0f6d57/east/frame_001.png",
+          "animations/animating-7e0f6d57/east/frame_002.png",
+          "animations/animating-7e0f6d57/east/frame_003.png"
+        ],
+        "north": [
+          "animations/animating-7e0f6d57/north/frame_000.png",
+          "animations/animating-7e0f6d57/north/frame_001.png",
+          "animations/animating-7e0f6d57/north/frame_002.png",
+          "animations/animating-7e0f6d57/north/frame_003.png"
+        ]
+      },
+      "cross_punch_attack-19e6d037": {
+        "west": [
+          "animations/cross_punch_attack-19e6d037/west/frame_000.png",
+          "animations/cross_punch_attack-19e6d037/west/frame_001.png",
+          "animations/cross_punch_attack-19e6d037/west/frame_002.png",
+          "animations/cross_punch_attack-19e6d037/west/frame_003.png",
+          "animations/cross_punch_attack-19e6d037/west/frame_004.png",
+          "animations/cross_punch_attack-19e6d037/west/frame_005.png"
+        ],
+        "south": [
+          "animations/cross_punch_attack-19e6d037/south/frame_000.png",
+          "animations/cross_punch_attack-19e6d037/south/frame_001.png",
+          "animations/cross_punch_attack-19e6d037/south/frame_002.png",
+          "animations/cross_punch_attack-19e6d037/south/frame_003.png",
+          "animations/cross_punch_attack-19e6d037/south/frame_004.png",
+          "animations/cross_punch_attack-19e6d037/south/frame_005.png"
+        ],
+        "north": [
+          "animations/cross_punch_attack-19e6d037/north/frame_000.png",
+          "animations/cross_punch_attack-19e6d037/north/frame_001.png",
+          "animations/cross_punch_attack-19e6d037/north/frame_002.png",
+          "animations/cross_punch_attack-19e6d037/north/frame_003.png",
+          "animations/cross_punch_attack-19e6d037/north/frame_004.png",
+          "animations/cross_punch_attack-19e6d037/north/frame_005.png"
+        ],
+        "east": [
+          "animations/cross_punch_attack-19e6d037/east/frame_000.png",
+          "animations/cross_punch_attack-19e6d037/east/frame_001.png",
+          "animations/cross_punch_attack-19e6d037/east/frame_002.png",
+          "animations/cross_punch_attack-19e6d037/east/frame_003.png",
+          "animations/cross_punch_attack-19e6d037/east/frame_004.png",
+          "animations/cross_punch_attack-19e6d037/east/frame_005.png"
+        ]
+      }
+    }
+  },
+  "export_version": "2.0",
+  "export_date": "2026-04-16T05:32:15.452571"
+}

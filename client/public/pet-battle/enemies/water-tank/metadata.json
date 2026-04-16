@@ -1,0 +1,87 @@
+{
+  "character": {
+    "id": "5af63a95-5627-4ba7-9db4-c72e0a77d097",
+    "name": "Water Tank",
+    "prompt": "deep sea guardian, massive armored hermit crab, heavy teal shell, enormous claws, pixel art enemy tank",
+    "size": {
+      "width": 96,
+      "height": 96
+    },
+    "template_id": "mannequin",
+    "directions": 4,
+    "view": "low top-down",
+    "created_at": "2026-04-16T04:22:46.08949+00:00"
+  },
+  "frames": {
+    "rotations": {
+      "south": "rotations/south.png",
+      "west": "rotations/west.png",
+      "east": "rotations/east.png",
+      "north": "rotations/north.png"
+    },
+    "animations": {
+      "animating-cb99895c": {
+        "west": [
+          "animations/animating-cb99895c/west/frame_000.png",
+          "animations/animating-cb99895c/west/frame_001.png",
+          "animations/animating-cb99895c/west/frame_002.png",
+          "animations/animating-cb99895c/west/frame_003.png"
+        ],
+        "north": [
+          "animations/animating-cb99895c/north/frame_000.png",
+          "animations/animating-cb99895c/north/frame_001.png",
+          "animations/animating-cb99895c/north/frame_002.png",
+          "animations/animating-cb99895c/north/frame_003.png"
+        ],
+        "east": [
+          "animations/animating-cb99895c/east/frame_000.png",
+          "animations/animating-cb99895c/east/frame_001.png",
+          "animations/animating-cb99895c/east/frame_002.png",
+          "animations/animating-cb99895c/east/frame_003.png"
+        ],
+        "south": [
+          "animations/animating-cb99895c/south/frame_000.png",
+          "animations/animating-cb99895c/south/frame_001.png",
+          "animations/animating-cb99895c/south/frame_002.png",
+          "animations/animating-cb99895c/south/frame_003.png"
+        ]
+      },
+      "cross_punch_attack-810d7213": {
+        "east": [
+          "animations/cross_punch_attack-810d7213/east/frame_000.png",
+          "animations/cross_punch_attack-810d7213/east/frame_001.png",
+          "animations/cross_punch_attack-810d7213/east/frame_002.png",
+          "animations/cross_punch_attack-810d7213/east/frame_003.png",
+          "animations/cross_punch_attack-810d7213/east/frame_004.png",
+          "animations/cross_punch_attack-810d7213/east/frame_005.png"
+        ],
+        "north": [
+          "animations/cross_punch_attack-810d7213/north/frame_000.png",
+          "animations/cross_punch_attack-810d7213/north/frame_001.png",
+          "animations/cross_punch_attack-810d7213/north/frame_002.png",
+          "animations/cross_punch_attack-810d7213/north/frame_003.png",
+          "animations/cross_punch_attack-810d7213/north/frame_004.png",
+          "animations/cross_punch_attack-810d7213/north/frame_005.png"
+        ],
+        "west": [
+          "animations/cross_punch_attack-810d7213/west/frame_000.png",
+          "animations/cross_punch_attack-810d7213/west/frame_001.png",
+          "animations/cross_punch_attack-810d7213/west/frame_002.png",
+          "animations/cross_punch_attack-810d7213/west/frame_003.png",
+          "animations/cross_punch_attack-810d7213/west/frame_004.png",
+          "animations/cross_punch_attack-810d7213/west/frame_005.png"
+        ],
+        "south": [
+          "animations/cross_punch_attack-810d7213/south/frame_000.png",
+          "animations/cross_punch_attack-810d7213/south/frame_001.png",
+          "animations/cross_punch_attack-810d7213/south/frame_002.png",
+          "animations/cross_punch_attack-810d7213/south/frame_003.png",
+          "animations/cross_punch_attack-810d7213/south/frame_004.png",
+          "animations/cross_punch_attack-810d7213/south/frame_005.png"
+        ]
+      }
+    }
+  },
+  "export_version": "2.0",
+  "export_date": "2026-04-16T05:31:19.738672"
+}

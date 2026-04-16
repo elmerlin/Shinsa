@@ -1,0 +1,79 @@
+{
+  "character": {
+    "id": "b60146b8-1693-4b31-9bf4-ed3bd6ffde55",
+    "name": "Rock Basic",
+    "prompt": "pebble imp, small grey-brown stone creature, rocky skin, glowing amber eyes, pixel art enemy basic unit",
+    "size": {
+      "width": 68,
+      "height": 68
+    },
+    "template_id": "mannequin",
+    "directions": 4,
+    "view": "low top-down",
+    "created_at": "2026-04-16T04:24:57.760683+00:00"
+  },
+  "frames": {
+    "rotations": {
+      "south": "rotations/south.png",
+      "west": "rotations/west.png",
+      "east": "rotations/east.png",
+      "north": "rotations/north.png"
+    },
+    "animations": {
+      "animating-3d6be3a3": {
+        "north": [
+          "animations/animating-3d6be3a3/north/frame_000.png",
+          "animations/animating-3d6be3a3/north/frame_001.png",
+          "animations/animating-3d6be3a3/north/frame_002.png",
+          "animations/animating-3d6be3a3/north/frame_003.png"
+        ],
+        "east": [
+          "animations/animating-3d6be3a3/east/frame_000.png",
+          "animations/animating-3d6be3a3/east/frame_001.png",
+          "animations/animating-3d6be3a3/east/frame_002.png",
+          "animations/animating-3d6be3a3/east/frame_003.png"
+        ],
+        "south": [
+          "animations/animating-3d6be3a3/south/frame_000.png",
+          "animations/animating-3d6be3a3/south/frame_001.png",
+          "animations/animating-3d6be3a3/south/frame_002.png",
+          "animations/animating-3d6be3a3/south/frame_003.png"
+        ],
+        "west": [
+          "animations/animating-3d6be3a3/west/frame_000.png",
+          "animations/animating-3d6be3a3/west/frame_001.png",
+          "animations/animating-3d6be3a3/west/frame_002.png",
+          "animations/animating-3d6be3a3/west/frame_003.png"
+        ]
+      },
+      "cross_punch_attack-34d9bf3c": {
+        "south": [
+          "animations/cross_punch_attack-34d9bf3c/south/frame_000.png",
+          "animations/cross_punch_attack-34d9bf3c/south/frame_001.png",
+          "animations/cross_punch_attack-34d9bf3c/south/frame_002.png",
+          "animations/cross_punch_attack-34d9bf3c/south/frame_003.png",
+          "animations/cross_punch_attack-34d9bf3c/south/frame_004.png",
+          "animations/cross_punch_attack-34d9bf3c/south/frame_005.png"
+        ],
+        "east": [
+          "animations/cross_punch_attack-34d9bf3c/east/frame_000.png",
+          "animations/cross_punch_attack-34d9bf3c/east/frame_001.png",
+          "animations/cross_punch_attack-34d9bf3c/east/frame_002.png",
+          "animations/cross_punch_attack-34d9bf3c/east/frame_003.png",
+          "animations/cross_punch_attack-34d9bf3c/east/frame_004.png",
+          "animations/cross_punch_attack-34d9bf3c/east/frame_005.png"
+        ],
+        "west": [
+          "animations/cross_punch_attack-34d9bf3c/west/frame_000.png",
+          "animations/cross_punch_attack-34d9bf3c/west/frame_001.png",
+          "animations/cross_punch_attack-34d9bf3c/west/frame_002.png",
+          "animations/cross_punch_attack-34d9bf3c/west/frame_003.png",
+          "animations/cross_punch_attack-34d9bf3c/west/frame_004.png",
+          "animations/cross_punch_attack-34d9bf3c/west/frame_005.png"
+        ]
+      }
+    }
+  },
+  "export_version": "2.0",
+  "export_date": "2026-04-16T05:31:45.450954"
+}

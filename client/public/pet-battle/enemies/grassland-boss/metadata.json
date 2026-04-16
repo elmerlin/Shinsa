@@ -1,0 +1,87 @@
+{
+  "character": {
+    "id": "55c6ebf3-50ed-4a4e-b53a-a43a06fd8d7c",
+    "name": "Grassland Boss",
+    "prompt": "shadow beast, enormous dark forest predator, glowing purple eyes, shadowy fur, massive boss creature, pixel art enemy boss",
+    "size": {
+      "width": 96,
+      "height": 96
+    },
+    "template_id": "mannequin",
+    "directions": 4,
+    "view": "low top-down",
+    "created_at": "2026-04-16T04:29:40.951178+00:00"
+  },
+  "frames": {
+    "rotations": {
+      "south": "rotations/south.png",
+      "west": "rotations/west.png",
+      "east": "rotations/east.png",
+      "north": "rotations/north.png"
+    },
+    "animations": {
+      "animating-16e80a06": {
+        "west": [
+          "animations/animating-16e80a06/west/frame_000.png",
+          "animations/animating-16e80a06/west/frame_001.png",
+          "animations/animating-16e80a06/west/frame_002.png",
+          "animations/animating-16e80a06/west/frame_003.png"
+        ],
+        "south": [
+          "animations/animating-16e80a06/south/frame_000.png",
+          "animations/animating-16e80a06/south/frame_001.png",
+          "animations/animating-16e80a06/south/frame_002.png",
+          "animations/animating-16e80a06/south/frame_003.png"
+        ],
+        "east": [
+          "animations/animating-16e80a06/east/frame_000.png",
+          "animations/animating-16e80a06/east/frame_001.png",
+          "animations/animating-16e80a06/east/frame_002.png",
+          "animations/animating-16e80a06/east/frame_003.png"
+        ],
+        "north": [
+          "animations/animating-16e80a06/north/frame_000.png",
+          "animations/animating-16e80a06/north/frame_001.png",
+          "animations/animating-16e80a06/north/frame_002.png",
+          "animations/animating-16e80a06/north/frame_003.png"
+        ]
+      },
+      "cross_punch_attack-af59d2fd": {
+        "north": [
+          "animations/cross_punch_attack-af59d2fd/north/frame_000.png",
+          "animations/cross_punch_attack-af59d2fd/north/frame_001.png",
+          "animations/cross_punch_attack-af59d2fd/north/frame_002.png",
+          "animations/cross_punch_attack-af59d2fd/north/frame_003.png",
+          "animations/cross_punch_attack-af59d2fd/north/frame_004.png",
+          "animations/cross_punch_attack-af59d2fd/north/frame_005.png"
+        ],
+        "east": [
+          "animations/cross_punch_attack-af59d2fd/east/frame_000.png",
+          "animations/cross_punch_attack-af59d2fd/east/frame_001.png",
+          "animations/cross_punch_attack-af59d2fd/east/frame_002.png",
+          "animations/cross_punch_attack-af59d2fd/east/frame_003.png",
+          "animations/cross_punch_attack-af59d2fd/east/frame_004.png",
+          "animations/cross_punch_attack-af59d2fd/east/frame_005.png"
+        ],
+        "south": [
+          "animations/cross_punch_attack-af59d2fd/south/frame_000.png",
+          "animations/cross_punch_attack-af59d2fd/south/frame_001.png",
+          "animations/cross_punch_attack-af59d2fd/south/frame_002.png",
+          "animations/cross_punch_attack-af59d2fd/south/frame_003.png",
+          "animations/cross_punch_attack-af59d2fd/south/frame_004.png",
+          "animations/cross_punch_attack-af59d2fd/south/frame_005.png"
+        ],
+        "west": [
+          "animations/cross_punch_attack-af59d2fd/west/frame_000.png",
+          "animations/cross_punch_attack-af59d2fd/west/frame_001.png",
+          "animations/cross_punch_attack-af59d2fd/west/frame_002.png",
+          "animations/cross_punch_attack-af59d2fd/west/frame_003.png",
+          "animations/cross_punch_attack-af59d2fd/west/frame_004.png",
+          "animations/cross_punch_attack-af59d2fd/west/frame_005.png"
+        ]
+      }
+    }
+  },
+  "export_version": "2.0",
+  "export_date": "2026-04-16T05:32:17.076729"
+}
