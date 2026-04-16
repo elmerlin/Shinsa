@@ -32,6 +32,7 @@ const weeklyChallengeRoutes = require('./routes/weeklyChallenges');
 const petRoutes = require('./routes/pets');
 const petWorldRoutes = require('./routes/petWorld');
 const petBomberRoutes = require('./routes/petBomber');
+const piumonRoutes = require('./routes/piumon');
 const petBomberWs = require('./lib/petBomber/ws');
 const petWorldWs = require('./lib/petWorld/ws');
 
@@ -99,6 +100,7 @@ app.use('/api/weekly-challenges', weeklyChallengeRoutes);
 app.use('/api/pets', petRoutes);
 app.use('/api/pet-world', petWorldRoutes);
 app.use('/api/pet-bomber', petBomberRoutes);
+app.use('/api/piumon', piumonRoutes);
 
 if (typeof piugameRoutes.startOverRankingNightlyScheduler === 'function') {
   try {
@@ -152,6 +154,7 @@ app.use('/api', (req, res) => {
 
 // Serve uploaded files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/piumon-assets', express.static(path.join(__dirname, '..', 'data', 'piumon')));
 
 if (!KOREAN_LOCALE_ENABLED) {
   const redirectHiddenKoreanLocale = (req, res) => {

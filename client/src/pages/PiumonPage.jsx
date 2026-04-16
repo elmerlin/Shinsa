@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import piuAvatarCatalog from '../data/piuAvatarCatalog.json';
 
 const TOTAL_SUPPLY_DEFAULT = 1000;
@@ -260,6 +261,49 @@ function WeightPill({ children, tone = 'cyan' }) {
   );
 }
 
+function UploadButton({ assetUrl, onUpload, onDelete, size = 'sm', label = 'Upload' }) {
+  const inputRef = useRef(null);
+  const handleChange = (event) => {
+    const file = event.target.files?.[0];
+    if (file) onUpload(file);
+    event.target.value = '';
+  };
+  if (assetUrl) {
+    return (
+      <div className="group/upload relative">
+        <img
+          src={`${assetUrl}?t=${Date.now()}`}
+          alt="Uploaded asset"
+          className={`rounded-lg border border-white/[0.08] bg-[#0a0915] object-contain ${size === 'lg' ? 'h-28 w-28' : 'h-10 w-10'}`}
+          style={{ imageRendering: 'pixelated' }}
+        />
+        <button
+          type="button"
+          onClick={onDelete}
+          className="absolute -right-1 -top-1 hidden h-4 w-4 items-center justify-center rounded-full bg-rose-500/90 text-[8px] font-bold text-white group-hover/upload:flex"
+          aria-label="Remove asset"
+        >
+          x
+        </button>
+      </div>
+    );
+  }
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        className={`rounded-lg border border-dashed border-white/[0.12] bg-white/[0.02] font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-gray-500 transition hover:border-cyan-400/40 hover:bg-cyan-400/[0.04] hover:text-cyan-300 ${
+          size === 'lg' ? 'flex h-28 w-28 items-center justify-center' : 'px-2 py-1'
+        }`}
+      >
+        {label}
+      </button>
+      <input ref={inputRef} type="file" accept="image/png,image/jpeg,image/gif,image/webp" hidden onChange={handleChange} />
+    </>
+  );
+}
+
 function CharacterCard({
   character,
   mintSize,
@@ -428,8 +472,9 @@ function CharacterCard({
   );
 }
 
-function TraitCard({ group, items, onToggle, onWeightChange }) {
+function TraitCard({ group, items, onToggle, onWeightChange, getAssetUrl, onUpload, onDelete }) {
   const totalWeight = sumActiveWeight(items);
+  const uploadedCount = items.filter((item) => getAssetUrl?.('traits', item.id)).length;
   return (
     <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-4">
       <div className="flex items-start justify-between gap-3">
@@ -440,13 +485,19 @@ function TraitCard({ group, items, onToggle, onWeightChange }) {
         <div className="shrink-0 text-right">
           <div className="font-mono text-[9px] font-bold uppercase tracking-[0.16em] text-gray-500">Total</div>
           <div className="mt-0.5 font-display text-lg font-black leading-none tabular-nums text-amber-200">{totalWeight}</div>
+          {onUpload ? (
+            <div className="mt-1 font-mono text-[9px] font-bold tracking-[0.12em] text-emerald-300/70">
+              {uploadedCount}/{items.length} layers
+            </div>
+          ) : null}
         </div>
       </div>
       <div className="mt-4 divide-y divide-white/[0.05] border-y border-white/[0.05]">
         {items.map((item) => {
           const active = item.active !== false;
+          const url = getAssetUrl?.('traits', item.id);
           return (
-            <div key={item.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 py-2">
+            <div key={item.id} className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 py-2">
               <label className="flex cursor-pointer items-center gap-2.5 text-[13px]">
                 <input
                   type="checkbox"
@@ -456,6 +507,13 @@ function TraitCard({ group, items, onToggle, onWeightChange }) {
                 />
                 <span className={active ? 'text-white' : 'text-gray-600 line-through'}>{item.name}</span>
               </label>
+              {onUpload ? (
+                <UploadButton
+                  assetUrl={url}
+                  onUpload={(file) => onUpload('traits', item.id, file)}
+                  onDelete={() => onDelete?.('traits', item.id)}
+                />
+              ) : null}
               <input
                 type="number"
                 min="0"
@@ -472,11 +530,15 @@ function TraitCard({ group, items, onToggle, onWeightChange }) {
   );
 }
 
-function HabitatCard({ habitat, onToggle, onWeightChange }) {
+function HabitatCard({ habitat, onToggle, onWeightChange, backdropUrl, onUpload, onDelete }) {
   const active = habitat.active !== false;
   return (
     <div className={`relative overflow-hidden rounded-2xl border ${habitat.border} bg-white/[0.02]`}>
-      <div className={`absolute inset-x-0 top-0 h-16 bg-gradient-to-b ${habitat.accent} opacity-60`} />
+      {backdropUrl ? (
+        <img src={`${backdropUrl}?t=${Date.now()}`} alt={habitat.name} className="absolute inset-x-0 top-0 h-24 w-full object-cover opacity-40" style={{ imageRendering: 'pixelated' }} />
+      ) : (
+        <div className={`absolute inset-x-0 top-0 h-16 bg-gradient-to-b ${habitat.accent} opacity-60`} />
+      )}
       <div className="relative p-4">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -505,6 +567,17 @@ function HabitatCard({ habitat, onToggle, onWeightChange }) {
             className="h-7 w-16 rounded-md border border-white/[0.08] bg-black/30 px-2 text-right font-mono text-[12px] tabular-nums text-white outline-none focus:border-cyan-400/60"
           />
         </div>
+        {onUpload ? (
+          <div className="mt-3 flex items-center justify-between border-t border-white/[0.06] pt-3">
+            <span className="font-mono text-[9px] font-bold uppercase tracking-[0.16em] text-gray-500">Backdrop</span>
+            <UploadButton
+              assetUrl={backdropUrl}
+              onUpload={(file) => onUpload('habitats', habitat.id, file)}
+              onDelete={() => onDelete?.('habitats', habitat.id)}
+              label="Upload"
+            />
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -520,6 +593,60 @@ export default function PiumonPage() {
     TRAIT_GROUPS.map((group) => [group.key, group.items.map((item) => ({ ...item, active: true }))])
   ));
   const [habitats, setHabitats] = useState(() => HABITATS.map((item) => ({ ...item, active: true })));
+
+  // Asset management
+  const [assets, setAssets] = useState({ bodies: [], traits: [], habitats: [] });
+  const [assetsLoading, setAssetsLoading] = useState(true);
+  const { user } = useAuth();
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) { setAssetsLoading(false); return; }
+    fetch('/api/piumon/assets', { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => (r.ok ? r.json() : { bodies: [], traits: [], habitats: [] }))
+      .then(setAssets)
+      .catch(() => {})
+      .finally(() => setAssetsLoading(false));
+  }, []);
+
+  const getAssetUrl = useCallback((type, id) => {
+    const asset = assets[type]?.find((a) => a.id === id);
+    return asset ? `/piumon-assets/${type}/${asset.filename}` : null;
+  }, [assets]);
+
+  const uploadAsset = useCallback(async (type, id, file) => {
+    const token = localStorage.getItem('token');
+    const formData = new FormData();
+    formData.append('image', file);
+    const res = await fetch(`/api/piumon/assets/${type}/${id}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    setAssets((prev) => ({
+      ...prev,
+      [type]: [...prev[type].filter((a) => a.id !== id), { id, filename: data.filename }],
+    }));
+  }, []);
+
+  const deleteAsset = useCallback(async (type, id) => {
+    const token = localStorage.getItem('token');
+    await fetch(`/api/piumon/assets/${type}/${id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    setAssets((prev) => ({
+      ...prev,
+      [type]: prev[type].filter((a) => a.id !== id),
+    }));
+  }, []);
+
+  // Composition preview
+  const [compBase, setCompBase] = useState('');
+  const [compHabitat, setCompHabitat] = useState('');
+  const [compTraits, setCompTraits] = useState({ hat: '', eyewear: '', neck: '', outfit: '' });
 
   const filteredCharacters = useMemo(() => {
     const query = baseQuery.trim().toLowerCase();
@@ -845,6 +972,82 @@ export default function PiumonPage() {
 
         <SectionShell
           index="03"
+          eyebrow="Body Generation"
+          title="PixelLab base bodies"
+          aside={
+            <div>
+              <div className="font-mono text-[9px] font-bold uppercase tracking-[0.22em] text-gray-500">Generation Progress</div>
+              <div className="mt-3">
+                <div className="flex items-baseline justify-between">
+                  <div className="font-display text-[2rem] font-black leading-none tabular-nums text-white">
+                    {activeBases.filter((c) => getAssetUrl('bodies', c.id)).length}
+                    <span className="ml-1 text-[14px] text-gray-500">/ {activeBases.length}</span>
+                  </div>
+                  <div className="font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-emerald-300/70">
+                    {activeBases.length > 0
+                      ? `${Math.round((activeBases.filter((c) => getAssetUrl('bodies', c.id)).length / activeBases.length) * 100)}%`
+                      : '0%'}
+                  </div>
+                </div>
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-emerald-400 transition-all"
+                    style={{ width: activeBases.length > 0 ? `${(activeBases.filter((c) => getAssetUrl('bodies', c.id)).length / activeBases.length) * 100}%` : '0%' }}
+                  />
+                </div>
+              </div>
+              <p className="mt-4 text-[11px] leading-snug text-gray-500">
+                Generate each character as a front-facing pixel body in PixelLab, then upload the result here. Every body must share the same pose and anchor points.
+              </p>
+            </div>
+          }
+        >
+          <div className="grid max-h-[42rem] gap-3 overflow-y-auto pr-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {activeBases.map((character) => {
+              const bodyUrl = getAssetUrl('bodies', character.id);
+              return (
+                <div key={character.id} className="rounded-2xl border border-white/[0.08] bg-white/[0.025] p-3">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/[0.08] bg-[#0a0915] p-1">
+                      <img src={character.preview} alt={character.name} className="h-full w-full object-contain" style={{ imageRendering: 'pixelated' }} />
+                    </div>
+                    <div className="text-[10px] font-bold text-gray-500">→</div>
+                    {bodyUrl ? (
+                      <div className="group/upload relative flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-emerald-400/20 bg-[#0a0915] p-1">
+                        <img src={`${bodyUrl}?t=${Date.now()}`} alt={`${character.name} body`} className="h-full w-full object-contain" style={{ imageRendering: 'pixelated' }} />
+                        <button
+                          type="button"
+                          onClick={() => deleteAsset('bodies', character.id)}
+                          className="absolute -right-1 -top-1 hidden h-4 w-4 items-center justify-center rounded-full bg-rose-500/90 text-[8px] font-bold text-white group-hover/upload:flex"
+                        >
+                          x
+                        </button>
+                      </div>
+                    ) : (
+                      <UploadButton
+                        assetUrl={null}
+                        onUpload={(file) => uploadAsset('bodies', character.id, file)}
+                        onDelete={() => {}}
+                        size="lg"
+                        label="Upload Body"
+                      />
+                    )}
+                  </div>
+                  <div className="mt-2">
+                    <div className="truncate font-display text-[13px] font-black tracking-tight text-white">{character.name}</div>
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <WeightPill tone={bodyUrl ? 'emerald' : 'amber'}>{bodyUrl ? 'Generated' : 'Pending'}</WeightPill>
+                      <span className="font-mono text-[9px] text-gray-600">{character.source === 'PIUGAME Avatar Shop' ? 'PIUGAME' : 'Custom'}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </SectionShell>
+
+        <SectionShell
+          index="04"
           eyebrow="Trait Pools"
           title="Reusable accessories and clothes"
           aside={
@@ -872,13 +1075,16 @@ export default function PiumonPage() {
                 items={traits[group.key] || []}
                 onToggle={(groupKey, id, checked) => updateTrait(groupKey, id, { active: checked })}
                 onWeightChange={(groupKey, id, value) => updateTrait(groupKey, id, { weight: clampWeight(value) })}
+                getAssetUrl={getAssetUrl}
+                onUpload={uploadAsset}
+                onDelete={deleteAsset}
               />
             ))}
           </div>
         </SectionShell>
 
         <SectionShell
-          index="04"
+          index="05"
           eyebrow="Habitats"
           title="Elemental background distributions"
           aside={
@@ -901,13 +1107,116 @@ export default function PiumonPage() {
                 habitat={habitat}
                 onToggle={(id, checked) => updateHabitat(id, { active: checked })}
                 onWeightChange={(id, value) => updateHabitat(id, { weight: clampWeight(value) })}
+                backdropUrl={getAssetUrl('habitats', habitat.id)}
+                onUpload={uploadAsset}
+                onDelete={deleteAsset}
               />
             ))}
           </div>
         </SectionShell>
 
         <SectionShell
-          index="05"
+          index="06"
+          eyebrow="Composition Preview"
+          title="Layer stack verification"
+          aside={
+            <div>
+              <div className="font-mono text-[9px] font-bold uppercase tracking-[0.22em] text-gray-500">Asset Readiness</div>
+              <dl className="mt-3 space-y-3">
+                <div className="flex items-baseline justify-between">
+                  <dt className="text-[12px] text-gray-400">Bodies</dt>
+                  <dd className="font-mono text-[11px] font-bold tabular-nums text-emerald-300">
+                    {activeBases.filter((c) => getAssetUrl('bodies', c.id)).length}/{activeBases.length}
+                  </dd>
+                </div>
+                <div className="flex items-baseline justify-between">
+                  <dt className="text-[12px] text-gray-400">Trait layers</dt>
+                  <dd className="font-mono text-[11px] font-bold tabular-nums text-emerald-300">
+                    {TRAIT_GROUPS.reduce((sum, g) => sum + (traits[g.key] || []).filter((t) => t.active !== false && getAssetUrl('traits', t.id)).length, 0)}
+                    /{TRAIT_GROUPS.reduce((sum, g) => sum + (traits[g.key] || []).filter((t) => t.active !== false).length, 0)}
+                  </dd>
+                </div>
+                <div className="flex items-baseline justify-between">
+                  <dt className="text-[12px] text-gray-400">Habitats</dt>
+                  <dd className="font-mono text-[11px] font-bold tabular-nums text-emerald-300">
+                    {activeHabitats.filter((h) => getAssetUrl('habitats', h.id)).length}/{activeHabitats.length}
+                  </dd>
+                </div>
+              </dl>
+              <p className="mt-4 text-[11px] leading-snug text-gray-500">
+                Select a character, traits, and habitat to preview the full composition. All layers stack via absolute positioning at the same dimensions.
+              </p>
+            </div>
+          }
+        >
+          <div className="grid gap-6 lg:grid-cols-[auto_minmax(0,1fr)]">
+            <div className="relative flex h-72 w-72 items-center justify-center overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0a0915]">
+              {compHabitat && getAssetUrl('habitats', compHabitat) ? (
+                <img src={getAssetUrl('habitats', compHabitat)} alt="Habitat" className="absolute inset-0 h-full w-full object-cover" style={{ imageRendering: 'pixelated' }} />
+              ) : (
+                <div className="absolute inset-0 bg-gradient-to-b from-slate-800/40 to-slate-900/80" />
+              )}
+              {compBase && getAssetUrl('bodies', compBase) ? (
+                <img src={getAssetUrl('bodies', compBase)} alt="Body" className="relative z-10 h-56 w-56 object-contain" style={{ imageRendering: 'pixelated' }} />
+              ) : null}
+              {Object.entries(compTraits).map(([key, traitId]) => {
+                if (!traitId) return null;
+                const url = getAssetUrl('traits', traitId);
+                if (!url) return null;
+                return <img key={key} src={url} alt={key} className="absolute inset-0 z-20 h-full w-full object-contain" style={{ imageRendering: 'pixelated' }} />;
+              })}
+              {!compBase ? (
+                <span className="relative z-30 font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-gray-600">Select a character</span>
+              ) : null}
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-gray-500">Character</label>
+                <select
+                  value={compBase}
+                  onChange={(e) => setCompBase(e.target.value)}
+                  className="mt-1.5 block w-full rounded-md border border-white/[0.08] bg-black/30 px-3 py-2 text-[13px] text-white outline-none focus:border-cyan-400/60"
+                >
+                  <option value="">— select —</option>
+                  {activeBases.filter((c) => getAssetUrl('bodies', c.id)).map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+              {TRAIT_GROUPS.map((group) => (
+                <div key={group.key}>
+                  <label className="font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-gray-500">{group.title}</label>
+                  <select
+                    value={compTraits[group.key] || ''}
+                    onChange={(e) => setCompTraits((prev) => ({ ...prev, [group.key]: e.target.value }))}
+                    className="mt-1.5 block w-full rounded-md border border-white/[0.08] bg-black/30 px-3 py-2 text-[13px] text-white outline-none focus:border-cyan-400/60"
+                  >
+                    <option value="">None</option>
+                    {(traits[group.key] || []).filter((t) => t.active !== false && getAssetUrl('traits', t.id)).map((t) => (
+                      <option key={t.id} value={t.id}>{t.name}</option>
+                    ))}
+                  </select>
+                </div>
+              ))}
+              <div>
+                <label className="font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-gray-500">Habitat</label>
+                <select
+                  value={compHabitat}
+                  onChange={(e) => setCompHabitat(e.target.value)}
+                  className="mt-1.5 block w-full rounded-md border border-white/[0.08] bg-black/30 px-3 py-2 text-[13px] text-white outline-none focus:border-cyan-400/60"
+                >
+                  <option value="">— none —</option>
+                  {activeHabitats.filter((h) => getAssetUrl('habitats', h.id)).map((h) => (
+                    <option key={h.id} value={h.id}>{h.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+        </SectionShell>
+
+        <SectionShell
+          index="07"
           eyebrow="Distribution Readout"
           title="What the current weights imply"
           aside={
