@@ -646,6 +646,7 @@ export default function PiumonPage() {
   // PixelLab generation
   const [genJobs, setGenJobs] = useState({}); // characterId -> { status, jobId, error }
   const [genSize, setGenSize] = useState(48);
+  const [batchGenerating, setBatchGenerating] = useState(false);
   const pollTimers = useRef({});
 
   const startGeneration = useCallback(async (character) => {
@@ -695,6 +696,57 @@ export default function PiumonPage() {
         }
       };
       pollTimers.current[character.id] = setTimeout(poll, 5000);
+    } catch (err) {
+      setGenJobs((prev) => ({ ...prev, [character.id]: { status: 'failed', error: err.message } }));
+    }
+  }, [genSize]);
+
+  // Submit job and wait for it to fully complete before resolving
+  const generateAndWait = useCallback(async (character) => {
+    const token = localStorage.getItem('token');
+    setGenJobs((prev) => ({ ...prev, [character.id]: { status: 'starting' } }));
+    try {
+      const res = await fetch('/api/piumon/generate/body', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          characterId: character.id,
+          previewUrl: character.preview,
+          name: character.name,
+          size: genSize,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Request failed' }));
+        setGenJobs((prev) => ({ ...prev, [character.id]: { status: 'failed', error: err.error } }));
+        return;
+      }
+      const { jobId } = await res.json();
+      setGenJobs((prev) => ({ ...prev, [character.id]: { status: 'processing', jobId } }));
+
+      // Poll until done (blocking)
+      for (let i = 0; i < 60; i++) {
+        await new Promise((r) => setTimeout(r, 6000));
+        try {
+          const pollRes = await fetch(`/api/piumon/generate/job/${jobId}?characterId=${encodeURIComponent(character.id)}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const data = await pollRes.json();
+          if (data.status === 'completed') {
+            setGenJobs((prev) => ({ ...prev, [character.id]: { status: 'completed', jobId } }));
+            setAssets((prev) => ({
+              ...prev,
+              bodies: [...prev.bodies.filter((a) => a.id !== character.id), { id: character.id, filename: data.filename }],
+            }));
+            return;
+          }
+          if (data.status === 'failed') {
+            setGenJobs((prev) => ({ ...prev, [character.id]: { status: 'failed', jobId, error: data.error } }));
+            return;
+          }
+        } catch { /* retry */ }
+      }
+      setGenJobs((prev) => ({ ...prev, [character.id]: { status: 'failed', error: 'Timed out after 6 minutes' } }));
     } catch (err) {
       setGenJobs((prev) => ({ ...prev, [character.id]: { status: 'failed', error: err.message } }));
     }
@@ -1074,16 +1126,21 @@ export default function PiumonPage() {
                 </div>
                 <button
                   type="button"
+                  disabled={batchGenerating}
                   onClick={async () => {
-                    const pending = activeBases.filter((c) => !getAssetUrl('bodies', c.id) && !genJobs[c.id]?.status?.match(/starting|processing/));
-                    for (const c of pending) {
-                      await startGeneration(c);
-                      await new Promise((r) => setTimeout(r, 4000));
+                    setBatchGenerating(true);
+                    try {
+                      const pending = activeBases.filter((c) => !getAssetUrl('bodies', c.id) && !genJobs[c.id]?.status?.match(/starting|processing/));
+                      for (const c of pending) {
+                        await generateAndWait(c);
+                      }
+                    } finally {
+                      setBatchGenerating(false);
                     }
                   }}
-                  className="w-full rounded-lg border border-cyan-300/30 bg-cyan-300/[0.08] py-2 font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-cyan-200 transition hover:bg-cyan-300/[0.14]"
+                  className={`w-full rounded-lg border py-2 font-mono text-[10px] font-bold uppercase tracking-[0.16em] transition ${batchGenerating ? 'border-cyan-400/40 bg-cyan-400/[0.12] text-cyan-100' : 'border-cyan-300/30 bg-cyan-300/[0.08] text-cyan-200 hover:bg-cyan-300/[0.14]'}`}
                 >
-                  Generate All Pending
+                  {batchGenerating ? 'Generating…' : 'Generate All Pending'}
                 </button>
               </div>
               <p className="mt-4 text-[11px] leading-snug text-gray-500">

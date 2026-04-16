@@ -162,7 +162,7 @@ async function imageToBase64Payload(filePath) {
   };
 }
 
-async function pixellabPost(endpoint, body, retries = 5) {
+async function pixellabPost(endpoint, body, retries = 12) {
   for (let attempt = 0; attempt <= retries; attempt++) {
     const res = await fetch(`${PIXELLAB_BASE}${endpoint}`, {
       method: 'POST',
@@ -173,8 +173,8 @@ async function pixellabPost(endpoint, body, retries = 5) {
       body: JSON.stringify(body),
     });
     if (res.status === 429 && attempt < retries) {
-      const wait = Math.min(15000, 5000 * (attempt + 1));
-      console.log(`[Piumon] 429 rate limited, waiting ${wait / 1000}s (attempt ${attempt + 1}/${retries})`);
+      const wait = Math.min(30000, 5000 * Math.pow(1.5, attempt));
+      console.log(`[Piumon] 429 rate limited, waiting ${Math.round(wait / 1000)}s (attempt ${attempt + 1}/${retries})`);
       await new Promise((r) => setTimeout(r, wait));
       continue;
     }
