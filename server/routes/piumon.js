@@ -216,7 +216,7 @@ router.post('/generate/body', requireAuth, requireAdmin, async (req, res) => {
       concept_image: conceptImage,
       image_size: { width: pixelSize, height: pixelSize },
       view: 'side',
-      description: description || `pixel art character sprite of ${name || 'character'}, front-facing, fixed standing pose, clean anchors for layered accessories`,
+      description: description || `pixel art character sprite of ${name || 'character'}, front-facing, fixed standing pose, bare body with no clothes no hat no accessories no glasses, plain base for layered trait overlays`,
     };
 
     const result = await pixellabPost('/generate-8-rotations-v2', body);
