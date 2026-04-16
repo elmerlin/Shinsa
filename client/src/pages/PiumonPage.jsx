@@ -1161,7 +1161,11 @@ export default function PiumonPage() {
                       <img src={character.preview} alt={character.name} className="h-full w-full object-contain" style={{ imageRendering: 'pixelated' }} />
                     </div>
                     <div className="text-[10px] font-bold text-gray-500">→</div>
-                    {bodyUrl ? (
+                    {isGenerating ? (
+                      <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl border border-cyan-400/20 bg-[#0a0915]">
+                        <div className="h-5 w-5 animate-spin rounded-full border-2 border-cyan-400/30 border-t-cyan-400" />
+                      </div>
+                    ) : bodyUrl ? (
                       <div className="group/upload relative flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-emerald-400/20 bg-[#0a0915] p-1">
                         <img src={`${bodyUrl}?t=${Date.now()}`} alt={`${character.name} body`} className="h-full w-full object-contain" style={{ imageRendering: 'pixelated' }} />
                         <button
@@ -1172,10 +1176,6 @@ export default function PiumonPage() {
                           x
                         </button>
                       </div>
-                    ) : isGenerating ? (
-                      <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl border border-cyan-400/20 bg-[#0a0915]">
-                        <div className="h-5 w-5 animate-spin rounded-full border-2 border-cyan-400/30 border-t-cyan-400" />
-                      </div>
                     ) : (
                       <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl border border-dashed border-white/[0.12] bg-[#0a0915]">
                         <span className="font-mono text-[8px] text-gray-600">—</span>
@@ -1185,12 +1185,12 @@ export default function PiumonPage() {
                   <div className="mt-2">
                     <div className="truncate font-display text-[13px] font-black tracking-tight text-white">{character.name}</div>
                     <div className="mt-1 flex items-center gap-1.5">
-                      {bodyUrl ? (
-                        <WeightPill tone="emerald">Generated</WeightPill>
-                      ) : isGenerating ? (
+                      {isGenerating ? (
                         <WeightPill tone="cyan">Generating…</WeightPill>
                       ) : job?.status === 'failed' ? (
                         <WeightPill tone="pink">Failed</WeightPill>
+                      ) : bodyUrl ? (
+                        <WeightPill tone="emerald">Generated</WeightPill>
                       ) : (
                         <WeightPill tone="amber">Pending</WeightPill>
                       )}
@@ -1210,14 +1210,14 @@ export default function PiumonPage() {
                         Generate
                       </button>
                     ) : null}
-                    {!bodyUrl ? (
+                    {!bodyUrl && !isGenerating ? (
                       <UploadButton
                         assetUrl={null}
                         onUpload={(file) => uploadAsset('bodies', character.id, file)}
                         onDelete={() => {}}
                         label="Upload"
                       />
-                    ) : (
+                    ) : !isGenerating ? (
                       <button
                         type="button"
                         onClick={() => startGeneration(character)}
@@ -1225,7 +1225,7 @@ export default function PiumonPage() {
                       >
                         Regen
                       </button>
-                    )}
+                    ) : null}
                   </div>
                 </div>
               );
