@@ -1490,14 +1490,15 @@ export default function PiumonPage() {
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {SPECIAL_PILOT_ENTRIES.map((special) => {
               const url = getAssetUrl(special.type, special.id);
+              const isHabitat = special.type === 'habitats';
               return (
                 <div
                   key={special.id}
                   className={`group relative overflow-hidden rounded-2xl border bg-[#0a0915] p-0 ring-1 ring-inset transition hover:-translate-y-0.5 ${special.ring} ${url ? 'border-white/[0.08]' : 'border-white/[0.04] opacity-60'}`}
                 >
-                  {/* Gradient aura */}
+                  {/* Gradient aura — stronger for habitats so transparent PNG edges blend with the card */}
                   <div
-                    className={`pointer-events-none absolute inset-0 bg-gradient-to-br opacity-[0.14] transition group-hover:opacity-[0.24] ${special.gradient}`}
+                    className={`pointer-events-none absolute inset-0 bg-gradient-to-br transition ${isHabitat ? 'opacity-[0.55] group-hover:opacity-[0.7]' : 'opacity-[0.14] group-hover:opacity-[0.24]'} ${special.gradient}`}
                     aria-hidden
                   />
                   {/* Image area */}
@@ -1508,7 +1509,9 @@ export default function PiumonPage() {
                       <img
                         src={`${url}?t=${Date.now()}`}
                         alt={special.name}
-                        className="relative z-10 max-h-[85%] max-w-[85%] object-contain"
+                        className={isHabitat
+                          ? 'absolute inset-0 z-10 h-full w-full object-cover'
+                          : 'relative z-10 max-h-[85%] max-w-[85%] object-contain'}
                         style={{ imageRendering: 'pixelated' }}
                       />
                     ) : (
