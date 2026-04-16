@@ -51,6 +51,23 @@ const CUSTOM_HEROES = [
     lockedName: true,
     characterGroups: ['Pixiu'],
   },
+  {
+    id: 'hero-special-obsidian-prism',
+    name: 'Obsidian Prism',
+    preview: '/piumon/dojocat-reference.jpeg',
+    source: 'Special · 1 of 10',
+    sourceNote: 'Unique special character · jet-black chibi with iridescent holographic highlights',
+    generationStatus: 'Pilot Ready',
+    weight: 1,
+    lockedName: true,
+    characterGroups: ['Specials'],
+    special: true,
+    rarity: 'unique',
+    accent: 'holo-black',
+    accentGradient: 'from-fuchsia-400 via-cyan-400 to-emerald-400',
+    accentBorder: 'border-fuchsia-400/60',
+    accentShadow: 'shadow-[0_0_24px_-6px_rgba(217,70,239,0.55)]',
+  },
 ];
 
 const TRAIT_GROUPS = [
@@ -65,6 +82,17 @@ const TRAIT_GROUPS = [
       { id: 'hat-beanie', name: 'Night Beanie', weight: 7 },
       { id: 'hat-visor', name: 'Step Visor', weight: 8 },
       { id: 'hat-horns', name: 'Chaos Horns', weight: 4 },
+      {
+        id: 'hat-special-phoenix-crown',
+        name: 'Phoenix Crown',
+        weight: 1,
+        special: true,
+        rarity: 'unique',
+        accent: 'phoenix-fire',
+        accentGradient: 'from-amber-300 via-orange-500 to-rose-500',
+        accentBorder: 'border-orange-400/60',
+        accentShadow: 'shadow-[0_0_22px_-6px_rgba(249,115,22,0.55)]',
+      },
     ],
   },
   {
@@ -102,6 +130,17 @@ const TRAIT_GROUPS = [
       { id: 'outfit-robe', name: 'Elemental Robe', weight: 4 },
       { id: 'outfit-armor', name: 'Rhythm Armor', weight: 2 },
       { id: 'outfit-kimono', name: 'Festival Kimono', weight: 3 },
+      {
+        id: 'outfit-special-astral-regalia',
+        name: 'Astral Regalia',
+        weight: 1,
+        special: true,
+        rarity: 'unique',
+        accent: 'astral-indigo',
+        accentGradient: 'from-indigo-400 via-violet-500 to-amber-300',
+        accentBorder: 'border-violet-400/60',
+        accentShadow: 'shadow-[0_0_22px_-6px_rgba(139,92,246,0.55)]',
+      },
     ],
   },
 ];
@@ -139,6 +178,29 @@ const HABITATS = [
     border: 'border-sky-200/30',
     note: 'Frost bloom, hard light, glassy snow, pale wind.',
   },
+  {
+    id: 'habitat-special-aurora-abyss',
+    name: 'Aurora Abyss',
+    weight: 1,
+    accent: 'from-teal-300/30 via-fuchsia-500/20 to-indigo-950/80',
+    border: 'border-fuchsia-300/40',
+    note: 'Cosmic void with swirling teal and magenta aurora ribbons. Unique · 1 of 10.',
+    special: true,
+    rarity: 'unique',
+    accentGradient: 'from-teal-300 via-fuchsia-400 to-indigo-400',
+    accentBorder: 'border-fuchsia-400/60',
+    accentShadow: 'shadow-[0_0_22px_-6px_rgba(232,121,249,0.55)]',
+  },
+];
+
+// Pilot "Specials" manifest — one unique per category for visual review before
+// scaling to 10 unique per category. Each entry resolves via getAssetUrl so
+// the Specials Gallery below renders the actual generated PixelLab assets.
+const SPECIAL_PILOT_ENTRIES = [
+  { type: 'bodies',   id: 'hero-special-obsidian-prism',     name: 'Obsidian Prism',  category: 'Character',  theme: 'Jet black · iridescent rainbow highlights', gradient: 'from-fuchsia-400 via-cyan-400 to-emerald-400', ring: 'ring-fuchsia-400/50', chip: 'bg-fuchsia-400/[0.12] text-fuchsia-200 border-fuchsia-400/30' },
+  { type: 'traits',   id: 'hat-special-phoenix-crown',       name: 'Phoenix Crown',   category: 'Headwear',   theme: 'Flame plumes · gold filigree',              gradient: 'from-amber-300 via-orange-500 to-rose-500',    ring: 'ring-orange-400/50',  chip: 'bg-orange-400/[0.12] text-orange-200 border-orange-400/30' },
+  { type: 'traits',   id: 'outfit-special-astral-regalia',   name: 'Astral Regalia',  category: 'Clothes',    theme: 'Indigo robe · gold constellations',         gradient: 'from-indigo-400 via-violet-500 to-amber-300', ring: 'ring-violet-400/50',  chip: 'bg-violet-400/[0.12] text-violet-200 border-violet-400/30' },
+  { type: 'habitats', id: 'habitat-special-aurora-abyss',    name: 'Aurora Abyss',    category: 'Habitat',    theme: 'Cosmic void · teal & magenta aurora',       gradient: 'from-teal-300 via-fuchsia-400 to-indigo-400',  ring: 'ring-fuchsia-400/50', chip: 'bg-fuchsia-400/[0.12] text-fuchsia-200 border-fuchsia-400/30' },
 ];
 
 const ATTRIBUTE_AXES = [
@@ -1364,6 +1426,98 @@ export default function PiumonPage() {
 
         <SectionShell
           index="06"
+          eyebrow="Specials Gallery"
+          title="Pilot — 1 of 10 per category"
+          aside={
+            <div>
+              <div className="font-mono text-[9px] font-bold uppercase tracking-[0.22em] text-gray-500">Unique Supply</div>
+              <dl className="mt-3 space-y-3">
+                <div className="flex items-baseline justify-between">
+                  <dt className="text-[12px] text-gray-400">Per category</dt>
+                  <dd className="font-mono text-[11px] font-bold tabular-nums text-fuchsia-300">10</dd>
+                </div>
+                <div className="flex items-baseline justify-between">
+                  <dt className="text-[12px] text-gray-400">Pilot generated</dt>
+                  <dd className="font-mono text-[11px] font-bold tabular-nums text-fuchsia-300">
+                    {SPECIAL_PILOT_ENTRIES.filter((s) => getAssetUrl(s.type, s.id)).length}/{SPECIAL_PILOT_ENTRIES.length}
+                  </dd>
+                </div>
+                <div className="flex items-baseline justify-between">
+                  <dt className="text-[12px] text-gray-400">Uses per mint</dt>
+                  <dd className="font-mono text-[11px] font-bold tabular-nums text-fuchsia-300">1</dd>
+                </div>
+              </dl>
+              <p className="mt-4 text-[11px] leading-snug text-gray-500">
+                Each special is used only once across the mint. Review the color signatures and silhouettes below — if these feel right, the next batch scales to 10 per category.
+              </p>
+            </div>
+          }
+        >
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {SPECIAL_PILOT_ENTRIES.map((special) => {
+              const url = getAssetUrl(special.type, special.id);
+              return (
+                <div
+                  key={special.id}
+                  className={`group relative overflow-hidden rounded-2xl border bg-[#0a0915] p-0 ring-1 ring-inset transition hover:-translate-y-0.5 ${special.ring} ${url ? 'border-white/[0.08]' : 'border-white/[0.04] opacity-60'}`}
+                >
+                  {/* Gradient aura */}
+                  <div
+                    className={`pointer-events-none absolute inset-0 bg-gradient-to-br opacity-[0.14] transition group-hover:opacity-[0.24] ${special.gradient}`}
+                    aria-hidden
+                  />
+                  {/* Image area */}
+                  <div className="relative flex aspect-square items-center justify-center overflow-hidden">
+                    {/* Subtle checker + radial tint */}
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_55%,rgba(255,255,255,0.04),transparent_65%)]" />
+                    {url ? (
+                      <img
+                        src={`${url}?t=${Date.now()}`}
+                        alt={special.name}
+                        className="relative z-10 max-h-[85%] max-w-[85%] object-contain"
+                        style={{ imageRendering: 'pixelated' }}
+                      />
+                    ) : (
+                      <span className="relative z-10 font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-gray-600">
+                        Awaiting generation
+                      </span>
+                    )}
+                    {/* Specials badge */}
+                    {url ? (
+                      <span
+                        className={`absolute right-2 top-2 z-20 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-[0.14em] backdrop-blur ${special.chip}`}
+                      >
+                        <svg width="9" height="9" viewBox="0 0 10 10" fill="currentColor" aria-hidden>
+                          <path d="M5 0l1.3 3.3L10 4.6 7 6.8 8 10 5 8 2 10l1-3.2L0 4.6l3.7-1.3z" />
+                        </svg>
+                        1 of 10
+                      </span>
+                    ) : null}
+                  </div>
+                  {/* Metadata footer */}
+                  <div className="relative border-t border-white/[0.06] p-3">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <div className="font-display text-[15px] font-black leading-tight tracking-tight text-white">
+                        {special.name}
+                      </div>
+                      <div className="font-mono text-[9px] font-bold uppercase tracking-[0.16em] text-gray-500">
+                        {special.category}
+                      </div>
+                    </div>
+                    <p className="mt-1.5 line-clamp-2 text-[11px] leading-snug text-gray-400">{special.theme}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <p className="mt-5 text-[11px] leading-relaxed text-gray-500">
+            <span className="font-mono font-bold uppercase tracking-[0.16em] text-fuchsia-300/80">Pilot note · </span>
+            If the art-direction lands, I scale to 10 unique per category (10 characters, 10 hats, 10 eyewear, 10 neckwear, 10 outfits, 10 habitats) with distinct color signatures per item. Head over to the Composition Preview below to mix one of these specials with the base traits.
+          </p>
+        </SectionShell>
+
+        <SectionShell
+          index="07"
           eyebrow="Composition Preview"
           title="Layer stack verification"
           aside={
@@ -1471,7 +1625,7 @@ export default function PiumonPage() {
         </SectionShell>
 
         <SectionShell
-          index="07"
+          index="08"
           eyebrow="Distribution Readout"
           title="What the current weights imply"
           aside={
