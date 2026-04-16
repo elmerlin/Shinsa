@@ -139,12 +139,11 @@ function resolvePreviewPath(previewUrl) {
   return path.join(CLIENT_PUBLIC, relative);
 }
 
-async function imageToDataUri(filePath) {
+async function imageToBase64Payload(filePath) {
   const buf = await fs.promises.readFile(filePath);
   const meta = await sharp(buf).metadata();
-  const mime = meta.format === 'jpeg' ? 'image/jpeg' : `image/${meta.format || 'png'}`;
   return {
-    dataUri: `data:${mime};base64,${buf.toString('base64')}`,
+    image: { type: 'base64', base64: buf.toString('base64') },
     width: meta.width,
     height: meta.height,
   };
@@ -188,12 +187,12 @@ router.post('/generate/body', requireAuth, requireAdmin, async (req, res) => {
     const filePath = resolvePreviewPath(previewUrl);
     if (!fs.existsSync(filePath)) return res.status(404).json({ error: `Source image not found: ${previewUrl}` });
 
-    const { dataUri, width, height } = await imageToDataUri(filePath);
+    const conceptImage = await imageToBase64Payload(filePath);
     const pixelSize = size || 48;
 
     const body = {
       method: 'create_from_concept',
-      concept_image: { image: dataUri, width, height },
+      concept_image: conceptImage,
       image_size: { width: pixelSize, height: pixelSize },
       view: 'side',
       description: description || `pixel art character sprite of ${name || 'character'}, front-facing, fixed standing pose, clean anchors for layered accessories`,
