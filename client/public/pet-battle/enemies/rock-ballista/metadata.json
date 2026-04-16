@@ -1,0 +1,87 @@
+{
+  "character": {
+    "id": "85634926-593d-4387-8356-cb5228ae2e28",
+    "name": "Rock Ballista",
+    "prompt": "stone siege tortoise, heavy boulder shell, crystal-tipped horn cannon, brown-grey rocky body, sturdy ranged enemy, pixel art creature",
+    "size": {
+      "width": 68,
+      "height": 68
+    },
+    "template_id": "mannequin",
+    "directions": 4,
+    "view": "low top-down",
+    "created_at": "2026-04-16T14:58:18.58416+00:00"
+  },
+  "frames": {
+    "rotations": {
+      "south": "rotations/south.png",
+      "west": "rotations/west.png",
+      "east": "rotations/east.png",
+      "north": "rotations/north.png"
+    },
+    "animations": {
+      "cross_punch_attack-649b59b6": {
+        "west": [
+          "animations/cross_punch_attack-649b59b6/west/frame_000.png",
+          "animations/cross_punch_attack-649b59b6/west/frame_001.png",
+          "animations/cross_punch_attack-649b59b6/west/frame_002.png",
+          "animations/cross_punch_attack-649b59b6/west/frame_003.png",
+          "animations/cross_punch_attack-649b59b6/west/frame_004.png",
+          "animations/cross_punch_attack-649b59b6/west/frame_005.png"
+        ],
+        "north": [
+          "animations/cross_punch_attack-649b59b6/north/frame_000.png",
+          "animations/cross_punch_attack-649b59b6/north/frame_001.png",
+          "animations/cross_punch_attack-649b59b6/north/frame_002.png",
+          "animations/cross_punch_attack-649b59b6/north/frame_003.png",
+          "animations/cross_punch_attack-649b59b6/north/frame_004.png",
+          "animations/cross_punch_attack-649b59b6/north/frame_005.png"
+        ],
+        "south": [
+          "animations/cross_punch_attack-649b59b6/south/frame_000.png",
+          "animations/cross_punch_attack-649b59b6/south/frame_001.png",
+          "animations/cross_punch_attack-649b59b6/south/frame_002.png",
+          "animations/cross_punch_attack-649b59b6/south/frame_003.png",
+          "animations/cross_punch_attack-649b59b6/south/frame_004.png",
+          "animations/cross_punch_attack-649b59b6/south/frame_005.png"
+        ],
+        "east": [
+          "animations/cross_punch_attack-649b59b6/east/frame_000.png",
+          "animations/cross_punch_attack-649b59b6/east/frame_001.png",
+          "animations/cross_punch_attack-649b59b6/east/frame_002.png",
+          "animations/cross_punch_attack-649b59b6/east/frame_003.png",
+          "animations/cross_punch_attack-649b59b6/east/frame_004.png",
+          "animations/cross_punch_attack-649b59b6/east/frame_005.png"
+        ]
+      },
+      "animating-29f31f37": {
+        "south": [
+          "animations/animating-29f31f37/south/frame_000.png",
+          "animations/animating-29f31f37/south/frame_001.png",
+          "animations/animating-29f31f37/south/frame_002.png",
+          "animations/animating-29f31f37/south/frame_003.png"
+        ],
+        "north": [
+          "animations/animating-29f31f37/north/frame_000.png",
+          "animations/animating-29f31f37/north/frame_001.png",
+          "animations/animating-29f31f37/north/frame_002.png",
+          "animations/animating-29f31f37/north/frame_003.png"
+        ],
+        "east": [
+          "animations/animating-29f31f37/east/frame_000.png",
+          "animations/animating-29f31f37/east/frame_001.png",
+          "animations/animating-29f31f37/east/frame_002.png",
+          "animations/animating-29f31f37/east/frame_003.png"
+        ],
+        "west": [
+          "animations/animating-29f31f37/west/frame_000.png",
+          "animations/animating-29f31f37/west/frame_001.png",
+          "animations/animating-29f31f37/west/frame_002.png",
+          "animations/animating-29f31f37/west/frame_003.png"
+        ]
+      }
+    }
+  },
+  "export_version": "2.0",
+  "export_date": "2026-04-16T15:25:04.063613"
+}

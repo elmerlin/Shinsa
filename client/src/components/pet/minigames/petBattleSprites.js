@@ -1662,7 +1662,7 @@ export function drawEnemyUnit(ctx, unit, x, groundY, scale, animFrame, world) {
 
   // Try PixelLab sprites first
   if (isEnemyLoaded(w, unit.type)) {
-    const sizeScale = unit.type === 'boss' ? 24 : unit.type === 'tank' ? 20 : unit.type === 'bruiser' ? 18 : 16;
+    const sizeScale = unit.type === 'boss' ? 24 : unit.type === 'tank' ? 20 : unit.type === 'ballista' ? 19 : unit.type === 'bruiser' ? 18 : 16;
     const spriteH = ps * sizeScale;
     const dir = 'west'; // enemies face left (toward player)
     let img = null;

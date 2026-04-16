@@ -1,0 +1,87 @@
+{
+  "character": {
+    "id": "200de616-be0b-49cc-9b59-f2c4beb5a1fd",
+    "name": "Grassland Ballista",
+    "prompt": "thorny plant siege beast, bark armor plating, vine-whip launcher arm, mossy green-brown body, nature ranged enemy, pixel art creature",
+    "size": {
+      "width": 68,
+      "height": 68
+    },
+    "template_id": "mannequin",
+    "directions": 4,
+    "view": "low top-down",
+    "created_at": "2026-04-16T14:58:22.280123+00:00"
+  },
+  "frames": {
+    "rotations": {
+      "south": "rotations/south.png",
+      "west": "rotations/west.png",
+      "east": "rotations/east.png",
+      "north": "rotations/north.png"
+    },
+    "animations": {
+      "animating-f29619bc": {
+        "north": [
+          "animations/animating-f29619bc/north/frame_000.png",
+          "animations/animating-f29619bc/north/frame_001.png",
+          "animations/animating-f29619bc/north/frame_002.png",
+          "animations/animating-f29619bc/north/frame_003.png"
+        ],
+        "south": [
+          "animations/animating-f29619bc/south/frame_000.png",
+          "animations/animating-f29619bc/south/frame_001.png",
+          "animations/animating-f29619bc/south/frame_002.png",
+          "animations/animating-f29619bc/south/frame_003.png"
+        ],
+        "west": [
+          "animations/animating-f29619bc/west/frame_000.png",
+          "animations/animating-f29619bc/west/frame_001.png",
+          "animations/animating-f29619bc/west/frame_002.png",
+          "animations/animating-f29619bc/west/frame_003.png"
+        ],
+        "east": [
+          "animations/animating-f29619bc/east/frame_000.png",
+          "animations/animating-f29619bc/east/frame_001.png",
+          "animations/animating-f29619bc/east/frame_002.png",
+          "animations/animating-f29619bc/east/frame_003.png"
+        ]
+      },
+      "cross_punch_attack-12876909": {
+        "south": [
+          "animations/cross_punch_attack-12876909/south/frame_000.png",
+          "animations/cross_punch_attack-12876909/south/frame_001.png",
+          "animations/cross_punch_attack-12876909/south/frame_002.png",
+          "animations/cross_punch_attack-12876909/south/frame_003.png",
+          "animations/cross_punch_attack-12876909/south/frame_004.png",
+          "animations/cross_punch_attack-12876909/south/frame_005.png"
+        ],
+        "west": [
+          "animations/cross_punch_attack-12876909/west/frame_000.png",
+          "animations/cross_punch_attack-12876909/west/frame_001.png",
+          "animations/cross_punch_attack-12876909/west/frame_002.png",
+          "animations/cross_punch_attack-12876909/west/frame_003.png",
+          "animations/cross_punch_attack-12876909/west/frame_004.png",
+          "animations/cross_punch_attack-12876909/west/frame_005.png"
+        ],
+        "north": [
+          "animations/cross_punch_attack-12876909/north/frame_000.png",
+          "animations/cross_punch_attack-12876909/north/frame_001.png",
+          "animations/cross_punch_attack-12876909/north/frame_002.png",
+          "animations/cross_punch_attack-12876909/north/frame_003.png",
+          "animations/cross_punch_attack-12876909/north/frame_004.png",
+          "animations/cross_punch_attack-12876909/north/frame_005.png"
+        ],
+        "east": [
+          "animations/cross_punch_attack-12876909/east/frame_000.png",
+          "animations/cross_punch_attack-12876909/east/frame_001.png",
+          "animations/cross_punch_attack-12876909/east/frame_002.png",
+          "animations/cross_punch_attack-12876909/east/frame_003.png",
+          "animations/cross_punch_attack-12876909/east/frame_004.png",
+          "animations/cross_punch_attack-12876909/east/frame_005.png"
+        ]
+      }
+    }
+  },
+  "export_version": "2.0",
+  "export_date": "2026-04-16T15:27:45.594951"
+}

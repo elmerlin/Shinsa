@@ -9,7 +9,7 @@ const CHARACTERS = [
 ];
 
 const WORLDS = ['fire', 'water', 'rock', 'ice', 'grassland'];
-const ENEMY_ROLES = ['basic', 'bruiser', 'sniper', 'tank', 'boss'];
+const ENEMY_ROLES = ['basic', 'bruiser', 'sniper', 'tank', 'boss', 'harpy', 'ballista'];
 
 const sprites = {};
 const enemySprites = {};

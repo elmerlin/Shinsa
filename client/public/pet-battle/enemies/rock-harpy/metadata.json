@@ -1,0 +1,87 @@
+{
+  "character": {
+    "id": "7cfcef47-6e7d-42a4-956c-c6fa26e4105a",
+    "name": "Rock Harpy",
+    "prompt": "stone gargoyle harpy, rocky grey wings, cracked stone body, mineral crystals on shoulders, sharp stone talons, pixel art enemy creature, menacing flying pose",
+    "size": {
+      "width": 68,
+      "height": 68
+    },
+    "template_id": "mannequin",
+    "directions": 4,
+    "view": "low top-down",
+    "created_at": "2026-04-16T14:58:08.080726+00:00"
+  },
+  "frames": {
+    "rotations": {
+      "south": "rotations/south.png",
+      "west": "rotations/west.png",
+      "east": "rotations/east.png",
+      "north": "rotations/north.png"
+    },
+    "animations": {
+      "cross_punch_attack-56609567": {
+        "east": [
+          "animations/cross_punch_attack-56609567/east/frame_000.png",
+          "animations/cross_punch_attack-56609567/east/frame_001.png",
+          "animations/cross_punch_attack-56609567/east/frame_002.png",
+          "animations/cross_punch_attack-56609567/east/frame_003.png",
+          "animations/cross_punch_attack-56609567/east/frame_004.png",
+          "animations/cross_punch_attack-56609567/east/frame_005.png"
+        ],
+        "west": [
+          "animations/cross_punch_attack-56609567/west/frame_000.png",
+          "animations/cross_punch_attack-56609567/west/frame_001.png",
+          "animations/cross_punch_attack-56609567/west/frame_002.png",
+          "animations/cross_punch_attack-56609567/west/frame_003.png",
+          "animations/cross_punch_attack-56609567/west/frame_004.png",
+          "animations/cross_punch_attack-56609567/west/frame_005.png"
+        ],
+        "south": [
+          "animations/cross_punch_attack-56609567/south/frame_000.png",
+          "animations/cross_punch_attack-56609567/south/frame_001.png",
+          "animations/cross_punch_attack-56609567/south/frame_002.png",
+          "animations/cross_punch_attack-56609567/south/frame_003.png",
+          "animations/cross_punch_attack-56609567/south/frame_004.png",
+          "animations/cross_punch_attack-56609567/south/frame_005.png"
+        ],
+        "north": [
+          "animations/cross_punch_attack-56609567/north/frame_000.png",
+          "animations/cross_punch_attack-56609567/north/frame_001.png",
+          "animations/cross_punch_attack-56609567/north/frame_002.png",
+          "animations/cross_punch_attack-56609567/north/frame_003.png",
+          "animations/cross_punch_attack-56609567/north/frame_004.png",
+          "animations/cross_punch_attack-56609567/north/frame_005.png"
+        ]
+      },
+      "animating-a9bcff3e": {
+        "north": [
+          "animations/animating-a9bcff3e/north/frame_000.png",
+          "animations/animating-a9bcff3e/north/frame_001.png",
+          "animations/animating-a9bcff3e/north/frame_002.png",
+          "animations/animating-a9bcff3e/north/frame_003.png"
+        ],
+        "east": [
+          "animations/animating-a9bcff3e/east/frame_000.png",
+          "animations/animating-a9bcff3e/east/frame_001.png",
+          "animations/animating-a9bcff3e/east/frame_002.png",
+          "animations/animating-a9bcff3e/east/frame_003.png"
+        ],
+        "south": [
+          "animations/animating-a9bcff3e/south/frame_000.png",
+          "animations/animating-a9bcff3e/south/frame_001.png",
+          "animations/animating-a9bcff3e/south/frame_002.png",
+          "animations/animating-a9bcff3e/south/frame_003.png"
+        ],
+        "west": [
+          "animations/animating-a9bcff3e/west/frame_000.png",
+          "animations/animating-a9bcff3e/west/frame_001.png",
+          "animations/animating-a9bcff3e/west/frame_002.png",
+          "animations/animating-a9bcff3e/west/frame_003.png"
+        ]
+      }
+    }
+  },
+  "export_version": "2.0",
+  "export_date": "2026-04-16T15:16:02.287799"
+}

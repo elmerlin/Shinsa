@@ -1,0 +1,87 @@
+{
+  "character": {
+    "id": "e4207885-5d10-43e9-8222-a83bbd9d1f01",
+    "name": "Ice Harpy",
+    "prompt": "frozen ice harpy, crystalline frost wings, pale blue icy body, snowflake patterns, icicle talons, pixel art enemy creature, menacing flying pose",
+    "size": {
+      "width": 68,
+      "height": 68
+    },
+    "template_id": "mannequin",
+    "directions": 4,
+    "view": "low top-down",
+    "created_at": "2026-04-16T14:58:10.09799+00:00"
+  },
+  "frames": {
+    "rotations": {
+      "south": "rotations/south.png",
+      "west": "rotations/west.png",
+      "east": "rotations/east.png",
+      "north": "rotations/north.png"
+    },
+    "animations": {
+      "animating-12869b4c": {
+        "east": [
+          "animations/animating-12869b4c/east/frame_000.png",
+          "animations/animating-12869b4c/east/frame_001.png",
+          "animations/animating-12869b4c/east/frame_002.png",
+          "animations/animating-12869b4c/east/frame_003.png"
+        ],
+        "south": [
+          "animations/animating-12869b4c/south/frame_000.png",
+          "animations/animating-12869b4c/south/frame_001.png",
+          "animations/animating-12869b4c/south/frame_002.png",
+          "animations/animating-12869b4c/south/frame_003.png"
+        ],
+        "north": [
+          "animations/animating-12869b4c/north/frame_000.png",
+          "animations/animating-12869b4c/north/frame_001.png",
+          "animations/animating-12869b4c/north/frame_002.png",
+          "animations/animating-12869b4c/north/frame_003.png"
+        ],
+        "west": [
+          "animations/animating-12869b4c/west/frame_000.png",
+          "animations/animating-12869b4c/west/frame_001.png",
+          "animations/animating-12869b4c/west/frame_002.png",
+          "animations/animating-12869b4c/west/frame_003.png"
+        ]
+      },
+      "cross_punch_attack-b53cc8f5": {
+        "south": [
+          "animations/cross_punch_attack-b53cc8f5/south/frame_000.png",
+          "animations/cross_punch_attack-b53cc8f5/south/frame_001.png",
+          "animations/cross_punch_attack-b53cc8f5/south/frame_002.png",
+          "animations/cross_punch_attack-b53cc8f5/south/frame_003.png",
+          "animations/cross_punch_attack-b53cc8f5/south/frame_004.png",
+          "animations/cross_punch_attack-b53cc8f5/south/frame_005.png"
+        ],
+        "east": [
+          "animations/cross_punch_attack-b53cc8f5/east/frame_000.png",
+          "animations/cross_punch_attack-b53cc8f5/east/frame_001.png",
+          "animations/cross_punch_attack-b53cc8f5/east/frame_002.png",
+          "animations/cross_punch_attack-b53cc8f5/east/frame_003.png",
+          "animations/cross_punch_attack-b53cc8f5/east/frame_004.png",
+          "animations/cross_punch_attack-b53cc8f5/east/frame_005.png"
+        ],
+        "north": [
+          "animations/cross_punch_attack-b53cc8f5/north/frame_000.png",
+          "animations/cross_punch_attack-b53cc8f5/north/frame_001.png",
+          "animations/cross_punch_attack-b53cc8f5/north/frame_002.png",
+          "animations/cross_punch_attack-b53cc8f5/north/frame_003.png",
+          "animations/cross_punch_attack-b53cc8f5/north/frame_004.png",
+          "animations/cross_punch_attack-b53cc8f5/north/frame_005.png"
+        ],
+        "west": [
+          "animations/cross_punch_attack-b53cc8f5/west/frame_000.png",
+          "animations/cross_punch_attack-b53cc8f5/west/frame_001.png",
+          "animations/cross_punch_attack-b53cc8f5/west/frame_002.png",
+          "animations/cross_punch_attack-b53cc8f5/west/frame_003.png",
+          "animations/cross_punch_attack-b53cc8f5/west/frame_004.png",
+          "animations/cross_punch_attack-b53cc8f5/west/frame_005.png"
+        ]
+      }
+    }
+  },
+  "export_version": "2.0",
+  "export_date": "2026-04-16T15:16:05.361582"
+}

@@ -1,0 +1,87 @@
+{
+  "character": {
+    "id": "341ed6b9-e617-4e37-b74f-aafa9cced754",
+    "name": "Fire Harpy",
+    "prompt": "winged fire demon harpy, burning feathers, ember wings spread wide, glowing orange-red body, fierce talons, pixel art enemy creature, menacing flying pose",
+    "size": {
+      "width": 68,
+      "height": 68
+    },
+    "template_id": "mannequin",
+    "directions": 4,
+    "view": "low top-down",
+    "created_at": "2026-04-16T14:58:04.110247+00:00"
+  },
+  "frames": {
+    "rotations": {
+      "south": "rotations/south.png",
+      "west": "rotations/west.png",
+      "east": "rotations/east.png",
+      "north": "rotations/north.png"
+    },
+    "animations": {
+      "animating-b5b49cb7": {
+        "south": [
+          "animations/animating-b5b49cb7/south/frame_000.png",
+          "animations/animating-b5b49cb7/south/frame_001.png",
+          "animations/animating-b5b49cb7/south/frame_002.png",
+          "animations/animating-b5b49cb7/south/frame_003.png"
+        ],
+        "west": [
+          "animations/animating-b5b49cb7/west/frame_000.png",
+          "animations/animating-b5b49cb7/west/frame_001.png",
+          "animations/animating-b5b49cb7/west/frame_002.png",
+          "animations/animating-b5b49cb7/west/frame_003.png"
+        ],
+        "north": [
+          "animations/animating-b5b49cb7/north/frame_000.png",
+          "animations/animating-b5b49cb7/north/frame_001.png",
+          "animations/animating-b5b49cb7/north/frame_002.png",
+          "animations/animating-b5b49cb7/north/frame_003.png"
+        ],
+        "east": [
+          "animations/animating-b5b49cb7/east/frame_000.png",
+          "animations/animating-b5b49cb7/east/frame_001.png",
+          "animations/animating-b5b49cb7/east/frame_002.png",
+          "animations/animating-b5b49cb7/east/frame_003.png"
+        ]
+      },
+      "cross_punch_attack-1448d819": {
+        "south": [
+          "animations/cross_punch_attack-1448d819/south/frame_000.png",
+          "animations/cross_punch_attack-1448d819/south/frame_001.png",
+          "animations/cross_punch_attack-1448d819/south/frame_002.png",
+          "animations/cross_punch_attack-1448d819/south/frame_003.png",
+          "animations/cross_punch_attack-1448d819/south/frame_004.png",
+          "animations/cross_punch_attack-1448d819/south/frame_005.png"
+        ],
+        "east": [
+          "animations/cross_punch_attack-1448d819/east/frame_000.png",
+          "animations/cross_punch_attack-1448d819/east/frame_001.png",
+          "animations/cross_punch_attack-1448d819/east/frame_002.png",
+          "animations/cross_punch_attack-1448d819/east/frame_003.png",
+          "animations/cross_punch_attack-1448d819/east/frame_004.png",
+          "animations/cross_punch_attack-1448d819/east/frame_005.png"
+        ],
+        "west": [
+          "animations/cross_punch_attack-1448d819/west/frame_000.png",
+          "animations/cross_punch_attack-1448d819/west/frame_001.png",
+          "animations/cross_punch_attack-1448d819/west/frame_002.png",
+          "animations/cross_punch_attack-1448d819/west/frame_003.png",
+          "animations/cross_punch_attack-1448d819/west/frame_004.png",
+          "animations/cross_punch_attack-1448d819/west/frame_005.png"
+        ],
+        "north": [
+          "animations/cross_punch_attack-1448d819/north/frame_000.png",
+          "animations/cross_punch_attack-1448d819/north/frame_001.png",
+          "animations/cross_punch_attack-1448d819/north/frame_002.png",
+          "animations/cross_punch_attack-1448d819/north/frame_003.png",
+          "animations/cross_punch_attack-1448d819/north/frame_004.png",
+          "animations/cross_punch_attack-1448d819/north/frame_005.png"
+        ]
+      }
+    }
+  },
+  "export_version": "2.0",
+  "export_date": "2026-04-16T15:15:59.103219"
+}

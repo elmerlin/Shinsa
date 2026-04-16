@@ -1,0 +1,87 @@
+{
+  "character": {
+    "id": "c80d3dca-28a0-4246-ac6c-593faeac27b6",
+    "name": "Water Ballista",
+    "prompt": "deep sea siege crab, barnacle-encrusted shell armor, large pincer cannon arm, blue-green aquatic creature, ranged enemy, pixel art creature",
+    "size": {
+      "width": 68,
+      "height": 68
+    },
+    "template_id": "mannequin",
+    "directions": 4,
+    "view": "low top-down",
+    "created_at": "2026-04-16T14:58:16.728308+00:00"
+  },
+  "frames": {
+    "rotations": {
+      "south": "rotations/south.png",
+      "west": "rotations/west.png",
+      "east": "rotations/east.png",
+      "north": "rotations/north.png"
+    },
+    "animations": {
+      "animating-9b2fb67c": {
+        "east": [
+          "animations/animating-9b2fb67c/east/frame_000.png",
+          "animations/animating-9b2fb67c/east/frame_001.png",
+          "animations/animating-9b2fb67c/east/frame_002.png",
+          "animations/animating-9b2fb67c/east/frame_003.png"
+        ],
+        "west": [
+          "animations/animating-9b2fb67c/west/frame_000.png",
+          "animations/animating-9b2fb67c/west/frame_001.png",
+          "animations/animating-9b2fb67c/west/frame_002.png",
+          "animations/animating-9b2fb67c/west/frame_003.png"
+        ],
+        "south": [
+          "animations/animating-9b2fb67c/south/frame_000.png",
+          "animations/animating-9b2fb67c/south/frame_001.png",
+          "animations/animating-9b2fb67c/south/frame_002.png",
+          "animations/animating-9b2fb67c/south/frame_003.png"
+        ],
+        "north": [
+          "animations/animating-9b2fb67c/north/frame_000.png",
+          "animations/animating-9b2fb67c/north/frame_001.png",
+          "animations/animating-9b2fb67c/north/frame_002.png",
+          "animations/animating-9b2fb67c/north/frame_003.png"
+        ]
+      },
+      "cross_punch_attack-0ddf95ac": {
+        "north": [
+          "animations/cross_punch_attack-0ddf95ac/north/frame_000.png",
+          "animations/cross_punch_attack-0ddf95ac/north/frame_001.png",
+          "animations/cross_punch_attack-0ddf95ac/north/frame_002.png",
+          "animations/cross_punch_attack-0ddf95ac/north/frame_003.png",
+          "animations/cross_punch_attack-0ddf95ac/north/frame_004.png",
+          "animations/cross_punch_attack-0ddf95ac/north/frame_005.png"
+        ],
+        "east": [
+          "animations/cross_punch_attack-0ddf95ac/east/frame_000.png",
+          "animations/cross_punch_attack-0ddf95ac/east/frame_001.png",
+          "animations/cross_punch_attack-0ddf95ac/east/frame_002.png",
+          "animations/cross_punch_attack-0ddf95ac/east/frame_003.png",
+          "animations/cross_punch_attack-0ddf95ac/east/frame_004.png",
+          "animations/cross_punch_attack-0ddf95ac/east/frame_005.png"
+        ],
+        "south": [
+          "animations/cross_punch_attack-0ddf95ac/south/frame_000.png",
+          "animations/cross_punch_attack-0ddf95ac/south/frame_001.png",
+          "animations/cross_punch_attack-0ddf95ac/south/frame_002.png",
+          "animations/cross_punch_attack-0ddf95ac/south/frame_003.png",
+          "animations/cross_punch_attack-0ddf95ac/south/frame_004.png",
+          "animations/cross_punch_attack-0ddf95ac/south/frame_005.png"
+        ],
+        "west": [
+          "animations/cross_punch_attack-0ddf95ac/west/frame_000.png",
+          "animations/cross_punch_attack-0ddf95ac/west/frame_001.png",
+          "animations/cross_punch_attack-0ddf95ac/west/frame_002.png",
+          "animations/cross_punch_attack-0ddf95ac/west/frame_003.png",
+          "animations/cross_punch_attack-0ddf95ac/west/frame_004.png",
+          "animations/cross_punch_attack-0ddf95ac/west/frame_005.png"
+        ]
+      }
+    }
+  },
+  "export_version": "2.0",
+  "export_date": "2026-04-16T15:21:48.186213"
+}
