@@ -52,6 +52,78 @@ const CUSTOM_HEROES = [
     characterGroups: ['Pixiu'],
   },
   {
+    id: 'hero-arcade-regular',
+    name: 'Arcade Regular',
+    preview: '/piumon-assets/bodies/hero-arcade-regular.png',
+    source: 'Common · Complete Look',
+    sourceNote: 'Common-tier chibi · turquoise cap, black hoodie, gaming headphones',
+    generationStatus: 'Common',
+    weight: 14,
+    lockedName: true,
+    characterGroups: ['Commons'],
+    rarity: 'common',
+  },
+  {
+    id: 'hero-neon-dancer',
+    name: 'Neon Dancer',
+    preview: '/piumon-assets/bodies/hero-neon-dancer.png',
+    source: 'Common · Complete Look',
+    sourceNote: 'Common-tier chibi · magenta LED-trim jacket, neon pink shorts',
+    generationStatus: 'Common',
+    weight: 14,
+    lockedName: true,
+    characterGroups: ['Commons'],
+    rarity: 'common',
+  },
+  {
+    id: 'hero-street-rival',
+    name: 'Street Rival',
+    preview: '/piumon-assets/bodies/hero-street-rival.png',
+    source: 'Common · Complete Look',
+    sourceNote: 'Common-tier chibi · black bomber over red tee, backwards snapback',
+    generationStatus: 'Common',
+    weight: 14,
+    lockedName: true,
+    characterGroups: ['Commons'],
+    rarity: 'common',
+  },
+  {
+    id: 'hero-festival-guest',
+    name: 'Festival Guest',
+    preview: '/piumon-assets/bodies/hero-festival-guest.png',
+    source: 'Common · Complete Look',
+    sourceNote: 'Common-tier chibi · yellow tank, denim shorts, flower crown',
+    generationStatus: 'Common',
+    weight: 14,
+    lockedName: true,
+    characterGroups: ['Commons'],
+    rarity: 'common',
+  },
+  {
+    id: 'hero-rookie-stepper',
+    name: 'Rookie Stepper',
+    preview: '/piumon-assets/bodies/hero-rookie-stepper.png',
+    source: 'Common · Complete Look',
+    sourceNote: 'Common-tier chibi · plain white tee and shorts, fresh sneakers',
+    generationStatus: 'Common',
+    weight: 14,
+    lockedName: true,
+    characterGroups: ['Commons'],
+    rarity: 'common',
+  },
+  {
+    id: 'hero-night-owl',
+    name: 'Night Owl',
+    preview: '/piumon-assets/bodies/hero-night-owl.png',
+    source: 'Common · Complete Look',
+    sourceNote: 'Common-tier chibi · deep purple hood, glowing yellow eyes',
+    generationStatus: 'Common',
+    weight: 14,
+    lockedName: true,
+    characterGroups: ['Commons'],
+    rarity: 'common',
+  },
+  {
     id: 'hero-special-obsidian-prism',
     name: 'Obsidian Prism',
     preview: '/piumon-assets/bodies/hero-special-obsidian-prism.png',
@@ -223,81 +295,6 @@ const CUSTOM_HEROES = [
   },
 ];
 
-const TRAIT_GROUPS = [
-  {
-    key: 'hat',
-    title: 'Headwear',
-    note: 'Keep hat anchors identical across every PixelLab generation so hats can swap cleanly.',
-    items: [
-      { id: 'hat-none', name: 'No Hat', weight: 18 },
-      { id: 'hat-chicken', name: 'Chicken Cap', weight: 6 },
-      { id: 'hat-crown', name: 'Arcade Crown', weight: 3 },
-      { id: 'hat-beanie', name: 'Night Beanie', weight: 7 },
-      { id: 'hat-visor', name: 'Step Visor', weight: 8 },
-      { id: 'hat-horns', name: 'Chaos Horns', weight: 4 },
-      {
-        id: 'hat-special-phoenix-crown',
-        name: 'Phoenix Crown',
-        weight: 1,
-        special: true,
-        rarity: 'unique',
-        accent: 'phoenix-fire',
-        accentGradient: 'from-amber-300 via-orange-500 to-rose-500',
-        accentBorder: 'border-orange-400/60',
-        accentShadow: 'shadow-[0_0_22px_-6px_rgba(249,115,22,0.55)]',
-      },
-    ],
-  },
-  {
-    key: 'eyewear',
-    title: 'Eyewear',
-    note: 'Eyewear should share one eye-line so glasses can be reused across all bases.',
-    items: [
-      { id: 'eye-none', name: 'No Eyewear', weight: 22 },
-      { id: 'eye-round', name: 'Round Specs', weight: 8 },
-      { id: 'eye-shades', name: 'Pixel Shades', weight: 5 },
-      { id: 'eye-mono', name: 'Monocle', weight: 2 },
-      { id: 'eye-star', name: 'Star Visor', weight: 3 },
-    ],
-  },
-  {
-    key: 'neck',
-    title: 'Neckwear',
-    note: 'Neck items should sit on one fixed neck line so medals and charms are truly reusable.',
-    items: [
-      { id: 'neck-none', name: 'No Necklace', weight: 14 },
-      { id: 'neck-stomp', name: 'Stomp Medal', weight: 10 },
-      { id: 'neck-luck', name: 'Lucky Charm', weight: 6 },
-      { id: 'neck-crystal', name: 'Crystal Pendant', weight: 4 },
-      { id: 'neck-scarf', name: 'Short Scarf', weight: 7 },
-    ],
-  },
-  {
-    key: 'outfit',
-    title: 'Clothes',
-    note: 'Every base should be generated in the same standing pose so outfits can be swapped without reposing.',
-    items: [
-      { id: 'outfit-tee', name: 'Plain Tee', weight: 14 },
-      { id: 'outfit-hoodie', name: 'Arcade Hoodie', weight: 10 },
-      { id: 'outfit-jacket', name: 'Street Jacket', weight: 8 },
-      { id: 'outfit-robe', name: 'Elemental Robe', weight: 4 },
-      { id: 'outfit-armor', name: 'Rhythm Armor', weight: 2 },
-      { id: 'outfit-kimono', name: 'Festival Kimono', weight: 3 },
-      {
-        id: 'outfit-special-astral-regalia',
-        name: 'Astral Regalia',
-        weight: 1,
-        special: true,
-        rarity: 'unique',
-        accent: 'astral-indigo',
-        accentGradient: 'from-indigo-400 via-violet-500 to-amber-300',
-        accentBorder: 'border-violet-400/60',
-        accentShadow: 'shadow-[0_0_22px_-6px_rgba(139,92,246,0.55)]',
-      },
-    ],
-  },
-];
-
 const HABITATS = [
   {
     id: 'rock',
@@ -330,6 +327,42 @@ const HABITATS = [
     accent: 'from-sky-100/35 via-blue-200/20 to-slate-900/80',
     border: 'border-sky-200/30',
     note: 'Frost bloom, hard light, glassy snow, pale wind.',
+  },
+  {
+    id: 'habitat-grassland',
+    name: 'Grassland',
+    weight: 7,
+    accent: 'from-lime-300/30 via-emerald-400/20 to-sky-900/70',
+    border: 'border-emerald-300/30',
+    note: 'Rolling hills, wildflowers, golden sunlight, distant tree line.',
+    rarity: 'common',
+  },
+  {
+    id: 'habitat-electric-grid',
+    name: 'Electric Grid',
+    weight: 6,
+    accent: 'from-fuchsia-400/30 via-cyan-400/20 to-indigo-950/80',
+    border: 'border-cyan-300/30',
+    note: 'Synthwave grid, magenta sunset, neon sparks, deep indigo ground.',
+    rarity: 'common',
+  },
+  {
+    id: 'habitat-windswept-peaks',
+    name: 'Windswept Peaks',
+    weight: 5,
+    accent: 'from-rose-200/30 via-orange-300/20 to-slate-900/80',
+    border: 'border-rose-200/30',
+    note: 'Cloud-sea cliffs, dawn sky, streaked wind, tiny eagle in the distance.',
+    rarity: 'common',
+  },
+  {
+    id: 'habitat-shadow-glade',
+    name: 'Shadow Glade',
+    weight: 5,
+    accent: 'from-purple-400/30 via-violet-700/25 to-black/80',
+    border: 'border-purple-300/30',
+    note: 'Misty purple forest, glowing mushrooms, moonbeam shafts, fireflies.',
+    rarity: 'common',
   },
   {
     id: 'habitat-special-aurora-abyss',
@@ -750,64 +783,6 @@ function CharacterCard({
   );
 }
 
-function TraitCard({ group, items, onToggle, onWeightChange, getAssetUrl, onUpload, onDelete }) {
-  const totalWeight = sumActiveWeight(items);
-  const uploadedCount = items.filter((item) => getAssetUrl?.('traits', item.id)).length;
-  return (
-    <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3 className="font-display text-[15px] font-black tracking-tight text-white">{group.title}</h3>
-          <p className="mt-1 text-[11px] leading-snug text-gray-500">{group.note}</p>
-        </div>
-        <div className="shrink-0 text-right">
-          <div className="font-mono text-[9px] font-bold uppercase tracking-[0.16em] text-gray-500">Total</div>
-          <div className="mt-0.5 font-display text-lg font-black leading-none tabular-nums text-amber-200">{totalWeight}</div>
-          {onUpload ? (
-            <div className="mt-1 font-mono text-[9px] font-bold tracking-[0.12em] text-emerald-300/70">
-              {uploadedCount}/{items.length} layers
-            </div>
-          ) : null}
-        </div>
-      </div>
-      <div className="mt-4 divide-y divide-white/[0.05] border-y border-white/[0.05]">
-        {items.map((item) => {
-          const active = item.active !== false;
-          const url = getAssetUrl?.('traits', item.id);
-          return (
-            <div key={item.id} className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 py-2">
-              <label className="flex cursor-pointer items-center gap-2.5 text-[13px]">
-                <input
-                  type="checkbox"
-                  checked={active}
-                  onChange={(event) => onToggle(group.key, item.id, event.target.checked)}
-                  className="h-3.5 w-3.5 rounded-sm border-white/20 bg-black/30 text-cyan-400 focus:ring-1 focus:ring-cyan-400/40 focus:ring-offset-0"
-                />
-                <span className={active ? 'text-white' : 'text-gray-600 line-through'}>{item.name}</span>
-              </label>
-              {onUpload ? (
-                <UploadButton
-                  assetUrl={url}
-                  onUpload={(file) => onUpload('traits', item.id, file)}
-                  onDelete={() => onDelete?.('traits', item.id)}
-                />
-              ) : null}
-              <input
-                type="number"
-                min="0"
-                max="999"
-                value={item.weight}
-                onChange={(event) => onWeightChange(group.key, item.id, event.target.value)}
-                className="h-7 w-14 rounded-md border border-white/[0.08] bg-black/30 px-2 text-right font-mono text-[11px] tabular-nums text-white outline-none focus:border-cyan-400/60"
-              />
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 function HabitatCard({ habitat, onToggle, onWeightChange, backdropUrl, onUpload, onDelete }) {
   const active = habitat.active !== false;
   return (
@@ -867,9 +842,6 @@ export default function PiumonPage() {
   const [baseFilter, setBaseFilter] = useState('all');
   const [baseCharacters, setBaseCharacters] = useState(() => [...CUSTOM_HEROES, ...createShopSeeds()].map((item) => ({ ...item, active: true })));
   const [groupDrafts, setGroupDrafts] = useState({});
-  const [traits, setTraits] = useState(() => Object.fromEntries(
-    TRAIT_GROUPS.map((group) => [group.key, group.items.map((item) => ({ ...item, active: true }))])
-  ));
   const [habitats, setHabitats] = useState(() => HABITATS.map((item) => ({ ...item, active: true })));
 
   // Asset management
@@ -1039,7 +1011,6 @@ export default function PiumonPage() {
   // Composition preview
   const [compBase, setCompBase] = useState('');
   const [compHabitat, setCompHabitat] = useState('');
-  const [compTraits, setCompTraits] = useState({ hat: '', eyewear: '', neck: '', outfit: '' });
   const EXPORT_SIZE = 512;
 
   const filteredCharacters = useMemo(() => {
@@ -1062,13 +1033,6 @@ export default function PiumonPage() {
   const totalBaseWeight = useMemo(() => sumActiveWeight(baseCharacters), [baseCharacters]);
   const removedBaseCount = useMemo(() => baseCharacters.filter((item) => item.removed).length, [baseCharacters]);
   const visibleBaseCount = useMemo(() => baseCharacters.filter((item) => !item.removed).length, [baseCharacters]);
-  const activeTraitCounts = useMemo(() => {
-    return TRAIT_GROUPS.map((group) => ({
-      key: group.key,
-      active: (traits[group.key] || []).filter((item) => item.active !== false && item.weight > 0).length,
-      totalWeight: sumActiveWeight(traits[group.key] || []),
-    }));
-  }, [traits]);
   const activeHabitats = useMemo(() => habitats.filter((item) => item.active !== false && item.weight > 0), [habitats]);
   const totalHabitatWeight = useMemo(() => sumActiveWeight(habitats), [habitats]);
   const characterGroups = useMemo(() => {
@@ -1088,9 +1052,8 @@ export default function PiumonPage() {
   }, [baseCharacters]);
   const groupSuggestions = useMemo(() => characterGroups.map((group) => group.name), [characterGroups]);
   const theoreticalCombos = useMemo(() => {
-    const traitProduct = activeTraitCounts.reduce((product, group) => product * Math.max(1, group.active), 1);
-    return activeBases.length * Math.max(1, activeHabitats.length) * traitProduct;
-  }, [activeBases.length, activeHabitats.length, activeTraitCounts]);
+    return activeBases.length * Math.max(1, activeHabitats.length);
+  }, [activeBases.length, activeHabitats.length]);
 
   const projectedTopBases = useMemo(() => {
     if (!totalBaseWeight) return [];
@@ -1138,16 +1101,6 @@ export default function PiumonPage() {
 
     sCtx.drawImage(bodyImg, 0, 0, native, native);
 
-    for (const [, traitId] of Object.entries(compTraits)) {
-      if (!traitId) continue;
-      const url = getAssetUrl('traits', traitId);
-      if (!url) continue;
-      try {
-        const tImg = await loadImg(url);
-        sCtx.drawImage(tImg, 0, 0, native, native);
-      } catch { /* skip */ }
-    }
-
     const big = document.createElement('canvas');
     big.width = EXPORT_SIZE;
     big.height = EXPORT_SIZE;
@@ -1160,7 +1113,7 @@ export default function PiumonPage() {
     link.download = `${charName.toLowerCase().replace(/\s+/g, '-')}-512.png`;
     link.href = big.toDataURL('image/png');
     link.click();
-  }, [compBase, compHabitat, compTraits, getAssetUrl, activeBases]);
+  }, [compBase, compHabitat, getAssetUrl, activeBases]);
 
   const heroReference = activeBases[0] || baseCharacters[0];
 
@@ -1190,18 +1143,9 @@ export default function PiumonPage() {
     );
   }
 
-  function updateTrait(groupKey, id, updates) {
-    setTraits((current) => ({
-      ...current,
-      [groupKey]: (current[groupKey] || []).map((item) => (item.id === id ? { ...item, ...updates } : item)),
-    }));
-  }
-
   function updateHabitat(id, updates) {
     setHabitats((current) => current.map((item) => (item.id === id ? { ...item, ...updates } : item)));
   }
-
-  const totalTraitLayers = activeTraitCounts.reduce((sum, item) => sum + item.active, 0);
 
   return (
     <div className="relative min-h-screen bg-[#070610] text-white">
@@ -1257,9 +1201,9 @@ export default function PiumonPage() {
             </dd>
           </div>
           <div className="sm:px-6">
-            <dt className="font-mono text-[9px] font-bold uppercase tracking-[0.22em] text-gray-500">Trait Layers</dt>
-            <dd className="mt-2 font-display text-[2.25rem] font-black leading-none tracking-tight text-white tabular-nums">{totalTraitLayers}</dd>
-            <dd className="mt-2 text-[11px] leading-snug text-gray-500">Across hats, eyes, neck, clothes.</dd>
+            <dt className="font-mono text-[9px] font-bold uppercase tracking-[0.22em] text-gray-500">Habitats</dt>
+            <dd className="mt-2 font-display text-[2.25rem] font-black leading-none tracking-tight text-white tabular-nums">{activeHabitats.length}</dd>
+            <dd className="mt-2 text-[11px] leading-snug text-gray-500">Backdrops live in rotation.</dd>
           </div>
           <div className="sm:px-6 sm:last:pr-0">
             <dt className="font-mono text-[9px] font-bold uppercase tracking-[0.22em] text-gray-500">Possible Combos</dt>
@@ -1342,7 +1286,7 @@ export default function PiumonPage() {
                 </div>
                 <div>
                   <dt className="font-display text-[11px] font-black uppercase tracking-[0.14em] text-white">Rarity model</dt>
-                  <dd className="mt-1 text-[11px] leading-snug text-gray-500">Character rarity = pool weight. Trait rarity = overlap with enabled wearables and habitats.</dd>
+                  <dd className="mt-1 text-[11px] leading-snug text-gray-500">Path A — each complete-look character is one unified sprite. Rarity flows through character pool weight plus habitat pairing.</dd>
                 </div>
               </dl>
               <div className="mt-5 border-t border-white/[0.06] pt-4">
@@ -1573,43 +1517,6 @@ export default function PiumonPage() {
 
         <SectionShell
           index="04"
-          eyebrow="Trait Pools"
-          title="Reusable accessories and clothes"
-          aside={
-            <div>
-              <div className="font-mono text-[9px] font-bold uppercase tracking-[0.22em] text-gray-500">Layer Order</div>
-              <ol className="mt-3 divide-y divide-white/[0.05] border-y border-white/[0.05]">
-                {['Base body', 'Clothes', 'Neckwear', 'Eyewear', 'Headwear'].map((label, index) => (
-                  <li key={label} className="flex items-center justify-between py-2">
-                    <span className="text-[12px] text-white">{label}</span>
-                    <span className="font-mono text-[10px] font-bold tracking-[0.1em] text-cyan-300/60">{String(index + 1).padStart(2, '0')}</span>
-                  </li>
-                ))}
-              </ol>
-              <p className="mt-3 text-[11px] leading-snug text-gray-500">
-                Break this stack and the collectible stops being composable. Catch it before the final mint batch generates.
-              </p>
-            </div>
-          }
-        >
-          <div className="grid gap-3 xl:grid-cols-2">
-            {TRAIT_GROUPS.map((group) => (
-              <TraitCard
-                key={group.key}
-                group={group}
-                items={traits[group.key] || []}
-                onToggle={(groupKey, id, checked) => updateTrait(groupKey, id, { active: checked })}
-                onWeightChange={(groupKey, id, value) => updateTrait(groupKey, id, { weight: clampWeight(value) })}
-                getAssetUrl={getAssetUrl}
-                onUpload={uploadAsset}
-                onDelete={deleteAsset}
-              />
-            ))}
-          </div>
-        </SectionShell>
-
-        <SectionShell
-          index="05"
           eyebrow="Habitats"
           title="Elemental background distributions"
           aside={
@@ -1641,7 +1548,7 @@ export default function PiumonPage() {
         </SectionShell>
 
         <SectionShell
-          index="06"
+          index="05"
           eyebrow="Specials Gallery"
           title="Path A pilot — complete looks"
           aside={
@@ -1736,7 +1643,7 @@ export default function PiumonPage() {
         </SectionShell>
 
         <SectionShell
-          index="07"
+          index="06"
           eyebrow="Mint Card Preview"
           title="Complete look on a habitat"
           aside={
@@ -1819,7 +1726,7 @@ export default function PiumonPage() {
         </SectionShell>
 
         <SectionShell
-          index="08"
+          index="07"
           eyebrow="Distribution Readout"
           title="What the current weights imply"
           aside={
@@ -1870,26 +1777,28 @@ export default function PiumonPage() {
 
             <div className="space-y-5">
               <div>
-                <div className="font-mono text-[9px] font-bold uppercase tracking-[0.22em] text-gray-500">Trait Readiness</div>
+                <div className="font-mono text-[9px] font-bold uppercase tracking-[0.22em] text-gray-500">Habitat Readiness</div>
                 <div className="mt-3 divide-y divide-white/[0.05] border-y border-white/[0.05]">
-                  {activeTraitCounts.map((group) => (
-                    <div key={group.key} className="flex items-baseline justify-between gap-3 py-2.5">
-                      <div className="min-w-0">
-                        <div className="text-[13px] font-semibold text-white">{TRAIT_GROUPS.find((item) => item.key === group.key)?.title}</div>
-                        <div className="font-mono text-[10px] text-gray-600">{group.totalWeight} total weight</div>
+                  {habitats.map((habitat) => {
+                    const live = habitat.active !== false && habitat.weight > 0;
+                    return (
+                      <div key={habitat.id} className="flex items-baseline justify-between gap-3 py-2.5">
+                        <div className="min-w-0">
+                          <div className="truncate text-[13px] font-semibold text-white">{habitat.name}</div>
+                          <div className="font-mono text-[10px] text-gray-600">weight {habitat.weight}{habitat.special ? ' · unique' : ''}</div>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <span className={`font-display text-[13px] font-black tabular-nums ${live ? 'text-cyan-300' : 'text-gray-600'}`}>{live ? 'live' : 'off'}</span>
+                        </div>
                       </div>
-                      <div className="shrink-0 text-right">
-                        <span className="font-display text-[15px] font-black tabular-nums text-cyan-300">{group.active}</span>
-                        <span className="ml-1 font-mono text-[9px] uppercase tracking-[0.14em] text-gray-500">live</span>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
               <div className="border-l-2 border-cyan-300/40 pl-4">
                 <div className="font-mono text-[9px] font-bold uppercase tracking-[0.22em] text-cyan-300/80">Next Step</div>
                 <p className="mt-2 text-[12px] leading-relaxed text-gray-400">
-                  Once identities are fully imported from the logged-in PIUGAME shop, this page drives the first PixelLab batch: generate standardized base bodies, then split swappable wearables and habitats from the approved layer system.
+                  Path A is locked in. Next beats: define rarity tiers (common / rare / epic / legendary / unique) against the 1&#8239;000 supply, then wire the mint flow so pool weight becomes actual draw probability on chain.
                 </p>
               </div>
             </div>
