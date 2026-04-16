@@ -1,4 +1,4 @@
-self.__APP_VERSION__ = '2026-04-16-piumon-path-a-habitat-fix';
+self.__APP_VERSION__ = '2026-04-16-piumon-path-a-ten-specials';
 const STATIC_CACHE = `shinsa-static-${self.__APP_VERSION__}`;
 const RUNTIME_CACHE = `shinsa-runtime-${self.__APP_VERSION__}`;
 const OFFLINE_URL = '/offline.html';
