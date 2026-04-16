@@ -24,6 +24,55 @@ const SMB_PALETTE = {
 
 const METAL = { dark: '#4a5568', mid: '#718096', light: '#a0aec0', bright: '#cbd5e0', shine: '#e2e8f0' };
 const WOOD = { dark: '#5a3825', mid: '#8b6c42', light: '#b8956a' };
+const HERO_ASSET_ROOT = '/pet-world/heroes';
+const PET_BATTLE_ASSET_ROOT = '/pet-battle/units';
+const HERO_ASSET_VERSION = '20260416a';
+const PET_BATTLE_ASSET_VERSION = '20260416a';
+const IMAGE_CACHE = new Map();
+
+function getImageAsset(src) {
+  if (typeof Image === 'undefined') return null;
+  if (IMAGE_CACHE.has(src)) return IMAGE_CACHE.get(src);
+  const img = new Image();
+  const entry = { image: img, loaded: false, error: false };
+  img.decoding = 'async';
+  img.onload = () => { entry.loaded = true; entry.error = false; };
+  img.onerror = () => { entry.error = true; };
+  img.src = src;
+  IMAGE_CACHE.set(src, entry);
+  return entry;
+}
+
+function drawImageAsset(ctx, src, x, y, w, h, alpha = 1) {
+  const entry = getImageAsset(src);
+  if (!entry?.loaded) return false;
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  if (alpha < 1) ctx.globalAlpha = alpha;
+  ctx.drawImage(entry.image, x, y, w, h);
+  ctx.restore();
+  return true;
+}
+
+function heroBasePath(character) {
+  return `${HERO_ASSET_ROOT}/${character}/base.png?v=${HERO_ASSET_VERSION}`;
+}
+
+function flierMountPath(character, veterancy = 0) {
+  const file = veterancy > 0 ? 'flier_veteran.png' : 'flier.png';
+  return `${PET_BATTLE_ASSET_ROOT}/${character}/${file}?v=${PET_BATTLE_ASSET_VERSION}`;
+}
+
+function drawBottomCenteredImage(ctx, src, cx, bottomY, width, height, alpha = 1) {
+  const entry = getImageAsset(src);
+  if (!entry?.loaded) return false;
+  const naturalW = entry.image.naturalWidth || width;
+  const naturalH = entry.image.naturalHeight || height;
+  const scale = Math.min(width / Math.max(1, naturalW), height / Math.max(1, naturalH));
+  const drawW = naturalW * scale;
+  const drawH = naturalH * scale;
+  return drawImageAsset(ctx, src, cx - drawW / 2, bottomY - drawH, drawW, drawH, alpha);
+}
 
 // ━━━ World Palettes ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 export const WORLD_THEMES = {
@@ -123,7 +172,12 @@ function attackCurve(p) {
   return 0.69 - (p - 0.55) * 1.53;
 }
 
-const LANE_HEIGHT = 5;
+const AIR_LAYER_HEIGHT = 26;
+
+function getLayerLift(layer, animFrame = 0, bobOffset = 0) {
+  if (layer !== 'air') return 0;
+  return AIR_LAYER_HEIGHT + Math.sin(animFrame * 0.08 + bobOffset) * 3;
+}
 
 // ━━━ Scenery ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -331,6 +385,28 @@ export function drawBattlefield(ctx, w, h, state, reducedMotion, world) {
     treePositions.forEach((tx, i) => {
       drawPixelTree(ctx, ((tx - drift * 1.8) % (w + 100)) - 40, groundY, treePx, i);
     });
+  }
+
+  const airBandY = groundY - AIR_LAYER_HEIGHT - 16;
+  const airGrad = ctx.createLinearGradient(0, airBandY - 22, 0, airBandY + 12);
+  airGrad.addColorStop(0, 'rgba(220, 242, 255, 0)');
+  airGrad.addColorStop(0.35, 'rgba(220, 242, 255, 0.14)');
+  airGrad.addColorStop(1, 'rgba(220, 242, 255, 0)');
+  ctx.fillStyle = airGrad;
+  ctx.fillRect(0, airBandY - 24, w, 36);
+  ctx.strokeStyle = 'rgba(236, 247, 255, 0.32)';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([10, 10]);
+  ctx.beginPath();
+  ctx.moveTo(0, airBandY);
+  ctx.lineTo(w, airBandY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = 'rgba(255,255,255,0.22)';
+  for (let i = 0; i < 7; i++) {
+    const sx = (((i * 92) - drift * 2.4) % (w + 120)) - 30;
+    ctx.fillRect(sx, airBandY - 6 - (i % 2) * 4, 18, 2);
+    ctx.fillRect(sx + 6, airBandY - 9 - (i % 2) * 3, 10, 2);
   }
 
   // World-specific decorations
@@ -643,6 +719,217 @@ function drawFace(ctx, hx, hy, ps, c, attacking, expression) {
     px(ctx, hx - ps, hy + 3 * ps, ps, c.nose);
     px(ctx, hx, hy + 3 * ps, ps, c.nose);
   }
+}
+
+const PLAYER_UNIT_BASE_SIZES = {
+  meatshield: 8,
+  brawler: 10.8,
+  ranged: 9.5,
+  flier: 9.8,
+  tank: 14.2,
+};
+
+const FLIER_LAYOUTS = {
+  dojocat: { width: 16, height: 10, seatYOffset: -2.4 },
+  buu: { width: 18, height: 11, seatYOffset: -1.8 },
+  devit: { width: 16, height: 9, seatYOffset: -2.8 },
+  pixiu: { width: 18, height: 11, seatYOffset: -2.6 },
+};
+
+function drawHeroPilot(ctx, character, x, seatY, ps, pilotScaleAdjust = 0.74, veterancy = 0) {
+  const size = Math.max(18, Math.round(ps * 11 * pilotScaleAdjust));
+  const bottomY = seatY + size * 0.62;
+  const loaded = drawBottomCenteredImage(ctx, heroBasePath(character), x, bottomY, size, size);
+  if (!loaded) return false;
+  if (veterancy > 0) {
+    const trim = lerpHex(CHAR_COLORS[character]?.accent || '#ffd36c', '#ffffff', 0.35);
+    ctx.fillStyle = trim;
+    ctx.fillRect(x - size * 0.18, bottomY - size + size * 0.08, size * 0.36, Math.max(2, ps));
+    if (veterancy > 1) {
+      ctx.fillRect(x - size * 0.1, bottomY - size - Math.max(2, ps), size * 0.2, Math.max(2, ps));
+    }
+  }
+  return true;
+}
+
+function drawVeterancyTrim(ctx, unit, x, fy, ps, c) {
+  const vet = unit.veterancy || 0;
+  if (!vet) return;
+  const trim = lerpHex(c.accent, '#ffffff', 0.35);
+  ctx.fillStyle = trim;
+  ctx.fillRect(x - 4 * ps, fy - 13 * ps, 8 * ps, ps);
+  if (vet >= 2) {
+    ctx.fillRect(x - 6 * ps, fy - 3 * ps, 3 * ps, ps);
+    ctx.fillRect(x + 3 * ps, fy - 3 * ps, 3 * ps, ps);
+  }
+  if (vet >= 3) {
+    ctx.fillRect(x + 5 * ps, fy - 18 * ps, ps, 6 * ps);
+    ctx.fillRect(x + 6 * ps, fy - 18 * ps, 2 * ps, 2 * ps);
+  }
+}
+
+function drawAccessoryTrim(ctx, unit, x, fy, ps, c) {
+  const accentBright = lerpHex(c.accent, '#ffffff', 0.28);
+  switch (unit.accessoryKey) {
+    case 'wrap_guard':
+      ctx.fillStyle = accentBright;
+      ctx.fillRect(x - 3 * ps, fy - 10 * ps, 6 * ps, ps);
+      ctx.fillRect(x - 6 * ps, fy - 6 * ps, 2 * ps, ps);
+      ctx.fillRect(x + 4 * ps, fy - 6 * ps, 2 * ps, ps);
+      break;
+    case 'dojo_brawler':
+      ctx.fillStyle = WOOD.dark;
+      ctx.fillRect(x - 9 * ps, fy - 16 * ps, ps, 8 * ps);
+      ctx.fillRect(x - 11 * ps, fy - 10 * ps, 5 * ps, ps);
+      ctx.fillStyle = accentBright;
+      ctx.fillRect(x - 4 * ps, fy - 8 * ps, 8 * ps, ps);
+      break;
+    case 'sky_monk':
+      ctx.fillStyle = accentBright;
+      ctx.fillRect(x - ps, fy - 15 * ps, 2 * ps, 5 * ps);
+      ctx.fillStyle = '#f6e6ba';
+      for (let bead = -4; bead <= 4; bead += 2) px(ctx, x + bead * ps * 0.5, fy - 11 * ps, ps, '#f6e6ba');
+      break;
+    case 'temple_tank':
+      ctx.fillStyle = accentBright;
+      ctx.fillRect(x - 5 * ps, fy - 4 * ps, 10 * ps, 2 * ps);
+      ctx.fillRect(x - ps, fy - 19 * ps, 2 * ps, 4 * ps);
+      break;
+    case 'blob_guard':
+      ctx.fillStyle = '#ffd36c';
+      ctx.fillRect(x - 2 * ps, fy - 14 * ps, 4 * ps, ps);
+      ctx.fillRect(x - ps, fy - 3 * ps, 2 * ps, 2 * ps);
+      break;
+    case 'buu_brawler':
+      ctx.fillStyle = '#ffd36c';
+      ctx.fillRect(x - 5 * ps, fy - 5 * ps, 10 * ps, 2 * ps);
+      ctx.fillRect(x - 2 * ps, fy - 16 * ps, 4 * ps, ps);
+      break;
+    case 'bubble_mage':
+      ctx.fillStyle = accentBright;
+      drawPixelEllipse(ctx, x + 6 * ps, fy - 12 * ps, 2, 2, ps, accentBright, 0.85);
+      ctx.fillStyle = '#ffffff';
+      px(ctx, x + 6 * ps, fy - 13 * ps, ps, '#ffffff');
+      break;
+    case 'mega_buu':
+      ctx.fillStyle = '#ffd36c';
+      ctx.fillRect(x - 6 * ps, fy - 11 * ps, 3 * ps, 2 * ps);
+      ctx.fillRect(x + 3 * ps, fy - 11 * ps, 3 * ps, 2 * ps);
+      ctx.fillRect(x - ps, fy - 4 * ps, 2 * ps, 3 * ps);
+      break;
+    case 'imp_guard':
+      ctx.fillStyle = c.accent;
+      ctx.fillRect(x - 4 * ps, fy - 12 * ps, 8 * ps, ps);
+      px(ctx, x - 3 * ps, fy - 13 * ps, ps, '#ffffff', 0.5);
+      px(ctx, x + 2 * ps, fy - 13 * ps, ps, '#ffffff', 0.5);
+      break;
+    case 'hell_brawler':
+      ctx.fillStyle = c.accent;
+      ctx.fillRect(x - 7 * ps, fy - 9 * ps, 2 * ps, ps);
+      ctx.fillRect(x + 5 * ps, fy - 9 * ps, 2 * ps, ps);
+      ctx.fillStyle = METAL.light;
+      ctx.fillRect(x - 4 * ps, fy - 5 * ps, 8 * ps, ps);
+      break;
+    case 'infernal_pike':
+      ctx.fillStyle = c.accent;
+      ctx.fillRect(x + 6 * ps, fy - 18 * ps, ps, 8 * ps);
+      ctx.fillRect(x + 5 * ps, fy - 18 * ps, 3 * ps, 2 * ps);
+      break;
+    case 'abyss_tank':
+      ctx.fillStyle = c.accent;
+      ctx.fillRect(x - 6 * ps, fy - 16 * ps, 3 * ps, 2 * ps);
+      ctx.fillRect(x + 3 * ps, fy - 16 * ps, 3 * ps, 2 * ps);
+      ctx.fillRect(x - 2 * ps, fy - 3 * ps, 4 * ps, 2 * ps);
+      break;
+    case 'coin_guard':
+      ctx.fillStyle = '#f6d36c';
+      drawPixelEllipse(ctx, x, fy - 10 * ps, 2, 2, ps, '#f6d36c');
+      ctx.fillStyle = accentBright;
+      ctx.fillRect(x - 4 * ps, fy - 4 * ps, 8 * ps, ps);
+      break;
+    case 'jade_brawler':
+      ctx.fillStyle = accentBright;
+      ctx.fillRect(x - 6 * ps, fy - 6 * ps, 2 * ps, 4 * ps);
+      ctx.fillRect(x + 4 * ps, fy - 6 * ps, 2 * ps, 4 * ps);
+      break;
+    case 'jade_lantern':
+      ctx.fillStyle = '#f6d36c';
+      drawPixelEllipse(ctx, x + 6 * ps, fy - 12 * ps, 2, 3, ps, '#f6d36c');
+      ctx.fillStyle = accentBright;
+      ctx.fillRect(x - ps, fy - 15 * ps, 2 * ps, 4 * ps);
+      break;
+    case 'celestial_guardian':
+      ctx.fillStyle = '#f6d36c';
+      ctx.fillRect(x - 5 * ps, fy - 16 * ps, 10 * ps, ps);
+      ctx.fillStyle = accentBright;
+      ctx.fillRect(x - 5 * ps, fy - 4 * ps, 10 * ps, 2 * ps);
+      break;
+    default:
+      break;
+  }
+}
+
+function drawFallbackFlierMount(ctx, unit, x, fy, groundY, ps, c, character, unitAnim) {
+  const flap = Math.sin(unitAnim * 0.22);
+  drawPixelEllipse(ctx, x, groundY - 1, 5, 1, ps, 'rgba(0,0,0,0.12)');
+  if (character === 'dojocat') {
+    const rotor = Math.sin(unitAnim * 0.55) * 2 * ps;
+    drawPixelEllipse(ctx, x, fy, 6, 4, ps, c.outline);
+    drawPixelEllipse(ctx, x, fy, 5, 3, ps, lerpHex(c.body, '#ffffff', 0.08));
+    ctx.fillStyle = WOOD.mid;
+    ctx.fillRect(x - ps, fy - 8 * ps, 2 * ps, 6 * ps);
+    ctx.fillStyle = c.accent;
+    ctx.fillRect(x - 7 * ps - rotor, fy - 9 * ps, 14 * ps + rotor * 2, ps);
+    ctx.fillRect(x + 6 * ps, fy - ps, 4 * ps, ps);
+  } else if (character === 'buu') {
+    drawPixelEllipse(ctx, x, fy + ps, 7, 3, ps, '#b85c95');
+    drawPixelEllipse(ctx, x, fy, 6, 2, ps, '#f29dc5');
+    drawPixelEllipse(ctx, x, fy - 3 * ps, 3, 2, ps, '#e7f4ff', 0.85);
+    ctx.fillStyle = '#ffd36c';
+    ctx.fillRect(x - ps, fy + 2 * ps, 2 * ps, ps);
+    ctx.fillRect(x - 9 * ps, fy + ps, 2 * ps, ps);
+    ctx.fillRect(x + 7 * ps, fy + ps, 2 * ps, ps);
+  } else if (character === 'devit') {
+    ctx.fillStyle = WOOD.dark;
+    ctx.fillRect(x - ps, fy - 7 * ps, 2 * ps, 12 * ps);
+    ctx.fillStyle = c.accent;
+    ctx.fillRect(x - 5 * ps, fy - 9 * ps, 10 * ps, 2 * ps);
+    ctx.fillRect(x - 7 * ps, fy - 11 * ps, 2 * ps, 4 * ps);
+    ctx.fillRect(x + 5 * ps, fy - 11 * ps, 2 * ps, 4 * ps);
+    drawPixelEllipse(ctx, x, fy + 2 * ps, 4, 1, ps, c.accent, 0.22 + Math.abs(flap) * 0.08);
+  } else {
+    drawPixelEllipse(ctx, x - 2 * ps, fy, 6, 3, ps, '#7bc7ff');
+    drawPixelEllipse(ctx, x + 4 * ps, fy - ps, 5, 3, ps, '#99e7ff');
+    ctx.fillStyle = '#f6d36c';
+    ctx.fillRect(x - ps, fy - 3 * ps, 2 * ps, 6 * ps);
+    ctx.fillStyle = c.accent;
+    ctx.fillRect(x - 9 * ps, fy - 2 * ps, 3 * ps, ps);
+    ctx.fillRect(x + 7 * ps, fy - 2 * ps, 3 * ps, ps);
+  }
+}
+
+function drawCharacterFlierMount(ctx, unit, x, fy, groundY, ps, c, character, unitAnim) {
+  const layout = FLIER_LAYOUTS[character] || FLIER_LAYOUTS.dojocat;
+  const mountW = Math.round(ps * layout.width);
+  const mountH = Math.round(ps * layout.height);
+  const mountBottomY = fy + ps * 5.5;
+  const hasMountAsset = drawBottomCenteredImage(
+    ctx,
+    flierMountPath(character, unit.veterancy || 0),
+    x,
+    mountBottomY,
+    mountW,
+    mountH,
+  );
+
+  if (!hasMountAsset) drawFallbackFlierMount(ctx, unit, x, fy + ps * 1.5, groundY, ps, c, character, unitAnim);
+  if ((unit.veterancy || 0) > 0) {
+    const trim = lerpHex(c.accent, '#ffffff', 0.35);
+    ctx.fillStyle = trim;
+    ctx.fillRect(x - ps, mountBottomY - mountH - ps, 2 * ps, ps);
+    if ((unit.veterancy || 0) > 1) ctx.fillRect(x + 4 * ps, mountBottomY - mountH * 0.55, ps, 3 * ps);
+  }
+  drawHeroPilot(ctx, character, x, fy + ps * layout.seatYOffset, ps, unit.pilotScaleAdjust, unit.veterancy || 0);
 }
 
 // ━━━ Player Unit Type Renderers ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1014,20 +1301,68 @@ function drawTankBody(ctx, x, fy, ps, c, character, walk, atk, atkP) {
   drawCharFeatures(ctx, hx, hy, ps, c, character, true);
 }
 
-export function drawPlayerUnit(ctx, unit, x, groundY, scale, character, animFrame) {
-  const laneLift = (unit.renderLane || 0) * LANE_HEIGHT;
-  const unitScaleMap = { meatshield: 0.48, brawler: 0.56, ranged: 0.52, tank: 0.68 };
-  const ps = Math.max(2, Math.floor(scale * (unitScaleMap[unit.type] || 0.5)));
-  const fy = groundY - laneLift;
-  const c = CHAR_COLORS[character] || CHAR_COLORS.dojocat;
+function drawFlierBody(ctx, x, fy, groundY, ps, c, character, walk, atk, atkP, unitAnim) {
+  const flap = Math.sin(unitAnim * 0.34) * 2.6 * ps;
+  const dive = atk ? Math.max(-4 * ps, attackCurve(atkP) * 5 * ps) : 0;
+  const bodyY = fy - 8 * ps + dive * 0.18;
+  const wingY = bodyY - ps;
+  const wingSpan = 7 * ps + flap;
+  const tailSwing = Math.sin(unitAnim * 0.26) * 2 * ps;
 
+  drawPixelEllipse(ctx, x, groundY - 1, 5, 1, ps, 'rgba(0,0,0,0.12)');
+
+  ctx.fillStyle = lerpHex(c.dark, c.outline, 0.15);
+  ctx.beginPath();
+  ctx.moveTo(x - 2 * ps, wingY);
+  ctx.lineTo(x - wingSpan, wingY - 2.5 * ps);
+  ctx.lineTo(x - 4 * ps, wingY + 2 * ps);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(x + 2 * ps, wingY);
+  ctx.lineTo(x + wingSpan, wingY - 2.5 * ps);
+  ctx.lineTo(x + 4 * ps, wingY + 2 * ps);
+  ctx.closePath();
+  ctx.fill();
+
+  drawPixelEllipse(ctx, x, bodyY, 5, 4, ps, c.outline);
+  drawPixelEllipse(ctx, x, bodyY, 4, 3, ps, c.body);
+  drawPixelEllipse(ctx, x, bodyY + ps, 2, 1, ps, c.belly);
+  drawPixelEllipse(ctx, x, bodyY - ps, 3, 2, ps, c.light);
+  drawPixelEllipse(ctx, x, bodyY - 5 * ps, 4, 3, ps, c.outline);
+  drawPixelEllipse(ctx, x, bodyY - 5 * ps, 3, 2, ps, c.body);
+  drawFace(ctx, x, bodyY - 5 * ps, ps, c, atk, 'proud');
+  drawCharFeatures(ctx, x, bodyY - 5 * ps, ps, c, character, false);
+
+  ctx.fillStyle = c.accent;
+  ctx.fillRect(x - ps, bodyY - 10 * ps, 2 * ps, 3 * ps);
+  ctx.fillStyle = lerpHex(c.accent, '#ffffff', 0.35);
+  px(ctx, x - ps, bodyY - 10 * ps, ps, lerpHex(c.accent, '#ffffff', 0.35));
+
+  ctx.fillStyle = c.dark;
+  ctx.fillRect(x - ps, bodyY + 3 * ps, 2 * ps, 3 * ps);
+  ctx.fillRect(x - 4 * ps + tailSwing, bodyY + 4 * ps, 2 * ps, 2 * ps);
+  ctx.fillRect(x + 2 * ps + tailSwing, bodyY + 4 * ps, 2 * ps, 2 * ps);
+}
+
+export function drawPlayerUnit(ctx, unit, x, groundY, scale, character, animFrame) {
   const unitAnim = animFrame + (unit.animOffset || 0);
+  const layerLift = getLayerLift(unit.layer, unitAnim, unit.flightBobOffset || 0);
+  const unitScaleMap = { meatshield: 0.48, brawler: 0.56, ranged: 0.52, flier: 0.5, tank: 0.68 };
+  const baseSize = PLAYER_UNIT_BASE_SIZES[unit.type] || 8;
+  const visualScaleAdjust = (unit.size || baseSize) / baseSize;
+  const ps = Math.max(2, Math.floor(scale * (unitScaleMap[unit.type] || 0.5) * visualScaleAdjust));
+  const fy = groundY - layerLift;
+  const c = CHAR_COLORS[character] || CHAR_COLORS.dojocat;
   const variation = ((unit.animOffset || 0) / 36);
   const walkFreq = 0.28 + variation * 0.12;
   const walkPhase = Math.sin(unitAnim * walkFreq);
 
   const atk = unit.attackFlash > 0;
   const atkP = atk ? Math.max(0, Math.min(1, (180 - unit.attackFlash) / 180)) : 0;
+  const vet = unit.veterancy || 0;
+
+  if (vet > 0) drawPixelEllipse(ctx, x, fy - 8 * ps, Math.max(3, ps * 1.4), Math.max(2, ps * 0.8), ps, c.accent, 0.12 + vet * 0.03);
 
   if (isLoaded(character, unit.type)) {
     const spriteH = ps * (unit.type === 'tank' ? 22 : unit.type === 'brawler' ? 18 : 16);
@@ -1058,26 +1393,28 @@ export function drawPlayerUnit(ctx, unit, x, groundY, scale, character, animFram
     case 'meatshield': drawMeatshieldBody(ctx, x, fy, ps, c, character, walkPhase, atk, atkP); break;
     case 'brawler': drawBrawlerBody(ctx, x, fy, ps, c, character, walkPhase, atk, atkP); break;
     case 'ranged': drawRangedBody(ctx, x, fy, ps, c, character, walkPhase, atk, atkP); break;
+    case 'flier': drawCharacterFlierMount(ctx, unit, x, fy, groundY, ps, c, character, unitAnim); break;
     case 'tank': drawTankBody(ctx, x, fy, ps, c, character, walkPhase, atk, atkP); break;
     default: drawMeatshieldBody(ctx, x, fy, ps, c, character, walkPhase, atk, atkP);
   }
 
-  drawPlayerUnitOverlay(ctx, unit, x, fy, ps);
+  if (unit.type !== 'flier') drawAccessoryTrim(ctx, unit, x, fy, ps, c);
+  drawVeterancyTrim(ctx, unit, x, fy, ps, c);
+  drawPlayerUnitOverlay(ctx, unit, x, fy, ps, vet);
 }
 
-function drawPlayerUnitOverlay(ctx, unit, x, fy, ps) {
+function drawPlayerUnitOverlay(ctx, unit, x, fy, ps, vet = unit.veterancy || 0) {
   // HP bar
   const barW = Math.max(20, ps * 16);
   const hpRatio = unit.hp / Math.max(1, unit.maxHp);
   const barColor = hpRatio > 0.5 ? '#58e17c' : hpRatio > 0.25 ? '#f7d55b' : '#ff6a5a';
-  const barY = fy - (unit.type === 'tank' ? 30 : unit.type === 'brawler' ? 26 : unit.type === 'ranged' ? 26 : 22) * ps;
+  const barY = fy - (unit.type === 'tank' ? 30 : unit.type === 'brawler' ? 26 : unit.type === 'ranged' ? 26 : unit.type === 'flier' ? 28 : 22) * ps;
   ctx.fillStyle = 'rgba(0,0,0,0.4)';
   ctx.fillRect(x - barW / 2, barY, barW, 3);
   ctx.fillStyle = barColor;
   ctx.fillRect(x - barW / 2, barY, barW * hpRatio, 3);
 
   // Veterancy stars
-  const vet = unit.veterancy || 0;
   if (vet > 0) {
     const starY = barY - 6;
     const starSize = Math.max(2, ps * 1.2);
@@ -1117,10 +1454,20 @@ const ENEMY_FRAMES = {
     walk2: ['  dddd  ', ' drpprd ', 'drpppprd', 'dpwppwpd', ' drpprdx', '  drdx x', 'd d d   '],
     attack: ['  dddd xx', ' drpprdx ', 'drpppprd ', 'dpwppwpd ', ' drpprd  ', '  drd    ', ' d d d   '],
   },
+  ballista: {
+    walk1: ['  dqqqqd   ', ' dqrrrrqd  ', 'dqrrxxxrqd ', 'dqrwwwwrqd ', ' dqrrrrqd  ', '  dttttd   ', ' d d  d d  '],
+    walk2: ['  dqqqqd   ', ' dqrrrrqd  ', 'dqrrxxxrqd ', 'dqrwwwwrqd ', ' dqrrrrqd  ', ' dtttttd   ', 'd d  d d   '],
+    attack: ['  dqqqqdxx ', ' dqrrrrqxx ', 'dqrrxxxrqd ', 'dqrwwwwrqd ', ' dqrrrrqd  ', '  dttttd   ', ' d d  d d  '],
+  },
   tank: {
     walk1: ['  dqqqqqd  ', ' dqrrrrrqd ', 'dqrrrrrrrqd', 'dqrwwrwwrqd', 'dqrrrrrrrqd', ' dqrrrrrqd ', '  dqqqqqd  ', ' ddd   ddd '],
     walk2: ['  dqqqqqd  ', ' dqrrrrrqd ', 'dqrrrrrrrqd', 'dqrwwrwwrqd', 'dqrrrrrrrqd', ' dqrrrrrqd ', '  dqqqqqd  ', 'ddd   ddd  '],
     attack: ['  dqqqqqddx', ' dqrrrrrqxx', 'dqrrrrrrrqd', 'dqrwwrwwrqd', 'dqrrrrrrrqd', ' dqrrrrrqd ', '  dqqqqqd  ', ' ddd   ddd '],
+  },
+  harpy: {
+    walk1: ['    ss    ', '  ssrrss  ', ' ssrrrrss ', 'ssrwwwwrss', ' ssrrrrss ', '  s rd s  ', '   d  d   '],
+    walk2: ['    ss    ', ' ssrrrrss ', 'ssrrrrrrss', ' srwwwwrs ', '  ssrrss  ', '   sdds   ', '  d    d  '],
+    attack: ['   sss x  ', ' ssrrrrxx ', 'ssrwwwwrss', ' ssrrrrss ', '  s rd s  ', '   d  d   '],
   },
   boss: {
     walk1: ['   dqqqqqqqd   ', '  dqrrrrrrrrqd  ', ' dqrrrrrrrrrrqd ', 'dqrrwwrrrrwwrqd', 'dqrrrrrrrrrrrrqd', 'dqrrrsrrrrssrqd', ' dqrrrrrrrrrrqd ', '  dqqqrrrqqqqd  ', ' ddd ddd ddd   '],
@@ -1145,60 +1492,135 @@ function unitFrame(unit, animFrame) {
 
 export function drawEnemyUnit(ctx, unit, x, groundY, scale, animFrame, world) {
   const palette = ENEMY_PALETTES[world] || ENEMY_PALETTE;
-  const laneLift = (unit.renderLane || 0) * LANE_HEIGHT;
+  const layerLift = getLayerLift(unit.layer, animFrame + (unit.animOffset || 0), unit.flightBobOffset || 0);
   const ps = Math.max(2, Math.round(scale * 0.9));
   const frame = ENEMY_FRAMES[unit.type]?.[unitFrame(unit, animFrame + (unit.animOffset || 0))] || ENEMY_FRAMES.basic.walk1;
-  drawPixelEllipse(ctx, x, groundY - laneLift - 1, Math.max(4, ps * 2.8), 1, 1, 'rgba(0,0,0,0.14)');
-  drawPixelMap(ctx, x - (frame[0].length * ps) / 2, groundY - laneLift - frame.length * ps, ps, frame, palette);
+  const fy = groundY - layerLift;
+  drawPixelEllipse(ctx, x, groundY - 1, Math.max(4, ps * (unit.layer === 'air' ? 2.2 : 2.8)), 1, 1, 'rgba(0,0,0,0.14)');
+  if (unit.layer === 'air') drawPixelEllipse(ctx, x, fy - frame.length * ps * 0.35, Math.max(4, ps * 2.2), 2, 1, '#d7e8ff', 0.12);
+  drawPixelMap(ctx, x - (frame[0].length * ps) / 2, fy - frame.length * ps, ps, frame, palette);
   // Highlight
   ctx.fillStyle = 'rgba(255,255,255,0.07)';
-  ctx.fillRect(x - frame[0].length * ps * 0.2, groundY - laneLift - frame.length * ps + ps, frame[0].length * ps * 0.3, Math.max(2, ps));
+  ctx.fillRect(x - frame[0].length * ps * 0.2, fy - frame.length * ps + ps, frame[0].length * ps * 0.3, Math.max(2, ps));
 
   const barW = Math.max(18, ps * 9);
   const hpRatio = unit.hp / Math.max(1, unit.maxHp);
   const barColor = hpRatio > 0.5 ? '#ff8c7a' : hpRatio > 0.25 ? '#ff6644' : '#ff3322';
   ctx.fillStyle = 'rgba(0,0,0,0.45)';
-  ctx.fillRect(x - barW / 2, groundY - laneLift - (frame.length + 3) * ps, barW, 3);
+  ctx.fillRect(x - barW / 2, fy - (frame.length + 3) * ps, barW, 3);
   ctx.fillStyle = barColor;
-  ctx.fillRect(x - barW / 2, groundY - laneLift - (frame.length + 3) * ps, barW * hpRatio, 3);
+  ctx.fillRect(x - barW / 2, fy - (frame.length + 3) * ps, barW * hpRatio, 3);
 }
 
 // ━━━ Projectiles ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 export function drawProjectile(ctx, projectile, x, y, scale, character) {
-  const ps = Math.max(2, Math.round(scale));
+  const ps = Math.max(2, Math.round(scale * (projectile.sizeBoost || 1)));
   const colors = CHAR_COLORS[character] || CHAR_COLORS.dojocat;
   const isPlayer = projectile.team === 'player';
   const fill = isPlayer ? colors.accent : '#9a5aaa';
   const glow = isPlayer ? lerpHex(colors.accent, '#ffffff', 0.5) : '#c88add';
+  const kind = projectile.variant || projectile.kind;
 
-  if (isPlayer && projectile.kind === 'ranged') {
-    // Energy bolt with trail
-    ctx.save();
-    // Trail
-    ctx.fillStyle = fill;
-    ctx.globalAlpha = 0.2;
-    ctx.fillRect(x - 6 * ps, y - ps, 6 * ps, 2 * ps);
-    ctx.globalAlpha = 0.1;
-    ctx.fillRect(x - 10 * ps, y - ps * 0.5, 4 * ps, ps);
-    ctx.globalAlpha = 1;
-    // Main bolt
-    drawPixelEllipse(ctx, x, y, 2, 2, ps, fill);
-    drawPixelEllipse(ctx, x, y, 1, 1, ps, glow);
-    // Sparkle
-    px(ctx, x + ps, y - 2 * ps, ps, '#ffffff', 0.7);
-    ctx.restore();
-  } else {
-    // Enemy projectile - dark orb
-    ctx.save();
-    ctx.fillStyle = fill;
-    ctx.globalAlpha = 0.15;
-    ctx.fillRect(x + 2 * ps, y - ps, 5 * ps, 2 * ps);
-    ctx.globalAlpha = 1;
-    drawPixelEllipse(ctx, x, y, 2, 2, ps, fill);
-    drawPixelEllipse(ctx, x, y, 1, 1, ps, glow);
-    ctx.restore();
+  ctx.save();
+  switch (kind) {
+    case 'bamboo_dart':
+      ctx.fillStyle = '#d5b16e';
+      ctx.fillRect(x - 4 * ps, y - ps, 7 * ps, 2 * ps);
+      ctx.fillStyle = '#6bbf67';
+      ctx.fillRect(x - 5 * ps, y - 2 * ps, 2 * ps, 4 * ps);
+      ctx.fillStyle = '#ffffff';
+      px(ctx, x + 2 * ps, y - ps, ps, '#ffffff');
+      break;
+    case 'bubble_beam':
+      drawPixelEllipse(ctx, x, y, 3, 3, ps, '#ffb9d5');
+      drawPixelEllipse(ctx, x, y, 2, 2, ps, '#ffe6f1');
+      px(ctx, x + ps, y - 2 * ps, ps, '#ffffff');
+      ctx.fillStyle = 'rgba(255, 184, 216, 0.2)';
+      ctx.fillRect(x - 6 * ps, y - ps, 5 * ps, 2 * ps);
+      break;
+    case 'infernal_pike':
+      ctx.fillStyle = '#e34b4b';
+      ctx.fillRect(x - 4 * ps, y - ps, 6 * ps, 2 * ps);
+      ctx.fillRect(x + ps, y - 2 * ps, 2 * ps, 4 * ps);
+      ctx.fillStyle = '#ffd36c';
+      px(ctx, x + 2 * ps, y - 2 * ps, ps, '#ffd36c');
+      break;
+    case 'jade_charm':
+      drawPixelEllipse(ctx, x, y, 2, 3, ps, '#8fd4b4');
+      drawPixelEllipse(ctx, x, y, 1, 2, ps, '#d9fff0');
+      ctx.fillStyle = '#f6d36c';
+      ctx.fillRect(x - ps, y - 4 * ps, 2 * ps, ps);
+      break;
+    case 'copter_star':
+      ctx.fillStyle = fill;
+      ctx.fillRect(x - 3 * ps, y - ps, 6 * ps, 2 * ps);
+      ctx.fillRect(x - ps, y - 3 * ps, 2 * ps, 6 * ps);
+      ctx.fillStyle = '#ffffff';
+      px(ctx, x, y, ps, '#ffffff');
+      break;
+    case 'gum_comet':
+      drawPixelEllipse(ctx, x, y, 3, 3, ps, '#ff87c1');
+      drawPixelEllipse(ctx, x, y, 2, 2, ps, '#ffd8ec');
+      ctx.fillStyle = 'rgba(255, 124, 188, 0.25)';
+      ctx.fillRect(x - 8 * ps, y - ps, 7 * ps, 2 * ps);
+      break;
+    case 'trident_spark':
+      ctx.fillStyle = '#ff7559';
+      ctx.fillRect(x - 2 * ps, y - 3 * ps, ps, 6 * ps);
+      ctx.fillRect(x - 3 * ps, y - 4 * ps, ps, 2 * ps);
+      ctx.fillRect(x, y - 4 * ps, ps, 2 * ps);
+      ctx.fillStyle = '#ffd36c';
+      px(ctx, x - ps, y - 3 * ps, ps, '#ffd36c');
+      break;
+    case 'jade_pearl':
+      drawPixelEllipse(ctx, x, y, 3, 3, ps, '#c5fff7');
+      drawPixelEllipse(ctx, x, y, 2, 2, ps, '#ffffff');
+      ctx.fillStyle = '#f6d36c';
+      ctx.fillRect(x - 7 * ps, y - ps, 5 * ps, 2 * ps);
+      break;
+    case 'lance':
+      ctx.fillStyle = fill;
+      ctx.globalAlpha = 0.18;
+      ctx.fillRect(x - 8 * ps, y - ps, 8 * ps, 2 * ps);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = SMB_PALETTE.white;
+      ctx.fillRect(x - 3 * ps, y - ps, 4 * ps, 2 * ps);
+      ctx.fillStyle = fill;
+      ctx.fillRect(x + ps, y - 2 * ps, 2 * ps, 4 * ps);
+      px(ctx, x + 2 * ps, y - 2 * ps, ps, glow);
+      break;
+    case 'ember':
+      drawPixelEllipse(ctx, x, y, 3, 3, ps, '#ff9548');
+      drawPixelEllipse(ctx, x, y, 2, 2, ps, '#ffd36c');
+      drawPixelEllipse(ctx, x, y, 1, 1, ps, '#ffffff');
+      ctx.fillStyle = 'rgba(255, 132, 64, 0.22)';
+      ctx.fillRect(x - 7 * ps, y - ps, 6 * ps, 2 * ps);
+      break;
+    case 'bomb':
+      drawPixelEllipse(ctx, x, y, 3, 3, ps, '#75415e');
+      drawPixelEllipse(ctx, x, y, 2, 2, ps, '#c66f8a');
+      px(ctx, x + ps, y - 3 * ps, ps, '#ffd36c');
+      break;
+    case 'bolt':
+      ctx.fillStyle = '#cfddff';
+      ctx.fillRect(x - 2 * ps, y - 3 * ps, ps, 6 * ps);
+      ctx.fillRect(x - ps, y - 2 * ps, 3 * ps, ps);
+      ctx.fillRect(x + ps, y - ps, ps, 3 * ps);
+      break;
+    case 'orb':
+      drawPixelEllipse(ctx, x, y, 2, 2, ps, fill);
+      drawPixelEllipse(ctx, x, y, 1, 1, ps, glow);
+      ctx.fillStyle = fill;
+      ctx.globalAlpha = 0.15;
+      ctx.fillRect(x + 2 * ps, y - ps, 5 * ps, 2 * ps);
+      break;
+    default:
+      drawPixelEllipse(ctx, x, y, 2, 2, ps, fill);
+      drawPixelEllipse(ctx, x, y, 1, 1, ps, glow);
   }
+  if ((projectile.veterancy || 0) > 0) drawPixelEllipse(ctx, x, y, 4, 2, ps, glow, 0.18 + Math.min(0.25, (projectile.veterancy || 0) * 0.05));
+  ctx.restore();
 }
 
 // ━━━ Effects ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1291,12 +1713,12 @@ export function drawHUD(ctx, w, h, state) {
   ctx.fillStyle = '#ffffff';
   ctx.font = 'bold 12px monospace';
   ctx.fillText(`SCORE ${state.score}`, 12, 14);
-  ctx.fillText(`STAGE ${state.stage}`, 12, 28);
+  ctx.fillText(`${state.stage > 10 ? 'SURV' : 'STAGE'} ${state.stage}`, 12, 28);
   ctx.fillText(`WAVE ${state.wave}/${state.waveCount}`, 112, 14);
   ctx.fillText(`AURA ${Math.floor(state.aura)}/${state.auraMax}`, 112, 28);
   ctx.textAlign = 'right';
   ctx.fillText(`BASE ${Math.max(0, Math.ceil(state.playerBaseHp))}`, w - 12, 14);
-  ctx.fillText(`FOES ${state.enemiesDefeated}`, w - 12, 28);
+  ctx.fillText(state.abilityCooldownMs > 0 ? `BURST ${Math.ceil(state.abilityCooldownMs / 1000)}s` : 'BURST READY', w - 12, 28);
   ctx.textAlign = 'left';
 }
 
@@ -1306,7 +1728,8 @@ export function drawSpawnButtons(ctx, x, y, width, state, character) {
   ctx.fillRect(x, y, width, 26);
   ctx.fillStyle = colors.accent;
   ctx.font = 'bold 11px monospace';
-  ctx.fillText(`READY ${Object.values(state.cooldowns || {}).filter((v) => v <= 0).length}/4`, x + 10, y + 17);
+  ctx.fillText(`READY ${Object.values(state.cooldowns || {}).filter((v) => v <= 0).length}/5`, x + 10, y + 12);
+  ctx.fillText('GROUND + AIR', x + 10, y + 22);
 }
 
 export function drawAuraMeter(ctx, x, y, width, aura, auraMax, auraLevel) {
@@ -1316,7 +1739,7 @@ export function drawAuraMeter(ctx, x, y, width, aura, auraMax, auraLevel) {
   ctx.fillRect(x, y, width * Math.max(0, Math.min(1, aura / Math.max(1, auraMax))), 10);
   ctx.fillStyle = '#ffffff';
   ctx.font = 'bold 10px monospace';
-  ctx.fillText(`LV ${auraLevel}`, x + width + 8, y + 8);
+  ctx.fillText(`FLOW ${auraLevel}`, x + width + 8, y + 8);
 }
 
 // ━━━ Screens ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1325,18 +1748,20 @@ export function drawStartScreen(ctx, w, h, character) {
   const colors = CHAR_COLORS[character] || CHAR_COLORS.dojocat;
   ctx.fillStyle = 'rgba(10, 12, 24, 0.48)';
   ctx.fillRect(0, 0, w, h);
+  const portraitSize = Math.max(56, Math.min(92, Math.round(h * 0.16)));
+  drawBottomCenteredImage(ctx, heroBasePath(character), w / 2, h * 0.3, portraitSize, portraitSize);
   ctx.textAlign = 'center';
   ctx.fillStyle = '#ffffff';
   ctx.font = '900 28px system-ui, -apple-system, sans-serif';
   ctx.fillText('PET BATTLE', w / 2, h * 0.2);
   ctx.fillStyle = colors.accent;
   ctx.font = '700 12px system-ui, -apple-system, sans-serif';
-  ctx.fillText('Deploy your pet army and crush the enemy castle', w / 2, h * 0.27);
+  ctx.fillText('Command ground troops, air units, and a timed burst skill', w / 2, h * 0.38);
   ctx.fillStyle = 'rgba(255,255,255,0.82)';
   ctx.font = '600 11px system-ui, -apple-system, sans-serif';
-  ctx.fillText('1-4 or QWER to spawn units', w / 2, h * 0.42);
-  ctx.fillText('5 or U to upgrade aura income', w / 2, h * 0.47);
-  ctx.fillText('Touch controls live below the battlefield', w / 2, h * 0.52);
+  ctx.fillText('1-5 / QWERT to deploy units • 6 / Y for Comet Burst', w / 2, h * 0.5);
+  ctx.fillText('7-9 / UIO upgrade Flow, Reserve, and Rhythm', w / 2, h * 0.55);
+  ctx.fillText('Skyguard targets air first. Fliers skip the ground frontline.', w / 2, h * 0.6);
   ctx.textAlign = 'left';
 }
 
@@ -1375,11 +1800,11 @@ export function drawStageClearBanner(ctx, w, h, state) {
     if (bonus.waveSkip > 0) { ctx.fillStyle = '#c084fc'; ctx.fillText(`\uD83D\uDD25 Blitz  +${bonus.waveSkip}`, w / 2, bannerY + 46 + row * 14); row++; }
     ctx.fillStyle = '#f7d55b';
     ctx.font = '700 11px system-ui, -apple-system, sans-serif';
-    ctx.fillText('Marching to the next castle...', w / 2, bannerY + bannerH - 10);
+    ctx.fillText(bonus.survival ? 'Survival pressure is rising...' : 'Marching to the next castle...', w / 2, bannerY + bannerH - 10);
   } else {
     ctx.fillStyle = '#f7d55b';
     ctx.font = '700 12px system-ui, -apple-system, sans-serif';
-    ctx.fillText('Marching to the next castle...', w / 2, bannerY + 48);
+    ctx.fillText(stage >= 10 ? 'Into survival...' : 'Marching to the next castle...', w / 2, bannerY + 48);
   }
   ctx.textAlign = 'left';
 }
@@ -1390,7 +1815,7 @@ export function drawResults(ctx, w, h, state) {
   ctx.textAlign = 'center';
   ctx.fillStyle = '#ffffff';
   ctx.font = '900 28px system-ui, -apple-system, sans-serif';
-  ctx.fillText(state.outcome === 'win' ? 'KINGDOM SAVED!' : 'CASTLE FALLEN', w / 2, h * 0.16);
+  ctx.fillText(state.outcome === 'win' ? 'KINGDOM SAVED!' : 'RUN OVER', w / 2, h * 0.16);
   ctx.fillStyle = state.outcome === 'win' ? '#58e17c' : '#ff8a60';
   ctx.font = '900 46px system-ui, -apple-system, sans-serif';
   ctx.fillText(String(state.score), w / 2, h * 0.3);

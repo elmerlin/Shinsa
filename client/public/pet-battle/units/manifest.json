@@ -1,0 +1,58 @@
+{
+  "version": "20260416a",
+  "notes": [
+    "Pet Battle uses live hero base sprites from /pet-world/heroes/{character}/base.png as the pilot/body reference.",
+    "These PixelLab assets are mount-only flier bodies rendered underneath that hero art when available.",
+    "All downloaded PNGs were trimmed to remove transparent padding before use."
+  ],
+  "characters": {
+    "dojocat": {
+      "base": {
+        "file": "/pet-battle/units/dojocat/flier.png",
+        "object_id": "1841b4ad-1eb4-4cb7-b62f-78aa42949a2d",
+        "description": "cute side-view mini helicopter mount for a dojo cat hero, compact copter body with bamboo frame, paw-shaped rotor cap, martial arts wraps, tiny cargo seat, battle-ready but adorable, vehicle only, no rider, transparent background"
+      },
+      "veteran": {
+        "file": "/pet-battle/units/dojocat/flier_veteran.png",
+        "object_id": "192d5b9e-c195-497c-96b2-6f7be49c2009",
+        "description": "veteran side-view mini helicopter mount for a dojo cat hero, same cute copter body with reinforced brass armor, rotor guard, martial ribbons, battle insignia, ace pilot upgrade, vehicle only, no rider, transparent background"
+      }
+    },
+    "buu": {
+      "base": {
+        "file": "/pet-battle/units/buu/flier.png",
+        "object_id": "0a98de1b-3ba3-435f-bfbd-42677bb19484",
+        "description": "cute round pink bubble saucer mount for a playful pink alien hero, Dragon Ball Z inspired silhouette, compact floating space pod with canopy and candy-battle trim, vehicle only, no rider, side view, transparent background"
+      },
+      "veteran": {
+        "file": "/pet-battle/units/buu/flier_veteran.png",
+        "object_id": "d39a65f4-68b1-40ca-be2e-2311d657ce46",
+        "description": "veteran empty-cockpit round pink bubble saucer mount for a playful pink alien hero, Dragon Ball Z inspired silhouette, upgraded battle pod with plated trim, brighter engines, candy insignia, NO rider, NO character, empty canopy, vehicle only, side view, transparent background"
+      }
+    },
+    "devit": {
+      "base": {
+        "file": "/pet-battle/units/devit/flier.png",
+        "object_id": "06fed838-6a13-4121-b4d3-54684a1befb1",
+        "description": "cute devil trident hover mount, side view, a mischievous flying trident staff with little flame fins, dark red metal head, tiny seat and battle wraps, mount only, no rider, transparent background, pixel art"
+      },
+      "veteran": {
+        "file": "/pet-battle/units/devit/flier_veteran.png",
+        "object_id": "c7ad1ecc-9e7b-422e-88db-5339fd9b78da",
+        "description": "veteran devil trident hover mount, side view, upgraded barbed trident staff with ember rings, armored seat, flame fins, infernal ace mount only, no rider, transparent background, pixel art"
+      }
+    },
+    "pixiu": {
+      "base": {
+        "file": "/pet-battle/units/pixiu/flier.png",
+        "object_id": "96d39bae-5336-46e1-a344-03339b671f4f",
+        "description": "auspicious side-view miniature Chinese dragon mount with jade armor saddle, flowing whiskers, lucky cloud accents, compact battle-ready flying beast for a mystical guardian hero, mount only, no rider, transparent background, pixel art"
+      },
+      "veteran": {
+        "file": "/pet-battle/units/pixiu/flier_veteran.png",
+        "object_id": "67741976-04f6-4dba-afd1-bcaa4e22d9cf",
+        "description": "veteran auspicious side-view miniature Chinese dragon mount with ornate jade armor saddle, gilded horns, imperial tassels, lucky cloud accents, elite flying beast mount only, no rider, transparent background, pixel art"
+      }
+    }
+  }
+}

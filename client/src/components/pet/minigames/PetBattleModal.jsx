@@ -1,7 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import SpritePet from '../../SpritePet';
 import PetBattleCanvas from './PetBattleCanvas';
-import usePetBattleGame, { ARCHETYPES, PET_UNIT_NAMES } from './usePetBattleGame';
+import usePetBattleGame, {
+  ARCHETYPES,
+  PET_ABILITY,
+  PET_UNIT_NAMES,
+  PET_UNIT_VARIANTS,
+  UPGRADE_TRACKS,
+} from './usePetBattleGame';
 import { WORLD_THEMES } from './petBattleSprites';
 import { isMuted, setMuted as setAudioMuted, startAudio, startMusic, stopMusic } from './petBattleAudio';
 
@@ -16,7 +22,7 @@ function stagesClearedForDisplay(state) {
   return Math.max(0, (state.stageReached || state.stage || 1) - 1);
 }
 
-function ControlButton({ label, name, cost, cooldown, disabled, accentClass, onClick }) {
+function ActionButton({ label, name, tag, value, valueLabel, note, cooldown, disabled, accentClass, onClick }) {
   const cooldownPct = cooldown?.remaining > 0 ? Math.min(1, cooldown.remaining / Math.max(1, cooldown.total)) : 0;
   return (
     <button
@@ -26,12 +32,16 @@ function ControlButton({ label, name, cost, cooldown, disabled, accentClass, onC
     >
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
-          <div className="text-[10px] uppercase tracking-[0.18em] text-white/45">{label}</div>
+          <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em]">
+            <span className="text-white/45">{label}</span>
+            {tag ? <span className="rounded-full border border-white/10 bg-white/5 px-1.5 py-0.5 text-[8px] font-black tracking-[0.16em] text-white/65">{tag}</span> : null}
+          </div>
           <div className="truncate text-[12px] font-semibold text-white/90">{name}</div>
+          {note ? <div className="truncate text-[9px] text-white/45">{note}</div> : null}
         </div>
         <div className="text-right shrink-0">
-          <div className="text-[12px] font-black text-amber-200">{cost}</div>
-          <div className="text-[9px] text-white/45">aura</div>
+          <div className="text-[12px] font-black text-amber-200">{value}</div>
+          <div className="text-[9px] text-white/45">{valueLabel}</div>
         </div>
       </div>
       {cooldownPct > 0 && (
@@ -41,6 +51,23 @@ function ControlButton({ label, name, cost, cooldown, disabled, accentClass, onC
           <div className="absolute right-2 top-2 text-[10px] font-semibold text-white/80 pointer-events-none">{formatCooldown(cooldown.remaining)}</div>
         </>
       )}
+    </button>
+  );
+}
+
+function UpgradeButton({ label, stat, level, cost, disabled, accentClass, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`rounded-xl border px-3 py-2 text-left transition-all disabled:opacity-40 ${accentClass}`}
+    >
+      <div className="text-[10px] uppercase tracking-[0.18em] text-white/45">{label}</div>
+      <div className="mt-0.5 text-[12px] font-semibold text-white/90">{stat}</div>
+      <div className="mt-1 flex items-center justify-between text-[9px] text-white/55">
+        <span>Lv {level}</span>
+        <span className="font-black text-amber-200">{cost} aura</span>
+      </div>
     </button>
   );
 }
@@ -82,7 +109,7 @@ export default function PetBattleModal({ open, onClose, character, onComplete, s
     const interval = setInterval(() => {
       const state = game.getState();
       setMode(state.mode);
-      setUiState({ ...state, cooldowns: { ...state.cooldowns } });
+      setUiState({ ...state, cooldowns: { ...state.cooldowns }, upgrades: { ...state.upgrades } });
     }, 100);
     return () => clearInterval(interval);
   }, [game, open]);
@@ -124,7 +151,7 @@ export default function PetBattleModal({ open, onClose, character, onComplete, s
   const syncUiState = useCallback(() => {
     const state = game.getState();
     setMode(state.mode);
-    setUiState({ ...state, cooldowns: { ...state.cooldowns } });
+    setUiState({ ...state, cooldowns: { ...state.cooldowns }, upgrades: { ...state.upgrades } });
   }, [game]);
 
   const handleSpawn = useCallback((typeKey) => {
@@ -132,8 +159,13 @@ export default function PetBattleModal({ open, onClose, character, onComplete, s
     syncUiState();
   }, [game, syncUiState]);
 
-  const handleUpgrade = useCallback(() => {
-    game.upgradeAura();
+  const handleUpgrade = useCallback((trackKey) => {
+    game.upgradeTrack(trackKey);
+    syncUiState();
+  }, [game, syncUiState]);
+
+  const handleAbility = useCallback(() => {
+    game.useAbility();
     syncUiState();
   }, [game, syncUiState]);
 
@@ -144,8 +176,68 @@ export default function PetBattleModal({ open, onClose, character, onComplete, s
   }, [muted]);
 
   const names = useMemo(() => PET_UNIT_NAMES[character || 'dojocat'] || PET_UNIT_NAMES.dojocat, [character]);
+  const variants = useMemo(() => PET_UNIT_VARIANTS[character || 'dojocat'] || PET_UNIT_VARIANTS.dojocat, [character]);
   const topEntries = Array.isArray(leaderboard) ? leaderboard.slice(0, 5) : [];
   const isPlaying = mode === 'playing';
+  const isTransitioning = mode === 'countdown' || mode === 'stage_clear';
+  const tempoBoostPct = Math.round((1 - (uiState.cooldownMultiplier || 1)) * 100);
+  const upgradeCards = [
+    {
+      key: 'income',
+      accentClass: 'border-amber-400/20 bg-amber-500/[0.08]',
+      stat: `+${uiState.auraRate || 14}/s`,
+      level: uiState.upgrades?.income || 0,
+    },
+    {
+      key: 'reservoir',
+      accentClass: 'border-cyan-400/20 bg-cyan-500/[0.08]',
+      stat: `${uiState.auraMax || 520} max`,
+      level: uiState.upgrades?.reservoir || 0,
+    },
+    {
+      key: 'tempo',
+      accentClass: 'border-emerald-400/20 bg-emerald-500/[0.08]',
+      stat: `${tempoBoostPct}% faster`,
+      level: uiState.upgrades?.tempo || 0,
+    },
+  ];
+  const unitCards = [
+    {
+      key: 'meatshield',
+      label: '1 / Q',
+      tag: 'GROUND',
+      accentClass: 'border-cyan-400/20 bg-cyan-500/[0.08]',
+      note: variants.meatshield?.battleNote || 'Cheap blocker',
+    },
+    {
+      key: 'brawler',
+      label: '2 / W',
+      tag: 'GROUND',
+      accentClass: 'border-rose-400/20 bg-rose-500/[0.08]',
+      note: variants.brawler?.battleNote || 'Melee burst',
+    },
+    {
+      key: 'ranged',
+      label: '3 / E',
+      tag: 'ANTI-AIR',
+      accentClass: 'border-emerald-400/20 bg-emerald-500/[0.08]',
+      note: variants.ranged?.battleNote || 'Targets air first',
+    },
+    {
+      key: 'flier',
+      label: '4 / R',
+      tag: 'AIR',
+      accentClass: 'border-fuchsia-400/20 bg-fuchsia-500/[0.08]',
+      note: variants.flier?.battleNote || 'Bypasses ground',
+    },
+    {
+      key: 'tank',
+      label: '5 / T',
+      tag: 'GROUND',
+      accentClass: 'border-amber-400/20 bg-amber-500/[0.08]',
+      note: variants.tank?.battleNote || 'Heavy splash',
+    },
+  ];
 
   if (!open) return null;
 
@@ -180,59 +272,79 @@ export default function PetBattleModal({ open, onClose, character, onComplete, s
           <div className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.05] bg-white/[0.03] px-3 py-2">
             <div>
               <div className="text-[10px] uppercase tracking-[0.18em] text-white/45">Aura Engine</div>
-              <div className="text-sm font-black text-amber-200 tabular-nums">{Math.floor(uiState.aura || 0)} / {uiState.auraMax || 500}</div>
+              <div className="text-sm font-black text-amber-200 tabular-nums">{Math.floor(uiState.aura || 0)} / {uiState.auraMax || 520}</div>
             </div>
             <div className="text-right">
-              <div className="text-[10px] text-white/45">Income</div>
-              <div className="text-[12px] font-semibold text-white/85">+{(14 + (uiState.auraLevel || 1) * 4)}/s</div>
+              <div className="text-[10px] text-white/45">{uiState.stage > 10 ? 'Survival' : 'Castle Run'}</div>
+              <div className="text-[12px] font-semibold text-white/85">Stage {uiState.stage || 1} · Wave {uiState.wave || 1}</div>
             </div>
-            <button
-              onClick={handleUpgrade}
-              disabled={(uiState.aura || 0) < Math.round(100 * (1.5 ** ((uiState.auraLevel || 1) - 1))) || (uiState.auraLevel || 1) >= 8}
-              className="rounded-xl border border-amber-400/25 bg-amber-500/[0.12] px-3 py-2 text-[11px] font-semibold text-amber-100 disabled:opacity-40"
-            >
-              Upgrade
-              <div className="text-[9px] text-amber-200/70">{Math.round(100 * (1.5 ** ((uiState.auraLevel || 1) - 1)))}</div>
-            </button>
+            <div className="text-right">
+              <div className="text-[10px] text-white/45">Flow</div>
+              <div className="text-[12px] font-semibold text-white/85">+{uiState.auraRate || 14}/s</div>
+              <div className="text-[9px] text-white/40">{tempoBoostPct}% faster cooldowns</div>
+            </div>
           </div>
 
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            <ControlButton
-              label="1 / Q"
-              name={names.meatshield}
-              cost={ARCHETYPES.meatshield.cost}
-              cooldown={{ remaining: uiState.cooldowns?.meatshield || 0, total: ARCHETYPES.meatshield.cooldownMs }}
-              disabled={(uiState.aura || 0) < ARCHETYPES.meatshield.cost || (uiState.cooldowns?.meatshield || 0) > 0}
-              accentClass="border-cyan-400/20 bg-cyan-500/[0.08]"
-              onClick={() => handleSpawn('meatshield')}
+          <div className="mt-3 grid grid-cols-3 gap-2">
+            {upgradeCards.map((card) => {
+              const track = UPGRADE_TRACKS[card.key];
+              const level = card.level;
+              const cost = track ? Math.round(track.baseCost * (track.growth ** level)) : 999;
+              const disabled = (uiState.aura || 0) < cost || level >= (track?.maxLevel || 0);
+              return (
+                <UpgradeButton
+                  key={card.key}
+                  label={track?.label || card.key}
+                  stat={card.stat}
+                  level={level}
+                  cost={level >= (track?.maxLevel || 0) ? 'MAX' : cost}
+                  disabled={disabled}
+                  accentClass={card.accentClass}
+                  onClick={() => handleUpgrade(card.key)}
+                />
+              );
+            })}
+          </div>
+
+          <div className="mt-3 grid grid-cols-3 gap-2">
+            {unitCards.map((card) => (
+              <ActionButton
+                key={card.key}
+                label={card.label}
+                name={names[card.key] || ARCHETYPES[card.key]?.label}
+                tag={card.tag}
+                value={ARCHETYPES[card.key]?.cost}
+                valueLabel="aura"
+                note={card.note}
+                cooldown={{ remaining: uiState.cooldowns?.[card.key] || 0, total: Math.round((ARCHETYPES[card.key]?.cooldownMs || 0) * (uiState.cooldownMultiplier || 1)) }}
+                disabled={(uiState.aura || 0) < (ARCHETYPES[card.key]?.cost || 0) || (uiState.cooldowns?.[card.key] || 0) > 0}
+                accentClass={card.accentClass}
+                onClick={() => handleSpawn(card.key)}
+              />
+            ))}
+            <ActionButton
+              label="6 / Y"
+              name={PET_ABILITY.label}
+              tag="SKILL"
+              value={(uiState.abilityCooldownMs || 0) > 0 ? formatCooldown(uiState.abilityCooldownMs || 0) : 'Ready'}
+              valueLabel={(uiState.abilityCooldownMs || 0) > 0 ? 'cooldown' : 'burst'}
+              note={PET_ABILITY.description}
+              cooldown={{ remaining: uiState.abilityCooldownMs || 0, total: PET_ABILITY.cooldownMs }}
+              disabled={(uiState.abilityCooldownMs || 0) > 0}
+              accentClass="border-sky-400/20 bg-sky-500/[0.08]"
+              onClick={handleAbility}
             />
-            <ControlButton
-              label="2 / W"
-              name={names.brawler}
-              cost={ARCHETYPES.brawler.cost}
-              cooldown={{ remaining: uiState.cooldowns?.brawler || 0, total: ARCHETYPES.brawler.cooldownMs }}
-              disabled={(uiState.aura || 0) < ARCHETYPES.brawler.cost || (uiState.cooldowns?.brawler || 0) > 0}
-              accentClass="border-rose-400/20 bg-rose-500/[0.08]"
-              onClick={() => handleSpawn('brawler')}
-            />
-            <ControlButton
-              label="3 / E"
-              name={names.ranged}
-              cost={ARCHETYPES.ranged.cost}
-              cooldown={{ remaining: uiState.cooldowns?.ranged || 0, total: ARCHETYPES.ranged.cooldownMs }}
-              disabled={(uiState.aura || 0) < ARCHETYPES.ranged.cost || (uiState.cooldowns?.ranged || 0) > 0}
-              accentClass="border-emerald-400/20 bg-emerald-500/[0.08]"
-              onClick={() => handleSpawn('ranged')}
-            />
-            <ControlButton
-              label="4 / R"
-              name={names.tank}
-              cost={ARCHETYPES.tank.cost}
-              cooldown={{ remaining: uiState.cooldowns?.tank || 0, total: ARCHETYPES.tank.cooldownMs }}
-              disabled={(uiState.aura || 0) < ARCHETYPES.tank.cost || (uiState.cooldowns?.tank || 0) > 0}
-              accentClass="border-amber-400/20 bg-amber-500/[0.08]"
-              onClick={() => handleSpawn('tank')}
-            />
+          </div>
+        </div>
+      ) : isTransitioning ? (
+        <div className="bg-black/70 border-t border-white/[0.06] shrink-0 px-3 py-3 pb-[max(0.9rem,env(safe-area-inset-bottom))]">
+          <div className="w-full rounded-xl border border-orange-400/18 bg-orange-500/[0.08] px-4 py-3 text-center">
+            <div className="text-[10px] font-black uppercase tracking-[0.18em] text-orange-200/75">
+              {mode === 'stage_clear' ? 'Stage Clear' : 'Battle Starting'}
+            </div>
+            <div className="mt-1 text-sm font-semibold text-orange-50">
+              {mode === 'stage_clear' ? 'Preparing the next round...' : 'Get ready...'}
+            </div>
           </div>
         </div>
       ) : (

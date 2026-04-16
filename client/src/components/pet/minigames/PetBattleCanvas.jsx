@@ -57,6 +57,7 @@ export default function PetBattleCanvas({ game, character, reducedMotion, world 
 
     drawBattlefield(ctx, w, h, state, reducedMotion, world || 'grassland');
     const groundY = getBattlefieldGroundY(h);
+    const layerY = (layer, offsetGround = 24, offsetAir = 52) => groundY - (layer === 'air' ? offsetAir : offsetGround);
     const pxPerWorld = w / VIEWPORT_WIDTH;
     const worldToScreen = (worldX) => (worldX - state.cameraX) * pxPerWorld;
     const scale = Math.max(4, Math.min(9, Math.round(Math.min(pxPerWorld * 1.12, h / 84))));
@@ -81,16 +82,19 @@ export default function PetBattleCanvas({ game, character, reducedMotion, world 
     state.projectiles.forEach((projectile) => {
       const screenX = worldToScreen(projectile.x);
       if (screenX < -40 || screenX > w + 40) return;
-      drawProjectile(ctx, projectile, screenX, groundY - 28, Math.max(2, scale * 0.6), state.character || character || 'dojocat');
+      drawProjectile(ctx, projectile, screenX, layerY(projectile.sourceLayer, 28, 54), Math.max(2, scale * 0.6), state.character || character || 'dojocat');
     });
 
     state.fx.forEach((fx) => {
       const screenX = worldToScreen(fx.x);
       const fxSize = fx.size * scale * 0.35;
-      if (fx.type === 'explosion') drawExplosion(ctx, screenX, groundY - 22, fxSize, fx.progress);
-      else if (fx.type === 'slash') drawSlashFX(ctx, screenX, groundY - 22, fxSize, fx.progress);
-      else if (fx.type === 'impact') drawImpactStars(ctx, screenX, groundY - 18, fxSize, fx.progress);
-      else drawDeathPoof(ctx, screenX, groundY - 18, fxSize, fx.progress);
+      const fxY = layerY(fx.layer, 22, 48);
+      if (fx.type === 'explosion') drawExplosion(ctx, screenX, fxY, fxSize, fx.progress);
+      else if (fx.type === 'burst') drawExplosion(ctx, screenX, fxY - 4, fxSize * 1.2, fx.progress);
+      else if (fx.type === 'shockwave') drawImpactStars(ctx, screenX, fxY, fxSize * 1.6, fx.progress);
+      else if (fx.type === 'slash') drawSlashFX(ctx, screenX, fxY, fxSize, fx.progress);
+      else if (fx.type === 'impact') drawImpactStars(ctx, screenX, fxY + 4, fxSize, fx.progress);
+      else drawDeathPoof(ctx, screenX, fxY + 4, fxSize, fx.progress);
     });
 
     drawHUD(ctx, w, h, state);
@@ -98,7 +102,7 @@ export default function PetBattleCanvas({ game, character, reducedMotion, world 
     if (state.mode === 'idle') {
       drawStartScreen(ctx, w, h, state.character || character || 'dojocat');
       drawSpawnButtons(ctx, 12, h - 28, 140, state, state.character || character || 'dojocat');
-      drawAuraMeter(ctx, 12, h - 42, 120, state.aura, state.auraMax, state.auraLevel);
+      drawAuraMeter(ctx, 12, h - 42, 120, state.aura, state.auraMax, state.upgrades?.income || 0);
       return;
     }
 
@@ -147,10 +151,18 @@ export default function PetBattleCanvas({ game, character, reducedMotion, world 
       w: () => game.spawnUnit('brawler'),
       '3': () => game.spawnUnit('ranged'),
       e: () => game.spawnUnit('ranged'),
-      '4': () => game.spawnUnit('tank'),
-      r: () => game.spawnUnit('tank'),
-      '5': () => game.upgradeAura(),
-      u: () => game.upgradeAura(),
+      '4': () => game.spawnUnit('flier'),
+      r: () => game.spawnUnit('flier'),
+      '5': () => game.spawnUnit('tank'),
+      t: () => game.spawnUnit('tank'),
+      '6': () => game.useAbility(),
+      y: () => game.useAbility(),
+      '7': () => game.upgradeTrack('income'),
+      u: () => game.upgradeTrack('income'),
+      '8': () => game.upgradeTrack('reservoir'),
+      i: () => game.upgradeTrack('reservoir'),
+      '9': () => game.upgradeTrack('tempo'),
+      o: () => game.upgradeTrack('tempo'),
     };
 
     const handleKeyDown = (event) => {
