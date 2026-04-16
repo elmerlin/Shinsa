@@ -1030,7 +1030,7 @@ export function drawPlayerUnit(ctx, unit, x, groundY, scale, character, animFram
   const atkP = atk ? Math.max(0, Math.min(1, (180 - unit.attackFlash) / 180)) : 0;
 
   if (isLoaded(character, unit.type)) {
-    const spriteH = ps * (unit.type === 'tank' ? 28 : unit.type === 'brawler' ? 24 : 20);
+    const spriteH = ps * (unit.type === 'tank' ? 22 : unit.type === 'brawler' ? 18 : 16);
     const dir = 'east';
     let img = null;
     if (atk) {
@@ -1047,7 +1047,8 @@ export function drawPlayerUnit(ctx, unit, x, groundY, scale, character, animFram
       }
     }
     if (!img) img = getRotation(character, unit.type, dir);
-    if (img && drawSprite(ctx, img, x, fy, spriteH, false)) {
+    // Sprites have ~20% bottom padding; shift down so feet touch ground
+    if (img && drawSprite(ctx, img, x, fy + spriteH * 0.18, spriteH, false)) {
       drawPlayerUnitOverlay(ctx, unit, x, fy, ps);
       return;
     }
