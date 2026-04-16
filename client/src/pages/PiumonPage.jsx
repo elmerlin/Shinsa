@@ -762,6 +762,74 @@ export default function PiumonPage() {
   const [compBase, setCompBase] = useState('');
   const [compHabitat, setCompHabitat] = useState('');
   const [compTraits, setCompTraits] = useState({ hat: '', eyewear: '', neck: '', outfit: '' });
+  const EXPORT_SIZE = 512;
+
+  const exportComposite = useCallback(async () => {
+    if (!compBase) return;
+    const bodyUrl = getAssetUrl('bodies', compBase);
+    if (!bodyUrl) return;
+
+    // Load all layer images
+    const loadImg = (src) =>
+      new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = src;
+      });
+
+    // Determine native size from the body image
+    const bodyImg = await loadImg(bodyUrl);
+    const native = bodyImg.naturalWidth || 48;
+
+    // Small canvas at native pixel size
+    const small = document.createElement('canvas');
+    small.width = native;
+    small.height = native;
+    const sCtx = small.getContext('2d');
+
+    // Draw habitat (cover)
+    const habUrl = compHabitat && getAssetUrl('habitats', compHabitat);
+    if (habUrl) {
+      try {
+        const habImg = await loadImg(habUrl);
+        const scale = Math.max(native / habImg.naturalWidth, native / habImg.naturalHeight);
+        const w = habImg.naturalWidth * scale;
+        const h = habImg.naturalHeight * scale;
+        sCtx.drawImage(habImg, (native - w) / 2, (native - h) / 2, w, h);
+      } catch { /* skip */ }
+    }
+
+    // Draw body (contain, centered)
+    sCtx.drawImage(bodyImg, 0, 0, native, native);
+
+    // Draw trait layers
+    for (const [, traitId] of Object.entries(compTraits)) {
+      if (!traitId) continue;
+      const url = getAssetUrl('traits', traitId);
+      if (!url) continue;
+      try {
+        const tImg = await loadImg(url);
+        sCtx.drawImage(tImg, 0, 0, native, native);
+      } catch { /* skip */ }
+    }
+
+    // Upscale to 512x512 with nearest-neighbor
+    const big = document.createElement('canvas');
+    big.width = EXPORT_SIZE;
+    big.height = EXPORT_SIZE;
+    const bCtx = big.getContext('2d');
+    bCtx.imageSmoothingEnabled = false;
+    bCtx.drawImage(small, 0, 0, EXPORT_SIZE, EXPORT_SIZE);
+
+    // Download
+    const link = document.createElement('a');
+    const charName = activeBases.find((c) => c.id === compBase)?.name || compBase;
+    link.download = `${charName.toLowerCase().replace(/\s+/g, '-')}-512.png`;
+    link.href = big.toDataURL('image/png');
+    link.click();
+  }, [compBase, compHabitat, compTraits, getAssetUrl, activeBases]);
 
   const filteredCharacters = useMemo(() => {
     const query = baseQuery.trim().toLowerCase();
@@ -1398,6 +1466,14 @@ export default function PiumonPage() {
                   ))}
                 </select>
               </div>
+              <button
+                type="button"
+                disabled={!compBase || !getAssetUrl('bodies', compBase)}
+                onClick={exportComposite}
+                className="mt-2 w-full rounded-lg border border-emerald-300/30 bg-emerald-300/[0.08] py-2.5 font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-200 transition hover:bg-emerald-300/[0.14] disabled:cursor-not-allowed disabled:opacity-30"
+              >
+                Export 512 &times; 512 PNG
+              </button>
             </div>
           </div>
         </SectionShell>
