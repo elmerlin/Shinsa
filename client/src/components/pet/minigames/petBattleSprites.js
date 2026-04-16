@@ -24,6 +24,60 @@ const SMB_PALETTE = {
 const METAL = { dark: '#4a5568', mid: '#718096', light: '#a0aec0', bright: '#cbd5e0', shine: '#e2e8f0' };
 const WOOD = { dark: '#5a3825', mid: '#8b6c42', light: '#b8956a' };
 
+// ━━━ World Palettes ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+export const WORLD_THEMES = {
+  grassland: {
+    name: 'Grassland',
+    sky: ['#6090e8', '#78a8ff', '#5C94FC', '#4e84ea'],
+    ground: '#00A800', groundDark: '#005800', groundAccent: '#29d129', groundShadow: '#003d00',
+    dirt: '#C84C0C', dirtDark: '#A02800', dirtLight: '#df6d2d',
+    hillBase: '#1a8a2e', hillLight: '#2ec446',
+    mountainBase: '#2a5aa0', mountainMid: '#3b78d0', mountainSnow: '#d8e8ff',
+    treeColors: ['#004d00', '#008000', '#00a800'],
+    particles: null,
+  },
+  fire: {
+    name: 'Fire World',
+    sky: ['#1a0a00', '#3d1500', '#6b2000', '#8b3000'],
+    ground: '#5c2800', groundDark: '#3a1800', groundAccent: '#ff6a20', groundShadow: '#2a1000',
+    dirt: '#4a1a08', dirtDark: '#2e0e04', dirtLight: '#6b3020',
+    hillBase: '#3a1200', hillLight: '#5c2000',
+    mountainBase: '#2a0800', mountainMid: '#4a1500', mountainSnow: '#ff4400',
+    treeColors: null,
+    particles: { color: '#ff6a20', glow: '#ff4400', type: 'embers' },
+  },
+  water: {
+    name: 'Water World',
+    sky: ['#0a2a4a', '#104068', '#186090', '#1878b0'],
+    ground: '#1a6878', groundDark: '#0e4a58', groundAccent: '#30b8d8', groundShadow: '#083848',
+    dirt: '#0e3848', dirtDark: '#082830', dirtLight: '#185868',
+    hillBase: '#104860', hillLight: '#1a6880',
+    mountainBase: '#082040', mountainMid: '#0e3060', mountainSnow: '#80d0f0',
+    treeColors: null,
+    particles: { color: '#60c8e8', glow: '#80e0ff', type: 'bubbles' },
+  },
+  rock: {
+    name: 'Rock World',
+    sky: ['#2a2030', '#3a3040', '#504858', '#605060'],
+    ground: '#686058', groundDark: '#484040', groundAccent: '#908070', groundShadow: '#383030',
+    dirt: '#585048', dirtDark: '#3a3430', dirtLight: '#786858',
+    hillBase: '#484040', hillLight: '#606058',
+    mountainBase: '#383030', mountainMid: '#504840', mountainSnow: '#a09890',
+    treeColors: null,
+    particles: { color: '#908880', glow: '#a8a098', type: 'dust' },
+  },
+  ice: {
+    name: 'Ice World',
+    sky: ['#0a1828', '#182840', '#284060', '#386088'],
+    ground: '#88b8d8', groundDark: '#6898b8', groundAccent: '#c0e8ff', groundShadow: '#5080a0',
+    dirt: '#4878a0', dirtDark: '#306088', dirtLight: '#6898c0',
+    hillBase: '#6090b0', hillLight: '#88c0e0',
+    mountainBase: '#385878', mountainMid: '#5888b0', mountainSnow: '#e0f0ff',
+    treeColors: null,
+    particles: { color: '#c0e0ff', glow: '#ffffff', type: 'snow' },
+  },
+};
+
 // ━━━ Helpers ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 function px(ctx, x, y, size, color, alpha = 1) {
   if (!color) return;
@@ -226,71 +280,228 @@ export function getBattlefieldGroundY(h) {
   return Math.min(h * 0.742, h - 102);
 }
 
-export function drawBattlefield(ctx, w, h, state, reducedMotion) {
+export function drawBattlefield(ctx, w, h, state, reducedMotion, world) {
+  const theme = WORLD_THEMES[world] || WORLD_THEMES.grassland;
   const groundY = getBattlefieldGroundY(h);
+
+  // Sky
   const skyGrad = ctx.createLinearGradient(0, 0, 0, groundY);
-  skyGrad.addColorStop(0, '#6090e8');
-  skyGrad.addColorStop(0.35, '#78a8ff');
-  skyGrad.addColorStop(0.7, SMB_PALETTE.sky);
-  skyGrad.addColorStop(1, '#4e84ea');
+  skyGrad.addColorStop(0, theme.sky[0]);
+  skyGrad.addColorStop(0.35, theme.sky[1]);
+  skyGrad.addColorStop(0.7, theme.sky[2]);
+  skyGrad.addColorStop(1, theme.sky[3]);
   ctx.fillStyle = skyGrad;
   ctx.fillRect(0, 0, w, groundY + 20);
 
   const drift = reducedMotion ? 0 : (state.cameraX || 0) * 0.25;
 
-  drawMountainRange(ctx, w, groundY, drift);
+  // Mountains (tinted per world)
+  drawWorldMountains(ctx, w, groundY, drift, theme);
 
-  const cloudConfigs = [
-    { x: 0, y: 48, v: 0 }, { x: 190, y: 36, v: 1 }, { x: 380, y: 58, v: 2 },
-    { x: 130, y: 28, v: 1 }, { x: 320, y: 44, v: 0 }, { x: 500, y: 52, v: 2 },
-  ];
-  cloudConfigs.forEach(({ x: cx, y: cy, v }) => {
-    drawCloud(ctx, ((cx - drift * 3.5) % (w + 300)) - 100, cy, 3.5, v);
-  });
-
-  ctx.fillStyle = 'rgba(255,255,255,0.1)';
-  for (let i = 0; i < 9; i++) {
-    const sx = ((i * 113) - drift * 3.2) % (w + 140);
-    ctx.fillRect(sx, 28 + (i % 3) * 18, 3, 3);
-    ctx.fillRect(sx + 5, 29 + (i % 2) * 16, 2, 2);
+  // Clouds (skip in fire/rock worlds, use themed tint)
+  if (world !== 'fire' && world !== 'rock') {
+    const cloudAlpha = world === 'ice' ? 0.6 : 1;
+    const cloudConfigs = [
+      { x: 0, y: 48, v: 0 }, { x: 190, y: 36, v: 1 }, { x: 380, y: 58, v: 2 },
+      { x: 130, y: 28, v: 1 }, { x: 320, y: 44, v: 0 }, { x: 500, y: 52, v: 2 },
+    ];
+    ctx.save();
+    if (cloudAlpha < 1) ctx.globalAlpha = cloudAlpha;
+    cloudConfigs.forEach(({ x: cx, y: cy, v }) => {
+      drawCloud(ctx, ((cx - drift * 3.5) % (w + 300)) - 100, cy, 3.5, v);
+    });
+    ctx.restore();
   }
 
+  // Particles (embers, bubbles, snow, dust)
+  if (theme.particles && !reducedMotion) {
+    drawWorldParticles(ctx, w, groundY, drift, state.animFrame || 0, theme.particles);
+  }
+
+  // Hills
   for (let i = -1; i < 4; i++) {
-    drawHill(ctx, i * 176 - drift * 2, groundY, 228, 96 - (i % 2) * 16);
+    drawWorldHill(ctx, i * 176 - drift * 2, groundY, 228, 96 - (i % 2) * 16, theme);
   }
 
-  const treePx = 3;
-  const treePositions = [60, 150, 240, 340, 440, 520];
-  treePositions.forEach((tx, i) => {
-    drawPixelTree(ctx, ((tx - drift * 1.8) % (w + 100)) - 40, groundY, treePx, i);
-  });
+  // Trees (only grassland)
+  if (theme.treeColors) {
+    const treePx = 3;
+    const treePositions = [60, 150, 240, 340, 440, 520];
+    treePositions.forEach((tx, i) => {
+      drawPixelTree(ctx, ((tx - drift * 1.8) % (w + 100)) - 40, groundY, treePx, i);
+    });
+  }
 
-  ctx.fillStyle = SMB_PALETTE.grassDark;
+  // World-specific decorations
+  if (world === 'fire') drawFireDecor(ctx, w, groundY, drift);
+  else if (world === 'ice') drawIceDecor(ctx, w, groundY, drift);
+  else if (world === 'rock') drawRockDecor(ctx, w, groundY, drift);
+  else if (world === 'water') drawWaterDecor(ctx, w, groundY, drift);
+
+  // Ground layers
+  ctx.fillStyle = theme.groundDark;
   ctx.fillRect(0, groundY - 4, w, 18);
-  ctx.fillStyle = SMB_PALETTE.grass;
+  ctx.fillStyle = theme.ground;
   ctx.fillRect(0, groundY, w, 10);
-  ctx.fillStyle = '#29d129';
+  ctx.fillStyle = theme.groundAccent;
   ctx.fillRect(0, groundY + 2, w, 2);
-  ctx.fillStyle = SMB_PALETTE.grassShadow;
+  ctx.fillStyle = theme.groundShadow;
   ctx.fillRect(0, groundY + 10, w, 4);
-  ctx.fillStyle = SMB_PALETTE.dirtLight;
+  ctx.fillStyle = theme.dirtLight;
   ctx.fillRect(0, groundY + 14, w, h - groundY - 14);
-  ctx.fillStyle = 'rgba(255,255,255,0.18)';
+  ctx.fillStyle = 'rgba(255,255,255,0.12)';
   ctx.fillRect(0, groundY + 14, w, 3);
-  ctx.fillStyle = 'rgba(124,32,0,0.3)';
+  ctx.fillStyle = 'rgba(0,0,0,0.15)';
   ctx.fillRect(0, groundY + 17, w, 6);
 
+  // Brick/block pattern
   const brickW = 26, brickH = 16;
   for (let y = groundY + 30; y < h; y += brickH) {
     for (let x2 = ((Math.floor(y / brickH) % 2) * (brickW / 2)) - brickW; x2 < w + brickW; x2 += brickW) {
-      ctx.fillStyle = SMB_PALETTE.dirt;
+      ctx.fillStyle = theme.dirt;
       ctx.fillRect(x2, y, brickW - 2, brickH - 2);
-      ctx.fillStyle = SMB_PALETTE.dirtDark;
+      ctx.fillStyle = theme.dirtDark;
       ctx.fillRect(x2 + 2, y + brickH - 6, brickW - 8, 2);
-      ctx.fillStyle = 'rgba(255,255,255,0.08)';
+      ctx.fillStyle = 'rgba(255,255,255,0.06)';
       ctx.fillRect(x2 + 2, y + 2, brickW - 9, 2);
     }
   }
+}
+
+// ━━━ World-specific scenery helpers ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+function drawWorldMountains(ctx, w, groundY, drift, theme) {
+  const peaks = [
+    { x: 0, w: 180, h: 120 }, { x: 160, w: 220, h: 150 }, { x: 360, w: 200, h: 130 },
+    { x: 520, w: 240, h: 160 }, { x: 700, w: 180, h: 110 },
+  ];
+  peaks.forEach(({ x: mx, w: mw, h: mh }) => {
+    const sx = ((mx - drift * 0.6) % (w + 300)) - 100;
+    ctx.fillStyle = theme.mountainBase;
+    ctx.beginPath();
+    ctx.moveTo(sx, groundY);
+    ctx.lineTo(sx + mw / 2, groundY - mh);
+    ctx.lineTo(sx + mw, groundY);
+    ctx.fill();
+    // Mid highlight
+    ctx.fillStyle = theme.mountainMid;
+    ctx.beginPath();
+    ctx.moveTo(sx + mw * 0.15, groundY);
+    ctx.lineTo(sx + mw / 2, groundY - mh * 0.85);
+    ctx.lineTo(sx + mw * 0.55, groundY);
+    ctx.fill();
+    // Snow/glow cap
+    ctx.fillStyle = theme.mountainSnow;
+    ctx.beginPath();
+    ctx.moveTo(sx + mw * 0.35, groundY - mh * 0.6);
+    ctx.lineTo(sx + mw / 2, groundY - mh);
+    ctx.lineTo(sx + mw * 0.65, groundY - mh * 0.6);
+    ctx.fill();
+  });
+}
+
+function drawWorldHill(ctx, x, groundY, width, height, theme) {
+  ctx.fillStyle = theme.hillBase;
+  ctx.beginPath();
+  ctx.ellipse(x + width / 2, groundY + 8, width / 2, height, 0, Math.PI, 0);
+  ctx.fill();
+  ctx.fillStyle = theme.hillLight;
+  ctx.beginPath();
+  ctx.ellipse(x + width / 2 - 20, groundY + 8, width / 3, height * 0.6, 0, Math.PI, 0);
+  ctx.fill();
+}
+
+function drawWorldParticles(ctx, w, groundY, drift, animFrame, p) {
+  const count = p.type === 'snow' ? 28 : p.type === 'embers' ? 18 : 14;
+  for (let i = 0; i < count; i++) {
+    const seed = i * 137.5;
+    let px2, py;
+    if (p.type === 'snow') {
+      px2 = ((seed + animFrame * 0.3 + Math.sin(i * 0.7) * 40 - drift * 2) % (w + 40)) - 20;
+      py = ((seed * 2.3 + animFrame * 0.8) % (groundY + 20)) - 10;
+    } else if (p.type === 'embers') {
+      px2 = ((seed + Math.sin(animFrame * 0.02 + i) * 30 - drift * 1.5) % (w + 40)) - 20;
+      py = groundY - 10 - ((seed * 1.7 + animFrame * 1.2) % (groundY * 0.7));
+    } else if (p.type === 'bubbles') {
+      px2 = ((seed - drift * 1.8) % (w + 40)) - 20;
+      py = groundY - 10 - ((seed * 2 + animFrame * 0.6) % (groundY * 0.6));
+    } else {
+      px2 = ((seed + animFrame * 0.15 - drift * 2.5) % (w + 40)) - 20;
+      py = groundY - ((seed * 1.2 + animFrame * 0.4) % 60) - 5;
+    }
+    const size = (p.type === 'snow' ? 2.5 : p.type === 'embers' ? 2 : 1.5) + (i % 3) * 0.5;
+    const alpha = 0.3 + (Math.sin(animFrame * 0.03 + i) + 1) * 0.3;
+    ctx.fillStyle = (i % 3 === 0) ? p.glow : p.color;
+    ctx.globalAlpha = alpha;
+    ctx.fillRect(Math.floor(px2), Math.floor(py), Math.ceil(size), Math.ceil(size));
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawFireDecor(ctx, w, groundY, drift) {
+  // Lava pools along the ground
+  const pools = [80, 250, 420, 580];
+  pools.forEach((px2, i) => {
+    const sx = ((px2 - drift * 1.5) % (w + 100)) - 50;
+    const pw = 30 + (i % 2) * 15;
+    ctx.fillStyle = '#ff4400';
+    ctx.globalAlpha = 0.5;
+    ctx.fillRect(sx, groundY - 2, pw, 4);
+    ctx.fillStyle = '#ff8800';
+    ctx.globalAlpha = 0.7;
+    ctx.fillRect(sx + 4, groundY - 1, pw - 8, 2);
+    ctx.globalAlpha = 1;
+  });
+}
+
+function drawWaterDecor(ctx, w, groundY, drift) {
+  // Water ripple lines
+  const ripples = [60, 180, 310, 470];
+  ripples.forEach((px2) => {
+    const sx = ((px2 - drift * 2) % (w + 100)) - 50;
+    ctx.fillStyle = 'rgba(96,200,232,0.3)';
+    ctx.fillRect(sx, groundY - 6, 40, 2);
+    ctx.fillRect(sx + 10, groundY - 3, 25, 1);
+  });
+}
+
+function drawRockDecor(ctx, w, groundY, drift) {
+  // Small boulders
+  const rocks = [90, 200, 350, 500];
+  rocks.forEach((px2, i) => {
+    const sx = ((px2 - drift * 1.6) % (w + 100)) - 50;
+    const rw = 10 + (i % 3) * 5;
+    const rh = 6 + (i % 2) * 4;
+    ctx.fillStyle = '#585050';
+    ctx.beginPath();
+    ctx.ellipse(sx + rw / 2, groundY - rh / 2 + 2, rw / 2, rh / 2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#706860';
+    ctx.beginPath();
+    ctx.ellipse(sx + rw / 2 - 2, groundY - rh / 2, rw / 3, rh / 3, 0, 0, Math.PI * 2);
+    ctx.fill();
+  });
+}
+
+function drawIceDecor(ctx, w, groundY, drift) {
+  // Ice crystals
+  const crystals = [70, 220, 380, 530];
+  crystals.forEach((px2, i) => {
+    const sx = ((px2 - drift * 1.4) % (w + 100)) - 50;
+    const ch = 12 + (i % 3) * 6;
+    ctx.fillStyle = 'rgba(192,224,255,0.5)';
+    ctx.beginPath();
+    ctx.moveTo(sx, groundY);
+    ctx.lineTo(sx + 3, groundY - ch);
+    ctx.lineTo(sx + 6, groundY);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(224,240,255,0.7)';
+    ctx.beginPath();
+    ctx.moveTo(sx + 1, groundY);
+    ctx.lineTo(sx + 3, groundY - ch * 0.7);
+    ctx.lineTo(sx + 4, groundY);
+    ctx.fill();
+  });
 }
 
 // ━━━ Castles ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -888,28 +1099,27 @@ const ENEMY_FRAMES = {
   },
 };
 
-const ENEMY_PALETTE = {
-  d: '#4a1838',
-  p: '#7a3a88',
-  q: '#9a5aaa',
-  r: '#6a2868',
-  w: SMB_PALETTE.white,
-  x: SMB_PALETTE.gold,
-  s: '#ff6688',
-  t: '#7fb3ff',
+const ENEMY_PALETTES = {
+  grassland: { d: '#4a1838', p: '#7a3a88', q: '#9a5aaa', r: '#6a2868', w: '#ffffff', x: '#FCB838', s: '#ff6688', t: '#7fb3ff' },
+  fire:      { d: '#4a0800', p: '#8b2000', q: '#cc4400', r: '#6b1500', w: '#ffe0c0', x: '#ff6600', s: '#ffaa00', t: '#ff4400' },
+  water:     { d: '#082840', p: '#1a5878', q: '#3090b8', r: '#0e4060', w: '#d0f0ff', x: '#40c8e8', s: '#60e8ff', t: '#80b0ff' },
+  rock:      { d: '#2a2420', p: '#585048', q: '#787068', r: '#484038', w: '#d8d0c8', x: '#a09080', s: '#c0a888', t: '#908070' },
+  ice:       { d: '#1a2838', p: '#3868a0', q: '#60a0d8', r: '#285080', w: '#e8f4ff', x: '#80d0ff', s: '#a0e0ff', t: '#c0e8ff' },
 };
+const ENEMY_PALETTE = ENEMY_PALETTES.grassland;
 
 function unitFrame(unit, animFrame) {
   if (unit.attackFlash > 0) return 'attack';
   return Math.floor(animFrame / 10) % 2 === 0 ? 'walk1' : 'walk2';
 }
 
-export function drawEnemyUnit(ctx, unit, x, groundY, scale, animFrame) {
+export function drawEnemyUnit(ctx, unit, x, groundY, scale, animFrame, world) {
+  const palette = ENEMY_PALETTES[world] || ENEMY_PALETTE;
   const laneLift = (unit.renderLane || 0) * LANE_HEIGHT;
   const ps = Math.max(2, Math.round(scale * 0.9));
   const frame = ENEMY_FRAMES[unit.type]?.[unitFrame(unit, animFrame + (unit.animOffset || 0))] || ENEMY_FRAMES.basic.walk1;
   drawPixelEllipse(ctx, x, groundY - laneLift - 1, Math.max(4, ps * 2.8), 1, 1, 'rgba(0,0,0,0.14)');
-  drawPixelMap(ctx, x - (frame[0].length * ps) / 2, groundY - laneLift - frame.length * ps, ps, frame, ENEMY_PALETTE);
+  drawPixelMap(ctx, x - (frame[0].length * ps) / 2, groundY - laneLift - frame.length * ps, ps, frame, palette);
   // Highlight
   ctx.fillStyle = 'rgba(255,255,255,0.07)';
   ctx.fillRect(x - frame[0].length * ps * 0.2, groundY - laneLift - frame.length * ps + ps, frame[0].length * ps * 0.3, Math.max(2, ps));

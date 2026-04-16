@@ -21,7 +21,7 @@ import {
 } from './petBattleSprites';
 import { VIEWPORT_WIDTH, ENEMY_BASE_X, PLAYER_BASE_X } from './usePetBattleGame';
 
-export default function PetBattleCanvas({ game, character, reducedMotion }) {
+export default function PetBattleCanvas({ game, character, reducedMotion, world }) {
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
   const sizeRef = useRef({ w: 0, h: 0 });
@@ -54,7 +54,7 @@ export default function PetBattleCanvas({ game, character, reducedMotion }) {
     if (!w || !h) return;
     ctx.clearRect(0, 0, w, h);
 
-    drawBattlefield(ctx, w, h, state, reducedMotion);
+    drawBattlefield(ctx, w, h, state, reducedMotion, world || 'grassland');
     const groundY = getBattlefieldGroundY(h);
     const pxPerWorld = w / VIEWPORT_WIDTH;
     const worldToScreen = (worldX) => (worldX - state.cameraX) * pxPerWorld;
@@ -74,7 +74,7 @@ export default function PetBattleCanvas({ game, character, reducedMotion }) {
       const screenX = worldToScreen(unit.x);
       if (screenX < -110 || screenX > w + 110) return;
       if (team === 'player') drawPlayerUnit(ctx, unit, screenX, groundY, scale, state.character || character || 'dojocat', state.animFrame);
-      else drawEnemyUnit(ctx, unit, screenX, groundY, scale, state.animFrame);
+      else drawEnemyUnit(ctx, unit, screenX, groundY, scale, state.animFrame, world || 'grassland');
     });
 
     state.projectiles.forEach((projectile) => {
@@ -113,7 +113,7 @@ export default function PetBattleCanvas({ game, character, reducedMotion }) {
     if (state.mode === 'game_over') {
       drawResults(ctx, w, h, state);
     }
-  }, [character, game, reducedMotion]);
+  }, [character, game, reducedMotion, world]);
 
   useEffect(() => {
     renderRef.current = render;
