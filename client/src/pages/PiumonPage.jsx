@@ -54,10 +54,10 @@ const CUSTOM_HEROES = [
   {
     id: 'hero-special-obsidian-prism',
     name: 'Obsidian Prism',
-    preview: '/piumon/dojocat-reference.jpeg',
-    source: 'Special · 1 of 10',
-    sourceNote: 'Unique special character · jet-black chibi with iridescent holographic highlights',
-    generationStatus: 'Pilot Ready',
+    preview: '/piumon-assets/bodies/hero-special-obsidian-prism.png',
+    source: 'Special · Complete Look',
+    sourceNote: 'Unique complete-look special · jet-black chibi with iridescent holographic highlights',
+    generationStatus: 'Path A Pilot',
     weight: 1,
     lockedName: true,
     characterGroups: ['Specials'],
@@ -67,6 +67,40 @@ const CUSTOM_HEROES = [
     accentGradient: 'from-fuchsia-400 via-cyan-400 to-emerald-400',
     accentBorder: 'border-fuchsia-400/60',
     accentShadow: 'shadow-[0_0_24px_-6px_rgba(217,70,239,0.55)]',
+  },
+  {
+    id: 'hero-special-void-archon',
+    name: 'Void Archon',
+    preview: '/piumon-assets/bodies/hero-special-void-archon.png',
+    source: 'Special · Complete Look',
+    sourceNote: 'Unique complete-look special · indigo robe with gold constellations and phoenix-flame crown',
+    generationStatus: 'Path A Pilot',
+    weight: 1,
+    lockedName: true,
+    characterGroups: ['Specials'],
+    special: true,
+    rarity: 'unique',
+    accent: 'void-indigo',
+    accentGradient: 'from-indigo-400 via-violet-500 to-amber-300',
+    accentBorder: 'border-violet-400/60',
+    accentShadow: 'shadow-[0_0_24px_-6px_rgba(167,139,250,0.55)]',
+  },
+  {
+    id: 'hero-special-solar-emperor',
+    name: 'Solar Emperor',
+    preview: '/piumon-assets/bodies/hero-special-solar-emperor.png',
+    source: 'Special · Complete Look',
+    sourceNote: 'Unique complete-look special · radiant gold chibi with sunburst halo crown and flame cape',
+    generationStatus: 'Path A Pilot',
+    weight: 1,
+    lockedName: true,
+    characterGroups: ['Specials'],
+    special: true,
+    rarity: 'unique',
+    accent: 'solar-gold',
+    accentGradient: 'from-amber-300 via-orange-500 to-rose-500',
+    accentBorder: 'border-orange-400/60',
+    accentShadow: 'shadow-[0_0_24px_-6px_rgba(251,146,60,0.55)]',
   },
 ];
 
@@ -197,10 +231,10 @@ const HABITATS = [
 // scaling to 10 unique per category. Each entry resolves via getAssetUrl so
 // the Specials Gallery below renders the actual generated PixelLab assets.
 const SPECIAL_PILOT_ENTRIES = [
-  { type: 'bodies',   id: 'hero-special-obsidian-prism',     name: 'Obsidian Prism',  category: 'Character',  theme: 'Jet black · iridescent rainbow highlights', gradient: 'from-fuchsia-400 via-cyan-400 to-emerald-400', ring: 'ring-fuchsia-400/50', chip: 'bg-fuchsia-400/[0.12] text-fuchsia-200 border-fuchsia-400/30' },
-  { type: 'traits',   id: 'hat-special-phoenix-crown',       name: 'Phoenix Crown',   category: 'Headwear',   theme: 'Flame plumes · gold filigree',              gradient: 'from-amber-300 via-orange-500 to-rose-500',    ring: 'ring-orange-400/50',  chip: 'bg-orange-400/[0.12] text-orange-200 border-orange-400/30' },
-  { type: 'traits',   id: 'outfit-special-astral-regalia',   name: 'Astral Regalia',  category: 'Clothes',    theme: 'Indigo robe · gold constellations',         gradient: 'from-indigo-400 via-violet-500 to-amber-300', ring: 'ring-violet-400/50',  chip: 'bg-violet-400/[0.12] text-violet-200 border-violet-400/30' },
-  { type: 'habitats', id: 'habitat-special-aurora-abyss',    name: 'Aurora Abyss',    category: 'Habitat',    theme: 'Cosmic void · teal & magenta aurora',       gradient: 'from-teal-300 via-fuchsia-400 to-indigo-400',  ring: 'ring-fuchsia-400/50', chip: 'bg-fuchsia-400/[0.12] text-fuchsia-200 border-fuchsia-400/30' },
+  { type: 'bodies',   id: 'hero-special-obsidian-prism', name: 'Obsidian Prism', category: 'Complete Look', theme: 'Jet black · iridescent rainbow highlights',       gradient: 'from-fuchsia-400 via-cyan-400 to-emerald-400', ring: 'ring-fuchsia-400/50', chip: 'bg-fuchsia-400/[0.12] text-fuchsia-200 border-fuchsia-400/30' },
+  { type: 'bodies',   id: 'hero-special-void-archon',    name: 'Void Archon',    category: 'Complete Look', theme: 'Indigo robe · phoenix crown · cosmic silhouette', gradient: 'from-indigo-400 via-violet-500 to-amber-300',  ring: 'ring-violet-400/50', chip: 'bg-violet-400/[0.12] text-violet-200 border-violet-400/30' },
+  { type: 'bodies',   id: 'hero-special-solar-emperor',  name: 'Solar Emperor',  category: 'Complete Look', theme: 'Golden chibi · sunburst halo · flame cape',       gradient: 'from-amber-300 via-orange-500 to-rose-500',    ring: 'ring-orange-400/50', chip: 'bg-orange-400/[0.12] text-orange-200 border-orange-400/30' },
+  { type: 'habitats', id: 'habitat-special-aurora-abyss', name: 'Aurora Abyss',  category: 'Habitat',       theme: 'Cosmic void · teal & magenta aurora backdrop',    gradient: 'from-teal-300 via-fuchsia-400 to-indigo-400',  ring: 'ring-fuchsia-400/50', chip: 'bg-fuchsia-400/[0.12] text-fuchsia-200 border-fuchsia-400/30' },
 ];
 
 const ATTRIBUTE_AXES = [
@@ -221,12 +255,12 @@ const PIPELINE_STEPS = [
     body: 'Every character is regenerated into one shared full-body pose in the Dojocat-style reference, so clothing and accessories fit every card the same way.',
   },
   {
-    title: 'Reusable Trait Layers',
-    body: 'Hat, eyewear, necklace, and clothes all sit on fixed anchors. That makes the collection behave more like BAYC / CryptoPunks trait layering instead of unique one-off art.',
+    title: 'Complete Looks (Path A)',
+    body: 'Each mint is one PixelLab-generated character with its outfit, accessories, and colour signature baked in. Abandoned modular layering after the pilot — PixelLab does not split cleanly into hat + outfit sprites, and complete looks give a more cohesive silhouette.',
   },
   {
     title: 'Habitat Backdrops',
-    body: 'Rock, fire, water, and ice backgrounds are a separate rarity layer so the same base character can exist in different elemental worlds without redrawing the figure.',
+    body: 'Rock, fire, water, ice, and cosmic backgrounds sit behind the complete-look character so the same figure can still swap biomes without redrawing the sprite.',
   },
 ];
 
@@ -1427,13 +1461,13 @@ export default function PiumonPage() {
         <SectionShell
           index="06"
           eyebrow="Specials Gallery"
-          title="Pilot — 1 of 10 per category"
+          title="Path A pilot — complete looks"
           aside={
             <div>
               <div className="font-mono text-[9px] font-bold uppercase tracking-[0.22em] text-gray-500">Unique Supply</div>
               <dl className="mt-3 space-y-3">
                 <div className="flex items-baseline justify-between">
-                  <dt className="text-[12px] text-gray-400">Per category</dt>
+                  <dt className="text-[12px] text-gray-400">Target specials</dt>
                   <dd className="font-mono text-[11px] font-bold tabular-nums text-fuchsia-300">10</dd>
                 </div>
                 <div className="flex items-baseline justify-between">
@@ -1448,7 +1482,7 @@ export default function PiumonPage() {
                 </div>
               </dl>
               <p className="mt-4 text-[11px] leading-snug text-gray-500">
-                Each special is used only once across the mint. Review the color signatures and silhouettes below — if these feel right, the next batch scales to 10 per category.
+                Each complete-look special is one unified PixelLab generation — body, outfit, and accessories baked into a single cohesive sprite. Review the silhouettes below; if these land, the next batch scales to 10 unique complete looks.
               </p>
             </div>
           }
@@ -1512,29 +1546,22 @@ export default function PiumonPage() {
           </div>
           <p className="mt-5 text-[11px] leading-relaxed text-gray-500">
             <span className="font-mono font-bold uppercase tracking-[0.16em] text-fuchsia-300/80">Pilot note · </span>
-            If the art-direction lands, I scale to 10 unique per category (10 characters, 10 hats, 10 eyewear, 10 neckwear, 10 outfits, 10 habitats) with distinct color signatures per item. Head over to the Composition Preview below to mix one of these specials with the base traits.
+            Path A means each special is a complete, unified PixelLab character — no modular hat/outfit layers. If the art direction lands, the next batch generates 7 more unique complete looks (plus the existing 3) to hit 10 total, each with a distinct colour signature. The Mint Card Preview below lets you pair any complete-look character with a habitat backdrop.
           </p>
         </SectionShell>
 
         <SectionShell
           index="07"
-          eyebrow="Composition Preview"
-          title="Layer stack verification"
+          eyebrow="Mint Card Preview"
+          title="Complete look on a habitat"
           aside={
             <div>
               <div className="font-mono text-[9px] font-bold uppercase tracking-[0.22em] text-gray-500">Asset Readiness</div>
               <dl className="mt-3 space-y-3">
                 <div className="flex items-baseline justify-between">
-                  <dt className="text-[12px] text-gray-400">Bodies</dt>
+                  <dt className="text-[12px] text-gray-400">Complete looks</dt>
                   <dd className="font-mono text-[11px] font-bold tabular-nums text-emerald-300">
                     {activeBases.filter((c) => getAssetUrl('bodies', c.id)).length}/{activeBases.length}
-                  </dd>
-                </div>
-                <div className="flex items-baseline justify-between">
-                  <dt className="text-[12px] text-gray-400">Trait layers</dt>
-                  <dd className="font-mono text-[11px] font-bold tabular-nums text-emerald-300">
-                    {TRAIT_GROUPS.reduce((sum, g) => sum + (traits[g.key] || []).filter((t) => t.active !== false && getAssetUrl('traits', t.id)).length, 0)}
-                    /{TRAIT_GROUPS.reduce((sum, g) => sum + (traits[g.key] || []).filter((t) => t.active !== false).length, 0)}
                   </dd>
                 </div>
                 <div className="flex items-baseline justify-between">
@@ -1545,7 +1572,7 @@ export default function PiumonPage() {
                 </div>
               </dl>
               <p className="mt-4 text-[11px] leading-snug text-gray-500">
-                Select a character, traits, and habitat to preview the full composition. All layers stack via absolute positioning at the same dimensions.
+                Under Path A each mint is a single unified character sprite — the only composition is character + habitat backdrop. No trait layers are stacked.
               </p>
             </div>
           }
@@ -1560,19 +1587,13 @@ export default function PiumonPage() {
               {compBase && getAssetUrl('bodies', compBase) ? (
                 <img src={getAssetUrl('bodies', compBase)} alt="Body" className="relative z-10 h-56 w-56 object-contain" style={{ imageRendering: 'pixelated' }} />
               ) : null}
-              {Object.entries(compTraits).map(([key, traitId]) => {
-                if (!traitId) return null;
-                const url = getAssetUrl('traits', traitId);
-                if (!url) return null;
-                return <img key={key} src={url} alt={key} className="absolute inset-0 z-20 h-full w-full object-contain" style={{ imageRendering: 'pixelated' }} />;
-              })}
               {!compBase ? (
-                <span className="relative z-30 font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-gray-600">Select a character</span>
+                <span className="relative z-30 font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-gray-600">Select a complete look</span>
               ) : null}
             </div>
             <div className="space-y-4">
               <div>
-                <label className="font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-gray-500">Character</label>
+                <label className="font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-gray-500">Complete Look</label>
                 <select
                   value={compBase}
                   onChange={(e) => setCompBase(e.target.value)}
@@ -1584,21 +1605,6 @@ export default function PiumonPage() {
                   ))}
                 </select>
               </div>
-              {TRAIT_GROUPS.map((group) => (
-                <div key={group.key}>
-                  <label className="font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-gray-500">{group.title}</label>
-                  <select
-                    value={compTraits[group.key] || ''}
-                    onChange={(e) => setCompTraits((prev) => ({ ...prev, [group.key]: e.target.value }))}
-                    className="mt-1.5 block w-full rounded-md border border-white/[0.08] bg-black/30 px-3 py-2 text-[13px] text-white outline-none focus:border-cyan-400/60"
-                  >
-                    <option value="">None</option>
-                    {(traits[group.key] || []).filter((t) => t.active !== false && getAssetUrl('traits', t.id)).map((t) => (
-                      <option key={t.id} value={t.id}>{t.name}</option>
-                    ))}
-                  </select>
-                </div>
-              ))}
               <div>
                 <label className="font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-gray-500">Habitat</label>
                 <select
@@ -1612,6 +1618,9 @@ export default function PiumonPage() {
                   ))}
                 </select>
               </div>
+              <p className="text-[11px] leading-snug text-gray-500">
+                No hat / outfit / eyewear selectors — every special bakes those into the sprite itself. That keeps silhouettes and palettes cohesive and removes alignment bugs between layers.
+              </p>
               <button
                 type="button"
                 disabled={!compBase || !getAssetUrl('bodies', compBase)}
