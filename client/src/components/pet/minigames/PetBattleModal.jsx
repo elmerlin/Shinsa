@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import SpritePet from '../../SpritePet';
 import PetBattleCanvas from './PetBattleCanvas';
 import usePetBattleGame, { ARCHETYPES, PET_UNIT_NAMES } from './usePetBattleGame';
+import { WORLD_THEMES } from './petBattleSprites';
 import { isMuted, setMuted as setAudioMuted, startAudio, startMusic, stopMusic } from './petBattleAudio';
 
 function formatCooldown(ms) {
@@ -49,6 +50,7 @@ export default function PetBattleModal({ open, onClose, character, onComplete, s
   const [muted, setMutedState] = useState(isMuted());
   const [reducedMotion, setReducedMotion] = useState(false);
   const [mode, setMode] = useState('idle');
+  const [selectedWorld, setSelectedWorld] = useState('grassland');
   const [uiState, setUiState] = useState(game.getState());
   const completedRef = useRef(false);
 
@@ -170,7 +172,7 @@ export default function PetBattleModal({ open, onClose, character, onComplete, s
       </div>
 
       <div className="flex-1 min-h-0 relative">
-        <PetBattleCanvas game={game} character={character || 'dojocat'} reducedMotion={reducedMotion} />
+        <PetBattleCanvas game={game} character={character || 'dojocat'} reducedMotion={reducedMotion} world={selectedWorld} />
       </div>
 
       {isPlaying ? (
@@ -235,6 +237,28 @@ export default function PetBattleModal({ open, onClose, character, onComplete, s
         </div>
       ) : (
         <div className="bg-black/70 border-t border-white/[0.06] shrink-0 px-3 py-3 pb-[max(0.9rem,env(safe-area-inset-bottom))]">
+          <div className="mb-3">
+            <div className="text-[10px] font-black tracking-[0.2em] uppercase text-white/40 mb-1.5">Choose World</div>
+            <div className="grid grid-cols-5 gap-1.5">
+              {Object.entries(WORLD_THEMES).map(([key, theme]) => {
+                const selected = selectedWorld === key;
+                const accent = { fire: 'border-orange-400 bg-orange-500/20 text-orange-200', water: 'border-blue-400 bg-blue-500/20 text-blue-200', rock: 'border-stone-400 bg-stone-500/20 text-stone-200', ice: 'border-cyan-300 bg-cyan-400/20 text-cyan-100', grassland: 'border-emerald-400 bg-emerald-500/20 text-emerald-200' }[key] || 'border-white/20 bg-white/10 text-white';
+                const idle = { fire: 'border-orange-400/15 bg-orange-500/[0.06] text-orange-300/60', water: 'border-blue-400/15 bg-blue-500/[0.06] text-blue-300/60', rock: 'border-stone-400/15 bg-stone-500/[0.06] text-stone-300/60', ice: 'border-cyan-300/15 bg-cyan-400/[0.06] text-cyan-200/60', grassland: 'border-emerald-400/15 bg-emerald-500/[0.06] text-emerald-300/60' }[key] || 'border-white/10 bg-white/[0.03] text-white/50';
+                const icon = { fire: '🔥', water: '🌊', rock: '🪨', ice: '❄️', grassland: '🌿' }[key] || '🌍';
+                return (
+                  <button
+                    key={key}
+                    onClick={() => setSelectedWorld(key)}
+                    className={`rounded-lg border px-1 py-1.5 text-center transition-all ${selected ? accent : idle} ${selected ? 'ring-1 ring-white/20 scale-[1.04]' : 'hover:scale-[1.02]'}`}
+                  >
+                    <div className="text-[14px] leading-none">{icon}</div>
+                    <div className="text-[8px] font-bold uppercase tracking-wider mt-0.5">{theme.name.replace(' World', '')}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           <button
             onClick={handleStart}
             className="w-full h-12 rounded-xl border border-orange-400/30 bg-orange-500/15 text-orange-100 font-black tracking-wide hover:bg-orange-500/20 active:scale-[0.99] transition-all"
