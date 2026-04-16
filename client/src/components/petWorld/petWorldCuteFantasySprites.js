@@ -296,11 +296,13 @@ const WANG_LOOKUP = [
 ];
 const WANG_WATER_GRASS = 'Tiles/wang_water_grass.png';
 
-// Dirt path is wang-based (organic edges). pathIdx uses 1=path, 0=grass —
-// inverted from PixelLab's 0=lower(path), 1=upper(grass) convention, so the
-// lookup is arranged so PATH_WANG_LOOKUP[i] points to the tile where `i`
-// corners are path (i.e. water-wang's [15 - i] cell).
-const WANG_DIRT_GRASS  = 'Tiles/wang_dirt_grass.png';
+// Path Wang tilesets. Both use the `path=1, grass=0` convention, so
+// PATH_WANG_LOOKUP[i] / COBBLE_WANG_LOOKUP[i] points to the tile where `i`
+// corners are path. The two atlases arrange their tiles differently so each
+// needs its own lookup — but the logic that uses them is shared.
+const WANG_DIRT_GRASS   = 'Tiles/wang_dirt_grass.png';
+const WANG_COBBLE_GRASS = 'Tiles/wang_cobble_grass.png';
+
 const PATH_WANG_LOOKUP = [
   [0, 48],  [16, 48], [0, 0],   [48, 0],   //  0-3  (all grass → mostly grass)
   [0, 32],  [16, 0],  [32, 48], [16, 16],   //  4-7
@@ -308,16 +310,16 @@ const PATH_WANG_LOOKUP = [
   [16, 32], [32, 32], [48, 16], [32, 16],   // 12-15 (mostly path → all path)
 ];
 
-// Stone/pavement is tile-atlas based (hard rectangular edges with brick
-// interior). Uses Pavement_Tiles.png cells (0..2, 0..1) — six interior brick
-// variants — and draws a 1px dark outline on each edge where the neighbour
-// tile is not also a stone path.
-const PAVEMENT_TILES = 'Tiles/Pavement_Tiles.png';
-const PAVEMENT_INTERIORS = [
-  [0, 0],  [16, 0],  [32, 0],
-  [0, 16], [16, 16], [32, 16],
+// PixelLab-generated cobblestone tileset — warm tan flagstones with dark
+// mortar grout lines between stones and soft organic edges bleeding into
+// grass. Matches the "cute fantasy" reference far better than the old
+// Pavement_Tiles.png (which was actually a brick-wall atlas misused as floor).
+const COBBLE_WANG_LOOKUP = [
+  [32, 16], [48, 16], [32, 32], [16, 32],  //  0-3
+  [32,  0], [48, 32], [ 0, 16], [48, 48],  //  4-7
+  [16, 16], [32, 48], [16,  0], [ 0, 32],  //  8-11
+  [48,  0], [ 0,  0], [16, 48], [ 0, 48],  // 12-15 (all path at [0, 48])
 ];
-const PAVEMENT_BORDER_COLOR = '#57483d';
 
 const FISHING_BANK_MASK = {
   n: 12, // north half dirt
@@ -899,12 +901,22 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
       return nNW * 8 + nNE * 4 + nSW * 2 + nSE;
     };
 
-    const drawDirtTile = (idx, alpha = 1) => {
-      const [psx, psy] = PATH_WANG_LOOKUP[idx];
-      drawFrame(ctx, cfp(WANG_DIRT_GRASS), psx, psy, 16, 16, x, y, size, size, undefined, alpha);
+    // Both path variants use Wang auto-tiling for organic edges that bleed
+    // softly onto grass — matches the cute fantasy reference. Each variant
+    // has its own atlas + lookup table so stone/dirt keep their own textures.
+    const PATH_ATLAS = {
+      dirt:  { src: WANG_DIRT_GRASS,   lookup: PATH_WANG_LOOKUP },
+      stone: { src: WANG_COBBLE_GRASS, lookup: COBBLE_WANG_LOOKUP },
     };
 
-    const drawDirtTileClipped = (idx, alpha = 1) => {
+    const drawPathTile = (variant, idx, alpha = 1) => {
+      const atlas = PATH_ATLAS[variant];
+      if (!atlas) return;
+      const [psx, psy] = atlas.lookup[idx];
+      drawFrame(ctx, cfp(atlas.src), psx, psy, 16, 16, x, y, size, size, undefined, alpha);
+    };
+
+    const drawPathTileClipped = (variant, idx, alpha = 1) => {
       const halfW = size / 2;
       const halfH = size / 2;
       ctx.save();
@@ -914,61 +926,34 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
       if (wangIdx & 2) ctx.rect(x, y + halfH, halfW, halfH);
       if (wangIdx & 1) ctx.rect(x + halfW, y + halfH, halfW, halfH);
       ctx.clip();
-      drawDirtTile(idx, alpha);
-      ctx.restore();
-    };
-
-    // Pavement: flat brick interior + dark outline on grass-facing edges.
-    // This matches the Cute Fantasy reference where pavement has hard
-    // rectangular edges rather than organic wang transitions.
-    const drawPavementTile = () => {
-      const vIdx = Math.abs(h) % PAVEMENT_INTERIORS.length;
-      const [psx, psy] = PAVEMENT_INTERIORS[vIdx];
-      drawFrame(ctx, cfp(PAVEMENT_TILES), psx, psy, 16, 16, x, y, size, size);
-
-      const isStone = (dir) => neighbors[dir + '_pathVariant'] === 'stone';
-      const stroke = Math.max(1, Math.round(size / 16));
-      ctx.save();
-      ctx.fillStyle = PAVEMENT_BORDER_COLOR;
-      if (!isStone('n')) ctx.fillRect(x, y, size, stroke);
-      if (!isStone('s')) ctx.fillRect(x, y + size - stroke, size, stroke);
-      if (!isStone('w')) ctx.fillRect(x, y, stroke, size);
-      if (!isStone('e')) ctx.fillRect(x + size - stroke, y, stroke, size);
-      // Fill concave corner pixels where two non-stone edges meet around a
-      // diagonal stone tile — prevents 1px notches at inside corners.
-      if (!isStone('n') && !isStone('w')) ctx.fillRect(x, y, stroke, stroke);
-      if (!isStone('n') && !isStone('e')) ctx.fillRect(x + size - stroke, y, stroke, stroke);
-      if (!isStone('s') && !isStone('w')) ctx.fillRect(x, y + size - stroke, stroke, stroke);
-      if (!isStone('s') && !isStone('e')) ctx.fillRect(x + size - stroke, y + size - stroke, stroke, stroke);
+      drawPathTile(variant, idx, alpha);
       ctx.restore();
     };
 
     if (hasPathBuilding) {
-      // Path building: draw using own variant. Stone uses the pavement atlas;
-      // dirt uses the wang tileset. Opposite-variant neighbours render as
-      // grass from the perspective of this tile, so the two path styles meet
-      // with a clean seam at the tile boundary.
+      // Path building: draw using own variant. Opposite-variant neighbours
+      // render as grass from the perspective of this tile, so stone/dirt
+      // meet with a clean seam at the tile boundary.
       const variant = ownVariant || 'dirt';
-      if (variant === 'stone') {
-        drawPavementTile();
-      } else {
-        const sameIdx = wangIdxForVariant('dirt');
-        const idx = sameIdx > 0 ? sameIdx : 15;
-        drawDirtTile(idx);
-      }
+      const sameIdx = wangIdxForVariant(variant);
+      // Fully-inside path cells still render as all-path (idx 15).
+      const idx = sameIdx > 0 ? sameIdx : 15;
+      drawPathTile(variant, idx);
     } else {
-      // Grass / shore tile: only dirt bleeds onto neighbouring grass (soft
-      // organic edges). Pavement has its own hard border drawn by the stone
-      // tile itself, so grass tiles never paint stone transitions.
-      const dirtIdx = wangIdxForVariant('dirt');
-      if (dirtIdx > 0) {
+      // Grass / shore tile: let each path variant bleed onto the grass with
+      // its own organic wang transition. Stone and dirt are painted
+      // independently so a grass tile bordering both gets both textures on
+      // the appropriate corners.
+      for (const variant of ['dirt', 'stone']) {
+        const idx = wangIdxForVariant(variant);
+        if (idx === 0) continue;
         if (!isShoreTransition) {
-          drawDirtTile(dirtIdx, 0.88);
+          drawPathTile(variant, idx, 0.9);
         } else {
           // Shore tile: clip transitions to grass quadrants only, so the
           // path texture never covers the water portion of the wang base.
-          const maskedIdx = dirtIdx & wangIdx;
-          if (maskedIdx > 0) drawDirtTileClipped(maskedIdx, 0.88);
+          const maskedIdx = idx & wangIdx;
+          if (maskedIdx > 0) drawPathTileClipped(variant, maskedIdx, 0.9);
         }
       }
     }
