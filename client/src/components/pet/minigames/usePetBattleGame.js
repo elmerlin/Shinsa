@@ -674,7 +674,7 @@ function findClosestTarget(attacker, targets) {
       if (!isValidTarget(attacker, target)) return;
       if (target.layer !== layer) return;
       const distance = getCombatGap(attacker, target);
-      if (distance < -1.2 || distance > attacker.range) return;
+      if (distance > attacker.range) return;
       if (distance < bestDistance) {
         best = target;
         bestDistance = distance;
@@ -851,7 +851,13 @@ function updateUnits(state, dt, playerUnits, enemyUnits) {
     } else if (canHitBase) {
       if (unit.attackTimer <= 0) attackUnit(state, unit, null, true);
     } else {
-      unit.x = Math.min(ENEMY_BASE_X - 4, unit.x + unit.moveSpeed * dtSec);
+      // Only advance if no targetable enemy is close ahead
+      const blocked = enemyUnits.some((eu) => {
+        if (eu.hp <= 0 || !unit.targetLayers.includes(eu.layer)) return false;
+        const dx = eu.x - unit.x;
+        return dx > -(unit.size || 8) * 0.5 && dx < unit.range + 4;
+      });
+      if (!blocked) unit.x = Math.min(ENEMY_BASE_X - 4, unit.x + unit.moveSpeed * dtSec);
     }
   });
 
@@ -865,7 +871,13 @@ function updateUnits(state, dt, playerUnits, enemyUnits) {
     } else if (canHitBase) {
       if (unit.attackTimer <= 0) attackUnit(state, unit, null, true);
     } else {
-      unit.x = Math.max(PLAYER_BASE_X + 4, unit.x - unit.moveSpeed * dtSec);
+      // Only advance if no targetable enemy is close ahead
+      const blocked = playerUnits.some((pu) => {
+        if (pu.hp <= 0 || !unit.targetLayers.includes(pu.layer)) return false;
+        const dx = unit.x - pu.x;
+        return dx > -(unit.size || 8) * 0.5 && dx < unit.range + 4;
+      });
+      if (!blocked) unit.x = Math.max(PLAYER_BASE_X + 4, unit.x - unit.moveSpeed * dtSec);
     }
   });
 
@@ -873,6 +885,21 @@ function updateUnits(state, dt, playerUnits, enemyUnits) {
   resolveOverlaps(playerUnits.filter((unit) => unit.layer === COMBAT_LAYERS.AIR));
   resolveOverlaps(enemyUnits.filter((unit) => unit.layer === COMBAT_LAYERS.GROUND));
   resolveOverlaps(enemyUnits.filter((unit) => unit.layer === COMBAT_LAYERS.AIR));
+
+  // Cross-team collision: prevent same-layer opposing units from walking through each other
+  playerUnits.forEach((pu) => {
+    if (pu.hp <= 0) return;
+    enemyUnits.forEach((eu) => {
+      if (eu.hp <= 0 || pu.layer !== eu.layer) return;
+      const minDist = ((pu.size || 8) + (eu.size || 8)) * 0.32;
+      const dist = Math.abs(pu.x - eu.x);
+      if (dist < minDist) {
+        const push = (minDist - dist) * 0.45;
+        if (pu.x < eu.x) { pu.x -= push; eu.x += push; }
+        else { pu.x += push; eu.x -= push; }
+      }
+    });
+  });
 }
 
 function updateProjectiles(state, dt) {
