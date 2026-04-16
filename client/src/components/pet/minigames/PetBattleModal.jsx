@@ -22,52 +22,118 @@ function stagesClearedForDisplay(state) {
   return Math.max(0, (state.stageReached || state.stage || 1) - 1);
 }
 
-function ActionButton({ label, name, tag, value, valueLabel, note, cooldown, disabled, accentClass, onClick }) {
-  const cooldownPct = cooldown?.remaining > 0 ? Math.min(1, cooldown.remaining / Math.max(1, cooldown.total)) : 0;
+/* Sprite path for unit card thumbnails */
+const SPRITE_TYPE_MAP = { meatshield: 'meatshield', brawler: 'brawler', ranged: 'ranged', tank: 'tank', flier: 'ranged' };
+function unitSpriteUrl(character, unitType) {
+  const mapped = SPRITE_TYPE_MAP[unitType] || unitType;
+  return `/pet-battle/characters/${character}-${mapped}/rotations/south.png`;
+}
+
+/* ━━━ Unit Card ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+function UnitCard({ unitKey, name, cost, shortcut, spriteUrl, isFlier, cooldown, disabled, onClick }) {
+  const cooldownPct = cooldown.remaining > 0 ? Math.min(1, cooldown.remaining / Math.max(1, cooldown.total)) : 0;
+  const onCooldown = cooldownPct > 0;
   return (
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`relative overflow-hidden rounded-xl border px-3 py-2 text-left transition-all disabled:opacity-45 ${accentClass}`}
+      className={`relative flex flex-col items-center rounded-lg border border-white/[0.08] bg-white/[0.04] backdrop-blur-sm px-1 py-1.5 transition-all
+        ${disabled ? 'opacity-40' : 'hover:bg-white/[0.08] hover:border-white/[0.14] active:scale-[0.96]'}`}
+      style={{ minWidth: 0 }}
     >
-      <div className="flex items-center justify-between gap-2">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em]">
-            <span className="text-white/45">{label}</span>
-            {tag ? <span className="rounded-full border border-white/10 bg-white/5 px-1.5 py-0.5 text-[8px] font-black tracking-[0.16em] text-white/65">{tag}</span> : null}
-          </div>
-          <div className="truncate text-[12px] font-semibold text-white/90">{name}</div>
-          {note ? <div className="truncate text-[9px] text-white/45">{note}</div> : null}
-        </div>
-        <div className="text-right shrink-0">
-          <div className="text-[12px] font-black text-amber-200">{value}</div>
-          <div className="text-[9px] text-white/45">{valueLabel}</div>
-        </div>
+      {/* Keyboard shortcut badge */}
+      <span className="absolute -top-1 -left-0.5 rounded bg-white/[0.10] px-1 py-px text-[8px] font-bold tabular-nums text-white/50 leading-none">
+        {shortcut}
+      </span>
+
+      {/* Sprite preview */}
+      <div className="relative w-9 h-9 flex items-center justify-center shrink-0">
+        <img
+          src={spriteUrl}
+          alt={name}
+          className="w-9 h-9 object-contain"
+          style={{ imageRendering: 'pixelated' }}
+          draggable={false}
+        />
+        {isFlier && (
+          <svg className="absolute -top-0.5 -right-0.5 w-3 h-3 text-fuchsia-300/80" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M8 1l2 4 4.5.6-3.2 3.2.8 4.5L8 11.3 3.9 13.3l.8-4.5L1.5 5.6 6 5z" />
+          </svg>
+        )}
+        {/* Cooldown overlay */}
+        {onCooldown && (
+          <>
+            <div className="absolute inset-0 rounded bg-black/55" />
+            <div className="absolute inset-0 flex items-center justify-center text-[10px] font-bold tabular-nums text-white/90 drop-shadow">
+              {formatCooldown(cooldown.remaining)}
+            </div>
+            <div className="absolute left-0 right-0 bottom-0 h-[2px] rounded-b bg-white/30 overflow-hidden">
+              <div className="h-full bg-white/70 transition-[width] duration-100" style={{ width: `${100 - cooldownPct * 100}%` }} />
+            </div>
+          </>
+        )}
       </div>
-      {cooldownPct > 0 && (
-        <>
-          <div className="absolute inset-0 bg-black/40 pointer-events-none" />
-          <div className="absolute left-0 bottom-0 h-1 bg-white/60 pointer-events-none" style={{ width: `${100 - cooldownPct * 100}%` }} />
-          <div className="absolute right-2 top-2 text-[10px] font-semibold text-white/80 pointer-events-none">{formatCooldown(cooldown.remaining)}</div>
-        </>
-      )}
+
+      {/* Cost */}
+      <div className="mt-0.5 text-[10px] font-black tabular-nums text-amber-300/90 leading-tight">{cost}</div>
+
+      {/* Name */}
+      <div className="w-full truncate text-center text-[8px] text-white/45 leading-tight">{name}</div>
     </button>
   );
 }
 
-function UpgradeButton({ label, stat, level, cost, disabled, accentClass, onClick }) {
+/* ━━━ Ability Card ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+function AbilityCard({ cooldown, disabled, onClick }) {
+  const cooldownPct = cooldown.remaining > 0 ? Math.min(1, cooldown.remaining / Math.max(1, cooldown.total)) : 0;
+  const onCooldown = cooldownPct > 0;
+  const ready = !disabled && !onCooldown;
   return (
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`rounded-xl border px-3 py-2 text-left transition-all disabled:opacity-40 ${accentClass}`}
+      className={`relative flex flex-col items-center rounded-lg border px-1 py-1.5 transition-all
+        ${ready ? 'border-sky-400/25 bg-sky-500/[0.12] hover:bg-sky-500/[0.20] hover:border-sky-400/40 active:scale-[0.96]' : 'border-white/[0.08] bg-white/[0.04] opacity-40'}`}
+      style={{ minWidth: 0 }}
     >
-      <div className="text-[10px] uppercase tracking-[0.18em] text-white/45">{label}</div>
-      <div className="mt-0.5 text-[12px] font-semibold text-white/90">{stat}</div>
-      <div className="mt-1 flex items-center justify-between text-[9px] text-white/55">
-        <span>Lv {level}</span>
-        <span className="font-black text-amber-200">{cost} aura</span>
+      <span className="absolute -top-1 -left-0.5 rounded bg-white/[0.10] px-1 py-px text-[8px] font-bold tabular-nums text-white/50 leading-none">6</span>
+
+      {/* Lightning bolt icon */}
+      <div className="relative w-9 h-9 flex items-center justify-center shrink-0">
+        <svg className={`w-6 h-6 ${ready ? 'text-sky-300' : 'text-white/30'}`} viewBox="0 0 24 24" fill="currentColor">
+          <path d="M13 2L4.5 12.6h5.3L8.2 22l8.8-11h-5.3L13 2z" />
+        </svg>
+        {onCooldown && (
+          <>
+            <div className="absolute inset-0 rounded bg-black/50" />
+            <div className="absolute inset-0 flex items-center justify-center text-[10px] font-bold tabular-nums text-white/90 drop-shadow">
+              {formatCooldown(cooldown.remaining)}
+            </div>
+            <div className="absolute left-0 right-0 bottom-0 h-[2px] rounded-b bg-white/30 overflow-hidden">
+              <div className="h-full bg-sky-400/70 transition-[width] duration-100" style={{ width: `${100 - cooldownPct * 100}%` }} />
+            </div>
+          </>
+        )}
       </div>
+
+      <div className="mt-0.5 text-[10px] font-black text-sky-300/80 leading-tight">{onCooldown ? '' : 'RDY'}</div>
+      <div className="w-full truncate text-center text-[8px] text-white/45 leading-tight">Burst</div>
+    </button>
+  );
+}
+
+/* ━━━ Upgrade Chip ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+function UpgradeChip({ icon, label, level, cost, maxed, disabled, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`flex items-center gap-1 rounded-md border border-white/[0.08] bg-white/[0.04] px-1.5 py-0.5 text-[10px] transition-all whitespace-nowrap
+        ${disabled ? 'opacity-40' : 'hover:bg-white/[0.10] hover:border-white/[0.15] active:scale-[0.97]'}`}
+    >
+      <span className="text-[10px]">{icon}</span>
+      <span className="text-white/60 font-medium">{label}<span className="text-white/35 ml-0.5">L{level}</span></span>
+      <span className="font-black tabular-nums text-amber-300/80">{maxed ? 'MAX' : cost}</span>
     </button>
   );
 }
@@ -175,74 +241,33 @@ export default function PetBattleModal({ open, onClose, character, onComplete, s
     setAudioMuted(next);
   }, [muted]);
 
-  const names = useMemo(() => PET_UNIT_NAMES[character || 'dojocat'] || PET_UNIT_NAMES.dojocat, [character]);
-  const variants = useMemo(() => PET_UNIT_VARIANTS[character || 'dojocat'] || PET_UNIT_VARIANTS.dojocat, [character]);
+  const charKey = character || 'dojocat';
+  const names = useMemo(() => PET_UNIT_NAMES[charKey] || PET_UNIT_NAMES.dojocat, [charKey]);
+  const variants = useMemo(() => PET_UNIT_VARIANTS[charKey] || PET_UNIT_VARIANTS.dojocat, [charKey]);
   const topEntries = Array.isArray(leaderboard) ? leaderboard.slice(0, 5) : [];
   const isPlaying = mode === 'playing';
   const isTransitioning = mode === 'countdown' || mode === 'stage_clear';
   const tempoBoostPct = Math.round((1 - (uiState.cooldownMultiplier || 1)) * 100);
+
   const upgradeCards = [
-    {
-      key: 'income',
-      accentClass: 'border-amber-400/20 bg-amber-500/[0.08]',
-      stat: `+${uiState.auraRate || 14}/s`,
-      level: uiState.upgrades?.income || 0,
-    },
-    {
-      key: 'reservoir',
-      accentClass: 'border-cyan-400/20 bg-cyan-500/[0.08]',
-      stat: `${uiState.auraMax || 520} max`,
-      level: uiState.upgrades?.reservoir || 0,
-    },
-    {
-      key: 'tempo',
-      accentClass: 'border-emerald-400/20 bg-emerald-500/[0.08]',
-      stat: `${tempoBoostPct}% faster`,
-      level: uiState.upgrades?.tempo || 0,
-    },
+    { key: 'income', icon: '\u2B06', level: uiState.upgrades?.income || 0 },
+    { key: 'reservoir', icon: '\u2B06', level: uiState.upgrades?.reservoir || 0 },
+    { key: 'tempo', icon: '\u2B06', level: uiState.upgrades?.tempo || 0 },
   ];
+
   const unitCards = [
-    {
-      key: 'meatshield',
-      label: '1 / Q',
-      tag: 'GROUND',
-      accentClass: 'border-cyan-400/20 bg-cyan-500/[0.08]',
-      note: variants.meatshield?.battleNote || 'Cheap blocker',
-    },
-    {
-      key: 'brawler',
-      label: '2 / W',
-      tag: 'GROUND',
-      accentClass: 'border-rose-400/20 bg-rose-500/[0.08]',
-      note: variants.brawler?.battleNote || 'Melee burst',
-    },
-    {
-      key: 'ranged',
-      label: '3 / E',
-      tag: 'ANTI-AIR',
-      accentClass: 'border-emerald-400/20 bg-emerald-500/[0.08]',
-      note: variants.ranged?.battleNote || 'Targets air first',
-    },
-    {
-      key: 'flier',
-      label: '4 / R',
-      tag: 'AIR',
-      accentClass: 'border-fuchsia-400/20 bg-fuchsia-500/[0.08]',
-      note: variants.flier?.battleNote || 'Bypasses ground',
-    },
-    {
-      key: 'tank',
-      label: '5 / T',
-      tag: 'GROUND',
-      accentClass: 'border-amber-400/20 bg-amber-500/[0.08]',
-      note: variants.tank?.battleNote || 'Heavy splash',
-    },
+    { key: 'meatshield', shortcut: '1' },
+    { key: 'brawler', shortcut: '2' },
+    { key: 'ranged', shortcut: '3' },
+    { key: 'flier', shortcut: '4' },
+    { key: 'tank', shortcut: '5' },
   ];
 
   if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-[200] flex flex-col overflow-hidden bg-[#0d0e16] select-none" style={{ WebkitTouchCallout: 'none', overscrollBehavior: 'none' }} onContextMenu={(e) => e.preventDefault()}>
+      {/* Header bar */}
       <div className="flex items-center justify-between px-3 py-2 bg-black/40 border-b border-white/[0.06] shrink-0">
         <button
           onClick={handleClose}
@@ -259,84 +284,85 @@ export default function PetBattleModal({ open, onClose, character, onComplete, s
           className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-all"
           title={muted ? 'Unmute' : 'Mute'}
         >
-          {muted ? '🔇' : '🔊'}
+          {muted ? '\uD83D\uDD07' : '\uD83D\uDD0A'}
         </button>
       </div>
 
+      {/* Canvas */}
       <div className="flex-1 min-h-0 relative">
-        <PetBattleCanvas game={game} character={character || 'dojocat'} reducedMotion={reducedMotion} world={selectedWorld} />
+        <PetBattleCanvas game={game} character={charKey} reducedMotion={reducedMotion} world={selectedWorld} />
       </div>
 
+      {/* ━━━ Playing panel ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       {isPlaying ? (
-        <div className="bg-black/70 border-t border-white/[0.06] shrink-0 px-3 py-3 pb-[max(0.9rem,env(safe-area-inset-bottom))]">
-          <div className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.05] bg-white/[0.03] px-3 py-2">
-            <div>
-              <div className="text-[10px] uppercase tracking-[0.18em] text-white/45">Aura Engine</div>
-              <div className="text-sm font-black text-amber-200 tabular-nums">{Math.floor(uiState.aura || 0)} / {uiState.auraMax || 520}</div>
+        <div className="bg-black/70 backdrop-blur-sm border-t border-white/[0.06] shrink-0 px-2 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+          {/* ── Status bar + upgrades row ── */}
+          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none">
+            {/* Aura readout */}
+            <div className="shrink-0 flex items-center gap-1 rounded-md border border-amber-400/15 bg-amber-500/[0.06] px-1.5 py-1">
+              <span className="text-[10px] font-bold text-amber-300/70">Aura</span>
+              <span className="text-[11px] font-black tabular-nums text-amber-200">{Math.floor(uiState.aura || 0)}<span className="text-amber-200/40">/{uiState.auraMax || 520}</span></span>
+              <span className="text-[9px] text-amber-300/50 tabular-nums">+{uiState.auraRate || 14}/s</span>
             </div>
-            <div className="text-right">
-              <div className="text-[10px] text-white/45">{uiState.stage > 10 ? 'Survival' : 'Castle Run'}</div>
-              <div className="text-[12px] font-semibold text-white/85">Stage {uiState.stage || 1} · Wave {uiState.wave || 1}</div>
-            </div>
-            <div className="text-right">
-              <div className="text-[10px] text-white/45">Flow</div>
-              <div className="text-[12px] font-semibold text-white/85">+{uiState.auraRate || 14}/s</div>
-              <div className="text-[9px] text-white/40">{tempoBoostPct}% faster cooldowns</div>
-            </div>
-          </div>
 
-          <div className="mt-3 grid grid-cols-3 gap-2">
+            {/* Upgrade chips */}
             {upgradeCards.map((card) => {
               const track = UPGRADE_TRACKS[card.key];
               const level = card.level;
               const cost = track ? Math.round(track.baseCost * (track.growth ** level)) : 999;
-              const disabled = (uiState.aura || 0) < cost || level >= (track?.maxLevel || 0);
+              const maxed = level >= (track?.maxLevel || 0);
+              const cantAfford = (uiState.aura || 0) < cost;
               return (
-                <UpgradeButton
+                <UpgradeChip
                   key={card.key}
+                  icon={card.icon}
                   label={track?.label || card.key}
-                  stat={card.stat}
                   level={level}
-                  cost={level >= (track?.maxLevel || 0) ? 'MAX' : cost}
-                  disabled={disabled}
-                  accentClass={card.accentClass}
+                  cost={maxed ? 'MAX' : cost}
+                  maxed={maxed}
+                  disabled={cantAfford || maxed}
                   onClick={() => handleUpgrade(card.key)}
                 />
               );
             })}
+
+            {/* Stage / wave pill */}
+            <div className="shrink-0 ml-auto rounded-md border border-white/[0.06] bg-white/[0.03] px-1.5 py-1 text-[10px] text-white/50 font-medium whitespace-nowrap tabular-nums">
+              {uiState.stage > 10 ? 'Surv' : 'Stg'} {uiState.stage || 1}<span className="text-white/25 mx-0.5">{'\u00B7'}</span>W{uiState.wave || 1}
+            </div>
           </div>
 
-          <div className="mt-3 grid grid-cols-3 gap-2">
-            {unitCards.map((card) => (
-              <ActionButton
-                key={card.key}
-                label={card.label}
-                name={names[card.key] || ARCHETYPES[card.key]?.label}
-                tag={card.tag}
-                value={ARCHETYPES[card.key]?.cost}
-                valueLabel="aura"
-                note={card.note}
-                cooldown={{ remaining: uiState.cooldowns?.[card.key] || 0, total: Math.round((ARCHETYPES[card.key]?.cooldownMs || 0) * (uiState.cooldownMultiplier || 1)) }}
-                disabled={(uiState.aura || 0) < (ARCHETYPES[card.key]?.cost || 0) || (uiState.cooldowns?.[card.key] || 0) > 0}
-                accentClass={card.accentClass}
-                onClick={() => handleSpawn(card.key)}
-              />
-            ))}
-            <ActionButton
-              label="6 / Y"
-              name={PET_ABILITY.label}
-              tag="SKILL"
-              value={(uiState.abilityCooldownMs || 0) > 0 ? formatCooldown(uiState.abilityCooldownMs || 0) : 'Ready'}
-              valueLabel={(uiState.abilityCooldownMs || 0) > 0 ? 'cooldown' : 'burst'}
-              note={PET_ABILITY.description}
+          {/* ── Unit strip ── */}
+          <div className="mt-1.5 grid grid-cols-6 gap-1.5">
+            {unitCards.map((card) => {
+              const arch = ARCHETYPES[card.key];
+              const cdRemaining = uiState.cooldowns?.[card.key] || 0;
+              const cdTotal = Math.round((arch?.cooldownMs || 0) * (uiState.cooldownMultiplier || 1));
+              const cantAfford = (uiState.aura || 0) < (arch?.cost || 0);
+              return (
+                <UnitCard
+                  key={card.key}
+                  unitKey={card.key}
+                  name={names[card.key] || arch?.label}
+                  cost={arch?.cost}
+                  shortcut={card.shortcut}
+                  spriteUrl={unitSpriteUrl(charKey, card.key)}
+                  isFlier={card.key === 'flier'}
+                  cooldown={{ remaining: cdRemaining, total: cdTotal }}
+                  disabled={cantAfford || cdRemaining > 0}
+                  onClick={() => handleSpawn(card.key)}
+                />
+              );
+            })}
+            <AbilityCard
               cooldown={{ remaining: uiState.abilityCooldownMs || 0, total: PET_ABILITY.cooldownMs }}
               disabled={(uiState.abilityCooldownMs || 0) > 0}
-              accentClass="border-sky-400/20 bg-sky-500/[0.08]"
               onClick={handleAbility}
             />
           </div>
         </div>
       ) : isTransitioning ? (
+        /* ━━━ Transition panel ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
         <div className="bg-black/70 border-t border-white/[0.06] shrink-0 px-3 py-3 pb-[max(0.9rem,env(safe-area-inset-bottom))]">
           <div className="w-full rounded-xl border border-orange-400/18 bg-orange-500/[0.08] px-4 py-3 text-center">
             <div className="text-[10px] font-black uppercase tracking-[0.18em] text-orange-200/75">
@@ -348,6 +374,7 @@ export default function PetBattleModal({ open, onClose, character, onComplete, s
           </div>
         </div>
       ) : (
+        /* ━━━ Idle / game-over panel ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
         <div className="bg-black/70 border-t border-white/[0.06] shrink-0 px-3 py-3 pb-[max(0.9rem,env(safe-area-inset-bottom))]">
           <div className="mb-3">
             <div className="text-[10px] font-black tracking-[0.2em] uppercase text-white/40 mb-1.5">Choose World</div>
@@ -356,7 +383,7 @@ export default function PetBattleModal({ open, onClose, character, onComplete, s
                 const selected = selectedWorld === key;
                 const accent = { fire: 'border-orange-400 bg-orange-500/20 text-orange-200', water: 'border-blue-400 bg-blue-500/20 text-blue-200', rock: 'border-stone-400 bg-stone-500/20 text-stone-200', ice: 'border-cyan-300 bg-cyan-400/20 text-cyan-100', grassland: 'border-emerald-400 bg-emerald-500/20 text-emerald-200' }[key] || 'border-white/20 bg-white/10 text-white';
                 const idle = { fire: 'border-orange-400/15 bg-orange-500/[0.06] text-orange-300/60', water: 'border-blue-400/15 bg-blue-500/[0.06] text-blue-300/60', rock: 'border-stone-400/15 bg-stone-500/[0.06] text-stone-300/60', ice: 'border-cyan-300/15 bg-cyan-400/[0.06] text-cyan-200/60', grassland: 'border-emerald-400/15 bg-emerald-500/[0.06] text-emerald-300/60' }[key] || 'border-white/10 bg-white/[0.03] text-white/50';
-                const icon = { fire: '🔥', water: '🌊', rock: '🪨', ice: '❄️', grassland: '🌿' }[key] || '🌍';
+                const icon = { fire: '\uD83D\uDD25', water: '\uD83C\uDF0A', rock: '\uD83E\uDEA8', ice: '\u2744\uFE0F', grassland: '\uD83C\uDF3F' }[key] || '\uD83C\uDF0D';
                 return (
                   <button
                     key={key}
@@ -388,7 +415,7 @@ export default function PetBattleModal({ open, onClose, character, onComplete, s
                 <div className="text-[10px] text-gray-500">Your best</div>
                 <div className="text-sm font-black tabular-nums text-white">{stats?.highScore ?? 0}</div>
                 <div className="text-[10px] text-gray-600">
-                  Stage {stats?.bestStage ?? 0} · {stats?.totalRuns ?? 0} runs
+                  Stage {stats?.bestStage ?? 0} {'\u00B7'} {stats?.totalRuns ?? 0} runs
                 </div>
               </div>
             </div>
@@ -421,7 +448,7 @@ export default function PetBattleModal({ open, onClose, character, onComplete, s
                     <div className="truncate text-[11px] font-semibold text-white/90">
                       {entry.nickname || entry.username || 'Unknown'}
                     </div>
-                    <div className="truncate text-[9px] text-gray-500">Stage {entry.best_stage || 0} · {entry.bosses_defeated || 0} bosses</div>
+                    <div className="truncate text-[9px] text-gray-500">Stage {entry.best_stage || 0} {'\u00B7'} {entry.bosses_defeated || 0} bosses</div>
                   </div>
                   <div className="text-right shrink-0">
                     <div className="text-[12px] font-black tabular-nums text-orange-200">{entry.high_score || 0}</div>

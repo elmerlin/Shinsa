@@ -97,7 +97,10 @@ export default function PetBattleCanvas({ game, character, reducedMotion, world 
       else drawDeathPoof(ctx, screenX, fxY + 4, fxSize, fx.progress);
     });
 
-    drawHUD(ctx, w, h, state);
+    // Only draw the canvas HUD for non-playing modes (the React UI status bar handles it during play)
+    if (state.mode !== 'playing') {
+      drawHUD(ctx, w, h, state);
+    }
 
     if (state.mode === 'idle') {
       drawStartScreen(ctx, w, h, state.character || character || 'dojocat');
