@@ -643,6 +643,69 @@ export default function PiumonPage() {
     }));
   }, []);
 
+  // PixelLab generation
+  const [genJobs, setGenJobs] = useState({}); // characterId -> { status, jobId, error }
+  const [genSize, setGenSize] = useState(48);
+  const pollTimers = useRef({});
+
+  const startGeneration = useCallback(async (character) => {
+    const token = localStorage.getItem('token');
+    setGenJobs((prev) => ({ ...prev, [character.id]: { status: 'starting' } }));
+    try {
+      const res = await fetch('/api/piumon/generate/body', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          characterId: character.id,
+          previewUrl: character.preview,
+          name: character.name,
+          size: genSize,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Request failed' }));
+        setGenJobs((prev) => ({ ...prev, [character.id]: { status: 'failed', error: err.error } }));
+        return;
+      }
+      const { jobId } = await res.json();
+      setGenJobs((prev) => ({ ...prev, [character.id]: { status: 'processing', jobId } }));
+
+      // Start polling
+      const poll = async () => {
+        try {
+          const pollRes = await fetch(`/api/piumon/generate/job/${jobId}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const data = await pollRes.json();
+          if (data.status === 'completed') {
+            setGenJobs((prev) => ({ ...prev, [character.id]: { status: 'completed', jobId } }));
+            setAssets((prev) => ({
+              ...prev,
+              bodies: [...prev.bodies.filter((a) => a.id !== character.id), { id: character.id, filename: data.filename }],
+            }));
+            delete pollTimers.current[character.id];
+          } else if (data.status === 'failed') {
+            setGenJobs((prev) => ({ ...prev, [character.id]: { status: 'failed', jobId, error: data.error } }));
+            delete pollTimers.current[character.id];
+          } else {
+            pollTimers.current[character.id] = setTimeout(poll, 6000);
+          }
+        } catch {
+          pollTimers.current[character.id] = setTimeout(poll, 8000);
+        }
+      };
+      pollTimers.current[character.id] = setTimeout(poll, 5000);
+    } catch (err) {
+      setGenJobs((prev) => ({ ...prev, [character.id]: { status: 'failed', error: err.message } }));
+    }
+  }, [genSize]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(pollTimers.current).forEach(clearTimeout);
+    };
+  }, []);
+
   // Composition preview
   const [compBase, setCompBase] = useState('');
   const [compHabitat, setCompHabitat] = useState('');
@@ -996,8 +1059,33 @@ export default function PiumonPage() {
                   />
                 </div>
               </div>
+              <div className="mt-4 space-y-3">
+                <div>
+                  <label className="font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-gray-500">Sprite Size (px)</label>
+                  <input
+                    type="number"
+                    min="16"
+                    max="128"
+                    step="8"
+                    value={genSize}
+                    onChange={(e) => setGenSize(Math.max(16, Math.min(128, Number(e.target.value) || 48)))}
+                    className="mt-1 block h-8 w-full rounded-md border border-white/[0.08] bg-black/30 px-2 text-right font-mono text-[12px] tabular-nums text-white outline-none focus:border-cyan-400/60"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    activeBases
+                      .filter((c) => !getAssetUrl('bodies', c.id) && !genJobs[c.id]?.status?.match(/starting|processing/))
+                      .forEach((c, i) => setTimeout(() => startGeneration(c), i * 2000));
+                  }}
+                  className="w-full rounded-lg border border-cyan-300/30 bg-cyan-300/[0.08] py-2 font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-cyan-200 transition hover:bg-cyan-300/[0.14]"
+                >
+                  Generate All Pending
+                </button>
+              </div>
               <p className="mt-4 text-[11px] leading-snug text-gray-500">
-                Generate each character as a front-facing pixel body in PixelLab, then upload the result here. Every body must share the same pose and anchor points.
+                Uses PixelLab&apos;s create-from-concept API. Each character&apos;s avatar is sent as the concept image and regenerated as an 8-direction pixel sprite.
               </p>
             </div>
           }
@@ -1005,8 +1093,10 @@ export default function PiumonPage() {
           <div className="grid max-h-[42rem] gap-3 overflow-y-auto pr-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {activeBases.map((character) => {
               const bodyUrl = getAssetUrl('bodies', character.id);
+              const job = genJobs[character.id];
+              const isGenerating = job?.status === 'starting' || job?.status === 'processing';
               return (
-                <div key={character.id} className="rounded-2xl border border-white/[0.08] bg-white/[0.025] p-3">
+                <div key={character.id} className={`rounded-2xl border p-3 ${isGenerating ? 'border-cyan-400/20 bg-cyan-400/[0.03]' : 'border-white/[0.08] bg-white/[0.025]'}`}>
                   <div className="flex items-start gap-3">
                     <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/[0.08] bg-[#0a0915] p-1">
                       <img src={character.preview} alt={character.name} className="h-full w-full object-contain" style={{ imageRendering: 'pixelated' }} />
@@ -1023,22 +1113,60 @@ export default function PiumonPage() {
                           x
                         </button>
                       </div>
+                    ) : isGenerating ? (
+                      <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl border border-cyan-400/20 bg-[#0a0915]">
+                        <div className="h-5 w-5 animate-spin rounded-full border-2 border-cyan-400/30 border-t-cyan-400" />
+                      </div>
                     ) : (
-                      <UploadButton
-                        assetUrl={null}
-                        onUpload={(file) => uploadAsset('bodies', character.id, file)}
-                        onDelete={() => {}}
-                        size="lg"
-                        label="Upload Body"
-                      />
+                      <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl border border-dashed border-white/[0.12] bg-[#0a0915]">
+                        <span className="font-mono text-[8px] text-gray-600">—</span>
+                      </div>
                     )}
                   </div>
                   <div className="mt-2">
                     <div className="truncate font-display text-[13px] font-black tracking-tight text-white">{character.name}</div>
-                    <div className="flex items-center gap-1.5 mt-1">
-                      <WeightPill tone={bodyUrl ? 'emerald' : 'amber'}>{bodyUrl ? 'Generated' : 'Pending'}</WeightPill>
+                    <div className="mt-1 flex items-center gap-1.5">
+                      {bodyUrl ? (
+                        <WeightPill tone="emerald">Generated</WeightPill>
+                      ) : isGenerating ? (
+                        <WeightPill tone="cyan">Generating…</WeightPill>
+                      ) : job?.status === 'failed' ? (
+                        <WeightPill tone="pink">Failed</WeightPill>
+                      ) : (
+                        <WeightPill tone="amber">Pending</WeightPill>
+                      )}
                       <span className="font-mono text-[9px] text-gray-600">{character.source === 'PIUGAME Avatar Shop' ? 'PIUGAME' : 'Custom'}</span>
                     </div>
+                    {job?.error ? (
+                      <div className="mt-1 truncate text-[10px] text-rose-300/70" title={job.error}>{job.error}</div>
+                    ) : null}
+                  </div>
+                  <div className="mt-2 flex gap-1.5">
+                    {!bodyUrl && !isGenerating ? (
+                      <button
+                        type="button"
+                        onClick={() => startGeneration(character)}
+                        className="h-7 flex-1 rounded-md border border-cyan-300/25 bg-cyan-300/[0.06] font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-cyan-200 transition hover:bg-cyan-300/[0.12]"
+                      >
+                        Generate
+                      </button>
+                    ) : null}
+                    {!bodyUrl ? (
+                      <UploadButton
+                        assetUrl={null}
+                        onUpload={(file) => uploadAsset('bodies', character.id, file)}
+                        onDelete={() => {}}
+                        label="Upload"
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => startGeneration(character)}
+                        className="h-7 rounded-md border border-white/[0.08] bg-white/[0.04] px-2 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-gray-400 transition hover:text-cyan-200"
+                      >
+                        Regen
+                      </button>
+                    )}
                   </div>
                 </div>
               );

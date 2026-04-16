@@ -4,11 +4,15 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const jwt = require('jsonwebtoken');
+const sharp = require('sharp');
 const { getDb } = require('../db/schema');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'shinsa-pump-dojo-secret-key';
+const PIXELLAB_API_KEY = process.env.PIXELLAB_API_KEY || '';
+const PIXELLAB_BASE = 'https://api.pixellab.ai/v2';
 
 const PIUMON_DIR = path.join(__dirname, '../../data/piumon');
+const CLIENT_PUBLIC = path.join(__dirname, '../../client/public');
 const ASSET_TYPES = ['bodies', 'traits', 'habitats'];
 
 for (const type of ASSET_TYPES) {
@@ -120,6 +124,138 @@ router.delete('/assets/:type/:id', requireAuth, requireAdmin, (req, res) => {
     res.json({ ok: true });
   } catch {
     res.status(404).json({ error: 'Not found' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// PixelLab generation
+// ---------------------------------------------------------------------------
+
+const activeJobs = new Map(); // jobId -> { characterId, status, error, result }
+
+function resolvePreviewPath(previewUrl) {
+  // preview URLs are like /avatars/foo.png, /piumon/dojocat-reference.jpeg, etc.
+  const relative = String(previewUrl || '').replace(/^\//, '');
+  return path.join(CLIENT_PUBLIC, relative);
+}
+
+async function imageToDataUri(filePath) {
+  const buf = await fs.promises.readFile(filePath);
+  const meta = await sharp(buf).metadata();
+  const mime = meta.format === 'jpeg' ? 'image/jpeg' : `image/${meta.format || 'png'}`;
+  return {
+    dataUri: `data:${mime};base64,${buf.toString('base64')}`,
+    width: meta.width,
+    height: meta.height,
+  };
+}
+
+async function pixellabPost(endpoint, body) {
+  const res = await fetch(`${PIXELLAB_BASE}${endpoint}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${PIXELLAB_API_KEY}`,
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`PixelLab ${endpoint} ${res.status}: ${text}`);
+  }
+  return res.json();
+}
+
+async function pixellabGet(endpoint) {
+  const res = await fetch(`${PIXELLAB_BASE}${endpoint}`, {
+    headers: { Authorization: `Bearer ${PIXELLAB_API_KEY}` },
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`PixelLab ${endpoint} ${res.status}: ${text}`);
+  }
+  return res.json();
+}
+
+// Start generation for a character body
+router.post('/generate/body', requireAuth, requireAdmin, async (req, res) => {
+  if (!PIXELLAB_API_KEY) return res.status(500).json({ error: 'PIXELLAB_API_KEY not configured' });
+
+  const { characterId, previewUrl, name, size, description } = req.body;
+  if (!characterId || !previewUrl) return res.status(400).json({ error: 'characterId and previewUrl required' });
+
+  try {
+    const filePath = resolvePreviewPath(previewUrl);
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: `Source image not found: ${previewUrl}` });
+
+    const { dataUri, width, height } = await imageToDataUri(filePath);
+    const pixelSize = size || 48;
+
+    const body = {
+      method: 'create_from_concept',
+      concept_image: { image: dataUri, width, height },
+      image_size: { width: pixelSize, height: pixelSize },
+      view: 'side',
+      description: description || `pixel art character sprite of ${name || 'character'}, front-facing, fixed standing pose, clean anchors for layered accessories`,
+    };
+
+    const result = await pixellabPost('/generate-8-rotations-v2', body);
+    const jobId = result.background_job_id || result.job_id;
+    if (!jobId) return res.status(500).json({ error: 'No job ID returned from PixelLab', result });
+
+    activeJobs.set(jobId, { characterId, status: 'processing', startedAt: Date.now() });
+
+    res.json({ jobId, characterId });
+  } catch (err) {
+    console.error('[Piumon] generate body error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Poll job status and save when complete
+router.get('/generate/job/:jobId', requireAuth, requireAdmin, async (req, res) => {
+  if (!PIXELLAB_API_KEY) return res.status(500).json({ error: 'PIXELLAB_API_KEY not configured' });
+
+  const { jobId } = req.params;
+  const tracked = activeJobs.get(jobId);
+
+  try {
+    const job = await pixellabGet(`/background-jobs/${jobId}`);
+    const status = job.status || 'unknown';
+
+    if (status === 'completed' && job.last_response?.images?.length) {
+      // Save the south-facing image (first in the array) as the body
+      const southImage = job.last_response.images[0];
+      const characterId = tracked?.characterId || req.query.characterId || 'unknown';
+      const safeId = String(characterId).replace(/[^a-zA-Z0-9_-]/g, '');
+
+      if (southImage.image) {
+        const base64Data = southImage.image.replace(/^data:image\/\w+;base64,/, '');
+        const outPath = path.join(PIUMON_DIR, 'bodies', `${safeId}.png`);
+        await fs.promises.writeFile(outPath, Buffer.from(base64Data, 'base64'));
+      }
+
+      if (tracked) {
+        tracked.status = 'completed';
+        tracked.result = { savedAs: `${safeId}.png`, imageCount: job.last_response.images.length };
+      }
+
+      res.json({
+        status: 'completed',
+        characterId: safeId,
+        filename: `${safeId}.png`,
+        path: `/piumon-assets/bodies/${safeId}.png`,
+        imageCount: job.last_response.images.length,
+      });
+    } else if (status === 'failed' || status === 'error') {
+      if (tracked) tracked.status = 'failed';
+      res.json({ status: 'failed', error: job.error || 'Generation failed' });
+    } else {
+      res.json({ status: 'processing' });
+    }
+  } catch (err) {
+    console.error('[Piumon] poll job error:', err.message);
+    res.status(500).json({ error: err.message });
   }
 });
 
