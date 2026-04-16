@@ -1,4 +1,5 @@
 const BASE_PATH = '/pet-battle/characters';
+const ENEMY_BASE_PATH = '/pet-battle/enemies';
 
 const CHARACTERS = [
   'dojocat-meatshield', 'dojocat-brawler', 'dojocat-ranged', 'dojocat-tank',
@@ -7,8 +8,13 @@ const CHARACTERS = [
   'pixiu-meatshield', 'pixiu-brawler', 'pixiu-ranged', 'pixiu-tank',
 ];
 
+const WORLDS = ['fire', 'water', 'rock', 'ice', 'grassland'];
+const ENEMY_ROLES = ['basic', 'bruiser', 'sniper', 'tank', 'boss'];
+
 const sprites = {};
+const enemySprites = {};
 let loadPromise = null;
+let enemyLoadPromise = null;
 
 function classifyAnimation(name, frames) {
   const lower = name.toLowerCase();
@@ -29,8 +35,7 @@ function loadImage(src) {
   });
 }
 
-async function loadCharacter(charKey) {
-  const dir = `${BASE_PATH}/${charKey}`;
+async function loadCharacterFromDir(dir) {
   let meta;
   try {
     const resp = await fetch(`${dir}/metadata.json`);
@@ -72,7 +77,7 @@ export function loadAllSprites() {
   loadPromise = (async () => {
     const results = await Promise.all(
       CHARACTERS.map(async (key) => {
-        const data = await loadCharacter(key);
+        const data = await loadCharacterFromDir(`${BASE_PATH}/${key}`);
         if (data) sprites[key] = data;
       })
     );
@@ -105,6 +110,51 @@ export function getAnimationLength(character, role, animType) {
   const firstDir = Object.values(anim)[0];
   return firstDir?.length || 0;
 }
+
+// ━━━ Enemy Sprites ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+export function loadAllEnemySprites() {
+  if (enemyLoadPromise) return enemyLoadPromise;
+  enemyLoadPromise = (async () => {
+    const keys = [];
+    for (const world of WORLDS) {
+      for (const role of ENEMY_ROLES) {
+        keys.push(`${world}-${role}`);
+      }
+    }
+    await Promise.all(
+      keys.map(async (key) => {
+        const data = await loadCharacterFromDir(`${ENEMY_BASE_PATH}/${key}`);
+        if (data) enemySprites[key] = data;
+      })
+    );
+    return enemySprites;
+  })();
+  return enemyLoadPromise;
+}
+
+export function isEnemyLoaded(world, type) {
+  return !!enemySprites[`${world}-${type}`];
+}
+
+export function getEnemyRotation(world, type, direction) {
+  return enemySprites[`${world}-${type}`]?.rotations?.[direction] || null;
+}
+
+export function getEnemyAnimationFrame(world, type, animType, direction, frameIndex) {
+  const frames = enemySprites[`${world}-${type}`]?.animations?.[animType]?.[direction];
+  if (!frames || frames.length === 0) return null;
+  return frames[frameIndex % frames.length];
+}
+
+export function getEnemyAnimationLength(world, type, animType) {
+  const anim = enemySprites[`${world}-${type}`]?.animations?.[animType];
+  if (!anim) return 0;
+  const firstDir = Object.values(anim)[0];
+  return firstDir?.length || 0;
+}
+
+// ━━━ Shared Drawing ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 export function drawSprite(ctx, img, x, groundY, targetHeight, flipX) {
   if (!img) return false;

@@ -1,0 +1,87 @@
+{
+  "character": {
+    "id": "6b991cdd-427a-4bed-a2c6-87368076b29d",
+    "name": "Fire Basic",
+    "prompt": "small flame imp, fiery red-orange body, glowing ember eyes, tiny horns, pixel art enemy creature, menacing stance",
+    "size": {
+      "width": 68,
+      "height": 68
+    },
+    "template_id": "mannequin",
+    "directions": 4,
+    "view": "low top-down",
+    "created_at": "2026-04-16T04:20:22.190609+00:00"
+  },
+  "frames": {
+    "rotations": {
+      "south": "rotations/south.png",
+      "west": "rotations/west.png",
+      "east": "rotations/east.png",
+      "north": "rotations/north.png"
+    },
+    "animations": {
+      "animating-ca4be27b": {
+        "west": [
+          "animations/animating-ca4be27b/west/frame_000.png",
+          "animations/animating-ca4be27b/west/frame_001.png",
+          "animations/animating-ca4be27b/west/frame_002.png",
+          "animations/animating-ca4be27b/west/frame_003.png"
+        ],
+        "north": [
+          "animations/animating-ca4be27b/north/frame_000.png",
+          "animations/animating-ca4be27b/north/frame_001.png",
+          "animations/animating-ca4be27b/north/frame_002.png",
+          "animations/animating-ca4be27b/north/frame_003.png"
+        ],
+        "south": [
+          "animations/animating-ca4be27b/south/frame_000.png",
+          "animations/animating-ca4be27b/south/frame_001.png",
+          "animations/animating-ca4be27b/south/frame_002.png",
+          "animations/animating-ca4be27b/south/frame_003.png"
+        ],
+        "east": [
+          "animations/animating-ca4be27b/east/frame_000.png",
+          "animations/animating-ca4be27b/east/frame_001.png",
+          "animations/animating-ca4be27b/east/frame_002.png",
+          "animations/animating-ca4be27b/east/frame_003.png"
+        ]
+      },
+      "cross_punch_attack-7eaa58ec": {
+        "north": [
+          "animations/cross_punch_attack-7eaa58ec/north/frame_000.png",
+          "animations/cross_punch_attack-7eaa58ec/north/frame_001.png",
+          "animations/cross_punch_attack-7eaa58ec/north/frame_002.png",
+          "animations/cross_punch_attack-7eaa58ec/north/frame_003.png",
+          "animations/cross_punch_attack-7eaa58ec/north/frame_004.png",
+          "animations/cross_punch_attack-7eaa58ec/north/frame_005.png"
+        ],
+        "west": [
+          "animations/cross_punch_attack-7eaa58ec/west/frame_000.png",
+          "animations/cross_punch_attack-7eaa58ec/west/frame_001.png",
+          "animations/cross_punch_attack-7eaa58ec/west/frame_002.png",
+          "animations/cross_punch_attack-7eaa58ec/west/frame_003.png",
+          "animations/cross_punch_attack-7eaa58ec/west/frame_004.png",
+          "animations/cross_punch_attack-7eaa58ec/west/frame_005.png"
+        ],
+        "south": [
+          "animations/cross_punch_attack-7eaa58ec/south/frame_000.png",
+          "animations/cross_punch_attack-7eaa58ec/south/frame_001.png",
+          "animations/cross_punch_attack-7eaa58ec/south/frame_002.png",
+          "animations/cross_punch_attack-7eaa58ec/south/frame_003.png",
+          "animations/cross_punch_attack-7eaa58ec/south/frame_004.png",
+          "animations/cross_punch_attack-7eaa58ec/south/frame_005.png"
+        ],
+        "east": [
+          "animations/cross_punch_attack-7eaa58ec/east/frame_000.png",
+          "animations/cross_punch_attack-7eaa58ec/east/frame_001.png",
+          "animations/cross_punch_attack-7eaa58ec/east/frame_002.png",
+          "animations/cross_punch_attack-7eaa58ec/east/frame_003.png",
+          "animations/cross_punch_attack-7eaa58ec/east/frame_004.png",
+          "animations/cross_punch_attack-7eaa58ec/east/frame_005.png"
+        ]
+      }
+    }
+  },
+  "export_version": "2.0",
+  "export_date": "2026-04-16T05:31:03.089159"
+}

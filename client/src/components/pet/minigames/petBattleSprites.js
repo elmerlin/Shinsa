@@ -1,5 +1,8 @@
 import { CHAR_COLORS } from './miniPumpSprites';
-import { isLoaded, getAnimationFrame, getRotation, drawSprite, getAnimationLength } from './petBattleSpriteLoader';
+import {
+  isLoaded, getAnimationFrame, getRotation, drawSprite, getAnimationLength,
+  isEnemyLoaded, getEnemyAnimationFrame, getEnemyRotation, getEnemyAnimationLength,
+} from './petBattleSpriteLoader';
 
 // ━━━ Palette ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 const SMB_PALETTE = {
@@ -1490,16 +1493,63 @@ function unitFrame(unit, animFrame) {
   return Math.floor(animFrame / 10) % 2 === 0 ? 'walk1' : 'walk2';
 }
 
+function drawEnemyUnitOverlay(ctx, unit, x, fy, ps, spriteH) {
+  const barW = Math.max(18, ps * 9);
+  const hpRatio = unit.hp / Math.max(1, unit.maxHp);
+  const barColor = hpRatio > 0.5 ? '#ff8c7a' : hpRatio > 0.25 ? '#ff6644' : '#ff3322';
+  const barY = fy - spriteH - 4;
+  ctx.fillStyle = 'rgba(0,0,0,0.45)';
+  ctx.fillRect(x - barW / 2, barY, barW, 3);
+  ctx.fillStyle = barColor;
+  ctx.fillRect(x - barW / 2, barY, barW * hpRatio, 3);
+}
+
 export function drawEnemyUnit(ctx, unit, x, groundY, scale, animFrame, world) {
-  const palette = ENEMY_PALETTES[world] || ENEMY_PALETTE;
-  const layerLift = getLayerLift(unit.layer, animFrame + (unit.animOffset || 0), unit.flightBobOffset || 0);
   const ps = Math.max(2, Math.round(scale * 0.9));
-  const frame = ENEMY_FRAMES[unit.type]?.[unitFrame(unit, animFrame + (unit.animOffset || 0))] || ENEMY_FRAMES.basic.walk1;
+  const unitAnim = animFrame + (unit.animOffset || 0);
+  const layerLift = getLayerLift(unit.layer, unitAnim, unit.flightBobOffset || 0);
   const fy = groundY - layerLift;
+  const atk = unit.attackFlash > 0;
+  const w = world || 'grassland';
+
+  // Ground shadow (smaller for air units)
   drawPixelEllipse(ctx, x, groundY - 1, Math.max(4, ps * (unit.layer === 'air' ? 2.2 : 2.8)), 1, 1, 'rgba(0,0,0,0.14)');
+
+  // Try PixelLab sprites first
+  if (isEnemyLoaded(w, unit.type)) {
+    const sizeScale = unit.type === 'boss' ? 24 : unit.type === 'tank' ? 20 : unit.type === 'bruiser' ? 18 : 16;
+    const spriteH = ps * sizeScale;
+    const dir = 'west'; // enemies face left (toward player)
+    let img = null;
+
+    if (atk) {
+      const len = getEnemyAnimationLength(w, unit.type, 'attack');
+      if (len > 0) {
+        const atkP = unit.attackFlash / (unit.attackMs || 700);
+        const fi = Math.floor(atkP * (len - 1));
+        img = getEnemyAnimationFrame(w, unit.type, 'attack', dir, fi);
+      }
+    }
+    if (!img) {
+      const walkLen = getEnemyAnimationLength(w, unit.type, 'walk');
+      if (walkLen > 0) {
+        const fi = Math.floor((unitAnim * 0.15) % walkLen);
+        img = getEnemyAnimationFrame(w, unit.type, 'walk', dir, fi);
+      }
+    }
+    if (!img) img = getEnemyRotation(w, unit.type, dir);
+
+    if (img && drawSprite(ctx, img, x, fy + spriteH * 0.18, spriteH, false)) {
+      drawEnemyUnitOverlay(ctx, unit, x, fy, ps, spriteH * 0.8);
+      return;
+    }
+  }
+
+  // Fallback: procedural pixel art
+  const palette = ENEMY_PALETTES[w] || ENEMY_PALETTE;
+  const frame = ENEMY_FRAMES[unit.type]?.[unitFrame(unit, unitAnim)] || ENEMY_FRAMES.basic.walk1;
   if (unit.layer === 'air') drawPixelEllipse(ctx, x, fy - frame.length * ps * 0.35, Math.max(4, ps * 2.2), 2, 1, '#d7e8ff', 0.12);
   drawPixelMap(ctx, x - (frame[0].length * ps) / 2, fy - frame.length * ps, ps, frame, palette);
-  // Highlight
   ctx.fillStyle = 'rgba(255,255,255,0.07)';
   ctx.fillRect(x - frame[0].length * ps * 0.2, fy - frame.length * ps + ps, frame[0].length * ps * 0.3, Math.max(2, ps));
 

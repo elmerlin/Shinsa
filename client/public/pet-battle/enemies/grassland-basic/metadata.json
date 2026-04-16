@@ -1,0 +1,87 @@
+{
+  "character": {
+    "id": "2eeb0ce8-e2eb-49b0-938b-97b84e8c2059",
+    "name": "Grassland Basic",
+    "prompt": "forest imp, small green-purple goblin creature, pointy ears, mischievous grin, pixel art enemy basic unit",
+    "size": {
+      "width": 68,
+      "height": 68
+    },
+    "template_id": "mannequin",
+    "directions": 4,
+    "view": "low top-down",
+    "created_at": "2026-04-16T04:29:33.809336+00:00"
+  },
+  "frames": {
+    "rotations": {
+      "south": "rotations/south.png",
+      "west": "rotations/west.png",
+      "east": "rotations/east.png",
+      "north": "rotations/north.png"
+    },
+    "animations": {
+      "animating-50a8950d": {
+        "north": [
+          "animations/animating-50a8950d/north/frame_000.png",
+          "animations/animating-50a8950d/north/frame_001.png",
+          "animations/animating-50a8950d/north/frame_002.png",
+          "animations/animating-50a8950d/north/frame_003.png"
+        ],
+        "south": [
+          "animations/animating-50a8950d/south/frame_000.png",
+          "animations/animating-50a8950d/south/frame_001.png",
+          "animations/animating-50a8950d/south/frame_002.png",
+          "animations/animating-50a8950d/south/frame_003.png"
+        ],
+        "east": [
+          "animations/animating-50a8950d/east/frame_000.png",
+          "animations/animating-50a8950d/east/frame_001.png",
+          "animations/animating-50a8950d/east/frame_002.png",
+          "animations/animating-50a8950d/east/frame_003.png"
+        ],
+        "west": [
+          "animations/animating-50a8950d/west/frame_000.png",
+          "animations/animating-50a8950d/west/frame_001.png",
+          "animations/animating-50a8950d/west/frame_002.png",
+          "animations/animating-50a8950d/west/frame_003.png"
+        ]
+      },
+      "cross_punch_attack-7324be80": {
+        "west": [
+          "animations/cross_punch_attack-7324be80/west/frame_000.png",
+          "animations/cross_punch_attack-7324be80/west/frame_001.png",
+          "animations/cross_punch_attack-7324be80/west/frame_002.png",
+          "animations/cross_punch_attack-7324be80/west/frame_003.png",
+          "animations/cross_punch_attack-7324be80/west/frame_004.png",
+          "animations/cross_punch_attack-7324be80/west/frame_005.png"
+        ],
+        "north": [
+          "animations/cross_punch_attack-7324be80/north/frame_000.png",
+          "animations/cross_punch_attack-7324be80/north/frame_001.png",
+          "animations/cross_punch_attack-7324be80/north/frame_002.png",
+          "animations/cross_punch_attack-7324be80/north/frame_003.png",
+          "animations/cross_punch_attack-7324be80/north/frame_004.png",
+          "animations/cross_punch_attack-7324be80/north/frame_005.png"
+        ],
+        "east": [
+          "animations/cross_punch_attack-7324be80/east/frame_000.png",
+          "animations/cross_punch_attack-7324be80/east/frame_001.png",
+          "animations/cross_punch_attack-7324be80/east/frame_002.png",
+          "animations/cross_punch_attack-7324be80/east/frame_003.png",
+          "animations/cross_punch_attack-7324be80/east/frame_004.png",
+          "animations/cross_punch_attack-7324be80/east/frame_005.png"
+        ],
+        "south": [
+          "animations/cross_punch_attack-7324be80/south/frame_000.png",
+          "animations/cross_punch_attack-7324be80/south/frame_001.png",
+          "animations/cross_punch_attack-7324be80/south/frame_002.png",
+          "animations/cross_punch_attack-7324be80/south/frame_003.png",
+          "animations/cross_punch_attack-7324be80/south/frame_004.png",
+          "animations/cross_punch_attack-7324be80/south/frame_005.png"
+        ]
+      }
+    }
+  },
+  "export_version": "2.0",
+  "export_date": "2026-04-16T05:32:07.626227"
+}
