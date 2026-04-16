@@ -916,23 +916,63 @@ function drawCharacterFlierMount(ctx, unit, x, fy, groundY, ps, c, character, un
   const mountW = Math.round(ps * layout.width);
   const mountH = Math.round(ps * layout.height);
   const mountBottomY = fy + ps * 5.5;
+  const atk = unit.attackFlash > 0;
+  const atkP = atk ? Math.max(0, Math.min(1, (180 - unit.attackFlash) / 180)) : 0;
+
+  // Attack tilt + recoil
+  const tiltAngle = atk ? Math.sin(atkP * Math.PI) * 0.18 : 0;
+  const recoilX = atk ? -Math.sin(atkP * Math.PI * 2) * ps * 2.5 : 0;
+
+  // Thruster exhaust glow (always animating)
+  const thrustPhase = (unitAnim * 0.35) % (Math.PI * 2);
+  const thrustAlpha = 0.25 + Math.sin(thrustPhase) * 0.12;
+  const thrustW = 3 + Math.sin(thrustPhase * 1.7) * 1.2;
+  ctx.save();
+  ctx.globalAlpha = thrustAlpha;
+  drawPixelEllipse(ctx, x - ps * 2, mountBottomY + ps, thrustW, 1.5, ps, c.accent);
+  drawPixelEllipse(ctx, x + ps * 2, mountBottomY + ps, thrustW, 1.5, ps, c.accent);
+  ctx.globalAlpha = thrustAlpha * 0.5;
+  drawPixelEllipse(ctx, x, mountBottomY + ps * 2, thrustW * 0.7, 1, ps, '#ffffff');
+  ctx.globalAlpha = 1;
+  ctx.restore();
+
+  // Draw mount with tilt
+  ctx.save();
+  if (tiltAngle) {
+    ctx.translate(x + recoilX, mountBottomY - mountH * 0.5);
+    ctx.rotate(tiltAngle);
+    ctx.translate(-(x + recoilX), -(mountBottomY - mountH * 0.5));
+  }
+  const drawX = x + recoilX;
   const hasMountAsset = drawBottomCenteredImage(
     ctx,
     flierMountPath(character, unit.veterancy || 0),
-    x,
+    drawX,
     mountBottomY,
     mountW,
     mountH,
   );
 
-  if (!hasMountAsset) drawFallbackFlierMount(ctx, unit, x, fy + ps * 1.5, groundY, ps, c, character, unitAnim);
+  if (!hasMountAsset) drawFallbackFlierMount(ctx, unit, drawX, fy + ps * 1.5, groundY, ps, c, character, unitAnim);
   if ((unit.veterancy || 0) > 0) {
     const trim = lerpHex(c.accent, '#ffffff', 0.35);
     ctx.fillStyle = trim;
-    ctx.fillRect(x - ps, mountBottomY - mountH - ps, 2 * ps, ps);
-    if ((unit.veterancy || 0) > 1) ctx.fillRect(x + 4 * ps, mountBottomY - mountH * 0.55, ps, 3 * ps);
+    ctx.fillRect(drawX - ps, mountBottomY - mountH - ps, 2 * ps, ps);
+    if ((unit.veterancy || 0) > 1) ctx.fillRect(drawX + 4 * ps, mountBottomY - mountH * 0.55, ps, 3 * ps);
   }
-  drawHeroPilot(ctx, character, x, fy + ps * layout.seatYOffset, ps, unit.pilotScaleAdjust, unit.veterancy || 0);
+  drawHeroPilot(ctx, character, drawX, fy + ps * layout.seatYOffset, ps, unit.pilotScaleAdjust, unit.veterancy || 0);
+  ctx.restore();
+
+  // Attack muzzle flash
+  if (atk && atkP < 0.4) {
+    const flashAlpha = (1 - atkP / 0.4) * 0.7;
+    ctx.save();
+    ctx.globalAlpha = flashAlpha;
+    drawPixelEllipse(ctx, x + ps * 8, fy + ps * 2, 3, 2, ps, '#ffd36c');
+    drawPixelEllipse(ctx, x + ps * 8, fy + ps * 2, 2, 1, ps, '#ffffff');
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
 }
 
 // ━━━ Player Unit Type Renderers ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1710,11 +1750,15 @@ export function drawEnemyUnit(ctx, unit, x, groundY, scale, animFrame, world) {
 // ━━━ Projectiles ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 export function drawProjectile(ctx, projectile, x, y, scale, character) {
-  const ps = Math.max(2, Math.round(scale * (projectile.sizeBoost || 1)));
+  const vet = projectile.veterancy || 0;
+  const ps = Math.max(2, Math.round(scale * Math.min(1.72, projectile.sizeBoost || 1)));
   const colors = CHAR_COLORS[character] || CHAR_COLORS.dojocat;
   const isPlayer = projectile.team === 'player';
-  const fill = isPlayer ? colors.accent : '#9a5aaa';
-  const glow = isPlayer ? lerpHex(colors.accent, '#ffffff', 0.5) : '#c88add';
+  let fill = isPlayer ? colors.accent : '#9a5aaa';
+  let glow = isPlayer ? lerpHex(colors.accent, '#ffffff', 0.5) : '#c88add';
+  // Vet color tiers — intensity shifts instead of just growing bigger
+  if (vet >= 5) { fill = lerpHex(fill, '#ffffff', 0.45); glow = '#ffffff'; }
+  else if (vet >= 3) { fill = lerpHex(fill, '#ffd700', 0.35); glow = lerpHex(glow, '#ffd700', 0.4); }
   const kind = projectile.variant || projectile.kind;
 
   ctx.save();
@@ -1814,7 +1858,11 @@ export function drawProjectile(ctx, projectile, x, y, scale, character) {
       drawPixelEllipse(ctx, x, y, 2, 2, ps, fill);
       drawPixelEllipse(ctx, x, y, 1, 1, ps, glow);
   }
-  if ((projectile.veterancy || 0) > 0) drawPixelEllipse(ctx, x, y, 4, 2, ps, glow, 0.18 + Math.min(0.25, (projectile.veterancy || 0) * 0.05));
+  if (vet > 0) {
+    const glowCol = vet >= 5 ? '#ffffff' : vet >= 3 ? '#ffd700' : glow;
+    drawPixelEllipse(ctx, x, y, 4, 2, ps, glowCol, 0.18 + Math.min(0.3, vet * 0.06));
+    if (vet >= 3) { px(ctx, x, y - ps, ps, glowCol); ctx.globalAlpha = 0.3; px(ctx, x - ps, y, ps, glowCol); ctx.globalAlpha = 1; }
+  }
   ctx.restore();
 }
 
