@@ -1,0 +1,87 @@
+{
+  "character": {
+    "id": "1cff0735-0e8a-450e-8f0a-83bb6dcb312f",
+    "name": "Cloud Strider",
+    "prompt": "orange tabby cat humanoid martial arts monk with small white feathered wings, blue karate belt gi, floating pose, friendly anime style",
+    "size": {
+      "width": 68,
+      "height": 68
+    },
+    "template_id": "mannequin",
+    "directions": 4,
+    "view": "low top-down",
+    "created_at": "2026-04-16T16:12:32.221816+00:00"
+  },
+  "frames": {
+    "rotations": {
+      "south": "rotations/south.png",
+      "west": "rotations/west.png",
+      "east": "rotations/east.png",
+      "north": "rotations/north.png"
+    },
+    "animations": {
+      "animating-1b3c7cf2": {
+        "west": [
+          "animations/animating-1b3c7cf2/west/frame_000.png",
+          "animations/animating-1b3c7cf2/west/frame_001.png",
+          "animations/animating-1b3c7cf2/west/frame_002.png",
+          "animations/animating-1b3c7cf2/west/frame_003.png"
+        ],
+        "south": [
+          "animations/animating-1b3c7cf2/south/frame_000.png",
+          "animations/animating-1b3c7cf2/south/frame_001.png",
+          "animations/animating-1b3c7cf2/south/frame_002.png",
+          "animations/animating-1b3c7cf2/south/frame_003.png"
+        ],
+        "north": [
+          "animations/animating-1b3c7cf2/north/frame_000.png",
+          "animations/animating-1b3c7cf2/north/frame_001.png",
+          "animations/animating-1b3c7cf2/north/frame_002.png",
+          "animations/animating-1b3c7cf2/north/frame_003.png"
+        ],
+        "east": [
+          "animations/animating-1b3c7cf2/east/frame_000.png",
+          "animations/animating-1b3c7cf2/east/frame_001.png",
+          "animations/animating-1b3c7cf2/east/frame_002.png",
+          "animations/animating-1b3c7cf2/east/frame_003.png"
+        ]
+      },
+      "cross_punch_attack-bfd0a066": {
+        "north": [
+          "animations/cross_punch_attack-bfd0a066/north/frame_000.png",
+          "animations/cross_punch_attack-bfd0a066/north/frame_001.png",
+          "animations/cross_punch_attack-bfd0a066/north/frame_002.png",
+          "animations/cross_punch_attack-bfd0a066/north/frame_003.png",
+          "animations/cross_punch_attack-bfd0a066/north/frame_004.png",
+          "animations/cross_punch_attack-bfd0a066/north/frame_005.png"
+        ],
+        "south": [
+          "animations/cross_punch_attack-bfd0a066/south/frame_000.png",
+          "animations/cross_punch_attack-bfd0a066/south/frame_001.png",
+          "animations/cross_punch_attack-bfd0a066/south/frame_002.png",
+          "animations/cross_punch_attack-bfd0a066/south/frame_003.png",
+          "animations/cross_punch_attack-bfd0a066/south/frame_004.png",
+          "animations/cross_punch_attack-bfd0a066/south/frame_005.png"
+        ],
+        "west": [
+          "animations/cross_punch_attack-bfd0a066/west/frame_000.png",
+          "animations/cross_punch_attack-bfd0a066/west/frame_001.png",
+          "animations/cross_punch_attack-bfd0a066/west/frame_002.png",
+          "animations/cross_punch_attack-bfd0a066/west/frame_003.png",
+          "animations/cross_punch_attack-bfd0a066/west/frame_004.png",
+          "animations/cross_punch_attack-bfd0a066/west/frame_005.png"
+        ],
+        "east": [
+          "animations/cross_punch_attack-bfd0a066/east/frame_000.png",
+          "animations/cross_punch_attack-bfd0a066/east/frame_001.png",
+          "animations/cross_punch_attack-bfd0a066/east/frame_002.png",
+          "animations/cross_punch_attack-bfd0a066/east/frame_003.png",
+          "animations/cross_punch_attack-bfd0a066/east/frame_004.png",
+          "animations/cross_punch_attack-bfd0a066/east/frame_005.png"
+        ]
+      }
+    }
+  },
+  "export_version": "2.0",
+  "export_date": "2026-04-16T16:29:27.161389"
+}

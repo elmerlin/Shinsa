@@ -2,10 +2,10 @@ const BASE_PATH = '/pet-battle/characters';
 const ENEMY_BASE_PATH = '/pet-battle/enemies';
 
 const CHARACTERS = [
-  'dojocat-meatshield', 'dojocat-brawler', 'dojocat-ranged', 'dojocat-tank',
-  'buu-meatshield', 'buu-brawler', 'buu-ranged', 'buu-tank',
-  'devit-meatshield', 'devit-brawler', 'devit-ranged', 'devit-tank',
-  'pixiu-meatshield', 'pixiu-brawler', 'pixiu-ranged', 'pixiu-tank',
+  'dojocat-meatshield', 'dojocat-brawler', 'dojocat-ranged', 'dojocat-tank', 'dojocat-flier',
+  'buu-meatshield', 'buu-brawler', 'buu-ranged', 'buu-tank', 'buu-flier',
+  'devit-meatshield', 'devit-brawler', 'devit-ranged', 'devit-tank', 'devit-flier',
+  'pixiu-meatshield', 'pixiu-brawler', 'pixiu-ranged', 'pixiu-tank', 'pixiu-flier',
 ];
 
 const WORLDS = ['fire', 'water', 'rock', 'ice', 'grassland'];

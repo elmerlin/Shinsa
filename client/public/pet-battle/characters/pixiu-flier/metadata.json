@@ -1,0 +1,87 @@
+{
+  "character": {
+    "id": "53ebb208-17ec-418a-a15a-766dc5f3e757",
+    "name": "Jade Phoenix",
+    "prompt": "celestial jade green phoenix humanoid spirit with large feathered wings, gold celestial armor, flowing tail feathers, mythical Chinese creature",
+    "size": {
+      "width": 68,
+      "height": 68
+    },
+    "template_id": "mannequin",
+    "directions": 4,
+    "view": "low top-down",
+    "created_at": "2026-04-16T16:12:34.143008+00:00"
+  },
+  "frames": {
+    "rotations": {
+      "south": "rotations/south.png",
+      "west": "rotations/west.png",
+      "east": "rotations/east.png",
+      "north": "rotations/north.png"
+    },
+    "animations": {
+      "animating-6547df7b": {
+        "north": [
+          "animations/animating-6547df7b/north/frame_000.png",
+          "animations/animating-6547df7b/north/frame_001.png",
+          "animations/animating-6547df7b/north/frame_002.png",
+          "animations/animating-6547df7b/north/frame_003.png"
+        ],
+        "south": [
+          "animations/animating-6547df7b/south/frame_000.png",
+          "animations/animating-6547df7b/south/frame_001.png",
+          "animations/animating-6547df7b/south/frame_002.png",
+          "animations/animating-6547df7b/south/frame_003.png"
+        ],
+        "east": [
+          "animations/animating-6547df7b/east/frame_000.png",
+          "animations/animating-6547df7b/east/frame_001.png",
+          "animations/animating-6547df7b/east/frame_002.png",
+          "animations/animating-6547df7b/east/frame_003.png"
+        ],
+        "west": [
+          "animations/animating-6547df7b/west/frame_000.png",
+          "animations/animating-6547df7b/west/frame_001.png",
+          "animations/animating-6547df7b/west/frame_002.png",
+          "animations/animating-6547df7b/west/frame_003.png"
+        ]
+      },
+      "cross_punch_attack-231cb83c": {
+        "west": [
+          "animations/cross_punch_attack-231cb83c/west/frame_000.png",
+          "animations/cross_punch_attack-231cb83c/west/frame_001.png",
+          "animations/cross_punch_attack-231cb83c/west/frame_002.png",
+          "animations/cross_punch_attack-231cb83c/west/frame_003.png",
+          "animations/cross_punch_attack-231cb83c/west/frame_004.png",
+          "animations/cross_punch_attack-231cb83c/west/frame_005.png"
+        ],
+        "north": [
+          "animations/cross_punch_attack-231cb83c/north/frame_000.png",
+          "animations/cross_punch_attack-231cb83c/north/frame_001.png",
+          "animations/cross_punch_attack-231cb83c/north/frame_002.png",
+          "animations/cross_punch_attack-231cb83c/north/frame_003.png",
+          "animations/cross_punch_attack-231cb83c/north/frame_004.png",
+          "animations/cross_punch_attack-231cb83c/north/frame_005.png"
+        ],
+        "east": [
+          "animations/cross_punch_attack-231cb83c/east/frame_000.png",
+          "animations/cross_punch_attack-231cb83c/east/frame_001.png",
+          "animations/cross_punch_attack-231cb83c/east/frame_002.png",
+          "animations/cross_punch_attack-231cb83c/east/frame_003.png",
+          "animations/cross_punch_attack-231cb83c/east/frame_004.png",
+          "animations/cross_punch_attack-231cb83c/east/frame_005.png"
+        ],
+        "south": [
+          "animations/cross_punch_attack-231cb83c/south/frame_000.png",
+          "animations/cross_punch_attack-231cb83c/south/frame_001.png",
+          "animations/cross_punch_attack-231cb83c/south/frame_002.png",
+          "animations/cross_punch_attack-231cb83c/south/frame_003.png",
+          "animations/cross_punch_attack-231cb83c/south/frame_004.png",
+          "animations/cross_punch_attack-231cb83c/south/frame_005.png"
+        ]
+      }
+    }
+  },
+  "export_version": "2.0",
+  "export_date": "2026-04-16T16:29:34.689561"
+}
