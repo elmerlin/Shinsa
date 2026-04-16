@@ -398,15 +398,6 @@ export default function PetBattleModal({ open, onClose, character, onComplete, s
             </div>
           </div>
 
-          <div className="mb-2 rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 py-2">
-            <div className="text-[10px] font-black tracking-[0.18em] uppercase text-white/35 mb-1">How to play</div>
-            <div className="space-y-0.5 text-[10px] text-white/55 leading-relaxed">
-              <div><span className="text-amber-300/80 font-bold">1-5</span> Deploy units · <span className="text-sky-300/80 font-bold">6</span> Burst skill</div>
-              <div><span className="text-amber-300/80 font-bold">7-9</span> Upgrade Flow (+aura/s), Reserve (max aura), Rhythm (faster cooldowns)</div>
-              <div className="text-white/40">Skyguard targets air first · Fliers bypass ground · Tank does splash</div>
-            </div>
-          </div>
-
           <button
             onClick={handleStart}
             className="w-full h-12 rounded-xl border border-orange-400/30 bg-orange-500/15 text-orange-100 font-black tracking-wide hover:bg-orange-500/20 active:scale-[0.99] transition-all"

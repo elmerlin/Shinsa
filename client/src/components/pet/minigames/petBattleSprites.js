@@ -1941,22 +1941,90 @@ export function drawAuraMeter(ctx, x, y, width, aura, auraMax, auraLevel) {
 
 export function drawStartScreen(ctx, w, h, character) {
   const colors = CHAR_COLORS[character] || CHAR_COLORS.dojocat;
-  ctx.fillStyle = 'rgba(10, 12, 24, 0.48)';
+  ctx.fillStyle = 'rgba(10, 12, 24, 0.52)';
   ctx.fillRect(0, 0, w, h);
-  const portraitSize = Math.max(56, Math.min(92, Math.round(h * 0.16)));
-  drawBottomCenteredImage(ctx, heroBasePath(character), w / 2, h * 0.3, portraitSize, portraitSize);
+
   ctx.textAlign = 'center';
+
+  // ── Title ──
   ctx.fillStyle = '#ffffff';
   ctx.font = '900 28px system-ui, -apple-system, sans-serif';
-  ctx.fillText('PET BATTLE', w / 2, h * 0.2);
+  ctx.fillText('PET BATTLE', w / 2, h * 0.1);
+
   ctx.fillStyle = colors.accent;
-  ctx.font = '700 12px system-ui, -apple-system, sans-serif';
-  ctx.fillText('Command ground troops, air units, and a timed burst skill', w / 2, h * 0.38);
-  ctx.fillStyle = 'rgba(255,255,255,0.82)';
   ctx.font = '600 11px system-ui, -apple-system, sans-serif';
-  ctx.fillText('1-5 / QWERT to deploy units • 6 / Y for Comet Burst', w / 2, h * 0.5);
-  ctx.fillText('7-9 / UIO upgrade Flow, Reserve, and Rhythm', w / 2, h * 0.55);
-  ctx.fillText('Skyguard targets air first. Fliers skip the ground frontline.', w / 2, h * 0.6);
+  ctx.fillText('Command ground troops, air units, and a burst skill', w / 2, h * 0.16);
+
+  // ── Pixel art unit lineup ──
+  const unitTypes = ['meatshield', 'brawler', 'ranged', 'tank'];
+  const spriteH = Math.max(28, Math.min(48, Math.round(h * 0.11)));
+  const spacing = Math.min(spriteH * 1.8, w / 5.5);
+  const lineupBottomY = h * 0.35;
+
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  unitTypes.forEach((type, i) => {
+    const img = getRotation(character, type, 'south');
+    if (!img) return;
+    const aspect = img.width / img.height;
+    const sw = spriteH * aspect;
+    const sx = w / 2 + (i - (unitTypes.length - 1) / 2) * spacing;
+    ctx.drawImage(img, sx - sw / 2, lineupBottomY - spriteH, sw, spriteH);
+  });
+  ctx.restore();
+
+  // ── How to play panel ──
+  const panelW = Math.min(w * 0.88, 310);
+  const panelX = (w - panelW) / 2;
+  const panelTop = h * 0.40;
+  const panelH = h * 0.52;
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.30)';
+  if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(panelX, panelTop, panelW, panelH, 6); ctx.fill(); }
+  else ctx.fillRect(panelX, panelTop, panelW, panelH);
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
+  ctx.lineWidth = 1;
+  if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(panelX, panelTop, panelW, panelH, 6); ctx.stroke(); }
+
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+  ctx.font = '800 9px system-ui, -apple-system, sans-serif';
+  ctx.fillText('H O W   T O   P L A Y', w / 2, panelTop + 18);
+
+  // Helper to draw "key  description" centered with two colors
+  const drawKeyLine = (key, desc, y, keyCol, descCol) => {
+    ctx.font = '700 11px system-ui, -apple-system, sans-serif';
+    const kW = ctx.measureText(key + '  ').width;
+    ctx.font = '500 11px system-ui, -apple-system, sans-serif';
+    const dW = ctx.measureText(desc).width;
+    const sx = w / 2 - (kW + dW) / 2;
+    ctx.textAlign = 'left';
+    ctx.font = '700 11px system-ui, -apple-system, sans-serif';
+    ctx.fillStyle = keyCol;
+    ctx.fillText(key, sx, y);
+    ctx.font = '500 11px system-ui, -apple-system, sans-serif';
+    ctx.fillStyle = descCol;
+    ctx.fillText(desc, sx + kW, y);
+    ctx.textAlign = 'center';
+  };
+
+  const amber = 'rgba(252, 211, 77, 0.88)';
+  const sky = 'rgba(125, 211, 252, 0.88)';
+  const text = 'rgba(255, 255, 255, 0.62)';
+  const dim = 'rgba(255, 255, 255, 0.36)';
+  const lh = Math.max(18, h * 0.055);
+  let y = panelTop + 38;
+
+  drawKeyLine('1-5', 'Deploy units (QWERT)', y, amber, text); y += lh;
+  drawKeyLine('6', 'Comet Burst skill (Y)', y, sky, text); y += lh;
+  drawKeyLine('7', 'Upgrade Flow — +aura/s (U)', y, amber, text); y += lh;
+  drawKeyLine('8', 'Upgrade Reserve — max aura (I)', y, amber, text); y += lh;
+  drawKeyLine('9', 'Upgrade Rhythm — faster cooldowns (O)', y, amber, text); y += lh * 1.3;
+
+  ctx.fillStyle = dim;
+  ctx.font = '500 10px system-ui, -apple-system, sans-serif';
+  ctx.fillText('Skyguard targets air first · Fliers bypass ground', w / 2, y);
+  y += Math.max(14, h * 0.04);
+  ctx.fillText('Tank does splash · Upgrades carry between stages', w / 2, y);
+
   ctx.textAlign = 'left';
 }
 
