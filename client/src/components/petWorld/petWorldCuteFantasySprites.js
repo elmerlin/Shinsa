@@ -944,10 +944,30 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
       // its own organic wang transition. Stone and dirt are painted
       // independently so a grass tile bordering both gets both textures on
       // the appropriate corners.
+      //
+      // "Fill enclosed grass" rule: count cardinal path neighbors for each
+      // variant. A grass cell with ≥ 3 of 4 cardinal neighbors (N/E/S/W) as
+      // the same path variant is treated as enclosed and rendered as solid
+      // path at full opacity. This hides accidental grass holes inside
+      // path areas without affecting genuine path edges (where at most 2
+      // cardinal neighbors are path).
+      const cardinalPathCount = (variant) => {
+        let c = 0;
+        if (neighbors.n_pathVariant === variant) c += 1;
+        if (neighbors.e_pathVariant === variant) c += 1;
+        if (neighbors.s_pathVariant === variant) c += 1;
+        if (neighbors.w_pathVariant === variant) c += 1;
+        return c;
+      };
       for (const variant of ['dirt', 'stone']) {
         const idx = wangIdxForVariant(variant);
         if (idx === 0) continue;
-        if (!isShoreTransition) {
+        const enclosed = !isShoreTransition && cardinalPathCount(variant) >= 3;
+        if (enclosed) {
+          // Solid fill — render the all-path tile (idx 15) at full opacity
+          // so any grass base underneath is hidden.
+          drawPathTile(variant, 15, 1);
+        } else if (!isShoreTransition) {
           drawPathTile(variant, idx, 0.9);
         } else {
           // Shore tile: clip transitions to grass quadrants only, so the
