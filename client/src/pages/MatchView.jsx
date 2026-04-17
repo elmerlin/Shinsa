@@ -689,8 +689,8 @@ export default function MatchView() {
         </div>
       )}
 
-      {/* Scoring Section - Gauntlet (Combined Score) */}
-      {isGauntlet && status === 'READY' && (
+      {/* Scoring Section - Legacy Gauntlet (Combined Score) */}
+      {gauntletResults && status === 'READY' && (
         <div className="space-y-3 sm:space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="font-display font-bold text-lg">Score Entry</h3>
