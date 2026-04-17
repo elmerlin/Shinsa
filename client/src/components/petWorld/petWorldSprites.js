@@ -254,6 +254,50 @@ export function analyzeTerrainGrid(grid, buildings = []) {
     }
   }
 
+  // Ray-cast fallback: for cells that CC classification didn't catch
+  // (usually because their component leaks to outdoor grass via a thin
+  // corridor so the whole component gets skipped), check how many of the
+  // 8 directional rays hit a nearby path before leaving the map. If ≥ 6
+  // of 8 hit within a reasonable distance, the cell is "surrounded" by
+  // path regardless of connectivity and should fill.
+  const RAY_DIRS = [
+    [0, -1], [0, 1], [1, 0], [-1, 0],
+    [1, -1], [-1, -1], [1, 1], [-1, 1],
+  ];
+  const MAX_RAY_DIST = 10;
+  let rayFilledCount = 0;
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      if (occupancy[y][x]?.isPath) continue;
+      if (enclosedVariantGrid[y][x]) continue; // already marked by CC
+      let hits = 0;
+      let dirt = 0;
+      let stone = 0;
+      for (const [dx, dy] of RAY_DIRS) {
+        let cx = x + dx;
+        let cy = y + dy;
+        let steps = 0;
+        while (cx >= 0 && cy >= 0 && cx < width && cy < height && steps < MAX_RAY_DIST) {
+          const sample = occupancy[cy][cx];
+          if (sample?.isPath) {
+            hits += 1;
+            if (sample.pathVariant === 'dirt') dirt += 1;
+            else if (sample.pathVariant === 'stone') stone += 1;
+            break;
+          }
+          cx += dx;
+          cy += dy;
+          steps += 1;
+        }
+      }
+      if (hits < 6) continue;
+      const variant = stone >= dirt && stone > 0 ? 'stone' : dirt > 0 ? 'dirt' : null;
+      if (!variant) continue;
+      enclosedVariantGrid[y][x] = variant;
+      rayFilledCount += 1;
+    }
+  }
+
   // Dev-only diagnostic so we can confirm the detection is firing.
   if (typeof window !== 'undefined') {
     let enclosedCount = 0;
@@ -271,6 +315,7 @@ export function analyzeTerrainGrid(grid, buildings = []) {
       height,
       componentCount: components.length,
       enclosedComponentCount,
+      rayFilledCount,
     };
   }
 
