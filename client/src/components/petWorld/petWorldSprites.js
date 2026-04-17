@@ -169,103 +169,92 @@ export function analyzeTerrainGrid(grid, buildings = []) {
     })
   ));
 
-  // Flood-fill from the map border to find grass regions enclosed by paths.
-  // A non-path cell that cannot reach the map edge without crossing a path
-  // is "enclosed" and should render with the surrounding path's texture —
-  // otherwise small decorative grass holes (2x2 etc.) show up as visible
-  // pits in the middle of the paved area.
-  const enclosedGrid = Array.from({ length: height }, () => new Uint8Array(width));
+  // Connected-component classification: label every non-path cell into a
+  // 4-connected component, then decide per-component whether it's a "hole"
+  // inside a paved area. A component is a hole if:
+  //   - area is small enough to be decorative rather than a meadow,
+  //   - its boundary is dominantly path edges vs map-border edges.
+  // This catches cases that strict flood-fill misses (a 1-cell leak to the
+  // outside) and cases that iterative neighbour-majority can't propagate
+  // through (the interior of a 4×4 or larger hole where non-corner edge
+  // cells only see 3 real path neighbours).
+  const componentId = Array.from({ length: height }, () => new Int32Array(width).fill(-1));
+  const components = [];
   const queueArr = new Int32Array(width * height);
-  let head = 0;
-  let tail = 0;
-  // Seed every non-path cell as enclosed; BFS from borders clears reachable ones.
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      if (!occupancy[y][x]?.isPath) enclosedGrid[y][x] = 1;
+  for (let seedY = 0; seedY < height; seedY += 1) {
+    for (let seedX = 0; seedX < width; seedX += 1) {
+      if (occupancy[seedY][seedX]?.isPath) continue;
+      if (componentId[seedY][seedX] !== -1) continue;
+      const id = components.length;
+      const comp = {
+        cells: [],
+        pathEdges: 0,
+        borderEdges: 0,
+        dirtEdges: 0,
+        stoneEdges: 0,
+      };
+      components.push(comp);
+      let head = 0;
+      let tail = 0;
+      queueArr[tail++] = seedY * width + seedX;
+      componentId[seedY][seedX] = id;
+      while (head < tail) {
+        const idx = queueArr[head++];
+        const cx = idx % width;
+        const cy = (idx - cx) / width;
+        comp.cells.push(idx);
+        const visit = (nx, ny) => {
+          if (nx < 0 || ny < 0 || nx >= width || ny >= height) {
+            comp.borderEdges += 1;
+            return;
+          }
+          const neighbor = occupancy[ny][nx];
+          if (neighbor?.isPath) {
+            comp.pathEdges += 1;
+            if (neighbor.pathVariant === 'dirt') comp.dirtEdges += 1;
+            else if (neighbor.pathVariant === 'stone') comp.stoneEdges += 1;
+            return;
+          }
+          if (componentId[ny][nx] !== -1) return;
+          componentId[ny][nx] = id;
+          queueArr[tail++] = ny * width + nx;
+        };
+        visit(cx + 1, cy);
+        visit(cx - 1, cy);
+        visit(cx, cy + 1);
+        visit(cx, cy - 1);
+      }
     }
   }
-  const seedBorder = (x, y) => {
-    if (x < 0 || y < 0 || x >= width || y >= height) return;
-    if (enclosedGrid[y][x]) {
-      enclosedGrid[y][x] = 0;
-      queueArr[tail++] = y * width + x;
-    }
-  };
-  for (let x = 0; x < width; x += 1) { seedBorder(x, 0); seedBorder(x, height - 1); }
-  for (let y = 0; y < height; y += 1) { seedBorder(0, y); seedBorder(width - 1, y); }
-  while (head < tail) {
-    const idx = queueArr[head++];
-    const cx = idx % width;
-    const cy = (idx - cx) / width;
-    if (cx + 1 < width && enclosedGrid[cy][cx + 1]) { enclosedGrid[cy][cx + 1] = 0; queueArr[tail++] = cy * width + cx + 1; }
-    if (cx - 1 >= 0 && enclosedGrid[cy][cx - 1]) { enclosedGrid[cy][cx - 1] = 0; queueArr[tail++] = cy * width + cx - 1; }
-    if (cy + 1 < height && enclosedGrid[cy + 1][cx]) { enclosedGrid[cy + 1][cx] = 0; queueArr[tail++] = (cy + 1) * width + cx; }
-    if (cy - 1 >= 0 && enclosedGrid[cy - 1][cx]) { enclosedGrid[cy - 1][cx] = 0; queueArr[tail++] = (cy - 1) * width + cx; }
-  }
-  // For each enclosed cell, choose the dominant surrounding path variant
-  // (5x5 window) so the pseudo-path texture matches the containing area.
+
+  // Pick the variant that best matches each hole's surrounding path.
   const enclosedVariantGrid = Array.from({ length: height }, () => new Array(width).fill(null));
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      if (!enclosedGrid[y][x]) continue;
-      let dirt = 0;
-      let stone = 0;
-      for (let dy = -2; dy <= 2; dy += 1) {
-        for (let dx = -2; dx <= 2; dx += 1) {
-          const s = occupancy[y + dy]?.[x + dx];
-          if (!s?.isPath) continue;
-          if (s.pathVariant === 'dirt') dirt += 1;
-          else if (s.pathVariant === 'stone') stone += 1;
-        }
-      }
-      if (stone > 0 && stone >= dirt) enclosedVariantGrid[y][x] = 'stone';
-      else if (dirt > 0) enclosedVariantGrid[y][x] = 'dirt';
+  const MAX_HOLE_AREA = 120; // cap so outdoor meadows never get painted
+  let enclosedComponentCount = 0;
+  for (const comp of components) {
+    const { cells, pathEdges, borderEdges, dirtEdges, stoneEdges } = comp;
+    if (pathEdges === 0) continue;
+    if (cells.length > MAX_HOLE_AREA) continue;
+    // Stricter for components that touch the map border (risk of painting
+    // an outdoor region): require the path boundary to dominate ≥ 3×.
+    // For fully-interior components (no border edges), any path boundary
+    // qualifies — that's a strict hole.
+    if (borderEdges > 0 && pathEdges < borderEdges * 3) continue;
+    const variant = stoneEdges >= dirtEdges && stoneEdges > 0
+      ? 'stone'
+      : dirtEdges > 0
+        ? 'dirt'
+        : null;
+    if (!variant) continue;
+    enclosedComponentCount += 1;
+    for (const idx of cells) {
+      const cx = idx % width;
+      const cy = (idx - cx) / width;
+      enclosedVariantGrid[cy][cx] = variant;
     }
   }
 
-  // Neighbourhood-majority pass: a grass cell that isn't strictly enclosed
-  // but has ≥ 5 of its 8 neighbours as the same path variant (counting
-  // real paths AND already-marked pseudo-paths) should still render as
-  // path. Catches 2x2 hole corners (5/8) and cases where the flood-fill
-  // leaks through a single-cell diagonal or cardinal gap. Iterates until
-  // no new cells are marked, so corners propagate inward through larger
-  // holes.
-  const variantAt = (x, y) => {
-    if (x < 0 || y < 0 || x >= width || y >= height) return null;
-    const sample = occupancy[y][x];
-    if (sample?.isPath) return sample.pathVariant;
-    return enclosedVariantGrid[y][x] || null;
-  };
-  const NEIGHBOR_DIRS = [
-    [0, -1], [0, 1], [1, 0], [-1, 0],
-    [1, -1], [-1, -1], [1, 1], [-1, 1],
-  ];
-  for (let iter = 0; iter < 8; iter += 1) {
-    let changed = false;
-    for (let y = 0; y < height; y += 1) {
-      for (let x = 0; x < width; x += 1) {
-        if (occupancy[y][x]?.isPath) continue;
-        if (enclosedVariantGrid[y][x]) continue; // already marked
-        let dirt = 0;
-        let stone = 0;
-        for (const [dx, dy] of NEIGHBOR_DIRS) {
-          const v = variantAt(x + dx, y + dy);
-          if (v === 'dirt') dirt += 1;
-          else if (v === 'stone') stone += 1;
-        }
-        if (stone >= 5 && stone >= dirt) {
-          enclosedVariantGrid[y][x] = 'stone';
-          changed = true;
-        } else if (dirt >= 5) {
-          enclosedVariantGrid[y][x] = 'dirt';
-          changed = true;
-        }
-      }
-    }
-    if (!changed) break;
-  }
-
-  // Dev-only diagnostic so we can confirm enclosure detection is firing.
+  // Dev-only diagnostic so we can confirm the detection is firing.
   if (typeof window !== 'undefined') {
     let enclosedCount = 0;
     let pathCount = 0;
@@ -275,7 +264,14 @@ export function analyzeTerrainGrid(grid, buildings = []) {
         if (!occupancy[y][x]?.isPath && enclosedVariantGrid[y][x]) enclosedCount += 1;
       }
     }
-    window.__petWorldPathDebug = { pathCount, enclosedCount, width, height };
+    window.__petWorldPathDebug = {
+      pathCount,
+      enclosedCount,
+      width,
+      height,
+      componentCount: components.length,
+      enclosedComponentCount,
+    };
   }
 
   return Array.from({ length: height }, (_, y) => (
