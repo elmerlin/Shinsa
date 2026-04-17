@@ -431,7 +431,7 @@ const GENS = {
 };
 
 /* ═══ build room ═══ */
-function buildRoom(type, level) {
+export function buildRoom(type, level) {
   const cfg = CFG[type] || CFG.house;
   const lv = Math.min(3, Math.max(1, level || 1));
   const li = lv - 1;

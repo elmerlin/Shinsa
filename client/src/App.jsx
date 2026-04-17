@@ -72,6 +72,7 @@ const PetPage = lazy(() => import('./pages/PetPage'));
 const PetGuidePage = lazy(() => import('./pages/PetGuidePage'));
 const PetWorldPage = lazy(() => import('./pages/PetWorldPage'));
 const PetWorldVisitPage = lazy(() => import('./pages/PetWorldVisitPage'));
+const PetWorldInteriorRulesPage = lazy(() => import('./pages/PetWorldInteriorRulesPage'));
 const PetBomberRoom = lazy(() => import('./pages/PetBomberRoom'));
 const PiumonPage = lazy(() => import('./pages/PiumonPage'));
 const TranslationEditorDrawer = lazy(() => import('./components/TranslationEditorDrawer'));
@@ -1525,6 +1526,7 @@ export default function App() {
             <Route path="/pet" element={<PetPage />} />
             <Route path="/pet/guide" element={<PetGuidePage />} />
             <Route path="/pet/world" element={<PetWorldPage />} />
+            <Route path="/pet/world/interior-rules" element={<PetWorldInteriorRulesPage />} />
             <Route path="/pet/world/:userId" element={<PetWorldVisitPage />} />
             <Route path="/pet/bomber/:roomId" element={<PetBomberRoom />} />
             <Route path="/piumon" element={canAccessAdmin ? <PiumonPage /> : <Navigate to="/admin" replace />} />
