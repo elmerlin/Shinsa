@@ -92,6 +92,8 @@ const PATH_NEIGHBOR_OFFSETS = [
   [1, -1, 1], [-1, -1, 1], [1, 1, 1], [-1, 1, 1],
 ];
 
+const PATH_LEAK_SEAL_RADIUS = 2;
+
 function clamp01(value) {
   return Math.max(0, Math.min(1, value));
 }
@@ -167,15 +169,24 @@ function sealRenderedPathLeaks(occupancy, renderedVariantGrid) {
       Array.from({ length: width }, (_, x) => isVariantSource(x, y, variant))
     ));
 
-    // Temporarily dilate the rendered path one tile outward so thin leaks to
-    // the outer meadow close up during the reachability pass. This lets us
-    // reclassify the leftover pockets as part of the same plaza/path shape.
-    for (let y = 0; y < height; y += 1) {
-      for (let x = 0; x < width; x += 1) {
-        if (grownMask[y][x]) continue;
-        if (!occupancy[y][x]?.openGround || renderedVariantGrid[y][x]) continue;
-        if (PATH_CARDINAL_OFFSETS.some(([dx, dy]) => isVariantSource(x + dx, y + dy, variant))) {
-          grownMask[y][x] = true;
+    // Temporarily dilate the rendered path outward so thin leaks to the
+    // outer meadow close up during the reachability pass. Two steps is still
+    // conservative enough to avoid swallowing normal meadows, but it catches
+    // the wider "green islands" that can remain inside a courtyard render.
+    for (let step = 0; step < PATH_LEAK_SEAL_RADIUS; step += 1) {
+      const nextMask = grownMask.map((row) => row.slice());
+      for (let y = 0; y < height; y += 1) {
+        for (let x = 0; x < width; x += 1) {
+          if (nextMask[y][x]) continue;
+          if (!occupancy[y][x]?.openGround || renderedVariantGrid[y][x]) continue;
+          if (PATH_CARDINAL_OFFSETS.some(([dx, dy]) => grownMask[y + dy]?.[x + dx])) {
+            nextMask[y][x] = true;
+          }
+        }
+      }
+      for (let y = 0; y < height; y += 1) {
+        for (let x = 0; x < width; x += 1) {
+          grownMask[y][x] = nextMask[y][x];
         }
       }
     }

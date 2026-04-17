@@ -86,6 +86,47 @@ function pick(arr, seed) {
   return arr[Math.abs(seed) % arr.length];
 }
 
+export function inferPromotedGrassPathVariant(neighbors, terrain = null) {
+  if (!neighbors) return null;
+  if (terrain?.enclosedByPath && terrain?.pathVariant) return terrain.pathVariant;
+
+  const evaluateVariant = (variant) => {
+    const matches = (dir) => neighbors[`${dir}_pathVariant`] === variant;
+    const n = matches('n');
+    const s = matches('s');
+    const e = matches('e');
+    const w = matches('w');
+    const ne = matches('ne');
+    const nw = matches('nw');
+    const se = matches('se');
+    const sw = matches('sw');
+
+    const cardinals = (n ? 1 : 0) + (s ? 1 : 0) + (e ? 1 : 0) + (w ? 1 : 0);
+    const diagonals = (ne ? 1 : 0) + (nw ? 1 : 0) + (se ? 1 : 0) + (sw ? 1 : 0);
+    const oppositeAxis = (n && s) || (e && w);
+    const cornerPocket = (n && w && nw) || (n && e && ne) || (s && w && sw) || (s && e && se);
+    const quadrantCoverage = (n || w || nw ? 1 : 0)
+      + (n || e || ne ? 1 : 0)
+      + (s || w || sw ? 1 : 0)
+      + (s || e || se ? 1 : 0);
+    const supportScore = cardinals * 5
+      + diagonals * 2
+      + (oppositeAxis ? 3 : 0)
+      + (cornerPocket ? 3 : 0)
+      + quadrantCoverage;
+    const promote = quadrantCoverage >= 4
+      || cardinals >= 3
+      || (oppositeAxis && diagonals >= 1)
+      || (cornerPocket && cardinals >= 2);
+    return promote ? supportScore : -1;
+  };
+
+  const dirtScore = evaluateVariant('dirt');
+  const stoneScore = evaluateVariant('stone');
+  if (dirtScore < 0 && stoneScore < 0) return null;
+  return stoneScore > dirtScore ? 'stone' : 'dirt';
+}
+
 // Subtle contact shadow — thin ground-line instead of floating blob disc
 function dropShadow(ctx, cx, cy, rx, ry, a) {
   ctx.save();
@@ -946,20 +987,28 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
       // decorative grass holes inside the paved area disappear.
       drawPathTile(terrain.pathVariant, 15, 1);
     } else {
+      const promotedVariant = !isShoreTransition
+        ? inferPromotedGrassPathVariant(neighbors, terrain)
+        : null;
+      if (promotedVariant) {
+        const idx = wangIdxForVariant(promotedVariant);
+        drawPathTile(promotedVariant, idx > 0 ? idx : 15, 1);
+      } else {
       // Grass / shore tile: let each path variant bleed onto the grass with
       // its own organic wang transition. Stone and dirt are painted
       // independently so a grass tile bordering both gets both textures on
       // the appropriate corners.
-      for (const variant of ['dirt', 'stone']) {
-        const idx = wangIdxForVariant(variant);
-        if (idx === 0) continue;
-        if (!isShoreTransition) {
-          drawPathTile(variant, idx, 0.9);
-        } else {
-          // Shore tile: clip transitions to grass quadrants only, so the
-          // path texture never covers the water portion of the wang base.
-          const maskedIdx = idx & wangIdx;
-          if (maskedIdx > 0) drawPathTileClipped(variant, maskedIdx, 0.9);
+        for (const variant of ['dirt', 'stone']) {
+          const idx = wangIdxForVariant(variant);
+          if (idx === 0) continue;
+          if (!isShoreTransition) {
+            drawPathTile(variant, idx, 0.9);
+          } else {
+            // Shore tile: clip transitions to grass quadrants only, so the
+            // path texture never covers the water portion of the wang base.
+            const maskedIdx = idx & wangIdx;
+            if (maskedIdx > 0) drawPathTileClipped(variant, maskedIdx, 0.9);
+          }
         }
       }
     }
@@ -973,6 +1022,7 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
   // Only on inland grass tiles — never on shore tiles (even mostly-grass ones)
   // or on cells we've painted as path-fill (they should look solid-paved).
   if (!hasPathBuilding && !isShoreTransition && !terrain?.enclosedByPath
+      && !inferPromotedGrassPathVariant(neighbors, terrain)
       && tile.t !== 'tree' && tile.t !== 'rock' && tile.t !== 'bush' && tile.t !== 'stump') {
     if (h % 6 === 0) {
       const variant = (h >>> 3) % FLOWER_GRASS_COUNT + 1;

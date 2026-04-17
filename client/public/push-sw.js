@@ -1,4 +1,4 @@
-self.__APP_VERSION__ = '2026-04-17-pet-world-path-gap-fix';
+self.__APP_VERSION__ = '2026-04-17-pet-world-path-gap-fix-v2';
 const STATIC_CACHE = `shinsa-static-${self.__APP_VERSION__}`;
 const RUNTIME_CACHE = `shinsa-runtime-${self.__APP_VERSION__}`;
 const OFFLINE_URL = '/offline.html';
