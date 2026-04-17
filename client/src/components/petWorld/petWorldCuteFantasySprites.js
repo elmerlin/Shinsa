@@ -971,7 +971,9 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
 
   /* ── Flower-grass overlays on ~16 % of open ground tiles ── */
   // Only on inland grass tiles — never on shore tiles (even mostly-grass ones)
-  if (!hasPathBuilding && !isShoreTransition && tile.t !== 'tree' && tile.t !== 'rock' && tile.t !== 'bush' && tile.t !== 'stump') {
+  // or on cells we've painted as path-fill (they should look solid-paved).
+  if (!hasPathBuilding && !isShoreTransition && !terrain?.enclosedByPath
+      && tile.t !== 'tree' && tile.t !== 'rock' && tile.t !== 'bush' && tile.t !== 'stump') {
     if (h % 6 === 0) {
       const variant = (h >>> 3) % FLOWER_GRASS_COUNT + 1;
       const fi = Math.floor((t * 0.002 + h * 0.07) % FLOWER_GRASS_FRAMES);

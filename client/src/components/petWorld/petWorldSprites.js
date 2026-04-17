@@ -254,47 +254,49 @@ export function analyzeTerrainGrid(grid, buildings = []) {
     }
   }
 
-  // Ray-cast fallback: for cells that CC classification didn't catch
-  // (usually because their component leaks to outdoor grass via a thin
-  // corridor so the whole component gets skipped), check how many of the
-  // 8 directional rays hit a nearby path before leaving the map. If ≥ 6
-  // of 8 hit within a reasonable distance, the cell is "surrounded" by
-  // path regardless of connectivity and should fill.
-  const RAY_DIRS = [
-    [0, -1], [0, 1], [1, 0], [-1, 0],
-    [1, -1], [-1, -1], [1, 1], [-1, 1],
+  // Iterative weighted-neighbor propagation: fills concave bays inside
+  // L/U/T path shapes that the CC classifier misses (because the bay is
+  // technically 4-connected to outdoor grass). For each grass cell,
+  // compute a weighted score of same-variant path neighbours:
+  //   cardinal (N/S/E/W) = 2, diagonal (NE/NW/SE/SW) = 1, max possible 12.
+  // Fill if score ≥ 5 for the dominant variant. Iterate until stable so
+  // freshly-filled cells can help their still-grass neighbours cross the
+  // threshold (propagates along a bay without over-expanding into open
+  // grass adjacent to a straight path edge — that caps at weighted 4).
+  const NEIGHBOR_OFFSETS = [
+    [0, -1, 2], [0, 1, 2], [1, 0, 2], [-1, 0, 2],
+    [1, -1, 1], [-1, -1, 1], [1, 1, 1], [-1, 1, 1],
   ];
-  const MAX_RAY_DIST = 10;
-  let rayFilledCount = 0;
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      if (occupancy[y][x]?.isPath) continue;
-      if (enclosedVariantGrid[y][x]) continue; // already marked by CC
-      let hits = 0;
-      let dirt = 0;
-      let stone = 0;
-      for (const [dx, dy] of RAY_DIRS) {
-        let cx = x + dx;
-        let cy = y + dy;
-        let steps = 0;
-        while (cx >= 0 && cy >= 0 && cx < width && cy < height && steps < MAX_RAY_DIST) {
-          const sample = occupancy[cy][cx];
-          if (sample?.isPath) {
-            hits += 1;
-            if (sample.pathVariant === 'dirt') dirt += 1;
-            else if (sample.pathVariant === 'stone') stone += 1;
-            break;
-          }
-          cx += dx;
-          cy += dy;
-          steps += 1;
+  const FILL_THRESHOLD = 5;
+  let propagateFilledCount = 0;
+  let changed = true;
+  let safetyPasses = 0;
+  while (changed && safetyPasses < 32) {
+    changed = false;
+    safetyPasses += 1;
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        if (occupancy[y][x]?.isPath) continue;
+        if (enclosedVariantGrid[y][x]) continue; // already filled
+        let dirtScore = 0;
+        let stoneScore = 0;
+        for (const [dx, dy, weight] of NEIGHBOR_OFFSETS) {
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+          const neighbour = occupancy[ny][nx];
+          const variant = neighbour?.isPath
+            ? neighbour.pathVariant
+            : enclosedVariantGrid[ny][nx];
+          if (variant === 'dirt') dirtScore += weight;
+          else if (variant === 'stone') stoneScore += weight;
         }
+        if (stoneScore < FILL_THRESHOLD && dirtScore < FILL_THRESHOLD) continue;
+        const variant = stoneScore >= dirtScore ? 'stone' : 'dirt';
+        enclosedVariantGrid[y][x] = variant;
+        propagateFilledCount += 1;
+        changed = true;
       }
-      if (hits < 6) continue;
-      const variant = stone >= dirt && stone > 0 ? 'stone' : dirt > 0 ? 'dirt' : null;
-      if (!variant) continue;
-      enclosedVariantGrid[y][x] = variant;
-      rayFilledCount += 1;
     }
   }
 
@@ -315,7 +317,8 @@ export function analyzeTerrainGrid(grid, buildings = []) {
       height,
       componentCount: components.length,
       enclosedComponentCount,
-      rayFilledCount,
+      propagateFilledCount,
+      safetyPasses,
     };
   }
 
