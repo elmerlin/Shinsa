@@ -1177,25 +1177,40 @@ const PIPELINE_STEPS = [
   },
 ];
 
+function piuRarity(price, owned) {
+  if (owned) return { rarity: 'common', weight: 6 };
+  const p = Number(price);
+  if (p <= 10)  return { rarity: 'common',    weight: 6 };
+  if (p <= 50)  return { rarity: 'common',    weight: 5 };
+  if (p <= 100) return { rarity: 'rare',      weight: 4 };
+  if (p <= 300) return { rarity: 'rare',      weight: 3 };
+  if (p <= 500) return { rarity: 'epic',      weight: 2 };
+  return          { rarity: 'legendary',  weight: 1 };
+}
+
 function createShopSeeds() {
-  return piuAvatarCatalog.map((item) => ({
-    id: `piu-${item.filename.replace('.png', '')}`,
-    name: item.name,
-    officialName: item.name,
-    preview: `/avatars/${item.filename}`,
-    source: 'PIUGAME Avatar Shop',
-    sourceNote: item.owned
-      ? 'Official PIUGAME roster import · already owned in source shop'
-      : `Official PIUGAME roster import · unlockable for ${item.price || '?'} PP`,
-    generationStatus: item.owned ? 'Source Owned' : 'Source Imported',
-    weight: item.owned ? 3 : 1,
-    lockedName: false,
-    ownedInShop: item.owned,
-    sourcePrice: item.price,
-    multiCharacter: false,
-    removed: false,
-    characterGroups: [],
-  }));
+  return piuAvatarCatalog.map((item) => {
+    const { rarity, weight } = piuRarity(item.price, item.owned);
+    return {
+      id: `piu-${item.filename.replace('.png', '')}`,
+      name: item.name,
+      officialName: item.name,
+      preview: `/avatars/${item.filename}`,
+      source: 'PIUGAME Avatar Shop',
+      sourceNote: item.owned
+        ? `Official PIUGAME roster import · already owned in source shop`
+        : `Official PIUGAME roster import · unlockable for ${item.price || '?'} PP`,
+      generationStatus: item.owned ? 'Source Owned' : 'Source Imported',
+      rarity,
+      weight,
+      lockedName: false,
+      ownedInShop: item.owned,
+      sourcePrice: item.price,
+      multiCharacter: false,
+      removed: false,
+      characterGroups: ['PIUGAME'],
+    };
+  });
 }
 
 function clampWeight(value) {
