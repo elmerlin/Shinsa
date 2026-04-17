@@ -940,13 +940,10 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
       const idx = sameIdx > 0 ? sameIdx : 15;
       drawPathTile(variant, idx);
     } else if (terrain?.enclosedByPath && terrain?.pathVariant) {
-      // Grass cell that is geometrically enclosed by path (no path-free
-      // route to the map border). Render as a solid path tile using the
-      // dominant surrounding variant so decorative grass holes inside the
-      // paved area disappear. Because analyzeTerrainGrid also advertises
-      // this cell's pathVariant to its neighbours, the adjacent real path
-      // cells now see this cell as path for their own wang lookups and
-      // render full interiors rather than grass-bump transitions.
+      // Grass cell that is geometrically enclosed by path (either by
+      // strict flood-fill or by neighbourhood-majority heuristic). Render
+      // as a solid path tile using the dominant surrounding variant so
+      // decorative grass holes inside the paved area disappear.
       drawPathTile(terrain.pathVariant, 15, 1);
     } else {
       // Grass / shore tile: let each path variant bleed onto the grass with
