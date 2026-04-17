@@ -223,6 +223,61 @@ export function analyzeTerrainGrid(grid, buildings = []) {
     }
   }
 
+  // Neighbourhood-majority pass: a grass cell that isn't strictly enclosed
+  // but has ≥ 5 of its 8 neighbours as the same path variant (counting
+  // real paths AND already-marked pseudo-paths) should still render as
+  // path. Catches 2x2 hole corners (5/8) and cases where the flood-fill
+  // leaks through a single-cell diagonal or cardinal gap. Iterates until
+  // no new cells are marked, so corners propagate inward through larger
+  // holes.
+  const variantAt = (x, y) => {
+    if (x < 0 || y < 0 || x >= width || y >= height) return null;
+    const sample = occupancy[y][x];
+    if (sample?.isPath) return sample.pathVariant;
+    return enclosedVariantGrid[y][x] || null;
+  };
+  const NEIGHBOR_DIRS = [
+    [0, -1], [0, 1], [1, 0], [-1, 0],
+    [1, -1], [-1, -1], [1, 1], [-1, 1],
+  ];
+  for (let iter = 0; iter < 8; iter += 1) {
+    let changed = false;
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        if (occupancy[y][x]?.isPath) continue;
+        if (enclosedVariantGrid[y][x]) continue; // already marked
+        let dirt = 0;
+        let stone = 0;
+        for (const [dx, dy] of NEIGHBOR_DIRS) {
+          const v = variantAt(x + dx, y + dy);
+          if (v === 'dirt') dirt += 1;
+          else if (v === 'stone') stone += 1;
+        }
+        if (stone >= 5 && stone >= dirt) {
+          enclosedVariantGrid[y][x] = 'stone';
+          changed = true;
+        } else if (dirt >= 5) {
+          enclosedVariantGrid[y][x] = 'dirt';
+          changed = true;
+        }
+      }
+    }
+    if (!changed) break;
+  }
+
+  // Dev-only diagnostic so we can confirm enclosure detection is firing.
+  if (typeof window !== 'undefined') {
+    let enclosedCount = 0;
+    let pathCount = 0;
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        if (occupancy[y][x]?.isPath) pathCount += 1;
+        if (!occupancy[y][x]?.isPath && enclosedVariantGrid[y][x]) enclosedCount += 1;
+      }
+    }
+    window.__petWorldPathDebug = { pathCount, enclosedCount, width, height };
+  }
+
   return Array.from({ length: height }, (_, y) => (
     Array.from({ length: width }, (_, x) => {
       const tile = occupancy[y]?.[x];
