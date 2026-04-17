@@ -425,6 +425,7 @@ export function analyzeTerrainGrid(grid, buildings = []) {
       );
 
       const enclosedPathVariant = !tile.isPath ? enclosedVariantGrid[y][x] : null;
+      const renderPathVariant = tile.pathVariant ?? enclosedPathVariant ?? null;
       return {
         openGround: tile.openGround,
         isWater: tile.isWater,
@@ -435,8 +436,10 @@ export function analyzeTerrainGrid(grid, buildings = []) {
         // lookups treat the hole as path. This lets the outer path cells
         // render a full interior (wang idx 15) over what would otherwise
         // be a visible grass pit.
-        pathVariant: tile.pathVariant ?? enclosedPathVariant,
+        pathVariant: renderPathVariant,
         enclosedByPath: enclosedPathVariant != null,
+        renderPathBuilding: !!renderPathVariant,
+        renderPathVariant,
         villageWear,
         waterRatio,
         foliageRatio,

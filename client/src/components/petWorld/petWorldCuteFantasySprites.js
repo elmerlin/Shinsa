@@ -888,8 +888,8 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
   /* ── Path auto-tiling (path↔grass Wang transitions) ── */
   // Each variant (dirt, stone) has its own wang texture and is computed separately,
   // so a stone path next to a dirt path gives a clean tile-edge seam between them.
-  const hasPathBuilding = tile.b != null && terrain?.isPathBuilding;
-  const ownVariant = terrain?.pathVariant || null;
+  const hasPathBuilding = !!terrain?.renderPathBuilding;
+  const ownVariant = terrain?.renderPathVariant || terrain?.pathVariant || null;
   if (neighbors) {
     // Compute a wang index for one variant — counts only neighbors of that variant.
     const wangIdxForVariant = (variant) => {

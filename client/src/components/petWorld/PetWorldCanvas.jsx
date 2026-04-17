@@ -3835,26 +3835,25 @@ export default function PetWorldCanvas({
           nw: world.grid.tiles[y - 1]?.[x - 1]?.t || null,
           se: world.grid.tiles[y + 1]?.[x + 1]?.t || null,
           sw: world.grid.tiles[y + 1]?.[x - 1]?.t || null,
-          // Path neighbor flags for Wang grass↔path auto-tiling
-          // Only actual path buildings count — ambient laneStrength was bleeding
-          // cobblestone texture onto grass tiles near non-path buildings.
-          // Variant flags let stone/dirt paths render with different textures.
-          n_path:  !!terrainRegions?.[y - 1]?.[x]?.isPathBuilding,
-          s_path:  !!terrainRegions?.[y + 1]?.[x]?.isPathBuilding,
-          e_path:  !!terrainRegions?.[y]?.[x + 1]?.isPathBuilding,
-          w_path:  !!terrainRegions?.[y]?.[x - 1]?.isPathBuilding,
-          ne_path: !!terrainRegions?.[y - 1]?.[x + 1]?.isPathBuilding,
-          nw_path: !!terrainRegions?.[y - 1]?.[x - 1]?.isPathBuilding,
-          se_path: !!terrainRegions?.[y + 1]?.[x + 1]?.isPathBuilding,
-          sw_path: !!terrainRegions?.[y + 1]?.[x - 1]?.isPathBuilding,
-          n_pathVariant:  terrainRegions?.[y - 1]?.[x]?.pathVariant || null,
-          s_pathVariant:  terrainRegions?.[y + 1]?.[x]?.pathVariant || null,
-          e_pathVariant:  terrainRegions?.[y]?.[x + 1]?.pathVariant || null,
-          w_pathVariant:  terrainRegions?.[y]?.[x - 1]?.pathVariant || null,
-          ne_pathVariant: terrainRegions?.[y - 1]?.[x + 1]?.pathVariant || null,
-          nw_pathVariant: terrainRegions?.[y - 1]?.[x - 1]?.pathVariant || null,
-          se_pathVariant: terrainRegions?.[y + 1]?.[x + 1]?.pathVariant || null,
-          sw_pathVariant: terrainRegions?.[y + 1]?.[x - 1]?.pathVariant || null,
+          // Path neighbor flags for Wang grass↔path auto-tiling.
+          // Use the render-smoothed path mask so tiny grass gaps trapped
+          // inside a plaza or lane don't show up as broken stray tiles.
+          n_path:  !!terrainRegions?.[y - 1]?.[x]?.renderPathBuilding,
+          s_path:  !!terrainRegions?.[y + 1]?.[x]?.renderPathBuilding,
+          e_path:  !!terrainRegions?.[y]?.[x + 1]?.renderPathBuilding,
+          w_path:  !!terrainRegions?.[y]?.[x - 1]?.renderPathBuilding,
+          ne_path: !!terrainRegions?.[y - 1]?.[x + 1]?.renderPathBuilding,
+          nw_path: !!terrainRegions?.[y - 1]?.[x - 1]?.renderPathBuilding,
+          se_path: !!terrainRegions?.[y + 1]?.[x + 1]?.renderPathBuilding,
+          sw_path: !!terrainRegions?.[y + 1]?.[x - 1]?.renderPathBuilding,
+          n_pathVariant:  terrainRegions?.[y - 1]?.[x]?.renderPathVariant || null,
+          s_pathVariant:  terrainRegions?.[y + 1]?.[x]?.renderPathVariant || null,
+          e_pathVariant:  terrainRegions?.[y]?.[x + 1]?.renderPathVariant || null,
+          w_pathVariant:  terrainRegions?.[y]?.[x - 1]?.renderPathVariant || null,
+          ne_pathVariant: terrainRegions?.[y - 1]?.[x + 1]?.renderPathVariant || null,
+          nw_pathVariant: terrainRegions?.[y - 1]?.[x - 1]?.renderPathVariant || null,
+          se_pathVariant: terrainRegions?.[y + 1]?.[x + 1]?.renderPathVariant || null,
+          sw_pathVariant: terrainRegions?.[y + 1]?.[x - 1]?.renderPathVariant || null,
         };
         visibleTiles.push({
           x,
