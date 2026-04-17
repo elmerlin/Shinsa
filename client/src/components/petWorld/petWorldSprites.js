@@ -1,17 +1,17 @@
-import { BUILDING_SIZES, getBuildingUi } from './petWorldBuildings';
-import { getBiomeUi, getTilePalette } from './petWorldTiles';
+import { BUILDING_SIZES, getBuildingUi } from './petWorldBuildings.js';
+import { getBiomeUi, getTilePalette } from './petWorldTiles.js';
 import {
   drawAmbientCritterAtlas,
   drawPetAtlas,
   drawTerrainAtlasSprite,
   drawVillageResidentAtlas,
-} from './petWorldAtlas';
+} from './petWorldAtlas.js';
 import {
   drawKenneyBuilding,
   drawKenneyCritter,
   drawKenneyResident,
   drawKenneyTerrain,
-} from './petWorldKenneySprites';
+} from './petWorldKenneySprites.js';
 import {
   drawCuteFantasyGround,
   drawCuteFantasyTerrain,
@@ -19,7 +19,7 @@ import {
   drawCuteFantasyResident,
   drawCuteFantasyCritter,
   drawCuteFantasyPet,
-} from './petWorldCuteFantasySprites';
+} from './petWorldCuteFantasySprites.js';
 
 // --- low-level drawing helpers ---
 
@@ -80,6 +80,18 @@ const TERRAIN_TOTAL_WEIGHT = TERRAIN_SAMPLE_WEIGHTS
   .flat()
   .reduce((sum, value) => sum + value, 0);
 
+const PATH_CARDINAL_OFFSETS = [
+  [1, 0],
+  [-1, 0],
+  [0, 1],
+  [0, -1],
+];
+
+const PATH_NEIGHBOR_OFFSETS = [
+  [0, -1, 2], [0, 1, 2], [1, 0, 2], [-1, 0, 2],
+  [1, -1, 1], [-1, -1, 1], [1, 1, 1], [-1, 1, 1],
+];
+
 function clamp01(value) {
   return Math.max(0, Math.min(1, value));
 }
@@ -133,6 +145,95 @@ function paintEdgeGlow(ctx, x, y, size, edge, color, alpha, depth = 0.2) {
     ctx.fillRect(x + size - span, y, span, size);
   }
   ctx.restore();
+}
+
+function sealRenderedPathLeaks(occupancy, renderedVariantGrid) {
+  const height = occupancy.length;
+  const width = occupancy[0]?.length || 0;
+  if (!width || !height) return 0;
+
+  const queueArr = new Int32Array(width * height);
+  const candidateScores = Array.from({ length: height }, () => (
+    Array.from({ length: width }, () => ({ dirt: 0, stone: 0 }))
+  ));
+
+  const isVariantSource = (x, y, variant) => {
+    if (x < 0 || y < 0 || x >= width || y >= height) return false;
+    return occupancy[y]?.[x]?.pathVariant === variant || renderedVariantGrid[y]?.[x] === variant;
+  };
+
+  for (const variant of ['dirt', 'stone']) {
+    const grownMask = Array.from({ length: height }, (_, y) => (
+      Array.from({ length: width }, (_, x) => isVariantSource(x, y, variant))
+    ));
+
+    // Temporarily dilate the rendered path one tile outward so thin leaks to
+    // the outer meadow close up during the reachability pass. This lets us
+    // reclassify the leftover pockets as part of the same plaza/path shape.
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        if (grownMask[y][x]) continue;
+        if (!occupancy[y][x]?.openGround || renderedVariantGrid[y][x]) continue;
+        if (PATH_CARDINAL_OFFSETS.some(([dx, dy]) => isVariantSource(x + dx, y + dy, variant))) {
+          grownMask[y][x] = true;
+        }
+      }
+    }
+
+    const reachable = Array.from({ length: height }, () => new Uint8Array(width));
+    let head = 0;
+    let tail = 0;
+    const push = (x, y) => {
+      if (x < 0 || y < 0 || x >= width || y >= height) return;
+      if (reachable[y][x]) return;
+      if (!occupancy[y][x]?.openGround || renderedVariantGrid[y][x] || grownMask[y][x]) return;
+      reachable[y][x] = 1;
+      queueArr[tail++] = y * width + x;
+    };
+
+    for (let x = 0; x < width; x += 1) {
+      push(x, 0);
+      push(x, height - 1);
+    }
+    for (let y = 0; y < height; y += 1) {
+      push(0, y);
+      push(width - 1, y);
+    }
+
+    while (head < tail) {
+      const idx = queueArr[head++];
+      const cx = idx % width;
+      const cy = (idx - cx) / width;
+      PATH_CARDINAL_OFFSETS.forEach(([dx, dy]) => push(cx + dx, cy + dy));
+    }
+
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        if (!occupancy[y][x]?.openGround || renderedVariantGrid[y][x] || reachable[y][x]) continue;
+        let supportScore = 0;
+        for (const [dx, dy, weight] of PATH_NEIGHBOR_OFFSETS) {
+          if (isVariantSource(x + dx, y + dy, variant)) supportScore += weight;
+        }
+        candidateScores[y][x][variant] = supportScore;
+      }
+    }
+  }
+
+  let leakSealedCount = 0;
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      if (renderedVariantGrid[y][x] || !occupancy[y][x]?.openGround) continue;
+      const { dirt, stone } = candidateScores[y][x];
+      if (dirt === 0 && stone === 0) continue;
+      // Leave seam tiles alone when two variants are equally plausible so
+      // dirt and pavement runs don't smear into each other.
+      if (dirt > 0 && stone > 0 && Math.abs(dirt - stone) < 2) continue;
+      renderedVariantGrid[y][x] = stone > dirt ? 'stone' : 'dirt';
+      leakSealedCount += 1;
+    }
+  }
+
+  return leakSealedCount;
 }
 
 export function analyzeTerrainGrid(grid, buildings = []) {
@@ -263,10 +364,6 @@ export function analyzeTerrainGrid(grid, buildings = []) {
   // freshly-filled cells can help their still-grass neighbours cross the
   // threshold (propagates along a bay without over-expanding into open
   // grass adjacent to a straight path edge — that caps at weighted 4).
-  const NEIGHBOR_OFFSETS = [
-    [0, -1, 2], [0, 1, 2], [1, 0, 2], [-1, 0, 2],
-    [1, -1, 1], [-1, -1, 1], [1, 1, 1], [-1, 1, 1],
-  ];
   const FILL_THRESHOLD = 5;
   let propagateFilledCount = 0;
   let changed = true;
@@ -280,7 +377,7 @@ export function analyzeTerrainGrid(grid, buildings = []) {
         if (enclosedVariantGrid[y][x]) continue; // already filled
         let dirtScore = 0;
         let stoneScore = 0;
-        for (const [dx, dy, weight] of NEIGHBOR_OFFSETS) {
+        for (const [dx, dy, weight] of PATH_NEIGHBOR_OFFSETS) {
           const nx = x + dx;
           const ny = y + dy;
           if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
@@ -300,6 +397,8 @@ export function analyzeTerrainGrid(grid, buildings = []) {
     }
   }
 
+  const leakSealedCount = sealRenderedPathLeaks(occupancy, enclosedVariantGrid);
+
   // Dev-only diagnostic so we can confirm the detection is firing.
   if (typeof window !== 'undefined') {
     let enclosedCount = 0;
@@ -318,6 +417,7 @@ export function analyzeTerrainGrid(grid, buildings = []) {
       componentCount: components.length,
       enclosedComponentCount,
       propagateFilledCount,
+      leakSealedCount,
       safetyPasses,
     };
   }

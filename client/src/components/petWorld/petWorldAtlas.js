@@ -1,4 +1,4 @@
-import { getBiomeUi } from './petWorldTiles';
+import { getBiomeUi } from './petWorldTiles.js';
 
 const FRAME_SIZE = 32;
 const SHEET_CACHE = new Map();
