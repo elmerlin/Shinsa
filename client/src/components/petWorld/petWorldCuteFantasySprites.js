@@ -939,35 +939,24 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
       // Fully-inside path cells still render as all-path (idx 15).
       const idx = sameIdx > 0 ? sameIdx : 15;
       drawPathTile(variant, idx);
+    } else if (terrain?.enclosedByPath && terrain?.pathVariant) {
+      // Grass cell that is geometrically enclosed by path (no path-free
+      // route to the map border). Render as a solid path tile using the
+      // dominant surrounding variant so decorative grass holes inside the
+      // paved area disappear. Because analyzeTerrainGrid also advertises
+      // this cell's pathVariant to its neighbours, the adjacent real path
+      // cells now see this cell as path for their own wang lookups and
+      // render full interiors rather than grass-bump transitions.
+      drawPathTile(terrain.pathVariant, 15, 1);
     } else {
       // Grass / shore tile: let each path variant bleed onto the grass with
       // its own organic wang transition. Stone and dirt are painted
       // independently so a grass tile bordering both gets both textures on
       // the appropriate corners.
-      //
-      // "Fill enclosed grass" rule: count cardinal path neighbors for each
-      // variant. A grass cell with ≥ 3 of 4 cardinal neighbors (N/E/S/W) as
-      // the same path variant is treated as enclosed and rendered as solid
-      // path at full opacity. This hides accidental grass holes inside
-      // path areas without affecting genuine path edges (where at most 2
-      // cardinal neighbors are path).
-      const cardinalPathCount = (variant) => {
-        let c = 0;
-        if (neighbors.n_pathVariant === variant) c += 1;
-        if (neighbors.e_pathVariant === variant) c += 1;
-        if (neighbors.s_pathVariant === variant) c += 1;
-        if (neighbors.w_pathVariant === variant) c += 1;
-        return c;
-      };
       for (const variant of ['dirt', 'stone']) {
         const idx = wangIdxForVariant(variant);
         if (idx === 0) continue;
-        const enclosed = !isShoreTransition && cardinalPathCount(variant) >= 3;
-        if (enclosed) {
-          // Solid fill — render the all-path tile (idx 15) at full opacity
-          // so any grass base underneath is hidden.
-          drawPathTile(variant, 15, 1);
-        } else if (!isShoreTransition) {
+        if (!isShoreTransition) {
           drawPathTile(variant, idx, 0.9);
         } else {
           // Shore tile: clip transitions to grass quadrants only, so the

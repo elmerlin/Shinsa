@@ -169,6 +169,60 @@ export function analyzeTerrainGrid(grid, buildings = []) {
     })
   ));
 
+  // Flood-fill from the map border to find grass regions enclosed by paths.
+  // A non-path cell that cannot reach the map edge without crossing a path
+  // is "enclosed" and should render with the surrounding path's texture —
+  // otherwise small decorative grass holes (2x2 etc.) show up as visible
+  // pits in the middle of the paved area.
+  const enclosedGrid = Array.from({ length: height }, () => new Uint8Array(width));
+  const queueArr = new Int32Array(width * height);
+  let head = 0;
+  let tail = 0;
+  // Seed every non-path cell as enclosed; BFS from borders clears reachable ones.
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      if (!occupancy[y][x]?.isPath) enclosedGrid[y][x] = 1;
+    }
+  }
+  const seedBorder = (x, y) => {
+    if (x < 0 || y < 0 || x >= width || y >= height) return;
+    if (enclosedGrid[y][x]) {
+      enclosedGrid[y][x] = 0;
+      queueArr[tail++] = y * width + x;
+    }
+  };
+  for (let x = 0; x < width; x += 1) { seedBorder(x, 0); seedBorder(x, height - 1); }
+  for (let y = 0; y < height; y += 1) { seedBorder(0, y); seedBorder(width - 1, y); }
+  while (head < tail) {
+    const idx = queueArr[head++];
+    const cx = idx % width;
+    const cy = (idx - cx) / width;
+    if (cx + 1 < width && enclosedGrid[cy][cx + 1]) { enclosedGrid[cy][cx + 1] = 0; queueArr[tail++] = cy * width + cx + 1; }
+    if (cx - 1 >= 0 && enclosedGrid[cy][cx - 1]) { enclosedGrid[cy][cx - 1] = 0; queueArr[tail++] = cy * width + cx - 1; }
+    if (cy + 1 < height && enclosedGrid[cy + 1][cx]) { enclosedGrid[cy + 1][cx] = 0; queueArr[tail++] = (cy + 1) * width + cx; }
+    if (cy - 1 >= 0 && enclosedGrid[cy - 1][cx]) { enclosedGrid[cy - 1][cx] = 0; queueArr[tail++] = (cy - 1) * width + cx; }
+  }
+  // For each enclosed cell, choose the dominant surrounding path variant
+  // (5x5 window) so the pseudo-path texture matches the containing area.
+  const enclosedVariantGrid = Array.from({ length: height }, () => new Array(width).fill(null));
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      if (!enclosedGrid[y][x]) continue;
+      let dirt = 0;
+      let stone = 0;
+      for (let dy = -2; dy <= 2; dy += 1) {
+        for (let dx = -2; dx <= 2; dx += 1) {
+          const s = occupancy[y + dy]?.[x + dx];
+          if (!s?.isPath) continue;
+          if (s.pathVariant === 'dirt') dirt += 1;
+          else if (s.pathVariant === 'stone') stone += 1;
+        }
+      }
+      if (stone > 0 && stone >= dirt) enclosedVariantGrid[y][x] = 'stone';
+      else if (dirt > 0) enclosedVariantGrid[y][x] = 'dirt';
+    }
+  }
+
   return Array.from({ length: height }, (_, y) => (
     Array.from({ length: width }, (_, x) => {
       const tile = occupancy[y]?.[x];
@@ -271,12 +325,19 @@ export function analyzeTerrainGrid(grid, buildings = []) {
         (macroSeed - 0.5) * 0.16
       );
 
+      const enclosedPathVariant = !tile.isPath ? enclosedVariantGrid[y][x] : null;
       return {
         openGround: tile.openGround,
         isWater: tile.isWater,
         isFoliage: tile.isFoliage,
         isPathBuilding: tile.isPath,
-        pathVariant: tile.pathVariant,
+        // Real path cells keep their own variant; enclosed grass cells
+        // advertise the dominant surrounding variant so neighbouring wang
+        // lookups treat the hole as path. This lets the outer path cells
+        // render a full interior (wang idx 15) over what would otherwise
+        // be a visible grass pit.
+        pathVariant: tile.pathVariant ?? enclosedPathVariant,
+        enclosedByPath: enclosedPathVariant != null,
         villageWear,
         waterRatio,
         foliageRatio,
