@@ -935,6 +935,63 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
       stone: wangIdxForVariant('stone'),
     };
     const hasGrassPathTransition = grassTransitionIndices.dirt > 0 || grassTransitionIndices.stone > 0;
+    const drawGrassPathShoulders = (variant) => {
+      const idx = grassTransitionIndices[variant];
+      if (idx === 0) return;
+      const matches = (dir) => neighbors[`${dir}_pathVariant`] === variant;
+      const n = matches('n');
+      const s = matches('s');
+      const e = matches('e');
+      const w = matches('w');
+      const ne = matches('ne');
+      const nw = matches('nw');
+      const se = matches('se');
+      const sw = matches('sw');
+      const strip = Math.max(3, Math.round(size * 0.34));
+      const corner = Math.max(strip + 1, Math.round(size * 0.44));
+      let clipped = false;
+      ctx.save();
+      ctx.beginPath();
+      if (n || ne || nw) {
+        ctx.rect(x, y, size, strip);
+        clipped = true;
+      }
+      if (s || se || sw) {
+        ctx.rect(x, y + size - strip, size, strip);
+        clipped = true;
+      }
+      if (w || nw || sw) {
+        ctx.rect(x, y, strip, size);
+        clipped = true;
+      }
+      if (e || ne || se) {
+        ctx.rect(x + size - strip, y, strip, size);
+        clipped = true;
+      }
+      if (nw || (n && w)) {
+        ctx.rect(x, y, corner, corner);
+        clipped = true;
+      }
+      if (ne || (n && e)) {
+        ctx.rect(x + size - corner, y, corner, corner);
+        clipped = true;
+      }
+      if (sw || (s && w)) {
+        ctx.rect(x, y + size - corner, corner, corner);
+        clipped = true;
+      }
+      if (se || (s && e)) {
+        ctx.rect(x + size - corner, y + size - corner, corner, corner);
+        clipped = true;
+      }
+      if (!clipped) {
+        ctx.restore();
+        return;
+      }
+      ctx.clip();
+      drawPathTile(variant, idx, 0.78);
+      ctx.restore();
+    };
 
     if (hasPathBuilding) {
       // Path building: draw using own variant. Opposite-variant neighbours
@@ -947,12 +1004,10 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
       drawPathTile(variant, idx);
     } else if (!isShoreTransition && hasGrassPathTransition) {
       // For normal grass next to real path tiles or short render-only
-      // feedways, paint only the edge transition. This restores the soft
-      // organic shoulders without inflating a whole plaza into existence.
+      // feedways, paint only clipped shoulders. This restores the soft
+      // organic edges without visually flood-filling nearby grass cells.
       for (const variant of ['dirt', 'stone']) {
-        const idx = grassTransitionIndices[variant];
-        if (idx === 0) continue;
-        drawPathTile(variant, idx, 0.9);
+        drawGrassPathShoulders(variant);
       }
     } else if (isShoreTransition) {
       // Keep shore rendering dominant. Render-only path connectors should

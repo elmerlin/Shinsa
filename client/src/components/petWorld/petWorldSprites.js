@@ -300,6 +300,52 @@ function buildRenderedConnectorGrid(occupancy, buildings = []) {
   };
 }
 
+function fillMicroPathHoles(occupancy, baseVariantGrid) {
+  const height = occupancy.length;
+  const width = occupancy[0]?.length || 0;
+  const microFillGrid = baseVariantGrid.map((row) => row.slice());
+  let microFillCount = 0;
+
+  const getVariant = (x, y) => {
+    if (x < 0 || y < 0 || x >= width || y >= height) return null;
+    return occupancy[y]?.[x]?.pathVariant || microFillGrid[y]?.[x] || null;
+  };
+
+  const evaluateVariant = (x, y, variant) => {
+    const n = getVariant(x, y - 1) === variant;
+    const s = getVariant(x, y + 1) === variant;
+    const e = getVariant(x + 1, y) === variant;
+    const w = getVariant(x - 1, y) === variant;
+    const ne = getVariant(x + 1, y - 1) === variant;
+    const nw = getVariant(x - 1, y - 1) === variant;
+    const se = getVariant(x + 1, y + 1) === variant;
+    const sw = getVariant(x - 1, y + 1) === variant;
+    const cardinals = (n ? 1 : 0) + (s ? 1 : 0) + (e ? 1 : 0) + (w ? 1 : 0);
+    const quadrants = (n || w || nw ? 1 : 0)
+      + (n || e || ne ? 1 : 0)
+      + (s || w || sw ? 1 : 0)
+      + (s || e || se ? 1 : 0);
+    return cardinals >= 4 || (cardinals >= 3 && quadrants >= 4);
+  };
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      if (!occupancy[y]?.[x]?.openGround || microFillGrid[y][x]) continue;
+      for (const variant of ['dirt', 'stone']) {
+        if (!evaluateVariant(x, y, variant)) continue;
+        microFillGrid[y][x] = variant;
+        microFillCount += 1;
+        break;
+      }
+    }
+  }
+
+  return {
+    microFillGrid,
+    microFillCount,
+  };
+}
+
 export function analyzeTerrainGrid(grid, buildings = []) {
   if (!grid?.tiles) return null;
 
@@ -339,6 +385,10 @@ export function analyzeTerrainGrid(grid, buildings = []) {
     connectorTileCount,
     actualPathCount,
   } = buildRenderedConnectorGrid(occupancy, buildings);
+  const {
+    microFillGrid,
+    microFillCount,
+  } = fillMicroPathHoles(occupancy, connectorVariantGrid);
 
   // Dev-only diagnostic so we can confirm the detection is firing.
   if (typeof window !== 'undefined') {
@@ -346,11 +396,13 @@ export function analyzeTerrainGrid(grid, buildings = []) {
     for (let y = 0; y < height; y += 1) {
       for (let x = 0; x < width; x += 1) {
         if (occupancy[y][x]?.isPath || connectorVariantGrid[y][x]) renderPathCount += 1;
+        else if (microFillGrid[y][x]) renderPathCount += 1;
       }
     }
     window.__petWorldPathDebug = {
       pathCount: actualPathCount,
       connectorTileCount,
+      microFillCount,
       renderPathCount,
       width,
       height,
@@ -460,14 +512,15 @@ export function analyzeTerrainGrid(grid, buildings = []) {
       );
 
       const connectorPathVariant = !tile.isPath ? connectorVariantGrid[y][x] : null;
-      const renderPathVariant = tile.pathVariant ?? connectorPathVariant ?? null;
+      const microFillVariant = !tile.isPath && !connectorPathVariant ? microFillGrid[y][x] : null;
+      const renderPathVariant = tile.pathVariant ?? connectorPathVariant ?? microFillVariant ?? null;
       return {
         openGround: tile.openGround,
         isWater: tile.isWater,
         isFoliage: tile.isFoliage,
         isPathBuilding: tile.isPath,
         pathVariant: renderPathVariant,
-        enclosedByPath: false,
+        enclosedByPath: microFillVariant != null,
         isRenderConnector: connectorPathVariant != null,
         renderPathBuilding: !!renderPathVariant,
         renderPathVariant,

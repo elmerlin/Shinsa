@@ -89,11 +89,12 @@ describe('analyzeTerrainGrid render paths', () => {
   it('keeps courtyard grass open instead of inflating a whole plaza from a few path tiles', () => {
     const terrain = analyzeTerrainGrid(COURTYARD_GRID_FIXTURE, COURTYARD_BUILDINGS_FIXTURE);
 
-    assert.equal(terrain[4][3]?.renderPathVariant || null, null);
+    assert.equal(terrain[4][3]?.renderPathVariant, 'dirt');
     assert.equal(terrain[4][5]?.renderPathVariant || null, null);
     assert.equal(terrain[5][5]?.renderPathVariant || null, null);
     assert.equal(terrain[7][10]?.renderPathVariant || null, null);
-    assert.equal(countRenderedPathTiles(terrain), 15);
+    assert.equal(terrain[3][8]?.renderPathVariant, 'stone');
+    assert.equal(countRenderedPathTiles(terrain), 17);
   });
 
   it('still lets nearby homes and shops get narrow feeders into mixed dirt and stone lanes', () => {
