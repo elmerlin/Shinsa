@@ -80,19 +80,33 @@ const TERRAIN_TOTAL_WEIGHT = TERRAIN_SAMPLE_WEIGHTS
   .flat()
   .reduce((sum, value) => sum + value, 0);
 
-const PATH_CARDINAL_OFFSETS = [
-  [1, 0],
-  [-1, 0],
-  [0, 1],
-  [0, -1],
-];
+const RENDER_CONNECTOR_BUILDING_TYPES = new Set([
+  'house',
+  'large_house',
+  'market',
+  'tavern',
+  'fishing_hut',
+  'woodcutters_hut',
+  'lumberyard',
+  'quarry',
+  'weaving_hut',
+  'storehouse',
+  'trading_post',
+  'town_hall',
+  'bakery',
+  'shrine',
+  'warehouse',
+  'watchtower',
+]);
 
-const PATH_NEIGHBOR_OFFSETS = [
-  [0, -1, 2], [0, 1, 2], [1, 0, 2], [-1, 0, 2],
-  [1, -1, 1], [-1, -1, 1], [1, 1, 1], [-1, 1, 1],
-];
+const RENDER_CONNECTOR_EDGE_PENALTIES = {
+  south: 0,
+  east: 0.35,
+  west: 0.35,
+  north: 0.75,
+};
 
-const PATH_LEAK_SEAL_RADIUS = 2;
+const MAX_RENDER_CONNECTOR_DISTANCE = 4;
 
 function clamp01(value) {
   return Math.max(0, Math.min(1, value));
@@ -149,102 +163,141 @@ function paintEdgeGlow(ctx, x, y, size, edge, color, alpha, depth = 0.2) {
   ctx.restore();
 }
 
-function sealRenderedPathLeaks(occupancy, renderedVariantGrid) {
+function tryTraceConnectorRoute(start, target, occupancy, axisOrder) {
+  const route = [];
+  let x = start.x;
+  let y = start.y;
+  const axes = axisOrder === 'horizontal-first' ? ['x', 'y'] : ['y', 'x'];
+
+  for (const axis of axes) {
+    const goal = axis === 'x' ? target.x : target.y;
+    while ((axis === 'x' ? x : y) !== goal) {
+      if (axis === 'x') x += Math.sign(goal - x);
+      else y += Math.sign(goal - y);
+      const sample = occupancy[y]?.[x];
+      if (!sample) return null;
+      const isTarget = x === target.x && y === target.y;
+      if (isTarget) {
+        if (!sample.isPath) return null;
+      } else if (!sample.openGround) {
+        return null;
+      }
+      route.push({ x, y });
+    }
+  }
+
+  return route;
+}
+
+function buildBuildingConnectorCandidates(building, occupancy) {
+  if (!building) return [];
+
   const height = occupancy.length;
   const width = occupancy[0]?.length || 0;
-  if (!width || !height) return 0;
+  const centerX = building.grid_x + building.width / 2;
+  const centerY = building.grid_y + building.height / 2;
+  const seen = new Set();
+  const candidates = [];
 
-  const queueArr = new Int32Array(width * height);
-  const candidateScores = Array.from({ length: height }, () => (
-    Array.from({ length: width }, () => ({ dirt: 0, stone: 0 }))
-  ));
-
-  const isVariantSource = (x, y, variant) => {
-    if (x < 0 || y < 0 || x >= width || y >= height) return false;
-    return occupancy[y]?.[x]?.pathVariant === variant || renderedVariantGrid[y]?.[x] === variant;
+  const pushCandidate = (x, y, edge) => {
+    if (x < 0 || y < 0 || x >= width || y >= height) return;
+    const sample = occupancy[y]?.[x];
+    if (!sample || (!sample.openGround && !sample.isPath)) return;
+    const key = `${x},${y}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    const tileCenterX = x + 0.5;
+    const tileCenterY = y + 0.5;
+    candidates.push({
+      x,
+      y,
+      edge,
+      edgePenalty: RENDER_CONNECTOR_EDGE_PENALTIES[edge] ?? 0.5,
+      centerBias: Math.abs(tileCenterX - centerX) + Math.abs(tileCenterY - centerY) * 0.5,
+    });
   };
 
-  for (const variant of ['dirt', 'stone']) {
-    const grownMask = Array.from({ length: height }, (_, y) => (
-      Array.from({ length: width }, (_, x) => isVariantSource(x, y, variant))
-    ));
-
-    // Temporarily dilate the rendered path outward so thin leaks to the
-    // outer meadow close up during the reachability pass. Two steps is still
-    // conservative enough to avoid swallowing normal meadows, but it catches
-    // the wider "green islands" that can remain inside a courtyard render.
-    for (let step = 0; step < PATH_LEAK_SEAL_RADIUS; step += 1) {
-      const nextMask = grownMask.map((row) => row.slice());
-      for (let y = 0; y < height; y += 1) {
-        for (let x = 0; x < width; x += 1) {
-          if (nextMask[y][x]) continue;
-          if (!occupancy[y][x]?.openGround || renderedVariantGrid[y][x]) continue;
-          if (PATH_CARDINAL_OFFSETS.some(([dx, dy]) => grownMask[y + dy]?.[x + dx])) {
-            nextMask[y][x] = true;
-          }
-        }
-      }
-      for (let y = 0; y < height; y += 1) {
-        for (let x = 0; x < width; x += 1) {
-          grownMask[y][x] = nextMask[y][x];
-        }
-      }
-    }
-
-    const reachable = Array.from({ length: height }, () => new Uint8Array(width));
-    let head = 0;
-    let tail = 0;
-    const push = (x, y) => {
-      if (x < 0 || y < 0 || x >= width || y >= height) return;
-      if (reachable[y][x]) return;
-      if (!occupancy[y][x]?.openGround || renderedVariantGrid[y][x] || grownMask[y][x]) return;
-      reachable[y][x] = 1;
-      queueArr[tail++] = y * width + x;
-    };
-
-    for (let x = 0; x < width; x += 1) {
-      push(x, 0);
-      push(x, height - 1);
-    }
-    for (let y = 0; y < height; y += 1) {
-      push(0, y);
-      push(width - 1, y);
-    }
-
-    while (head < tail) {
-      const idx = queueArr[head++];
-      const cx = idx % width;
-      const cy = (idx - cx) / width;
-      PATH_CARDINAL_OFFSETS.forEach(([dx, dy]) => push(cx + dx, cy + dy));
-    }
-
-    for (let y = 0; y < height; y += 1) {
-      for (let x = 0; x < width; x += 1) {
-        if (!occupancy[y][x]?.openGround || renderedVariantGrid[y][x] || reachable[y][x]) continue;
-        let supportScore = 0;
-        for (const [dx, dy, weight] of PATH_NEIGHBOR_OFFSETS) {
-          if (isVariantSource(x + dx, y + dy, variant)) supportScore += weight;
-        }
-        candidateScores[y][x][variant] = supportScore;
-      }
-    }
+  for (let x = building.grid_x; x < building.grid_x + building.width; x += 1) {
+    pushCandidate(x, building.grid_y + building.height, 'south');
+    pushCandidate(x, building.grid_y - 1, 'north');
+  }
+  for (let y = building.grid_y; y < building.grid_y + building.height; y += 1) {
+    pushCandidate(building.grid_x - 1, y, 'west');
+    pushCandidate(building.grid_x + building.width, y, 'east');
   }
 
-  let leakSealedCount = 0;
+  candidates.sort((a, b) => (a.edgePenalty + a.centerBias) - (b.edgePenalty + b.centerBias));
+  return candidates;
+}
+
+function buildRenderedConnectorGrid(occupancy, buildings = []) {
+  const height = occupancy.length;
+  const width = occupancy[0]?.length || 0;
+  const connectorVariantGrid = Array.from({ length: height }, () => new Array(width).fill(null));
+  const connectorScoreGrid = Array.from({ length: height }, () => new Array(width).fill(Infinity));
+  const actualPathTiles = [];
+
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
-      if (renderedVariantGrid[y][x] || !occupancy[y][x]?.openGround) continue;
-      const { dirt, stone } = candidateScores[y][x];
-      if (dirt === 0 && stone === 0) continue;
-      // Leave seam tiles alone when two variants are equally plausible so
-      // dirt and pavement runs don't smear into each other.
-      if (dirt > 0 && stone > 0 && Math.abs(dirt - stone) < 2) continue;
-      renderedVariantGrid[y][x] = stone > dirt ? 'stone' : 'dirt';
-      leakSealedCount += 1;
+      const tile = occupancy[y]?.[x];
+      if (!tile?.isPath || !tile.pathVariant) continue;
+      actualPathTiles.push({ x, y, variant: tile.pathVariant });
     }
   }
 
-  return leakSealedCount;
+  let connectorTileCount = 0;
+
+  buildings.forEach((building) => {
+    if (!building) return;
+    if (!RENDER_CONNECTOR_BUILDING_TYPES.has(building.type || building.building_type || '')) return;
+    const startCandidates = buildBuildingConnectorCandidates(building, occupancy);
+    let best = null;
+
+    startCandidates.forEach((candidate) => {
+      const startSample = occupancy[candidate.y]?.[candidate.x];
+      if (!startSample || startSample.isPath) return;
+
+      actualPathTiles.forEach((target) => {
+        const manhattan = Math.abs(target.x - candidate.x) + Math.abs(target.y - candidate.y);
+        if (manhattan < 1 || manhattan > MAX_RENDER_CONNECTOR_DISTANCE) return;
+
+        ['vertical-first', 'horizontal-first'].forEach((axisOrder, orderIndex) => {
+          const traced = tryTraceConnectorRoute(candidate, target, occupancy, axisOrder);
+          if (!traced?.length) return;
+
+          const connectorTiles = [{ x: candidate.x, y: candidate.y }, ...traced.slice(0, -1)];
+          const score = connectorTiles.length
+            + candidate.edgePenalty
+            + candidate.centerBias * 0.12
+            + orderIndex * 0.08
+            + Math.abs(target.x - candidate.x) * 0.03;
+
+          if (!best || score < best.score) {
+            best = {
+              score,
+              variant: target.variant,
+              tiles: connectorTiles,
+            };
+          }
+        });
+      });
+    });
+
+    if (!best) return;
+    best.tiles.forEach((tile, index) => {
+      const nextScore = best.score + index * 0.02;
+      if (nextScore >= connectorScoreGrid[tile.y][tile.x]) return;
+      if (!connectorVariantGrid[tile.y][tile.x]) connectorTileCount += 1;
+      connectorVariantGrid[tile.y][tile.x] = best.variant;
+      connectorScoreGrid[tile.y][tile.x] = nextScore;
+    });
+  });
+
+  return {
+    connectorVariantGrid,
+    connectorTileCount,
+    actualPathCount: actualPathTiles.length,
+  };
 }
 
 export function analyzeTerrainGrid(grid, buildings = []) {
@@ -281,155 +334,26 @@ export function analyzeTerrainGrid(grid, buildings = []) {
     })
   ));
 
-  // Connected-component classification: label every non-path cell into a
-  // 4-connected component, then decide per-component whether it's a "hole"
-  // inside a paved area. A component is a hole if:
-  //   - area is small enough to be decorative rather than a meadow,
-  //   - its boundary is dominantly path edges vs map-border edges.
-  // This catches cases that strict flood-fill misses (a 1-cell leak to the
-  // outside) and cases that iterative neighbour-majority can't propagate
-  // through (the interior of a 4×4 or larger hole where non-corner edge
-  // cells only see 3 real path neighbours).
-  const componentId = Array.from({ length: height }, () => new Int32Array(width).fill(-1));
-  const components = [];
-  const queueArr = new Int32Array(width * height);
-  for (let seedY = 0; seedY < height; seedY += 1) {
-    for (let seedX = 0; seedX < width; seedX += 1) {
-      if (occupancy[seedY][seedX]?.isPath) continue;
-      if (componentId[seedY][seedX] !== -1) continue;
-      const id = components.length;
-      const comp = {
-        cells: [],
-        pathEdges: 0,
-        borderEdges: 0,
-        dirtEdges: 0,
-        stoneEdges: 0,
-      };
-      components.push(comp);
-      let head = 0;
-      let tail = 0;
-      queueArr[tail++] = seedY * width + seedX;
-      componentId[seedY][seedX] = id;
-      while (head < tail) {
-        const idx = queueArr[head++];
-        const cx = idx % width;
-        const cy = (idx - cx) / width;
-        comp.cells.push(idx);
-        const visit = (nx, ny) => {
-          if (nx < 0 || ny < 0 || nx >= width || ny >= height) {
-            comp.borderEdges += 1;
-            return;
-          }
-          const neighbor = occupancy[ny][nx];
-          if (neighbor?.isPath) {
-            comp.pathEdges += 1;
-            if (neighbor.pathVariant === 'dirt') comp.dirtEdges += 1;
-            else if (neighbor.pathVariant === 'stone') comp.stoneEdges += 1;
-            return;
-          }
-          if (componentId[ny][nx] !== -1) return;
-          componentId[ny][nx] = id;
-          queueArr[tail++] = ny * width + nx;
-        };
-        visit(cx + 1, cy);
-        visit(cx - 1, cy);
-        visit(cx, cy + 1);
-        visit(cx, cy - 1);
-      }
-    }
-  }
-
-  // Pick the variant that best matches each hole's surrounding path.
-  const enclosedVariantGrid = Array.from({ length: height }, () => new Array(width).fill(null));
-  const MAX_HOLE_AREA = 120; // cap so outdoor meadows never get painted
-  let enclosedComponentCount = 0;
-  for (const comp of components) {
-    const { cells, pathEdges, borderEdges, dirtEdges, stoneEdges } = comp;
-    if (pathEdges === 0) continue;
-    if (cells.length > MAX_HOLE_AREA) continue;
-    // Stricter for components that touch the map border (risk of painting
-    // an outdoor region): require the path boundary to dominate ≥ 3×.
-    // For fully-interior components (no border edges), any path boundary
-    // qualifies — that's a strict hole.
-    if (borderEdges > 0 && pathEdges < borderEdges * 3) continue;
-    const variant = stoneEdges >= dirtEdges && stoneEdges > 0
-      ? 'stone'
-      : dirtEdges > 0
-        ? 'dirt'
-        : null;
-    if (!variant) continue;
-    enclosedComponentCount += 1;
-    for (const idx of cells) {
-      const cx = idx % width;
-      const cy = (idx - cx) / width;
-      enclosedVariantGrid[cy][cx] = variant;
-    }
-  }
-
-  // Iterative weighted-neighbor propagation: fills concave bays inside
-  // L/U/T path shapes that the CC classifier misses (because the bay is
-  // technically 4-connected to outdoor grass). For each grass cell,
-  // compute a weighted score of same-variant path neighbours:
-  //   cardinal (N/S/E/W) = 2, diagonal (NE/NW/SE/SW) = 1, max possible 12.
-  // Fill if score ≥ 5 for the dominant variant. Iterate until stable so
-  // freshly-filled cells can help their still-grass neighbours cross the
-  // threshold (propagates along a bay without over-expanding into open
-  // grass adjacent to a straight path edge — that caps at weighted 4).
-  const FILL_THRESHOLD = 5;
-  let propagateFilledCount = 0;
-  let changed = true;
-  let safetyPasses = 0;
-  while (changed && safetyPasses < 32) {
-    changed = false;
-    safetyPasses += 1;
-    for (let y = 0; y < height; y += 1) {
-      for (let x = 0; x < width; x += 1) {
-        if (occupancy[y][x]?.isPath) continue;
-        if (enclosedVariantGrid[y][x]) continue; // already filled
-        let dirtScore = 0;
-        let stoneScore = 0;
-        for (const [dx, dy, weight] of PATH_NEIGHBOR_OFFSETS) {
-          const nx = x + dx;
-          const ny = y + dy;
-          if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
-          const neighbour = occupancy[ny][nx];
-          const variant = neighbour?.isPath
-            ? neighbour.pathVariant
-            : enclosedVariantGrid[ny][nx];
-          if (variant === 'dirt') dirtScore += weight;
-          else if (variant === 'stone') stoneScore += weight;
-        }
-        if (stoneScore < FILL_THRESHOLD && dirtScore < FILL_THRESHOLD) continue;
-        const variant = stoneScore >= dirtScore ? 'stone' : 'dirt';
-        enclosedVariantGrid[y][x] = variant;
-        propagateFilledCount += 1;
-        changed = true;
-      }
-    }
-  }
-
-  const leakSealedCount = sealRenderedPathLeaks(occupancy, enclosedVariantGrid);
+  const {
+    connectorVariantGrid,
+    connectorTileCount,
+    actualPathCount,
+  } = buildRenderedConnectorGrid(occupancy, buildings);
 
   // Dev-only diagnostic so we can confirm the detection is firing.
   if (typeof window !== 'undefined') {
-    let enclosedCount = 0;
-    let pathCount = 0;
+    let renderPathCount = 0;
     for (let y = 0; y < height; y += 1) {
       for (let x = 0; x < width; x += 1) {
-        if (occupancy[y][x]?.isPath) pathCount += 1;
-        if (!occupancy[y][x]?.isPath && enclosedVariantGrid[y][x]) enclosedCount += 1;
+        if (occupancy[y][x]?.isPath || connectorVariantGrid[y][x]) renderPathCount += 1;
       }
     }
     window.__petWorldPathDebug = {
-      pathCount,
-      enclosedCount,
+      pathCount: actualPathCount,
+      connectorTileCount,
+      renderPathCount,
       width,
       height,
-      componentCount: components.length,
-      enclosedComponentCount,
-      propagateFilledCount,
-      leakSealedCount,
-      safetyPasses,
     };
   }
 
@@ -535,20 +459,16 @@ export function analyzeTerrainGrid(grid, buildings = []) {
         (macroSeed - 0.5) * 0.16
       );
 
-      const enclosedPathVariant = !tile.isPath ? enclosedVariantGrid[y][x] : null;
-      const renderPathVariant = tile.pathVariant ?? enclosedPathVariant ?? null;
+      const connectorPathVariant = !tile.isPath ? connectorVariantGrid[y][x] : null;
+      const renderPathVariant = tile.pathVariant ?? connectorPathVariant ?? null;
       return {
         openGround: tile.openGround,
         isWater: tile.isWater,
         isFoliage: tile.isFoliage,
         isPathBuilding: tile.isPath,
-        // Real path cells keep their own variant; enclosed grass cells
-        // advertise the dominant surrounding variant so neighbouring wang
-        // lookups treat the hole as path. This lets the outer path cells
-        // render a full interior (wang idx 15) over what would otherwise
-        // be a visible grass pit.
         pathVariant: renderPathVariant,
-        enclosedByPath: enclosedPathVariant != null,
+        enclosedByPath: false,
+        isRenderConnector: connectorPathVariant != null,
         renderPathBuilding: !!renderPathVariant,
         renderPathVariant,
         villageWear,

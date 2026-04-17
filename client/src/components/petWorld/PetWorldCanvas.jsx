@@ -3836,8 +3836,8 @@ export default function PetWorldCanvas({
           se: world.grid.tiles[y + 1]?.[x + 1]?.t || null,
           sw: world.grid.tiles[y + 1]?.[x - 1]?.t || null,
           // Path neighbor flags for Wang grass↔path auto-tiling.
-          // Use the render-smoothed path mask so tiny grass gaps trapped
-          // inside a plaza or lane don't show up as broken stray tiles.
+          // This render mask includes only real placed path tiles plus the
+          // short building feedways we synthesize for readability.
           n_path:  !!terrainRegions?.[y - 1]?.[x]?.renderPathBuilding,
           s_path:  !!terrainRegions?.[y + 1]?.[x]?.renderPathBuilding,
           e_path:  !!terrainRegions?.[y]?.[x + 1]?.renderPathBuilding,
