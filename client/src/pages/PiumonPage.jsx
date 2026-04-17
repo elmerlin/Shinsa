@@ -1553,6 +1553,19 @@ export default function PiumonPage() {
   const [mintSize, setMintSize] = useState(TOTAL_SUPPLY_DEFAULT);
   const [baseQuery, setBaseQuery] = useState('');
   const [baseFilter, setBaseFilter] = useState('all');
+  const [spriteReviewFilter, setSpriteReviewFilter] = useState('all'); // 'all' | 'flagged' | 'missing'
+  const [flaggedSprites, setFlaggedSprites] = useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem('piu-sprite-flags') || '[]')); }
+    catch { return new Set(); }
+  });
+  const toggleFlag = useCallback((hash) => {
+    setFlaggedSprites(prev => {
+      const next = new Set(prev);
+      if (next.has(hash)) next.delete(hash); else next.add(hash);
+      localStorage.setItem('piu-sprite-flags', JSON.stringify([...next]));
+      return next;
+    });
+  }, []);
   const [baseCharacters, setBaseCharacters] = useState(() => [...CUSTOM_HEROES, ...createShopSeeds()].map((item) => ({ ...item, active: true })));
   const [groupDrafts, setGroupDrafts] = useState({});
   const [habitats, setHabitats] = useState(() => HABITATS.map((item) => ({ ...item, active: true })));
@@ -2517,6 +2530,130 @@ export default function PiumonPage() {
             </div>
           </div>
         </SectionShell>
+
+        {/* ── 08 PIU Sprite Review ───────────────────────────────────────── */}
+        <SectionShell
+          index="08"
+          eyebrow="PIU Sprite Review"
+          title="Compare reference avatars vs generated sprites"
+          aside={
+            <div className="space-y-3">
+              <div className="font-mono text-[9px] font-bold uppercase tracking-[0.22em] text-gray-500">Flagged for regen</div>
+              <div className="font-display text-[2rem] font-black leading-none tabular-nums text-rose-400">{flaggedSprites.size}</div>
+              <div className="font-mono text-[9px] text-gray-500">of {piuAvatarCatalog.length} characters</div>
+              {flaggedSprites.size > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const list = piuAvatarCatalog
+                      .filter(e => flaggedSprites.has(e.filename.replace('.png','')))
+                      .map(e => ({ name: e.name, hash: e.filename.replace('.png','') }));
+                    navigator.clipboard.writeText(JSON.stringify(list, null, 2));
+                  }}
+                  className="h-7 w-full rounded-md border border-rose-400/30 bg-rose-400/[0.06] font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-rose-300 transition hover:bg-rose-400/[0.12]"
+                >
+                  Copy flagged list
+                </button>
+              )}
+              {flaggedSprites.size > 0 && (
+                <button
+                  type="button"
+                  onClick={() => { setFlaggedSprites(new Set()); localStorage.removeItem('piu-sprite-flags'); }}
+                  className="h-7 w-full rounded-md border border-white/[0.06] bg-white/[0.03] font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-gray-500 transition hover:text-rose-300"
+                >
+                  Clear all flags
+                </button>
+              )}
+            </div>
+          }
+        >
+          {/* Filter bar */}
+          <div className="mb-4 flex gap-2">
+            {['all', 'flagged', 'missing'].map(f => (
+              <button
+                key={f}
+                type="button"
+                onClick={() => setSpriteReviewFilter(f)}
+                className={`h-7 rounded-md border px-3 font-mono text-[9px] font-bold uppercase tracking-[0.14em] transition ${
+                  spriteReviewFilter === f
+                    ? 'border-cyan-400/40 bg-cyan-400/[0.08] text-cyan-300'
+                    : 'border-white/[0.08] bg-white/[0.025] text-gray-500 hover:text-gray-300'
+                }`}
+              >
+                {f === 'all' ? `All (${piuAvatarCatalog.length})` : f === 'flagged' ? `Flagged (${flaggedSprites.size})` : `Missing (9)`}
+              </button>
+            ))}
+          </div>
+
+          {/* Sprite grid */}
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {piuAvatarCatalog
+              .filter(entry => {
+                const hash = entry.filename.replace('.png','');
+                if (spriteReviewFilter === 'flagged') return flaggedSprites.has(hash);
+                if (spriteReviewFilter === 'missing') return [
+                  'ce0e9f464be0c2b2d01adccfbab031f8','c4e46603a5c931efda0dfe3945000b37',
+                  'e947839f4dabdcbf70388e06165b5dbd','1714cb21061955169a6e39b765339a7a',
+                  '77ebac59a8a18e91a62c580b546797cc','7aae77ee552c2c0985c678778ceda0bd',
+                  '3efae2202bc24e85c22bf1280801f982','901ceb863fc221f3e704143c7177e1b3',
+                  '4f617606e7751b2dc2559d80f09c40bf',
+                ].includes(hash);
+                return true;
+              })
+              .map(entry => {
+                const hash = entry.filename.replace('.png','');
+                const isFlagged = flaggedSprites.has(hash);
+                const isMissing = ['ce0e9f464be0c2b2d01adccfbab031f8','c4e46603a5c931efda0dfe3945000b37',
+                  'e947839f4dabdcbf70388e06165b5dbd','1714cb21061955169a6e39b765339a7a',
+                  '77ebac59a8a18e91a62c580b546797cc','7aae77ee552c2c0985c678778ceda0bd',
+                  '3efae2202bc24e85c22bf1280801f982','901ceb863fc221f3e704143c7177e1b3',
+                  '4f617606e7751b2dc2559d80f09c40bf'].includes(hash);
+                return (
+                  <div
+                    key={hash}
+                    onClick={() => toggleFlag(hash)}
+                    className={`cursor-pointer rounded-xl border p-2 transition select-none ${
+                      isFlagged
+                        ? 'border-rose-400/40 bg-rose-400/[0.06] ring-1 ring-rose-400/20'
+                        : 'border-white/[0.07] bg-white/[0.02] hover:border-white/[0.14]'
+                    }`}
+                  >
+                    <div className="flex gap-2">
+                      {/* Reference avatar */}
+                      <div className="flex h-16 w-24 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-white/[0.07] bg-black/30">
+                        <img
+                          src={`https://pumpshinsa.com/avatars/${hash}.png`}
+                          alt={`${entry.name} ref`}
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                        />
+                      </div>
+                      {/* Generated sprite */}
+                      <div className={`flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-[#0a0915] ${isMissing ? 'border-amber-400/30' : 'border-white/[0.07]'}`}>
+                        {isMissing ? (
+                          <span className="font-mono text-[8px] text-amber-400/60">missing</span>
+                        ) : (
+                          <img
+                            src={`/piumon-assets/bodies/piu-${hash}.png`}
+                            alt={`${entry.name} sprite`}
+                            className="h-full w-full object-contain"
+                            style={{ imageRendering: 'pixelated' }}
+                            loading="lazy"
+                          />
+                        )}
+                      </div>
+                    </div>
+                    <div className="mt-1.5 flex items-center justify-between gap-1">
+                      <div className="truncate font-display text-[11px] font-black tracking-tight text-white">{entry.name}</div>
+                      {isFlagged && <span className="shrink-0 font-mono text-[8px] font-bold text-rose-400">⚑ regen</span>}
+                      {isMissing && !isFlagged && <span className="shrink-0 font-mono text-[8px] font-bold text-amber-400">missing</span>}
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        </SectionShell>
+
         </div>
       </div>
     </div>
