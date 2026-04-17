@@ -930,6 +930,12 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
       ctx.restore();
     };
 
+    const grassTransitionIndices = {
+      dirt: wangIdxForVariant('dirt'),
+      stone: wangIdxForVariant('stone'),
+    };
+    const hasGrassPathTransition = grassTransitionIndices.dirt > 0 || grassTransitionIndices.stone > 0;
+
     if (hasPathBuilding) {
       // Path building: draw using own variant. Opposite-variant neighbours
       // render as grass from the perspective of this tile, so stone/dirt
@@ -939,6 +945,15 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
       // Fully-inside path cells still render as all-path (idx 15).
       const idx = sameIdx > 0 ? sameIdx : 15;
       drawPathTile(variant, idx);
+    } else if (!isShoreTransition && hasGrassPathTransition) {
+      // For normal grass next to real path tiles or short render-only
+      // feedways, paint only the edge transition. This restores the soft
+      // organic shoulders without inflating a whole plaza into existence.
+      for (const variant of ['dirt', 'stone']) {
+        const idx = grassTransitionIndices[variant];
+        if (idx === 0) continue;
+        drawPathTile(variant, idx, 0.9);
+      }
     } else if (isShoreTransition) {
       // Keep shore rendering dominant. Render-only path connectors should
       // stay on land rather than bleeding into shoreline quadrants.
@@ -957,8 +972,15 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
 
   /* ── Flower-grass overlays on ~16 % of open ground tiles ── */
   // Only on inland grass tiles — never on shore tiles (even mostly-grass ones)
-  // or on cells we've painted as path-fill (they should look solid-paved).
-  if (!hasPathBuilding && !isShoreTransition
+  // or on cells carrying a path transition overlay.
+  const hasTransitionedPathNeighbor = neighbors
+    ? ['dirt', 'stone'].some((variant) => {
+      const matches = (dir) => neighbors[`${dir}_pathVariant`] === variant;
+      return matches('n') || matches('s') || matches('e') || matches('w')
+        || matches('ne') || matches('nw') || matches('se') || matches('sw');
+    })
+    : false;
+  if (!hasPathBuilding && !isShoreTransition && !hasTransitionedPathNeighbor
       && tile.t !== 'tree' && tile.t !== 'rock' && tile.t !== 'bush' && tile.t !== 'stump') {
     if (h % 6 === 0) {
       const variant = (h >>> 3) % FLOWER_GRASS_COUNT + 1;
