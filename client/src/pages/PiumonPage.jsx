@@ -1558,6 +1558,10 @@ export default function PiumonPage() {
     try { return new Set(JSON.parse(localStorage.getItem('piu-sprite-flags') || '[]')); }
     catch { return new Set(); }
   });
+  const [brokenSprites, setBrokenSprites] = useState(() => new Set());
+  const markBroken = useCallback((hash) => {
+    setBrokenSprites(prev => new Set([...prev, hash]));
+  }, []);
   const toggleFlag = useCallback((hash) => {
     setFlaggedSprites(prev => {
       const next = new Set(prev);
@@ -2580,7 +2584,7 @@ export default function PiumonPage() {
                     : 'border-white/[0.08] bg-white/[0.025] text-gray-500 hover:text-gray-300'
                 }`}
               >
-                {f === 'all' ? `All (${piuAvatarCatalog.length})` : f === 'flagged' ? `Flagged (${flaggedSprites.size})` : `Missing (9)`}
+                {f === 'all' ? `All (${piuAvatarCatalog.length})` : f === 'flagged' ? `Flagged (${flaggedSprites.size})` : `Missing (${brokenSprites.size})`}
               </button>
             ))}
           </div>
@@ -2591,23 +2595,13 @@ export default function PiumonPage() {
               .filter(entry => {
                 const hash = entry.filename.replace('.png','');
                 if (spriteReviewFilter === 'flagged') return flaggedSprites.has(hash);
-                if (spriteReviewFilter === 'missing') return [
-                  'ce0e9f464be0c2b2d01adccfbab031f8','c4e46603a5c931efda0dfe3945000b37',
-                  'e947839f4dabdcbf70388e06165b5dbd','1714cb21061955169a6e39b765339a7a',
-                  '77ebac59a8a18e91a62c580b546797cc','7aae77ee552c2c0985c678778ceda0bd',
-                  '3efae2202bc24e85c22bf1280801f982','901ceb863fc221f3e704143c7177e1b3',
-                  '4f617606e7751b2dc2559d80f09c40bf',
-                ].includes(hash);
+                if (spriteReviewFilter === 'missing') return brokenSprites.has(hash);
                 return true;
               })
               .map(entry => {
                 const hash = entry.filename.replace('.png','');
                 const isFlagged = flaggedSprites.has(hash);
-                const isMissing = ['ce0e9f464be0c2b2d01adccfbab031f8','c4e46603a5c931efda0dfe3945000b37',
-                  'e947839f4dabdcbf70388e06165b5dbd','1714cb21061955169a6e39b765339a7a',
-                  '77ebac59a8a18e91a62c580b546797cc','7aae77ee552c2c0985c678778ceda0bd',
-                  '3efae2202bc24e85c22bf1280801f982','901ceb863fc221f3e704143c7177e1b3',
-                  '4f617606e7751b2dc2559d80f09c40bf'].includes(hash);
+                const isBroken = brokenSprites.has(hash);
                 return (
                   <div
                     key={hash}
@@ -2629,16 +2623,17 @@ export default function PiumonPage() {
                         />
                       </div>
                       {/* Generated sprite */}
-                      <div className={`flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-[#0a0915] ${isMissing ? 'border-amber-400/30' : 'border-white/[0.07]'}`}>
-                        {isMissing ? (
+                      <div className={`flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-[#0a0915] ${isBroken ? 'border-amber-400/30' : 'border-white/[0.07]'}`}>
+                        {isBroken ? (
                           <span className="font-mono text-[8px] text-amber-400/60">missing</span>
                         ) : (
                           <img
-                            src={`/piumon-assets/bodies/piu-${hash}.png`}
+                            src={`/piumon-assets/bodies/piu-${hash}.png?v=2`}
                             alt={`${entry.name} sprite`}
                             className="h-full w-full object-contain"
                             style={{ imageRendering: 'pixelated' }}
                             loading="lazy"
+                            onError={() => markBroken(hash)}
                           />
                         )}
                       </div>
@@ -2646,7 +2641,7 @@ export default function PiumonPage() {
                     <div className="mt-1.5 flex items-center justify-between gap-1">
                       <div className="truncate font-display text-[11px] font-black tracking-tight text-white">{entry.name}</div>
                       {isFlagged && <span className="shrink-0 font-mono text-[8px] font-bold text-rose-400">⚑ regen</span>}
-                      {isMissing && !isFlagged && <span className="shrink-0 font-mono text-[8px] font-bold text-amber-400">missing</span>}
+                      {isBroken && !isFlagged && <span className="shrink-0 font-mono text-[8px] font-bold text-amber-400">missing</span>}
                     </div>
                   </div>
                 );
