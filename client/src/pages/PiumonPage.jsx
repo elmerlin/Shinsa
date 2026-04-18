@@ -1559,6 +1559,7 @@ export default function PiumonPage() {
     catch { return new Set(); }
   });
   const [brokenSprites, setBrokenSprites] = useState(() => new Set());
+  const spriteTs = useMemo(() => Date.now(), []);
   const markBroken = useCallback((hash) => {
     setBrokenSprites(prev => new Set([...prev, hash]));
   }, []);
@@ -2628,7 +2629,7 @@ export default function PiumonPage() {
                           <span className="font-mono text-[8px] text-amber-400/60">missing</span>
                         ) : (
                           <img
-                            src={`/piumon-assets/bodies/piu-${hash}.png?v=2`}
+                            src={`/piumon-assets/bodies/piu-${hash}.png?t=${spriteTs}`}
                             alt={`${entry.name} sprite`}
                             className="h-full w-full object-contain"
                             style={{ imageRendering: 'pixelated' }}
