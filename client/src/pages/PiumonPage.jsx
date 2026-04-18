@@ -2401,14 +2401,14 @@ export default function PiumonPage() {
           }
         >
           <div className="grid gap-6 lg:grid-cols-[auto_minmax(0,1fr)]">
-            <div className="relative flex h-72 w-72 items-center justify-center overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0a0915]">
+            <div className="relative flex h-80 w-80 items-center justify-center overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0a0915]">
               {compHabitat && getAssetUrl('habitats', compHabitat) ? (
                 <img src={getAssetUrl('habitats', compHabitat)} alt="Habitat" className="absolute inset-0 h-full w-full object-cover" style={{ imageRendering: 'pixelated' }} />
               ) : (
                 <div className="absolute inset-0 bg-gradient-to-b from-slate-800/40 to-slate-900/80" />
               )}
               {compBase && getAssetUrl('bodies', compBase) ? (
-                <img src={getAssetUrl('bodies', compBase)} alt="Body" className="relative z-10 h-56 w-56 object-contain" style={{ imageRendering: 'pixelated' }} />
+                <img src={getAssetUrl('bodies', compBase)} alt="Body" className="relative z-10 h-64 w-64 object-contain" style={{ imageRendering: 'pixelated' }} />
               ) : null}
               {!compBase ? (
                 <span className="relative z-30 font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-gray-600">Select a complete look</span>
