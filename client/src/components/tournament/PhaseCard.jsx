@@ -31,7 +31,11 @@ const PHASE_CARD_PERF_STYLE = {
 function getGauntletLevels(config = {}) {
   const start = parseInt(config.start_level ?? config.start_single_level, 10) || 19;
   const final = parseInt(config.final_level ?? config.final_single_level, 10) || 24;
-  return { start, final };
+  const finalMax = Math.max(
+    final,
+    parseInt(config.final_level_max ?? config.final_single_level_max, 10) || Math.min(final + 1, 28)
+  );
+  return { start, final, finalMax };
 }
 
 function getConfigSummary(format, config) {
@@ -45,7 +49,11 @@ function getConfigSummary(format, config) {
     case 'double_elim':
       return `Best of ${config.best_of || 3}${config.grand_final_reset ? ', grand final reset' : ''}`;
     case 'gauntlet':
-      return `Lv ${getGauntletLevels(config).start}→Lv ${getGauntletLevels(config).final}, mixed S/D, ${parseInt(config.best_of, 10) === 1 ? 'single song' : 'best of 3'}`;
+      return (() => {
+        const levels = getGauntletLevels(config);
+        const finalBand = levels.finalMax !== levels.final ? `${levels.final}-${levels.finalMax}` : `${levels.final}`;
+        return `Lv ${levels.start}→Lv ${finalBand}, mixed S/D, ${parseInt(config.best_of, 10) === 1 ? 'single song' : 'best of 3'}`;
+      })();
     case 'hour_of_power':
       return `${config.duration_minutes || 60} min, cumulative rating`;
     case 'b15':

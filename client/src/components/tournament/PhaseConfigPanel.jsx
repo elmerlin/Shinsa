@@ -209,6 +209,10 @@ export default function PhaseConfigPanel({ phase, onChange, isLastPhase }) {
   const advancement = phase.advancement || {};
   const gauntletStartLevel = config.start_level ?? config.start_single_level ?? 19;
   const gauntletFinalLevel = config.final_level ?? config.final_single_level ?? 24;
+  const gauntletFinalLevelMax = Math.max(
+    gauntletFinalLevel,
+    config.final_level_max ?? config.final_single_level_max ?? Math.min(Number(gauntletFinalLevel) + 1, 28)
+  );
   const gauntletBestOf = config.best_of ?? 3;
 
   const updateConfig = (nextConfig) => onChange({ ...phase, config: nextConfig });
@@ -317,7 +321,7 @@ export default function PhaseConfigPanel({ phase, onChange, isLastPhase }) {
         <ConfigSection
           eyebrow="Gauntlet"
           title="Level climb and draw format"
-          description="Set the opening and final chart levels for the king-of-the-hill run. Each match draws from real songs at that level, and the cards can be singles or doubles."
+          description="Set the opening and final chart levels for the king-of-the-hill run. Each match draws from real songs at that level, and the final gauntlet match also pulls from the next level up."
         >
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <NumberField
@@ -330,9 +334,15 @@ export default function PhaseConfigPanel({ phase, onChange, isLastPhase }) {
             <NumberField
               label="Final Level"
               value={gauntletFinalLevel}
-              onChange={(value) => updateConfig({ ...config, final_level: value, final_single_level: undefined })}
+              onChange={(value) => updateConfig({
+                ...config,
+                final_level: value,
+                final_single_level: undefined,
+                final_level_max: Math.min((parseInt(value, 10) || 1) + 1, 28),
+              })}
               min={1}
               max={28}
+              hint={`Final match draws from Lv.${gauntletFinalLevel}-${gauntletFinalLevelMax}.`}
             />
             <SelectField
               label="Match Format"

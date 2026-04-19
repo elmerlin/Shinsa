@@ -56,7 +56,11 @@ function formatRoundLevelLabel(roundLevel = {}, index = 0) {
 function getGauntletLevels(config = {}) {
   const start = parseInt(config.start_level ?? config.start_single_level, 10) || 19;
   const final = parseInt(config.final_level ?? config.final_single_level, 10) || 24;
-  return { start, final };
+  const finalMax = Math.max(
+    final,
+    parseInt(config.final_level_max ?? config.final_single_level_max, 10) || Math.min(final + 1, 28)
+  );
+  return { start, final, finalMax };
 }
 
 export function formatTournamentDate(value) {
@@ -270,7 +274,7 @@ export function TournamentPhaseRuleCard({ phase, prevPhase, className = '' }) {
     config.rounds ? `${config.rounds} round${config.rounds > 1 ? 's' : ''}` : '',
     config.pool_count ? `${config.pool_count} pools` : '',
     config.duration_minutes ? `${config.duration_minutes} minute session` : '',
-    format === 'gauntlet' ? `Lv ${gauntletLevels.start} to Lv ${gauntletLevels.final}` : '',
+    format === 'gauntlet' ? `Lv ${gauntletLevels.start} to Lv ${gauntletLevels.final}${gauntletLevels.finalMax !== gauntletLevels.final ? `-${gauntletLevels.finalMax}` : ''}` : '',
     format === 'gauntlet' ? 'Mixed singles/doubles card draw' : '',
     format === 'gauntlet' && gauntletBestOf === 3 ? '5 cards drawn, 1 veto each, best of 3' : '',
     format === 'gauntlet' && gauntletBestOf === 1 ? '1 song drawn per match' : '',

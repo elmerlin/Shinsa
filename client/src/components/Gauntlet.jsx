@@ -2,6 +2,13 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getAvatarUrl } from './AvatarPicker';
 
+function formatLevelBand(minLevel, maxLevel) {
+  const min = parseInt(minLevel, 10) || 0;
+  const max = parseInt(maxLevel, 10) || min;
+  if (!min && !max) return '?';
+  return min === max ? `${min}` : `${min}-${max}`;
+}
+
 export default function Gauntlet({ matches, players, onUpdate }) {
   const navigate = useNavigate();
   const playerMap = {};
@@ -91,7 +98,7 @@ export default function Gauntlet({ matches, players, onUpdate }) {
                   {isFinal ? 'FINAL' : `#${match.gauntlet_order}`}
                 </div>
                 <div className="text-[10px] text-zinc-600 font-mono">
-                  Lv{match.difficulty_min}
+                  Lv{formatLevelBand(match.difficulty_min, match.difficulty_max)}
                 </div>
               </div>
 

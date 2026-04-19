@@ -147,7 +147,11 @@ function getPhaseRules(phase) {
   if (f === 'gauntlet') {
     const start = parseInt(c.start_level ?? c.start_single_level, 10) || 19;
     const final = parseInt(c.final_level ?? c.final_single_level, 10) || 24;
-    rules.push(`Lv ${start} \u2192 Lv ${final}`);
+    const finalMax = Math.max(
+      final,
+      parseInt(c.final_level_max ?? c.final_single_level_max, 10) || Math.min(final + 1, 28)
+    );
+    rules.push(`Lv ${start} \u2192 Lv ${final}${finalMax !== final ? `-${finalMax}` : ''}`);
     rules.push('Mixed singles/doubles');
     const bo = parseInt(c.best_of, 10) || 3;
     if (bo === 3) rules.push('5 cards, 1 veto each, Bo3');
@@ -1524,7 +1528,13 @@ export default function TournamentPoster() {
           if (pCfg.best_of) rules.push(`Best of ${pCfg.best_of}`);
           if (pCfg.rounds) rules.push(`${pCfg.rounds} rounds`);
         } else if (phase.format === 'gauntlet') {
-          if (pCfg.start_level) rules.push(`S${pCfg.start_level}\u2013S${pCfg.final_level || '??'}`);
+          if (pCfg.start_level) {
+            const finalLevel = pCfg.final_level || '??';
+            const finalLevelMax = pCfg.final_level_max && pCfg.final_level_max !== pCfg.final_level
+              ? `-${pCfg.final_level_max}`
+              : '';
+            rules.push(`S${pCfg.start_level}\u2013S${finalLevel}${finalLevelMax}`);
+          }
           if (pCfg.best_of) rules.push(`Best of ${pCfg.best_of}`);
         } else if (phase.format === 'double_elimination') {
           rules.push('Double Elimination Bracket');
@@ -1690,7 +1700,12 @@ export default function TournamentPoster() {
       });
       virtual.push({
         format: 'gauntlet', name: 'Gauntlet',
-        config: { start_level: config.start_single_level, final_level: config.final_single_level, best_of: config.gauntlet_best_of || 3 },
+        config: {
+          start_level: config.start_single_level,
+          final_level: config.final_single_level,
+          final_level_max: config.final_single_level ? Math.min(config.final_single_level + 1, 28) : 25,
+          best_of: config.gauntlet_best_of || 3,
+        },
         advancement: null,
       });
     } else {

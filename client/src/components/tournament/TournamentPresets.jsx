@@ -98,6 +98,7 @@ const PRESETS = [
         config: {
           start_level: 19,
           final_level: 24,
+          final_level_max: 25,
           best_of: 3,
         },
         advancement: { type: 'all' },

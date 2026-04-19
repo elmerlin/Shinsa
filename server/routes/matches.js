@@ -44,7 +44,17 @@ function getGauntletLevelBounds(config = {}) {
       ?? config.gauntlet_final_single_level,
     10
   ) || 24;
-  return { startLevel, finalLevel };
+  const finalLevelMax = Math.max(
+    finalLevel,
+    parseInt(
+      config.final_level_max
+        ?? config.final_single_level_max
+        ?? config.gauntlet_final_level_max
+        ?? config.gauntlet_final_single_level_max,
+      10
+    ) || Math.min(finalLevel + 1, 28)
+  );
+  return { startLevel, finalLevel, finalLevelMax };
 }
 
 function getGauntletMatchRules(config = {}) {
@@ -57,7 +67,7 @@ function getGauntletMatchRules(config = {}) {
   };
 }
 
-function getMatchRules(db, match) {
+function getMatchConfigAndFormat(db, match) {
   let config = {};
   let format = match.match_type || '';
 
@@ -72,6 +82,12 @@ function getMatchRules(db, match) {
     if (tournament) config = parseConfig(tournament.config);
   }
 
+  return { config, format };
+}
+
+function getMatchRules(db, match) {
+  const { config, format } = getMatchConfigAndFormat(db, match);
+
   if (match.match_type === 'gauntlet' || format === 'gauntlet') {
     return getGauntletMatchRules(config);
   }
@@ -83,6 +99,34 @@ function getMatchRules(db, match) {
       ? parseInt(config.vetoes_per_player, 10)
       : 1,
     level_mode: 'range',
+  };
+}
+
+function normalizeGauntletMatchLevels(db, match) {
+  if (!match || match.match_type !== 'gauntlet') return match;
+
+  const minLevel = parseInt(match.difficulty_min, 10) || parseInt(match.difficulty_max, 10) || 19;
+  const currentMaxLevel = parseInt(match.difficulty_max, 10) || minLevel;
+  if (currentMaxLevel > minLevel) return match;
+
+  const { config } = getMatchConfigAndFormat(db, match);
+  const { finalLevel, finalLevelMax } = getGauntletLevelBounds(config);
+  if (finalLevelMax <= currentMaxLevel || minLevel !== finalLevel) return match;
+
+  const scopeField = match.phase_id ? 'phase_id' : 'tournament_id';
+  const scopeValue = match.phase_id || match.tournament_id;
+  const finalGauntlet = db.prepare(
+    `SELECT MAX(gauntlet_order) AS max_order FROM matches WHERE ${scopeField} = ? AND match_type = 'gauntlet'`
+  ).get(scopeValue);
+  const maxOrder = parseInt(finalGauntlet?.max_order, 10) || 0;
+  const matchOrder = parseInt(match.gauntlet_order, 10) || 0;
+
+  if (matchOrder !== maxOrder) return match;
+
+  return {
+    ...match,
+    difficulty_min: minLevel,
+    difficulty_max: finalLevelMax,
   };
 }
 
@@ -102,9 +146,11 @@ function isSharedWinSeriesResult({ match, matchRules, winnerId, playedSongs, sco
   return p1Wins > 0 && p1Wins === p2Wins;
 }
 
-function getPreferredSongsForLevel(db, level) {
-  let songs = db.prepare('SELECT * FROM songs WHERE level = ? AND flags LIKE ?').all(level, '%cut:2%');
-  if (songs.length === 0) songs = db.prepare('SELECT * FROM songs WHERE level = ?').all(level);
+function getPreferredSongsForRange(db, minLevel, maxLevel = minLevel) {
+  const lowLevel = Math.min(parseInt(minLevel, 10) || 1, parseInt(maxLevel, 10) || parseInt(minLevel, 10) || 1);
+  const highLevel = Math.max(parseInt(minLevel, 10) || 1, parseInt(maxLevel, 10) || parseInt(minLevel, 10) || 1);
+  let songs = db.prepare('SELECT * FROM songs WHERE level >= ? AND level <= ? AND flags LIKE ?').all(lowLevel, highLevel, '%cut:2%');
+  if (songs.length === 0) songs = db.prepare('SELECT * FROM songs WHERE level >= ? AND level <= ?').all(lowLevel, highLevel);
   return songs;
 }
 
@@ -137,7 +183,7 @@ router.get('/tournament/:tournamentId', (req, res) => {
   if (round) { query += ' AND round_number = ?'; params.push(parseInt(round)); }
   query += ' ORDER BY round_number ASC, created_at ASC';
 
-  const matches = db.prepare(query).all(...params);
+  const matches = db.prepare(query).all(...params).map((match) => normalizeGauntletMatchLevels(db, match));
   db.close();
   res.json(matches.map(parseMatchJSON));
 });
@@ -145,7 +191,8 @@ router.get('/tournament/:tournamentId', (req, res) => {
 // GET single match with player details
 router.get('/:id', (req, res) => {
   const db = getDb();
-  const match = db.prepare('SELECT * FROM matches WHERE id = ?').get(req.params.id);
+  const storedMatch = db.prepare('SELECT * FROM matches WHERE id = ?').get(req.params.id);
+  const match = normalizeGauntletMatchLevels(db, storedMatch);
   if (!match) { db.close(); return res.status(404).json({ error: 'Match not found' }); }
 
   const player1 = match.player1_id ? db.prepare('SELECT * FROM players WHERE id = ?').get(match.player1_id) : null;
@@ -246,7 +293,7 @@ router.post('/tournament/:tournamentId/gauntlet', (req, res) => {
     return res.status(400).json({ error: 'Need at least 2 players for gauntlet' });
   }
 
-  const { startLevel, finalLevel } = getGauntletLevelBounds(config);
+  const { startLevel, finalLevel, finalLevelMax } = getGauntletLevelBounds(config);
   const totalMatches = players.length - 1;
 
   // Rankings: index 0 = 1st place, index N-1 = last place
@@ -264,13 +311,10 @@ router.post('/tournament/:tournamentId/gauntlet', (req, res) => {
   const createGauntlet = db.transaction(() => {
     for (let i = 0; i < totalMatches; i++) {
       const matchOrder = i + 1;
-      let matchLevel;
-
-      if (matchOrder === totalMatches) {
-        matchLevel = finalLevel;
-      } else {
-        matchLevel = Math.min(startLevel + i, finalLevel);
-      }
+      const matchMinLevel = matchOrder === totalMatches
+        ? finalLevel
+        : Math.min(startLevel + i, finalLevel);
+      const matchMaxLevel = matchOrder === totalMatches ? finalLevelMax : matchMinLevel;
 
       // Challenger from standings (going from bottom up)
       // Match 1: challenger = second-to-last (index N-2), opponent = last (index N-1)
@@ -290,7 +334,7 @@ router.post('/tournament/:tournamentId/gauntlet', (req, res) => {
       insertMatch.run(
         uuidv4(), tournamentId, 0,
         challengerId, opponentId,
-        matchLevel, matchLevel,
+        matchMinLevel, matchMaxLevel,
         i === 0 ? 'PENDING' : 'WAITING',
         matchOrder
       );
@@ -313,7 +357,8 @@ router.post('/tournament/:tournamentId/gauntlet', (req, res) => {
 // POST draw cards for a match (5 cards: at least 2 Single + 2 Double)
 router.post('/:id/draw', (req, res) => {
   const db = getDb();
-  const match = db.prepare('SELECT * FROM matches WHERE id = ?').get(req.params.id);
+  const storedMatch = db.prepare('SELECT * FROM matches WHERE id = ?').get(req.params.id);
+  const match = normalizeGauntletMatchLevels(db, storedMatch);
   if (!match) { db.close(); return res.status(404).json({ error: 'Match not found' }); }
 
   const shuffle = (arr) => {
@@ -329,13 +374,15 @@ router.post('/:id/draw', (req, res) => {
 
   if (isGauntlet) {
     const matchRules = getMatchRules(db, match);
-    const matchLevel = parseInt(match.difficulty_min, 10) || parseInt(match.difficulty_max, 10) || 19;
-    const songPool = getPreferredSongsForLevel(db, matchLevel);
+    const matchMinLevel = parseInt(match.difficulty_min, 10) || parseInt(match.difficulty_max, 10) || 19;
+    const matchMaxLevel = parseInt(match.difficulty_max, 10) || matchMinLevel;
+    const levelLabel = matchMinLevel === matchMaxLevel ? `${matchMinLevel}` : `${matchMinLevel}-${matchMaxLevel}`;
+    const songPool = getPreferredSongsForRange(db, matchMinLevel, matchMaxLevel);
     const minimumSongs = matchRules.best_of === 1 ? 1 : 3;
 
     if (songPool.length < minimumSongs) {
       db.close();
-      return res.status(400).json({ error: `Not enough charts at level ${matchLevel} for this gauntlet draw` });
+      return res.status(400).json({ error: `Not enough charts at level ${levelLabel} for this gauntlet draw` });
     }
 
     const drawCount = Math.min(songPool.length, matchRules.cards_per_draw || minimumSongs);
@@ -776,7 +823,7 @@ function generatePhaseDoubleElim(db, phase, players, config, res) {
 }
 
 function generatePhaseGauntlet(db, phase, players, config, res) {
-  const { startLevel, finalLevel } = getGauntletLevelBounds(config);
+  const { startLevel, finalLevel, finalLevelMax } = getGauntletLevelBounds(config);
   const totalMatches = players.length - 1;
 
   const insertMatch = db.prepare(`
@@ -787,13 +834,10 @@ function generatePhaseGauntlet(db, phase, players, config, res) {
   const createGauntlet = db.transaction(() => {
     for (let i = 0; i < totalMatches; i++) {
       const matchOrder = i + 1;
-      let matchLevel;
-
-      if (matchOrder === totalMatches) {
-        matchLevel = finalLevel;
-      } else {
-        matchLevel = Math.min(startLevel + i, finalLevel);
-      }
+      const matchMinLevel = matchOrder === totalMatches
+        ? finalLevel
+        : Math.min(startLevel + i, finalLevel);
+      const matchMaxLevel = matchOrder === totalMatches ? finalLevelMax : matchMinLevel;
 
       const challengerIdx = players.length - 1 - i - 1;
       const challengerId = players[challengerIdx]?.player_id || players[challengerIdx]?.id || null;
@@ -806,7 +850,7 @@ function generatePhaseGauntlet(db, phase, players, config, res) {
       insertMatch.run(
         uuidv4(), phase.tournament_id,
         challengerId, opponentId,
-        matchLevel, matchLevel,
+        matchMinLevel, matchMaxLevel,
         i === 0 ? 'PENDING' : 'WAITING',
         matchOrder, phase.id
       );

@@ -60,6 +60,13 @@ const getSharedWinSeriesScore = (match) => {
   return Math.max(1, Math.floor(bestOf / 2));
 };
 
+const formatLevelBand = (minLevel, maxLevel) => {
+  const min = parseInt(minLevel, 10) || 0;
+  const max = parseInt(maxLevel, 10) || min;
+  if (!min && !max) return '?';
+  return min === max ? `${min}` : `${min}-${max}`;
+};
+
 const usesLegacyGauntletScoring = (match) => (
   match?.match_type === 'gauntlet'
   && (match?.played_songs || []).length === 2
@@ -453,7 +460,7 @@ export default function MatchView() {
           </div>
           <div className="text-sm text-gray-500">
             {isGauntlet
-              ? `Match #${match.gauntlet_order} | Lv.${match.difficulty_min} mixed draw | ${bestOf === 1 ? '1 song' : 'Best of 3'}`
+              ? `Match #${match.gauntlet_order} | Lv.${formatLevelBand(match.difficulty_min, match.difficulty_max)} mixed draw | ${bestOf === 1 ? '1 song' : 'Best of 3'}`
               : `Round ${match.round_number} | Lv.${match.difficulty_min}${match.difficulty_max !== match.difficulty_min ? `-${match.difficulty_max}` : ''}`
             }
           </div>
@@ -523,8 +530,8 @@ export default function MatchView() {
           <p className="text-sm text-gray-500 mt-2">
             {isGauntlet
               ? (bestOf === 1
-                ? `Draw 1 singles-or-doubles chart at Lv.${match.difficulty_min}`
-                : `Draw 5 singles-or-doubles charts at Lv.${match.difficulty_min}, veto 1 each, then play the final 3`)
+                ? `Draw 1 singles-or-doubles chart at Lv.${formatLevelBand(match.difficulty_min, match.difficulty_max)}`
+                : `Draw 5 singles-or-doubles charts at Lv.${formatLevelBand(match.difficulty_min, match.difficulty_max)}, veto 1 each, then play the final 3`)
               : '5 drawn, 2 vetoed, best of 3 remaining'
             }
           </p>
