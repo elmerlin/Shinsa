@@ -208,10 +208,19 @@ export default function PhaseConfigPanel({ phase, onChange, isLastPhase }) {
   const config = phase.config || {};
   const advancement = phase.advancement || {};
   const gauntletStartLevel = config.start_level ?? config.start_single_level ?? 19;
-  const gauntletFinalLevel = config.final_level ?? config.final_single_level ?? 24;
+  const explicitGauntletFinalLevel = parseInt(config.final_level, 10);
+  const legacyGauntletFinalUpper = parseInt(config.final_single_level, 10);
+  const gauntletFinalLevel = Number.isFinite(explicitGauntletFinalLevel)
+    ? explicitGauntletFinalLevel
+    : Number.isFinite(legacyGauntletFinalUpper)
+      ? Math.max(1, legacyGauntletFinalUpper - 1)
+      : 24;
   const gauntletFinalLevelMax = Math.max(
     gauntletFinalLevel,
-    config.final_level_max ?? config.final_single_level_max ?? Math.min(Number(gauntletFinalLevel) + 1, 28)
+    parseInt(config.final_level_max ?? config.final_single_level_max, 10)
+      || (Number.isFinite(legacyGauntletFinalUpper)
+        ? legacyGauntletFinalUpper
+        : Math.min(Number(gauntletFinalLevel) + 1, 28))
   );
   const gauntletBestOf = config.best_of ?? 3;
 

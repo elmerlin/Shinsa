@@ -30,6 +30,23 @@ function parseConfig(rawConfig) {
 }
 
 function getGauntletLevelBounds(config = {}) {
+  const explicitFinalLevel = parseInt(
+    config.final_level
+      ?? config.gauntlet_final_level,
+    10
+  );
+  const legacyFinalUpperLevel = parseInt(
+    config.final_single_level
+      ?? config.gauntlet_final_single_level,
+    10
+  );
+  const explicitFinalLevelMax = parseInt(
+    config.final_level_max
+      ?? config.gauntlet_final_level_max
+      ?? config.final_single_level_max
+      ?? config.gauntlet_final_single_level_max,
+    10
+  );
   const startLevel = parseInt(
     config.start_level
       ?? config.start_single_level
@@ -37,22 +54,18 @@ function getGauntletLevelBounds(config = {}) {
       ?? config.gauntlet_start_single_level,
     10
   ) || 19;
-  const finalLevel = parseInt(
-    config.final_level
-      ?? config.final_single_level
-      ?? config.gauntlet_final_level
-      ?? config.gauntlet_final_single_level,
-    10
-  ) || 24;
+  const finalLevel = Number.isFinite(explicitFinalLevel)
+    ? explicitFinalLevel
+    : Number.isFinite(legacyFinalUpperLevel)
+      ? Math.max(1, legacyFinalUpperLevel - 1)
+      : 24;
   const finalLevelMax = Math.max(
     finalLevel,
-    parseInt(
-      config.final_level_max
-        ?? config.final_single_level_max
-        ?? config.gauntlet_final_level_max
-        ?? config.gauntlet_final_single_level_max,
-      10
-    ) || Math.min(finalLevel + 1, 28)
+    Number.isFinite(explicitFinalLevelMax)
+      ? explicitFinalLevelMax
+      : Number.isFinite(legacyFinalUpperLevel)
+        ? legacyFinalUpperLevel
+        : Math.min(finalLevel + 1, 28)
   );
   return { startLevel, finalLevel, finalLevelMax };
 }
@@ -107,12 +120,9 @@ function normalizeGauntletMatchLevels(db, match) {
 
   const minLevel = parseInt(match.difficulty_min, 10) || parseInt(match.difficulty_max, 10) || 19;
   const currentMaxLevel = parseInt(match.difficulty_max, 10) || minLevel;
-  if (currentMaxLevel > minLevel) return match;
 
   const { config } = getMatchConfigAndFormat(db, match);
   const { finalLevel, finalLevelMax } = getGauntletLevelBounds(config);
-  if (finalLevelMax <= currentMaxLevel || minLevel !== finalLevel) return match;
-
   const scopeField = match.phase_id ? 'phase_id' : 'tournament_id';
   const scopeValue = match.phase_id || match.tournament_id;
   const finalGauntlet = db.prepare(
@@ -122,10 +132,13 @@ function normalizeGauntletMatchLevels(db, match) {
   const matchOrder = parseInt(match.gauntlet_order, 10) || 0;
 
   if (matchOrder !== maxOrder) return match;
+  if (minLevel === finalLevel && currentMaxLevel === finalLevelMax) return match;
+  if (currentMaxLevel > minLevel && currentMaxLevel !== finalLevelMax) return match;
+  if (minLevel !== finalLevel && minLevel !== finalLevelMax) return match;
 
   return {
     ...match,
-    difficulty_min: minLevel,
+    difficulty_min: finalLevel,
     difficulty_max: finalLevelMax,
   };
 }

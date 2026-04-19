@@ -55,10 +55,21 @@ function formatRoundLevelLabel(roundLevel = {}, index = 0) {
 
 function getGauntletLevels(config = {}) {
   const start = parseInt(config.start_level ?? config.start_single_level, 10) || 19;
-  const final = parseInt(config.final_level ?? config.final_single_level, 10) || 24;
+  const explicitFinal = parseInt(config.final_level, 10);
+  const legacyFinalUpper = parseInt(config.final_single_level, 10);
+  const explicitFinalMax = parseInt(config.final_level_max ?? config.final_single_level_max, 10);
+  const final = Number.isFinite(explicitFinal)
+    ? explicitFinal
+    : Number.isFinite(legacyFinalUpper)
+      ? Math.max(1, legacyFinalUpper - 1)
+      : 24;
   const finalMax = Math.max(
     final,
-    parseInt(config.final_level_max ?? config.final_single_level_max, 10) || Math.min(final + 1, 28)
+    Number.isFinite(explicitFinalMax)
+      ? explicitFinalMax
+      : Number.isFinite(legacyFinalUpper)
+        ? legacyFinalUpper
+        : Math.min(final + 1, 28)
   );
   return { start, final, finalMax };
 }

@@ -146,10 +146,21 @@ function getPhaseRules(phase) {
   if (c.duration_minutes) rules.push(`${c.duration_minutes} min session`);
   if (f === 'gauntlet') {
     const start = parseInt(c.start_level ?? c.start_single_level, 10) || 19;
-    const final = parseInt(c.final_level ?? c.final_single_level, 10) || 24;
+    const explicitFinal = parseInt(c.final_level, 10);
+    const legacyFinalUpper = parseInt(c.final_single_level, 10);
+    const explicitFinalMax = parseInt(c.final_level_max ?? c.final_single_level_max, 10);
+    const final = Number.isFinite(explicitFinal)
+      ? explicitFinal
+      : Number.isFinite(legacyFinalUpper)
+        ? Math.max(1, legacyFinalUpper - 1)
+        : 24;
     const finalMax = Math.max(
       final,
-      parseInt(c.final_level_max ?? c.final_single_level_max, 10) || Math.min(final + 1, 28)
+      Number.isFinite(explicitFinalMax)
+        ? explicitFinalMax
+        : Number.isFinite(legacyFinalUpper)
+          ? legacyFinalUpper
+          : Math.min(final + 1, 28)
     );
     rules.push(`Lv ${start} \u2192 Lv ${final}${finalMax !== final ? `-${finalMax}` : ''}`);
     rules.push('Mixed singles/doubles');
@@ -1702,8 +1713,8 @@ export default function TournamentPoster() {
         format: 'gauntlet', name: 'Gauntlet',
         config: {
           start_level: config.start_single_level,
-          final_level: config.final_single_level,
-          final_level_max: config.final_single_level ? Math.min(config.final_single_level + 1, 28) : 25,
+          final_level: config.final_single_level ? Math.max(1, config.final_single_level - 1) : 24,
+          final_level_max: config.final_single_level || 25,
           best_of: config.gauntlet_best_of || 3,
         },
         advancement: null,
