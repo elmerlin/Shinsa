@@ -2,6 +2,10 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getAvatarUrl } from './AvatarPicker';
 
+function isSharedWinMatch(match) {
+  return !!match?.scores?.shared_win;
+}
+
 export default function SwissRound({ round, matches, players, config, onUpdate, tournamentId }) {
   const navigate = useNavigate();
   const playerMap = {};
@@ -61,6 +65,7 @@ export default function SwissRound({ round, matches, players, config, onUpdate, 
           const isComplete = match.status === 'COMPLETED';
           const isLive = match.status === 'DRAWING' || match.status === 'VETOING' || match.status === 'READY';
           const scores = match.scores || {};
+          const sharedWin = isSharedWinMatch(match);
 
           return (
             <div
@@ -72,7 +77,7 @@ export default function SwissRound({ round, matches, players, config, onUpdate, 
               `}
             >
               {/* Player 1 (higher seed) */}
-              <div className={`flex-1 text-right min-w-0 ${match.winner_id === match.player1_id ? 'text-piu-green' : ''}`}>
+              <div className={`flex-1 text-right min-w-0 ${(match.winner_id === match.player1_id || sharedWin) ? 'text-piu-green' : ''}`}>
                 <div className="font-display font-bold text-sm sm:text-base truncate flex items-center justify-end gap-1.5">
                   {p1?.avatar && (
                     <img src={getAvatarUrl(p1.avatar)} alt="" className="h-6 w-6 rounded-full border border-white/10 shrink-0 shadow-sm" />
@@ -88,11 +93,11 @@ export default function SwissRound({ round, matches, players, config, onUpdate, 
               <div className="flex flex-col items-center min-w-[60px] sm:min-w-[80px]">
                 {isComplete ? (
                   <div className="flex items-center gap-1.5 sm:gap-2 font-display font-bold text-base sm:text-lg">
-                    <span className={match.winner_id === match.player1_id ? 'text-piu-green' : 'text-zinc-600'}>
+                    <span className={match.winner_id === match.player1_id || sharedWin ? 'text-piu-green' : 'text-zinc-600'}>
                       {scores.player1_wins || 0}
                     </span>
                     <span className="text-zinc-700">&ndash;</span>
-                    <span className={match.winner_id === match.player2_id ? 'text-piu-green' : 'text-zinc-600'}>
+                    <span className={match.winner_id === match.player2_id || sharedWin ? 'text-piu-green' : 'text-zinc-600'}>
                       {scores.player2_wins || 0}
                     </span>
                   </div>
@@ -108,7 +113,7 @@ export default function SwissRound({ round, matches, players, config, onUpdate, 
               </div>
 
               {/* Player 2 (lower seed) */}
-              <div className={`flex-1 min-w-0 ${match.winner_id === match.player2_id ? 'text-piu-green' : ''}`}>
+              <div className={`flex-1 min-w-0 ${(match.winner_id === match.player2_id || sharedWin) ? 'text-piu-green' : ''}`}>
                 <div className="font-display font-bold text-sm sm:text-base truncate flex items-center gap-1.5">
                   {p2?.avatar && (
                     <img src={getAvatarUrl(p2.avatar)} alt="" className="h-6 w-6 rounded-full border border-white/10 shrink-0 shadow-sm" />

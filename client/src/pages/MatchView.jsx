@@ -46,6 +46,20 @@ const getSkillColorFromTitle = (title) => {
 
 const getBestOf = (match) => (parseInt(match?.match_rules?.best_of, 10) === 1 ? 1 : 3);
 
+const isSharedWinMatch = (match) => !!match?.scores?.shared_win;
+
+const canUseSharedWinRule = (match) => (
+  !!match
+  && match.match_type !== 'gauntlet'
+  && !match.bracket
+  && getBestOf(match) > 1
+);
+
+const getSharedWinSeriesScore = (match) => {
+  const bestOf = getBestOf(match);
+  return Math.max(1, Math.floor(bestOf / 2));
+};
+
 const usesLegacyGauntletScoring = (match) => (
   match?.match_type === 'gauntlet'
   && (match?.played_songs || []).length === 2
@@ -186,7 +200,17 @@ export default function MatchView() {
     const bestOf = getBestOf(match);
     const majority = Math.ceil(bestOf / 2);
     if (!match) {
-      return { results: [], p1Wins: 0, p2Wins: 0, matchOver: false, winnerId: null, p1Total: 0, p2Total: 0, songsNeeded: bestOf };
+      return {
+        results: [],
+        p1Wins: 0,
+        p2Wins: 0,
+        matchOver: false,
+        winnerId: null,
+        p1Total: 0,
+        p2Total: 0,
+        songsNeeded: bestOf,
+        sharedWin: false,
+      };
     }
 
     const songsToScore = getPlayableSongs(match, false);
@@ -217,12 +241,24 @@ export default function MatchView() {
       results.push({ song, p1Score, p2Score, songWinnerId, hasScores, skipped: false });
     }
 
-    const matchOver = p1Wins >= majority || p2Wins >= majority;
-    const winnerId = matchOver ? (p1Wins >= majority ? match.player1_id : match.player2_id) : null;
     const scoredCount = results.filter((r) => r.hasScores && !r.skipped).length;
     const allScoredDone = scoredCount > 0 && results.filter((r) => !r.skipped).every((r) => r.hasScores);
+    const sharedWin = canUseSharedWinRule(match) && allScoredDone && p1Wins === p2Wins && p1Wins > 0;
+    const matchOver = p1Wins >= majority || p2Wins >= majority || sharedWin;
+    const winnerId = matchOver ? (p1Wins >= majority ? match.player1_id : match.player2_id) : null;
 
-    return { results, p1Wins, p2Wins, matchOver, winnerId, p1Total, p2Total, allScoredDone, songsNeeded: matchOver ? scoredCount : bestOf };
+    return {
+      results,
+      p1Wins,
+      p2Wins,
+      matchOver,
+      winnerId: sharedWin ? null : winnerId,
+      p1Total,
+      p2Total,
+      allScoredDone,
+      songsNeeded: matchOver ? scoredCount : bestOf,
+      sharedWin,
+    };
   };
 
   // Calculate gauntlet results (combined total score)
@@ -293,7 +329,7 @@ export default function MatchView() {
         setSubmitting(false);
       }
     } else {
-      const { results, p1Wins, p2Wins, matchOver, winnerId, p1Total, p2Total } = getSeriesResults();
+      const { results, p1Wins, p2Wins, matchOver, winnerId, p1Total, p2Total, sharedWin } = getSeriesResults();
 
       if (!matchOver) {
         return addToast('Match is not decided yet.', 'error');
@@ -313,9 +349,15 @@ export default function MatchView() {
       setSubmitting(true);
       try {
         await submitResult(id, {
-          winner_id: winnerId,
+          winner_id: sharedWin ? null : winnerId,
           played_songs: playedSongs,
-          scores: { player1_wins: p1Wins, player2_wins: p2Wins, p1_total: p1Total, p2_total: p2Total },
+          scores: {
+            player1_wins: p1Wins,
+            player2_wins: p2Wins,
+            p1_total: p1Total,
+            p2_total: p2Total,
+            shared_win: sharedWin,
+          },
         });
         await loadMatch();
       } catch (err) {
@@ -323,6 +365,50 @@ export default function MatchView() {
       } finally {
         setSubmitting(false);
       }
+    }
+  };
+
+  const handleSubmitSharedWin = async () => {
+    if (!canUseSharedWinRule(match)) {
+      return addToast('Shared win is only available for round robin series matches.', 'error');
+    }
+
+    const tiedWins = getSharedWinSeriesScore(match);
+    const playedSongs = playable.map((song) => {
+      const songScore = scores[song.id] || {};
+      const hasScores = songScore.p1 !== '' && songScore.p2 !== '';
+      const p1Score = hasScores ? (parseInt(songScore.p1, 10) || 0) : null;
+      const p2Score = hasScores ? (parseInt(songScore.p2, 10) || 0) : null;
+      return {
+        song_id: song.id,
+        song,
+        p1_score: p1Score,
+        p2_score: p2Score,
+        song_winner_id: null,
+        title: song.title,
+        mode: song.mode,
+        level: song.level,
+      };
+    });
+
+    setSubmitting(true);
+    try {
+      await submitResult(id, {
+        winner_id: null,
+        played_songs: playedSongs,
+        scores: {
+          player1_wins: tiedWins,
+          player2_wins: tiedWins,
+          p1_total: 0,
+          p2_total: 0,
+          shared_win: true,
+        },
+      });
+      await loadMatch();
+    } catch (err) {
+      addToast(err.message, 'error');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -340,6 +426,7 @@ export default function MatchView() {
   const statusInfo = (isGauntlet ? GAUNTLET_STATUS_FLOW : STATUS_FLOW)[status] || {};
   const songResults = legacyGauntlet ? null : getSeriesResults();
   const gauntletResults = legacyGauntlet ? getGauntletResults() : null;
+  const sharedWinMatch = isSharedWinMatch(match);
 
   return (
     <div className="max-w-4xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
@@ -377,7 +464,7 @@ export default function MatchView() {
           <PlayerHeader
             player={player1}
             label={isGauntlet ? 'Challenger' : `Seed #${player1?.seed_rank || '?'}`}
-            isWinner={match.winner_id === match.player1_id}
+            isWinner={match.winner_id === match.player1_id || sharedWinMatch}
             sublabel={isGauntlet ? '' : 'Higher Seed'}
           />
 
@@ -399,11 +486,11 @@ export default function MatchView() {
                 </div>
               ) : (
                 <div className="font-display font-bold text-2xl sm:text-3xl">
-                  <span className={match.winner_id === match.player1_id ? 'text-piu-green' : 'text-gray-600'}>
+                  <span className={match.winner_id === match.player1_id || sharedWinMatch ? 'text-piu-green' : 'text-gray-600'}>
                     {match.scores?.player1_wins || 0}
                   </span>
                   <span className="text-gray-700 mx-1 sm:mx-2">-</span>
-                  <span className={match.winner_id === match.player2_id ? 'text-piu-green' : 'text-gray-600'}>
+                  <span className={match.winner_id === match.player2_id || sharedWinMatch ? 'text-piu-green' : 'text-gray-600'}>
                     {match.scores?.player2_wins || 0}
                   </span>
                 </div>
@@ -416,7 +503,7 @@ export default function MatchView() {
           <PlayerHeader
             player={player2}
             label={isGauntlet ? (match.gauntlet_order === 1 ? 'Bottom Rank' : 'Defender') : `Seed #${player2?.seed_rank || '?'}`}
-            isWinner={match.winner_id === match.player2_id}
+            isWinner={match.winner_id === match.player2_id || sharedWinMatch}
             sublabel={isGauntlet ? '' : 'Lower Seed'}
             align="right"
           />
@@ -586,6 +673,27 @@ export default function MatchView() {
               : 'Best of 3: first to win 2 songs wins the match. Enter scores (0 - 1,000,000).'}
           </p>
 
+          {canUseSharedWinRule(match) && (
+            <div className="card border-piu-accent/20 bg-piu-accent/5">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="font-display font-bold text-piu-accent">Need to record a shared win?</p>
+                  <p className="text-xs text-gray-400">
+                    Use this when the deciding tie-breaker song ended in a draw and both players should take a win, even if song scores were not entered.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSubmitSharedWin}
+                  className="rounded-lg border border-piu-accent/30 bg-piu-accent/12 px-4 py-2 text-sm font-display font-bold text-rose-100 transition-colors hover:border-piu-accent/45 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={submitting}
+                >
+                  {submitting ? 'Submitting...' : 'Record Shared Win'}
+                </button>
+              </div>
+            </div>
+          )}
+
           {playable.map((song, idx) => {
             const songResult = songResults.results[idx];
             const isSkipped = songResult?.skipped;
@@ -671,10 +779,14 @@ export default function MatchView() {
           {songResults.matchOver && (
             <div className="card text-center py-4 border-piu-green/30 bg-piu-green/5">
               <p className="font-display font-bold text-piu-green text-xl">
-                {songResults.winnerId === match.player1_id ? player1?.name : player2?.name} wins!
+                {songResults.sharedWin
+                  ? 'Shared win'
+                  : `${songResults.winnerId === match.player1_id ? player1?.name : player2?.name} wins!`}
               </p>
               <p className="text-sm text-gray-400">
-                Songs: {songResults.p1Wins} - {songResults.p2Wins}
+                {songResults.sharedWin
+                  ? `Deciding song tied at ${songResults.p1Wins}-${songResults.p2Wins}, both players take a win.`
+                  : `Songs: ${songResults.p1Wins} - ${songResults.p2Wins}`}
               </p>
             </div>
           )}
@@ -837,6 +949,12 @@ export default function MatchView() {
               </div>
             );
           })}
+          {sharedWinMatch && (
+            <div className="card text-center py-3 border-piu-accent/20 bg-piu-accent/5">
+              <p className="font-display font-bold text-piu-accent">Shared win</p>
+              <p className="text-xs text-gray-400">Deciding song ended in a draw, so both players receive a win.</p>
+            </div>
+          )}
         </div>
       )}
 

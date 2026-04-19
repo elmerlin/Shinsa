@@ -19,6 +19,8 @@ const getSkillColor = (title) => {
   return 'text-gray-500';
 };
 
+const isSharedWinMatch = (match) => !!match?.scores?.shared_win;
+
 export default function Standings({ players, matches, showFinal }) {
   const [expandedId, setExpandedId] = useState(null);
 
@@ -150,7 +152,8 @@ export default function Standings({ players, matches, showFinal }) {
                       {playerMatches.map(m => {
                         const opponentId = m.player1_id === player.id ? m.player2_id : m.player1_id;
                         const opponent = playerMap[opponentId];
-                        const isWin = m.winner_id === player.id;
+                        const sharedWin = isSharedWinMatch(m);
+                        const isWin = sharedWin || m.winner_id === player.id;
                         const mScores = m.scores || {};
                         const playedSongs = m.played_songs || [];
                         const isP1 = m.player1_id === player.id;
@@ -161,8 +164,14 @@ export default function Standings({ players, matches, showFinal }) {
                           <div key={m.id} className={`rounded-lg border p-3 ${isWin ? 'bg-piu-green/[0.04] border-piu-green/15' : 'bg-red-500/[0.04] border-red-500/15'}`}>
                             <div className="flex items-center justify-between mb-2 flex-wrap gap-1">
                               <div className="flex items-center gap-2">
-                                <span className={`font-display font-bold text-[10px] px-2 py-0.5 rounded-full border ${isWin ? 'bg-piu-green/12 border-piu-green/20 text-piu-green' : 'bg-red-500/12 border-red-500/20 text-red-400'}`}>
-                                  {isWin ? 'WIN' : 'LOSS'}
+                                <span className={`font-display font-bold text-[10px] px-2 py-0.5 rounded-full border ${
+                                  sharedWin
+                                    ? 'bg-piu-accent/12 border-piu-accent/20 text-piu-accent'
+                                    : isWin
+                                      ? 'bg-piu-green/12 border-piu-green/20 text-piu-green'
+                                      : 'bg-red-500/12 border-red-500/20 text-red-400'
+                                }`}>
+                                  {sharedWin ? 'SHARED WIN' : isWin ? 'WIN' : 'LOSS'}
                                 </span>
                                 <span className="text-zinc-300 font-display text-sm flex items-center gap-1">
                                   vs {opponentFlag && <span className="text-sm">{opponentFlag}</span>}{opponent?.name || 'Unknown'}
@@ -197,6 +206,7 @@ export default function Standings({ players, matches, showFinal }) {
                                   const iSongWin = isGauntlet
                                     ? (myScore > theirScore)
                                     : (s.song_winner_id === player.id);
+                                  const songTied = !isGauntlet && s.song_winner_id == null && myScore != null && theirScore != null && Number(myScore) === Number(theirScore);
 
                                   return (
                                     <div key={si} className="flex items-center gap-2 text-sm">
@@ -206,11 +216,11 @@ export default function Standings({ players, matches, showFinal }) {
                                         {songMode[0]}{songLevel}
                                       </span>
                                       <span className="text-zinc-400 flex-1 truncate text-xs">{songTitle}</span>
-                                      <span className={`font-mono text-xs ${iSongWin ? 'text-piu-green font-bold' : 'text-zinc-600'}`}>
+                                      <span className={`font-mono text-xs ${songTied ? 'text-piu-accent font-bold' : iSongWin ? 'text-piu-green font-bold' : 'text-zinc-600'}`}>
                                         {formatScore(myScore)}
                                       </span>
                                       <span className="text-zinc-700 text-[10px]">vs</span>
-                                      <span className={`font-mono text-xs ${!iSongWin ? 'text-red-400 font-bold' : 'text-zinc-600'}`}>
+                                      <span className={`font-mono text-xs ${songTied ? 'text-piu-accent font-bold' : !iSongWin ? 'text-red-400 font-bold' : 'text-zinc-600'}`}>
                                         {formatScore(theirScore)}
                                       </span>
                                     </div>

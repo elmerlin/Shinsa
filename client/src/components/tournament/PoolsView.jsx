@@ -17,6 +17,10 @@ function getPoolColor(poolId) {
   return POOL_COLORS[poolId % POOL_COLORS.length];
 }
 
+function isSharedWinMatch(match) {
+  return !!match?.scores?.shared_win;
+}
+
 function PoolStandings({ poolPlayers, poolMatches, playerMap }) {
   const sorted = [...poolPlayers].sort((a, b) => {
     const aPlayer = playerMap[a.player_id] || a;
@@ -162,7 +166,7 @@ export default function PoolsView({ matches, players, phaseConfig, phasePlayers,
                         ${isComplete ? 'bg-piu-green/5 hover:bg-piu-green/10' : isActive ? 'bg-piu-accent/5 hover:bg-piu-accent/10' : 'hover:bg-piu-dark/40'}
                       `}
                     >
-                      <span className={`font-display font-bold truncate flex-1 text-right ${match.winner_id === match.player1_id ? 'text-piu-green' : ''}`}>
+                      <span className={`font-display font-bold truncate flex-1 text-right ${(match.winner_id === match.player1_id || isSharedWinMatch(match)) ? 'text-piu-green' : ''}`}>
                         {p1?.name || 'TBD'}
                       </span>
                       <span className="text-gray-600 mx-1 shrink-0">
@@ -171,7 +175,7 @@ export default function PoolsView({ matches, players, phaseConfig, phasePlayers,
                           : 'vs'
                         }
                       </span>
-                      <span className={`font-display font-bold truncate flex-1 ${match.winner_id === match.player2_id ? 'text-piu-green' : ''}`}>
+                      <span className={`font-display font-bold truncate flex-1 ${(match.winner_id === match.player2_id || isSharedWinMatch(match)) ? 'text-piu-green' : ''}`}>
                         {p2?.name || 'TBD'}
                       </span>
                     </div>

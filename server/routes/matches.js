@@ -86,6 +86,22 @@ function getMatchRules(db, match) {
   };
 }
 
+function isSharedWinSeriesResult({ match, matchRules, winnerId, playedSongs, scores }) {
+  if (!match || match.match_type === 'gauntlet' || match.bracket) return false;
+  if (scores?.shared_win === true) return true;
+  if (winnerId) return false;
+
+  const bestOf = parseInt(matchRules?.best_of, 10) === 1 ? 1 : 3;
+  if (bestOf <= 1) return false;
+
+  const rows = Array.isArray(playedSongs) ? playedSongs : [];
+  if (rows.length < bestOf) return false;
+
+  const p1Wins = parseInt(scores?.player1_wins, 10) || 0;
+  const p2Wins = parseInt(scores?.player2_wins, 10) || 0;
+  return p1Wins > 0 && p1Wins === p2Wins;
+}
+
 function getPreferredSongsForLevel(db, level) {
   let songs = db.prepare('SELECT * FROM songs WHERE level = ? AND flags LIKE ?').all(level, '%cut:2%');
   if (songs.length === 0) songs = db.prepare('SELECT * FROM songs WHERE level = ?').all(level);
@@ -452,16 +468,30 @@ router.post('/:id/result', (req, res) => {
   if (!match) { db.close(); return res.status(404).json({ error: 'Match not found' }); }
 
   const { winner_id, played_songs, scores } = req.body;
-
+  const matchRules = getMatchRules(db, match);
   const isGauntlet = match.match_type === 'gauntlet';
+  const sharedWin = isSharedWinSeriesResult({
+    match,
+    matchRules,
+    winnerId: winner_id,
+    playedSongs: played_songs,
+    scores,
+  });
+  const serializedScores = JSON.stringify({
+    ...(scores && typeof scores === 'object' ? scores : {}),
+    shared_win: sharedWin,
+  });
 
   const submitResult = db.transaction(() => {
     db.prepare(
       'UPDATE matches SET winner_id = ?, played_songs = ?, scores = ?, status = ? WHERE id = ?'
-    ).run(winner_id, JSON.stringify(played_songs), JSON.stringify(scores), 'COMPLETED', req.params.id);
+    ).run(winner_id || null, JSON.stringify(played_songs), serializedScores, 'COMPLETED', req.params.id);
 
     if (!isGauntlet && match.player1_id && match.player2_id) {
-      if (winner_id === match.player1_id) {
+      if (sharedWin) {
+        db.prepare('UPDATE players SET wins = wins + 1, points = points + 1 WHERE id = ?').run(match.player1_id);
+        db.prepare('UPDATE players SET wins = wins + 1, points = points + 1 WHERE id = ?').run(match.player2_id);
+      } else if (winner_id === match.player1_id) {
         db.prepare('UPDATE players SET wins = wins + 1, points = points + 1 WHERE id = ?').run(match.player1_id);
         db.prepare('UPDATE players SET losses = losses + 1 WHERE id = ?').run(match.player2_id);
       } else if (winner_id === match.player2_id) {
@@ -495,7 +525,10 @@ router.post('/:id/result', (req, res) => {
 
     // Update phase player stats for phase-aware matches
     if (match.phase_id && match.player1_id && match.player2_id && !isGauntlet) {
-      if (winner_id === match.player1_id) {
+      if (sharedWin) {
+        db.prepare('UPDATE tournament_phase_players SET wins = wins + 1, points = points + 1 WHERE phase_id = ? AND player_id = ?').run(match.phase_id, match.player1_id);
+        db.prepare('UPDATE tournament_phase_players SET wins = wins + 1, points = points + 1 WHERE phase_id = ? AND player_id = ?').run(match.phase_id, match.player2_id);
+      } else if (winner_id === match.player1_id) {
         db.prepare('UPDATE tournament_phase_players SET wins = wins + 1, points = points + 1 WHERE phase_id = ? AND player_id = ?').run(match.phase_id, match.player1_id);
         db.prepare('UPDATE tournament_phase_players SET losses = losses + 1 WHERE phase_id = ? AND player_id = ?').run(match.phase_id, match.player2_id);
       } else if (winner_id === match.player2_id) {
