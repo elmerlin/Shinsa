@@ -2,16 +2,36 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { getSongs, getJacketMap, saveMySongOfWeek } from '../utils/api';
 import PiuChartJacket, { resolveChartJacketUrl } from './PiuChartJacket';
 
-const MODE_OPTIONS = ['all', 'Single', 'Double', 'CoOp'];
-const MAX_RESULTS = 80;
+const MODE_OPTIONS = [
+  { value: 'all', label: 'All' },
+  { value: 'Single', label: 'Single' },
+  { value: 'Double', label: 'Double' },
+  { value: 'CoOp', label: 'Co-Op' },
+];
+const MAX_GROUPS = 120;
 
-function matchesSearch(song, query) {
-  if (!query) return true;
-  const q = query.toLowerCase();
-  return (
-    String(song.title || '').toLowerCase().includes(q) ||
-    String(song.artist || '').toLowerCase().includes(q)
-  );
+function modeShort(mode) {
+  if (mode === 'Single') return 'S';
+  if (mode === 'Double') return 'D';
+  if (mode === 'CoOp') return 'C';
+  return '';
+}
+
+function modeTone(mode, selected) {
+  const baseActive = 'border-piu-accent bg-piu-accent/30 text-white';
+  if (selected) return baseActive;
+  if (mode === 'Single') return 'border-rose-500/30 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20';
+  if (mode === 'Double') return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20';
+  if (mode === 'CoOp') return 'border-sky-500/30 bg-sky-500/10 text-sky-200 hover:bg-sky-500/20';
+  return 'border-piu-border/40 bg-piu-dark text-gray-300 hover:bg-piu-border/20';
+}
+
+function sortCharts(a, b) {
+  const modeOrder = { Single: 0, Double: 1, CoOp: 2 };
+  const am = modeOrder[a.mode] ?? 99;
+  const bm = modeOrder[b.mode] ?? 99;
+  if (am !== bm) return am - bm;
+  return (a.level || 0) - (b.level || 0);
 }
 
 export default function SongOfWeekComposerModal({
@@ -65,17 +85,45 @@ export default function SongOfWeekComposerModal({
     setTimeout(() => searchInputRef.current?.focus(), 40);
   }, [open, existingPick]);
 
-  const filtered = useMemo(() => {
+  const grouped = useMemo(() => {
     if (!songs.length) return [];
-    let list = songs;
-    if (modeFilter !== 'all') list = list.filter((s) => s.mode === modeFilter);
-    if (search.trim()) {
-      const q = search.trim();
-      list = list.filter((s) => matchesSearch(s, q));
-    } else {
-      return [];
+    const q = search.trim().toLowerCase();
+    const map = new Map();
+    for (const row of songs) {
+      if (!row || !row.title || !row.mode || !row.level) continue;
+      if (modeFilter !== 'all' && row.mode !== modeFilter) continue;
+      if (q) {
+        const hay = `${row.title} ${row.artist || ''}`.toLowerCase();
+        if (!hay.includes(q)) continue;
+      }
+      const key = `${row.title}|${row.artist || ''}`;
+      if (!map.has(key)) {
+        map.set(key, {
+          key,
+          title: row.title,
+          artist: row.artist || '',
+          jacket_url: row.jacket_url || '',
+          charts: [],
+          chartKeys: new Set(),
+        });
+      }
+      const group = map.get(key);
+      const chartKey = `${row.mode}|${row.level}`;
+      if (group.chartKeys.has(chartKey)) continue;
+      group.chartKeys.add(chartKey);
+      group.charts.push({
+        id: row.id,
+        title: row.title,
+        artist: row.artist || '',
+        mode: row.mode,
+        level: row.level,
+        jacket_url: row.jacket_url || '',
+      });
     }
-    return list.slice(0, MAX_RESULTS);
+    const groups = Array.from(map.values());
+    for (const g of groups) g.charts.sort(sortCharts);
+    groups.sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }));
+    return groups.slice(0, MAX_GROUPS);
   }, [songs, search, modeFilter]);
 
   if (!open) return null;
@@ -153,6 +201,10 @@ export default function SongOfWeekComposerModal({
                 {selectedChart.artist && (
                   <p className="text-[11px] text-gray-400 truncate">{selectedChart.artist}</p>
                 )}
+                <p className="text-[11px] text-gray-300 mt-0.5">
+                  {modeShort(selectedChart.mode)}
+                  {selectedChart.level || ''}
+                </p>
               </div>
               <button
                 type="button"
@@ -187,63 +239,84 @@ export default function SongOfWeekComposerModal({
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
-              <select
-                className="input-field text-xs"
-                value={modeFilter}
-                onChange={(e) => setModeFilter(e.target.value)}
-              >
-                {MODE_OPTIONS.map((m) => (
-                  <option key={m} value={m}>
-                    {m === 'all' ? 'All modes' : m}
-                  </option>
+              <div className="flex gap-1">
+                {MODE_OPTIONS.map((opt) => (
+                  <button
+                    type="button"
+                    key={opt.value}
+                    onClick={() => setModeFilter(opt.value)}
+                    className={`px-2 py-1 rounded-md text-[10px] font-display font-bold border transition-colors ${
+                      modeFilter === opt.value
+                        ? 'border-piu-accent bg-piu-accent/20 text-white'
+                        : 'border-piu-border/40 bg-piu-dark text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
                 ))}
-              </select>
+              </div>
             </div>
 
             {loading ? (
               <p className="text-[11px] text-gray-500">Loading charts...</p>
-            ) : !search.trim() ? (
-              <p className="text-[11px] text-gray-500">Start typing to search charts.</p>
-            ) : filtered.length === 0 ? (
-              <p className="text-[11px] text-gray-500">No charts match your search.</p>
+            ) : grouped.length === 0 ? (
+              <p className="text-[11px] text-gray-500">
+                {search.trim() ? 'No charts match your search.' : 'No charts available.'}
+              </p>
             ) : (
               <div className="divide-y divide-piu-border/20 border border-piu-border/20 rounded-lg">
-                {filtered.map((song) => {
+                {grouped.map((group) => {
                   const jacketUrl = resolveChartJacketUrl({
-                    title: song.title,
-                    mode: song.mode,
-                    level: song.level,
+                    title: group.title,
+                    mode: group.charts[0]?.mode,
+                    level: group.charts[0]?.level,
                     jacketLookup,
-                    jacketUrl: song.jacket_url,
+                    jacketUrl: group.jacket_url,
                   });
-                  const isSelected = selectedChart && selectedChart.id === song.id;
                   return (
-                    <button
-                      type="button"
-                      key={song.id}
-                      onClick={() => setSelectedChart(song)}
-                      className={`w-full flex items-center gap-3 px-2 py-2 text-left hover:bg-piu-accent/10 transition-colors ${
-                        isSelected ? 'bg-piu-accent/15' : ''
-                      }`}
+                    <div
+                      key={group.key}
+                      className="flex items-center gap-3 px-2 py-2"
                     >
                       <PiuChartJacket
-                        title={song.title}
-                        mode={song.mode}
-                        level={song.level}
+                        title={group.title}
+                        mode={group.charts[0]?.mode}
+                        level={group.charts[0]?.level}
                         jacketUrl={jacketUrl}
                         size="md"
                       />
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-display font-bold text-white truncate">
-                          {song.title}
+                          {group.title}
                         </p>
-                        {song.artist && (
-                          <p className="text-[10px] text-gray-400 truncate">{song.artist}</p>
+                        {group.artist && (
+                          <p className="text-[10px] text-gray-400 truncate">{group.artist}</p>
                         )}
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {group.charts.map((chart) => {
+                            const isSelected = selectedChart?.id === chart.id;
+                            return (
+                              <button
+                                type="button"
+                                key={chart.id}
+                                onClick={() => setSelectedChart(chart)}
+                                className={`inline-flex items-center gap-0.5 rounded border px-1.5 py-0.5 text-[10px] font-display font-black transition-colors ${modeTone(chart.mode, isSelected)}`}
+                              >
+                                {modeShort(chart.mode)}
+                                {chart.level}
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
-                    </button>
+                    </div>
                   );
                 })}
+                {grouped.length >= MAX_GROUPS && (
+                  <p className="text-[10px] text-gray-500 text-center py-2">
+                    Showing first {MAX_GROUPS} songs &mdash; refine your search to see more.
+                  </p>
+                )}
               </div>
             )}
           </div>

@@ -2764,7 +2764,7 @@ export default function ProfilePage() {
             )}
           </div>
           </div>
-          {(hasCompactPiuSummary || hasAnyBadges || showOwnerRecentSyncShortcut) && (
+          {(hasCompactPiuSummary || hasAnyBadges || showOwnerRecentSyncShortcut || isOwner) && (
             <div className="shrink-0 self-start w-[160px] sm:w-[220px]">
               {hasCompactPiuSummary && (
                 <div className="rounded-lg bg-piu-dark/50 border border-piu-border/30 px-1.5 py-1 sm:px-3 sm:py-2 flex flex-col gap-0 sm:gap-1">
@@ -2858,8 +2858,8 @@ export default function ProfilePage() {
                   </div>
                 </div>
               )}
-              {showOwnerRecentSyncShortcut && (
-                <div className={`${hasAnyBadges || hasCompactPiuSummary ? 'mt-2' : ''} flex items-center justify-end gap-2`}>
+              {(showOwnerRecentSyncShortcut || isOwner) && (
+                <div className={`${hasAnyBadges || hasCompactPiuSummary ? 'mt-2' : ''} flex items-center justify-end gap-2 flex-wrap`}>
                   {recentlyPlayedSyncFeedback && (
                     <span
                       className={`text-[10px] ${
@@ -2869,25 +2869,45 @@ export default function ProfilePage() {
                       {recentlyPlayedSyncFeedback}
                     </span>
                   )}
-                  <button
-                    type="button"
-                    onClick={handleSyncRecentlyPlayedShortcut}
-                    disabled={recentlyPlayedSyncing}
-                    className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-piu-border/50 bg-piu-dark/60 text-gray-300 hover:text-white hover:border-piu-accent/70 transition-colors disabled:opacity-60"
-                    title="Sync recently played"
-                    aria-label="Sync recently played"
-                  >
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                      className={`w-4 h-4 ${recentlyPlayedSyncing ? 'animate-spin' : ''}`}
+                  {isOwner && (
+                    <button
+                      type="button"
+                      onClick={() => setSowComposerOpen(true)}
+                      className="inline-flex items-center gap-1 px-2 h-8 rounded-md border border-piu-accent/40 bg-piu-accent/10 text-piu-accent hover:text-white hover:bg-piu-accent/20 hover:border-piu-accent/70 transition-colors text-[11px] font-display font-bold"
+                      title={sowPick ? 'Edit Song of the Week' : 'Set Song of the Week'}
                     >
-                      <path d="M20 12a8 8 0 1 1-2.35-5.65" strokeLinecap="round" />
-                      <path d="M20 4v5h-5" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </button>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-3.5 h-3.5">
+                        <path d="M9 17V5l12-2v12" strokeLinecap="round" strokeLinejoin="round" />
+                        <circle cx="6" cy="17" r="3" />
+                        <circle cx="18" cy="15" r="3" />
+                      </svg>
+                      <span className="hidden sm:inline">
+                        {sowPick ? 'Edit Song' : 'Song of the Week'}
+                      </span>
+                      <span className="sm:hidden">Song</span>
+                    </button>
+                  )}
+                  {showOwnerRecentSyncShortcut && (
+                    <button
+                      type="button"
+                      onClick={handleSyncRecentlyPlayedShortcut}
+                      disabled={recentlyPlayedSyncing}
+                      className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-piu-border/50 bg-piu-dark/60 text-gray-300 hover:text-white hover:border-piu-accent/70 transition-colors disabled:opacity-60"
+                      title="Sync recently played"
+                      aria-label="Sync recently played"
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        className={`w-4 h-4 ${recentlyPlayedSyncing ? 'animate-spin' : ''}`}
+                      >
+                        <path d="M20 12a8 8 0 1 1-2.35-5.65" strokeLinecap="round" />
+                        <path d="M20 4v5h-5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -2935,7 +2955,7 @@ export default function ProfilePage() {
         onClose={() => setShowTopProfilePumbilityModal(false)}
       />
 
-      {(sowPick || isOwner) && (
+      {sowPick && (
         <div className="mb-3">
           <SongOfWeekCard
             pick={sowPick}
@@ -2944,7 +2964,6 @@ export default function ProfilePage() {
             variant="spotlight"
             showOwnerActions={isOwner}
             onEdit={() => setSowComposerOpen(true)}
-            onCreate={() => setSowComposerOpen(true)}
           />
         </div>
       )}
