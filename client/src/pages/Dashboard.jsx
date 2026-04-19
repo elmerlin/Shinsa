@@ -13,6 +13,7 @@ const LiveDirectoryCard = lazy(() => import('../components/LiveDirectoryCard'));
 const ArchiveBrowser = lazy(() => import('../components/tournament/ArchiveBrowser'));
 const DailyHighlights = lazy(() => import('../components/DailyHighlights'));
 const WeeklyChallengesSummary = lazy(() => import('../components/weeklyChallenges/WeeklyChallengesSummary'));
+const SongOfWeekStrip = lazy(() => import('../components/SongOfWeekStrip'));
 
 function timeAgo(dateStr) {
   const date = new Date(dateStr + (dateStr.endsWith('Z') ? '' : 'Z'));
@@ -476,6 +477,14 @@ export default function Dashboard() {
         <div style={DEFERRED_SECTION_STYLE}>
           <Suspense fallback={<DashboardSectionFallback />}>
             <DailyHighlights data={dailyHighlights} jacketLookup={jacketLookup} chartKeyMap={chartKeyMap} />
+          </Suspense>
+        </div>
+      )}
+
+      {searchResults === null && (
+        <div style={DEFERRED_SECTION_STYLE}>
+          <Suspense fallback={null}>
+            <SongOfWeekStrip />
           </Suspense>
         </div>
       )}
