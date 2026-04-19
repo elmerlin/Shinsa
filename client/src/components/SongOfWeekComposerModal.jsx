@@ -160,8 +160,8 @@ export default function SongOfWeekComposerModal({
     : '';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm p-2 sm:p-4">
-      <div className="w-full max-w-2xl bg-piu-card border border-piu-border/50 rounded-2xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 backdrop-blur-sm p-2 sm:p-4">
+      <div className="w-full max-w-2xl bg-piu-card border border-piu-border/50 rounded-2xl shadow-2xl flex flex-col max-h-[88vh] overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b border-piu-border/30">
           <div>
             <p className="text-[10px] uppercase tracking-[0.14em] text-piu-accent font-display font-bold">
