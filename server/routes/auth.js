@@ -2420,6 +2420,30 @@ router.get('/user/:id/activity', (req, res) => {
     });
   }
 
+  // Song of the Week picks
+  const sowPicks = db.prepare(`
+    SELECT id, song_title_snapshot, artist_snapshot, mode, level, week_key, created_at, updated_at
+    FROM user_song_of_week_picks
+    WHERE user_id = ?
+    ORDER BY COALESCE(updated_at, created_at) DESC
+    LIMIT 40
+  `).all(userId);
+  for (const pick of sowPicks) {
+    const modeShort = pick.mode === 'Single' ? 'S' : pick.mode === 'Double' ? 'D' : 'C';
+    const label = pick.song_title_snapshot
+      ? `${pick.song_title_snapshot} (${modeShort}${pick.level || ''})`
+      : '';
+    activities.push({
+      id: `sow-${pick.id}`,
+      category: 'posts',
+      type: 'song_of_week',
+      created_at: pick.updated_at || pick.created_at,
+      message: label ? `Set Song of the Week: ${label}` : 'Set Song of the Week',
+      detail: pick.artist_snapshot || '',
+      link: `/song-of-the-week/${pick.id}`,
+    });
+  }
+
   const clears = db.prepare(`
     SELECT id, song_title, mode, level, clears_json, created_at
     FROM user_new_clears

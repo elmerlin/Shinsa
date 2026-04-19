@@ -980,6 +980,27 @@ export const deleteWeeklyChallengePlayComment = (id) => request(`/social/weekly-
 export const pumpWeeklyChallengePlay = (id) => pumpRequestWithHaptic(`/social/weekly-challenge-plays/${id}/pump`, { method: 'POST' });
 export const getWeeklyChallengePlayPumpers = (id) => request(`/social/weekly-challenge-plays/${id}/pumps`);
 
+// ─── Song of the Week ────────────────────────────────
+export const getMySongOfWeek = () => request('/social/song-of-week/me');
+export const saveMySongOfWeek = ({ chart_id, caption }) =>
+  request('/social/song-of-week/me', {
+    method: 'PUT',
+    body: JSON.stringify({ chart_id, caption: caption || '' }),
+  });
+export const getUserSongOfWeek = (userId) =>
+  request(`/social/song-of-week/users/${encodeURIComponent(userId)}`);
+export const getSongOfWeekFeed = (scope = 'global') =>
+  request(`/social/song-of-week?scope=${encodeURIComponent(scope)}`);
+export const getSongOfWeekItem = (id) => request(`/social/song-of-week/${id}`);
+export const getSongOfWeekComments = (id) => request(`/social/song-of-week/${id}/comments`);
+export const addSongOfWeekComment = (id, content, parentId) =>
+  request(`/social/song-of-week/${id}/comments`, {
+    method: 'POST',
+    body: JSON.stringify({ content, parent_id: parentId || null }),
+  });
+export const deleteSongOfWeekComment = (id) =>
+  request(`/social/song-of-week/comments/${id}`, { method: 'DELETE' });
+
 // ─── Communities ─────────────────────────────────────
 
 export async function createCommunity(formData) {

@@ -19,6 +19,7 @@ import {
   getUserWeeklyChallengeHistory,
   getUserWeeklyChallengePersonal,
   getPlayComments, addPlayComment, deletePlayComment,
+  getUserSongOfWeek,
 } from '../utils/api';
 import { getAvatarUrl } from '../components/AvatarPicker';
 import { getCountryFlag, getSkillColor, GENDER_SYMBOLS } from '../components/PlayerRegistration';
@@ -41,6 +42,8 @@ import { StoryShareModal, buildStoryDraft, ScoreCardImageShareButton, ScoreCardS
 import YouTubeReplayModal from '../components/YouTubeReplayModal';
 import SendToDirectMessageButton from '../components/SendToDirectMessageButton';
 import WeeklyChallengePersonalCard from '../components/WeeklyChallengePersonalCard';
+import SongOfWeekCard from '../components/SongOfWeekCard';
+import SongOfWeekComposerModal from '../components/SongOfWeekComposerModal';
 import PlateBadge from '../components/ui/plate-badge';
 import { buildScoreSnapshotLinkShare } from '../utils/directMessageShares';
 import { buildReplayModalTitle } from '../utils/replayTitle';
@@ -1126,6 +1129,8 @@ export default function ProfilePage() {
   const [liveDeleteBusyId, setLiveDeleteBusyId] = useState('');
   const [publicPet, setPublicPet] = useState(null);
   const [showPetModal, setShowPetModal] = useState(false);
+  const [sowPick, setSowPick] = useState(null);
+  const [sowComposerOpen, setSowComposerOpen] = useState(false);
 
   const profileId = profile?.id || null;
   const isOwner = authUser && profileId && authUser.id === profileId;
@@ -1250,6 +1255,23 @@ export default function ProfilePage() {
       getUserPosts(profileId, 1).then(setProfilePosts).catch(() => {});
     }
   }, [tab, profileId]);
+
+  // Load Song of the Week spotlight for the viewed profile
+  useEffect(() => {
+    if (!profileId) {
+      setSowPick(null);
+      return;
+    }
+    let cancelled = false;
+    getUserSongOfWeek(profileId)
+      .then((data) => {
+        if (!cancelled) setSowPick(data || null);
+      })
+      .catch(() => {
+        if (!cancelled) setSowPick(null);
+      });
+    return () => { cancelled = true; };
+  }, [profileId]);
 
   // Load followers/following when followers tab is active
   useEffect(() => {
@@ -2912,6 +2934,32 @@ export default function ProfilePage() {
         jacketLookup={jacketLookup}
         onClose={() => setShowTopProfilePumbilityModal(false)}
       />
+
+      {(sowPick || isOwner) && (
+        <div className="mb-3">
+          <SongOfWeekCard
+            pick={sowPick}
+            jacketLookup={jacketLookup}
+            chartKeyMap={chartKeyMap}
+            variant="spotlight"
+            showOwnerActions={isOwner}
+            onEdit={() => setSowComposerOpen(true)}
+            onCreate={() => setSowComposerOpen(true)}
+          />
+        </div>
+      )}
+
+      {isOwner && (
+        <SongOfWeekComposerModal
+          open={sowComposerOpen}
+          existingPick={sowPick}
+          onClose={() => setSowComposerOpen(false)}
+          onSaved={(saved) => {
+            setSowPick(saved);
+            setSowComposerOpen(false);
+          }}
+        />
+      )}
 
       {/* Tabs */}
       <div className="mb-3" ref={piuTabsMenuRef}>

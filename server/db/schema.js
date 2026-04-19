@@ -4002,6 +4002,48 @@ function initializeDb() {
     )
   `);
 
+  // Song of the Week — weekly profile pick per user
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS user_song_of_week_picks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      week_key TEXT NOT NULL,
+      week_starts_at_utc TEXT NOT NULL,
+      week_ends_at_utc TEXT NOT NULL,
+      chart_id INTEGER NOT NULL REFERENCES songs(id),
+      song_title_snapshot TEXT DEFAULT '',
+      artist_snapshot TEXT DEFAULT '',
+      mode TEXT NOT NULL,
+      level INTEGER NOT NULL,
+      jacket_url_snapshot TEXT DEFAULT '',
+      caption TEXT DEFAULT '',
+      linked_play_id INTEGER DEFAULT NULL REFERENCES user_recently_played(id) ON DELETE SET NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_sow_user_week
+      ON user_song_of_week_picks(user_id, week_key);
+    CREATE INDEX IF NOT EXISTS idx_sow_week_key
+      ON user_song_of_week_picks(week_key);
+    CREATE INDEX IF NOT EXISTS idx_sow_user_id
+      ON user_song_of_week_picks(user_id);
+    CREATE INDEX IF NOT EXISTS idx_sow_created_at
+      ON user_song_of_week_picks(created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS song_of_week_comments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      pick_id INTEGER NOT NULL REFERENCES user_song_of_week_picks(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      parent_id INTEGER DEFAULT NULL REFERENCES song_of_week_comments(id) ON DELETE CASCADE,
+      content TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_sow_comments_pick
+      ON song_of_week_comments(pick_id, created_at ASC);
+    CREATE INDEX IF NOT EXISTS idx_sow_comments_parent
+      ON song_of_week_comments(parent_id);
+  `);
+
   ensureBuiltInAchievementSeries(db);
   bootstrapChangelogEntriesIfEmpty();
 }

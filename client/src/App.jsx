@@ -61,6 +61,8 @@ const DojoPage = lazy(() => import('./pages/DojoPage'));
 const LeaderboardsPage = lazy(() => import('./pages/LeaderboardsPage'));
 const LivePage = lazy(() => import('./pages/LivePage'));
 const WeeklyChallengesPage = lazy(() => import('./pages/WeeklyChallengesPage'));
+const SongOfWeekPage = lazy(() => import('./pages/SongOfWeekPage'));
+const SongOfWeekDetailPage = lazy(() => import('./pages/SongOfWeekDetailPage'));
 const LiveOverlayPage = lazy(() => import('./pages/LiveOverlayPage'));
 const TournamentWatch = lazy(() => import('./pages/TournamentWatch'));
 const TournamentOverlay = lazy(() => import('./pages/TournamentOverlay'));
@@ -1505,6 +1507,8 @@ export default function App() {
             <Route path="/clear/:id" element={<SingleClearPage />} />
             <Route path="/play/:id" element={<SinglePlayPage />} />
             <Route path="/weekly-play/:id" element={<SingleWeeklyChallengePlayPage />} />
+            <Route path="/song-of-the-week" element={<SongOfWeekPage />} />
+            <Route path="/song-of-the-week/:id" element={<SongOfWeekDetailPage />} />
             <Route path="/communities" element={<CommunitiesListPage />} />
             <Route path="/community/new" element={<CommunitySetupPage />} />
             <Route path="/c/:communityName" element={<CommunityPage />} />

@@ -39,7 +39,7 @@ const {
   listDailyMixTapeRuns,
   runDailyMixTapeJob,
 } = require('../lib/dailyMixTapes');
-const { annotateWeeklyChallengePlayRows } = require('../lib/weeklyChallenges');
+const { annotateWeeklyChallengePlayRows, getWeekBoundary } = require('../lib/weeklyChallenges');
 
 const SHARE_MARKER_PREFIX = '[[SHINSA_SHARE_V1:';
 const SHARE_MARKER_SUFFIX = ']]';
@@ -3332,6 +3332,299 @@ router.delete('/weekly-challenge-plays/comments/:id', requireAuth, (req, res) =>
   if (!comment) return res.status(404).json({ error: 'Not found' });
   if (comment.user_id !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
   db.prepare('DELETE FROM weekly_challenge_play_comments WHERE id = ?').run(comment.id);
+  res.json({ success: true });
+});
+
+// ─── Song of the Week ────────────────────────────────
+// Each user can designate one chart per week as their Song of the Week.
+
+function hydrateSongOfWeekPick(db, pick, viewerId) {
+  if (!pick) return null;
+  pick.avatar = normalizeUserAvatarForList(pick.avatar, pick.user_id, 80, pick.avatar_v);
+  pick.comment_count = db.prepare(
+    'SELECT COUNT(*) AS n FROM song_of_week_comments WHERE pick_id = ?'
+  ).get(pick.id).n;
+  pick.is_owner = viewerId ? viewerId === pick.user_id : false;
+  if (pick.linked_play_id) {
+    const play = db.prepare(`
+      SELECT id, song_title, mode, level, score, grade, plate, date_played, played_at_utc,
+             background_url, replay_embed_url, replay_video_id,
+             replay_start_seconds, replay_end_seconds
+      FROM user_recently_played
+      WHERE id = ?
+    `).get(pick.linked_play_id);
+    pick.linked_play = play || null;
+  } else {
+    pick.linked_play = null;
+  }
+  return pick;
+}
+
+function findMatchingRecentPlay(db, userId, chart) {
+  if (!userId || !chart) return null;
+  const row = db.prepare(`
+    SELECT id FROM user_recently_played
+    WHERE user_id = ?
+      AND LOWER(TRIM(song_title)) = LOWER(TRIM(?))
+      AND mode = ?
+      AND level = ?
+    ORDER BY datetime(COALESCE(NULLIF(played_at_utc,''), date_played)) DESC, id DESC
+    LIMIT 1
+  `).get(userId, chart.title, chart.mode, chart.level);
+  return row?.id || null;
+}
+
+// GET /api/social/song-of-week/me — authenticated user's current-week pick
+router.get('/song-of-week/me', requireAuth, (req, res) => {
+  const db = getDb();
+  const { weekKey } = getWeekBoundary(new Date());
+  const pick = db.prepare(`
+    SELECT s.*, u.username, u.avatar, u.avatar_v, u.nationality
+    FROM user_song_of_week_picks s
+    JOIN users u ON s.user_id = u.id
+    WHERE s.user_id = ? AND s.week_key = ?
+  `).get(req.user.id, weekKey);
+  if (!pick) return res.json(null);
+  res.json(hydrateSongOfWeekPick(db, pick, req.user.id));
+});
+
+// PUT /api/social/song-of-week/me — upsert current-week pick
+router.put('/song-of-week/me', requireAuth, (req, res) => {
+  const db = getDb();
+  const chartId = parseInt(req.body?.chart_id, 10);
+  if (!chartId) return res.status(400).json({ error: 'chart_id is required' });
+  const chart = db.prepare('SELECT id, title, artist, mode, level, jacket_url FROM songs WHERE id = ?').get(chartId);
+  if (!chart) return res.status(404).json({ error: 'Chart not found' });
+
+  const rawCaption = String(req.body?.caption || '').replace(/\s+/g, ' ').trim().slice(0, 280);
+  const { weekKey, startsAtUtc, endsAtUtc } = getWeekBoundary(new Date());
+  const linkedPlayId = findMatchingRecentPlay(db, req.user.id, chart);
+
+  const existing = db.prepare(
+    'SELECT id FROM user_song_of_week_picks WHERE user_id = ? AND week_key = ?'
+  ).get(req.user.id, weekKey);
+
+  let pickId;
+  if (existing) {
+    db.prepare(`
+      UPDATE user_song_of_week_picks
+      SET chart_id = ?, song_title_snapshot = ?, artist_snapshot = ?, mode = ?, level = ?,
+          jacket_url_snapshot = ?, caption = ?, linked_play_id = ?, updated_at = datetime('now')
+      WHERE id = ?
+    `).run(
+      chart.id, chart.title || '', chart.artist || '', chart.mode, chart.level,
+      chart.jacket_url || '', rawCaption, linkedPlayId, existing.id
+    );
+    pickId = existing.id;
+  } else {
+    const result = db.prepare(`
+      INSERT INTO user_song_of_week_picks
+        (user_id, week_key, week_starts_at_utc, week_ends_at_utc, chart_id,
+         song_title_snapshot, artist_snapshot, mode, level, jacket_url_snapshot,
+         caption, linked_play_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      req.user.id, weekKey, startsAtUtc, endsAtUtc, chart.id,
+      chart.title || '', chart.artist || '', chart.mode, chart.level, chart.jacket_url || '',
+      rawCaption, linkedPlayId
+    );
+    pickId = result.lastInsertRowid;
+  }
+
+  const pick = db.prepare(`
+    SELECT s.*, u.username, u.avatar, u.avatar_v, u.nationality
+    FROM user_song_of_week_picks s
+    JOIN users u ON s.user_id = u.id
+    WHERE s.id = ?
+  `).get(pickId);
+  res.json(hydrateSongOfWeekPick(db, pick, req.user.id));
+});
+
+// GET /api/social/song-of-week — current-week feed
+// ?scope=following|global|me (default global)
+router.get('/song-of-week', optionalAuth, (req, res) => {
+  const db = getDb();
+  const { weekKey } = getWeekBoundary(new Date());
+  const rawScope = String(req.query?.scope || 'global').toLowerCase();
+  const scope = ['following', 'global', 'me'].includes(rawScope) ? rawScope : 'global';
+
+  let rows = [];
+  if (scope === 'me') {
+    if (!req.user) return res.json([]);
+    rows = db.prepare(`
+      SELECT s.*, u.username, u.avatar, u.avatar_v, u.nationality
+      FROM user_song_of_week_picks s
+      JOIN users u ON s.user_id = u.id
+      WHERE s.week_key = ? AND s.user_id = ?
+      ORDER BY s.created_at DESC
+    `).all(weekKey, req.user.id);
+  } else if (scope === 'following') {
+    if (!req.user) return res.json([]);
+    rows = db.prepare(`
+      SELECT s.*, u.username, u.avatar, u.avatar_v, u.nationality
+      FROM user_song_of_week_picks s
+      JOIN users u ON s.user_id = u.id
+      JOIN user_follows f ON f.following_id = s.user_id
+      WHERE s.week_key = ? AND f.follower_id = ?
+      ORDER BY s.created_at DESC
+    `).all(weekKey, req.user.id);
+  } else {
+    rows = db.prepare(`
+      SELECT s.*, u.username, u.avatar, u.avatar_v, u.nationality
+      FROM user_song_of_week_picks s
+      JOIN users u ON s.user_id = u.id
+      WHERE s.week_key = ?
+      ORDER BY s.created_at DESC
+      LIMIT 200
+    `).all(weekKey);
+  }
+
+  const viewerId = req.user?.id || null;
+  const hydrated = rows.map((row) => hydrateSongOfWeekPick(db, row, viewerId));
+  res.json(hydrated);
+});
+
+// GET /api/social/song-of-week/users/:userId — that user's current-week pick
+router.get('/song-of-week/users/:userId', optionalAuth, (req, res) => {
+  const db = getDb();
+  const { weekKey } = getWeekBoundary(new Date());
+  const pick = db.prepare(`
+    SELECT s.*, u.username, u.avatar, u.avatar_v, u.nationality
+    FROM user_song_of_week_picks s
+    JOIN users u ON s.user_id = u.id
+    WHERE s.user_id = ? AND s.week_key = ?
+  `).get(req.params.userId, weekKey);
+  if (!pick) return res.json(null);
+  res.json(hydrateSongOfWeekPick(db, pick, req.user?.id || null));
+});
+
+// GET /api/social/song-of-week/:id — single pick detail
+router.get('/song-of-week/:id', optionalAuth, (req, res) => {
+  const db = getDb();
+  const pickId = parseInt(req.params.id, 10);
+  if (!pickId) return res.status(400).json({ error: 'Invalid pick ID' });
+  const pick = db.prepare(`
+    SELECT s.*, u.username, u.avatar, u.avatar_v, u.nationality
+    FROM user_song_of_week_picks s
+    JOIN users u ON s.user_id = u.id
+    WHERE s.id = ?
+  `).get(pickId);
+  if (!pick) return res.status(404).json({ error: 'Song of the Week pick not found' });
+  res.json(hydrateSongOfWeekPick(db, pick, req.user?.id || null));
+});
+
+// GET /api/social/song-of-week/:id/comments
+router.get('/song-of-week/:id/comments', optionalAuth, (req, res) => {
+  const db = getDb();
+  const pickId = parseInt(req.params.id, 10);
+  if (!pickId) return res.json([]);
+
+  const allComments = db.prepare(`
+    SELECT c.*, u.username, u.avatar, u.avatar_v
+    FROM song_of_week_comments c
+    JOIN users u ON c.user_id = u.id
+    WHERE c.pick_id = ?
+    ORDER BY c.created_at ASC
+  `).all(pickId);
+  if (allComments.length === 0) return res.json([]);
+
+  const normalizedComments = normalizeCommentUserRows(allComments, 40);
+  for (const c of normalizedComments) {
+    c.pump_count = 0;
+    c.user_pumped = false;
+  }
+
+  const topLevel = [];
+  const replyMap = {};
+  for (const c of normalizedComments) {
+    if (!c.parent_id) {
+      c.replies = [];
+      topLevel.push(c);
+      replyMap[c.id] = c.replies;
+    }
+  }
+  for (const c of normalizedComments) {
+    if (c.parent_id && replyMap[c.parent_id]) {
+      replyMap[c.parent_id].push(c);
+    }
+  }
+  res.json(topLevel);
+});
+
+// POST /api/social/song-of-week/:id/comments
+router.post('/song-of-week/:id/comments', requireAuth, (req, res) => {
+  const db = getDb();
+  const pickId = parseInt(req.params.id, 10);
+  if (!pickId) return res.status(400).json({ error: 'Invalid pick ID' });
+  const pick = db.prepare('SELECT id, user_id, song_title_snapshot FROM user_song_of_week_picks WHERE id = ?').get(pickId);
+  if (!pick) return res.status(404).json({ error: 'Song of the Week pick not found' });
+
+  const content = String(req.body?.content || '').trim();
+  if (!content) return res.status(400).json({ error: 'Comment cannot be empty' });
+
+  const parentId = req.body?.parent_id ? parseInt(req.body.parent_id, 10) : null;
+  if (parentId) {
+    const parent = db.prepare('SELECT id FROM song_of_week_comments WHERE id = ? AND pick_id = ?').get(parentId, pickId);
+    if (!parent) return res.status(404).json({ error: 'Parent comment not found' });
+  }
+
+  const result = db.prepare(
+    'INSERT INTO song_of_week_comments (pick_id, user_id, parent_id, content) VALUES (?, ?, ?, ?)'
+  ).run(pickId, req.user.id, parentId, content);
+
+  const comment = db.prepare(`
+    SELECT c.*, u.username, u.avatar, u.avatar_v
+    FROM song_of_week_comments c JOIN users u ON c.user_id = u.id
+    WHERE c.id = ?
+  `).get(result.lastInsertRowid);
+  const normalized = normalizeCommentUserRows([comment], 40)[0];
+  normalized.replies = [];
+  normalized.pump_count = 0;
+  normalized.user_pumped = false;
+
+  const me = db.prepare('SELECT username FROM users WHERE id = ?').get(req.user.id);
+  const commentLink = `/song-of-the-week/${pickId}?comment=${encodeURIComponent(String(comment.id))}`;
+
+  if (parentId) {
+    const parent = db.prepare('SELECT user_id FROM song_of_week_comments WHERE id = ?').get(parentId);
+    if (parent && parent.user_id !== req.user.id) {
+      createNotification(db, parent.user_id, 'sow_reply', 'New Reply', `${me.username} replied to your comment`, commentLink);
+    }
+  }
+  if (pick.user_id !== req.user.id && pick.user_id !== SYSTEM_USER_ID) {
+    const songLabel = pick.song_title_snapshot ? ` on "${pick.song_title_snapshot}"` : '';
+    createNotification(db, pick.user_id, 'sow_comment', 'New Comment', `${me.username} commented on your Song of the Week${songLabel}`, commentLink);
+  }
+
+  const mentionedUsers = findMentionedUsers(db, content);
+  notifyMentionedUsers(db, {
+    mentionedUsers,
+    actorUserId: req.user.id,
+    actorUsername: me?.username || 'Someone',
+    type: 'sow_mention',
+    title: 'Mentioned in Comment',
+    message: `${me?.username || 'Someone'} mentioned you in a Song of the Week comment`,
+    link: commentLink,
+  });
+
+  res.status(201).json(normalized);
+});
+
+// DELETE /api/social/song-of-week/comments/:id
+router.delete('/song-of-week/comments/:id', requireAuth, (req, res) => {
+  const db = getDb();
+  const commentId = parseInt(req.params.id, 10);
+  const comment = db.prepare(`
+    SELECT c.id, c.user_id, s.user_id AS pick_owner_id
+    FROM song_of_week_comments c
+    JOIN user_song_of_week_picks s ON c.pick_id = s.id
+    WHERE c.id = ?
+  `).get(commentId);
+  if (!comment) return res.status(404).json({ error: 'Comment not found' });
+  if (comment.user_id !== req.user.id && comment.pick_owner_id !== req.user.id) {
+    return res.status(403).json({ error: 'Not authorized to delete this comment' });
+  }
+  db.prepare('DELETE FROM song_of_week_comments WHERE id = ? OR parent_id = ?').run(commentId, commentId);
   res.json({ success: true });
 });
 
