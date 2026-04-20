@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { getDb } = require('../db/schema');
+const { syncTournamentPlacementSnapshots } = require('../lib/tournamentPlacings');
+const { scheduleRoundRobinMatches } = require('../lib/roundRobinSchedule');
 const {
   generateSingleElimBracket,
   generateDoubleElimBracket,
@@ -194,7 +196,11 @@ router.get('/tournament/:tournamentId', (req, res) => {
   const params = [req.params.tournamentId];
 
   if (round) { query += ' AND round_number = ?'; params.push(parseInt(round)); }
-  query += ' ORDER BY round_number ASC, created_at ASC';
+  query += ` ORDER BY
+    round_number ASC,
+    CASE WHEN match_type = 'gauntlet' THEN gauntlet_order ELSE schedule_order END ASC,
+    created_at ASC,
+    id ASC`;
 
   const matches = db.prepare(query).all(...params).map((match) => normalizeGauntletMatchLevels(db, match));
   db.close();
@@ -245,20 +251,19 @@ router.post('/tournament/:tournamentId/round-robin', (req, res) => {
   });
 
   const insertMatch = db.prepare(`
-    INSERT INTO matches (id, tournament_id, round_number, player1_id, player2_id, difficulty_min, difficulty_max, status)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO matches (id, tournament_id, round_number, schedule_order, player1_id, player2_id, difficulty_min, difficulty_max, status)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
+  const schedule = scheduleRoundRobinMatches(players);
 
   const createRound = db.transaction(() => {
-    for (let i = 0; i < players.length; i++) {
-      for (let j = i + 1; j < players.length; j++) {
-        insertMatch.run(
-          uuidv4(), tournamentId, roundNumber,
-          players[i].id, players[j].id,
-          roundLevels.min, roundLevels.max,
-          'PENDING'
-        );
-      }
+    for (const match of schedule) {
+      insertMatch.run(
+        uuidv4(), tournamentId, roundNumber, match.schedule_order,
+        match.player1_id, match.player2_id,
+        roundLevels.min, roundLevels.max,
+        'PENDING'
+      );
     }
     db.prepare('UPDATE tournaments SET current_round = ?, phase = ? WHERE id = ?')
       .run(roundNumber, 'ROUND_ROBIN', tournamentId);
@@ -267,7 +272,7 @@ router.post('/tournament/:tournamentId/round-robin', (req, res) => {
   createRound();
 
   const matches = db.prepare(
-    'SELECT * FROM matches WHERE tournament_id = ? AND round_number = ? ORDER BY created_at ASC'
+    'SELECT * FROM matches WHERE tournament_id = ? AND round_number = ? ORDER BY schedule_order ASC, created_at ASC, id ASC'
   ).all(tournamentId, roundNumber);
   db.close();
 
@@ -602,6 +607,7 @@ router.post('/:id/result', (req, res) => {
   if (!isGauntlet) {
     updateBuchholz(db, match.tournament_id);
   }
+  syncTournamentPlacementSnapshots(db, match.tournament_id);
 
   const updated = db.prepare('SELECT * FROM matches WHERE id = ?').get(req.params.id);
   db.close();
@@ -662,26 +668,25 @@ function generatePhaseRoundRobin(db, phase, players, config, res) {
   const diffMax = config.difficulty_max || 19;
 
   const insertMatch = db.prepare(`
-    INSERT INTO matches (id, tournament_id, round_number, player1_id, player2_id, difficulty_min, difficulty_max, status, phase_id, pool_id)
-    VALUES (?, ?, 1, ?, ?, ?, ?, 'PENDING', ?, 0)
+    INSERT INTO matches (id, tournament_id, round_number, schedule_order, player1_id, player2_id, difficulty_min, difficulty_max, status, phase_id, pool_id)
+    VALUES (?, ?, 1, ?, ?, ?, ?, ?, 'PENDING', ?, 0)
   `);
+  const schedule = scheduleRoundRobinMatches(players);
 
   const createRR = db.transaction(() => {
-    for (let i = 0; i < players.length; i++) {
-      for (let j = i + 1; j < players.length; j++) {
-        insertMatch.run(
-          uuidv4(), phase.tournament_id,
-          players[i].player_id, players[j].player_id,
-          diffMin, diffMax, phase.id
-        );
-      }
+    for (const match of schedule) {
+      insertMatch.run(
+        uuidv4(), phase.tournament_id,
+        match.schedule_order, match.player1_id, match.player2_id,
+        diffMin, diffMax, phase.id
+      );
     }
   });
 
   createRR();
 
   const matches = db.prepare(
-    'SELECT * FROM matches WHERE phase_id = ? ORDER BY created_at ASC'
+    'SELECT * FROM matches WHERE phase_id = ? ORDER BY schedule_order ASC, created_at ASC, id ASC'
   ).all(phase.id);
 
   res.status(201).json(matches.map(parseMatchJSON));
@@ -698,8 +703,8 @@ function generatePhasePools(db, phase, players, config, res) {
   const updatePool = db.prepare('UPDATE tournament_phase_players SET pool_id = ? WHERE phase_id = ? AND player_id = ?');
 
   const insertMatch = db.prepare(`
-    INSERT INTO matches (id, tournament_id, round_number, player1_id, player2_id, difficulty_min, difficulty_max, status, phase_id, pool_id)
-    VALUES (?, ?, 1, ?, ?, ?, ?, 'PENDING', ?, ?)
+    INSERT INTO matches (id, tournament_id, round_number, schedule_order, player1_id, player2_id, difficulty_min, difficulty_max, status, phase_id, pool_id)
+    VALUES (?, ?, 1, ?, ?, ?, ?, ?, 'PENDING', ?, ?)
   `);
 
   const createPools = db.transaction(() => {
@@ -710,17 +715,14 @@ function generatePhasePools(db, phase, players, config, res) {
         updatePool.run(pool.pool_id, phase.id, pid);
       }
 
-      // Generate round robin within pool
-      for (let i = 0; i < pool.players.length; i++) {
-        for (let j = i + 1; j < pool.players.length; j++) {
-          const p1id = pool.players[i].player_id || pool.players[i].id;
-          const p2id = pool.players[j].player_id || pool.players[j].id;
-          insertMatch.run(
-            uuidv4(), phase.tournament_id,
-            p1id, p2id,
-            diffMin, diffMax, phase.id, pool.pool_id
-          );
-        }
+      const poolSchedule = scheduleRoundRobinMatches(pool.players);
+
+      for (const match of poolSchedule) {
+        insertMatch.run(
+          uuidv4(), phase.tournament_id,
+          match.schedule_order, match.player1_id, match.player2_id,
+          diffMin, diffMax, phase.id, pool.pool_id
+        );
       }
     }
   });
@@ -728,7 +730,7 @@ function generatePhasePools(db, phase, players, config, res) {
   createPools();
 
   const matches = db.prepare(
-    'SELECT * FROM matches WHERE phase_id = ? ORDER BY pool_id ASC, created_at ASC'
+    'SELECT * FROM matches WHERE phase_id = ? ORDER BY pool_id ASC, schedule_order ASC, created_at ASC, id ASC'
   ).all(phase.id);
 
   res.status(201).json(matches.map(parseMatchJSON));

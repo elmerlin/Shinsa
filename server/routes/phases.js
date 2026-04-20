@@ -2,16 +2,23 @@ const express = require('express');
 const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { getDb } = require('../db/schema');
+const { parsePlacementSnapshots, syncTournamentPlacementSnapshots } = require('../lib/tournamentPlacings');
+
+function normalizePhaseRow(phase) {
+  if (!phase) return phase;
+  return {
+    ...phase,
+    config: JSON.parse(phase.config || '{}'),
+    advancement: JSON.parse(phase.advancement || '{}'),
+    placement_snapshots: parsePlacementSnapshots(phase.placement_snapshots),
+  };
+}
 
 // GET all phases for a tournament
 router.get('/tournament/:tournamentId', (req, res) => {
   const db = getDb();
   const phases = db.prepare('SELECT * FROM tournament_phases WHERE tournament_id = ? ORDER BY phase_order').all(req.params.tournamentId);
-  res.json(phases.map(p => ({
-    ...p,
-    config: JSON.parse(p.config || '{}'),
-    advancement: JSON.parse(p.advancement || '{}'),
-  })));
+  res.json(phases.map(normalizePhaseRow));
 });
 
 // GET single phase
@@ -25,9 +32,7 @@ router.get('/:id', (req, res) => {
   ).all(phase.id);
 
   res.json({
-    ...phase,
-    config: JSON.parse(phase.config || '{}'),
-    advancement: JSON.parse(phase.advancement || '{}'),
+    ...normalizePhaseRow(phase),
     players,
   });
 });
@@ -59,11 +64,7 @@ router.post('/', (req, res) => {
   );
 
   const phase = db.prepare('SELECT * FROM tournament_phases WHERE id = ?').get(id);
-  res.status(201).json({
-    ...phase,
-    config: JSON.parse(phase.config || '{}'),
-    advancement: JSON.parse(phase.advancement || '{}'),
-  });
+  res.status(201).json(normalizePhaseRow(phase));
 });
 
 // PUT update a phase
@@ -89,11 +90,7 @@ router.put('/:id', (req, res) => {
   db.prepare(`UPDATE tournament_phases SET ${updates.join(', ')} WHERE id = ?`).run(...params);
 
   const updated = db.prepare('SELECT * FROM tournament_phases WHERE id = ?').get(req.params.id);
-  res.json({
-    ...updated,
-    config: JSON.parse(updated.config || '{}'),
-    advancement: JSON.parse(updated.advancement || '{}'),
-  });
+  res.json(normalizePhaseRow(updated));
 });
 
 // DELETE a phase
@@ -203,9 +200,7 @@ router.post('/:id/activate', (req, res) => {
   ).all(phase.id);
 
   res.json({
-    ...updated,
-    config: JSON.parse(updated.config || '{}'),
-    advancement: JSON.parse(updated.advancement || '{}'),
+    ...normalizePhaseRow(updated),
     players: phasePlayers,
     advanced_count: playerCount,
   });
@@ -244,13 +239,10 @@ router.post('/:id/complete', (req, res) => {
   });
 
   complete();
+  syncTournamentPlacementSnapshots(db, phase.tournament_id);
 
   const updated = db.prepare('SELECT * FROM tournament_phases WHERE id = ?').get(req.params.id);
-  res.json({
-    ...updated,
-    config: JSON.parse(updated.config || '{}'),
-    advancement: JSON.parse(updated.advancement || '{}'),
-  });
+  res.json(normalizePhaseRow(updated));
 });
 
 module.exports = router;

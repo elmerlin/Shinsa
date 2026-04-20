@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { getDb } = require('../db/schema');
+const { parsePlacementSnapshots } = require('../lib/tournamentPlacings');
 const { enrichTournamentSummaries, parseTournamentConfig } = require('../lib/tournamentSummary');
 const { requireAuth, optionalAuth } = require('./auth');
 const {
@@ -9,6 +10,15 @@ const {
   emitTournamentDiscussionEvent,
   getTournamentDiscussionViewerCount,
 } = require('../lib/tournamentDiscussionHub');
+
+function normalizeTournamentRow(tournament) {
+  if (!tournament) return tournament;
+  return {
+    ...tournament,
+    config: parseTournamentConfig(tournament.config),
+    placement_snapshots: parsePlacementSnapshots(tournament.placement_snapshots),
+  };
+}
 
 // GET all tournaments (excludes archived by default, ?include_archived=1 to include)
 router.get('/', (req, res) => {
@@ -55,8 +65,7 @@ router.get('/:id', (req, res) => {
   const tournament = db.prepare('SELECT * FROM tournaments WHERE id = ?').get(req.params.id);
   db.close();
   if (!tournament) return res.status(404).json({ error: 'Tournament not found' });
-  tournament.config = parseTournamentConfig(tournament.config);
-  res.json(tournament);
+  res.json(normalizeTournamentRow(tournament));
 });
 
 router.post('/', (req, res) => {
@@ -83,8 +92,7 @@ router.post('/', (req, res) => {
 
   const tournament = db.prepare('SELECT * FROM tournaments WHERE id = ?').get(id);
   db.close();
-  tournament.config = parseTournamentConfig(tournament.config);
-  res.status(201).json(tournament);
+  res.status(201).json(normalizeTournamentRow(tournament));
 });
 
 router.put('/:id', (req, res) => {
@@ -115,8 +123,7 @@ router.put('/:id', (req, res) => {
 
   const updated = db.prepare('SELECT * FROM tournaments WHERE id = ?').get(req.params.id);
   db.close();
-  updated.config = parseTournamentConfig(updated.config);
-  res.json(updated);
+  res.json(normalizeTournamentRow(updated));
 });
 
 // PUT archive/unarchive a tournament

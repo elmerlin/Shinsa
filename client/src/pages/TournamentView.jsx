@@ -364,6 +364,8 @@ export default function TournamentView() {
 
         {activeTab === 'final' && (
           <FinalStandings
+            tournament={tournament}
+            phases={phases}
             players={players}
             matches={matches}
             config={config}
@@ -593,7 +595,7 @@ export default function TournamentView() {
       )}
 
       {activeTab === 'final' && (
-        <FinalStandings players={players} matches={matches} config={config} />
+        <FinalStandings tournament={tournament} phases={phases} players={players} matches={matches} config={config} />
       )}
 
       {activeTab === 'standings' && (

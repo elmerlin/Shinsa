@@ -221,6 +221,8 @@ export default function TournamentWatch() {
 
         {activeTab === 'final' && (
           <FinalStandings
+            tournament={tournament}
+            phases={phases}
             players={players}
             matches={matches}
             config={config}
@@ -404,7 +406,7 @@ export default function TournamentWatch() {
       )}
 
       {activeTab === 'final' && (
-        <FinalStandings players={players} matches={matches} config={config} />
+        <FinalStandings tournament={tournament} phases={phases} players={players} matches={matches} config={config} />
       )}
 
       {activeTab === 'standings' && (

@@ -766,6 +766,7 @@ function initializeDb() {
       current_round INT DEFAULT 0,
       total_rounds INT DEFAULT 3,
       config TEXT DEFAULT '{}',
+      placement_snapshots TEXT DEFAULT '{}',
       avatar TEXT DEFAULT '',
       archived INT DEFAULT 0,
       created_at TEXT DEFAULT (datetime('now'))
@@ -835,6 +836,7 @@ function initializeDb() {
       id TEXT PRIMARY KEY,
       tournament_id TEXT NOT NULL,
       round_number INT NOT NULL,
+      schedule_order INT DEFAULT 0,
       player1_id TEXT,
       player2_id TEXT,
       winner_id TEXT,
@@ -1876,6 +1878,9 @@ function initializeDb() {
   if (!matchColumns.includes('gauntlet_order')) {
     db.exec("ALTER TABLE matches ADD COLUMN gauntlet_order INT DEFAULT 0");
   }
+  if (!matchColumns.includes('schedule_order')) {
+    db.exec("ALTER TABLE matches ADD COLUMN schedule_order INT DEFAULT 0");
+  }
   if (!matchColumns.includes('phase_id')) {
     db.exec("ALTER TABLE matches ADD COLUMN phase_id TEXT DEFAULT ''");
   }
@@ -1904,6 +1909,9 @@ function initializeDb() {
 
   if (!tournamentCols2.includes('gif_avatar')) {
     db.exec("ALTER TABLE tournaments ADD COLUMN gif_avatar TEXT DEFAULT ''");
+  }
+  if (!tournamentCols2.includes('placement_snapshots')) {
+    db.exec("ALTER TABLE tournaments ADD COLUMN placement_snapshots TEXT DEFAULT '{}'");
   }
 
   // Migrations for players table - elimination tracking
@@ -3111,6 +3119,11 @@ function initializeDb() {
   db.exec("CREATE INDEX IF NOT EXISTS idx_over_level_ranking_scores_chart_score ON over_level_ranking_scores(chart_key, score DESC, row_order ASC)");
   db.exec("CREATE INDEX IF NOT EXISTS idx_over_level_ranking_scores_player_chart ON over_level_ranking_scores(player_name, chart_key)");
 
+  const tournamentPhaseCols = db.prepare("PRAGMA table_info(tournament_phases)").all().map(c => c.name);
+  if (tournamentPhaseCols.length > 0 && !tournamentPhaseCols.includes('placement_snapshots')) {
+    db.exec("ALTER TABLE tournament_phases ADD COLUMN placement_snapshots TEXT DEFAULT '{}'");
+  }
+
   // Migrations for users table - add world map location fields
   const userCols = db.prepare("PRAGMA table_info(users)").all().map(c => c.name);
   const userMigrations = [
@@ -3727,6 +3740,7 @@ function initializeDb() {
       name TEXT DEFAULT '',
       config TEXT DEFAULT '{}',
       advancement TEXT DEFAULT '{}',
+      placement_snapshots TEXT DEFAULT '{}',
       status TEXT DEFAULT 'PENDING',
       created_at TEXT DEFAULT (datetime('now')),
       FOREIGN KEY (tournament_id) REFERENCES tournaments(id) ON DELETE CASCADE
