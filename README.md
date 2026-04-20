@@ -161,7 +161,7 @@ In development, Vite proxies `/api` and `/uploads` to port `3001`.
 
 ## Environment Variables
 
-This project does not currently load `.env` automatically with `dotenv`; set env vars in your shell, PM2 config, or process manager.
+This project does not currently load `.env` automatically with `dotenv`; set env vars in your shell, PM2 config, or process manager. The included `ecosystem.config.js` can also load a shell-style env file from `SHINSA_ENV_FILE`, `/etc/shinsa/shinsa.env`, `.env.production.local`, or `.env.local`.
 
 | Variable | Default | Required in Prod | Purpose |
 |---|---|---:|---|
@@ -177,6 +177,11 @@ This project does not currently load `.env` automatically with `dotenv`; set env
 | `YOUTUBE_OAUTH_SCOPES` | `https://www.googleapis.com/auth/youtube.force-ssl` | No | Space/comma separated scopes to request from Google |
 | `YOUTUBE_OAUTH_STATE_SECRET` | `JWT_SECRET` fallback | Yes (recommended) | Signs the temporary OAuth state payload |
 | `YOUTUBE_ENCRYPT_KEY` | `PIU_ENCRYPT_KEY` fallback | Yes (recommended) | Encrypts stored YouTube access/refresh tokens |
+| `SQUARE_ACCESS_TOKEN` | empty | If venue payments used | Square API access token |
+| `SQUARE_LOCATION_ID` | empty | If venue payments used | Square location ID used for hosted checkout links |
+| `SQUARE_WEBHOOK_SIGNATURE_KEY` | empty | If venue payments used | Verifies incoming Square webhooks |
+| `SQUARE_ENVIRONMENT` | `sandbox` | If venue payments used | `sandbox` or `production` |
+| `SQUARE_WEBHOOK_URL` | empty | If venue payments used | Full public webhook URL passed into Square signature verification |
 | `VAPID_SUBJECT` | `mailto:support@pumpshinsa.com` | If push used | Web push VAPID subject |
 | `VAPID_PUBLIC_KEY` | empty | If push used | Web push public key |
 | `VAPID_PRIVATE_KEY` | empty | If push used | Web push private key |
@@ -261,6 +266,32 @@ export YOUTUBE_CLIENT_SECRET='replace-with-google-client-secret'
 # export VAPID_PRIVATE_KEY='...'
 ```
 
+For PM2 deployments, prefer storing these in an env file outside the repo so future pulls do not wipe production secrets. Example:
+
+```bash
+sudo mkdir -p /etc/shinsa
+sudo tee /etc/shinsa/shinsa.env >/dev/null <<'EOF'
+NODE_OPTIONS=--max-old-space-size=4096
+NODE_ENV=production
+PORT=3001
+DB_PATH=/var/data/shinsa/shinsa.db
+APP_URL=https://pumpshinsa.com
+JWT_SECRET=replace-with-strong-secret
+PIU_ENCRYPT_KEY=replace-with-strong-secret
+YOUTUBE_CLIENT_ID=replace-with-google-client-id
+YOUTUBE_CLIENT_SECRET=replace-with-google-client-secret
+YOUTUBE_REDIRECT_URI=https://pumpshinsa.com/api/youtube/oauth/callback
+YOUTUBE_OAUTH_STATE_SECRET=replace-with-strong-secret
+YOUTUBE_ENCRYPT_KEY=replace-with-strong-secret
+SQUARE_ACCESS_TOKEN=replace-with-square-access-token
+SQUARE_LOCATION_ID=replace-with-square-location-id
+SQUARE_WEBHOOK_SIGNATURE_KEY=replace-with-square-webhook-signature-key
+SQUARE_ENVIRONMENT=production
+SQUARE_WEBHOOK_URL=https://pumpshinsa.com/api/venue-access/webhook
+EOF
+sudo chmod 600 /etc/shinsa/shinsa.env
+```
+
 ## 5) Start app
 
 ```bash
@@ -271,7 +302,7 @@ The Express server serves both API and built frontend (`client/dist`).
 
 ### PM2 (included config)
 
-`ecosystem.config.js` already defines an app named `shinsa`.
+`ecosystem.config.js` already defines an app named `shinsa` and automatically reads `/etc/shinsa/shinsa.env` when present.
 
 ```bash
 pm2 start ecosystem.config.js
