@@ -2030,6 +2030,11 @@ function YoutubeTimestampsCard({
                 {data.skipped_non_clear_count} non-clear attempt{data.skipped_non_clear_count === 1 ? '' : 's'} ignored because chapter timing only uses passed songs.
               </p>
             ) : null}
+            {data.truncated_chapter_count > 0 ? (
+              <p className="mt-2 rounded-lg border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+                YouTube description space is limited, so the published block will omit the last {data.truncated_chapter_count} chapter{data.truncated_chapter_count === 1 ? '' : 's'}.
+              </p>
+            ) : null}
 
             <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.18fr)_minmax(19rem,0.82fr)]">
               <div className="overflow-hidden rounded-lg border border-piu-border/60 bg-piu-dark/45">

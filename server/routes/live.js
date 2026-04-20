@@ -40,7 +40,7 @@ const {
 } = require('../lib/youtube');
 const {
   buildYoutubeTimestampPayload,
-  upsertManagedYoutubeChaptersBlock,
+  fitManagedYoutubeChaptersBlock,
 } = require('../lib/youtubeTimestamps');
 const { findMentionedUsers, notifyMentionedUsers } = require('../lib/mentions');
 const piugameRoutes = require('./piugame');
@@ -2454,12 +2454,16 @@ async function buildLiveSessionYoutubeTimestampPreview(db, session, userId) {
     throw err;
   }
   const timestamps = buildYoutubeTimestampPayload(session, plays, video);
+  const fittedDescription = fitManagedYoutubeChaptersBlock(video.description || '', timestamps.text);
 
   return {
     video_id: videoId,
     video_title: video.title || '',
     video_description: video.description || '',
-    next_description: upsertManagedYoutubeChaptersBlock(video.description || '', timestamps.text),
+    next_description: fittedDescription.description,
+    publishable_text: fittedDescription.published_text,
+    truncated_chapter_count: fittedDescription.truncated_chapter_count,
+    total_chapter_count: fittedDescription.total_chapter_count,
     play_count: plays.length,
     ...timestamps,
   };
