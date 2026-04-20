@@ -75,8 +75,11 @@ function formatChapterLabel(play, options = {}) {
   const title = String(play?.song_title || '').trim() || 'Unknown song';
   const mode = String(play?.mode || '').trim();
   const level = toInt(play?.level);
+  const modeLabel = mode === 'Single' ? 'S' : mode === 'Double' ? 'D' : mode.slice(0, 1).toUpperCase();
   const suffix = mode && level > 0
-    ? ` (${mode === 'Single' ? 'S' : mode === 'Double' ? 'D' : mode.slice(0, 1).toUpperCase()}${level})`
+    ? options.compact
+      ? ` ${modeLabel}${level}`
+      : ` (${modeLabel}${level})`
     : '';
   const result = formatChapterResult(play);
   const performerPrefix = options.showPerformer && getPlayPerformerLabel(play)
@@ -160,7 +163,7 @@ function stripManagedYoutubeChaptersBlock(description) {
   return String(description || '').replace(SHINSA_CHAPTERS_BLOCK_REGEX, '\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
-function buildYoutubeTimestampPayload(session, plays = [], video = null) {
+function buildYoutubeTimestampPayload(session, plays = [], video = null, options = {}) {
   const videoActualStart = parseUtcLike(video?.actual_start_time);
   const sessionActualStart = parseUtcLike(session?.youtube_actual_start_time);
   const videoScheduledStart = parseUtcLike(video?.scheduled_start_time);
@@ -277,7 +280,7 @@ function buildYoutubeTimestampPayload(session, plays = [], video = null) {
     chapters.push({
       offset_seconds: nextOffset,
       offset_label: formatChapterOffset(nextOffset),
-      title: sanitizeChapterTitle(formatChapterLabel(item.play, { showPerformer }), chapters.length),
+      title: sanitizeChapterTitle(formatChapterLabel(item.play, { showPerformer, compact: !!options.compact }), chapters.length),
       user_id: String(item.play?.user_id || item.play?.performer_user_id || '').trim(),
       username: getPlayPerformerLabel(item.play),
       song_title: String(item.play?.song_title || '').trim(),

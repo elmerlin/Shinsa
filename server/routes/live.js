@@ -2453,8 +2453,18 @@ async function buildLiveSessionYoutubeTimestampPreview(db, session, userId) {
     err.statusCode = 404;
     throw err;
   }
-  const timestamps = buildYoutubeTimestampPayload(session, plays, video);
-  const fittedDescription = fitManagedYoutubeChaptersBlock(video.description || '', timestamps.text);
+  const defaultTimestamps = buildYoutubeTimestampPayload(session, plays, video);
+  let timestamps = defaultTimestamps;
+  let fittedDescription = fitManagedYoutubeChaptersBlock(video.description || '', timestamps.text);
+
+  if (fittedDescription.truncated_chapter_count > 0) {
+    const compactTimestamps = buildYoutubeTimestampPayload(session, plays, video, { compact: true });
+    const compactFittedDescription = fitManagedYoutubeChaptersBlock(video.description || '', compactTimestamps.text);
+    if (compactFittedDescription.truncated_chapter_count < fittedDescription.truncated_chapter_count) {
+      timestamps = compactTimestamps;
+      fittedDescription = compactFittedDescription;
+    }
+  }
 
   return {
     video_id: videoId,
