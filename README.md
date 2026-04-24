@@ -185,6 +185,12 @@ This project does not currently load `.env` automatically with `dotenv`; set env
 | `VAPID_SUBJECT` | `mailto:support@pumpshinsa.com` | If push used | Web push VAPID subject |
 | `VAPID_PUBLIC_KEY` | empty | If push used | Web push public key |
 | `VAPID_PRIVATE_KEY` | empty | If push used | Web push private key |
+| `APNS_KEY_ID` | empty | If iOS push used | Apple Push Notifications auth key ID |
+| `APNS_TEAM_ID` | empty | If iOS push used | Apple developer team ID |
+| `APNS_BUNDLE_ID` | `com.elmerlin.shinsa` | If iOS push used | iOS app bundle identifier |
+| `APNS_PRIVATE_KEY` | empty | If iOS push used | `.p8` key contents; use `\n` for escaped newlines |
+| `APNS_PRIVATE_KEY_PATH` | empty | If iOS push used | Alternative path to the `.p8` key |
+| `APNS_PRODUCTION` | `false` | If iOS push used | Use Apple production APNs endpoint for tokens with no stored environment |
 
 Generate VAPID keys (if enabling push):
 
@@ -264,6 +270,10 @@ export YOUTUBE_CLIENT_SECRET='replace-with-google-client-secret'
 # export VAPID_SUBJECT='mailto:you@example.com'
 # export VAPID_PUBLIC_KEY='...'
 # export VAPID_PRIVATE_KEY='...'
+# export APNS_KEY_ID='...'
+# export APNS_TEAM_ID='...'
+# export APNS_PRIVATE_KEY_PATH='/var/secrets/AuthKey_XXXXXXXXXX.p8'
+# export APNS_PRODUCTION='true'
 ```
 
 For PM2 deployments, prefer storing these in an env file outside the repo so future pulls do not wipe production secrets. Example:
@@ -345,6 +355,7 @@ python3 -m pip install -r server/requirements.txt
 - Ensure VAPID keys are set.
 - Ensure site is served over HTTPS.
 - Ensure browser permission is granted.
+- For native iOS push, ensure the app has the Push Notifications capability and APNS env vars are set on the server.
 
 ### DB permission/path errors
 Set `DB_PATH` to a writable directory and ensure parent directory exists.

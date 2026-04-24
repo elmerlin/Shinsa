@@ -1,5 +1,6 @@
 const { emitNotification } = require('./notificationHub');
 const { sendWebPushToUser } = require('./webPush');
+const { sendNativePushToUser } = require('./nativePush');
 
 function createUserNotification(db, userId, type, title, message = '', link = '') {
   if (!db || !userId) return null;
@@ -14,6 +15,9 @@ function createUserNotification(db, userId, type, title, message = '', link = ''
     emitNotification(userId, notification);
     sendWebPushToUser(db, userId, notification).catch((err) => {
       console.error('Web push dispatch error:', err?.message || 'Unknown error');
+    });
+    sendNativePushToUser(db, userId, notification).catch((err) => {
+      console.error('Native push dispatch error:', err?.message || 'Unknown error');
     });
   }
   return notification || null;

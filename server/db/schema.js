@@ -1443,6 +1443,17 @@ function initializeDb() {
       updated_at TEXT DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS user_native_push_tokens (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      platform TEXT NOT NULL DEFAULT 'ios',
+      device_token TEXT NOT NULL UNIQUE,
+      environment TEXT DEFAULT '',
+      app_version TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS conversations (
       id TEXT PRIMARY KEY,
       kind TEXT NOT NULL DEFAULT 'direct',
@@ -1699,6 +1710,8 @@ function initializeDb() {
     CREATE INDEX IF NOT EXISTS idx_activity_notif_target ON user_activity_notification_subscriptions(target_user_id);
     CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user ON user_push_subscriptions(user_id);
     CREATE INDEX IF NOT EXISTS idx_push_subscriptions_endpoint ON user_push_subscriptions(endpoint);
+    CREATE INDEX IF NOT EXISTS idx_native_push_tokens_user ON user_native_push_tokens(user_id);
+    CREATE INDEX IF NOT EXISTS idx_native_push_tokens_token ON user_native_push_tokens(device_token);
     CREATE INDEX IF NOT EXISTS idx_conversations_last_message ON conversations(last_message_at, created_at);
     CREATE INDEX IF NOT EXISTS idx_conversation_members_user ON conversation_members(user_id, updated_at);
     CREATE INDEX IF NOT EXISTS idx_conversation_messages_conversation_time ON conversation_messages(conversation_id, created_at);

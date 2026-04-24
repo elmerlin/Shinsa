@@ -199,11 +199,30 @@ function getDojoCheckoutReminderRemainingMs(userId, checkinId) {
 }
 
 function NotificationBell() {
-  const { notifications, totalBadge, unreadCount, invitationCount, markRead, markAllRead, dismiss } = useNotifications();
+  const {
+    notifications,
+    totalBadge,
+    unreadCount,
+    invitationCount,
+    pushStatus,
+    markRead,
+    markAllRead,
+    dismiss,
+    reenablePushNotifications,
+  } = useNotifications();
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   const navigate = useNavigate();
+
+  const pushStatusText = (() => {
+    if (pushStatus?.syncing) return 'Checking system notifications...';
+    if (pushStatus?.error) return pushStatus.error;
+    if (pushStatus?.message) return pushStatus.message;
+    if (pushStatus?.permission === 'denied') return 'System notifications are blocked in browser or OS settings.';
+    if (pushStatus?.active) return 'System notifications are enabled on this device.';
+    return 'Refresh system push for this PWA install.';
+  })();
 
   useEffect(() => {
     function handleClick(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
@@ -250,6 +269,28 @@ function NotificationBell() {
               </span>
             </Link>
           )}
+
+          <div className="px-3 py-2.5 border-b border-piu-border/30 bg-piu-dark/25">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[10px] font-display font-bold uppercase tracking-wide text-gray-400">System push</p>
+                <p className={`mt-0.5 text-[10px] leading-snug ${pushStatus?.error ? 'text-red-300' : pushStatus?.active ? 'text-emerald-300' : 'text-gray-500'}`}>
+                  {pushStatusText}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  reenablePushNotifications?.();
+                }}
+                disabled={pushStatus?.syncing || pushStatus?.supported === false}
+                className="shrink-0 rounded-lg border border-piu-accent/30 bg-piu-accent/10 px-2.5 py-1.5 text-[10px] font-display font-bold text-piu-accent transition-colors hover:bg-piu-accent/20 disabled:cursor-not-allowed disabled:border-gray-700 disabled:bg-gray-900/40 disabled:text-gray-600"
+              >
+                {pushStatus?.syncing ? 'Refreshing' : 'Re-enable'}
+              </button>
+            </div>
+          </div>
 
           {notifications.length === 0 && invitationCount === 0 && (
             <p className="text-center text-gray-500 text-xs py-6">{t('app.notifications.none')}</p>

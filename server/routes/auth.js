@@ -9,6 +9,7 @@ const sharp = require('sharp');
 const { getDb } = require('../db/schema');
 const { addNotificationClient } = require('../lib/notificationHub');
 const { getPublicVapidKey, isWebPushConfigured } = require('../lib/webPush');
+const { isNativePushConfigured } = require('../lib/nativePush');
 const { isInlineDataAvatar, normalizeUserAvatarForList } = require('../lib/avatarProxy');
 const { evaluateAchievementSeries, getSeriesProgressValue } = require('../lib/achievements');
 const {
@@ -2747,6 +2748,51 @@ router.delete('/push/subscribe', requireAuth, (req, res) => {
 
   db.prepare('DELETE FROM user_push_subscriptions WHERE user_id = ? AND endpoint = ?')
     .run(req.user.id, endpoint);
+
+  res.json({ success: true });
+});
+
+// POST /api/auth/push/native/ios — register/update an iOS APNs device token for current user
+router.post('/push/native/ios', requireAuth, (req, res) => {
+  const db = getDb();
+  const deviceToken = String(req.body?.device_token || req.body?.token || '')
+    .replace(/[^a-fA-F0-9]/g, '')
+    .toLowerCase();
+  const environment = String(req.body?.environment || '').trim().toLowerCase();
+  const appVersion = String(req.body?.app_version || '').trim().slice(0, 80);
+
+  if (!deviceToken || deviceToken.length < 32) {
+    return res.status(400).json({ error: 'Invalid device token' });
+  }
+
+  const normalizedEnvironment = environment === 'production' || environment === 'sandbox'
+    ? environment
+    : '';
+
+  db.prepare(`
+    INSERT INTO user_native_push_tokens (user_id, platform, device_token, environment, app_version)
+    VALUES (?, 'ios', ?, ?, ?)
+    ON CONFLICT(device_token) DO UPDATE SET
+      user_id = excluded.user_id,
+      platform = 'ios',
+      environment = excluded.environment,
+      app_version = excluded.app_version,
+      updated_at = datetime('now')
+  `).run(req.user.id, deviceToken, normalizedEnvironment, appVersion);
+
+  res.json({ success: true, enabled: isNativePushConfigured() });
+});
+
+// DELETE /api/auth/push/native/ios — unregister an iOS APNs token for current user
+router.delete('/push/native/ios', requireAuth, (req, res) => {
+  const db = getDb();
+  const deviceToken = String(req.body?.device_token || req.body?.token || '')
+    .replace(/[^a-fA-F0-9]/g, '')
+    .toLowerCase();
+  if (!deviceToken) return res.status(400).json({ error: 'device_token is required' });
+
+  db.prepare('DELETE FROM user_native_push_tokens WHERE user_id = ? AND device_token = ?')
+    .run(req.user.id, deviceToken);
 
   res.json({ success: true });
 });

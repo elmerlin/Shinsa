@@ -7,6 +7,7 @@ import {
   deleteNotification,
   getPushPublicKey,
   savePushSubscription,
+  removePushSubscription,
 } from '../utils/api';
 import { useAuth } from './AuthContext';
 
@@ -29,12 +30,30 @@ function urlBase64ToUint8Array(base64String) {
   return output;
 }
 
+function arrayBufferToUrlBase64(buffer) {
+  if (!buffer) return '';
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i += 1) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return window.btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
 export function NotificationProvider({ children }) {
   const { user, loading } = useAuth();
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [invitationCount, setInvitationCount] = useState(0);
   const [messageUnreadCount, setMessageUnreadCount] = useState(0);
+  const [pushStatus, setPushStatus] = useState(() => ({
+    supported: supportsWebPush(),
+    permission: typeof Notification === 'undefined' ? 'unsupported' : Notification.permission,
+    active: false,
+    syncing: false,
+    message: '',
+    error: '',
+  }));
   const streamRef = useRef(null);
   const webPushActiveRef = useRef(false);
   const permissionPromptAttachedRef = useRef(false);
@@ -78,23 +97,39 @@ export function NotificationProvider({ children }) {
     } catch {}
   }, []);
 
-  const syncPushSubscription = useCallback(async () => {
+  const syncPushSubscription = useCallback(async ({ force = false } = {}) => {
     webPushActiveRef.current = false;
-    if (!user) return;
-    if (!supportsWebPush()) return;
+    setPushStatus(prev => ({ ...prev, supported: supportsWebPush(), active: false, syncing: true, message: '', error: '' }));
+    if (!user) {
+      setPushStatus(prev => ({ ...prev, syncing: false, active: false, message: '' }));
+      return { ok: false, reason: 'not_logged_in' };
+    }
+    if (!supportsWebPush()) {
+      setPushStatus(prev => ({ ...prev, supported: false, syncing: false, active: false, permission: 'unsupported', error: 'Push notifications are not supported in this browser.' }));
+      return { ok: false, reason: 'unsupported' };
+    }
 
     try {
       const keyData = await getPushPublicKey();
       const publicKey = String(keyData?.public_key || '');
-      if (!keyData?.enabled || !publicKey) return;
+      if (!keyData?.enabled || !publicKey) {
+        setPushStatus(prev => ({ ...prev, syncing: false, active: false, permission: Notification.permission, error: 'Push notifications are not enabled on the server.' }));
+        return { ok: false, reason: 'server_disabled' };
+      }
 
       // Chrome (especially mobile) may ignore permission prompts that are not
       // initiated by a user gesture. Ask only from the gesture effect below.
-      if (Notification.permission !== 'granted') return;
+      if (Notification.permission !== 'granted') {
+        setPushStatus(prev => ({ ...prev, syncing: false, active: false, permission: Notification.permission }));
+        return { ok: false, reason: Notification.permission };
+      }
 
       let registration = await navigator.serviceWorker.getRegistration('/');
       if (!registration) {
         registration = await navigator.serviceWorker.register('/push-sw.js', { scope: '/' });
+      }
+      if (force) {
+        await registration.update().catch(() => {});
       }
       if (!registration.active) {
         registration = await navigator.serviceWorker.ready;
@@ -103,6 +138,25 @@ export function NotificationProvider({ children }) {
         registration.waiting.postMessage({ type: 'SKIP_WAITING' });
       }
       let subscription = await registration.pushManager.getSubscription();
+      if (force && subscription) {
+        const endpoint = subscription.endpoint;
+        await subscription.unsubscribe();
+        if (endpoint) {
+          await removePushSubscription(endpoint).catch(() => {});
+        }
+        subscription = null;
+      }
+      if (subscription?.options?.applicationServerKey) {
+        const currentKey = arrayBufferToUrlBase64(subscription.options.applicationServerKey);
+        if (currentKey && currentKey !== publicKey) {
+          const endpoint = subscription.endpoint;
+          await subscription.unsubscribe();
+          if (endpoint) {
+            await removePushSubscription(endpoint).catch(() => {});
+          }
+          subscription = null;
+        }
+      }
       if (!subscription) {
         subscription = await registration.pushManager.subscribe({
           userVisibleOnly: true,
@@ -114,11 +168,69 @@ export function NotificationProvider({ children }) {
       const payload = subscription?.toJSON ? subscription.toJSON() : subscription;
       await savePushSubscription(payload);
       webPushActiveRef.current = true;
+      setPushStatus(prev => ({
+        ...prev,
+        supported: true,
+        permission: Notification.permission,
+        active: true,
+        syncing: false,
+        message: force ? 'System notifications re-enabled on this device.' : '',
+        error: '',
+      }));
+      return { ok: true };
     } catch (err) {
       webPushActiveRef.current = false;
+      setPushStatus(prev => ({
+        ...prev,
+        supported: supportsWebPush(),
+        permission: typeof Notification === 'undefined' ? 'unsupported' : Notification.permission,
+        active: false,
+        syncing: false,
+        message: '',
+        error: err?.message || 'Could not re-enable push notifications.',
+      }));
       console.error('Web push subscription sync failed:', err?.message || err);
+      return { ok: false, reason: 'error', error: err };
     }
   }, [user]);
+
+  const reenablePushNotifications = useCallback(async () => {
+    if (!supportsWebPush()) {
+      setPushStatus(prev => ({ ...prev, supported: false, permission: 'unsupported', active: false, error: 'Push notifications are not supported in this browser.' }));
+      return { ok: false, reason: 'unsupported' };
+    }
+
+    setPushStatus(prev => ({ ...prev, supported: true, syncing: true, message: '', error: '' }));
+
+    if (Notification.permission === 'denied') {
+      setPushStatus(prev => ({
+        ...prev,
+        permission: 'denied',
+        syncing: false,
+        active: false,
+        error: 'Notifications are blocked in browser or system settings.',
+      }));
+      return { ok: false, reason: 'denied' };
+    }
+
+    if (Notification.permission !== 'granted') {
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        setPushStatus(prev => ({
+          ...prev,
+          permission,
+          syncing: false,
+          active: false,
+          error: permission === 'denied'
+            ? 'Notifications are blocked in browser or system settings.'
+            : 'Notification permission was not granted.',
+        }));
+        return { ok: false, reason: permission };
+      }
+    }
+
+    return syncPushSubscription({ force: true });
+  }, [syncPushSubscription]);
 
   const refresh = useCallback(() => {
     if (!user) return;
@@ -302,7 +414,7 @@ export function NotificationProvider({ children }) {
   }, []);
 
   return (
-    <NotificationContext.Provider value={{ notifications, unreadCount, invitationCount, totalBadge, messageUnreadCount, refresh, refreshMessageUnread, markRead, markAllRead, dismiss, subscribeTyping, subscribeNewMessage }}>
+    <NotificationContext.Provider value={{ notifications, unreadCount, invitationCount, totalBadge, messageUnreadCount, pushStatus, refresh, refreshMessageUnread, markRead, markAllRead, dismiss, reenablePushNotifications, subscribeTyping, subscribeNewMessage }}>
       {children}
     </NotificationContext.Provider>
   );

@@ -285,6 +285,19 @@ class APIService {
     func markNotificationRead(_ id: Int) async throws -> GenericResponse { try await request("/auth/notifications/\(id)/read", method: "PUT") }
     func markAllNotificationsRead() async throws -> GenericResponse { try await request("/auth/notifications/read-all", method: "PUT") }
     func deleteNotification(_ id: Int) async throws { try await requestVoid("/auth/notifications/\(id)", method: "DELETE") }
+    func registerNativePushToken(_ token: String) async throws -> GenericResponse {
+        #if DEBUG
+        let environment = "sandbox"
+        #else
+        let environment = "production"
+        #endif
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
+        return try await request("/auth/push/native/ios", method: "POST", body: [
+            "device_token": AnyCodable(token),
+            "environment": AnyCodable(environment),
+            "app_version": AnyCodable(version)
+        ])
+    }
 
     // MARK: - Social: Follows
     func followUser(_ userId: String) async throws -> GenericResponse { try await request("/social/follow/\(userId)", method: "POST") }
@@ -668,4 +681,3 @@ struct AnyCodable: Codable {
         else { try container.encode("\(value)") }
     }
 }
-
