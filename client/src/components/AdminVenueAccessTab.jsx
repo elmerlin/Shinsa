@@ -84,7 +84,7 @@ function formatAverageVisits(value) {
 const PLAN_TYPE_LABELS = {
   day_pass_weekday: 'Day Pass (Weekday)',
   day_pass_weekend: 'Day Pass (Weekend)',
-  monthly: 'Monthly Subscription',
+  monthly: 'Monthly Membership',
 };
 
 function buildEmptyPlanForm() {
@@ -939,8 +939,8 @@ export default function AdminVenueAccessTab() {
               <div className="space-y-3 rounded-xl border border-piu-border/50 bg-piu-dark/40 p-3">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <div className="text-sm font-bold text-gray-200">Billing options</div>
-                    <div className="text-xs text-gray-500">Add one Square subscription variation per billing cadence.</div>
+                    <div className="text-sm font-bold text-gray-200">Checkout options</div>
+                    <div className="text-xs text-gray-500">Leave the Square variation blank for a one-time non-recurring month checkout.</div>
                   </div>
                   <button
                     type="button"
@@ -1014,7 +1014,7 @@ export default function AdminVenueAccessTab() {
                           />
                         </div>
                         <div>
-                          <label className="text-xs text-gray-400 block mb-1">Square Plan Variation ID</label>
+                          <label className="text-xs text-gray-400 block mb-1">Square Subscription Variation ID</label>
                           <input
                             value={cadence.square_plan_variation_id}
                             onChange={e => setPlanForm(f => ({
@@ -1024,6 +1024,7 @@ export default function AdminVenueAccessTab() {
                             placeholder="..."
                             className="w-full bg-piu-dark border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"
                           />
+                          <p className="mt-1 text-[10px] text-gray-500">Blank creates a normal one-off Square checkout.</p>
                         </div>
                       </div>
                     </div>
@@ -1053,7 +1054,7 @@ export default function AdminVenueAccessTab() {
                   <div className="text-xs text-gray-400">{PLAN_TYPE_LABELS[plan.plan_type] || plan.plan_type}</div>
                   {cadenceOptions.length > 0 && (
                     <div className="text-[11px] text-gray-500 mt-1 truncate">
-                      {cadenceOptions.map((cadence) => `${cadence.label} ${formatCurrency(cadence.price_amount, cadence.currency)}`).join(' • ')}
+                      {cadenceOptions.map((cadence) => `${cadence.label} ${formatCurrency(cadence.price_amount, cadence.currency)}${cadence.is_one_time ? ' one-time' : ' recurring'}`).join(' • ')}
                     </div>
                   )}
                 </div>

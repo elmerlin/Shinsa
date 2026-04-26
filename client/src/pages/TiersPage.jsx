@@ -44,6 +44,7 @@ const OVERLAY_MAX = 100;
 const JACKET_OPACITY_MIN = 10;
 const JACKET_OPACITY_MAX = 100;
 const SONGS_PER_ROW_OPTIONS = [4, 5, 6, 7];
+const CAPTURE_IMAGE_FETCH_LIMIT = 6;
 
 const TIER_STYLE = {
   Overrated:  { bg: 'bg-indigo-500/[0.09]',  accent: 'bg-indigo-400',  text: 'text-indigo-200'  },
@@ -146,6 +147,102 @@ function nearestLevel(levels, targetLevel) {
     }
   }
   return best;
+}
+
+function waitForNextPaint() {
+  return new Promise((resolve) => {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(resolve);
+    });
+  });
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(reader.error || new Error('Failed to read image data.'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function fetchImageAsDataUrl(src) {
+  const rawSrc = String(src || '').trim();
+  if (!rawSrc || rawSrc.startsWith('data:')) return rawSrc;
+
+  const url = new URL(rawSrc, window.location.href);
+  const response = await fetch(url.href, {
+    cache: 'force-cache',
+    credentials: url.origin === window.location.origin ? 'same-origin' : 'omit',
+  });
+  if (!response.ok) {
+    throw new Error(`Image request failed: ${response.status}`);
+  }
+
+  const blob = await response.blob();
+  if (!String(blob.type || '').startsWith('image/')) return rawSrc;
+  return blobToDataUrl(blob);
+}
+
+async function mapWithConcurrency(items, limit, mapper) {
+  const results = new Array(items.length);
+  let cursor = 0;
+  const workerCount = Math.min(limit, items.length);
+
+  await Promise.all(Array.from({ length: workerCount }, async () => {
+    while (cursor < items.length) {
+      const index = cursor;
+      cursor += 1;
+      results[index] = await mapper(items[index], index);
+    }
+  }));
+
+  return results;
+}
+
+async function buildCaptureImageMap(urls) {
+  const uniqueUrls = Array.from(new Set(urls.map((url) => String(url || '').trim()).filter(Boolean)));
+  const entries = await mapWithConcurrency(
+    uniqueUrls,
+    CAPTURE_IMAGE_FETCH_LIMIT,
+    async (url) => {
+      try {
+        return [url, await fetchImageAsDataUrl(url)];
+      } catch (err) {
+        console.warn('Failed to inline tier jacket for capture:', url, err);
+        return [url, url];
+      }
+    }
+  );
+  return Object.fromEntries(entries);
+}
+
+async function waitForCaptureAssets(root) {
+  if (document.fonts?.ready) {
+    await document.fonts.ready.catch(() => {});
+  }
+
+  const images = Array.from(root?.querySelectorAll('img') || []);
+  await Promise.all(images.map((image) => {
+    if (image.complete && image.naturalWidth > 0) return Promise.resolve();
+    return new Promise((resolve) => {
+      let timeout = null;
+      const done = () => {
+        if (timeout) window.clearTimeout(timeout);
+        image.removeEventListener('load', done);
+        image.removeEventListener('error', done);
+        resolve();
+      };
+
+      image.addEventListener('load', done, { once: true });
+      image.addEventListener('error', done, { once: true });
+      timeout = window.setTimeout(done, 5000);
+
+      if (typeof image.decode === 'function') {
+        image.decode().then(done).catch(() => {});
+      }
+    });
+  }));
 }
 
 function SettingsModal({
@@ -408,7 +505,7 @@ function JacketOverlayText({
           {fitTemplate}
         </span>
         <span
-          className={`inline-flex items-start justify-center whitespace-nowrap text-center font-display font-black italic ${colorClass} ${isBroken ? 'grade-broken' : ''}`}
+          className={`inline-grid whitespace-nowrap text-center font-display font-black italic ${colorClass} ${isBroken ? 'grade-broken' : ''}`}
           data-grade={text}
           style={{
             fontSize: `${baseFontRem}rem`,
@@ -416,6 +513,8 @@ function JacketOverlayText({
             transformOrigin: 'center center',
             lineHeight: 1,
             letterSpacing: '-0.12em',
+            gridTemplateColumns: hasPlus ? 'auto 0.4em' : 'auto',
+            alignItems: 'start',
             WebkitTextStroke: '4px rgba(20,10,0,0.95)',
             paintOrder: 'stroke fill',
             filter: 'drop-shadow(0 3px 3px rgba(0,0,0,0.65)) drop-shadow(0 0 5px rgba(0,0,0,0.35))',
@@ -426,9 +525,10 @@ function JacketOverlayText({
             <span
               style={{
                 fontSize: '0.6em',
+                display: 'block',
                 lineHeight: 1,
-                marginLeft: '-0.05em',
-                marginTop: '-0.05em',
+                transform: 'translate(-0.1em, -0.08em)',
+                transformOrigin: 'left top',
                 color: 'rgb(239, 68, 68)',
                 letterSpacing: 'normal',
                 WebkitTextStroke: '2.5px rgba(20,10,0,0.95)',
@@ -469,6 +569,7 @@ export default function TiersPage() {
   const [songsPerRow, setSongsPerRow] = useState(() => clampSongsPerRow(localStorage.getItem('tiers_songs_per_row')));
   const [captureBusy, setCaptureBusy] = useState(false);
   const [captureMode, setCaptureMode] = useState(false);
+  const [captureImageMap, setCaptureImageMap] = useState({});
 
   useEffect(() => {
     localStorage.setItem('tiers_display_mode', displayMode);
@@ -709,18 +810,25 @@ export default function TiersPage() {
   const captureTierImage = async () => {
     if (!captureRef.current || captureBusy) return;
     setCaptureBusy(true);
-    setCaptureMode(true);
+    setCaptureImageMap({});
     setError('');
     try {
-      await new Promise((resolve) => {
-        window.requestAnimationFrame(() => {
-          window.requestAnimationFrame(resolve);
-        });
-      });
+      const jacketUrls = tiersForRender.flatMap((tier) => (
+        Array.isArray(tier.charts) ? tier.charts.map((chart) => chart.jacket_url) : []
+      ));
+      const imageMap = await buildCaptureImageMap(jacketUrls);
+      setCaptureImageMap(imageMap);
+      setCaptureMode(true);
+
+      await waitForNextPaint();
+      await waitForCaptureAssets(captureRef.current);
+      await waitForNextPaint();
 
       const { toPng } = await import('html-to-image');
       const dataUrl = await toPng(captureRef.current, {
         backgroundColor: '#071326',
+        cacheBust: true,
+        includeQueryParams: true,
         pixelRatio: 2,
       });
       const download = document.createElement('a');
@@ -732,6 +840,7 @@ export default function TiersPage() {
       setError(err?.message || 'Failed to create tier image.');
     } finally {
       setCaptureMode(false);
+      setCaptureImageMap({});
       setCaptureBusy(false);
     }
   };
@@ -865,6 +974,9 @@ export default function TiersPage() {
                   const overlayBaseRem = displayMode === 'score' ? 1.2 : 1.45;
                   const overlayScale = overlaySize / 65;
                   const overlayFontRem = Math.max(0.7, Math.min(2.2, overlayBaseRem * overlayScale));
+                  const jacketUrl = captureMode
+                    ? (captureImageMap[chart.jacket_url] || chart.jacket_url)
+                    : chart.jacket_url;
 
                   return (
                     <Link
@@ -873,12 +985,14 @@ export default function TiersPage() {
                       className="relative group rounded overflow-hidden border border-piu-border/50 bg-piu-dark/80 hover:border-piu-accent/60 transition-colors"
                       title={`${chart.title} (${MODE_PREFIX[chart.mode] || '?'}${chart.level})`}
                     >
-                      {chart.jacket_url ? (
+                      {jacketUrl ? (
                         <img
-                          src={chart.jacket_url}
+                          src={jacketUrl}
                           alt={chart.title}
                           className="w-full aspect-[16/10] object-cover"
                           style={{ opacity: jacketOpacity / 100 }}
+                          loading={captureMode ? 'eager' : 'lazy'}
+                          decoding={captureMode ? 'sync' : 'async'}
                         />
                       ) : (
                         <div className="w-full aspect-[16/10] bg-piu-dark" />

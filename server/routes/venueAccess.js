@@ -138,6 +138,8 @@ function attachPlanCadenceMeta(plan, discount = null) {
 
   const cadences = parseMonthlyCadences(plan).map((cadence) => ({
     ...cadence,
+    is_recurring: !!cadence.square_plan_variation_id,
+    is_one_time: !cadence.square_plan_variation_id,
     discount_percent: discount ? discount.discount_percent : 0,
     discounted_amount: discount ? applyDiscount(cadence.price_amount, discount.discount_percent) : cadence.price_amount,
   }));
@@ -328,15 +330,44 @@ function isUserApproved(db, userId, venueId) {
 }
 
 const DOJO_MEMBER_GROUP_NAME = 'Pump Dojo';
+const DOJO_VISITOR_GROUP_NAME = 'Dojo Visitor';
 
-/** Check if user is in the "Pump Dojo" admin user group. */
-function isDojoMember(db, userId) {
+function isUserInAdminGroup(db, userId, groupName) {
   const row = db.prepare(`
     SELECT 1 FROM admin_user_group_members gm
     JOIN admin_user_groups g ON g.id = gm.group_id
     WHERE gm.user_id = ? AND g.name = ? COLLATE NOCASE
-  `).get(userId, DOJO_MEMBER_GROUP_NAME);
+    LIMIT 1
+  `).get(userId, groupName);
   return !!row;
+}
+
+/** Check if user is in the "Pump Dojo" admin user group. */
+function isDojoMember(db, userId) {
+  return isUserInAdminGroup(db, userId, DOJO_MEMBER_GROUP_NAME);
+}
+
+/** Check if user is in the pay-as-you-go dojo visitor group. */
+function isDojoVisitor(db, userId) {
+  return isUserInAdminGroup(db, userId, DOJO_VISITOR_GROUP_NAME);
+}
+
+function getVenueApprovalState(db, userId, venueId) {
+  const approved = isUserApproved(db, userId, venueId);
+  const dojoVisitor = isDojoVisitor(db, userId);
+  return {
+    approved,
+    dojoVisitor,
+    purchaseApproved: approved || dojoVisitor,
+  };
+}
+
+function getVenueAccessForMembership(db, userId, venueId) {
+  const access = checkUserVenueAccess(db, userId, venueId);
+  if (access.accessType === 'group_member' && isDojoVisitor(db, userId) && !isDojoMember(db, userId)) {
+    return { hasAccess: false, accessType: 'dojo_visitor', detail: null };
+  }
+  return access;
 }
 
 /**
@@ -374,6 +405,14 @@ function addUserToDojoMemberGroup(db, userId, addedByUserId) {
     INSERT OR IGNORE INTO admin_user_group_feature_permissions (group_id, feature_key)
     VALUES (?, 'checkin')
   `).run(groupId);
+
+  db.prepare(`
+    DELETE FROM admin_user_group_members
+    WHERE user_id = ?
+      AND group_id IN (
+        SELECT id FROM admin_user_groups WHERE name = ? COLLATE NOCASE
+      )
+  `).run(userId, DOJO_VISITOR_GROUP_NAME);
 }
 
 function finalizeVenuePaymentSuccess(db, paymentRow, options = {}) {
@@ -634,9 +673,15 @@ router.get('/plans/:venueSlug', requireAuth, (req, res) => {
     }, discount);
   });
 
-  const approved = isUserApproved(db, req.user.id, venue.id);
+  const approval = getVenueApprovalState(db, req.user.id, venue.id);
 
-  res.json({ venue, plans: plansWithDiscount, approved });
+  res.json({
+    venue,
+    plans: plansWithDiscount,
+    approved: approval.purchaseApproved,
+    approved_direct: approval.approved,
+    dojo_visitor: approval.dojoVisitor,
+  });
 });
 
 // GET /api/venue-access/my-access/:venueSlug — check current user's access status
@@ -645,7 +690,7 @@ router.get('/my-access/:venueSlug', requireAuth, (req, res) => {
   const venue = db.prepare('SELECT id, name, slug FROM venues WHERE slug = ?').get(req.params.venueSlug);
   if (!venue) return res.status(404).json({ error: 'Venue not found' });
 
-  const access = checkUserVenueAccess(db, req.user.id, venue.id);
+  const access = getVenueAccessForMembership(db, req.user.id, venue.id);
 
   const subscription = db.prepare(`
     SELECT vs.id, vs.status, vs.current_period_start, vs.current_period_end, vs.cancelled_at,
@@ -678,11 +723,13 @@ router.get('/my-access/:venueSlug', requireAuth, (req, res) => {
     ORDER BY discount_percent DESC
   `).all(req.user.id, venue.id);
 
-  const approved = isUserApproved(db, req.user.id, venue.id);
+  const approval = getVenueApprovalState(db, req.user.id, venue.id);
 
   res.json({
     venue,
-    approved,
+    approved: approval.purchaseApproved,
+    approved_direct: approval.approved,
+    dojo_visitor: approval.dojoVisitor,
     has_access: access.hasAccess,
     access_type: access.accessType,
     subscription: subscription || null,
@@ -836,7 +883,7 @@ router.post('/purchase/day-pass', requireAuth, async (req, res) => {
 
     // Check whitelist
     const venue = db.prepare(`SELECT v.id FROM venues v JOIN venue_access_plans vap ON v.id = vap.venue_id WHERE vap.id = ?`).get(plan_id);
-    if (venue && !isUserApproved(db, req.user.id, venue.id)) {
+    if (venue && !getVenueApprovalState(db, req.user.id, venue.id).purchaseApproved) {
       return res.status(403).json({ error: 'You are not approved for this venue. Please contact the venue admin.' });
     }
 
@@ -960,7 +1007,7 @@ router.post('/purchase/subscription', requireAuth, async (req, res) => {
     }
 
     // Check whitelist
-    if (!isUserApproved(db, req.user.id, plan.venue_id)) {
+    if (!getVenueApprovalState(db, req.user.id, plan.venue_id).purchaseApproved) {
       return res.status(403).json({ error: 'You are not approved for this venue. Please contact the venue admin.' });
     }
 
@@ -976,6 +1023,10 @@ router.post('/purchase/subscription', requireAuth, async (req, res) => {
     const discount = getUserDiscount(db, req.user.id, plan.venue_id, 'monthly');
     const chargeAmount = discount ? applyDiscount(selectedCadence.price_amount, discount.discount_percent) : selectedCadence.price_amount;
     const discountNote = discount ? ` (${discount.discount_percent}% discount applied)` : '';
+    const isOneTimeMonthly = !String(selectedCadence.square_plan_variation_id || '').trim();
+    const checkoutDescription = isOneTimeMonthly
+      ? `${selectedCadence.months === 1 ? '1 month' : `${selectedCadence.months} months`} unlimited entry to the Dojo`
+      : `${selectedCadence.label} membership for ${plan.venue_name}`;
 
     const paymentId = uuidv4();
     db.prepare(`
@@ -994,7 +1045,7 @@ router.post('/purchase/subscription', requireAuth, async (req, res) => {
       selectedCadence.key,
       selectedCadence.label,
       selectedCadence.months,
-      `${selectedCadence.label} membership for ${plan.venue_name}${discountNote}`,
+      `${checkoutDescription}${discountNote}`,
     );
 
     const user = db.prepare('SELECT email, username FROM users WHERE id = ?').get(req.user.id);
@@ -1098,8 +1149,8 @@ router.get('/my-membership/:venueSlug', requireAuth, async (req, res) => {
   const userId = req.user.id;
   await reconcilePendingVenuePaymentsForUser(db, userId);
   purgeStalePendingDayPassPayments(db, { userId, venueId: venue.id });
-  const access = checkUserVenueAccess(db, userId, venue.id);
-  const approved = isUserApproved(db, userId, venue.id);
+  const access = getVenueAccessForMembership(db, userId, venue.id);
+  const approval = getVenueApprovalState(db, userId, venue.id);
   const dojoMember = isDojoMember(db, userId);
   const today = todayDateString();
 
@@ -1193,7 +1244,9 @@ router.get('/my-membership/:venueSlug', requireAuth, async (req, res) => {
     venue,
     has_access: access.hasAccess,
     access_type: access.accessType,
-    approved,
+    approved: approval.purchaseApproved,
+    approved_direct: approval.approved,
+    dojo_visitor: approval.dojoVisitor,
     dojo_member: dojoMember,
     subscription: subscription || null,
     past_subscriptions: pastSubscriptions,

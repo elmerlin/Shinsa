@@ -48,6 +48,13 @@ const STATUS_COLORS = {
   failed: 'text-red-400',
 };
 
+function userHasGroup(user, groupName) {
+  const target = String(groupName || '').trim().toLowerCase();
+  if (!target) return false;
+  return Array.isArray(user?.groups)
+    && user.groups.some((group) => String(group?.name || '').trim().toLowerCase() === target);
+}
+
 export default function MembershipPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -163,10 +170,14 @@ export default function MembershipPage() {
 
   const hasAccess = data?.has_access;
   const accessType = data?.access_type;
+  const isDojoVisitor = !!data?.dojo_visitor || userHasGroup(user, 'Dojo Visitor');
+  const hasPaidAccess = accessType === 'monthly' || accessType === 'day_pass' || !!data?.subscription;
+  const hasActiveAccess = !!hasAccess && !(isDojoVisitor && accessType === 'group_member' && !hasPaidAccess);
+  const purchaseApproved = !!data?.approved || isDojoVisitor;
   const dayPassPlans = (data?.plans || []).filter(p => p.plan_type.startsWith('day_pass_'));
   const monthlyPlans = (data?.plans || []).filter(p => p.plan_type === 'monthly');
   const tabs = ['status', 'passes', 'payments'];
-  if (!data?.subscription && data?.approved) tabs.splice(1, 0, 'subscribe');
+  if (!data?.subscription && purchaseApproved) tabs.splice(1, 0, 'subscribe');
 
   return (
     <div className="max-w-3xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
@@ -185,17 +196,19 @@ export default function MembershipPage() {
       {message && <div className="bg-green-500/10 border border-green-500/30 rounded-lg px-3 py-2 mb-4 text-xs text-green-400">{message} <button onClick={() => setMessage('')} className="underline ml-1">dismiss</button></div>}
 
       {/* Access Status Card */}
-      <div className={`rounded-2xl p-4 sm:p-5 mb-4 border ${hasAccess ? 'bg-gradient-to-br from-green-900/20 to-emerald-900/10 border-green-700/30' : 'bg-gradient-to-br from-yellow-900/20 to-orange-900/10 border-yellow-700/30'}`}>
+      <div className={`rounded-2xl p-4 sm:p-5 mb-4 border ${hasActiveAccess ? 'bg-gradient-to-br from-green-900/20 to-emerald-900/10 border-green-700/30' : 'bg-gradient-to-br from-yellow-900/20 to-orange-900/10 border-yellow-700/30'}`}>
         <div className="flex items-center gap-3 mb-3">
-          <div className={`w-3 h-3 rounded-full ${hasAccess ? 'bg-green-400 shadow-lg shadow-green-400/50' : 'bg-yellow-400'}`} />
+          <div className={`w-3 h-3 rounded-full ${hasActiveAccess ? 'bg-green-400 shadow-lg shadow-green-400/50' : 'bg-yellow-400'}`} />
           <h2 className="font-display font-bold text-base sm:text-lg">
-            {hasAccess
+            {hasActiveAccess
               ? accessType === 'monthly'
                 ? 'Active Monthly Member'
                 : accessType === 'day_pass'
                   ? 'Day Pass Active'
                   : 'Pump Dojo Member'
-              : 'No Active Access'}
+              : isDojoVisitor
+                ? 'Dojo Visitor'
+                : 'No Active Access'}
           </h2>
         </div>
 
@@ -233,19 +246,19 @@ export default function MembershipPage() {
         )}
 
         {/* Group-only member message */}
-        {accessType === 'group_member' && !data?.subscription && (
+        {accessType === 'group_member' && !isDojoVisitor && !data?.subscription && (
           <div className="text-xs text-gray-400 mt-2">
             You have access through your Pump Dojo Member group membership. Consider subscribing for uninterrupted access.
           </div>
         )}
 
-        {!hasAccess && data?.approved && (
+        {!hasActiveAccess && purchaseApproved && (
           <div className="text-xs text-gray-400 mt-2">
-            You've been whitelisted to use the Dojo! Please purchase a day pass, or consider a monthly membership for access!
+            You&apos;re whitelisted to visit the Dojo. Please purchase a day pass or membership to gain access.
           </div>
         )}
 
-        {!hasAccess && !data?.approved && (
+        {!hasActiveAccess && !purchaseApproved && (
           <div className="text-xs text-gray-400 mt-2">
             You need to be approved by an admin before you can purchase access. Please contact the venue admin.
           </div>
@@ -376,8 +389,8 @@ export default function MembershipPage() {
       {/* ── Subscribe Tab ──────────────────────────────────────────────── */}
       {tab === 'subscribe' && (
         <div className="space-y-4">
-          <h3 className="text-sm font-display font-bold text-gray-300 mb-2">Monthly Membership Plans</h3>
-          <p className="text-xs text-gray-400 mb-3">Subscribe for unlimited access every month. Your subscription will automatically renew.</p>
+          <h3 className="text-sm font-display font-bold text-gray-300 mb-2">Membership Plans</h3>
+          <p className="text-xs text-gray-400 mb-3">Choose a one-time month of unlimited Dojo entry or a recurring membership.</p>
 
           {monthlyPlans.length === 0 ? (
             <p className="text-gray-500 text-sm">No monthly plans are currently available.</p>
@@ -389,7 +402,7 @@ export default function MembershipPage() {
                   <div key={plan.id} className="bg-piu-card border border-piu-border rounded-xl p-4">
                     <div className="mb-3">
                       <h4 className="font-bold text-base">{plan.name}</h4>
-                      <div className="text-xs text-gray-400">Unlimited venue access with recurring billing options.</div>
+                      <div className="text-xs text-gray-400">Unlimited Dojo entry for the selected membership period.</div>
                     </div>
                     <div className="space-y-2">
                       {cadenceOptions.map(cadence => {
@@ -404,6 +417,9 @@ export default function MembershipPage() {
                             <div className="text-left">
                               <div className="font-bold text-sm">{cadence.label}</div>
                               <div className="text-xs text-gray-400">{getCadenceIntervalLabel(cadence)}</div>
+                              {cadence.is_one_time && (
+                                <div className="text-[10px] text-gray-500">Non-recurring checkout. Access lasts for 1 month.</div>
+                              )}
                             </div>
                             <div className="text-right">
                               {cadence.discount_percent > 0 ? (

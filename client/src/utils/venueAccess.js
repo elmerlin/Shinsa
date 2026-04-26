@@ -32,6 +32,7 @@ export function getMonthlyCadenceOptions(plan) {
   const options = (directOptions.length > 0 ? directOptions : parsedOptions)
     .map((cadence, index) => {
       const months = Math.max(1, parseInt(cadence?.months, 10) || 1);
+      const squarePlanVariationId = String(cadence?.square_plan_variation_id || '').trim();
       return {
         key: String(cadence?.key || '').trim() || `cadence_${index + 1}`,
         label: String(cadence?.label || '').trim() || (months === 1 ? 'Monthly' : `${months} months`),
@@ -40,7 +41,9 @@ export function getMonthlyCadenceOptions(plan) {
         discounted_amount: Math.max(0, parseInt(cadence?.discounted_amount, 10) || 0),
         discount_percent: Math.max(0, parseInt(cadence?.discount_percent, 10) || 0),
         currency: String(cadence?.currency || plan.currency || 'gbp').toLowerCase(),
-        square_plan_variation_id: String(cadence?.square_plan_variation_id || '').trim(),
+        square_plan_variation_id: squarePlanVariationId,
+        is_recurring: cadence?.is_recurring != null ? !!cadence.is_recurring : !!squarePlanVariationId,
+        is_one_time: cadence?.is_one_time != null ? !!cadence.is_one_time : !squarePlanVariationId,
       };
     })
     .filter((cadence) => cadence.months > 0);
@@ -56,11 +59,14 @@ export function getMonthlyCadenceOptions(plan) {
     discount_percent: Math.max(0, parseInt(plan.discount_percent, 10) || 0),
     currency: String(plan.currency || 'gbp').toLowerCase(),
     square_plan_variation_id: String(plan.square_plan_variation_id || '').trim(),
+    is_recurring: !!String(plan.square_plan_variation_id || '').trim(),
+    is_one_time: !String(plan.square_plan_variation_id || '').trim(),
   }];
 }
 
 export function getCadenceIntervalLabel(cadence) {
   const months = Math.max(1, parseInt(cadence?.months, 10) || 1);
+  if (cadence?.is_one_time) return months === 1 ? 'one-time 1 month' : `one-time ${months} months`;
   if (months === 1) return 'billed monthly';
   if (months === 3) return 'billed quarterly';
   if (months === 6) return 'billed every 6 months';
@@ -70,5 +76,6 @@ export function getCadenceIntervalLabel(cadence) {
 
 export function getCadenceCycleSuffix(cadence) {
   const months = Math.max(1, parseInt(cadence?.months, 10) || 1);
+  if (cadence?.is_one_time) return ' once';
   return months === 1 ? '/month' : `/${months} months`;
 }

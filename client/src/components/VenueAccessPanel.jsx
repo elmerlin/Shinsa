@@ -244,7 +244,7 @@ export default function VenueAccessPanel({ venueSlug = 'london-pump-dojo' }) {
                     <div key={plan.id} className="bg-piu-dark/40 border border-piu-border/40 rounded-xl p-3 space-y-2">
                       <div>
                         <div className="text-sm font-bold">{plan.name}</div>
-                        <div className="text-xs text-gray-400">Unlimited venue access with flexible billing options.</div>
+                        <div className="text-xs text-gray-400">Unlimited Dojo entry for the selected membership period.</div>
                       </div>
                       <div className="space-y-2">
                         {cadenceOptions.map(cadence => {
@@ -259,6 +259,9 @@ export default function VenueAccessPanel({ venueSlug = 'london-pump-dojo' }) {
                               <div className="text-left">
                                 <div className="text-sm font-bold">{cadence.label}</div>
                                 <div className="text-xs text-gray-400">{getCadenceIntervalLabel(cadence)}</div>
+                                {cadence.is_one_time && (
+                                  <div className="text-[10px] text-gray-500">Non-recurring checkout</div>
+                                )}
                               </div>
                               <div className="text-right">
                                 {cadence.discount_percent > 0 ? (

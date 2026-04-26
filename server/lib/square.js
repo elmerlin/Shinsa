@@ -76,6 +76,8 @@ async function createDayPassPaymentLink({ userId, email, username, venueId, plan
 async function createSubscriptionPaymentLink({ userId, email, username, venueId, planId, squarePlanVariationId, cadenceKey, cadenceLabel, billingIntervalMonths, planName, priceAmount, currency }) {
   const client = getSquareClient();
   const { v4: uuidv4 } = require('uuid');
+  const months = Math.max(1, parseInt(billingIntervalMonths, 10) || 1);
+  const durationLabel = months === 1 ? '1 month' : `${months} months`;
 
   if (squarePlanVariationId) {
     // Use subscription checkout
@@ -97,10 +99,11 @@ async function createSubscriptionPaymentLink({ userId, email, username, venueId,
   }
 
   // Fallback: one-off payment link (admin will need to manage renewal manually)
+  const oneTimeName = `${durationLabel} unlimited entry to the Dojo`;
   const result = await client.checkout.paymentLinks.create({
     idempotencyKey: uuidv4(),
     quickPay: {
-      name: planName || 'Monthly Subscription',
+      name: oneTimeName,
       priceMoney: {
         amount: BigInt(priceAmount),
         currency: (currency || 'GBP').toUpperCase(),
@@ -110,7 +113,7 @@ async function createSubscriptionPaymentLink({ userId, email, username, venueId,
     checkoutOptions: {
       redirectUrl: `${APP_URL}/membership?payment=success`,
     },
-    paymentNote: `${cadenceLabel || 'Membership'} for ${planName || 'Monthly Subscription'}`,
+    paymentNote: `${oneTimeName}${planName ? ` — ${planName}` : ''}`,
   });
 
   return {
