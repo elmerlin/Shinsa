@@ -418,7 +418,7 @@ export default function MembershipPage() {
                               <div className="font-bold text-sm">{cadence.label}</div>
                               <div className="text-xs text-gray-400">{getCadenceIntervalLabel(cadence)}</div>
                               {cadence.is_one_time && (
-                                <div className="text-[10px] text-gray-500">Non-recurring checkout. Access lasts for 1 month.</div>
+                                <div className="text-[10px] text-gray-500">Non-recurring checkout. Access lasts for the selected period.</div>
                               )}
                             </div>
                             <div className="text-right">

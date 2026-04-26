@@ -1,10 +1,12 @@
 export function buildMonthlyCadenceDraft(cadence = {}, fallbackCurrency = 'gbp') {
   const months = Math.max(1, parseInt(cadence?.months, 10) || 1);
-  const label = String(cadence?.label || '').trim() || (months === 1 ? 'Monthly' : `${months} months`);
+  const durationDays = Math.max(0, parseInt(cadence?.duration_days, 10) || 0);
+  const label = String(cadence?.label || '').trim() || (durationDays === 7 ? 'Weekly Pass' : (months === 1 ? 'Monthly' : `${months} months`));
   return {
     key: String(cadence?.key || '').trim(),
     label,
     months,
+    duration_days: durationDays,
     price_amount: cadence?.price_amount != null && cadence?.price_amount !== ''
       ? String((Number(cadence.price_amount) / 100).toFixed(2))
       : '',
@@ -32,11 +34,13 @@ export function getMonthlyCadenceOptions(plan) {
   const options = (directOptions.length > 0 ? directOptions : parsedOptions)
     .map((cadence, index) => {
       const months = Math.max(1, parseInt(cadence?.months, 10) || 1);
+      const durationDays = Math.max(0, parseInt(cadence?.duration_days, 10) || 0);
       const squarePlanVariationId = String(cadence?.square_plan_variation_id || '').trim();
       return {
         key: String(cadence?.key || '').trim() || `cadence_${index + 1}`,
-        label: String(cadence?.label || '').trim() || (months === 1 ? 'Monthly' : `${months} months`),
+        label: String(cadence?.label || '').trim() || (durationDays === 7 ? 'Weekly Pass' : (months === 1 ? 'Monthly' : `${months} months`)),
         months,
+        duration_days: durationDays,
         price_amount: Math.max(0, parseInt(cadence?.price_amount, 10) || 0),
         discounted_amount: Math.max(0, parseInt(cadence?.discounted_amount, 10) || 0),
         discount_percent: Math.max(0, parseInt(cadence?.discount_percent, 10) || 0),
@@ -54,6 +58,7 @@ export function getMonthlyCadenceOptions(plan) {
     key: 'monthly',
     label: 'Monthly',
     months: 1,
+    duration_days: 0,
     price_amount: Math.max(0, parseInt(plan.price_amount, 10) || 0),
     discounted_amount: Math.max(0, parseInt(plan.discounted_amount, 10) || parseInt(plan.price_amount, 10) || 0),
     discount_percent: Math.max(0, parseInt(plan.discount_percent, 10) || 0),
@@ -65,6 +70,11 @@ export function getMonthlyCadenceOptions(plan) {
 }
 
 export function getCadenceIntervalLabel(cadence) {
+  const durationDays = Math.max(0, parseInt(cadence?.duration_days, 10) || 0);
+  if (durationDays > 0) {
+    if (cadence?.is_one_time) return durationDays === 7 ? 'one-time 1 week' : `one-time ${durationDays} days`;
+    return durationDays === 7 ? 'billed weekly' : `billed every ${durationDays} days`;
+  }
   const months = Math.max(1, parseInt(cadence?.months, 10) || 1);
   if (cadence?.is_one_time) return months === 1 ? 'one-time 1 month' : `one-time ${months} months`;
   if (months === 1) return 'billed monthly';
@@ -75,7 +85,9 @@ export function getCadenceIntervalLabel(cadence) {
 }
 
 export function getCadenceCycleSuffix(cadence) {
-  const months = Math.max(1, parseInt(cadence?.months, 10) || 1);
   if (cadence?.is_one_time) return ' once';
+  const durationDays = Math.max(0, parseInt(cadence?.duration_days, 10) || 0);
+  if (durationDays > 0) return durationDays === 7 ? '/week' : `/${durationDays} days`;
+  const months = Math.max(1, parseInt(cadence?.months, 10) || 1);
   return months === 1 ? '/month' : `/${months} months`;
 }

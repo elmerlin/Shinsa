@@ -73,11 +73,14 @@ async function createDayPassPaymentLink({ userId, email, username, venueId, plan
  * Requires a subscription plan variation to be set up in Square.
  * If no Square plan variation ID is provided, falls back to a one-off payment.
  */
-async function createSubscriptionPaymentLink({ userId, email, username, venueId, planId, squarePlanVariationId, cadenceKey, cadenceLabel, billingIntervalMonths, planName, priceAmount, currency }) {
+async function createSubscriptionPaymentLink({ userId, email, username, venueId, planId, squarePlanVariationId, cadenceKey, cadenceLabel, billingIntervalMonths, billingIntervalDays = 0, planName, priceAmount, currency }) {
   const client = getSquareClient();
   const { v4: uuidv4 } = require('uuid');
   const months = Math.max(1, parseInt(billingIntervalMonths, 10) || 1);
-  const durationLabel = months === 1 ? '1 month' : `${months} months`;
+  const days = Math.max(0, parseInt(billingIntervalDays, 10) || 0);
+  const durationLabel = days > 0
+    ? (days === 7 ? '1 week' : `${days} days`)
+    : (months === 1 ? '1 month' : `${months} months`);
 
   if (squarePlanVariationId) {
     // Use subscription checkout

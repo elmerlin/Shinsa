@@ -234,11 +234,13 @@ export default function AdminVenueAccessTab() {
               throw new Error(`Invalid price for cadence #${index + 1}`);
             }
             const months = Math.max(1, parseInt(cadence.months, 10) || 0);
-            const label = String(cadence.label || '').trim() || (months === 1 ? 'Monthly' : `${months} months`);
+            const durationDays = Math.max(0, parseInt(cadence.duration_days, 10) || 0);
+            const label = String(cadence.label || '').trim() || (durationDays === 7 ? 'Weekly Pass' : (months === 1 ? 'Monthly' : `${months} months`));
             return {
               key: String(cadence.key || '').trim(),
               label,
               months,
+              duration_days: durationDays,
               price_amount: priceInPence,
               currency: planForm.currency,
               square_plan_variation_id: String(cadence.square_plan_variation_id || '').trim(),
@@ -995,6 +997,21 @@ export default function AdminVenueAccessTab() {
                               ...f,
                               monthly_cadences: f.monthly_cadences.map((row, rowIndex) => rowIndex === index ? { ...row, months: e.target.value } : row),
                             }))}
+                            className="w-full bg-piu-dark border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs text-gray-400 block mb-1">One-off duration days</label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            value={cadence.duration_days || ''}
+                            onChange={e => setPlanForm(f => ({
+                              ...f,
+                              monthly_cadences: f.monthly_cadences.map((row, rowIndex) => rowIndex === index ? { ...row, duration_days: e.target.value } : row),
+                            }))}
+                            placeholder="7 for weekly pass"
                             className="w-full bg-piu-dark border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"
                           />
                         </div>

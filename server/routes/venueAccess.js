@@ -71,13 +71,15 @@ function parseMonthlyCadences(plan) {
   const normalized = rows
     .map((row, idx) => {
       const months = Math.max(1, parseInt(row?.months, 10) || 0);
+      const durationDays = Math.max(0, parseInt(row?.duration_days, 10) || 0);
       const priceAmount = Math.max(0, parseInt(row?.price_amount, 10) || 0);
-      const label = String(row?.label || '').trim() || (months === 1 ? 'Monthly' : `${months} months`);
+      const label = String(row?.label || '').trim() || (durationDays === 7 ? 'Weekly Pass' : (months === 1 ? 'Monthly' : `${months} months`));
       const key = slugifyCadenceKey(row?.key || label || `cadence_${idx + 1}`) || `cadence_${idx + 1}`;
       return {
         key,
         label,
         months,
+        duration_days: durationDays,
         price_amount: priceAmount,
         currency: String(row?.currency || plan.currency || 'gbp').toLowerCase(),
         square_plan_variation_id: String(row?.square_plan_variation_id || '').trim(),
@@ -99,6 +101,7 @@ function parseMonthlyCadences(plan) {
       key: 'monthly',
       label: 'Monthly',
       months: 1,
+      duration_days: 0,
       price_amount: Math.max(0, parseInt(plan.price_amount, 10) || 0),
       currency: String(plan.currency || 'gbp').toLowerCase(),
       square_plan_variation_id: String(plan.square_plan_variation_id || '').trim(),
@@ -110,13 +113,15 @@ function serializeMonthlyCadences(cadences, fallbackCurrency = 'gbp') {
   const normalized = (Array.isArray(cadences) ? cadences : [])
     .map((row, idx) => {
       const months = Math.max(1, parseInt(row?.months, 10) || 0);
+      const durationDays = Math.max(0, parseInt(row?.duration_days, 10) || 0);
       const priceAmount = Math.max(0, parseInt(row?.price_amount, 10) || 0);
-      const label = String(row?.label || '').trim() || (months === 1 ? 'Monthly' : `${months} months`);
+      const label = String(row?.label || '').trim() || (durationDays === 7 ? 'Weekly Pass' : (months === 1 ? 'Monthly' : `${months} months`));
       const key = slugifyCadenceKey(row?.key || label || `cadence_${idx + 1}`) || `cadence_${idx + 1}`;
       return {
         key,
         label,
         months,
+        duration_days: durationDays,
         price_amount: priceAmount,
         currency: String(row?.currency || fallbackCurrency || 'gbp').toLowerCase(),
         square_plan_variation_id: String(row?.square_plan_variation_id || '').trim(),
@@ -155,6 +160,23 @@ function addMonthsToIsoDate(startDate, monthsToAdd) {
   const next = new Date(base);
   next.setMonth(next.getMonth() + Math.max(1, parseInt(monthsToAdd, 10) || 1));
   return next.toISOString().slice(0, 10);
+}
+
+function addDaysToIsoDate(startDate, daysToAdd) {
+  const base = new Date(startDate);
+  const next = new Date(base);
+  next.setUTCDate(next.getUTCDate() + Math.max(1, parseInt(daysToAdd, 10) || 1));
+  return next.toISOString().slice(0, 10);
+}
+
+function formatMembershipDuration({ months = 1, days = 0 } = {}) {
+  const parsedDays = Math.max(0, parseInt(days, 10) || 0);
+  if (parsedDays > 0) {
+    if (parsedDays === 7) return '1 week';
+    return `${parsedDays} days`;
+  }
+  const parsedMonths = Math.max(1, parseInt(months, 10) || 1);
+  return parsedMonths === 1 ? '1 month' : `${parsedMonths} months`;
 }
 
 function currentMonthKey() {
@@ -484,15 +506,18 @@ function finalizeVenuePaymentSuccess(db, paymentRow, options = {}) {
       const subId = uuidv4();
       const periodStart = todayDateString();
       const billingIntervalMonths = Math.max(1, parseInt(paymentRow.billing_interval_months, 10) || 1);
-      const periodEnd = addMonthsToIsoDate(`${periodStart}T12:00:00Z`, billingIntervalMonths);
+      const billingIntervalDays = Math.max(0, parseInt(paymentRow.billing_interval_days, 10) || 0);
+      const periodEnd = billingIntervalDays > 0
+        ? addDaysToIsoDate(`${periodStart}T12:00:00Z`, billingIntervalDays)
+        : addMonthsToIsoDate(`${periodStart}T12:00:00Z`, billingIntervalMonths);
 
       db.prepare(`
         INSERT INTO venue_subscriptions (
           id, user_id, venue_id, plan_id, status,
-          subscription_cadence_key, subscription_cadence_label, billing_interval_months,
+          subscription_cadence_key, subscription_cadence_label, billing_interval_months, billing_interval_days,
           current_period_start, current_period_end
         )
-        VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?)
       `).run(
         subId,
         paymentRow.user_id,
@@ -501,6 +526,7 @@ function finalizeVenuePaymentSuccess(db, paymentRow, options = {}) {
         paymentRow.subscription_cadence_key || '',
         paymentRow.subscription_cadence_label || '',
         billingIntervalMonths,
+        billingIntervalDays,
         periodStart,
         periodEnd,
       );
@@ -694,7 +720,7 @@ router.get('/my-access/:venueSlug', requireAuth, (req, res) => {
 
   const subscription = db.prepare(`
     SELECT vs.id, vs.status, vs.current_period_start, vs.current_period_end, vs.cancelled_at,
-           vs.subscription_cadence_key, vs.subscription_cadence_label, vs.billing_interval_months,
+           vs.subscription_cadence_key, vs.subscription_cadence_label, vs.billing_interval_months, vs.billing_interval_days,
            vap.name AS plan_name, vap.price_amount, vap.currency
     FROM venue_subscriptions vs
     JOIN venue_access_plans vap ON vap.id = vs.plan_id
@@ -1023,18 +1049,19 @@ router.post('/purchase/subscription', requireAuth, async (req, res) => {
     const discount = getUserDiscount(db, req.user.id, plan.venue_id, 'monthly');
     const chargeAmount = discount ? applyDiscount(selectedCadence.price_amount, discount.discount_percent) : selectedCadence.price_amount;
     const discountNote = discount ? ` (${discount.discount_percent}% discount applied)` : '';
+    const billingIntervalDays = Math.max(0, parseInt(selectedCadence.duration_days, 10) || 0);
     const isOneTimeMonthly = !String(selectedCadence.square_plan_variation_id || '').trim();
     const checkoutDescription = isOneTimeMonthly
-      ? `${selectedCadence.months === 1 ? '1 month' : `${selectedCadence.months} months`} unlimited entry to the Dojo`
+      ? `${formatMembershipDuration({ months: selectedCadence.months, days: billingIntervalDays })} unlimited entry to the Dojo`
       : `${selectedCadence.label} membership for ${plan.venue_name}`;
 
     const paymentId = uuidv4();
     db.prepare(`
       INSERT INTO venue_payments (
         id, user_id, venue_id, plan_id, payment_type, amount, currency, status,
-        subscription_cadence_key, subscription_cadence_label, billing_interval_months, description
+        subscription_cadence_key, subscription_cadence_label, billing_interval_months, billing_interval_days, description
       )
-      VALUES (?, ?, ?, ?, 'subscription', ?, ?, 'pending', ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, 'subscription', ?, ?, 'pending', ?, ?, ?, ?, ?)
     `).run(
       paymentId,
       req.user.id,
@@ -1045,6 +1072,7 @@ router.post('/purchase/subscription', requireAuth, async (req, res) => {
       selectedCadence.key,
       selectedCadence.label,
       selectedCadence.months,
+      billingIntervalDays,
       `${checkoutDescription}${discountNote}`,
     );
 
@@ -1060,6 +1088,7 @@ router.post('/purchase/subscription', requireAuth, async (req, res) => {
       cadenceKey: selectedCadence.key,
       cadenceLabel: selectedCadence.label,
       billingIntervalMonths: selectedCadence.months,
+      billingIntervalDays,
       planName: `${plan.venue_name} — ${plan.name} (${selectedCadence.label})${discountNote}`,
       priceAmount: chargeAmount,
       currency: selectedCadence.currency || plan.currency,
@@ -1157,7 +1186,7 @@ router.get('/my-membership/:venueSlug', requireAuth, async (req, res) => {
   // Active subscription
   const subscription = db.prepare(`
     SELECT vs.id, vs.status, vs.current_period_start, vs.current_period_end, vs.cancelled_at, vs.created_at,
-           vs.subscription_cadence_key, vs.subscription_cadence_label, vs.billing_interval_months,
+           vs.subscription_cadence_key, vs.subscription_cadence_label, vs.billing_interval_months, vs.billing_interval_days,
            vap.name AS plan_name, vap.price_amount, vap.currency
     FROM venue_subscriptions vs
     JOIN venue_access_plans vap ON vap.id = vs.plan_id
@@ -1169,7 +1198,7 @@ router.get('/my-membership/:venueSlug', requireAuth, async (req, res) => {
   // Past subscriptions
   const pastSubscriptions = db.prepare(`
     SELECT vs.id, vs.status, vs.current_period_start, vs.current_period_end, vs.cancelled_at, vs.created_at,
-           vs.subscription_cadence_key, vs.subscription_cadence_label, vs.billing_interval_months,
+           vs.subscription_cadence_key, vs.subscription_cadence_label, vs.billing_interval_months, vs.billing_interval_days,
            vap.name AS plan_name, vap.price_amount, vap.currency
     FROM venue_subscriptions vs
     JOIN venue_access_plans vap ON vap.id = vs.plan_id
@@ -1408,7 +1437,10 @@ router.post('/webhook', (req, res) => {
           const subscriptionPlan = db.prepare('SELECT name FROM venue_access_plans WHERE id = ?').get(sub.plan_id);
           const periodStart = todayDateString();
           const billingIntervalMonths = Math.max(1, parseInt(sub.billing_interval_months, 10) || 1);
-          const periodEnd = addMonthsToIsoDate(`${periodStart}T12:00:00Z`, billingIntervalMonths);
+          const billingIntervalDays = Math.max(0, parseInt(sub.billing_interval_days, 10) || 0);
+          const periodEnd = billingIntervalDays > 0
+            ? addDaysToIsoDate(`${periodStart}T12:00:00Z`, billingIntervalDays)
+            : addMonthsToIsoDate(`${periodStart}T12:00:00Z`, billingIntervalMonths);
 
           db.prepare(`
             UPDATE venue_subscriptions
@@ -1423,10 +1455,10 @@ router.post('/webhook', (req, res) => {
           db.prepare(`
             INSERT INTO venue_payments (
               id, user_id, venue_id, plan_id, payment_type, amount, currency, status,
-              subscription_cadence_key, subscription_cadence_label, billing_interval_months,
+              subscription_cadence_key, subscription_cadence_label, billing_interval_months, billing_interval_days,
               square_payment_id, description
             )
-            VALUES (?, ?, ?, ?, 'subscription_renewal', ?, ?, 'succeeded', ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, 'subscription_renewal', ?, ?, 'succeeded', ?, ?, ?, ?, ?, ?)
           `).run(
             paymentId,
             sub.user_id,
@@ -1437,6 +1469,7 @@ router.post('/webhook', (req, res) => {
             sub.subscription_cadence_key || '',
             sub.subscription_cadence_label || '',
             billingIntervalMonths,
+            billingIntervalDays,
             invoice?.id || '',
             sub.subscription_cadence_label
               ? `Subscription renewal (${sub.subscription_cadence_label})`
@@ -1680,7 +1713,7 @@ router.get('/admin/overview/:venueSlug', requireAuth, requireDojoAdmin, (req, re
 
   const activeSubscribers = db.prepare(`
     SELECT vs.id, vs.user_id, vs.status, vs.current_period_start, vs.current_period_end, vs.cancelled_at, vs.created_at,
-           vs.subscription_cadence_key, vs.subscription_cadence_label, vs.billing_interval_months,
+           vs.subscription_cadence_key, vs.subscription_cadence_label, vs.billing_interval_months, vs.billing_interval_days,
            u.username, u.avatar, u.avatar_v,
            vap.name AS plan_name, vap.price_amount, vap.currency
     FROM venue_subscriptions vs
@@ -1881,7 +1914,7 @@ router.get('/admin/member-details/:venueSlug/:userId', requireAuth, requireDojoA
 
   const subscriptions = db.prepare(`
     SELECT vs.id, vs.status, vs.created_at, vs.current_period_start, vs.current_period_end, vs.cancelled_at,
-           vs.subscription_cadence_key, vs.subscription_cadence_label, vs.billing_interval_months,
+           vs.subscription_cadence_key, vs.subscription_cadence_label, vs.billing_interval_months, vs.billing_interval_days,
            vap.name AS plan_name, vap.price_amount, vap.currency
     FROM venue_subscriptions vs
     JOIN venue_access_plans vap ON vap.id = vs.plan_id
@@ -1925,7 +1958,11 @@ router.get('/admin/member-details/:venueSlug/:userId', requireAuth, requireDojoA
     WHERE user_id = ? AND venue_id = ? AND status = 'succeeded'
   `).get(member.id, venue.id);
 
-  const totalSubscribedMonths = subscriptions.reduce((sum, sub) => sum + Math.max(1, parseInt(sub.billing_interval_months, 10) || 1), 0);
+  const totalSubscribedMonths = subscriptions.reduce((sum, sub) => {
+    const days = Math.max(0, parseInt(sub.billing_interval_days, 10) || 0);
+    if (days > 0) return sum + (days / 30);
+    return sum + Math.max(1, parseInt(sub.billing_interval_months, 10) || 1);
+  }, 0);
   const firstSubscriptionDate = firstSubscription?.created_at
     ? new Date(String(firstSubscription.created_at).endsWith('Z') ? String(firstSubscription.created_at) : `${firstSubscription.created_at}Z`)
     : null;
@@ -2063,9 +2100,9 @@ router.post('/admin/grant-subscription', requireAuth, requireDojoAdmin, (req, re
   db.prepare(`
     INSERT INTO venue_payments (
       id, user_id, venue_id, plan_id, payment_type, amount, currency, status,
-      subscription_cadence_key, subscription_cadence_label, billing_interval_months, description
+      subscription_cadence_key, subscription_cadence_label, billing_interval_months, billing_interval_days, description
     )
-    VALUES (?, ?, ?, ?, 'subscription', 0, ?, 'succeeded', ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, 'subscription', 0, ?, 'succeeded', ?, ?, ?, 0, ?)
   `).run(
     paymentId,
     user_id,
@@ -2082,10 +2119,10 @@ router.post('/admin/grant-subscription', requireAuth, requireDojoAdmin, (req, re
   db.prepare(`
     INSERT INTO venue_subscriptions (
       id, user_id, venue_id, plan_id, status,
-      subscription_cadence_key, subscription_cadence_label, billing_interval_months,
+      subscription_cadence_key, subscription_cadence_label, billing_interval_months, billing_interval_days,
       current_period_start, current_period_end
     )
-    VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, 'active', ?, ?, ?, 0, ?, ?)
   `).run(
     subId,
     user_id,

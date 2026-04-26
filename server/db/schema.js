@@ -3652,6 +3652,7 @@ function initializeDb() {
       subscription_cadence_key TEXT DEFAULT '',
       subscription_cadence_label TEXT DEFAULT '',
       billing_interval_months INTEGER NOT NULL DEFAULT 1,
+      billing_interval_days INTEGER NOT NULL DEFAULT 0,
       current_period_start TEXT,
       current_period_end TEXT,
       cancelled_at TEXT,
@@ -3674,6 +3675,7 @@ function initializeDb() {
       subscription_cadence_key TEXT DEFAULT '',
       subscription_cadence_label TEXT DEFAULT '',
       billing_interval_months INTEGER NOT NULL DEFAULT 1,
+      billing_interval_days INTEGER NOT NULL DEFAULT 0,
       square_payment_id TEXT,
       square_order_id TEXT,
       square_link_id TEXT,
@@ -3716,6 +3718,9 @@ function initializeDb() {
   if (!venueSubscriptionCols.includes('billing_interval_months')) {
     db.exec("ALTER TABLE venue_subscriptions ADD COLUMN billing_interval_months INTEGER NOT NULL DEFAULT 1");
   }
+  if (!venueSubscriptionCols.includes('billing_interval_days')) {
+    db.exec("ALTER TABLE venue_subscriptions ADD COLUMN billing_interval_days INTEGER NOT NULL DEFAULT 0");
+  }
 
   const venuePaymentCols = db.prepare("PRAGMA table_info(venue_payments)").all().map(c => c.name);
   if (!venuePaymentCols.includes('subscription_cadence_key')) {
@@ -3726,6 +3731,9 @@ function initializeDb() {
   }
   if (!venuePaymentCols.includes('billing_interval_months')) {
     db.exec("ALTER TABLE venue_payments ADD COLUMN billing_interval_months INTEGER NOT NULL DEFAULT 1");
+  }
+  if (!venuePaymentCols.includes('billing_interval_days')) {
+    db.exec("ALTER TABLE venue_payments ADD COLUMN billing_interval_days INTEGER NOT NULL DEFAULT 0");
   }
 
   db.exec(`
