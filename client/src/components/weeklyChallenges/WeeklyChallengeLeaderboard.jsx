@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { getAvatarUrl } from '../AvatarPicker';
 import { getCountryFlag } from '../../utils/countryFlags';
 import { useAuth } from '../../contexts/AuthContext';
+import WeeklyChallengeBonusChip from './WeeklyChallengeBonusChip';
 
 const MEDAL_COLORS = ['text-piu-gold', 'text-piu-silver', 'text-piu-bronze'];
 const MEDAL_BG = [
@@ -53,9 +54,12 @@ function LeaderboardRow({ entry, isViewer, medal }) {
       </Link>
 
       <div className="flex items-center gap-3 shrink-0">
-        <span className="text-sm font-display font-bold text-white/80 tabular-nums">
-          {(entry.points || 0).toLocaleString()}
-        </span>
+        <div className="flex min-w-0 items-center justify-end gap-1.5">
+          <span className="text-sm font-display font-bold text-white/80 tabular-nums">
+            {(entry.points || 0).toLocaleString()}
+          </span>
+          <WeeklyChallengeBonusChip entry={entry} />
+        </div>
         <span className="text-xs font-display text-white/35 tabular-nums w-7 text-right">
           {entry.clears || 0}
         </span>

@@ -2,6 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { getAvatarUrl } from '../AvatarPicker';
 import { getCountryFlag } from '../../utils/countryFlags';
+import WeeklyChallengeBonusChip from './WeeklyChallengeBonusChip';
 
 const PODIUM_COLORS = [
   { bg: 'from-amber-500/20 via-yellow-600/10 to-transparent', border: 'border-amber-500/40', icon: 'text-piu-gold', label: '1st' },
@@ -47,9 +48,12 @@ function PodiumCard({ award }) {
           {award.username_snapshot}
         </Link>
       </div>
-      <span className="shrink-0 text-xs font-display font-bold text-white/60 tabular-nums">
-        {(award.points || 0).toLocaleString()}
-      </span>
+      <div className="flex shrink-0 items-center gap-1.5">
+        <span className="text-xs font-display font-bold text-white/60 tabular-nums">
+          {(award.points || 0).toLocaleString()}
+        </span>
+        <WeeklyChallengeBonusChip entry={award} />
+      </div>
     </div>
   );
 }

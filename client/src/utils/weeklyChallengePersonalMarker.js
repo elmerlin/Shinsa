@@ -36,6 +36,10 @@ function sanitizeHighestRatedPlay(entry) {
     score: toInt(src.score),
     grade: String(src.grade || ''),
     ratingPoints: toInt(src.ratingPoints),
+    baseRatingPoints: toInt(src.baseRatingPoints),
+    pgBonusPoints: toInt(src.pgBonusPoints),
+    pgBonusPercent: toInt(src.pgBonusPercent),
+    hasPgBonus: !!src.hasPgBonus,
   };
 }
 

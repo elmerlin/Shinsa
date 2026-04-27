@@ -5,7 +5,7 @@
 const crypto = require('crypto');
 const path = require('path');
 const { makeChartKey, toCanonicalTitle } = require('./chartKeys');
-const { calculateRatingPoints, normalizeGrade, gradeFromScore } = require('./titleProgress');
+const { getPersistedWeeklyChallengeRatingBreakdown } = require('./weeklyChallengePoints');
 const { normalizeUserAvatarForList } = require('./avatarProxy');
 
 // ---------------------------------------------------------------------------
@@ -34,12 +34,52 @@ function getAliases() {
   return _aliases;
 }
 
-function resolveGrade(rawGrade, score) {
-  return normalizeGrade(rawGrade) || gradeFromScore(parseInt(score, 10) || 0);
-}
-
 function toSummaryAvatar(avatar, userId) {
   return normalizeUserAvatarForList(avatar || '', userId, 64);
+}
+
+function toBonusSummaryFields(breakdown) {
+  return {
+    base_rating_points: breakdown.baseRatingPoints || breakdown.ratingPoints || 0,
+    pg_bonus_points: breakdown.pgBonusPoints || 0,
+    pg_bonus_percent: breakdown.pgBonusPercent || 0,
+    has_pg_bonus: !!breakdown.hasPgBonus,
+  };
+}
+
+function computeBonusTotalsByScope(db, weekId) {
+  const totals = { both: {}, singles: {}, doubles: {} };
+  const rows = db.prepare(`
+    SELECT r.user_id, r.score, r.resolved_grade, r.plate, r.rating_points,
+           wc.mode, wc.level
+    FROM weekly_challenge_results r
+    JOIN weekly_challenge_charts wc ON wc.id = r.weekly_chart_id
+    WHERE wc.week_id = ?
+  `).all(weekId);
+
+  for (const row of rows) {
+    const breakdown = getPersistedWeeklyChallengeRatingBreakdown(
+      row.level,
+      row.resolved_grade,
+      row.score,
+      row.plate,
+      row.rating_points,
+      row.resolved_grade
+    );
+    if (!breakdown.hasPgBonus) continue;
+
+    const scopes = ['both'];
+    if (row.mode === 'Single') scopes.push('singles');
+    if (row.mode === 'Double') scopes.push('doubles');
+
+    for (const scope of scopes) {
+      if (!totals[scope][row.user_id]) totals[scope][row.user_id] = { pg_bonus_points: 0, pg_bonus_count: 0 };
+      totals[scope][row.user_id].pg_bonus_points += breakdown.pgBonusPoints;
+      totals[scope][row.user_id].pg_bonus_count += 1;
+    }
+  }
+
+  return totals;
 }
 
 // ---------------------------------------------------------------------------
@@ -368,6 +408,14 @@ function selectReplayHighlights(db, weekId, awards) {
     const count = playerCounts[r.user_id] || 0;
     if (count >= 2) continue;
     playerCounts[r.user_id] = count + 1;
+    const ratingBreakdown = getPersistedWeeklyChallengeRatingBreakdown(
+      r.level,
+      r.resolved_grade,
+      r.score,
+      r.plate,
+      r.rating_points,
+      r.resolved_grade
+    );
     selected.push({
       user_id: r.user_id,
       username: r.username_snapshot || '',
@@ -379,7 +427,8 @@ function selectReplayHighlights(db, weekId, awards) {
       jacket_url: r.jacket_url_snapshot || '',
       score: r.score || 0,
       grade: r.resolved_grade || '',
-      rating_points: r.rating_points || 0,
+      rating_points: ratingBreakdown.ratingPoints,
+      ...toBonusSummaryFields(ratingBreakdown),
       replay_embed_url: r.replay_embed_url || '',
       replay_video_id: r.replay_video_id || '',
       replay_start_seconds: r.replay_start_seconds || 0,
@@ -422,9 +471,12 @@ function buildWeeklyChallengeSummary(db, weekId, targetWeekId = null) {
   const awardRows = db.prepare(
     'SELECT * FROM weekly_challenge_awards WHERE week_id = ? ORDER BY award_key, rank'
   ).all(weekId);
+  const bonusTotalsByScope = computeBonusTotalsByScope(db, weekId);
 
   const awards = { overall: [], singles: [], doubles: [], advanced: [], intermediate: [] };
   for (const a of awardRows) {
+    const scopeKey = a.award_key === 'singles' ? 'singles' : a.award_key === 'doubles' ? 'doubles' : 'both';
+    const bonus = bonusTotalsByScope[scopeKey]?.[a.user_id] || {};
     const entry = {
       rank: a.rank,
       user_id: a.user_id,
@@ -433,6 +485,8 @@ function buildWeeklyChallengeSummary(db, weekId, targetWeekId = null) {
       nationality: a.nationality_snapshot || '',
       skill_title: a.skill_title_snapshot || '',
       points: a.points,
+      pg_bonus_points: bonus.pg_bonus_points || 0,
+      pg_bonus_count: bonus.pg_bonus_count || 0,
       clears: a.clears,
     };
     if (awards[a.award_key]) awards[a.award_key].push(entry);
@@ -570,7 +624,7 @@ function buildPersonalSummaries(db, weekId) {
   // Highest rated play per user (ordered by rating_points DESC, score DESC)
   const bestPlayMap = {};
   for (const row of db.prepare(`
-    SELECT r.user_id, r.score, r.resolved_grade, r.rating_points,
+    SELECT r.user_id, r.score, r.resolved_grade, r.plate, r.rating_points,
            wc.song_title_snapshot, wc.mode, wc.level, wc.jacket_url_snapshot
     FROM weekly_challenge_results r
     JOIN weekly_challenge_charts wc ON wc.id = r.weekly_chart_id
@@ -578,6 +632,14 @@ function buildPersonalSummaries(db, weekId) {
     ORDER BY r.rating_points DESC, r.score DESC
   `).all(weekId)) {
     if (!bestPlayMap[row.user_id]) {
+      const ratingBreakdown = getPersistedWeeklyChallengeRatingBreakdown(
+        row.level,
+        row.resolved_grade,
+        row.score,
+        row.plate,
+        row.rating_points,
+        row.resolved_grade
+      );
       bestPlayMap[row.user_id] = {
         songTitle: row.song_title_snapshot || '',
         mode: row.mode || '',
@@ -585,7 +647,11 @@ function buildPersonalSummaries(db, weekId) {
         jacketUrl: row.jacket_url_snapshot || '',
         score: row.score || 0,
         grade: row.resolved_grade || '',
-        ratingPoints: row.rating_points || 0,
+        ratingPoints: ratingBreakdown.ratingPoints,
+        baseRatingPoints: ratingBreakdown.baseRatingPoints,
+        pgBonusPoints: ratingBreakdown.pgBonusPoints,
+        pgBonusPercent: ratingBreakdown.pgBonusPercent,
+        hasPgBonus: ratingBreakdown.hasPgBonus,
       };
     }
   }

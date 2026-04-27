@@ -3,7 +3,12 @@
 
 const path = require('path');
 const crypto = require('crypto');
-const { calculateRatingPoints, normalizeGrade, gradeFromScore, GRADE_MULTIPLIER, TITLE_REQUIREMENTS } = require('./titleProgress');
+const { normalizeGrade, gradeFromScore, GRADE_MULTIPLIER, TITLE_REQUIREMENTS } = require('./titleProgress');
+const {
+  calculateWeeklyChallengeRatingPoints,
+  getWeeklyChallengeRatingBreakdown,
+  getPersistedWeeklyChallengeRatingBreakdown,
+} = require('./weeklyChallengePoints');
 const { isPassRecord } = require('./pumbilityCandidates');
 const { makeChartKey, toCanonicalTitle, normalizeMode } = require('./chartKeys');
 const { buildWeeklyChallengeSummary, buildPersonalSummaries } = require('./weeklyChallengeSummary');
@@ -399,11 +404,16 @@ function aggregateWeeklyResults(db, weekId) {
     const existing = userChartBests.get(key);
 
     if (!existing || isBetterPlay(play, resolved, existing.play, existing.resolvedGrade)) {
+      const ratingBreakdown = getWeeklyChallengeRatingBreakdown(wc.level, play.grade, play.score, play.plate, resolved);
       userChartBests.set(key, {
         play,
         weeklyChart: wc,
         resolvedGrade: resolved,
-        ratingPoints: calculateRatingPoints(wc.level, play.grade, play.score),
+        ratingPoints: ratingBreakdown.ratingPoints,
+        baseRatingPoints: ratingBreakdown.baseRatingPoints,
+        pgBonusPoints: ratingBreakdown.pgBonusPoints,
+        pgBonusPercent: ratingBreakdown.pgBonusPercent,
+        hasPgBonus: ratingBreakdown.hasPgBonus,
       });
     }
 
@@ -498,6 +508,10 @@ function aggregateWeeklyResults(db, weekId) {
       play: entry.play,
       resolvedGrade: entry.resolvedGrade,
       ratingPoints: entry.ratingPoints,
+      baseRatingPoints: entry.baseRatingPoints,
+      pgBonusPoints: entry.pgBonusPoints,
+      pgBonusPercent: entry.pgBonusPercent,
+      hasPgBonus: entry.hasPgBonus,
     });
   }
 
@@ -525,6 +539,10 @@ function aggregateWeeklyResults(db, weekId) {
         score: e.play.score,
         grade: e.resolvedGrade,
         rating_points: e.ratingPoints,
+        base_rating_points: e.baseRatingPoints || e.ratingPoints,
+        pg_bonus_points: e.pgBonusPoints || 0,
+        pg_bonus_percent: e.pgBonusPercent || 0,
+        has_pg_bonus: !!e.hasPgBonus,
         plate: e.play.plate || '',
         };
       });
@@ -545,6 +563,10 @@ function aggregateWeeklyResults(db, weekId) {
         single: { points: 0, clears: 0, totalScore: 0, bestAt: '' },
         double: { points: 0, clears: 0, totalScore: 0, bestAt: '' },
       };
+      for (const scope of ['both', 'single', 'double']) {
+        userTotals[uid][scope].pgBonusPoints = 0;
+        userTotals[uid][scope].pgBonusCount = 0;
+      }
     }
     const t = userTotals[uid];
     const mode = entry.weeklyChart.mode === 'Single' ? 'single' : 'double';
@@ -552,6 +574,8 @@ function aggregateWeeklyResults(db, weekId) {
 
     for (const scope of ['both', mode]) {
       t[scope].points += entry.ratingPoints;
+      t[scope].pgBonusPoints += entry.pgBonusPoints || 0;
+      if (entry.hasPgBonus) t[scope].pgBonusCount += 1;
       t[scope].clears += 1;
       t[scope].totalScore += entry.play.score;
       if (!t[scope].bestAt || playedAt < t[scope].bestAt) {
@@ -610,6 +634,8 @@ function buildLeaderboard(userTotals, scopeMode = 'both', skillFamily = 'all', s
       skill_title: snap?.skill_title_snapshot || totals.profile?.skill_title || '',
       skill_family: totals.profile?.skill_family || '',
       points: scope.points,
+      pg_bonus_points: scope.pgBonusPoints || 0,
+      pg_bonus_count: scope.pgBonusCount || 0,
       clears: scope.clears,
       total_score: scope.totalScore,
       best_result_achieved_at: scope.bestAt,
@@ -731,6 +757,59 @@ function finalizeWeek(db, weekId) {
 // Frozen data readers (for finalized weeks)
 // ---------------------------------------------------------------------------
 
+function toRatingBonusApiFields(breakdown) {
+  return {
+    base_rating_points: breakdown.baseRatingPoints || breakdown.ratingPoints || 0,
+    pg_bonus_points: breakdown.pgBonusPoints || 0,
+    pg_bonus_percent: breakdown.pgBonusPercent || 0,
+    has_pg_bonus: !!breakdown.hasPgBonus,
+  };
+}
+
+function getFrozenBonusTotalsByUser(db, weekId, scopeMode = 'both') {
+  const rows = db.prepare(`
+    SELECT r.user_id, r.score, r.resolved_grade, r.plate, r.rating_points,
+           wc.mode, wc.level
+    FROM weekly_challenge_results r
+    JOIN weekly_challenge_charts wc ON wc.id = r.weekly_chart_id
+    WHERE wc.week_id = ?
+  `).all(weekId);
+
+  const totals = {};
+  for (const row of rows) {
+    if (scopeMode === 'single' && row.mode !== 'Single') continue;
+    if (scopeMode === 'double' && row.mode !== 'Double') continue;
+
+    const breakdown = getPersistedWeeklyChallengeRatingBreakdown(
+      row.level,
+      row.resolved_grade,
+      row.score,
+      row.plate,
+      row.rating_points,
+      row.resolved_grade
+    );
+    if (!breakdown.hasPgBonus) continue;
+    if (!totals[row.user_id]) totals[row.user_id] = { pg_bonus_points: 0, pg_bonus_count: 0 };
+    totals[row.user_id].pg_bonus_points += breakdown.pgBonusPoints;
+    totals[row.user_id].pg_bonus_count += 1;
+  }
+  return totals;
+}
+
+function enrichFrozenWeeklyChallengeAwards(db, weekId, awards = []) {
+  const byScope = {};
+  return (Array.isArray(awards) ? awards : []).map((award) => {
+    const scope = award.scope_mode || 'both';
+    if (!byScope[scope]) byScope[scope] = getFrozenBonusTotalsByUser(db, weekId, scope);
+    const bonus = byScope[scope]?.[award.user_id] || {};
+    return {
+      ...award,
+      pg_bonus_points: bonus.pg_bonus_points || 0,
+      pg_bonus_count: bonus.pg_bonus_count || 0,
+    };
+  });
+}
+
 function getFrozenChartResults(db, weekId) {
   const charts = db.prepare(
     'SELECT * FROM weekly_challenge_charts WHERE week_id = ? ORDER BY sort_order'
@@ -753,17 +832,28 @@ function getFrozenChartResults(db, weekId) {
 
     results[chart.id] = {
       chart,
-      top3: top3.map((r, i) => ({
-        rank: i + 1,
-        user_id: r.user_id,
-        username: r.username_snapshot,
-        avatar: r.avatar_snapshot,
-        nationality: r.nationality_snapshot,
-        score: r.score,
-        grade: r.resolved_grade,
-        rating_points: r.rating_points,
-        plate: r.plate || '',
-      })),
+      top3: top3.map((r, i) => {
+        const breakdown = getPersistedWeeklyChallengeRatingBreakdown(
+          chart.level,
+          r.resolved_grade,
+          r.score,
+          r.plate,
+          r.rating_points,
+          r.resolved_grade
+        );
+        return {
+          rank: i + 1,
+          user_id: r.user_id,
+          username: r.username_snapshot,
+          avatar: r.avatar_snapshot,
+          nationality: r.nationality_snapshot,
+          score: r.score,
+          grade: r.resolved_grade,
+          rating_points: breakdown.ratingPoints,
+          ...toRatingBonusApiFields(breakdown),
+          plate: r.plate || '',
+        };
+      }),
       participantCount,
       clearCount: participantCount,
     };
@@ -772,6 +862,8 @@ function getFrozenChartResults(db, weekId) {
 }
 
 function getFrozenLeaderboard(db, weekId, scopeMode = 'both', skillFamily = 'all') {
+  const bonusByUser = getFrozenBonusTotalsByUser(db, weekId, scopeMode);
+
   // Get frozen leaderboard rows for this scope
   const rows = db.prepare(`
     SELECT lb.*, s.username_snapshot, s.avatar_snapshot, s.nationality_snapshot,
@@ -792,19 +884,24 @@ function getFrozenLeaderboard(db, weekId, scopeMode = 'both', skillFamily = 'all
     });
   }
 
-  return filtered.map((r, i) => ({
-    rank: i + 1,
-    user_id: r.user_id,
-    username: r.username_snapshot,
-    avatar: r.avatar_snapshot,
-    nationality: r.nationality_snapshot,
-    skill_title: r.skill_title_snapshot,
-    skill_family: r.skill_family_snapshot,
-    points: r.points,
-    clears: r.clears,
-    total_score: r.total_score,
-    best_result_achieved_at: r.best_result_achieved_at,
-  }));
+  return filtered.map((r, i) => {
+    const bonus = bonusByUser[r.user_id] || {};
+    return {
+      rank: i + 1,
+      user_id: r.user_id,
+      username: r.username_snapshot,
+      avatar: r.avatar_snapshot,
+      nationality: r.nationality_snapshot,
+      skill_title: r.skill_title_snapshot,
+      skill_family: r.skill_family_snapshot,
+      points: r.points,
+      pg_bonus_points: bonus.pg_bonus_points || 0,
+      pg_bonus_count: bonus.pg_bonus_count || 0,
+      clears: r.clears,
+      total_score: r.total_score,
+      best_result_achieved_at: r.best_result_achieved_at,
+    };
+  });
 }
 
 function getViewerWeeklyBests(db, weekId, userId) {
@@ -820,24 +917,39 @@ function getViewerWeeklyBests(db, weekId, userId) {
 
   const bests = {};
   let totalPoints = 0;
+  let pgBonusPoints = 0;
+  let pgBonusCount = 0;
   let totalClears = 0;
   for (const r of rows) {
+    const breakdown = getPersistedWeeklyChallengeRatingBreakdown(
+      r.level,
+      r.resolved_grade,
+      r.score,
+      r.plate,
+      r.rating_points,
+      r.resolved_grade
+    );
     bests[r.weekly_chart_id] = {
       score: r.score,
       grade: r.resolved_grade,
-      rating_points: r.rating_points,
+      rating_points: breakdown.ratingPoints,
+      ...toRatingBonusApiFields(breakdown),
       plate: r.plate,
     };
-    totalPoints += r.rating_points;
+    totalPoints += breakdown.ratingPoints;
+    pgBonusPoints += breakdown.pgBonusPoints;
+    if (breakdown.hasPgBonus) pgBonusCount += 1;
     totalClears += 1;
   }
-  return { bests, totalPoints, totalClears };
+  return { bests, totalPoints, totalClears, pgBonusPoints, pgBonusCount };
 }
 
 function getActiveViewerBests(userChartBests, userId) {
   if (!userId || !userChartBests) return null;
   const bests = {};
   let totalPoints = 0;
+  let pgBonusPoints = 0;
+  let pgBonusCount = 0;
   let totalClears = 0;
 
   for (const [key, entry] of userChartBests) {
@@ -846,14 +958,20 @@ function getActiveViewerBests(userChartBests, userId) {
       score: entry.play.score,
       grade: entry.resolvedGrade,
       rating_points: entry.ratingPoints,
+      base_rating_points: entry.baseRatingPoints || entry.ratingPoints,
+      pg_bonus_points: entry.pgBonusPoints || 0,
+      pg_bonus_percent: entry.pgBonusPercent || 0,
+      has_pg_bonus: !!entry.hasPgBonus,
       plate: entry.play.plate || '',
     };
     totalPoints += entry.ratingPoints;
+    pgBonusPoints += entry.pgBonusPoints || 0;
+    if (entry.hasPgBonus) pgBonusCount += 1;
     totalClears += 1;
   }
 
   if (totalClears === 0) return null;
-  return { bests, totalPoints, totalClears };
+  return { bests, totalPoints, totalClears, pgBonusPoints, pgBonusCount };
 }
 
 // ---------------------------------------------------------------------------
@@ -1091,6 +1209,7 @@ function buildWeeklyChallengePlayEntry(play) {
   const level = parseInt(play?.level, 10) || 0;
   const score = parseInt(play?.score, 10) || 0;
   const grade = String(play?.grade || '').trim();
+  const ratingBreakdown = getWeeklyChallengeRatingBreakdown(level, grade, score, play?.plate);
   return {
     song_title: String(play?.song_title || ''),
     mode: String(play?.mode || ''),
@@ -1114,7 +1233,11 @@ function buildWeeklyChallengePlayEntry(play) {
     weekly_challenge_rank: play?.weekly_challenge_rank || null,
     weekly_challenge_week_key: String(play?.weekly_challenge_week_key || ''),
     weekly_challenge_chart_id: parseInt(play?.weekly_challenge_chart_id, 10) || null,
-    rating_points: calculateRatingPoints(level, grade, score),
+    rating_points: ratingBreakdown.ratingPoints,
+    base_rating_points: ratingBreakdown.baseRatingPoints,
+    pg_bonus_points: ratingBreakdown.pgBonusPoints,
+    pg_bonus_percent: ratingBreakdown.pgBonusPercent,
+    has_pg_bonus: ratingBreakdown.hasPgBonus,
   };
 }
 
@@ -1339,6 +1462,9 @@ module.exports = {
   getGlobalChallengeMaxLevel,
   annotateWeeklyChallengePlayRows,
   persistWeeklyChallengePlayPosts,
+  calculateWeeklyChallengeRatingPoints,
+  getWeeklyChallengeRatingBreakdown,
+  enrichFrozenWeeklyChallengeAwards,
   computeIsoWeekKey,
   publishWeeklyChallengeSummary,
   repairMissingSummaryPosts,

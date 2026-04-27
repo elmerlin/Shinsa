@@ -11,6 +11,7 @@ import WeeklyChallengeLeaderboard from '../components/weeklyChallenges/WeeklyCha
 import WeeklyChallengeLevelRow from '../components/weeklyChallenges/WeeklyChallengeLevelRow';
 import WeeklyChallengeWeekPicker, { formatWeekRange } from '../components/weeklyChallenges/WeeklyChallengeWeekPicker';
 import { TrophyIcon } from '../components/weeklyChallenges/WeeklyChallengePodiumStrip';
+import WeeklyChallengeBonusChip from '../components/weeklyChallenges/WeeklyChallengeBonusChip';
 import PlateBadge from '../components/ui/plate-badge';
 
 const ScoreSnapshotModal = lazy(() => import('../components/ScoreSnapshotModal'));
@@ -51,10 +52,18 @@ function ViewerSummaryCard({ viewer, awards = [] }) {
           )}
         </div>
         <div className="flex items-center gap-4">
-          <span className="text-sm font-display font-bold text-white tabular-nums">
-            {(viewer.totalPoints || 0).toLocaleString()}
-            <span className="text-white/30 text-[10px] ml-0.5">pts</span>
-          </span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-sm font-display font-bold text-white tabular-nums">
+              {(viewer.totalPoints || 0).toLocaleString()}
+              <span className="text-white/30 text-[10px] ml-0.5">pts</span>
+            </span>
+            <WeeklyChallengeBonusChip
+              entry={{
+                pg_bonus_points: viewer.pgBonusPoints,
+                pg_bonus_count: viewer.pgBonusCount,
+              }}
+            />
+          </div>
           <span className="text-xs font-display text-white/50 tabular-nums">
             {viewer.totalClears || 0} clears
           </span>
@@ -356,6 +365,12 @@ export default function WeeklyChallengesPage() {
                           <div className="mt-0.5 flex items-center justify-end gap-1">
                             <p className="text-[10px] font-display text-zinc-500">{entry.grade}</p>
                             <PlateBadge plate={entry.plate} size="xs" />
+                          </div>
+                          <div className="mt-1 flex items-center justify-end gap-1.5">
+                            <span className="text-[10px] font-display font-bold text-white/35 tabular-nums">
+                              {(entry.rating_points || 0).toLocaleString()} pts
+                            </span>
+                            <WeeklyChallengeBonusChip entry={entry} />
                           </div>
                         </button>
                       </div>

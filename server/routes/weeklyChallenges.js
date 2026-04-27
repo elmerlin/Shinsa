@@ -13,6 +13,8 @@ const {
   getViewerWeeklyBests,
   getActiveViewerBests,
   getUserWeeklyChallengeHistory,
+  getWeeklyChallengeRatingBreakdown,
+  enrichFrozenWeeklyChallengeAwards,
 } = require('../lib/weeklyChallenges');
 
 const SONG_ALIAS_PATH = path.join(__dirname, '..', 'data', 'piugame-song-aliases.json');
@@ -101,6 +103,7 @@ router.get('/home', optionalAuth, (req, res) => {
         awards = db.prepare(
           'SELECT * FROM weekly_challenge_awards WHERE week_id = ? ORDER BY award_key, rank'
         ).all(week.id);
+        awards = enrichFrozenWeeklyChallengeAwards(db, week.id, awards);
 
         const { charts, results } = getFrozenChartResults(db, week.id);
         challengePreviews = charts.slice(0, 4).map(c => ({
@@ -131,6 +134,8 @@ router.get('/home', optionalAuth, (req, res) => {
               user_id: e.user_id, username_snapshot: e.username,
               avatar_snapshot: e.avatar, nationality_snapshot: e.nationality,
               points: e.points, clears: e.clears,
+              pg_bonus_points: e.pg_bonus_points || 0,
+              pg_bonus_count: e.pg_bonus_count || 0,
             }));
 
           awards = [
@@ -291,6 +296,7 @@ function sendWeekDetail(req, res, resolvedWeekKey = null) {
         awards = db.prepare(
           'SELECT * FROM weekly_challenge_awards WHERE week_id = ? ORDER BY award_key, rank'
         ).all(week.id);
+        awards = enrichFrozenWeeklyChallengeAwards(db, week.id, awards);
       } else {
         const agg = getLiveWeekAggregate(db, week);
         charts = agg?.weeklyCharts || [];
@@ -314,6 +320,8 @@ function sendWeekDetail(req, res, resolvedWeekKey = null) {
               awards.push({
                 award_key: cfg.key, award_label: cfg.label, rank: entry.rank,
                 user_id: entry.user_id, points: entry.points, clears: entry.clears,
+                pg_bonus_points: entry.pg_bonus_points || 0,
+                pg_bonus_count: entry.pg_bonus_count || 0,
                 total_score: entry.total_score, best_result_achieved_at: entry.best_result_achieved_at,
                 username_snapshot: snap.username_snapshot || entry.username,
                 avatar_snapshot: snap.avatar_snapshot || entry.avatar,
@@ -511,8 +519,14 @@ router.get('/charts/:chartId/scores', (req, res) => {
     for (const row of scoredRows) {
       if (seen.has(row.user_id)) continue;
       seen.add(row.user_id);
+      const ratingBreakdown = getWeeklyChallengeRatingBreakdown(chart.level, row.grade, row.score, row.plate);
       scores.push({
         ...row,
+        rating_points: ratingBreakdown.ratingPoints,
+        base_rating_points: ratingBreakdown.baseRatingPoints,
+        pg_bonus_points: ratingBreakdown.pgBonusPoints,
+        pg_bonus_percent: ratingBreakdown.pgBonusPercent,
+        has_pg_bonus: ratingBreakdown.hasPgBonus,
         attempt_count: attemptCounts.get(row.user_id) || 0,
         rank: scores.length + 1,
       });

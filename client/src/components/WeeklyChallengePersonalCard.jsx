@@ -1,6 +1,7 @@
 import React from 'react';
 import PiuChartJacket from './PiuChartJacket';
 import { getGradeColorClass, getGradeDisplayLabel } from '../utils/grades';
+import WeeklyChallengeBonusChip from './weeklyChallenges/WeeklyChallengeBonusChip';
 
 const MEDAL_EMOJI = { 1: '\uD83E\uDD47', 2: '\uD83E\uDD48', 3: '\uD83E\uDD49' };
 const MEDAL_COLORS = {
@@ -125,6 +126,12 @@ export default function WeeklyChallengePersonalCard({ personal, className = '', 
                   <span className="text-white/60 tabular-nums">{(highestRatedPlay.score || 0).toLocaleString()}</span>
                   <span className={`font-display font-bold ${highestRatedPlayGradeClass}`}>{highestRatedPlayGrade}</span>
                   <span className="text-white/40">{(highestRatedPlay.ratingPoints || 0).toLocaleString()} RP</span>
+                  <WeeklyChallengeBonusChip
+                    entry={{
+                      hasPgBonus: highestRatedPlay.hasPgBonus,
+                      pgBonusPoints: highestRatedPlay.pgBonusPoints,
+                    }}
+                  />
                 </div>
               </div>
             </div>

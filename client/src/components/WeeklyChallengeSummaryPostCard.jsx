@@ -5,6 +5,7 @@ import { getCountryFlag } from '../utils/countryFlags';
 import PiuChartJacket from './PiuChartJacket';
 import YouTubeReplayModal from './YouTubeReplayModal';
 import { getGradeColorClass, getGradeDisplayLabel } from '../utils/grades';
+import WeeklyChallengeBonusChip from './weeklyChallenges/WeeklyChallengeBonusChip';
 
 const PODIUM_COLORS = [
   { bg: 'from-amber-500/20 via-yellow-600/10 to-transparent', border: 'border-amber-500/40', icon: 'text-piu-gold', label: '1st', medal: '\uD83E\uDD47' },
@@ -55,9 +56,12 @@ function PodiumRow({ entry, rank }) {
           {entry.username}
         </span>
       </div>
-      <span className="shrink-0 text-[10px] font-display font-bold text-white/60">
-        {(entry.points || 0).toLocaleString()}
-      </span>
+      <div className="flex shrink-0 items-center gap-1.5">
+        <span className="text-[10px] font-display font-bold text-white/60">
+          {(entry.points || 0).toLocaleString()}
+        </span>
+        <WeeklyChallengeBonusChip entry={entry} />
+      </div>
     </div>
   );
 }
@@ -147,6 +151,7 @@ function ReplayHighlightRow({ highlight, onPlay }) {
           <span className="text-gray-600">&bull;</span>
           <span className="font-display text-white/80 tabular-nums">{(highlight.score || 0).toLocaleString()}</span>
           <span className={`font-display font-bold ${gradeColorClass}`}>{gradeLabel}</span>
+          <WeeklyChallengeBonusChip entry={highlight} />
         </div>
         <p className="text-[9px] text-gray-500 mt-0.5">{highlight.highlight_reason}</p>
       </div>

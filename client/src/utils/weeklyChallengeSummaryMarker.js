@@ -36,6 +36,8 @@ function sanitizePodiumEntry(entry) {
     nationality: String(src.nationality || ''),
     skill_title: String(src.skill_title || ''),
     points: toInt(src.points),
+    pg_bonus_points: toInt(src.pg_bonus_points),
+    pg_bonus_count: toInt(src.pg_bonus_count),
     clears: toInt(src.clears),
   };
 }
@@ -77,6 +79,10 @@ function sanitizeReplayHighlight(entry) {
     score: toInt(src.score),
     grade: String(src.grade || ''),
     rating_points: toInt(src.rating_points),
+    base_rating_points: toInt(src.base_rating_points),
+    pg_bonus_points: toInt(src.pg_bonus_points),
+    pg_bonus_percent: toInt(src.pg_bonus_percent),
+    has_pg_bonus: !!src.has_pg_bonus,
     replay_embed_url: String(src.replay_embed_url || ''),
     replay_video_id: String(src.replay_video_id || ''),
     replay_start_seconds: toInt(src.replay_start_seconds),

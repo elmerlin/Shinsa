@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getAvatarUrl } from '../AvatarPicker';
 import { getCountryFlag } from '../../utils/countryFlags';
+import WeeklyChallengeBonusChip from './WeeklyChallengeBonusChip';
 
 const LEVEL_ROW_STYLE = {
   contentVisibility: 'auto',
@@ -100,9 +101,12 @@ function ChartCard({ chart, viewerBest, onClick }) {
                   {entry.nationality && getCountryFlag(entry.nationality, 'h-[11px] inline-block mr-0.5')}
                   {entry.username}
                 </Link>
-                <span className={`shrink-0 text-xs font-display font-bold tabular-nums ${getGradeColor(entry.grade)}`}>
-                  {(entry.score || 0).toLocaleString()}
-                </span>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <span className={`text-xs font-display font-bold tabular-nums ${getGradeColor(entry.grade)}`}>
+                    {(entry.score || 0).toLocaleString()}
+                  </span>
+                  <WeeklyChallengeBonusChip entry={entry} />
+                </div>
               </div>
             );
           })}
@@ -114,10 +118,13 @@ function ChartCard({ chart, viewerBest, onClick }) {
         <div className="border-t border-piu-gold/15 bg-piu-gold/[0.04] px-3 py-2">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-display font-bold text-piu-gold/70">Your best</span>
-            <span className={`text-xs font-display font-bold tabular-nums ${getGradeColor(viewerBest.grade)}`}>
-              {(viewerBest.score || 0).toLocaleString()}
-              <span className="text-white/30 ml-1 text-[10px]">{viewerBest.grade}</span>
-            </span>
+            <div className="flex items-center gap-1.5">
+              <span className={`text-xs font-display font-bold tabular-nums ${getGradeColor(viewerBest.grade)}`}>
+                {(viewerBest.score || 0).toLocaleString()}
+                <span className="text-white/30 ml-1 text-[10px]">{viewerBest.grade}</span>
+              </span>
+              <WeeklyChallengeBonusChip entry={viewerBest} />
+            </div>
           </div>
         </div>
       )}
