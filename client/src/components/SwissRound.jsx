@@ -17,17 +17,22 @@ export default function SwissRound({ round, matches, players, config, onUpdate, 
     onPlayerClick(player);
   };
 
-  const renderPlayerName = (player, align = 'left') => {
+  const renderPlayerCell = (player, subtitle, align = 'left', highlighted = false) => {
     const content = (
       <>
-        {player?.avatar && (
-          <img src={getAvatarUrl(player.avatar)} alt="" className="h-6 w-6 rounded-full border border-white/10 shrink-0 shadow-sm" />
-        )}
-        <span className="truncate">{player?.name || 'TBD'}</span>
+        <div className={`font-display font-bold text-sm sm:text-base truncate flex items-center gap-1.5 ${align === 'right' ? 'justify-end' : ''}`}>
+          {player?.avatar && (
+            <img src={getAvatarUrl(player.avatar)} alt="" className="h-6 w-6 rounded-full border border-white/10 shrink-0 shadow-sm" />
+          )}
+          <span className="truncate">{player?.name || 'TBD'}</span>
+        </div>
+        <div className="text-[10px] sm:text-xs text-zinc-600">
+          {subtitle}
+        </div>
       </>
     );
 
-    const baseClass = `font-display font-bold text-sm sm:text-base truncate flex items-center gap-1.5 ${align === 'right' ? 'justify-end' : ''}`;
+    const baseClass = `flex-1 min-w-0 rounded-lg px-1.5 py-1 -mx-1.5 ${align === 'right' ? 'text-right' : ''} ${highlighted ? 'text-piu-green' : ''}`;
     if (!player || !onPlayerClick) {
       return <div className={baseClass}>{content}</div>;
     }
@@ -36,7 +41,8 @@ export default function SwissRound({ round, matches, players, config, onUpdate, 
       <button
         type="button"
         onClick={(event) => handlePlayerClick(event, player)}
-        className={`${baseClass} w-full min-w-0 text-inherit transition-colors hover:text-piu-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-piu-accent/60 rounded-md`}
+        className={`${baseClass} block text-inherit transition-colors hover:bg-white/[0.04] hover:text-piu-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-piu-accent/60`}
+        title={`View ${player.name}'s phase match history`}
       >
         {content}
       </button>
@@ -108,13 +114,7 @@ export default function SwissRound({ round, matches, players, config, onUpdate, 
                 ${isLive ? 'border-piu-accent/30 shadow-[0_0_12px_rgba(255,51,102,0.12)] animate-pulse-glow' : ''}
               `}
             >
-              {/* Player 1 (higher seed) */}
-              <div className={`flex-1 text-right min-w-0 ${(match.winner_id === match.player1_id || sharedWin) ? 'text-piu-green' : ''}`}>
-                {renderPlayerName(p1, 'right')}
-                <div className="text-[10px] sm:text-xs text-zinc-600">
-                  #{p1?.seed_rank || '?'}
-                </div>
-              </div>
+              {renderPlayerCell(p1, `#${p1?.seed_rank || '?'}`, 'right', match.winner_id === match.player1_id || sharedWin)}
 
               {/* Score / Status */}
               <div className="flex flex-col items-center min-w-[60px] sm:min-w-[80px]">
@@ -139,13 +139,7 @@ export default function SwissRound({ round, matches, players, config, onUpdate, 
                 )}
               </div>
 
-              {/* Player 2 (lower seed) */}
-              <div className={`flex-1 min-w-0 ${(match.winner_id === match.player2_id || sharedWin) ? 'text-piu-green' : ''}`}>
-                {renderPlayerName(p2)}
-                <div className="text-[10px] sm:text-xs text-zinc-600">
-                  #{p2?.seed_rank || '?'}
-                </div>
-              </div>
+              {renderPlayerCell(p2, `#${p2?.seed_rank || '?'}`, 'left', match.winner_id === match.player2_id || sharedWin)}
 
               {!isComplete && (
                 <div className="text-zinc-700 text-sm shrink-0">&#8250;</div>

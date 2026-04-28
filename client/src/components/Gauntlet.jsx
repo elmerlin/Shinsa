@@ -20,17 +20,22 @@ export default function Gauntlet({ matches, players, onUpdate, onPlayerClick }) 
     onPlayerClick(player);
   };
 
-  const renderPlayerName = (player, align = 'left') => {
+  const renderPlayerCell = (player, subtitle, align = 'left', highlighted = false) => {
     const content = (
       <>
-        {player?.avatar && (
-          <img src={getAvatarUrl(player.avatar)} alt="" className="h-6 w-6 rounded-full border border-white/10 shrink-0 shadow-sm" />
-        )}
-        <span className="truncate">{player?.name || 'TBD'}</span>
+        <div className={`font-display font-bold text-sm sm:text-base truncate flex items-center gap-1.5 ${align === 'right' ? 'justify-end' : ''}`}>
+          {player?.avatar && (
+            <img src={getAvatarUrl(player.avatar)} alt="" className="h-6 w-6 rounded-full border border-white/10 shrink-0 shadow-sm" />
+          )}
+          <span className="truncate">{player?.name || 'TBD'}</span>
+        </div>
+        <div className="text-[10px] sm:text-xs text-zinc-600">
+          {subtitle}
+        </div>
       </>
     );
 
-    const baseClass = `font-display font-bold text-sm sm:text-base truncate flex items-center gap-1.5 ${align === 'right' ? 'justify-end' : ''}`;
+    const baseClass = `flex-1 min-w-0 rounded-lg px-1.5 py-1 -mx-1.5 ${align === 'right' ? 'text-right' : ''} ${highlighted ? 'text-piu-green' : ''}`;
     if (!player || !onPlayerClick) {
       return <div className={baseClass}>{content}</div>;
     }
@@ -39,7 +44,8 @@ export default function Gauntlet({ matches, players, onUpdate, onPlayerClick }) 
       <button
         type="button"
         onClick={(event) => handlePlayerClick(event, player)}
-        className={`${baseClass} w-full min-w-0 text-inherit transition-colors hover:text-piu-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-piu-accent/60 rounded-md`}
+        className={`${baseClass} block text-inherit transition-colors hover:bg-white/[0.04] hover:text-piu-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-piu-accent/60`}
+        title={`View ${player.name}'s phase match history`}
       >
         {content}
       </button>
@@ -134,13 +140,7 @@ export default function Gauntlet({ matches, players, onUpdate, onPlayerClick }) 
                 </div>
               </div>
 
-              {/* Player 1 - ranked challenger */}
-              <div className={`flex-1 text-right min-w-0 ${match.winner_id === match.player1_id ? 'text-piu-green' : ''}`}>
-                {renderPlayerName(p1, 'right')}
-                <div className="text-[10px] sm:text-xs text-zinc-600">
-                  {p1 ? 'Challenger' : ''}
-                </div>
-              </div>
+              {renderPlayerCell(p1, p1 ? 'Challenger' : '', 'right', match.winner_id === match.player1_id)}
 
               {/* Score / Status */}
               <div className="flex flex-col items-center min-w-[60px] sm:min-w-[80px]">
@@ -168,13 +168,7 @@ export default function Gauntlet({ matches, players, onUpdate, onPlayerClick }) 
                 )}
               </div>
 
-              {/* Player 2 - defender from previous match */}
-              <div className={`flex-1 min-w-0 ${match.winner_id === match.player2_id ? 'text-piu-green' : ''}`}>
-                {renderPlayerName(p2)}
-                <div className="text-[10px] sm:text-xs text-zinc-600">
-                  {p2 ? (idx === 0 ? 'Bottom Rank' : 'Defender') : ''}
-                </div>
-              </div>
+              {renderPlayerCell(p2, p2 ? (idx === 0 ? 'Bottom Rank' : 'Defender') : '', 'left', match.winner_id === match.player2_id)}
 
               {!isComplete && !isWaiting && (
                 <div className="text-zinc-700 text-sm shrink-0">&#8250;</div>

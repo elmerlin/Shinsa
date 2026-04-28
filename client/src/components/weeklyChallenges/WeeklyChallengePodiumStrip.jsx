@@ -27,12 +27,12 @@ function TrophyIcon({ rank, className = '' }) {
   );
 }
 
-function PodiumCard({ award }) {
+function PodiumCard({ award, compact = false }) {
   const style = PODIUM_COLORS[award.rank - 1] || PODIUM_COLORS[2];
   const avatarUrl = getAvatarUrl(award.avatar_snapshot, 'sm');
 
   return (
-    <div className={`flex items-center gap-2.5 rounded-lg border ${style.border} bg-gradient-to-r ${style.bg} px-3 py-2 min-w-0`}>
+    <div className={`flex min-w-0 items-center overflow-hidden rounded-lg border ${style.border} bg-gradient-to-r ${style.bg} ${compact ? 'gap-2 px-2.5 py-2' : 'gap-2.5 px-3 py-2'}`}>
       <TrophyIcon rank={award.rank} className="text-base shrink-0" />
       {avatarUrl && (
         <img src={avatarUrl} alt="" className="h-6 w-6 shrink-0 rounded-full border border-white/20 object-cover" loading="lazy" decoding="async" />
@@ -42,17 +42,17 @@ function PodiumCard({ award }) {
           to="/weekly-challenges"
           className="block truncate text-xs font-display font-bold text-white hover:text-piu-gold transition-colors"
         >
-          {award.nationality_snapshot && (
+          {!compact && award.nationality_snapshot && (
             <>{getCountryFlag(award.nationality_snapshot, 'h-[12px] inline-block mr-0.5')} </>
           )}
           {award.username_snapshot}
         </Link>
       </div>
-      <div className="flex shrink-0 items-center gap-1.5">
+      <div className={`flex min-w-0 shrink-0 items-center justify-end ${compact ? 'gap-1' : 'gap-1.5'}`}>
         <span className="text-xs font-display font-bold text-white/60 tabular-nums">
           {(award.points || 0).toLocaleString()}
         </span>
-        <WeeklyChallengeBonusChip entry={award} />
+        <WeeklyChallengeBonusChip entry={award} compact={compact} />
       </div>
     </div>
   );
@@ -75,7 +75,7 @@ export default function WeeklyChallengePodiumStrip({ awards = [], compact = fals
     return (
       <div className="flex flex-col gap-1.5">
         {overall.map((a) => (
-          <PodiumCard key={`${a.award_key}-${a.rank}`} award={a} />
+          <PodiumCard key={`${a.award_key}-${a.rank}`} award={a} compact />
         ))}
       </div>
     );

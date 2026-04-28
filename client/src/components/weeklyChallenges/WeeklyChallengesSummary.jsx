@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import { getWeeklyChallengesHome } from '../../utils/api';
 import WeeklyChallengePodiumStrip from './WeeklyChallengePodiumStrip';
 import { getAvatarUrl } from '../AvatarPicker';
-import { getCountryFlag } from '../PlayerRegistration';
 
 function getLevelBadgeTone(mode) {
   if (String(mode || '').trim() === 'Single')
@@ -49,7 +48,7 @@ function ChallengePreview({ chart }) {
   const top1 = chart.top3?.[0];
   const avatarUrl = top1?.avatar ? getAvatarUrl(top1.avatar, 'sm') : '';
   return (
-    <div className="relative flex-shrink-0 snap-start w-[140px] h-[105px] overflow-hidden rounded-lg border border-piu-border/50">
+    <div className="relative h-[112px] w-[150px] flex-shrink-0 snap-start overflow-hidden rounded-lg border border-piu-border/50 sm:h-[118px] sm:w-[168px] xl:h-[126px] xl:w-[184px]">
       {/* Full-bleed jacket background */}
       {chart.jacket_url_snapshot ? (
         <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${chart.jacket_url_snapshot})` }} />
@@ -141,10 +140,10 @@ export default function WeeklyChallengesSummary() {
       </div>
 
       {/* Content row: Podium + Singles/Doubles badges + Challenge previews */}
-      <div className="flex gap-3 items-start">
+      <div className="flex items-start gap-2">
         {/* Left: Compact podium */}
         {overallAwards.length > 0 && (
-          <div className="shrink-0 w-[180px] hidden sm:block">
+          <div className="hidden w-[194px] shrink-0 sm:block xl:w-[208px]">
             <WeeklyChallengePodiumStrip awards={overallAwards} compact />
             {/* Singles & Doubles first place badges */}
             <div className="flex gap-1.5 mt-2">
@@ -170,11 +169,11 @@ export default function WeeklyChallengesSummary() {
 
         {/* Right: Challenge previews scroll rail */}
         <div className="flex-1 min-w-0 relative">
-          <ScrollArrow direction="left" onClick={() => scrollRef.current?.scrollBy({ left: -140, behavior: 'smooth' })} visible={canLeft} />
-          <ScrollArrow direction="right" onClick={() => scrollRef.current?.scrollBy({ left: 140, behavior: 'smooth' })} visible={canRight} />
+          <ScrollArrow direction="left" onClick={() => scrollRef.current?.scrollBy({ left: -170, behavior: 'smooth' })} visible={canLeft} />
+          <ScrollArrow direction="right" onClick={() => scrollRef.current?.scrollBy({ left: 170, behavior: 'smooth' })} visible={canRight} />
           <div
             ref={scrollRef}
-            className="flex gap-2 overflow-x-auto scroll-smooth snap-x snap-mandatory pb-1 scrollbar-none"
+            className="flex gap-1.5 overflow-x-auto scroll-smooth snap-x snap-mandatory pb-1 scrollbar-none"
             style={{ scrollbarWidth: 'none' }}
           >
             {(challengePreviews || []).map(chart => (
