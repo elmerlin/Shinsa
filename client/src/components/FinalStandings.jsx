@@ -46,33 +46,52 @@ function PlacementPodium({ entries = [] }) {
   const podium = entries.slice(0, 3);
 
   return (
-    <div className="grid grid-cols-3 gap-2 sm:gap-4">
+    <div className="grid grid-cols-3 gap-2 sm:gap-3">
       {[1, 0, 2].map((slotIndex) => {
         const entry = podium[slotIndex];
         if (!entry) return <div key={slotIndex} />;
         const medal = MEDAL_CONFIG[entry.rank];
         const flag = getCountryFlag(entry.nationality);
+        const avatar = entry.avatar ? getAvatarUrl(entry.avatar) : '';
         const isChampion = entry.rank === 1;
+        const isSecond = entry.rank === 2;
+
+        const heightClass = isChampion ? 'pt-5 sm:pt-7 pb-4 sm:pb-5' : 'mt-3 sm:mt-5 pt-3 sm:pt-4 pb-3 sm:pb-4';
+        const ringClass = isChampion ? 'ring-piu-gold/45' : isSecond ? 'ring-piu-silver/40' : 'ring-piu-bronze/40';
 
         return (
           <div
             key={entry.player_id || `${entry.rank}-${entry.name}`}
-            className={`rounded-2xl border px-3 py-4 text-center ${medal.bg} ${
+            className={`relative overflow-hidden rounded-2xl border px-3 text-center ${heightClass} ${
               isChampion
-                ? 'bg-[radial-gradient(circle_at_50%_0%,rgba(255,215,0,0.14),transparent_62%),linear-gradient(180deg,rgba(255,255,255,0.06),rgba(10,10,14,0.5))]'
-                : 'bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(10,10,14,0.48))]'
+                ? 'border-piu-gold/35 bg-[radial-gradient(circle_at_50%_-20%,rgba(255,215,0,0.18),transparent_60%),linear-gradient(180deg,rgba(22,18,12,0.88),rgba(15,12,8,0.92))] shadow-[0_18px_36px_-8px_rgba(0,0,0,0.5),0_0_22px_-2px_rgba(255,215,0,0.2)]'
+                : isSecond
+                  ? 'border-piu-silver/30 bg-[radial-gradient(circle_at_50%_-20%,rgba(192,192,192,0.10),transparent_60%),linear-gradient(180deg,rgba(18,20,24,0.85),rgba(13,15,18,0.9))] shadow-[0_12px_28px_-8px_rgba(0,0,0,0.4)]'
+                  : 'border-piu-bronze/30 bg-[radial-gradient(circle_at_50%_-20%,rgba(205,127,50,0.10),transparent_60%),linear-gradient(180deg,rgba(20,16,12,0.85),rgba(14,12,9,0.9))] shadow-[0_12px_28px_-8px_rgba(0,0,0,0.4)]'
             }`}
           >
-            <div className={`mb-1 text-3xl ${isChampion ? 'sm:text-5xl' : 'sm:text-4xl'}`}>{medal.icon}</div>
-            <p className={`font-display text-[10px] font-bold uppercase tracking-[0.18em] ${medal.color}`}>{medal.label}</p>
-            <div className="mt-2 flex items-center justify-center gap-1.5">
-              {flag && <span className="text-base">{flag}</span>}
-              <p className={`max-w-full truncate font-display font-bold ${isChampion ? 'text-base sm:text-lg' : 'text-sm sm:text-base'} ${medal.color}`}>
-                {entry.name}
-              </p>
-            </div>
+            {isChampion && (
+              <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-piu-gold/60 to-transparent" />
+            )}
+            <div className={`text-3xl mb-1 ${isChampion ? 'sm:text-5xl' : 'sm:text-4xl'}`}>{medal.icon}</div>
+            <p className={`font-display text-[10px] font-bold uppercase tracking-[0.18em] mb-2 ${medal.color}`}>{medal.label}</p>
+            {avatar ? (
+              <img
+                src={avatar}
+                alt=""
+                className={`mx-auto rounded-full object-cover ring-1 ${ringClass} ${isChampion ? 'h-12 w-12 sm:h-14 sm:w-14' : 'h-10 w-10 sm:h-11 sm:w-11'}`}
+              />
+            ) : (
+              <div className={`mx-auto flex items-center justify-center rounded-full bg-gradient-to-br from-piu-accent/70 to-purple-700/70 font-display font-bold text-white ring-1 ${ringClass} ${isChampion ? 'h-12 w-12 sm:h-14 sm:w-14 text-base' : 'h-10 w-10 sm:h-11 sm:w-11 text-sm'}`}>
+                {String(entry.name || '?').trim().slice(0, 1).toUpperCase()}
+              </div>
+            )}
+            {flag && <div className="text-base mt-1.5">{flag}</div>}
+            <p className={`mt-1 max-w-full truncate font-display font-bold px-2 ${isChampion ? 'text-sm sm:text-base' : 'text-xs sm:text-sm'} ${medal.color}`}>
+              {entry.name}
+            </p>
             {entry.skill_title && (
-              <p className="mt-1 truncate text-[11px] text-zinc-500">{entry.skill_title}</p>
+              <p className="mt-1 truncate text-[10px] text-zinc-600 px-2">{entry.skill_title}</p>
             )}
           </div>
         );
@@ -272,42 +291,68 @@ export default function FinalStandings({ tournament = null, phases = [], players
   }
 
   const championFlag = champion ? getCountryFlag(champion.nationality) : '';
+  const championAvatar = champion?.avatar ? getAvatarUrl(champion.avatar) : '';
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-5">
       <div className="flex items-center gap-3">
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-piu-gold/20 bg-piu-gold/10">
-          <span className="text-base">{'\uD83C\uDFC6'}</span>
+        <div className="flex h-10 w-10 sm:h-11 sm:w-11 items-center justify-center rounded-xl bg-gradient-to-br from-piu-gold/20 to-piu-gold/5 border border-piu-gold/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_4px_14px_-4px_rgba(255,215,0,0.3)]">
+          <span className="text-base sm:text-lg" aria-hidden>{'\uD83C\uDFC6'}</span>
         </div>
         <div>
-          <h2 className="font-display text-xl font-bold tracking-wide text-white">Placement Timeline</h2>
-          <p className="text-sm text-zinc-500">
+          <h2 className="font-display text-xl sm:text-2xl font-bold tracking-tight text-white">Placement Timeline</h2>
+          <p className="text-xs text-zinc-500 mt-0.5">
             {hasGauntlet ? 'Round robin locked the ladder, then the gauntlet decided the finish.' : 'Final placings were settled in round robin.'}
           </p>
         </div>
       </div>
 
       {champion && (
-        <div className="relative overflow-hidden rounded-[1.6rem] border border-piu-gold/25 bg-[radial-gradient(circle_at_50%_0%,rgba(255,215,0,0.16),transparent_48%),radial-gradient(circle_at_85%_25%,rgba(255,51,102,0.08),transparent_36%),linear-gradient(180deg,rgba(255,255,255,0.05),rgba(8,8,12,0.82))] px-5 py-6 shadow-[0_18px_42px_rgba(0,0,0,0.3)] sm:px-6">
-          <div className="pointer-events-none absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-piu-gold/45 to-transparent" />
-          <p className="font-display text-[10px] font-bold uppercase tracking-[0.22em] text-zinc-400">
-            {hasGauntlet ? 'Gauntlet Champion' : 'Tournament Champion'}
-          </p>
-          <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <div className="flex items-center gap-3">
-                {championFlag && <span className="text-3xl">{championFlag}</span>}
-                <div>
-                  <p className="font-display text-3xl font-bold tracking-wide text-piu-gold sm:text-4xl">{champion.name}</p>
-                  {champion.skill_title && (
-                    <p className="mt-1 text-sm text-zinc-400">{champion.skill_title}</p>
-                  )}
+        <div className="relative overflow-hidden rounded-2xl border border-piu-gold/30 bg-[radial-gradient(circle_at_50%_-30%,rgba(255,215,0,0.22),transparent_55%),radial-gradient(circle_at_85%_120%,rgba(255,51,102,0.10),transparent_45%),radial-gradient(circle_at_15%_115%,rgba(68,136,255,0.06),transparent_45%),linear-gradient(180deg,rgba(22,18,12,0.92),rgba(13,11,8,0.96))] py-7 sm:py-9 px-5 sm:px-6 shadow-[0_24px_60px_-12px_rgba(0,0,0,0.6),0_0_32px_-4px_rgba(255,215,0,0.3)]">
+          <div className="pointer-events-none absolute inset-0 opacity-[0.08]" aria-hidden>
+            <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <pattern id="champ-grid" x="0" y="0" width="48" height="48" patternUnits="userSpaceOnUse">
+                  <path d="M 48 0 L 0 0 0 48" fill="none" stroke="rgba(255,215,0,0.6)" strokeWidth="0.5" />
+                </pattern>
+              </defs>
+              <rect width="100%" height="100%" fill="url(#champ-grid)" />
+            </svg>
+          </div>
+          <div className="pointer-events-none absolute inset-x-12 top-0 h-px bg-gradient-to-r from-transparent via-piu-gold/70 to-transparent" />
+          <div className="pointer-events-none absolute -top-12 left-1/2 h-24 w-24 -translate-x-1/2 rounded-full bg-piu-gold/30 blur-3xl" />
+
+          <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-4">
+              {championAvatar ? (
+                <img
+                  src={championAvatar}
+                  alt={champion.name}
+                  className="h-16 w-16 sm:h-20 sm:w-20 rounded-2xl object-cover ring-2 ring-piu-gold/50 shadow-[0_0_24px_rgba(255,215,0,0.4)]"
+                />
+              ) : (
+                <div className="flex h-16 w-16 sm:h-20 sm:w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-piu-gold/85 via-amber-500/70 to-piu-accent/65 font-display text-3xl font-bold text-white ring-2 ring-piu-gold/50 shadow-[0_0_24px_rgba(255,215,0,0.4)]">
+                  {String(champion.name || '?').charAt(0).toUpperCase()}
                 </div>
+              )}
+              <div className="min-w-0">
+                <p className="font-display text-[10px] font-bold uppercase tracking-[0.28em] text-piu-gold/70">
+                  {hasGauntlet ? 'Gauntlet Champion' : 'Tournament Champion'}
+                </p>
+                <div className="mt-1 flex items-center gap-2.5">
+                  {championFlag && <span className="text-2xl sm:text-3xl">{championFlag}</span>}
+                  <p className="font-display text-3xl sm:text-4xl font-bold tracking-tight text-piu-gold drop-shadow-[0_3px_12px_rgba(255,215,0,0.5)]">
+                    {champion.name}
+                  </p>
+                </div>
+                {champion.skill_title && (
+                  <p className="mt-1.5 text-xs sm:text-sm font-display uppercase tracking-[0.14em] text-piu-gold/70">{champion.skill_title}</p>
+                )}
               </div>
             </div>
-            <div className="rounded-2xl border border-white/8 bg-black/20 px-4 py-3">
-              <p className="font-display text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-500">Final Order</p>
-              <p className="mt-1 font-display text-lg font-bold text-white">
+            <div className="rounded-xl border border-piu-gold/15 bg-black/25 px-4 py-3 sm:max-w-xs">
+              <p className="font-display text-[10px] font-bold uppercase tracking-[0.16em] text-piu-gold/60">Final Order</p>
+              <p className="mt-1.5 font-display text-sm sm:text-base font-bold text-white leading-relaxed">
                 {final.slice(0, 3).map((entry) => `${getDisplayRank(entry.rank)} ${entry.name}`).join(' · ')}
               </p>
             </div>
