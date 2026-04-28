@@ -6,10 +6,42 @@ function isSharedWinMatch(match) {
   return !!match?.scores?.shared_win;
 }
 
-export default function SwissRound({ round, matches, players, config, onUpdate, tournamentId }) {
+export default function SwissRound({ round, matches, players, config, onUpdate, tournamentId, onPlayerClick }) {
   const navigate = useNavigate();
   const playerMap = {};
   players.forEach(p => { playerMap[p.id] = p; });
+
+  const handlePlayerClick = (event, player) => {
+    if (!player || !onPlayerClick) return;
+    event.stopPropagation();
+    onPlayerClick(player);
+  };
+
+  const renderPlayerName = (player, align = 'left') => {
+    const content = (
+      <>
+        {player?.avatar && (
+          <img src={getAvatarUrl(player.avatar)} alt="" className="h-6 w-6 rounded-full border border-white/10 shrink-0 shadow-sm" />
+        )}
+        <span className="truncate">{player?.name || 'TBD'}</span>
+      </>
+    );
+
+    const baseClass = `font-display font-bold text-sm sm:text-base truncate flex items-center gap-1.5 ${align === 'right' ? 'justify-end' : ''}`;
+    if (!player || !onPlayerClick) {
+      return <div className={baseClass}>{content}</div>;
+    }
+
+    return (
+      <button
+        type="button"
+        onClick={(event) => handlePlayerClick(event, player)}
+        className={`${baseClass} w-full min-w-0 text-inherit transition-colors hover:text-piu-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-piu-accent/60 rounded-md`}
+      >
+        {content}
+      </button>
+    );
+  };
 
   const levelConfig = (config.round_levels || []).find(l => l.round === round);
   const completedCount = matches.filter(m => m.status === 'COMPLETED').length;
@@ -78,12 +110,7 @@ export default function SwissRound({ round, matches, players, config, onUpdate, 
             >
               {/* Player 1 (higher seed) */}
               <div className={`flex-1 text-right min-w-0 ${(match.winner_id === match.player1_id || sharedWin) ? 'text-piu-green' : ''}`}>
-                <div className="font-display font-bold text-sm sm:text-base truncate flex items-center justify-end gap-1.5">
-                  {p1?.avatar && (
-                    <img src={getAvatarUrl(p1.avatar)} alt="" className="h-6 w-6 rounded-full border border-white/10 shrink-0 shadow-sm" />
-                  )}
-                  {p1?.name || 'TBD'}
-                </div>
+                {renderPlayerName(p1, 'right')}
                 <div className="text-[10px] sm:text-xs text-zinc-600">
                   #{p1?.seed_rank || '?'}
                 </div>
@@ -114,12 +141,7 @@ export default function SwissRound({ round, matches, players, config, onUpdate, 
 
               {/* Player 2 (lower seed) */}
               <div className={`flex-1 min-w-0 ${(match.winner_id === match.player2_id || sharedWin) ? 'text-piu-green' : ''}`}>
-                <div className="font-display font-bold text-sm sm:text-base truncate flex items-center gap-1.5">
-                  {p2?.avatar && (
-                    <img src={getAvatarUrl(p2.avatar)} alt="" className="h-6 w-6 rounded-full border border-white/10 shrink-0 shadow-sm" />
-                  )}
-                  {p2?.name || 'TBD'}
-                </div>
+                {renderPlayerName(p2)}
                 <div className="text-[10px] sm:text-xs text-zinc-600">
                   #{p2?.seed_rank || '?'}
                 </div>

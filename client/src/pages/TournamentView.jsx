@@ -16,6 +16,7 @@ import PoolsView from '../components/tournament/PoolsView';
 import BracketView from '../components/tournament/BracketView';
 import DoubleElimBracketView from '../components/tournament/DoubleElimBracketView';
 import PhaseTransition from '../components/tournament/PhaseTransition';
+import PlayerPhaseHistoryModal from '../components/tournament/PlayerPhaseHistoryModal';
 import TournamentSkeleton from '../components/tournament/TournamentSkeleton';
 import {
   TournamentCallout,
@@ -50,6 +51,7 @@ export default function TournamentView() {
   const [loading, setLoading] = useState(true);
   const [selectedRound, setSelectedRound] = useState(null);
   const [showTransition, setShowTransition] = useState(null);
+  const [playerHistory, setPlayerHistory] = useState(null);
 
   const isPhaseMode = phases.length > 0;
 
@@ -203,10 +205,41 @@ export default function TournamentView() {
     }
   };
 
+  const openPlayerHistory = useCallback((player, scope) => {
+    if (!player) return;
+    setPlayerHistory({
+      playerId: player.id,
+      phaseId: scope?.phaseId || null,
+      phaseLabel: scope?.phaseLabel || 'Phase',
+      format: scope?.format || 'round_robin',
+    });
+  }, []);
+
   if (loading) return <TournamentSkeleton />;
   if (!tournament) return <div className="text-center py-20 text-red-400">Tournament not found</div>;
 
   const config = tournament.config || {};
+  const historyPlayer = playerHistory
+    ? players.find((player) => player.id === playerHistory.playerId)
+    : null;
+  const historyMatches = playerHistory
+    ? matches.filter((match) => {
+      if (playerHistory.phaseId) return match.phase_id === playerHistory.phaseId;
+      if (playerHistory.format === 'gauntlet') return match.match_type === 'gauntlet';
+      if (playerHistory.format === 'round_robin') return match.match_type !== 'gauntlet';
+      return true;
+    })
+    : [];
+  const historyModal = historyPlayer ? (
+    <PlayerPhaseHistoryModal
+      player={historyPlayer}
+      players={players}
+      matches={historyMatches}
+      phaseLabel={playerHistory.phaseLabel}
+      phaseFormat={playerHistory.format}
+      onClose={() => setPlayerHistory(null)}
+    />
+  ) : null;
   const canEditSetup = !!user?.is_admin;
   const editSetupAction = (
     <div className="flex items-center gap-2">
@@ -259,6 +292,7 @@ export default function TournamentView() {
 
     return (
       <div className="max-w-6xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
+        {historyModal}
         {showTransition && (
           <PhaseTransition
             phaseName={showTransition.name}
@@ -388,6 +422,11 @@ export default function TournamentView() {
                 config={currentTabPhase.config || {}}
                 onUpdate={loadData}
                 tournamentId={id}
+                onPlayerClick={(player) => openPlayerHistory(player, {
+                  phaseId: currentTabPhase.id,
+                  phaseLabel: currentTabPhase.name || FORMAT_LABELS[currentTabPhase.format] || currentTabPhase.format,
+                  format: currentTabPhase.format,
+                })}
               />
             )}
 
@@ -423,6 +462,11 @@ export default function TournamentView() {
                 matches={phaseMatches.length > 0 ? phaseMatches : matches}
                 players={players}
                 onUpdate={loadData}
+                onPlayerClick={(player) => openPlayerHistory(player, {
+                  phaseId: currentTabPhase.id,
+                  phaseLabel: currentTabPhase.name || FORMAT_LABELS[currentTabPhase.format] || currentTabPhase.format,
+                  format: currentTabPhase.format,
+                })}
               />
             )}
 
@@ -459,6 +503,7 @@ export default function TournamentView() {
 
   return (
     <div className="max-w-6xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
+      {historyModal}
       <div className="mb-4 sm:mb-6">
         <TournamentHero
           tournament={tournament}
@@ -586,12 +631,24 @@ export default function TournamentView() {
             config={config}
             onUpdate={loadData}
             tournamentId={id}
+            onPlayerClick={(player) => openPlayerHistory(player, {
+              phaseLabel: 'Round Robin',
+              format: 'round_robin',
+            })}
           />
         </div>
       )}
 
       {activeTab === 'gauntlet' && (
-        <Gauntlet matches={matches} players={players} onUpdate={loadData} />
+        <Gauntlet
+          matches={matches}
+          players={players}
+          onUpdate={loadData}
+          onPlayerClick={(player) => openPlayerHistory(player, {
+            phaseLabel: 'Gauntlet',
+            format: 'gauntlet',
+          })}
+        />
       )}
 
       {activeTab === 'final' && (
