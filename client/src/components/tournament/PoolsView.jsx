@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { formatScore, getSkillColor } from '../../utils/tournamentConstants';
+import { sortRoundRobinPlayers } from '../../utils/tournamentPlacings';
 
 const POOL_COLORS = [
   { border: 'border-sky-400/30', bg: 'bg-sky-500/5', text: 'text-sky-300', label: 'Pool A' },
@@ -22,25 +22,62 @@ function isSharedWinMatch(match) {
 }
 
 function PoolStandings({ poolPlayers, poolMatches, playerMap }) {
-  const sorted = [...poolPlayers].sort((a, b) => {
-    const aPlayer = playerMap[a.player_id] || a;
-    const bPlayer = playerMap[b.player_id] || b;
-    if ((b.wins || bPlayer.wins || 0) !== (a.wins || aPlayer.wins || 0)) {
-      return (b.wins || bPlayer.wins || 0) - (a.wins || aPlayer.wins || 0);
-    }
-    return (b.points || bPlayer.pumbility || 0) - (a.points || aPlayer.pumbility || 0);
-  });
+  const standingsPlayers = useMemo(() => {
+    const stats = new Map();
+    poolPlayers.forEach((pp) => {
+      const base = playerMap[pp.player_id] || playerMap[pp.id] || pp;
+      const playerId = pp.player_id || base.id;
+      if (!playerId) return;
+      stats.set(playerId, {
+        ...base,
+        ...pp,
+        id: base.id || playerId,
+        player_id: playerId,
+        name: base.name || pp.name,
+        pumbility: base.pumbility ?? pp.pumbility ?? 0,
+        wins: 0,
+        losses: 0,
+        points: 0,
+      });
+    });
+
+    poolMatches.forEach((match) => {
+      if (match.status !== 'COMPLETED') return;
+      const p1 = stats.get(match.player1_id);
+      const p2 = stats.get(match.player2_id);
+      if (!p1 || !p2) return;
+      if (isSharedWinMatch(match)) {
+        p1.wins += 1;
+        p1.points += 1;
+        p2.wins += 1;
+        p2.points += 1;
+        return;
+      }
+      const winner = stats.get(match.winner_id);
+      const loserId = match.winner_id === match.player1_id ? match.player2_id : match.player1_id;
+      const loser = stats.get(loserId);
+      if (winner) {
+        winner.wins += 1;
+        winner.points += 1;
+      }
+      if (loser) loser.losses += 1;
+    });
+
+    return Array.from(stats.values());
+  }, [poolPlayers, poolMatches, playerMap]);
+
+  const sorted = sortRoundRobinPlayers(standingsPlayers, poolMatches);
 
   return (
     <div className="space-y-0.5">
-      {sorted.map((pp, idx) => {
-        const player = playerMap[pp.player_id] || pp;
+      {sorted.map((player, idx) => {
+        const playerId = player.player_id || player.id;
         return (
-          <div key={pp.player_id || pp.id} className="flex items-center gap-2 px-2 py-1.5 rounded text-xs">
+          <div key={playerId} className="flex items-center gap-2 px-2 py-1.5 rounded text-xs">
             <span className="text-gray-600 font-mono w-4 text-center">{idx + 1}</span>
             <span className="font-display font-bold truncate flex-1 text-white">{player.name}</span>
-            <span className="font-mono text-piu-green text-[11px]">{pp.wins || player.wins || 0}W</span>
-            <span className="font-mono text-red-400 text-[11px]">{pp.losses || player.losses || 0}L</span>
+            <span className="font-mono text-piu-green text-[11px]">{player.wins || 0}W</span>
+            <span className="font-mono text-red-400 text-[11px]">{player.losses || 0}L</span>
           </div>
         );
       })}

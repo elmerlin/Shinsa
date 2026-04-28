@@ -131,7 +131,7 @@ function PlacementList({ entries = [], variant }) {
               </p>
               {variant === 'roundRobin' && (
                 <p className="text-[11px] text-zinc-600">
-                  {entry.buchholz ? `BH ${Math.round(entry.buchholz * 10) / 10}` : `Pum ${entry.pumbility || 0}`}
+                  Pum {Number(entry.pumbility || 0).toLocaleString()}
                 </p>
               )}
             </div>

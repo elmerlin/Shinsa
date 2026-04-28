@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { getDb } = require('../db/schema');
-const { syncTournamentPlacementSnapshots } = require('../lib/tournamentPlacings');
+const { sortRoundRobinPlayers, syncTournamentPlacementSnapshots } = require('../lib/tournamentPlacings');
 const { scheduleRoundRobinMatches } = require('../lib/roundRobinSchedule');
 const {
   generateSingleElimBracket,
@@ -301,10 +301,15 @@ router.post('/tournament/:tournamentId/gauntlet', (req, res) => {
     return res.status(400).json({ error: 'Gauntlet has already been generated' });
   }
 
-  // Get round robin standings: sort by wins desc, then buchholz desc, then pumbility desc
-  const players = db.prepare(
-    'SELECT * FROM players WHERE tournament_id = ? AND is_active = 1 ORDER BY wins DESC, buchholz DESC, pumbility DESC'
-  ).all(tournamentId);
+  // Get round robin standings for the gauntlet ladder.
+  const players = sortRoundRobinPlayers(
+    db.prepare(
+      'SELECT * FROM players WHERE tournament_id = ? AND is_active = 1 ORDER BY seed_rank ASC, id ASC'
+    ).all(tournamentId),
+    db.prepare(
+      "SELECT * FROM matches WHERE tournament_id = ? AND status = 'COMPLETED' ORDER BY round_number ASC, schedule_order ASC, created_at ASC, id ASC"
+    ).all(tournamentId)
+  );
 
   if (players.length < 2) {
     db.close();

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { getCountryFlag } from './PlayerRegistration';
 import { getAvatarUrl } from './AvatarPicker';
+import { sortRoundRobinPlayers } from '../utils/tournamentPlacings';
 
 const GENDER_SYMBOLS = { male: '\u2642', female: '\u2640' };
 
@@ -24,10 +25,7 @@ const isSharedWinMatch = (match) => !!match?.scores?.shared_win;
 export default function Standings({ players, matches, showFinal }) {
   const [expandedId, setExpandedId] = useState(null);
 
-  const sorted = [...players].sort((a, b) => {
-    if (b.wins !== a.wins) return b.wins - a.wins;
-    return b.pumbility - a.pumbility;
-  });
+  const sorted = sortRoundRobinPlayers(players, matches);
 
   const playerMap = {};
   players.forEach(p => { playerMap[p.id] = p; });

@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { getDb } = require('../db/schema');
-const { parsePlacementSnapshots, syncTournamentPlacementSnapshots } = require('../lib/tournamentPlacings');
+const { parsePlacementSnapshots, sortRoundRobinPlayers, syncTournamentPlacementSnapshots } = require('../lib/tournamentPlacings');
 
 function normalizePhaseRow(phase) {
   if (!phase) return phase;
@@ -125,11 +125,18 @@ router.post('/:id/activate', (req, res) => {
     if (prevPhase) {
       const advancement = JSON.parse(prevPhase.advancement || '{}');
       const prevPlayers = db.prepare(
-        'SELECT pp.*, p.name, p.pumbility, p.skill_title, p.skill_level FROM tournament_phase_players pp JOIN players p ON pp.player_id = p.id WHERE pp.phase_id = ? AND pp.status = ? ORDER BY pp.wins DESC, pp.buchholz DESC, p.pumbility DESC'
+        'SELECT pp.*, p.name, p.pumbility, p.skill_title, p.skill_level FROM tournament_phase_players pp JOIN players p ON pp.player_id = p.id WHERE pp.phase_id = ? AND pp.status = ? ORDER BY pp.seed ASC'
       ).all(prevPhase.id, 'active');
+      const prevMatches = db.prepare(
+        'SELECT * FROM matches WHERE phase_id = ? ORDER BY pool_id ASC, schedule_order ASC, created_at ASC, id ASC'
+      ).all(prevPhase.id);
+      const rankablePrevPhase = prevPhase.format === 'round_robin' || prevPhase.format === 'pools';
+      const rankedPrevPlayers = rankablePrevPhase
+        ? sortRoundRobinPlayers(prevPlayers, prevMatches)
+        : prevPlayers;
 
       if (advancement.type === 'top_n') {
-        advancingPlayers = prevPlayers.slice(0, advancement.count || prevPlayers.length);
+        advancingPlayers = rankedPrevPlayers.slice(0, advancement.count || rankedPrevPlayers.length);
       } else if (advancement.type === 'per_pool_top_n') {
         const pools = {};
         prevPlayers.forEach(p => {
@@ -137,14 +144,17 @@ router.post('/:id/activate', (req, res) => {
           pools[p.pool_id].push(p);
         });
         for (const poolId of Object.keys(pools).sort()) {
-          const poolPlayers = pools[poolId];
+          const poolMatches = prevMatches.filter((match) => String(match.pool_id || 0) === String(poolId));
+          const poolPlayers = rankablePrevPhase
+            ? sortRoundRobinPlayers(pools[poolId], poolMatches)
+            : pools[poolId];
           advancingPlayers.push(...poolPlayers.slice(0, advancement.count || poolPlayers.length));
         }
       } else if (advancement.type === 'threshold') {
-        advancingPlayers = prevPlayers.filter(p => p.points >= (advancement.threshold || 0));
+        advancingPlayers = rankedPrevPlayers.filter(p => p.points >= (advancement.threshold || 0));
       } else {
         // Default: all active players advance
-        advancingPlayers = prevPlayers;
+        advancingPlayers = rankedPrevPlayers;
       }
 
       // Mark non-advancing players as eliminated in previous phase

@@ -4,6 +4,7 @@ import { getAvatarUrl } from '../AvatarPicker';
 import { getCountryFlag, getSkillColor } from '../PlayerRegistration';
 import { getProfilePath } from '../../utils/profile';
 import { FORMAT_LABELS } from '../../utils/tournamentConstants';
+import { sortRoundRobinPlayers } from '../../utils/tournamentPlacings';
 
 const GENDER_SYMBOLS = { male: '\u2642', female: '\u2640' };
 
@@ -62,10 +63,7 @@ function getActivePhaseLabel(playerId, matches, phases) {
 }
 
 export default function TournamentRoster({ players, matches, phases = [] }) {
-  const sorted = [...players].sort((a, b) => {
-    if (b.wins !== a.wins) return b.wins - a.wins;
-    return (b.pumbility || 0) - (a.pumbility || 0);
-  });
+  const sorted = sortRoundRobinPlayers(players, matches);
 
   if (sorted.length === 0) {
     return (

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo } from 'react';
 import { getAvatarUrl } from '../AvatarPicker';
+import PiuChartJacket from '../PiuChartJacket';
 
 const formatScore = (score) => {
   if (score == null || score === '') return '-';
@@ -10,22 +11,43 @@ const formatScore = (score) => {
 
 const isSharedWinMatch = (match) => !!match?.scores?.shared_win;
 
-const getSongMeta = (song) => {
-  const mode = song.mode || song.song?.mode || '';
-  const level = song.level || song.song?.level || '';
-  const modeLabel = mode ? mode.slice(0, 1).toUpperCase() : '?';
-  return `${modeLabel}${level || '?'}`;
-};
-
 const getSongTitle = (song, index) => {
   return song.title || song.song?.title || `Song ${index + 1}`;
 };
 
+const getSongArtist = (song) => {
+  return song.artist || song.song?.artist || '';
+};
+
+const getSongMode = (song) => {
+  return song.mode || song.song?.mode || 'Single';
+};
+
+const getSongLevel = (song) => {
+  return song.level || song.song?.level || '';
+};
+
+const getSongJacketUrl = (song) => {
+  return song.jacket_url
+    || song.background_url
+    || song.song_jacket_url
+    || song.song?.jacket_url
+    || song.song?.background_url
+    || song.song?.song_jacket_url
+    || '';
+};
+
+const scoreNumber = (score) => {
+  if (score == null || score === '') return null;
+  const numeric = Number(score);
+  return Number.isFinite(numeric) ? numeric : null;
+};
+
 const getSongWinnerId = (song) => {
   if (song.song_winner_id) return song.song_winner_id;
-  const p1Score = Number(song.p1_score);
-  const p2Score = Number(song.p2_score);
-  if (Number.isNaN(p1Score) || Number.isNaN(p2Score)) return null;
+  const p1Score = scoreNumber(song.p1_score);
+  const p2Score = scoreNumber(song.p2_score);
+  if (p1Score == null || p2Score == null) return null;
   if (p1Score === p2Score) return 'tie';
   return p1Score > p2Score ? 'p1' : 'p2';
 };
@@ -51,10 +73,34 @@ const getMatchLabel = (match, phaseFormat, totalGauntletMatches) => {
 
 const getMatchScore = (match) => {
   const scores = match.scores || {};
-  if (match.match_type === 'gauntlet') {
-    return `${formatScore(scores.p1_total)} - ${formatScore(scores.p2_total)}`;
-  }
+  if (match.match_type === 'gauntlet') return null;
   return `${scores.player1_wins ?? 0} - ${scores.player2_wins ?? 0}`;
+};
+
+const getScoreTotals = (match) => {
+  const scores = match.scores || {};
+  const playedSongs = match.played_songs || [];
+  const summed = playedSongs.reduce((acc, song) => {
+    const p1Score = scoreNumber(song.p1_score);
+    const p2Score = scoreNumber(song.p2_score);
+    if (p1Score != null) {
+      acc.p1 += p1Score;
+      acc.hasScores = true;
+    }
+    if (p2Score != null) {
+      acc.p2 += p2Score;
+      acc.hasScores = true;
+    }
+    return acc;
+  }, { p1: 0, p2: 0, hasScores: false });
+
+  const p1Total = scoreNumber(scores.p1_total);
+  const p2Total = scoreNumber(scores.p2_total);
+  if ((p1Total || p2Total) && p1Total != null && p2Total != null) {
+    return { p1: p1Total, p2: p2Total, hasScores: true };
+  }
+  if (summed.hasScores) return summed;
+  return { p1: p1Total ?? 0, p2: p2Total ?? 0, hasScores: p1Total != null || p2Total != null };
 };
 
 function ScoreBox({ player, score, active }) {
@@ -66,6 +112,37 @@ function ScoreBox({ player, score, active }) {
       <p className={`mt-1 truncate font-mono text-sm font-bold ${active ? 'text-piu-green' : 'text-zinc-200'}`}>
         {formatScore(score)}
       </p>
+    </div>
+  );
+}
+
+function TotalScoreStrip({ p1, p2, totals, winnerId, sharedWin }) {
+  if (!totals.hasScores) return null;
+  const p1Active = sharedWin || winnerId === p1?.id;
+  const p2Active = sharedWin || winnerId === p2?.id;
+
+  return (
+    <div className="mt-3 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-stretch gap-2 rounded-lg border border-white/8 bg-black/18 p-2">
+      <div className={`min-w-0 rounded-md border px-2.5 py-2 text-right ${p1Active ? 'border-piu-green/25 bg-piu-green/[0.06]' : 'border-white/8 bg-white/[0.025]'}`}>
+        <p className={`truncate font-display text-[9px] font-bold uppercase tracking-[0.12em] ${p1Active ? 'text-piu-green' : 'text-zinc-500'}`}>
+          {p1?.name || 'TBD'}
+        </p>
+        <p className={`mt-0.5 font-mono text-sm font-bold tabular-nums ${p1Active ? 'text-piu-green' : 'text-zinc-200'}`}>
+          {formatScore(totals.p1)}
+        </p>
+      </div>
+      <div className="flex min-w-[42px] flex-col items-center justify-center">
+        <span className="font-display text-[9px] font-bold uppercase tracking-[0.14em] text-zinc-600">Sum</span>
+        <span className="mt-0.5 text-zinc-700">-</span>
+      </div>
+      <div className={`min-w-0 rounded-md border px-2.5 py-2 ${p2Active ? 'border-piu-green/25 bg-piu-green/[0.06]' : 'border-white/8 bg-white/[0.025]'}`}>
+        <p className={`truncate font-display text-[9px] font-bold uppercase tracking-[0.12em] ${p2Active ? 'text-piu-green' : 'text-zinc-500'}`}>
+          {p2?.name || 'TBD'}
+        </p>
+        <p className={`mt-0.5 font-mono text-sm font-bold tabular-nums ${p2Active ? 'text-piu-green' : 'text-zinc-200'}`}>
+          {formatScore(totals.p2)}
+        </p>
+      </div>
     </div>
   );
 }
@@ -195,6 +272,8 @@ export default function PlayerPhaseHistoryModal({
                 const isWin = sharedWin || match.winner_id === player.id;
                 const winner = sharedWin ? null : playerMap[match.winner_id];
                 const playedSongs = match.played_songs || [];
+                const totals = getScoreTotals(match);
+                const matchScore = getMatchScore(match);
 
                 return (
                   <div
@@ -225,15 +304,22 @@ export default function PlayerPhaseHistoryModal({
                         <span className="rounded-full border border-white/8 bg-white/[0.04] px-2 py-1 font-display text-[10px] font-bold uppercase tracking-[0.12em] text-zinc-400">
                           {getMatchLabel(match, phaseFormat, totalGauntletMatches)}
                         </span>
-                        <span className="rounded-full border border-white/8 bg-black/25 px-2 py-1 font-mono text-[10px] font-bold text-zinc-300">
-                          {getMatchScore(match)}
-                        </span>
+                        {matchScore && (
+                          <span className="rounded-full border border-white/8 bg-black/25 px-2 py-1 font-mono text-[10px] font-bold text-zinc-300">
+                            {matchScore}
+                          </span>
+                        )}
                       </div>
                     </div>
+                    <TotalScoreStrip p1={p1} p2={p2} totals={totals} winnerId={match.winner_id} sharedWin={sharedWin} />
 
                     {playedSongs.length > 0 ? (
                       <div className="mt-3 space-y-2">
                         {playedSongs.map((song, index) => {
+                          const title = getSongTitle(song, index);
+                          const artist = getSongArtist(song);
+                          const mode = getSongMode(song);
+                          const level = getSongLevel(song);
                           const songWinnerId = getSongWinnerId(song);
                           const songWinner = songWinnerId === 'p1'
                             ? p1
@@ -245,17 +331,25 @@ export default function PlayerPhaseHistoryModal({
                           const p2Active = !tied && (songWinnerId === 'p2' || songWinnerId === match.player2_id);
 
                           return (
-                            <div key={`${match.id}-${index}`} className="rounded-lg border border-white/8 bg-black/18 p-2.5">
-                              <div className="flex items-start gap-2">
-                                <span className="mt-0.5 w-9 shrink-0 rounded bg-piu-blue/12 px-1 py-1 text-center font-display text-[10px] font-bold text-piu-blue">
-                                  {getSongMeta(song)}
-                                </span>
+                            <div key={`${match.id}-${index}`} className="rounded-lg border border-piu-border/45 bg-piu-dark/45 px-2.5 py-2.5">
+                              <div className="flex items-start gap-2.5">
+                                <PiuChartJacket
+                                  title={title}
+                                  mode={mode}
+                                  level={level}
+                                  jacketUrl={getSongJacketUrl(song)}
+                                  size="wide"
+                                  className="mt-0.5"
+                                />
                                 <div className="min-w-0 flex-1">
-                                  <p className="truncate font-display text-sm font-bold text-zinc-100">
-                                    {getSongTitle(song, index)}
+                                  <p className="truncate font-display text-sm font-black text-white">
+                                    {title}
                                   </p>
-                                  <p className="mt-0.5 text-[11px] text-zinc-500">
-                                    Song winner: <span className="text-zinc-300">{tied ? 'Tie' : songWinner?.name || 'Not recorded'}</span>
+                                  <p className="mt-0.5 truncate text-[10px] text-zinc-500">
+                                    {artist || `${mode} ${level}`}
+                                  </p>
+                                  <p className="mt-1 text-[10px] font-display font-bold uppercase tracking-[0.1em] text-zinc-500">
+                                    Winner <span className="text-zinc-300">{tied ? 'Tie' : songWinner?.name || 'Not recorded'}</span>
                                   </p>
                                 </div>
                               </div>

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { getTournament, getPlayers, getMatches, getPhases } from '../utils/api';
 import { FORMAT_LABELS, FORMAT_ICONS } from '../utils/tournamentConstants';
+import { sortRoundRobinPlayers } from '../utils/tournamentPlacings';
 import BracketView from '../components/tournament/BracketView';
 import DoubleElimBracketView from '../components/tournament/DoubleElimBracketView';
 
@@ -9,9 +10,19 @@ const REFRESH_INTERVAL = 10000;
 
 function computeStandings(players, matches) {
   const stats = {};
-  players.forEach(p => { stats[p.id] = { id: p.id, name: p.name, wins: 0, losses: 0 }; });
+  players.forEach(p => {
+    stats[p.id] = {
+      id: p.id,
+      name: p.name,
+      wins: 0,
+      losses: 0,
+      pumbility: p.pumbility || 0,
+      seed_rank: p.seed_rank || 0,
+    };
+  });
   matches.forEach(m => {
     if (m.status !== 'COMPLETED') return;
+    if (m.match_type === 'gauntlet' || m.bracket) return;
     if (m.scores?.shared_win) {
       if (stats[m.player1_id]) stats[m.player1_id].wins++;
       if (stats[m.player2_id]) stats[m.player2_id].wins++;
@@ -21,7 +32,7 @@ function computeStandings(players, matches) {
     const loserId = m.winner_id === m.player1_id ? m.player2_id : m.player1_id;
     if (loserId && stats[loserId]) stats[loserId].losses++;
   });
-  return Object.values(stats).sort((a, b) => b.wins - a.wins || a.losses - b.losses);
+  return sortRoundRobinPlayers(Object.values(stats), matches);
 }
 
 function getPlayerName(id, players) {

@@ -12,6 +12,24 @@ function getPlayerId(player) {
   return String(player?.player_id || player?.id || '').trim();
 }
 
+function toInt(value) {
+  const parsed = parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function toNumber(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function isRoundRobinTieBreakerMatch(match) {
+  if (!match || match.status !== 'COMPLETED') return false;
+  if (!match.player1_id || !match.player2_id) return false;
+  if (match.match_type === 'gauntlet' || match.match_type === 'hour_of_power') return false;
+  if (match.bracket) return false;
+  return true;
+}
+
 function snapshotPlayer(player, rank) {
   return {
     rank,
@@ -20,39 +38,106 @@ function snapshotPlayer(player, rank) {
     avatar: String(player?.avatar || '').trim(),
     nationality: String(player?.nationality || '').trim(),
     skill_title: String(player?.skill_title || '').trim(),
-    pumbility: parseInt(player?.pumbility, 10) || 0,
-    wins: parseInt(player?.wins, 10) || 0,
-    losses: parseInt(player?.losses, 10) || 0,
-    points: Number(player?.points) || 0,
-    buchholz: Number(player?.buchholz) || 0,
-    seed_rank: parseInt(player?.seed_rank ?? player?.seed, 10) || 0,
+    pumbility: toInt(player?.pumbility),
+    wins: toInt(player?.wins),
+    losses: toInt(player?.losses),
+    points: toNumber(player?.points),
+    buchholz: toNumber(player?.buchholz),
+    seed_rank: toInt(player?.seed_rank ?? player?.seed),
   };
 }
 
-function compareRoundRobinPlayers(a, b) {
-  const pointDelta = (Number(b?.points) || 0) - (Number(a?.points) || 0);
-  if (pointDelta !== 0) return pointDelta;
-
-  const winDelta = (parseInt(b?.wins, 10) || 0) - (parseInt(a?.wins, 10) || 0);
+function compareRoundRobinRecord(a, b) {
+  const winDelta = toInt(b?.wins) - toInt(a?.wins);
   if (winDelta !== 0) return winDelta;
 
-  const buchholzDelta = (Number(b?.buchholz) || 0) - (Number(a?.buchholz) || 0);
-  if (buchholzDelta !== 0) return buchholzDelta;
+  const lossDelta = toInt(a?.losses) - toInt(b?.losses);
+  if (lossDelta !== 0) return lossDelta;
 
-  const pumbilityDelta = (parseInt(b?.pumbility, 10) || 0) - (parseInt(a?.pumbility, 10) || 0);
+  return 0;
+}
+
+function compareRoundRobinFallback(a, b) {
+  const pumbilityDelta = toInt(a?.pumbility) - toInt(b?.pumbility);
   if (pumbilityDelta !== 0) return pumbilityDelta;
 
-  const seedDelta = (parseInt(a?.seed_rank ?? a?.seed, 10) || 0) - (parseInt(b?.seed_rank ?? b?.seed, 10) || 0);
+  const seedDelta = toInt(a?.seed_rank ?? a?.seed) - toInt(b?.seed_rank ?? b?.seed);
   if (seedDelta !== 0) return seedDelta;
 
   return String(a?.name || '').localeCompare(String(b?.name || ''));
 }
 
-export function computeRoundRobinPlacings(players = []) {
-  return [...players]
+function buildHeadToHeadStats(tiedPlayers, matches = []) {
+  const tiedIds = new Set(tiedPlayers.map(getPlayerId).filter(Boolean));
+  const stats = new Map();
+  tiedIds.forEach((id) => {
+    stats.set(id, { wins: 0, losses: 0 });
+  });
+
+  for (const match of matches) {
+    if (!isRoundRobinTieBreakerMatch(match)) continue;
+    const p1Id = String(match.player1_id || '');
+    const p2Id = String(match.player2_id || '');
+    if (!tiedIds.has(p1Id) || !tiedIds.has(p2Id)) continue;
+
+    if (match.scores?.shared_win) {
+      stats.get(p1Id).wins += 1;
+      stats.get(p2Id).wins += 1;
+      continue;
+    }
+
+    const winnerId = String(match.winner_id || '');
+    if (!tiedIds.has(winnerId)) continue;
+
+    const loserId = winnerId === p1Id ? p2Id : p1Id;
+    stats.get(winnerId).wins += 1;
+    stats.get(loserId).losses += 1;
+  }
+
+  return stats;
+}
+
+function sortRoundRobinTieGroup(group, matches = []) {
+  if (group.length <= 1) return group;
+  const h2hStats = buildHeadToHeadStats(group, matches);
+
+  return [...group].sort((a, b) => {
+    const aStats = h2hStats.get(getPlayerId(a)) || { wins: 0, losses: 0 };
+    const bStats = h2hStats.get(getPlayerId(b)) || { wins: 0, losses: 0 };
+
+    const h2hWinDelta = bStats.wins - aStats.wins;
+    if (h2hWinDelta !== 0) return h2hWinDelta;
+
+    const h2hLossDelta = aStats.losses - bStats.losses;
+    if (h2hLossDelta !== 0) return h2hLossDelta;
+
+    return compareRoundRobinFallback(a, b);
+  });
+}
+
+export function sortRoundRobinPlayers(players = [], matches = []) {
+  const recordGroups = new Map();
+  [...players]
     .filter((player) => getPlayerId(player))
-    .sort(compareRoundRobinPlayers)
+    .forEach((player) => {
+      const key = `${toInt(player?.wins)}:${toInt(player?.losses)}`;
+      if (!recordGroups.has(key)) recordGroups.set(key, []);
+      recordGroups.get(key).push(player);
+    });
+
+  return [...recordGroups.values()]
+    .sort((a, b) => compareRoundRobinRecord(a[0], b[0]))
+    .flatMap((group) => sortRoundRobinTieGroup(group, matches));
+}
+
+export function computeRoundRobinPlacings(players = [], matches = []) {
+  return sortRoundRobinPlayers(players, matches)
     .map((player, index) => snapshotPlayer(player, index + 1));
+}
+
+function rerankRoundRobinPlacings(entries = [], matches = []) {
+  return sortRoundRobinPlayers(entries, matches)
+    .map((entry, index) => ({ ...entry, rank: index + 1 }));
 }
 
 export function computeGauntletPlacings(players = [], matches = []) {
@@ -110,13 +195,25 @@ export function getTournamentPlacings({ tournament, phases = [], players = [], m
     ? (normalizeSnapshots(latestCompletedPhase.placement_snapshots).placings || [])
     : (tournamentSnapshots.final || []);
 
-  const fallbackRoundRobin = computeRoundRobinPlacings(players);
+  const roundRobinMatches = latestRoundRobinPhase
+    ? matches.filter((match) => match?.phase_id === latestRoundRobinPhase.id)
+    : matches;
+  const finalMatches = latestCompletedPhase
+    ? matches.filter((match) => match?.phase_id === latestCompletedPhase.id)
+    : matches;
+
+  const fallbackRoundRobin = computeRoundRobinPlacings(players, roundRobinMatches);
   const fallbackGauntlet = computeGauntletPlacings(players, matches);
 
-  const resolvedRoundRobin = roundRobinPlacings.length > 0 ? roundRobinPlacings : fallbackRoundRobin;
+  const resolvedRoundRobin = roundRobinPlacings.length > 0
+    ? rerankRoundRobinPlacings(roundRobinPlacings, roundRobinMatches)
+    : fallbackRoundRobin;
   const resolvedGauntlet = gauntletPlacings.length > 0 ? gauntletPlacings : fallbackGauntlet;
+  const finalIsRoundRobin = latestCompletedPhase
+    ? (latestCompletedPhase.format === 'round_robin' || latestCompletedPhase.format === 'pools')
+    : resolvedGauntlet.length === 0;
   const resolvedFinal = finalPlacings.length > 0
-    ? finalPlacings
+    ? (finalIsRoundRobin ? rerankRoundRobinPlacings(finalPlacings, finalMatches) : finalPlacings)
     : (resolvedGauntlet.length > 0 ? resolvedGauntlet : resolvedRoundRobin);
 
   return {
