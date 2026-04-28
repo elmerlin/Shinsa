@@ -101,11 +101,11 @@ function ChartCard({ chart, viewerBest, onClick }) {
                   {entry.nationality && getCountryFlag(entry.nationality, 'h-[11px] inline-block mr-0.5')}
                   {entry.username}
                 </Link>
-                <div className="flex shrink-0 items-center gap-1.5">
+                <div className="flex shrink-0 items-center gap-1">
                   <span className={`text-xs font-display font-bold tabular-nums ${getGradeColor(entry.grade)}`}>
                     {(entry.score || 0).toLocaleString()}
                   </span>
-                  <WeeklyChallengeBonusChip entry={entry} />
+                  <WeeklyChallengeBonusChip entry={entry} compact />
                 </div>
               </div>
             );
@@ -116,15 +116,15 @@ function ChartCard({ chart, viewerBest, onClick }) {
       {/* Viewer's best */}
       {viewerBest && (
         <div className="border-t border-piu-gold/15 bg-piu-gold/[0.04] px-3 py-2">
-          <div className="flex items-center justify-between">
+          <div className="grid grid-cols-[min-content_minmax(0,1fr)] items-center gap-x-2 gap-y-1">
             <span className="text-[10px] font-display font-bold text-piu-gold/70">Your best</span>
-            <div className="flex items-center gap-1.5">
-              <span className={`text-xs font-display font-bold tabular-nums ${getGradeColor(viewerBest.grade)}`}>
+            <div className="min-w-0 justify-self-end text-right">
+              <span className={`block truncate text-xs font-display font-bold tabular-nums ${getGradeColor(viewerBest.grade)}`}>
                 {(viewerBest.score || 0).toLocaleString()}
                 <span className="text-white/30 ml-1 text-[10px]">{viewerBest.grade}</span>
               </span>
-              <WeeklyChallengeBonusChip entry={viewerBest} />
             </div>
+            <WeeklyChallengeBonusChip entry={viewerBest} compact className="col-start-2 justify-self-end" />
           </div>
         </div>
       )}
