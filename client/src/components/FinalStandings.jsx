@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import { getCountryFlag } from './PlayerRegistration';
 import { getAvatarUrl } from './AvatarPicker';
@@ -81,7 +81,7 @@ function PlacementPodium({ entries = [] }) {
   );
 }
 
-function PlacementList({ entries = [], variant }) {
+function PlacementList({ entries = [], variant, onEntryClick }) {
   return (
     <div className="overflow-hidden rounded-2xl border border-white/8 bg-zinc-950/70">
       <div className="grid grid-cols-[auto,1fr,auto] gap-3 border-b border-white/6 bg-white/[0.03] px-3 py-2 text-[10px] font-display font-bold uppercase tracking-[0.16em] text-zinc-500 sm:px-4">
@@ -94,14 +94,16 @@ function PlacementList({ entries = [], variant }) {
         const medal = MEDAL_CONFIG[entry.rank];
         const flag = getCountryFlag(entry.nationality);
         const avatar = entry.avatar ? getAvatarUrl(entry.avatar) : '';
-
-        return (
-          <div
-            key={entry.player_id || `${entry.rank}-${entry.name}`}
-            className={`grid grid-cols-[auto,1fr,auto] items-center gap-3 px-3 py-3 sm:px-4 ${
-              index > 0 ? 'border-t border-white/5' : ''
-            } ${medal ? 'bg-white/[0.02]' : 'hover:bg-white/[0.02]'} transition-colors`}
-          >
+        const interactive = typeof onEntryClick === 'function' && entry.player_id;
+        const rowClassName = `group grid w-full grid-cols-[auto,minmax(0,1fr),auto] items-center gap-3 px-3 py-3 text-left ${
+          index > 0 ? 'border-t border-white/5' : ''
+        } ${
+          medal ? 'bg-white/[0.02]' : ''
+        } ${
+          interactive ? 'cursor-pointer transition-colors hover:bg-white/[0.045] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-piu-accent/60' : ''
+        } sm:px-4`;
+        const rowContent = (
+          <>
             <div className={`min-w-[44px] font-display text-sm font-bold ${medal ? medal.color : 'text-zinc-500'}`}>
               {medal ? medal.icon : getDisplayRank(entry.rank)}
             </div>
@@ -115,9 +117,11 @@ function PlacementList({ entries = [], variant }) {
                 </div>
               )}
               <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  {flag && <span className="text-sm">{flag}</span>}
-                  <p className="truncate font-display font-bold text-white">{entry.name}</p>
+                <div className="flex min-w-0 items-center gap-2">
+                  {flag && <span className="shrink-0 text-sm">{flag}</span>}
+                  <p className={`truncate font-display font-bold text-white ${interactive ? 'group-hover:text-piu-accent' : ''}`}>
+                    {entry.name}
+                  </p>
                 </div>
                 {entry.skill_title && (
                   <p className="truncate text-xs text-zinc-500">{entry.skill_title}</p>
@@ -125,16 +129,42 @@ function PlacementList({ entries = [], variant }) {
               </div>
             </div>
 
-            <div className="text-right">
-              <p className={`font-display text-[11px] font-bold uppercase tracking-[0.12em] ${medal ? medal.color : 'text-zinc-400'}`}>
-                {getStageValue(entry, variant)}
-              </p>
-              {variant === 'roundRobin' && (
-                <p className="text-[11px] text-zinc-600">
-                  Pum {Number(entry.pumbility || 0).toLocaleString()}
+            <div className="flex items-center justify-end gap-2 text-right">
+              <div>
+                <p className={`font-display text-[11px] font-bold uppercase tracking-[0.12em] ${medal ? medal.color : 'text-zinc-400'}`}>
+                  {getStageValue(entry, variant)}
                 </p>
+                {variant === 'roundRobin' && (
+                  <p className="text-[11px] text-zinc-600">
+                    Pum {Number(entry.pumbility || 0).toLocaleString()}
+                  </p>
+                )}
+              </div>
+              {interactive && (
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/8 bg-white/[0.035] font-display text-sm font-bold text-zinc-500 transition-colors group-hover:border-piu-accent/25 group-hover:bg-piu-accent/10 group-hover:text-piu-accent" aria-hidden="true">
+                  &gt;
+                </span>
               )}
             </div>
+          </>
+        );
+
+        return interactive ? (
+          <button
+            key={entry.player_id || `${entry.rank}-${entry.name}`}
+            type="button"
+            onClick={() => onEntryClick(entry)}
+            className={rowClassName}
+            aria-label={`View ${entry.name} match history`}
+          >
+            {rowContent}
+          </button>
+        ) : (
+          <div
+            key={entry.player_id || `${entry.rank}-${entry.name}`}
+            className={rowClassName}
+          >
+            {rowContent}
           </div>
         );
       })}
@@ -142,7 +172,7 @@ function PlacementList({ entries = [], variant }) {
   );
 }
 
-function PlacementSnapshotPanel({ title, subtitle, entries, variant }) {
+function PlacementSnapshotPanel({ title, subtitle, entries, variant, onEntryClick }) {
   const tone = PANEL_TONES[variant];
 
   return (
@@ -164,17 +194,53 @@ function PlacementSnapshotPanel({ title, subtitle, entries, variant }) {
 
       <div className="space-y-4 px-4 py-4 sm:px-5">
         <PlacementPodium entries={entries} />
-        <PlacementList entries={entries} variant={variant} />
+        <PlacementList entries={entries} variant={variant} onEntryClick={onEntryClick} />
       </div>
     </section>
   );
 }
 
-export default function FinalStandings({ tournament = null, phases = [], players, matches }) {
+function getPhaseDisplayLabel(phase, fallback) {
+  return phase?.name || fallback;
+}
+
+export default function FinalStandings({ tournament = null, phases = [], players, matches, onPlayerClick }) {
   const { roundRobin, gauntlet, final } = getTournamentPlacings({ tournament, phases, players, matches });
   const hasGauntlet = gauntlet.length > 0;
   const champion = final[0] || null;
   const confettiFired = useRef(false);
+  const canOpenHistory = typeof onPlayerClick === 'function';
+  const playerMap = useMemo(() => {
+    const map = new Map();
+    players.forEach((player) => {
+      if (player?.id) map.set(player.id, player);
+    });
+    return map;
+  }, [players]);
+  const completedPhases = useMemo(
+    () => phases.filter((phase) => phase?.status === 'COMPLETED'),
+    [phases],
+  );
+  const latestRoundRobinPhase = useMemo(
+    () => [...completedPhases].reverse().find((phase) => phase.format === 'round_robin' || phase.format === 'pools') || null,
+    [completedPhases],
+  );
+  const latestGauntletPhase = useMemo(
+    () => [...completedPhases].reverse().find((phase) => phase.format === 'gauntlet') || null,
+    [completedPhases],
+  );
+
+  const openEntryHistory = (entry, variant) => {
+    if (!onPlayerClick || !entry?.player_id) return;
+    const player = playerMap.get(entry.player_id) || { ...entry, id: entry.player_id };
+    const phase = variant === 'gauntlet' ? latestGauntletPhase : latestRoundRobinPhase;
+    const fallbackLabel = variant === 'gauntlet' ? 'Gauntlet' : 'Round Robin';
+    onPlayerClick(player, {
+      phaseId: phase?.id || null,
+      phaseLabel: getPhaseDisplayLabel(phase, fallbackLabel),
+      format: phase?.format || (variant === 'gauntlet' ? 'gauntlet' : 'round_robin'),
+    });
+  };
 
   useEffect(() => {
     if (!champion || confettiFired.current) return;
@@ -254,6 +320,7 @@ export default function FinalStandings({ tournament = null, phases = [], players
         subtitle={hasGauntlet ? 'These results seeded the gauntlet ladder before the climb began.' : 'No gauntlet stage was played, so round robin locked the final order.'}
         entries={roundRobin}
         variant="roundRobin"
+        onEntryClick={canOpenHistory ? (entry) => openEntryHistory(entry, 'roundRobin') : null}
       />
 
       {gauntlet.length > 0 && (
@@ -262,6 +329,7 @@ export default function FinalStandings({ tournament = null, phases = [], players
           subtitle="Winner-stays-on gauntlet results settled the championship and the full finishing order."
           entries={gauntlet}
           variant="gauntlet"
+          onEntryClick={canOpenHistory ? (entry) => openEntryHistory(entry, 'gauntlet') : null}
         />
       )}
     </div>

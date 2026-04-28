@@ -226,7 +226,7 @@ export default function TournamentView() {
     ? matches.filter((match) => {
       if (playerHistory.phaseId) return match.phase_id === playerHistory.phaseId;
       if (playerHistory.format === 'gauntlet') return match.match_type === 'gauntlet';
-      if (playerHistory.format === 'round_robin') return match.match_type !== 'gauntlet';
+      if (playerHistory.format === 'round_robin' || playerHistory.format === 'pools') return match.match_type !== 'gauntlet';
       return true;
     })
     : [];
@@ -403,6 +403,7 @@ export default function TournamentView() {
             players={players}
             matches={matches}
             config={config}
+            onPlayerClick={openPlayerHistory}
           />
         )}
 
@@ -652,7 +653,14 @@ export default function TournamentView() {
       )}
 
       {activeTab === 'final' && (
-        <FinalStandings tournament={tournament} phases={phases} players={players} matches={matches} config={config} />
+        <FinalStandings
+          tournament={tournament}
+          phases={phases}
+          players={players}
+          matches={matches}
+          config={config}
+          onPlayerClick={openPlayerHistory}
+        />
       )}
 
       {activeTab === 'standings' && (

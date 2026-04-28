@@ -9,6 +9,7 @@ import FinalStandings from '../components/FinalStandings';
 import PoolsView from '../components/tournament/PoolsView';
 import BracketView from '../components/tournament/BracketView';
 import DoubleElimBracketView from '../components/tournament/DoubleElimBracketView';
+import PlayerPhaseHistoryModal from '../components/tournament/PlayerPhaseHistoryModal';
 import TournamentSkeleton from '../components/tournament/TournamentSkeleton';
 import {
   TournamentEmptyPanel,
@@ -39,6 +40,7 @@ export default function TournamentWatch() {
   const [loading, setLoading] = useState(true);
   const [selectedRound, setSelectedRound] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [playerHistory, setPlayerHistory] = useState(null);
   const activeTabRef = useRef(activeTab);
   const selectedRoundRef = useRef(selectedRound);
 
@@ -138,6 +140,16 @@ export default function TournamentWatch() {
     }
   };
 
+  const openPlayerHistory = useCallback((player, scope) => {
+    if (!player) return;
+    setPlayerHistory({
+      playerId: player.id,
+      phaseId: scope?.phaseId || null,
+      phaseLabel: scope?.phaseLabel || 'Phase',
+      format: scope?.format || 'round_robin',
+    });
+  }, []);
+
   if (loading) return <TournamentSkeleton />;
   if (!tournament) return <div className="text-center py-20 text-red-400">Tournament not found</div>;
 
@@ -146,6 +158,27 @@ export default function TournamentWatch() {
 
   // Noop for read-only
   const noop = () => {};
+  const historyPlayer = playerHistory
+    ? players.find((player) => player.id === playerHistory.playerId)
+    : null;
+  const historyMatches = playerHistory
+    ? matches.filter((match) => {
+      if (playerHistory.phaseId) return match.phase_id === playerHistory.phaseId;
+      if (playerHistory.format === 'gauntlet') return match.match_type === 'gauntlet';
+      if (playerHistory.format === 'round_robin' || playerHistory.format === 'pools') return match.match_type !== 'gauntlet';
+      return true;
+    })
+    : [];
+  const historyModal = historyPlayer ? (
+    <PlayerPhaseHistoryModal
+      player={historyPlayer}
+      players={players}
+      matches={historyMatches}
+      phaseLabel={playerHistory.phaseLabel}
+      phaseFormat={playerHistory.format}
+      onClose={() => setPlayerHistory(null)}
+    />
+  ) : null;
 
   // ── Phase-mode rendering ──
   if (isPhaseMode) {
@@ -174,6 +207,7 @@ export default function TournamentWatch() {
 
     return (
       <div className="max-w-6xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
+        {historyModal}
         <div className="mb-4 sm:mb-6">
           <TournamentHero
             tournament={tournament}
@@ -226,6 +260,7 @@ export default function TournamentWatch() {
             players={players}
             matches={matches}
             config={config}
+            onPlayerClick={openPlayerHistory}
           />
         )}
 
@@ -315,6 +350,7 @@ export default function TournamentWatch() {
 
   return (
     <div className="max-w-6xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
+      {historyModal}
       <div className="mb-4 sm:mb-6">
         <TournamentHero
           tournament={tournament}
@@ -406,7 +442,14 @@ export default function TournamentWatch() {
       )}
 
       {activeTab === 'final' && (
-        <FinalStandings tournament={tournament} phases={phases} players={players} matches={matches} config={config} />
+        <FinalStandings
+          tournament={tournament}
+          phases={phases}
+          players={players}
+          matches={matches}
+          config={config}
+          onPlayerClick={openPlayerHistory}
+        />
       )}
 
       {activeTab === 'standings' && (
