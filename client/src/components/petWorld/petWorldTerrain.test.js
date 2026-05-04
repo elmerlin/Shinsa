@@ -77,32 +77,32 @@ const COURTYARD_BUILDINGS_FIXTURE = [
 ];
 
 describe('analyzeTerrainGrid render paths', () => {
-  it('adds a short feeder from a building edge into a nearby placed path tile', () => {
+  it('does not auto-generate connector tiles around buildings', () => {
     const terrain = analyzeTerrainGrid(FEEDER_GRID_FIXTURE, FEEDER_BUILDINGS_FIXTURE);
 
-    assert.equal(terrain[3][2]?.isRenderConnector, true);
-    assert.equal(terrain[3][2]?.renderPathVariant, 'dirt');
     assert.equal(terrain[4][2]?.isPathBuilding, true);
-    assert.equal(countRenderedPathTiles(terrain), 2);
+    assert.equal(terrain[3][2]?.isRenderConnector || false, false);
+    assert.equal(terrain[3][2]?.renderPathVariant || null, null);
+    assert.equal(countRenderedPathTiles(terrain), 1);
   });
 
-  it('keeps courtyard grass open instead of inflating a whole plaza from a few path tiles', () => {
+  it('renders only the path tiles the player explicitly placed', () => {
     const terrain = analyzeTerrainGrid(COURTYARD_GRID_FIXTURE, COURTYARD_BUILDINGS_FIXTURE);
 
     assert.equal(terrain[4][3]?.renderPathVariant, 'dirt');
+    assert.equal(terrain[3][8]?.renderPathVariant, 'stone');
+    assert.equal(countRenderedPathTiles(terrain), 8);
+  });
+
+  it('leaves grass tiles around buildings untouched without explicit paths', () => {
+    const terrain = analyzeTerrainGrid(COURTYARD_GRID_FIXTURE, COURTYARD_BUILDINGS_FIXTURE);
+
+    assert.equal(terrain[3][5]?.renderPathVariant || null, null);
+    assert.equal(terrain[4][2]?.renderPathVariant || null, null);
+    assert.equal(terrain[3][7]?.renderPathVariant || null, null);
+    assert.equal(terrain[5][10]?.renderPathVariant || null, null);
     assert.equal(terrain[4][5]?.renderPathVariant || null, null);
     assert.equal(terrain[5][5]?.renderPathVariant || null, null);
     assert.equal(terrain[7][10]?.renderPathVariant || null, null);
-    assert.equal(terrain[3][8]?.renderPathVariant, 'stone');
-    assert.equal(countRenderedPathTiles(terrain), 17);
-  });
-
-  it('still lets nearby homes and shops get narrow feeders into mixed dirt and stone lanes', () => {
-    const terrain = analyzeTerrainGrid(COURTYARD_GRID_FIXTURE, COURTYARD_BUILDINGS_FIXTURE);
-
-    assert.equal(terrain[3][5]?.renderPathVariant, 'dirt');
-    assert.equal(terrain[4][2]?.renderPathVariant, 'dirt');
-    assert.equal(terrain[3][7]?.renderPathVariant, 'stone');
-    assert.equal(terrain[5][10]?.renderPathVariant, 'stone');
   });
 });

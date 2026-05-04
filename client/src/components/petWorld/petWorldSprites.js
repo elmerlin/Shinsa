@@ -106,7 +106,7 @@ const RENDER_CONNECTOR_EDGE_PENALTIES = {
   north: 0.75,
 };
 
-const MAX_RENDER_CONNECTOR_DISTANCE = 4;
+const MAX_RENDER_CONNECTOR_DISTANCE = 0;
 
 function clamp01(value) {
   return Math.max(0, Math.min(1, value));
@@ -316,16 +316,8 @@ function fillMicroPathHoles(occupancy, baseVariantGrid) {
     const s = getVariant(x, y + 1) === variant;
     const e = getVariant(x + 1, y) === variant;
     const w = getVariant(x - 1, y) === variant;
-    const ne = getVariant(x + 1, y - 1) === variant;
-    const nw = getVariant(x - 1, y - 1) === variant;
-    const se = getVariant(x + 1, y + 1) === variant;
-    const sw = getVariant(x - 1, y + 1) === variant;
     const cardinals = (n ? 1 : 0) + (s ? 1 : 0) + (e ? 1 : 0) + (w ? 1 : 0);
-    const quadrants = (n || w || nw ? 1 : 0)
-      + (n || e || ne ? 1 : 0)
-      + (s || w || sw ? 1 : 0)
-      + (s || e || se ? 1 : 0);
-    return cardinals >= 4 || (cardinals >= 3 && quadrants >= 4);
+    return cardinals >= 4;
   };
 
   for (let y = 0; y < height; y += 1) {

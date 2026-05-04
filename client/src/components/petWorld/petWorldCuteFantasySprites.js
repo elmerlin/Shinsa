@@ -947,8 +947,8 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
       const nw = matches('nw');
       const se = matches('se');
       const sw = matches('sw');
-      const strip = Math.max(3, Math.round(size * 0.34));
-      const corner = Math.max(strip + 1, Math.round(size * 0.44));
+      const strip = Math.max(2, Math.round(size * 0.12));
+      const corner = Math.max(strip + 1, Math.round(size * 0.18));
       let clipped = false;
       ctx.save();
       ctx.beginPath();
