@@ -89,14 +89,22 @@ describe('analyzeTerrainGrid render paths', () => {
   it('renders only the path tiles the player explicitly placed', () => {
     const terrain = analyzeTerrainGrid(COURTYARD_GRID_FIXTURE, COURTYARD_BUILDINGS_FIXTURE);
 
-    assert.equal(terrain[4][3]?.renderPathVariant, 'dirt');
-    assert.equal(terrain[3][8]?.renderPathVariant, 'stone');
+    assert.equal(terrain[3][2]?.renderPathVariant, 'dirt');
+    assert.equal(terrain[3][3]?.renderPathVariant, 'dirt');
+    assert.equal(terrain[3][4]?.renderPathVariant, 'dirt');
+    assert.equal(terrain[3][6]?.renderPathVariant, 'stone');
+    assert.equal(terrain[4][6]?.renderPathVariant, 'stone');
+    assert.equal(terrain[4][7]?.renderPathVariant, 'stone');
+    assert.equal(terrain[4][8]?.renderPathVariant, 'stone');
+    assert.equal(terrain[4][9]?.renderPathVariant, 'stone');
     assert.equal(countRenderedPathTiles(terrain), 8);
   });
 
   it('leaves grass tiles around buildings untouched without explicit paths', () => {
     const terrain = analyzeTerrainGrid(COURTYARD_GRID_FIXTURE, COURTYARD_BUILDINGS_FIXTURE);
 
+    assert.equal(terrain[4][3]?.renderPathVariant || null, null);
+    assert.equal(terrain[3][8]?.renderPathVariant || null, null);
     assert.equal(terrain[3][5]?.renderPathVariant || null, null);
     assert.equal(terrain[4][2]?.renderPathVariant || null, null);
     assert.equal(terrain[3][7]?.renderPathVariant || null, null);

@@ -996,19 +996,11 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
     if (hasPathBuilding) {
       // Path building: draw using own variant. Opposite-variant neighbours
       // render as grass from the perspective of this tile, so stone/dirt
-      // meet with a clean seam at the tile boundary.
+      // meet with a clean seam at the tile boundary. Render placed tiles
+      // as full path (idx 15) so the player sees exactly what they painted
+      // — no organic bleed into adjacent grass cells.
       const variant = ownVariant || 'dirt';
-      const sameIdx = wangIdxForVariant(variant);
-      // Fully-inside path cells still render as all-path (idx 15).
-      const idx = sameIdx > 0 ? sameIdx : 15;
-      drawPathTile(variant, idx);
-    } else if (!isShoreTransition && hasGrassPathTransition) {
-      // For normal grass next to real path tiles or short render-only
-      // feedways, paint only clipped shoulders. This restores the soft
-      // organic edges without visually flood-filling nearby grass cells.
-      for (const variant of ['dirt', 'stone']) {
-        drawGrassPathShoulders(variant);
-      }
+      drawPathTile(variant, 15);
     } else if (isShoreTransition) {
       // Keep shore rendering dominant. Render-only path connectors should
       // stay on land rather than bleeding into shoreline quadrants.
