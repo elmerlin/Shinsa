@@ -994,13 +994,14 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
     };
 
     if (hasPathBuilding) {
-      // Path building: draw using own variant. Opposite-variant neighbours
-      // render as grass from the perspective of this tile, so stone/dirt
-      // meet with a clean seam at the tile boundary. Render placed tiles
-      // as full path (idx 15) so the player sees exactly what they painted
-      // — no organic bleed into adjacent grass cells.
+      // Path building: use the wang lookup so the placed tile's edges
+      // round off where they meet grass (organic corners). Adjacent grass
+      // tiles deliberately render with NO shoulder bleed, so the painted
+      // footprint matches what the player sees 1:1.
       const variant = ownVariant || 'dirt';
-      drawPathTile(variant, 15);
+      const sameIdx = wangIdxForVariant(variant);
+      const idx = sameIdx > 0 ? sameIdx : 15;
+      drawPathTile(variant, idx);
     } else if (isShoreTransition) {
       // Keep shore rendering dominant. Render-only path connectors should
       // stay on land rather than bleeding into shoreline quadrants.
