@@ -995,13 +995,21 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
 
     if (hasPathBuilding) {
       // Path building: use the wang lookup so the placed tile's edges
-      // round off where they meet grass (organic corners). Adjacent grass
-      // tiles deliberately render with NO shoulder bleed, so the painted
-      // footprint matches what the player sees 1:1.
+      // round off where they meet grass. The wang atlas is designed
+      // symmetrically — adjacent grass tiles paint the matching corner
+      // (see drawGrassPathShoulders below) so the transition completes.
       const variant = ownVariant || 'dirt';
       const sameIdx = wangIdxForVariant(variant);
       const idx = sameIdx > 0 ? sameIdx : 15;
       drawPathTile(variant, idx);
+    } else if (!isShoreTransition && hasGrassPathTransition) {
+      // Grass tile adjacent to a placed path: paint a thin shoulder of
+      // path texture so the wang corner transitions on the placed tile
+      // are visually completed. Without this the placed tile shows
+      // jagged half-grass artifacts on its outer edges.
+      for (const variant of ['dirt', 'stone']) {
+        drawGrassPathShoulders(variant);
+      }
     } else if (isShoreTransition) {
       // Keep shore rendering dominant. Render-only path connectors should
       // stay on land rather than bleeding into shoreline quadrants.
