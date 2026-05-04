@@ -224,6 +224,8 @@ function NotificationBell() {
     return 'Refresh system push for this PWA install.';
   })();
 
+  const pushNeedsAction = pushStatus?.supported !== false && !pushStatus?.active;
+
   useEffect(() => {
     function handleClick(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
     document.addEventListener('mousedown', handleClick);
@@ -253,7 +255,7 @@ function NotificationBell() {
           <div className="flex items-center justify-between gap-3 px-3 py-2 border-b border-piu-border/50">
             <span className="font-display font-bold text-xs text-gray-400">{t('app.notifications.title')}</span>
             <div className="flex items-center gap-3">
-              {pushStatus?.supported !== false && (
+              {pushNeedsAction && (
                 <button
                   type="button"
                   onClick={(event) => {
@@ -264,7 +266,7 @@ function NotificationBell() {
                   title={pushStatusText}
                   className="text-[10px] text-piu-accent hover:underline disabled:text-gray-600 disabled:no-underline disabled:cursor-not-allowed"
                 >
-                  {pushStatus?.syncing ? 'Refreshing' : 'Re-enable push'}
+                  {pushStatus?.syncing ? 'Refreshing' : 'Enable push'}
                 </button>
               )}
               {unreadCount > 0 && (
