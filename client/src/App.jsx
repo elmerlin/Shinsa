@@ -250,11 +250,27 @@ function NotificationBell() {
 
       {open && (
         <div className="absolute right-0 top-full mt-2 w-72 sm:w-80 max-h-96 overflow-y-auto bg-piu-card border border-piu-border rounded-xl shadow-2xl z-50">
-          <div className="flex items-center justify-between px-3 py-2 border-b border-piu-border/50">
+          <div className="flex items-center justify-between gap-3 px-3 py-2 border-b border-piu-border/50">
             <span className="font-display font-bold text-xs text-gray-400">{t('app.notifications.title')}</span>
-            {unreadCount > 0 && (
-              <button onClick={markAllRead} className="text-[10px] text-piu-accent hover:underline">{t('app.notifications.mark_all_read')}</button>
-            )}
+            <div className="flex items-center gap-3">
+              {pushStatus?.supported !== false && (
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    reenablePushNotifications?.();
+                  }}
+                  disabled={pushStatus?.syncing}
+                  title={pushStatusText}
+                  className="text-[10px] text-piu-accent hover:underline disabled:text-gray-600 disabled:no-underline disabled:cursor-not-allowed"
+                >
+                  {pushStatus?.syncing ? 'Refreshing' : 'Re-enable push'}
+                </button>
+              )}
+              {unreadCount > 0 && (
+                <button onClick={markAllRead} className="text-[10px] text-piu-accent hover:underline">{t('app.notifications.mark_all_read')}</button>
+              )}
+            </div>
           </div>
 
           {invitationCount > 0 && (
@@ -269,28 +285,6 @@ function NotificationBell() {
               </span>
             </Link>
           )}
-
-          <div className="px-3 py-2.5 border-b border-piu-border/30 bg-piu-dark/25">
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-[10px] font-display font-bold uppercase tracking-wide text-gray-400">System push</p>
-                <p className={`mt-0.5 text-[10px] leading-snug ${pushStatus?.error ? 'text-red-300' : pushStatus?.active ? 'text-emerald-300' : 'text-gray-500'}`}>
-                  {pushStatusText}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  reenablePushNotifications?.();
-                }}
-                disabled={pushStatus?.syncing || pushStatus?.supported === false}
-                className="shrink-0 rounded-lg border border-piu-accent/30 bg-piu-accent/10 px-2.5 py-1.5 text-[10px] font-display font-bold text-piu-accent transition-colors hover:bg-piu-accent/20 disabled:cursor-not-allowed disabled:border-gray-700 disabled:bg-gray-900/40 disabled:text-gray-600"
-              >
-                {pushStatus?.syncing ? 'Refreshing' : 'Re-enable'}
-              </button>
-            </div>
-          </div>
 
           {notifications.length === 0 && invitationCount === 0 && (
             <p className="text-center text-gray-500 text-xs py-6">{t('app.notifications.none')}</p>
