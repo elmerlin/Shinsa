@@ -994,21 +994,56 @@ export function drawCuteFantasyGround(ctx, biome, tile, x, y, size, neighbors, s
     };
 
     if (hasPathBuilding) {
-      // Path building: use the wang lookup so the placed tile's edges
-      // round off where they meet grass. The wang atlas is designed
-      // symmetrically — adjacent grass tiles paint the matching corner
-      // (see drawGrassPathShoulders below) so the transition completes.
+      // Render placed path tiles as full cobble (idx 15), with the OUTER
+      // corners of the painted region softly rounded. Inner corners
+      // between two connected path tiles stay sharp so the path forms a
+      // continuous shape. Adjacent grass tiles render no path texture,
+      // so the visible cobble footprint matches the painted footprint.
       const variant = ownVariant || 'dirt';
-      const sameIdx = wangIdxForVariant(variant);
-      const idx = sameIdx > 0 ? sameIdx : 15;
-      drawPathTile(variant, idx);
-    } else if (!isShoreTransition && hasGrassPathTransition) {
-      // Grass tile adjacent to a placed path: paint a thin shoulder of
-      // path texture so the wang corner transitions on the placed tile
-      // are visually completed. Without this the placed tile shows
-      // jagged half-grass artifacts on its outer edges.
-      for (const variant of ['dirt', 'stone']) {
-        drawGrassPathShoulders(variant);
+      const matchesPath = (dir) => neighbors[`${dir}_pathVariant`] === variant;
+      const outerNW = !matchesPath('n') && !matchesPath('w') && !matchesPath('nw');
+      const outerNE = !matchesPath('n') && !matchesPath('e') && !matchesPath('ne');
+      const outerSW = !matchesPath('s') && !matchesPath('w') && !matchesPath('sw');
+      const outerSE = !matchesPath('s') && !matchesPath('e') && !matchesPath('se');
+      if (!outerNW && !outerNE && !outerSW && !outerSE) {
+        drawPathTile(variant, 15);
+      } else {
+        const r = Math.max(2, Math.round(size * 0.22));
+        const x0 = x;
+        const y0 = y;
+        const x1 = x + size;
+        const y1 = y + size;
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(outerNW ? x0 + r : x0, y0);
+        if (outerNE) {
+          ctx.lineTo(x1 - r, y0);
+          ctx.quadraticCurveTo(x1, y0, x1, y0 + r);
+        } else {
+          ctx.lineTo(x1, y0);
+        }
+        if (outerSE) {
+          ctx.lineTo(x1, y1 - r);
+          ctx.quadraticCurveTo(x1, y1, x1 - r, y1);
+        } else {
+          ctx.lineTo(x1, y1);
+        }
+        if (outerSW) {
+          ctx.lineTo(x0 + r, y1);
+          ctx.quadraticCurveTo(x0, y1, x0, y1 - r);
+        } else {
+          ctx.lineTo(x0, y1);
+        }
+        if (outerNW) {
+          ctx.lineTo(x0, y0 + r);
+          ctx.quadraticCurveTo(x0, y0, x0 + r, y0);
+        } else {
+          ctx.lineTo(x0, y0);
+        }
+        ctx.closePath();
+        ctx.clip();
+        drawPathTile(variant, 15);
+        ctx.restore();
       }
     } else if (isShoreTransition) {
       // Keep shore rendering dominant. Render-only path connectors should
