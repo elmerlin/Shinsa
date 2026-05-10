@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HamburgerButton } from '@/components/hamburger-button';
+import { IconSymbol } from '@/components/ui/icon-symbol';
 import { LiveSessionCard } from '@/components/live-session-card';
 import { useTheme } from '@/contexts/theme-context';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
@@ -292,6 +293,12 @@ export default function SocialScreen() {
       <View style={[s.header, { paddingTop: insets.top + 12 }]}>
         <HamburgerButton />
         <Text style={s.heading}>Feed</Text>
+        <Pressable
+          onPress={() => router.push('/posts')}
+          hitSlop={12}
+          style={({ pressed }) => [s.composeBtn, pressed && { opacity: 0.6 }]}>
+          <IconSymbol name="plus" size={22} color={theme.accent} />
+        </Pressable>
       </View>
 
       {isLoading ? (
@@ -332,7 +339,8 @@ export default function SocialScreen() {
 const makeStyles = (t: ThemeColors) => ({
   container: { flex: 1, backgroundColor: t.bg },
   header: { paddingHorizontal: 16, paddingBottom: 12, flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12 },
-  heading: { fontSize: 28, fontWeight: '800' as const, color: t.text, letterSpacing: 2 },
+  heading: { flex: 1, fontSize: 28, fontWeight: '800' as const, color: t.text, letterSpacing: 2 },
+  composeBtn: { padding: 4 },
   listContent: { padding: 16, paddingBottom: 80 },
   separator: { height: 12 },
   center: { flex: 1, alignItems: 'center' as const, justifyContent: 'center' as const, padding: 32 },

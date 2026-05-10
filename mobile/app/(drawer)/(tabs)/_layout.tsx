@@ -1,32 +1,9 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
 
 import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useTheme } from '@/contexts/theme-context';
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function PostsFabButton(props: any) {
-  const { theme } = useTheme();
-  return (
-    <Pressable
-      onPress={props.onPress}
-      style={({ pressed }) => [styles.fabContainer, pressed && { opacity: 0.85 }]}>
-      <View
-        style={[
-          styles.fab,
-          {
-            backgroundColor: theme.accent,
-            shadowColor: theme.accent,
-            borderColor: theme.bg,
-          },
-        ]}>
-        <IconSymbol name="paperplane.fill" size={26} color={theme.textOnAccent} />
-      </View>
-    </Pressable>
-  );
-}
 
 export default function TabLayout() {
   const { theme } = useTheme();
@@ -55,11 +32,10 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="posts"
+        name="songs"
         options={{
-          title: '',
-          tabBarLabel: () => null,
-          tabBarButton: (props) => <PostsFabButton {...props} />,
+          title: 'Songs',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="music.note" color={color} />,
         }}
       />
       <Tabs.Screen
@@ -79,25 +55,3 @@ export default function TabLayout() {
     </Tabs>
   );
 }
-
-const styles = StyleSheet.create({
-  fabContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 50,
-  },
-  fab: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: -22,
-    borderWidth: 4,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-});
