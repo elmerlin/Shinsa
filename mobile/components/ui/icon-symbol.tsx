@@ -19,6 +19,10 @@ const MAPPING = {
   'music.note': 'music-note',
   'person.fill': 'person',
   'paperplane.fill': 'send',
+  'line.horizontal.3': 'menu',
+  'magnifyingglass': 'search',
+  'bell.fill': 'notifications',
+  'plus': 'add',
   'chevron.left.forwardslash.chevron.right': 'code',
   'chevron.right': 'chevron-right',
 } as IconMapping;

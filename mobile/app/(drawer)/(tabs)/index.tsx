@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { HamburgerButton } from '@/components/hamburger-button';
 import { PumpShinsaLogo } from '@/components/pump-shinsa-logo';
 import { useTheme } from '@/contexts/theme-context';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
@@ -93,8 +94,12 @@ export default function HomeScreen() {
       <ScrollView
         contentContainerStyle={[s.scroll, { paddingTop: insets.top + 16 }]}
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={theme.spinner} />}>
-        <View style={s.brand}>
-          <PumpShinsaLogo variant="horizontal" size={44} />
+        <View style={s.brandRow}>
+          <HamburgerButton />
+          <View style={s.brandCenter}>
+            <PumpShinsaLogo variant="horizontal" size={40} />
+          </View>
+          <View style={s.brandSpacer} />
         </View>
 
         {isLoading && (
@@ -152,7 +157,9 @@ export default function HomeScreen() {
 const makeStyles = (t: ThemeColors) => ({
   container: { flex: 1, backgroundColor: t.bg },
   scroll: { paddingHorizontal: 20, paddingBottom: 80, gap: 24 },
-  brand: { alignItems: 'center' as const, marginBottom: 8 },
+  brandRow: { flexDirection: 'row' as const, alignItems: 'center' as const, marginBottom: 8 },
+  brandCenter: { flex: 1, alignItems: 'center' as const },
+  brandSpacer: { width: 32 },
   center: { padding: 32, alignItems: 'center' as const },
   errorBox: {
     backgroundColor: t.dangerBg,

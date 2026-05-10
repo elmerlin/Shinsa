@@ -3,6 +3,7 @@ import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { HamburgerButton } from '@/components/hamburger-button';
 import { LiveSessionCard } from '@/components/live-session-card';
 import { useTheme } from '@/contexts/theme-context';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
@@ -289,6 +290,7 @@ export default function SocialScreen() {
   return (
     <View style={s.container}>
       <View style={[s.header, { paddingTop: insets.top + 12 }]}>
+        <HamburgerButton />
         <Text style={s.heading}>Feed</Text>
       </View>
 
@@ -329,7 +331,7 @@ export default function SocialScreen() {
 
 const makeStyles = (t: ThemeColors) => ({
   container: { flex: 1, backgroundColor: t.bg },
-  header: { paddingHorizontal: 20, paddingBottom: 12 },
+  header: { paddingHorizontal: 16, paddingBottom: 12, flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12 },
   heading: { fontSize: 28, fontWeight: '800' as const, color: t.text, letterSpacing: 2 },
   listContent: { padding: 16, paddingBottom: 80 },
   separator: { height: 12 },

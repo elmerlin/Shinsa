@@ -1,6 +1,7 @@
 import { Image } from 'expo-image';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { HamburgerButton } from '@/components/hamburger-button';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme, type ThemePreference } from '@/contexts/theme-context';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
@@ -38,6 +39,9 @@ export default function ProfileScreen() {
   return (
     <View style={s.container}>
       <ScrollView contentContainerStyle={[s.scroll, { paddingTop: insets.top + 16 }]}>
+        <View style={s.topBar}>
+          <HamburgerButton />
+        </View>
         <View style={s.header}>
           {avatarUrl ? (
             <Image source={{ uri: avatarUrl }} style={s.avatar} contentFit="cover" transition={200} />
@@ -87,7 +91,8 @@ export default function ProfileScreen() {
 
 const makeStyles = (t: ThemeColors) => ({
   container: { flex: 1, backgroundColor: t.bg },
-  scroll: { padding: 20, gap: 24, paddingBottom: 60 },
+  scroll: { padding: 20, gap: 16, paddingBottom: 60 },
+  topBar: { flexDirection: 'row' as const, alignItems: 'center' as const, marginBottom: 8 },
   header: { alignItems: 'center' as const, gap: 8 },
   avatar: { width: 96, height: 96, borderRadius: 48, backgroundColor: t.surfaceMuted },
   avatarFallback: { alignItems: 'center' as const, justifyContent: 'center' as const },
