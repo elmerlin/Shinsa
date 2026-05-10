@@ -1,5 +1,5 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 
 type ChartMode = 'Single' | 'Double' | 'CoOp' | 'UCS' | string;
 
@@ -17,9 +17,9 @@ const MODE_GRADIENTS: Record<string, readonly [string, string, string]> = {
 };
 
 const SIZES = {
-  xs: { dim: 22, font: 9 },
-  sm: { dim: 26, font: 10 },
-  md: { dim: 32, font: 12 },
+  xs: { dim: 18, font: 8 },
+  sm: { dim: 22, font: 10 },
+  md: { dim: 28, font: 12 },
 } as const;
 
 function getModeShort(mode?: string): string {
@@ -77,8 +77,14 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.4)',
   },
   label: {
-    fontWeight: '900',
+    fontWeight: '700',
     color: '#fff',
-    letterSpacing: -0.4,
+    fontVariant: ['tabular-nums'],
+    letterSpacing: 0,
+    fontFamily: Platform.select({
+      ios: 'Avenir Next',
+      android: 'sans-serif-medium',
+      default: 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
+    }),
   },
 });

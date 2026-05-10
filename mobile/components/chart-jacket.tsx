@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 
 type ChartMode = 'Single' | 'Double' | 'CoOp' | 'UCS' | string;
 export type ChartJacketSize = 'xs' | 'sm' | 'md' | 'wide';
@@ -26,10 +26,10 @@ interface Dim {
 }
 
 const SIZES: Record<ChartJacketSize, Dim> = {
-  xs: { w: 56, h: 32, badgeSize: 18, fontSize: 10, radius: 6 },
-  sm: { w: 72, h: 42, badgeSize: 22, fontSize: 12, radius: 7 },
-  md: { w: 96, h: 56, badgeSize: 28, fontSize: 14, radius: 8 },
-  wide: { w: 128, h: 74, badgeSize: 32, fontSize: 16, radius: 10 },
+  xs: { w: 56, h: 32, badgeSize: 14, fontSize: 8, radius: 6 },
+  sm: { w: 72, h: 42, badgeSize: 18, fontSize: 10, radius: 7 },
+  md: { w: 96, h: 56, badgeSize: 22, fontSize: 12, radius: 8 },
+  wide: { w: 128, h: 74, badgeSize: 26, fontSize: 14, radius: 10 },
 };
 
 // Mode → 3-stop gradient (top → middle → bottom)
@@ -138,8 +138,14 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
   },
   badgeText: {
-    fontWeight: '900',
+    fontWeight: '700',
     color: '#fff',
-    letterSpacing: -0.4,
+    fontVariant: ['tabular-nums'],
+    letterSpacing: 0,
+    fontFamily: Platform.select({
+      ios: 'Avenir Next',
+      android: 'sans-serif-medium',
+      default: 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
+    }),
   },
 });
