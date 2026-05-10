@@ -16,7 +16,7 @@ function formatDate(input?: string): string {
 
 const PHASE_COLORS: Record<string, { bg: string; fg: string }> = {
   COMPLETED: { bg: 'rgba(148,163,184,0.15)', fg: '#94a3b8' },
-  DRAW: { bg: 'rgba(59,130,246,0.15)', fg: '#60a5fa' },
+  DRAW: { bg: 'rgba(255,51,102,0.15)', fg: '#ff6b8a' },
   PLAYING: { bg: 'rgba(34,197,94,0.15)', fg: '#4ade80' },
   PENDING: { bg: 'rgba(234,179,8,0.15)', fg: '#facc15' },
 };
@@ -63,7 +63,7 @@ export default function TournamentsScreen() {
 
       {isLoading ? (
         <View style={styles.center}>
-          <ActivityIndicator color="#3b82f6" />
+          <ActivityIndicator color="#ff3366" />
         </View>
       ) : isError ? (
         <View style={styles.center}>
@@ -82,7 +82,7 @@ export default function TournamentsScreen() {
           contentContainerStyle={{ paddingBottom: 80 }}
           ItemSeparatorComponent={() => <View style={styles.separator} />}
           ListEmptyComponent={() => <Text style={styles.empty}>No active tournaments</Text>}
-          refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#3b82f6" />}
+          refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#ff3366" />}
         />
       )}
     </ThemedView>
@@ -94,16 +94,16 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: 20, paddingBottom: 12 },
   heading: { fontSize: 28, fontWeight: '700', letterSpacing: 4 },
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 16, gap: 12 },
-  rowPressed: { backgroundColor: 'rgba(59,130,246,0.08)' },
+  rowPressed: { backgroundColor: 'rgba(255,51,102,0.08)' },
   avatarPlaceholder: {
     width: 48,
     height: 48,
     borderRadius: 8,
-    backgroundColor: 'rgba(59,130,246,0.15)',
+    backgroundColor: 'rgba(255,51,102,0.15)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarLetter: { fontSize: 22, fontWeight: '700', color: '#60a5fa' },
+  avatarLetter: { fontSize: 22, fontWeight: '700', color: '#ff6b8a' },
   rowMain: { flex: 1, gap: 2, minWidth: 0 },
   rowTitle: { fontSize: 15, fontWeight: '600' },
   rowMeta: { fontSize: 12, opacity: 0.55 },

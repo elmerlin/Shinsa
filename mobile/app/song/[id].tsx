@@ -33,7 +33,7 @@ export default function ChartDetailScreen() {
       <ScrollView contentContainerStyle={styles.scroll}>
         {isLoading && (
           <View style={styles.center}>
-            <ActivityIndicator color="#3b82f6" />
+            <ActivityIndicator color="#ff3366" />
           </View>
         )}
 
@@ -131,7 +131,7 @@ const styles = StyleSheet.create({
     color: '#cbd5e1',
     fontWeight: '600',
   },
-  levelChip: { backgroundColor: 'rgba(59,130,246,0.2)', color: '#60a5fa' },
+  levelChip: { backgroundColor: 'rgba(255,51,102,0.2)', color: '#ff6b8a' },
   section: { gap: 8 },
   sectionHeader: {
     flexDirection: 'row',
@@ -141,7 +141,7 @@ const styles = StyleSheet.create({
   sectionCount: { fontSize: 12, opacity: 0.5 },
   scoreCard: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(148,163,184,0.06)',
+    backgroundColor: '#141428',
     borderRadius: 12,
     padding: 16,
     gap: 12,

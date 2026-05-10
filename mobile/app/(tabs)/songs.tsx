@@ -72,7 +72,7 @@ export default function SongsScreen() {
 
       {isLoading ? (
         <View style={styles.center}>
-          <ActivityIndicator color="#3b82f6" />
+          <ActivityIndicator color="#ff3366" />
         </View>
       ) : isError ? (
         <View style={styles.center}>
@@ -115,7 +115,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     gap: 12,
   },
-  rowPressed: { backgroundColor: 'rgba(59,130,246,0.08)' },
+  rowPressed: { backgroundColor: 'rgba(255,51,102,0.08)' },
   jacket: { width: 48, height: 48, borderRadius: 6, backgroundColor: '#1e293b' },
   jacketPlaceholder: { backgroundColor: '#1e293b' },
   rowMain: { flex: 1, gap: 2, minWidth: 0 },
@@ -139,8 +139,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
-    backgroundColor: 'rgba(59,130,246,0.15)',
-    color: '#60a5fa',
+    backgroundColor: 'rgba(255,51,102,0.15)',
+    color: '#ff6b8a',
     minWidth: 28,
     textAlign: 'center',
   },

@@ -1,4 +1,11 @@
-import { ApiClient, createAuthApi, createDashboardApi, createSongsApi, createTournamentsApi } from '@shared/api';
+import {
+  ApiClient,
+  createAuthApi,
+  createDashboardApi,
+  createSocialApi,
+  createSongsApi,
+  createTournamentsApi,
+} from '@shared/api';
 import { getToken } from '@/lib/storage';
 
 const baseUrl = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3001';
@@ -12,5 +19,6 @@ export const authApi = createAuthApi(apiClient);
 export const dashboardApi = createDashboardApi(apiClient);
 export const songsApi = createSongsApi(apiClient);
 export const tournamentsApi = createTournamentsApi(apiClient);
+export const socialApi = createSocialApi(apiClient);
 
 export const apiBaseUrl = baseUrl.replace(/\/$/, '');

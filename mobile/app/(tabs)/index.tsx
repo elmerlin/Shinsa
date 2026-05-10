@@ -89,12 +89,12 @@ export default function HomeScreen() {
     <ThemedView style={styles.container}>
       <ScrollView
         contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 16 }]}
-        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#3b82f6" />}>
+        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#ff3366" />}>
         <ThemedText type="title" style={styles.heading}>Shinsa</ThemedText>
 
         {isLoading && (
           <View style={styles.center}>
-            <ActivityIndicator color="#3b82f6" />
+            <ActivityIndicator color="#ff3366" />
           </View>
         )}
 
@@ -157,7 +157,7 @@ const styles = StyleSheet.create({
   },
   sectionCount: { fontSize: 12, opacity: 0.5 },
   sectionBody: {
-    backgroundColor: 'rgba(148,163,184,0.06)',
+    backgroundColor: '#141428',
     borderRadius: 12,
     overflow: 'hidden',
   },
@@ -170,7 +170,7 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(148,163,184,0.15)',
     gap: 12,
   },
-  rowPressed: { backgroundColor: 'rgba(59,130,246,0.08)' },
+  rowPressed: { backgroundColor: 'rgba(255,51,102,0.08)' },
   rowMain: { flex: 1, gap: 2, minWidth: 0 },
   rowTitle: { fontSize: 15, fontWeight: '600' },
   rowMeta: { fontSize: 12, opacity: 0.55 },
@@ -179,8 +179,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
-    backgroundColor: 'rgba(59,130,246,0.15)',
-    color: '#60a5fa',
+    backgroundColor: 'rgba(255,51,102,0.15)',
+    color: '#ff6b8a',
     fontWeight: '600',
   },
   empty: {
@@ -188,7 +188,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     opacity: 0.5,
     textAlign: 'center',
-    backgroundColor: 'rgba(148,163,184,0.06)',
+    backgroundColor: '#141428',
     borderRadius: 12,
   },
 });

@@ -133,7 +133,7 @@ export default function TournamentDetailScreen() {
       <ScrollView contentContainerStyle={styles.scroll}>
         {tournamentQuery.isLoading && (
           <View style={styles.center}>
-            <ActivityIndicator color="#3b82f6" />
+            <ActivityIndicator color="#ff3366" />
           </View>
         )}
 
@@ -165,7 +165,7 @@ export default function TournamentDetailScreen() {
                 <Text style={styles.sectionCount}>{standings.length}</Text>
               </View>
               {playersQuery.isLoading ? (
-                <ActivityIndicator color="#3b82f6" style={{ padding: 24 }} />
+                <ActivityIndicator color="#ff3366" style={{ padding: 24 }} />
               ) : standings.length === 0 ? (
                 <Text style={styles.empty}>No players yet</Text>
               ) : (
@@ -181,7 +181,7 @@ export default function TournamentDetailScreen() {
                 <Text style={styles.sectionCount}>{matches.length}</Text>
               </View>
               {matchesQuery.isLoading ? (
-                <ActivityIndicator color="#3b82f6" style={{ padding: 24 }} />
+                <ActivityIndicator color="#ff3366" style={{ padding: 24 }} />
               ) : matches.length === 0 ? (
                 <Text style={styles.empty}>No matches yet</Text>
               ) : (
@@ -197,7 +197,7 @@ export default function TournamentDetailScreen() {
                 <Text style={styles.sectionCount}>{topLevelDiscussion.length}</Text>
               </View>
               {discussionQuery.isLoading ? (
-                <ActivityIndicator color="#3b82f6" style={{ padding: 24 }} />
+                <ActivityIndicator color="#ff3366" style={{ padding: 24 }} />
               ) : topLevelDiscussion.length === 0 ? (
                 <Text style={styles.empty}>No discussion yet</Text>
               ) : (
@@ -230,12 +230,12 @@ const styles = StyleSheet.create({
     color: '#cbd5e1',
     fontWeight: '600',
   },
-  roundChip: { backgroundColor: 'rgba(59,130,246,0.2)', color: '#60a5fa' },
+  roundChip: { backgroundColor: 'rgba(255,51,102,0.2)', color: '#ff6b8a' },
 
   section: { gap: 8 },
   sectionHeader: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
   sectionCount: { fontSize: 12, opacity: 0.5 },
-  list: { backgroundColor: 'rgba(148,163,184,0.06)', borderRadius: 12, overflow: 'hidden' },
+  list: { backgroundColor: '#141428', borderRadius: 12, overflow: 'hidden' },
 
   matchRow: {
     paddingVertical: 12,
@@ -245,7 +245,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   matchHeader: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-  matchRound: { fontSize: 10, fontWeight: '700', color: '#60a5fa' },
+  matchRound: { fontSize: 10, fontWeight: '700', color: '#ff6b8a' },
   matchStatus: { fontSize: 10, fontWeight: '600', color: '#94a3b8', letterSpacing: 0.5 },
   matchDifficulty: { fontSize: 10, fontWeight: '600', color: '#94a3b8', marginLeft: 'auto' },
   matchPlayers: { flexDirection: 'row', alignItems: 'center', gap: 8 },
@@ -269,7 +269,7 @@ const styles = StyleSheet.create({
   playerSkill: { fontSize: 11, opacity: 0.55 },
   playerStats: { alignItems: 'flex-end', gap: 2 },
   playerWL: { fontSize: 13, fontWeight: '700', color: '#cbd5e1' },
-  playerPts: { fontSize: 11, color: '#60a5fa', fontWeight: '600' },
+  playerPts: { fontSize: 11, color: '#ff6b8a', fontWeight: '600' },
 
   msgRow: {
     paddingVertical: 12,

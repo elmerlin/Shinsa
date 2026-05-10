@@ -218,3 +218,101 @@ export interface DiscussionResponse {
   threads: DiscussionMessage[];
   viewer_count?: number;
 }
+
+// --- Social ---
+
+/**
+ * Post — the most common feed item. The `images` field is sometimes a
+ * JSON-encoded string (`"[]"` or stringified array) and sometimes already an
+ * array; consumers should normalize.
+ */
+export interface Post {
+  id: string;
+  user_id?: string;
+  content?: string;
+  images?: string | string[];
+  youtube_url?: string;
+  comments_disabled?: boolean | number;
+  is_pinned?: boolean | number;
+  created_at?: string;
+  updated_at?: string | null;
+  post_kind?: string | null;
+  community_id?: string;
+  username?: string;
+  avatar?: string;
+  user_avatar?: string;
+  nationality?: string;
+  pump_count?: number;
+  comment_count?: number;
+  user_pumped?: boolean | number;
+  [key: string]: unknown;
+}
+
+export interface Comment {
+  id: string;
+  post_id?: string;
+  user_id?: string;
+  parent_id?: string | null;
+  content?: string;
+  username?: string;
+  avatar?: string;
+  created_at?: string;
+  pump_count?: number;
+  user_pumped?: boolean | number;
+  [key: string]: unknown;
+}
+
+/**
+ * Feed items are heterogeneous: `type` discriminates between post / upscore /
+ * clear / weekly_challenge. v1 renders posts richly and other types as compact
+ * activity rows.
+ */
+export type FeedItemType = 'post' | 'upscore' | 'clear' | 'weekly_challenge';
+
+export interface FeedItem {
+  type: FeedItemType;
+  id: string | number;
+  user_id?: string;
+  username?: string;
+  avatar?: string;
+  created_at?: string;
+  pump_count?: number;
+  // post
+  content?: string;
+  images?: string | string[];
+  youtube_url?: string;
+  comment_count?: number;
+  user_pumped?: boolean | number;
+  post_kind?: string | null;
+  // upscore
+  upscores_json?: string;
+  pumbility_gain?: number;
+  singles_pumbility_gain?: number;
+  [key: string]: unknown;
+}
+
+// --- Communities ---
+
+export interface Community {
+  id: string;
+  name: string;
+  display_name?: string;
+  description?: string;
+  avatar?: string;
+  banner?: string;
+  owner_id?: string;
+  is_invite_only?: boolean | number;
+  badge_text?: string;
+  badge_color?: string;
+  badge_text_color?: string;
+  created_at?: string;
+  about?: string;
+  location_country?: string;
+  rules?: string;
+  index_tags?: string | string[];
+  owner_username?: string;
+  owner_avatar?: string;
+  member_count?: number;
+  posts_last_week?: number;
+  [key: string]: unknown;
+}

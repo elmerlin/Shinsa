@@ -36,9 +36,9 @@ function AuthGate() {
           flex: 1,
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor: '#0a0e1a',
+          backgroundColor: '#0a0a1a',
         }}>
-        <ActivityIndicator size="large" color="#3b82f6" />
+        <ActivityIndicator size="large" color="#ff3366" />
       </View>
     );
   }
@@ -49,6 +49,7 @@ function AuthGate() {
       <Stack.Screen name="(auth)" options={{ headerShown: false }} />
       <Stack.Screen name="song/[id]" options={{ title: 'Song', headerBackTitle: 'Songs' }} />
       <Stack.Screen name="tournament/[id]" options={{ title: 'Tournament', headerBackTitle: 'Tournaments' }} />
+      <Stack.Screen name="post/[id]" options={{ title: 'Post', headerBackTitle: 'Back' }} />
       <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
     </Stack>
   );

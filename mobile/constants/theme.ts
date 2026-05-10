@@ -1,12 +1,38 @@
 /**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
+ * Theme tokens for Shinsa mobile.
+ *
+ * The `Piu` palette mirrors `client/tailwind.config.js` (the web product). When
+ * styling new components, prefer importing from `Piu` over hardcoding hex values
+ * so the design stays consistent with pumpshinsa.com.
  */
 
 import { Platform } from 'react-native';
 
-const tintColorLight = '#0a7ea4';
-const tintColorDark = '#fff';
+export const Piu = {
+  bg: '#0a0a1a',
+  card: '#141428',
+  dark: '#0d0d20',
+  border: '#2a2a4a',
+  accent: '#ff3366',
+  accentMuted: '#ff6b8a',
+  gold: '#ffd700',
+  silver: '#c0c0c0',
+  bronze: '#cd7f32',
+  blue: '#4488ff',
+  green: '#33ff66',
+  text: '#ECEDEE',
+  textMuted: '#94a3b8',
+  textDim: '#64748b',
+  danger: '#ef4444',
+  dangerText: '#fca5a5',
+  /** Pink accent at the given alpha. */
+  accentRgba: (a: number) => `rgba(255,51,102,${a})`,
+  /** Subtle gray surface (used for chips, dividers, faint backdrops). */
+  surfaceRgba: (a: number) => `rgba(148,163,184,${a})`,
+};
+
+const tintColorLight = Piu.accent;
+const tintColorDark = Piu.accent;
 
 export const Colors = {
   light: {
@@ -18,24 +44,20 @@ export const Colors = {
     tabIconSelected: tintColorLight,
   },
   dark: {
-    text: '#ECEDEE',
-    background: '#151718',
+    text: Piu.text,
+    background: Piu.bg,
     tint: tintColorDark,
-    icon: '#9BA1A6',
-    tabIconDefault: '#9BA1A6',
+    icon: Piu.textMuted,
+    tabIconDefault: Piu.textMuted,
     tabIconSelected: tintColorDark,
   },
 };
 
 export const Fonts = Platform.select({
   ios: {
-    /** iOS `UIFontDescriptorSystemDesignDefault` */
     sans: 'system-ui',
-    /** iOS `UIFontDescriptorSystemDesignSerif` */
     serif: 'ui-serif',
-    /** iOS `UIFontDescriptorSystemDesignRounded` */
     rounded: 'ui-rounded',
-    /** iOS `UIFontDescriptorSystemDesignMonospaced` */
     mono: 'ui-monospace',
   },
   default: {

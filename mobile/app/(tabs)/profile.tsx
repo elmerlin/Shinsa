@@ -66,7 +66,7 @@ const styles = StyleSheet.create({
   avatarLetter: { fontSize: 40, fontWeight: '700', color: '#94a3b8' },
   username: { fontSize: 24, fontWeight: '700' },
   skill: { fontSize: 14, opacity: 0.6 },
-  fields: { gap: 4, backgroundColor: 'rgba(148,163,184,0.06)', borderRadius: 12, padding: 16 },
+  fields: { gap: 4, backgroundColor: '#141428', borderRadius: 12, padding: 16 },
   field: { paddingVertical: 8, gap: 2 },
   fieldLabel: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, opacity: 0.5 },
   fieldValue: { fontSize: 15 },
