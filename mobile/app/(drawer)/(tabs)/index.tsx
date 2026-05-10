@@ -3,6 +3,10 @@ import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { DailyHighlights } from '@/components/dashboard/daily-highlights';
+import { NoticeBoard } from '@/components/dashboard/notice-board';
+import { SongOfWeekStrip } from '@/components/dashboard/song-of-week-strip';
+import { WeeklyChallengesSummary } from '@/components/dashboard/weekly-challenges-summary';
 import { HamburgerButton } from '@/components/hamburger-button';
 import { PumpShinsaLogo } from '@/components/pump-shinsa-logo';
 import { QuickNavButton } from '@/components/quick-nav-button';
@@ -190,6 +194,8 @@ export default function HomeScreen() {
           </View>
         )}
 
+        <NoticeBoard />
+
         {activityQuery.data && activityQuery.data.length > 0 && (
           <View style={s.section}>
             <Text style={s.eyebrowTitle}>RECENT ACTIVITY</Text>
@@ -198,6 +204,10 @@ export default function HomeScreen() {
             </View>
           </View>
         )}
+
+        <DailyHighlights />
+        <SongOfWeekStrip />
+        <WeeklyChallengesSummary />
 
         {dashQuery.data && (
           <>

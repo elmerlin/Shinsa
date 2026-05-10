@@ -1,4 +1,4 @@
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQueryClient, type InfiniteData } from '@tanstack/react-query';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
@@ -15,7 +15,9 @@ import { socialApi } from '@/lib/api';
 import { fullImageUrl } from '@/lib/images';
 import { parseLiveSessionMarker } from '@/lib/liveSessionMarker';
 import type { ThemeColors } from '@/constants/theme';
-import type { FeedItem } from '@shared/api';
+import type { FeedItem, PumpResponse } from '@shared/api';
+
+const FEED_QUERY_KEY = ['social-feed'] as const;
 
 function timeAgo(input?: string): string {
   if (!input) return '';
@@ -88,6 +90,75 @@ interface WeeklyChallengePlay {
 
 type Styles = ReturnType<typeof useThemedStyles<ReturnType<typeof makeStyles>>>;
 
+/**
+ * Toggles pump on a feed item with optimistic update against the
+ * useInfiniteQuery cache. Server is source of truth on success.
+ */
+function usePumpFeedItem() {
+  const queryClient = useQueryClient();
+
+  const optimisticToggle = (item: FeedItem) => {
+    queryClient.setQueryData<InfiniteData<FeedItem[]>>(FEED_QUERY_KEY, (old) => {
+      if (!old) return old;
+      return {
+        ...old,
+        pages: old.pages.map((page) =>
+          page.map((it) =>
+            it.type === item.type && it.id === item.id
+              ? {
+                  ...it,
+                  user_pumped: it.user_pumped ? 0 : 1,
+                  pump_count: (it.pump_count ?? 0) + (it.user_pumped ? -1 : 1),
+                }
+              : it
+          )
+        ),
+      };
+    });
+  };
+
+  const applyServerResult = (item: FeedItem, result: PumpResponse) => {
+    queryClient.setQueryData<InfiniteData<FeedItem[]>>(FEED_QUERY_KEY, (old) => {
+      if (!old) return old;
+      return {
+        ...old,
+        pages: old.pages.map((page) =>
+          page.map((it) =>
+            it.type === item.type && it.id === item.id
+              ? { ...it, user_pumped: result.pumped ? 1 : 0, pump_count: result.pump_count }
+              : it
+          )
+        ),
+      };
+    });
+  };
+
+  const mutation = useMutation({
+    mutationFn: async (item: FeedItem) => {
+      const id = String(item.id);
+      if (item.type === 'upscore') return socialApi.pumpUpscore(id);
+      if (item.type === 'clear') return socialApi.pumpClear(id);
+      if (item.type === 'post') return socialApi.pumpPost(id);
+      if (item.type === 'weekly_challenge') return socialApi.pumpWeeklyChallengePlay(id);
+      throw new Error(`Cannot pump item of type ${item.type}`);
+    },
+    onMutate: async (item) => {
+      const prev = queryClient.getQueryData<InfiniteData<FeedItem[]>>(FEED_QUERY_KEY);
+      optimisticToggle(item);
+      return { prev };
+    },
+    onError: (_err, _item, ctx) => {
+      // Roll back if the request failed.
+      if (ctx?.prev) queryClient.setQueryData(FEED_QUERY_KEY, ctx.prev);
+    },
+    onSuccess: (result, item) => {
+      applyServerResult(item, result);
+    },
+  });
+
+  return (item: FeedItem) => mutation.mutate(item);
+}
+
 function CardHeader({
   username,
   avatar,
@@ -122,24 +193,30 @@ function CardHeader({
 }
 
 function ActionFooter({
-  pumpCount,
-  commentCount,
+  item,
   s,
+  onPump,
 }: {
-  pumpCount?: number;
-  commentCount?: number;
+  item: FeedItem;
   s: Styles;
+  onPump: (item: FeedItem) => void;
 }) {
   const { theme } = useTheme();
+  const pumped = !!item.user_pumped;
+  const pumpColor = pumped ? theme.accent : theme.textMuted;
+
   return (
     <View style={s.actionFooter}>
-      <View style={s.actionItem}>
-        <IconSymbol name="arrow.up" size={14} color={theme.accent} />
-        <Text style={s.actionCount}>{pumpCount ?? 0}</Text>
-      </View>
+      <Pressable
+        onPress={() => onPump(item)}
+        hitSlop={6}
+        style={({ pressed }) => [s.actionItem, pressed && { opacity: 0.6 }]}>
+        <IconSymbol name="arrow.up" size={14} color={pumpColor} />
+        <Text style={[s.actionCount, { color: pumpColor }]}>{item.pump_count ?? 0}</Text>
+      </Pressable>
       <View style={s.actionItem}>
         <IconSymbol name="bubble.left.and.bubble.right.fill" size={14} color={theme.textMuted} />
-        <Text style={s.actionCount}>{commentCount ?? 0}</Text>
+        <Text style={s.actionCount}>{item.comment_count ?? 0}</Text>
       </View>
       <View style={s.actionItem}>
         <IconSymbol name="paperplane.fill" size={14} color={theme.textMuted} />
@@ -148,16 +225,7 @@ function ActionFooter({
   );
 }
 
-function ScoreCell({ score, grade, size = 'sm' }: { score?: number; grade?: string; size?: 'xs' | 'sm' }) {
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-      <Text style={[styles.scoreNum, size === 'xs' && styles.scoreNumXs]}>{fmtNum(score)}</Text>
-      <GradeChip grade={grade} score={score ?? 0} size={size} />
-    </View>
-  );
-}
-
-function PostCard({ item, onPress, s }: { item: FeedItem; onPress: () => void; s: Styles }) {
+function PostCard({ item, onPress, onPump, s }: { item: FeedItem; onPress: () => void; onPump: (i: FeedItem) => void; s: Styles }) {
   const avatar = typeof item.avatar === 'string' ? fullImageUrl(item.avatar) : undefined;
   const images = parseImages(item.images);
   const firstImage = images[0] ? fullImageUrl(images[0]) : undefined;
@@ -176,12 +244,12 @@ function PostCard({ item, onPress, s }: { item: FeedItem; onPress: () => void; s
       {firstImage ? (
         <Image source={{ uri: firstImage }} style={s.cardImage} contentFit="cover" transition={150} />
       ) : null}
-      <ActionFooter pumpCount={item.pump_count} commentCount={item.comment_count} s={s} />
+      <ActionFooter item={item} s={s} onPump={onPump} />
     </Pressable>
   );
 }
 
-function UpscoreCard({ item, s }: { item: FeedItem; s: Styles }) {
+function UpscoreCard({ item, onPump, s }: { item: FeedItem; onPump: (i: FeedItem) => void; s: Styles }) {
   const { theme } = useTheme();
   const [showAll, setShowAll] = useState(false);
   const username = String(item.username || 'anonymous');
@@ -251,7 +319,8 @@ function UpscoreCard({ item, s }: { item: FeedItem; s: Styles }) {
                   <Text style={s.scoreNumOld}>{fmtNum(u.old_score)}</Text>
                   <GradeChip grade={u.old_grade} score={u.old_score ?? 0} size="xs" />
                   <Text style={s.arrow}>→</Text>
-                  <ScoreCell score={u.new_score} grade={u.new_grade} size="xs" />
+                  <Text style={s.scoreNum}>{fmtNum(u.new_score)}</Text>
+                  <GradeChip grade={u.new_grade} score={u.new_score ?? 0} size="xs" />
                 </View>
                 <Text style={s.delta}>+{fmtNum(delta)}</Text>
               </View>
@@ -268,12 +337,12 @@ function UpscoreCard({ item, s }: { item: FeedItem; s: Styles }) {
         </Pressable>
       ) : null}
 
-      <ActionFooter pumpCount={item.pump_count} commentCount={item.comment_count} s={s} />
+      <ActionFooter item={item} s={s} onPump={onPump} />
     </View>
   );
 }
 
-function ClearCard({ item, s }: { item: FeedItem; s: Styles }) {
+function ClearCard({ item, onPump, s }: { item: FeedItem; onPump: (i: FeedItem) => void; s: Styles }) {
   const username = String(item.username || 'anonymous');
   const avatar = typeof item.avatar === 'string' ? fullImageUrl(item.avatar) : undefined;
   const itemRec = item as Record<string, unknown>;
@@ -315,12 +384,12 @@ function ClearCard({ item, s }: { item: FeedItem; s: Styles }) {
         </View>
       </View>
 
-      <ActionFooter pumpCount={item.pump_count} commentCount={item.comment_count} s={s} />
+      <ActionFooter item={item} s={s} onPump={onPump} />
     </View>
   );
 }
 
-function WeeklyChallengeCard({ item, s }: { item: FeedItem; s: Styles }) {
+function WeeklyChallengeCard({ item, onPump, s }: { item: FeedItem; onPump: (i: FeedItem) => void; s: Styles }) {
   const username = String(item.username || 'anonymous');
   const avatar = typeof item.avatar === 'string' ? fullImageUrl(item.avatar) : undefined;
   const itemRec = item as Record<string, unknown>;
@@ -342,7 +411,7 @@ function WeeklyChallengeCard({ item, s }: { item: FeedItem; s: Styles }) {
       {charts > 0 ? (
         <Text style={s.wcSummary}>{charts} chart{charts === 1 ? '' : 's'}{ptsLabel}</Text>
       ) : null}
-      <ActionFooter pumpCount={item.pump_count} commentCount={item.comment_count} s={s} />
+      <ActionFooter item={item} s={s} onPump={onPump} />
     </View>
   );
 }
@@ -352,6 +421,7 @@ export default function FeedScreen() {
   const router = useRouter();
   const { theme } = useTheme();
   const s = useThemedStyles(makeStyles);
+  const onPump = usePumpFeedItem();
 
   const {
     data,
@@ -364,7 +434,7 @@ export default function FeedScreen() {
     hasNextPage,
     isFetchingNextPage,
   } = useInfiniteQuery({
-    queryKey: ['social-feed'],
+    queryKey: FEED_QUERY_KEY,
     queryFn: ({ pageParam = 1 }) => socialApi.feed({ page: pageParam }),
     initialPageParam: 1,
     getNextPageParam: (lastPage, pages) => (lastPage.length === 0 ? undefined : pages.length + 1),
@@ -401,13 +471,14 @@ export default function FeedScreen() {
                 <PostCard
                   item={item}
                   s={s}
+                  onPump={onPump}
                   onPress={() => router.push({ pathname: '/post/[id]', params: { id: String(item.id) } })}
                 />
               );
             }
-            if (item.type === 'upscore') return <UpscoreCard item={item} s={s} />;
-            if (item.type === 'clear') return <ClearCard item={item} s={s} />;
-            if (item.type === 'weekly_challenge') return <WeeklyChallengeCard item={item} s={s} />;
+            if (item.type === 'upscore') return <UpscoreCard item={item} s={s} onPump={onPump} />;
+            if (item.type === 'clear') return <ClearCard item={item} s={s} onPump={onPump} />;
+            if (item.type === 'weekly_challenge') return <WeeklyChallengeCard item={item} s={s} onPump={onPump} />;
             return null;
           }}
           contentContainerStyle={s.listContent}
@@ -435,11 +506,6 @@ export default function FeedScreen() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  scoreNum: { fontSize: 13, fontWeight: '800', color: '#fff', fontVariant: ['tabular-nums' as const] },
-  scoreNumXs: { fontSize: 10, fontWeight: '700' },
-});
 
 const makeStyles = (t: ThemeColors) => ({
   container: { flex: 1, backgroundColor: t.bg },
@@ -541,7 +607,7 @@ const makeStyles = (t: ThemeColors) => ({
     justifyContent: 'center' as const,
   },
   scoresCol: { alignItems: 'flex-end' as const, gap: 2, minWidth: 110 },
-  scoreNum: { fontSize: 13, fontWeight: '800' as const, color: t.text },
+  scoreNum: { fontSize: 13, fontWeight: '800' as const, color: t.text, fontVariant: ['tabular-nums' as const] },
   scoreNumOld: { fontSize: 10, color: t.textMuted, fontVariant: ['tabular-nums' as const] },
   arrow: { fontSize: 10, color: t.textDim },
   delta: { fontSize: 11, fontWeight: '800' as const, color: t.success, fontVariant: ['tabular-nums' as const] },

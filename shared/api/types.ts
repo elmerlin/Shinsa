@@ -291,6 +291,103 @@ export interface FeedItem {
   [key: string]: unknown;
 }
 
+// --- Pump response (toggling a pump on a feed item) ---
+
+export interface PumpResponse {
+  pumped: boolean;
+  pump_count: number;
+}
+
+// --- Daily Highlights (Dashboard top-replays strip) ---
+
+export interface ReplayHighlight {
+  id: number;
+  user_id?: string;
+  song_title?: string;
+  mode?: string;
+  level?: number;
+  score?: number;
+  grade?: string;
+  plate?: string;
+  perfect?: number;
+  great?: number;
+  good?: number;
+  bad?: number;
+  miss?: number;
+  max_combo?: number;
+  replay_embed_url?: string;
+  replay_video_id?: string;
+  replay_start_seconds?: number;
+  replay_end_seconds?: number;
+  background_url?: string;
+  date_played?: string;
+  machine_name?: string;
+  username?: string;
+  avatar?: string;
+  nationality?: string;
+  comment_count?: number;
+  play_id?: number;
+  [key: string]: unknown;
+}
+
+export interface DailyHighlights {
+  mixTape: unknown | null;
+  topReplays: ReplayHighlight[];
+}
+
+// --- Weekly Challenges home ---
+
+export interface WeeklyChallengeWeek {
+  week_key: string;
+  starts_at_utc?: string;
+  ends_at_utc?: string;
+  status?: string;
+  chart_count?: number;
+  challenge_max_level?: number;
+}
+
+export interface WeeklyChallengeAward {
+  award_key: 'overall' | 'singles' | string;
+  award_label?: string;
+  rank: number;
+  user_id?: string;
+  username_snapshot?: string;
+  avatar_snapshot?: string;
+  nationality_snapshot?: string;
+  points?: number;
+  clears?: number;
+  pg_bonus_points?: number;
+  pg_bonus_count?: number;
+}
+
+export interface WeeklyChallengesHome {
+  week: WeeklyChallengeWeek;
+  participantCount: number;
+  awards: WeeklyChallengeAward[];
+}
+
+// --- Song of the Week ---
+
+export interface SongOfWeekItem {
+  id: number;
+  user_id?: string;
+  week_key?: string;
+  chart_id?: number;
+  song_title_snapshot?: string;
+  artist_snapshot?: string;
+  mode?: string;
+  level?: number;
+  jacket_url_snapshot?: string;
+  caption?: string;
+  linked_play_id?: number | null;
+  created_at?: string;
+  username?: string;
+  avatar?: string;
+  nationality?: string;
+  comment_count?: number;
+  [key: string]: unknown;
+}
+
 // --- Activity feed (used by Dashboard's Recent Activity strip) ---
 
 export type ActivityType =
