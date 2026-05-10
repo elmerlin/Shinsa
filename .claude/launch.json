@@ -20,6 +20,13 @@
       "runtimeArgs": ["run", "dev"],
       "port": 5174,
       "cwd": "chart-editor"
+    },
+    {
+      "name": "shinsa-mobile-web",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["expo", "start", "--web", "--port", "8082"],
+      "port": 8082,
+      "cwd": "mobile"
     }
   ]
 }
