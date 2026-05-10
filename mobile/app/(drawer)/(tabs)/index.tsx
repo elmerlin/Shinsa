@@ -61,6 +61,21 @@ interface PlacementEntry {
   name?: string;
 }
 
+// Bucket priority — `final` is the authoritative end-of-tournament ranking,
+// then `gauntlet` (last phase if multi-phase ends with gauntlet), then
+// other final-stage formats, then `round_robin` only as a last resort
+// (because it's typically just the seeding phase, not the winner).
+const PLACEMENT_BUCKET_PRIORITY = [
+  'final',
+  'gauntlet',
+  'double_elim',
+  'single_elim',
+  'pools',
+  'b15',
+  'hour_of_power',
+  'round_robin',
+];
+
 function parsePlacementSnapshots(raw: unknown): PlacementEntry[] {
   if (!raw) return [];
   let parsed: unknown = raw;
@@ -73,11 +88,13 @@ function parsePlacementSnapshots(raw: unknown): PlacementEntry[] {
   }
   if (!parsed || typeof parsed !== 'object') return [];
   const obj = parsed as Record<string, unknown>;
-  // Pick the first non-empty array bucket (e.g. round_robin / final / etc).
+  for (const key of PLACEMENT_BUCKET_PRIORITY) {
+    const value = obj[key];
+    if (Array.isArray(value) && value.length > 0) return value as PlacementEntry[];
+  }
+  // Fallback: any non-empty bucket if none of the priority keys matched.
   for (const value of Object.values(obj)) {
-    if (Array.isArray(value) && value.length > 0) {
-      return value as PlacementEntry[];
-    }
+    if (Array.isArray(value) && value.length > 0) return value as PlacementEntry[];
   }
   return [];
 }

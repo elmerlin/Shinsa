@@ -26,10 +26,10 @@ interface Dim {
 }
 
 const SIZES: Record<ChartJacketSize, Dim> = {
-  xs: { w: 40, h: 24, badgeSize: 16, fontSize: 8, radius: 5 },
-  sm: { w: 52, h: 30, badgeSize: 18, fontSize: 9, radius: 6 },
-  md: { w: 64, h: 36, badgeSize: 20, fontSize: 10, radius: 7 },
-  wide: { w: 96, h: 54, badgeSize: 24, fontSize: 12, radius: 8 },
+  xs: { w: 56, h: 32, badgeSize: 18, fontSize: 10, radius: 6 },
+  sm: { w: 72, h: 42, badgeSize: 22, fontSize: 12, radius: 7 },
+  md: { w: 96, h: 56, badgeSize: 28, fontSize: 14, radius: 8 },
+  wide: { w: 128, h: 74, badgeSize: 32, fontSize: 16, radius: 10 },
 };
 
 // Mode → 3-stop gradient (top → middle → bottom)
@@ -51,11 +51,13 @@ function getModeShort(mode?: string): string {
 }
 
 function getBadgeLabel(mode?: string, level?: number | string): string {
-  const short = getModeShort(mode);
-  if (short === 'UCS') return 'UCS';
+  // Mode is conveyed by badge color (red=Single, green=Double, blue=CoOp,
+  // purple=UCS) so we drop the letter prefix and show only the level number.
+  // UCS doesn't have a numeric level, so it keeps its label.
+  if (getModeShort(mode) === 'UCS') return 'UCS';
   const parsed = parseInt(String(level ?? ''), 10);
-  const display = Number.isFinite(parsed) && parsed > 0 ? String(parsed) : (String(level || '').trim() || '?');
-  return `${short}${display}`;
+  if (Number.isFinite(parsed) && parsed > 0) return String(parsed);
+  return String(level || '').trim() || '?';
 }
 
 export function ChartJacket({

@@ -41,9 +41,11 @@ export function ChartBadge({ mode, level, size = 'sm' }: Props) {
   const dim = SIZES[size];
   const colors = MODE_GRADIENTS[mode || ''] ?? MODE_GRADIENTS.CoOp;
   const short = getModeShort(mode);
+  // Mode is conveyed by colour (red/green/blue/purple), so we drop the letter
+  // prefix and show only the level number. UCS keeps its label.
   const label = short === 'UCS'
     ? 'UCS'
-    : `${short}${parseInt(String(level ?? ''), 10) || level || '?'}`;
+    : String(parseInt(String(level ?? ''), 10) || level || '?');
 
   return (
     <View style={[styles.outer, { width: dim.dim + 14, height: dim.dim }]}>
