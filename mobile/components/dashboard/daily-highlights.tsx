@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Image } from 'expo-image';
 import { StyleSheet, Text, View } from 'react-native';
+import { ChartBadge } from '@/components/chart-badge';
 import { GradeChip } from '@/components/grade-chip';
 import { PlateBadge } from '@/components/plate-badge';
 import { IconSymbol } from '@/components/ui/icon-symbol';
@@ -44,12 +45,12 @@ export function DailyHighlights() {
                     <IconSymbol name="play.rectangle.fill" size={10} color="#7dd3fc" />
                     <Text style={s.replayText}>REPLAY</Text>
                   </View>
-                  <PlateBadge plate={r.plate} size="xs" />
+                  <ChartBadge mode={r.mode} level={r.level} size="xs" />
                 </View>
                 <View style={s.bottom}>
                   <Text style={s.title} numberOfLines={1}>{r.song_title || 'Unknown'}</Text>
                   <View style={s.scoreLine}>
-                    <Text style={s.mode}>{r.mode}{typeof r.level === 'number' && r.level > 0 ? ` ${r.level}` : ''}</Text>
+                    <PlateBadge plate={r.plate} size="xs" />
                     <Text style={s.score}>{fmt(r.score)}</Text>
                     <GradeChip grade={r.grade} score={r.score ?? 0} size="xs" />
                   </View>
@@ -105,10 +106,10 @@ const makeStyles = (t: ThemeColors) => ({
     borderColor: 'rgba(125,211,252,0.4)',
   },
   replayText: { fontSize: 8, fontWeight: '800' as const, letterSpacing: 0.5, color: '#7dd3fc' },
-  bottom: { gap: 2 },
+  bottom: { gap: 4 },
   title: { fontSize: 12, fontWeight: '800' as const, color: '#fff' },
-  scoreLine: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4 },
-  mode: { fontSize: 9, fontWeight: '700' as const, color: 'rgba(255,255,255,0.7)' },
+  scoreLine: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6 },
   score: { fontSize: 11, fontWeight: '800' as const, color: '#fff', fontVariant: ['tabular-nums' as const] },
   user: { fontSize: 10, color: 'rgba(255,255,255,0.7)' },
+  modeChartChip: { paddingRight: 4 },
 });

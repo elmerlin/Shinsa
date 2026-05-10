@@ -162,6 +162,24 @@ export interface ChartDetailResponse {
   friend_records?: unknown[];
 }
 
+/** A song from /api/songs/library — bundles all charts for one song. */
+export interface SongLibraryItem {
+  song_group_key: string;
+  title: string;
+  artist?: string;
+  jacket_url?: string;
+  song_key?: string;
+  flags?: string;
+  charts: Chart[];
+  [key: string]: unknown;
+}
+
+export interface SongLibraryResponse {
+  total_songs: number;
+  total_charts: number;
+  songs: SongLibraryItem[];
+}
+
 export interface Match {
   id: string;
   tournament_id: string;

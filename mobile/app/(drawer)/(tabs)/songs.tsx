@@ -1,17 +1,19 @@
 import { useQuery } from '@tanstack/react-query';
-import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ChartJacket } from '@/components/chart-jacket';
+import { HamburgerButton } from '@/components/hamburger-button';
+import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/contexts/theme-context';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { songsApi } from '@/lib/api';
 import { fullImageUrl } from '@/lib/images';
 import type { ThemeColors } from '@/constants/theme';
-import type { Song } from '@shared/api';
+import type { Chart, SongLibraryItem } from '@shared/api';
 
-function useDebounced<T>(value: T, delay = 300): T {
+function useDebounced<T>(value: T, delay = 250): T {
   const [debounced, setDebounced] = useState(value);
   useEffect(() => {
     const t = setTimeout(() => setDebounced(value), delay);
@@ -20,26 +22,48 @@ function useDebounced<T>(value: T, delay = 300): T {
   return debounced;
 }
 
-function SongRow({ song, onPress, s }: { song: Song; onPress: () => void; s: ReturnType<typeof useThemedStyles<ReturnType<typeof makeStyles>>> }) {
+type Styles = ReturnType<typeof useThemedStyles<ReturnType<typeof makeStyles>>>;
+
+function SongRow({ song, onChartPress, s }: {
+  song: SongLibraryItem;
+  onChartPress: (chart: Chart) => void;
+  s: Styles;
+}) {
   const jacket = fullImageUrl(song.jacket_url);
+  const sortedCharts = [...(song.charts || [])].sort((a, b) => {
+    const modeOrder: Record<string, number> = { Single: 0, Double: 1, CoOp: 2, UCS: 3 };
+    const am = modeOrder[a.mode || ''] ?? 9;
+    const bm = modeOrder[b.mode || ''] ?? 9;
+    if (am !== bm) return am - bm;
+    return (a.level ?? 0) - (b.level ?? 0);
+  });
+
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [s.row, pressed && s.rowPressed]}>
-      {jacket ? (
-        <Image source={{ uri: jacket }} style={s.jacket} contentFit="cover" transition={150} />
-      ) : (
-        <View style={[s.jacket, s.jacketPlaceholder]} />
-      )}
-      <View style={s.rowMain}>
-        <Text style={s.rowTitle} numberOfLines={1}>{song.title}</Text>
-        <Text style={s.rowMeta} numberOfLines={1}>{song.artist}</Text>
+    <View style={s.song}>
+      <View style={s.songHeader}>
+        {jacket ? <ChartJacket jacketUrl={jacket} mode="" level="" size="md" withBadge={false} /> : null}
+        <View style={s.songMain}>
+          <Text style={s.songTitle} numberOfLines={1}>{song.title}</Text>
+          {song.artist ? <Text style={s.songArtist} numberOfLines={1}>{song.artist}</Text> : null}
+        </View>
       </View>
-      <View style={s.rowRight}>
-        {song.mode ? <Text style={s.modeChip}>{song.mode[0]}</Text> : null}
-        {typeof song.level === 'number' && song.level > 0 ? (
-          <Text style={s.levelChip}>{song.level}</Text>
-        ) : null}
+      <View style={s.chartsRow}>
+        {sortedCharts.map((chart) => (
+          <Pressable
+            key={chart.chart_id}
+            onPress={() => onChartPress(chart)}
+            hitSlop={4}
+            style={({ pressed }) => [pressed && { opacity: 0.7 }]}>
+            <ChartJacket
+              jacketUrl={jacket}
+              mode={chart.mode}
+              level={chart.level}
+              size="sm"
+            />
+          </Pressable>
+        ))}
       </View>
-    </Pressable>
+    </View>
   );
 }
 
@@ -47,23 +71,38 @@ export default function SongsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { theme } = useTheme();
+  const { user } = useAuth();
   const s = useThemedStyles(makeStyles);
-  const [query, setQuery] = useState('');
-  const debouncedQuery = useDebounced(query, 300);
+  const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounced(search, 250);
 
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ['songs', debouncedQuery],
-    queryFn: () => songsApi.list({ q: debouncedQuery || undefined, limit: 100 }),
+    queryKey: ['songs-library', user?.id ?? null],
+    queryFn: () => songsApi.library(user?.id ? { user_id: user.id } : {}),
   });
+
+  const filtered = useMemo(() => {
+    const all = data?.songs ?? [];
+    const q = debouncedSearch.trim().toLowerCase();
+    if (!q) return all;
+    return all.filter((song) => {
+      const titleMatch = (song.title || '').toLowerCase().includes(q);
+      const artistMatch = (song.artist || '').toLowerCase().includes(q);
+      return titleMatch || artistMatch;
+    });
+  }, [data, debouncedSearch]);
 
   return (
     <View style={s.container}>
       <View style={[s.header, { paddingTop: insets.top + 12 }]}>
+        <HamburgerButton />
         <Text style={s.heading}>Songs</Text>
+      </View>
+      <View style={s.searchRow}>
         <TextInput
           style={s.search}
-          value={query}
-          onChangeText={setQuery}
+          value={search}
+          onChangeText={setSearch}
           placeholder="Search title or artist…"
           placeholderTextColor={theme.textDim}
           autoCapitalize="none"
@@ -83,16 +122,29 @@ export default function SongsScreen() {
         </View>
       ) : (
         <FlatList
-          data={data ?? []}
-          keyExtractor={(item) => String(item.id)}
+          data={filtered}
+          keyExtractor={(song) => song.song_group_key}
           renderItem={({ item }) => (
-            <SongRow song={item} s={s} onPress={() => router.push({ pathname: '/song/[id]', params: { id: String(item.id) } })} />
+            <SongRow
+              song={item}
+              s={s}
+              onChartPress={(chart) =>
+                router.push({ pathname: '/song/[id]', params: { id: String(chart.chart_id) } })
+              }
+            />
           )}
           contentContainerStyle={{ paddingBottom: 80 }}
           ItemSeparatorComponent={() => <View style={s.separator} />}
           ListEmptyComponent={() => (
-            <Text style={s.empty}>{debouncedQuery ? 'No songs match your search.' : 'No songs found.'}</Text>
+            <Text style={s.empty}>{debouncedSearch ? 'No songs match your search.' : 'No songs found.'}</Text>
           )}
+          ListHeaderComponent={() =>
+            data ? (
+              <Text style={s.totalLine}>
+                {data.total_songs} songs · {data.total_charts} charts
+              </Text>
+            ) : null
+          }
         />
       )}
     </View>
@@ -101,8 +153,9 @@ export default function SongsScreen() {
 
 const makeStyles = (t: ThemeColors) => ({
   container: { flex: 1, backgroundColor: t.bg },
-  header: { paddingHorizontal: 20, paddingBottom: 12, gap: 12 },
-  heading: { fontSize: 28, fontWeight: '800' as const, color: t.text, letterSpacing: 2 },
+  header: { paddingHorizontal: 16, paddingBottom: 12, flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12 },
+  heading: { flex: 1, fontSize: 28, fontWeight: '800' as const, color: t.text, letterSpacing: 2 },
+  searchRow: { paddingHorizontal: 16, paddingBottom: 8 },
   search: {
     backgroundColor: t.surfaceMuted,
     color: t.text,
@@ -111,43 +164,18 @@ const makeStyles = (t: ThemeColors) => ({
     paddingVertical: 10,
     fontSize: 15,
   },
-  row: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    gap: 12,
+  totalLine: { fontSize: 11, color: t.textDim, paddingHorizontal: 16, paddingTop: 4, paddingBottom: 8 },
+  song: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    gap: 8,
   },
-  rowPressed: { backgroundColor: t.accentTint },
-  jacket: { width: 48, height: 48, borderRadius: 6, backgroundColor: t.card },
-  jacketPlaceholder: { backgroundColor: t.card },
-  rowMain: { flex: 1, gap: 2, minWidth: 0 },
-  rowTitle: { fontSize: 15, fontWeight: '600' as const, color: t.text },
-  rowMeta: { fontSize: 12, color: t.textMuted },
-  rowRight: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6 },
-  modeChip: {
-    fontSize: 10,
-    fontWeight: '700' as const,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    backgroundColor: t.surfaceMuted,
-    color: t.textMuted,
-    minWidth: 18,
-    textAlign: 'center' as const,
-  },
-  levelChip: {
-    fontSize: 12,
-    fontWeight: '700' as const,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    backgroundColor: t.accentTint,
-    color: t.accent,
-    minWidth: 28,
-    textAlign: 'center' as const,
-  },
-  separator: { height: StyleSheet.hairlineWidth, backgroundColor: t.border, marginLeft: 76 },
+  songHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12 },
+  songMain: { flex: 1, gap: 2, minWidth: 0 },
+  songTitle: { fontSize: 15, fontWeight: '700' as const, color: t.text },
+  songArtist: { fontSize: 12, color: t.textMuted },
+  chartsRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 12, paddingLeft: 76 },
+  separator: { height: StyleSheet.hairlineWidth, backgroundColor: t.border, marginHorizontal: 14 },
   center: { flex: 1, alignItems: 'center' as const, justifyContent: 'center' as const, padding: 32 },
   empty: { textAlign: 'center' as const, padding: 32, color: t.textDim },
   errorText: { color: t.danger, textAlign: 'center' as const },

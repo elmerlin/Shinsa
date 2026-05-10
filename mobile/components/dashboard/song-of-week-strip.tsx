@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import { Image } from 'expo-image';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ChartJacket } from '@/components/chart-jacket';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { socialApi } from '@/lib/api';
 import { fullImageUrl } from '@/lib/images';
@@ -25,15 +25,10 @@ export function SongOfWeekStrip() {
           const jacket = it.jacket_url_snapshot ? fullImageUrl(it.jacket_url_snapshot) : undefined;
           return (
             <View key={String(it.id)} style={s.card}>
-              {jacket ? (
-                <Image source={{ uri: jacket }} style={s.jacket} contentFit="cover" />
-              ) : (
-                <View style={[s.jacket, s.jacketFallback]} />
-              )}
+              <View style={s.jacketWrap}>
+                <ChartJacket jacketUrl={jacket} mode={it.mode} level={it.level} size="wide" />
+              </View>
               <Text style={s.title} numberOfLines={1}>{it.song_title_snapshot || 'Unknown'}</Text>
-              <Text style={s.meta} numberOfLines={1}>
-                {it.mode || ''}{typeof it.level === 'number' && it.level > 0 ? ` Lv ${it.level}` : ''}
-              </Text>
               <Text style={s.user} numberOfLines={1}>@{it.username}</Text>
               {it.caption ? <Text style={s.caption} numberOfLines={2}>"{it.caption}"</Text> : null}
             </View>
@@ -61,13 +56,13 @@ const makeStyles = (t: ThemeColors) => ({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: t.border,
     borderRadius: 10,
-    padding: 8,
+    paddingHorizontal: 10,
+    paddingTop: 12,
+    paddingBottom: 10,
     gap: 4,
   },
-  jacket: { width: '100%' as const, aspectRatio: 1, borderRadius: 6, backgroundColor: t.surfaceMuted, marginBottom: 4 },
-  jacketFallback: {},
+  jacketWrap: { alignSelf: 'center' as const, marginBottom: 6 },
   title: { fontSize: 12, fontWeight: '800' as const, color: t.text },
-  meta: { fontSize: 10, color: t.textMuted },
   user: { fontSize: 10, color: t.accent, fontWeight: '700' as const },
   caption: { fontSize: 10, color: t.textDim, fontStyle: 'italic' as const },
 });

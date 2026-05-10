@@ -15,7 +15,7 @@ import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { dashboardApi, socialApi } from '@/lib/api';
 import { fullImageUrl } from '@/lib/images';
 import type { ThemeColors } from '@/constants/theme';
-import type { ActivityItem, Duel, Notice, Tournament } from '@shared/api';
+import type { ActivityItem, Tournament } from '@shared/api';
 
 function formatDate(input?: string): string {
   if (!input) return '';
@@ -53,53 +53,74 @@ const ACTIVITY_ICONS: Record<string, string> = {
   online_duel_win: '🏅',
 };
 
+const RANK_MEDALS = ['🥇', '🥈', '🥉'];
+
+interface PlacementEntry {
+  rank?: number;
+  player_id?: string;
+  name?: string;
+}
+
+function parsePlacementSnapshots(raw: unknown): PlacementEntry[] {
+  if (!raw) return [];
+  let parsed: unknown = raw;
+  if (typeof raw === 'string') {
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return [];
+    }
+  }
+  if (!parsed || typeof parsed !== 'object') return [];
+  const obj = parsed as Record<string, unknown>;
+  // Pick the first non-empty array bucket (e.g. round_robin / final / etc).
+  for (const value of Object.values(obj)) {
+    if (Array.isArray(value) && value.length > 0) {
+      return value as PlacementEntry[];
+    }
+  }
+  return [];
+}
+
 type Styles = ReturnType<typeof useThemedStyles<ReturnType<typeof makeStyles>>>;
 
 function TournamentRow({ t, onPress, s }: { t: Tournament; onPress: () => void; s: Styles }) {
+  const completed = String(t.phase || '').toUpperCase() === 'COMPLETED';
+  const placements = parsePlacementSnapshots((t as Record<string, unknown>).placement_snapshots);
+  const top3 = [...placements]
+    .sort((a, b) => (a.rank ?? 99) - (b.rank ?? 99))
+    .slice(0, 3);
+
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [s.row, pressed && s.rowPressed]}>
       <View style={s.rowMain}>
-        <Text style={s.rowTitle} numberOfLines={1}>{t.name}</Text>
+        <View style={s.rowTitleLine}>
+          {completed ? <Text style={s.completedIcon}>🏁</Text> : null}
+          <Text style={s.rowTitle} numberOfLines={1}>{t.name}</Text>
+        </View>
         <Text style={s.rowMeta} numberOfLines={1}>
           {[t.phase, t.location, formatDate(t.date)].filter(Boolean).join(' · ')}
         </Text>
+        {top3.length > 0 ? (
+          <View style={s.placementsRow}>
+            {top3.map((p, i) => (
+              <Text key={String(p.player_id ?? i)} style={s.placementPill} numberOfLines={1}>
+                {RANK_MEDALS[i] ?? `#${p.rank ?? i + 1}`} {p.name ?? '—'}
+              </Text>
+            ))}
+          </View>
+        ) : null}
       </View>
-      {typeof t.current_round === 'number' && typeof t.total_rounds === 'number' && t.total_rounds > 0 ? (
+      {!completed && typeof t.current_round === 'number' && typeof t.total_rounds === 'number' && t.total_rounds > 0 ? (
         <Text style={s.rowBadge}>R{t.current_round}/{t.total_rounds}</Text>
       ) : null}
     </Pressable>
   );
 }
 
-function DuelRow({ d, s }: { d: Duel; s: Styles }) {
-  return (
-    <View style={s.row}>
-      <View style={s.rowMain}>
-        <Text style={s.rowTitle} numberOfLines={1}>{d.name || 'Untitled duel'}</Text>
-        <Text style={s.rowMeta}>{formatDate(d.created_at)}</Text>
-      </View>
-    </View>
-  );
-}
-
-function NoticeRow({ n, s }: { n: Notice; s: Styles }) {
-  return (
-    <View style={s.row}>
-      <View style={s.rowMain}>
-        <Text style={s.rowTitle} numberOfLines={2}>
-          {n.pinned ? '📌 ' : ''}{n.title || 'Untitled notice'}
-        </Text>
-        {n.body ? <Text style={s.rowMeta} numberOfLines={2}>{n.body}</Text> : null}
-      </View>
-    </View>
-  );
-}
-
 function ActivityRow({ a, s }: { a: ActivityItem; s: Styles }) {
   const icon = ACTIVITY_ICONS[a.type] || '•';
   const avatar = typeof a.avatar === 'string' ? fullImageUrl(a.avatar) : undefined;
-  // Strip any embedded markup like emojis at start; web does a `renderFormattedText` pass.
-  // For mobile we just render the text plainly — server returns a human-friendly message.
   return (
     <View style={s.activityRow}>
       <Text style={s.activityIcon}>{icon}</Text>
@@ -114,12 +135,10 @@ function ActivityRow({ a, s }: { a: ActivityItem; s: Styles }) {
   );
 }
 
-function Section({ title, count, children, empty, isEmpty, s }: {
+function Section({ title, count, children, s }: {
   title: string;
   count: number;
   children: React.ReactNode;
-  empty: string;
-  isEmpty: boolean;
   s: Styles;
 }) {
   return (
@@ -128,7 +147,7 @@ function Section({ title, count, children, empty, isEmpty, s }: {
         <Text style={s.sectionTitle}>{title}</Text>
         <Text style={s.sectionCount}>{count}</Text>
       </View>
-      {isEmpty ? <Text style={s.empty}>{empty}</Text> : <View style={s.sectionBody}>{children}</View>}
+      <View style={s.sectionBody}>{children}</View>
     </View>
   );
 }
@@ -147,7 +166,6 @@ export default function HomeScreen() {
   const activityQuery = useQuery({
     queryKey: ['recent-activity'],
     queryFn: () => socialApi.recentActivity(),
-    // Recent Activity is auth-protected; if it 401s we just hide the section.
     retry: false,
   });
 
@@ -173,13 +191,17 @@ export default function HomeScreen() {
 
         <View style={s.quickNav}>
           <QuickNavButton label="Live" href="/live" icon="video.fill"
-            gradientFrom="#06b6d4" gradientTo="#1d4ed8" borderColor="rgba(165,243,252,0.3)" />
+            gradientFrom="#22d3ee" gradientTo="#1d4ed8"
+            borderColor="rgba(165,243,252,0.45)" shadowColor="#1d4ed8" />
           <QuickNavButton label="Songs" href="/songs" icon="music.note"
-            gradientFrom="#10b981" gradientTo="#0f766e" borderColor="rgba(167,243,208,0.3)" />
+            gradientFrom="#34d399" gradientTo="#0f766e"
+            borderColor="rgba(167,243,208,0.45)" shadowColor="#0f766e" />
           <QuickNavButton label="Lists" href="/lists" icon="list.bullet.rectangle"
-            gradientFrom="#8b5cf6" gradientTo="#6d28d9" borderColor="rgba(196,181,253,0.3)" />
+            gradientFrom="#a78bfa" gradientTo="#6d28d9"
+            borderColor="rgba(196,181,253,0.45)" shadowColor="#6d28d9" />
           <QuickNavButton label="Training" href="/training" icon="chart.line.uptrend.xyaxis"
-            gradientFrom="#f59e0b" gradientTo="#c2410c" borderColor="rgba(252,211,77,0.3)" />
+            gradientFrom="#fbbf24" gradientTo="#c2410c"
+            borderColor="rgba(252,211,77,0.45)" shadowColor="#c2410c" />
         </View>
 
         {dashQuery.isLoading && (
@@ -209,40 +231,17 @@ export default function HomeScreen() {
         <SongOfWeekStrip />
         <WeeklyChallengesSummary />
 
-        {dashQuery.data && (
-          <>
-            <Section
-              s={s}
-              title="Tournaments"
-              count={dashQuery.data.tournaments.length}
-              empty="No active tournaments"
-              isEmpty={dashQuery.data.tournaments.length === 0}>
-              {dashQuery.data.tournaments.slice(0, 10).map((t) => (
-                <TournamentRow
-                  key={t.id}
-                  t={t}
-                  s={s}
-                  onPress={() => router.push({ pathname: '/tournament/[id]', params: { id: t.id } })}
-                />
-              ))}
-            </Section>
-            <Section
-              s={s}
-              title="Recent duels"
-              count={dashQuery.data.duels.length}
-              empty="No recent duels"
-              isEmpty={dashQuery.data.duels.length === 0}>
-              {dashQuery.data.duels.slice(0, 10).map((d) => <DuelRow key={d.id} d={d} s={s} />)}
-            </Section>
-            <Section
-              s={s}
-              title="Notices"
-              count={dashQuery.data.notices.length}
-              empty="No notices"
-              isEmpty={dashQuery.data.notices.length === 0}>
-              {dashQuery.data.notices.slice(0, 10).map((n) => <NoticeRow key={String(n.id)} n={n} s={s} />)}
-            </Section>
-          </>
+        {dashQuery.data && dashQuery.data.tournaments.length > 0 && (
+          <Section s={s} title="Tournaments" count={dashQuery.data.tournaments.length}>
+            {dashQuery.data.tournaments.slice(0, 10).map((t) => (
+              <TournamentRow
+                key={t.id}
+                t={t}
+                s={s}
+                onPress={() => router.push({ pathname: '/tournament/[id]', params: { id: t.id } })}
+              />
+            ))}
+          </Section>
         )}
       </ScrollView>
     </View>
@@ -255,7 +254,7 @@ const makeStyles = (t: ThemeColors) => ({
   brandRow: { flexDirection: 'row' as const, alignItems: 'center' as const, marginBottom: 0, paddingHorizontal: 4 },
   brandCenter: { flex: 1, alignItems: 'center' as const },
   brandSpacer: { width: 32 },
-  quickNav: { flexDirection: 'row' as const, gap: 8 },
+  quickNav: { flexDirection: 'row' as const, gap: 10, paddingTop: 4 },
   center: { padding: 32, alignItems: 'center' as const },
   errorBox: {
     backgroundColor: t.dangerBg,
@@ -289,7 +288,7 @@ const makeStyles = (t: ThemeColors) => ({
   },
   row: {
     flexDirection: 'row' as const,
-    alignItems: 'center' as const,
+    alignItems: 'flex-start' as const,
     paddingVertical: 12,
     paddingHorizontal: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -297,9 +296,22 @@ const makeStyles = (t: ThemeColors) => ({
     gap: 12,
   },
   rowPressed: { backgroundColor: t.accentTint },
-  rowMain: { flex: 1, gap: 2, minWidth: 0 },
-  rowTitle: { fontSize: 15, fontWeight: '600' as const, color: t.text },
+  rowMain: { flex: 1, gap: 4, minWidth: 0 },
+  rowTitleLine: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6 },
+  completedIcon: { fontSize: 14 },
+  rowTitle: { flex: 1, fontSize: 15, fontWeight: '700' as const, color: t.text },
   rowMeta: { fontSize: 12, color: t.textMuted },
+  placementsRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 6, paddingTop: 4 },
+  placementPill: {
+    fontSize: 11,
+    color: t.text,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    backgroundColor: t.surfaceMuted,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: t.border,
+  },
   rowBadge: {
     fontSize: 11,
     paddingHorizontal: 8,
@@ -308,16 +320,6 @@ const makeStyles = (t: ThemeColors) => ({
     backgroundColor: t.accentTint,
     color: t.accent,
     fontWeight: '700' as const,
-  },
-  empty: {
-    padding: 16,
-    fontSize: 13,
-    color: t.textDim,
-    textAlign: 'center' as const,
-    backgroundColor: t.card,
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: t.border,
   },
   activityRow: {
     flexDirection: 'row' as const,

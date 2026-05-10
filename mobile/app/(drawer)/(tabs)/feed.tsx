@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ChartJacket } from '@/components/chart-jacket';
 import { GradeChip } from '@/components/grade-chip';
 import { HamburgerButton } from '@/components/hamburger-button';
 import { LiveSessionCard } from '@/components/live-session-card';
@@ -291,18 +292,10 @@ function UpscoreCard({ item, onPump, s }: { item: FeedItem; onPump: (i: FeedItem
           const delta = (u.new_score ?? 0) - (u.old_score ?? 0);
           return (
             <View key={i} style={s.upscoreRow}>
-              {jacketUrl ? (
-                <Image source={{ uri: jacketUrl }} style={s.entryJacket} contentFit="cover" transition={150} />
-              ) : (
-                <View style={[s.entryJacket, s.jacketFallback]} />
-              )}
+              <ChartJacket jacketUrl={jacketUrl} mode={u.mode} level={u.level} size="sm" />
               <View style={s.entryMain}>
                 <Text style={s.songTitle} numberOfLines={1}>{u.song_title || 'Unknown song'}</Text>
                 <View style={s.metaChipsRow}>
-                  {u.mode ? <Text style={s.modeChip}>{u.mode}</Text> : null}
-                  {typeof u.level === 'number' && u.level > 0 ? (
-                    <Text style={s.levelChip}>Lv {u.level}</Text>
-                  ) : null}
                   <PlateBadge plate={u.plate} size="xs" />
                   {typeof u.over_top100_rank === 'number' && u.over_top100_rank > 0 ? (
                     <Text style={s.topRankChip}>TOP #{u.over_top100_rank}</Text>
@@ -365,16 +358,10 @@ function ClearCard({ item, onPump, s }: { item: FeedItem; onPump: (i: FeedItem) 
       />
 
       <View style={s.upscoreRow}>
-        {jacket ? (
-          <Image source={{ uri: jacket }} style={s.entryJacket} contentFit="cover" transition={150} />
-        ) : (
-          <View style={[s.entryJacket, s.jacketFallback]} />
-        )}
+        <ChartJacket jacketUrl={jacket} mode={mode} level={Number.isFinite(level) ? level : undefined} size="sm" />
         <View style={s.entryMain}>
           <Text style={s.songTitle} numberOfLines={1}>{songTitle}</Text>
           <View style={s.metaChipsRow}>
-            {mode ? <Text style={s.modeChip}>{mode}</Text> : null}
-            {Number.isFinite(level) && level > 0 ? <Text style={s.levelChip}>Lv {level}</Text> : null}
             <PlateBadge plate={plate} size="xs" />
           </View>
         </View>
