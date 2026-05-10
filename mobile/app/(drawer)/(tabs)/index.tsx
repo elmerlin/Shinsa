@@ -1,14 +1,17 @@
 import { useQuery } from '@tanstack/react-query';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HamburgerButton } from '@/components/hamburger-button';
 import { PumpShinsaLogo } from '@/components/pump-shinsa-logo';
+import { QuickNavButton } from '@/components/quick-nav-button';
 import { useTheme } from '@/contexts/theme-context';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
-import { dashboardApi } from '@/lib/api';
+import { dashboardApi, socialApi } from '@/lib/api';
+import { fullImageUrl } from '@/lib/images';
 import type { ThemeColors } from '@/constants/theme';
-import type { Duel, Notice, Tournament } from '@shared/api';
+import type { ActivityItem, Duel, Notice, Tournament } from '@shared/api';
 
 function formatDate(input?: string): string {
   if (!input) return '';
@@ -17,11 +20,38 @@ function formatDate(input?: string): string {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-interface RowProps {
-  s: ReturnType<typeof useThemedStyles<ReturnType<typeof makeStyles>>>;
+function timeAgo(input?: string): string {
+  if (!input) return '';
+  const d = new Date(input);
+  if (Number.isNaN(d.getTime())) return input;
+  const ms = Date.now() - d.getTime();
+  const secs = Math.floor(ms / 1000);
+  if (secs < 60) return `${secs}s`;
+  const m = Math.floor(secs / 60);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h`;
+  const days = Math.floor(h / 24);
+  if (days < 7) return `${days}d`;
+  return d.toLocaleDateString();
 }
 
-function TournamentRow({ t, onPress, s }: { t: Tournament; onPress: () => void } & RowProps) {
+const ACTIVITY_ICONS: Record<string, string> = {
+  new_user: '👤',
+  upscore: '📈',
+  new_clear: '🎯',
+  new_post: '📝',
+  new_tournament: '🏆',
+  new_duel: '⚔️',
+  new_online_duel: '🌐',
+  tournament_win: '🥇',
+  duel_win: '🏅',
+  online_duel_win: '🏅',
+};
+
+type Styles = ReturnType<typeof useThemedStyles<ReturnType<typeof makeStyles>>>;
+
+function TournamentRow({ t, onPress, s }: { t: Tournament; onPress: () => void; s: Styles }) {
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [s.row, pressed && s.rowPressed]}>
       <View style={s.rowMain}>
@@ -37,7 +67,7 @@ function TournamentRow({ t, onPress, s }: { t: Tournament; onPress: () => void }
   );
 }
 
-function DuelRow({ d, s }: { d: Duel } & RowProps) {
+function DuelRow({ d, s }: { d: Duel; s: Styles }) {
   return (
     <View style={s.row}>
       <View style={s.rowMain}>
@@ -48,7 +78,7 @@ function DuelRow({ d, s }: { d: Duel } & RowProps) {
   );
 }
 
-function NoticeRow({ n, s }: { n: Notice } & RowProps) {
+function NoticeRow({ n, s }: { n: Notice; s: Styles }) {
   return (
     <View style={s.row}>
       <View style={s.rowMain}>
@@ -61,13 +91,33 @@ function NoticeRow({ n, s }: { n: Notice } & RowProps) {
   );
 }
 
+function ActivityRow({ a, s }: { a: ActivityItem; s: Styles }) {
+  const icon = ACTIVITY_ICONS[a.type] || '•';
+  const avatar = typeof a.avatar === 'string' ? fullImageUrl(a.avatar) : undefined;
+  // Strip any embedded markup like emojis at start; web does a `renderFormattedText` pass.
+  // For mobile we just render the text plainly — server returns a human-friendly message.
+  return (
+    <View style={s.activityRow}>
+      <Text style={s.activityIcon}>{icon}</Text>
+      {avatar ? (
+        <Image source={{ uri: avatar }} style={s.activityAvatar} contentFit="cover" />
+      ) : (
+        <View style={s.activityAvatarPlaceholder} />
+      )}
+      <Text style={s.activityMessage} numberOfLines={1}>{a.message}</Text>
+      <Text style={s.activityTime}>{timeAgo(a.created_at)}</Text>
+    </View>
+  );
+}
+
 function Section({ title, count, children, empty, isEmpty, s }: {
   title: string;
   count: number;
   children: React.ReactNode;
   empty: string;
   isEmpty: boolean;
-} & RowProps) {
+  s: Styles;
+}) {
   return (
     <View style={s.section}>
       <View style={s.sectionHeader}>
@@ -84,16 +134,31 @@ export default function HomeScreen() {
   const router = useRouter();
   const { theme } = useTheme();
   const s = useThemedStyles(makeStyles);
-  const { data, isLoading, isError, error, refetch, isRefetching } = useQuery({
+
+  const dashQuery = useQuery({
     queryKey: ['dashboard'],
     queryFn: () => dashboardApi.get(),
   });
+
+  const activityQuery = useQuery({
+    queryKey: ['recent-activity'],
+    queryFn: () => socialApi.recentActivity(),
+    // Recent Activity is auth-protected; if it 401s we just hide the section.
+    retry: false,
+  });
+
+  const refetchAll = () => {
+    dashQuery.refetch();
+    activityQuery.refetch();
+  };
+
+  const isRefetching = dashQuery.isRefetching || activityQuery.isRefetching;
 
   return (
     <View style={s.container}>
       <ScrollView
         contentContainerStyle={[s.scroll, { paddingTop: insets.top + 16 }]}
-        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={theme.spinner} />}>
+        refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetchAll} tintColor={theme.spinner} />}>
         <View style={s.brandRow}>
           <HamburgerButton />
           <View style={s.brandCenter}>
@@ -102,27 +167,47 @@ export default function HomeScreen() {
           <View style={s.brandSpacer} />
         </View>
 
-        {isLoading && (
+        <View style={s.quickNav}>
+          <QuickNavButton label="Live" href="/live" icon="video.fill"
+            gradientFrom="#06b6d4" gradientTo="#1d4ed8" borderColor="rgba(165,243,252,0.3)" />
+          <QuickNavButton label="Songs" href="/songs" icon="music.note"
+            gradientFrom="#10b981" gradientTo="#0f766e" borderColor="rgba(167,243,208,0.3)" />
+          <QuickNavButton label="Lists" href="/lists" icon="list.bullet.rectangle"
+            gradientFrom="#8b5cf6" gradientTo="#6d28d9" borderColor="rgba(196,181,253,0.3)" />
+          <QuickNavButton label="Training" href="/training" icon="chart.line.uptrend.xyaxis"
+            gradientFrom="#f59e0b" gradientTo="#c2410c" borderColor="rgba(252,211,77,0.3)" />
+        </View>
+
+        {dashQuery.isLoading && (
           <View style={s.center}>
             <ActivityIndicator color={theme.spinner} />
           </View>
         )}
 
-        {isError && (
+        {dashQuery.isError && (
           <View style={s.errorBox}>
-            <Text style={s.errorText}>{error instanceof Error ? error.message : 'Failed to load dashboard'}</Text>
+            <Text style={s.errorText}>{dashQuery.error instanceof Error ? dashQuery.error.message : 'Failed to load dashboard'}</Text>
           </View>
         )}
 
-        {data && (
+        {activityQuery.data && activityQuery.data.length > 0 && (
+          <View style={s.section}>
+            <Text style={s.eyebrowTitle}>RECENT ACTIVITY</Text>
+            <View style={s.sectionBody}>
+              {activityQuery.data.slice(0, 10).map((a, i) => <ActivityRow key={i} a={a} s={s} />)}
+            </View>
+          </View>
+        )}
+
+        {dashQuery.data && (
           <>
             <Section
               s={s}
               title="Tournaments"
-              count={data.tournaments.length}
+              count={dashQuery.data.tournaments.length}
               empty="No active tournaments"
-              isEmpty={data.tournaments.length === 0}>
-              {data.tournaments.slice(0, 10).map((t) => (
+              isEmpty={dashQuery.data.tournaments.length === 0}>
+              {dashQuery.data.tournaments.slice(0, 10).map((t) => (
                 <TournamentRow
                   key={t.id}
                   t={t}
@@ -134,18 +219,18 @@ export default function HomeScreen() {
             <Section
               s={s}
               title="Recent duels"
-              count={data.duels.length}
+              count={dashQuery.data.duels.length}
               empty="No recent duels"
-              isEmpty={data.duels.length === 0}>
-              {data.duels.slice(0, 10).map((d) => <DuelRow key={d.id} d={d} s={s} />)}
+              isEmpty={dashQuery.data.duels.length === 0}>
+              {dashQuery.data.duels.slice(0, 10).map((d) => <DuelRow key={d.id} d={d} s={s} />)}
             </Section>
             <Section
               s={s}
               title="Notices"
-              count={data.notices.length}
+              count={dashQuery.data.notices.length}
               empty="No notices"
-              isEmpty={data.notices.length === 0}>
-              {data.notices.slice(0, 10).map((n) => <NoticeRow key={String(n.id)} n={n} s={s} />)}
+              isEmpty={dashQuery.data.notices.length === 0}>
+              {dashQuery.data.notices.slice(0, 10).map((n) => <NoticeRow key={String(n.id)} n={n} s={s} />)}
             </Section>
           </>
         )}
@@ -156,10 +241,11 @@ export default function HomeScreen() {
 
 const makeStyles = (t: ThemeColors) => ({
   container: { flex: 1, backgroundColor: t.bg },
-  scroll: { paddingHorizontal: 20, paddingBottom: 80, gap: 24 },
-  brandRow: { flexDirection: 'row' as const, alignItems: 'center' as const, marginBottom: 8 },
+  scroll: { paddingHorizontal: 16, paddingBottom: 80, gap: 24 },
+  brandRow: { flexDirection: 'row' as const, alignItems: 'center' as const, marginBottom: 0, paddingHorizontal: 4 },
   brandCenter: { flex: 1, alignItems: 'center' as const },
   brandSpacer: { width: 32 },
+  quickNav: { flexDirection: 'row' as const, gap: 8 },
   center: { padding: 32, alignItems: 'center' as const },
   errorBox: {
     backgroundColor: t.dangerBg,
@@ -177,6 +263,13 @@ const makeStyles = (t: ThemeColors) => ({
   },
   sectionTitle: { fontSize: 18, fontWeight: '700' as const, color: t.text },
   sectionCount: { fontSize: 12, color: t.textDim },
+  eyebrowTitle: {
+    fontSize: 13,
+    fontWeight: '800' as const,
+    letterSpacing: 2,
+    color: t.accent,
+    textTransform: 'uppercase' as const,
+  },
   sectionBody: {
     backgroundColor: t.card,
     borderRadius: 12,
@@ -216,4 +309,18 @@ const makeStyles = (t: ThemeColors) => ({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: t.border,
   },
+  activityRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: t.border,
+    gap: 8,
+  },
+  activityIcon: { fontSize: 14, width: 20, textAlign: 'center' as const },
+  activityAvatar: { width: 22, height: 22, borderRadius: 11, backgroundColor: t.surfaceMuted },
+  activityAvatarPlaceholder: { width: 22, height: 22 },
+  activityMessage: { flex: 1, fontSize: 12, color: t.textMuted },
+  activityTime: { fontSize: 10, color: t.textDim },
 });

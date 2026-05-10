@@ -23,6 +23,11 @@ const MAPPING = {
   'magnifyingglass': 'search',
   'bell.fill': 'notifications',
   'plus': 'add',
+  'video.fill': 'videocam',
+  'list.bullet.rectangle': 'list',
+  'chart.line.uptrend.xyaxis': 'trending-up',
+  'arrow.up': 'arrow-upward',
+  'play.rectangle.fill': 'play-arrow',
   'chevron.left.forwardslash.chevron.right': 'code',
   'chevron.right': 'chevron-right',
 } as IconMapping;

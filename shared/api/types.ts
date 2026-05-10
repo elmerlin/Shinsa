@@ -291,6 +291,35 @@ export interface FeedItem {
   [key: string]: unknown;
 }
 
+// --- Activity feed (used by Dashboard's Recent Activity strip) ---
+
+export type ActivityType =
+  | 'new_user'
+  | 'upscore'
+  | 'new_clear'
+  | 'new_post'
+  | 'new_tournament'
+  | 'new_duel'
+  | 'new_online_duel'
+  | 'tournament_win'
+  | 'duel_win'
+  | 'online_duel_win'
+  | string;
+
+export interface ActivityItem {
+  type: ActivityType;
+  /** Pre-formatted message — server returns a human-friendly string. */
+  message: string;
+  /** Web URL to navigate to (we map to mobile route or leave as no-op). */
+  link?: string;
+  user_id?: string;
+  username?: string;
+  avatar?: string;
+  nationality?: string;
+  created_at?: string;
+  [key: string]: unknown;
+}
+
 // --- Communities ---
 
 export interface Community {
