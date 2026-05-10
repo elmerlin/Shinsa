@@ -27,9 +27,9 @@ interface Dim {
 
 const SIZES: Record<ChartJacketSize, Dim> = {
   xs: { w: 56, h: 32, badgeSize: 14, fontSize: 8, radius: 6 },
-  sm: { w: 72, h: 42, badgeSize: 18, fontSize: 10, radius: 7 },
-  md: { w: 96, h: 56, badgeSize: 22, fontSize: 12, radius: 8 },
-  wide: { w: 128, h: 74, badgeSize: 26, fontSize: 14, radius: 10 },
+  sm: { w: 90, h: 52, badgeSize: 20, fontSize: 11, radius: 7 },
+  md: { w: 112, h: 64, badgeSize: 24, fontSize: 13, radius: 8 },
+  wide: { w: 144, h: 84, badgeSize: 28, fontSize: 15, radius: 10 },
 };
 
 // Mode → 3-stop gradient (top → middle → bottom)

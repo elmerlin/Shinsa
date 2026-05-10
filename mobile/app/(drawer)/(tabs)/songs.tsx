@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ChartBadge } from '@/components/chart-badge';
 import { ChartJacket } from '@/components/chart-jacket';
 import { HamburgerButton } from '@/components/hamburger-button';
 import { useAuth } from '@/contexts/auth-context';
@@ -52,14 +53,9 @@ function SongRow({ song, onChartPress, s }: {
           <Pressable
             key={chart.chart_id}
             onPress={() => onChartPress(chart)}
-            hitSlop={4}
+            hitSlop={6}
             style={({ pressed }) => [pressed && { opacity: 0.7 }]}>
-            <ChartJacket
-              jacketUrl={jacket}
-              mode={chart.mode}
-              level={chart.level}
-              size="sm"
-            />
+            <ChartBadge mode={chart.mode} level={chart.level} size="md" />
           </Pressable>
         ))}
       </View>
@@ -174,7 +170,7 @@ const makeStyles = (t: ThemeColors) => ({
   songMain: { flex: 1, gap: 2, minWidth: 0 },
   songTitle: { fontSize: 15, fontWeight: '700' as const, color: t.text },
   songArtist: { fontSize: 12, color: t.textMuted },
-  chartsRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 12, paddingLeft: 76 },
+  chartsRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8, paddingLeft: 0 },
   separator: { height: StyleSheet.hairlineWidth, backgroundColor: t.border, marginHorizontal: 14 },
   center: { flex: 1, alignItems: 'center' as const, justifyContent: 'center' as const, padding: 32 },
   empty: { textAlign: 'center' as const, padding: 32, color: t.textDim },
