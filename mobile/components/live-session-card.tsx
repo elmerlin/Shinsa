@@ -71,9 +71,9 @@ export function LiveSessionCard({ summary }: Props) {
 const makeStyles = (t: ThemeColors) => ({
   card: {
     borderRadius: 16,
-    backgroundColor: t.accentTint,
+    backgroundColor: t.surfaceMuted,
     borderWidth: 1,
-    borderColor: t.borderStrong,
+    borderColor: t.accentTint,
     padding: 14,
     gap: 10,
   },

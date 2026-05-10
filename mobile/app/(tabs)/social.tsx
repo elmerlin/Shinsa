@@ -28,18 +28,81 @@ function timeAgo(input?: string): string {
   return d.toLocaleDateString();
 }
 
-function parseImages(raw: FeedItem['images']): string[] {
+function fmtNum(n: number | undefined): string {
+  if (typeof n !== 'number' || !Number.isFinite(n)) return '—';
+  return n.toLocaleString();
+}
+
+function parseImages(raw: unknown): string[] {
   if (!raw) return [];
-  if (Array.isArray(raw)) return raw;
+  if (Array.isArray(raw)) return raw as string[];
   try {
-    const parsed = JSON.parse(raw);
+    const parsed = JSON.parse(String(raw));
     return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
   }
 }
 
+function parseList<T>(raw: unknown): T[] {
+  if (Array.isArray(raw)) return raw as T[];
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+interface UpscoreEntry {
+  song_title?: string;
+  mode?: string;
+  level?: number;
+  old_score?: number;
+  new_score?: number;
+  old_grade?: string;
+  new_grade?: string;
+  jacket_url?: string;
+  background_url?: string;
+}
+
+interface WeeklyChallengePlay {
+  song_title?: string;
+  mode?: string;
+  level?: number;
+  score?: number;
+  grade?: string;
+}
+
 type Styles = ReturnType<typeof useThemedStyles<ReturnType<typeof makeStyles>>>;
+
+function ActivityHeader({ username, action, time, avatar, s }: {
+  username: string;
+  action: string;
+  time: string;
+  avatar?: string;
+  s: Styles;
+}) {
+  return (
+    <View style={s.activityHeader}>
+      {avatar ? (
+        <Image source={{ uri: avatar }} style={s.activityAvatar} contentFit="cover" />
+      ) : (
+        <View style={[s.activityAvatar, s.avatarFallback]}>
+          <Text style={s.avatarLetter}>{username.charAt(0).toUpperCase()}</Text>
+        </View>
+      )}
+      <Text style={s.activityHeaderText}>
+        <Text style={s.activityUser}>{username}</Text>
+        <Text style={s.activityVerb}> {action}</Text>
+      </Text>
+      <Text style={s.activityTime}>{time}</Text>
+    </View>
+  );
+}
 
 function PostCard({ item, onPress, s }: { item: FeedItem; onPress: () => void; s: Styles }) {
   const avatar = typeof item.avatar === 'string' ? fullImageUrl(item.avatar) : undefined;
@@ -63,9 +126,7 @@ function PostCard({ item, onPress, s }: { item: FeedItem; onPress: () => void; s
         </View>
       </View>
       {summary ? <LiveSessionCard summary={summary} /> : null}
-      {content ? (
-        <Text style={s.content} numberOfLines={6}>{content}</Text>
-      ) : null}
+      {content ? <Text style={s.content} numberOfLines={6}>{content}</Text> : null}
       {firstImage ? (
         <Image source={{ uri: firstImage }} style={s.cardImage} contentFit="cover" transition={150} />
       ) : null}
@@ -81,29 +142,135 @@ function PostCard({ item, onPress, s }: { item: FeedItem; onPress: () => void; s
   );
 }
 
-function ActivityRow({ item, s }: { item: FeedItem; s: Styles }) {
+function ClearRow({ item, s }: { item: FeedItem; s: Styles }) {
+  const username = String(item.username || 'anonymous');
   const avatar = typeof item.avatar === 'string' ? fullImageUrl(item.avatar) : undefined;
-  let label = '';
-  if (item.type === 'upscore') label = 'upscored';
-  else if (item.type === 'clear') label = 'cleared a chart';
-  else if (item.type === 'weekly_challenge') label = 'played a weekly challenge';
+  const jacket = typeof item.background_url === 'string' ? fullImageUrl(item.background_url) : undefined;
+  const songTitle = String((item as Record<string, unknown>).song_title ?? '').trim() || 'Unknown song';
+  const mode = String((item as Record<string, unknown>).mode ?? '');
+  const level = Number((item as Record<string, unknown>).level);
+  const score = Number((item as Record<string, unknown>).score);
+  const grade = String((item as Record<string, unknown>).grade ?? '');
+  const plate = String((item as Record<string, unknown>).plate ?? '');
 
   return (
-    <View style={s.activityRow}>
-      {avatar ? (
-        <Image source={{ uri: avatar }} style={s.activityAvatar} contentFit="cover" />
-      ) : (
-        <View style={[s.activityAvatar, s.avatarFallback]}>
-          <Text style={s.activityAvatarLetter}>{(item.username || '?').charAt(0).toUpperCase()}</Text>
+    <View style={s.activityCard}>
+      <ActivityHeader
+        username={username}
+        action="cleared a chart"
+        time={timeAgo(item.created_at)}
+        avatar={avatar}
+        s={s}
+      />
+      <View style={s.activityBody}>
+        {jacket ? (
+          <Image source={{ uri: jacket }} style={s.activityJacket} contentFit="cover" transition={150} />
+        ) : (
+          <View style={[s.activityJacket, s.jacketFallback]} />
+        )}
+        <View style={s.activityBodyMain}>
+          <Text style={s.songTitle} numberOfLines={2}>{songTitle}</Text>
+          <View style={s.metaChipsRow}>
+            {mode ? <Text style={s.modeChip}>{mode}</Text> : null}
+            {Number.isFinite(level) && level > 0 ? <Text style={s.levelChip}>Lv {level}</Text> : null}
+          </View>
         </View>
-      )}
-      <View style={s.activityMain}>
-        <Text style={s.activityText}>
-          <Text style={s.activityUser}>{item.username || 'anonymous'}</Text>
-          <Text style={s.activityLabel}> {label}</Text>
-        </Text>
-        <Text style={s.activityTime}>{timeAgo(item.created_at)}</Text>
+        <View style={s.activityScoreCol}>
+          <Text style={s.scoreValue}>{fmtNum(score)}</Text>
+          <View style={s.gradeRow}>
+            {grade ? <Text style={s.gradeText}>{grade}</Text> : null}
+            {plate ? <Text style={s.plateText}>{plate}</Text> : null}
+          </View>
+        </View>
       </View>
+    </View>
+  );
+}
+
+function UpscoreRow({ item, s }: { item: FeedItem; s: Styles }) {
+  const username = String(item.username || 'anonymous');
+  const avatar = typeof item.avatar === 'string' ? fullImageUrl(item.avatar) : undefined;
+  const entries = parseList<UpscoreEntry>((item as Record<string, unknown>).upscores_json);
+  const first = entries[0];
+  const more = Math.max(0, entries.length - 1);
+  const pumbGain = Number((item as Record<string, unknown>).pumbility_gain);
+
+  if (!first) {
+    // No detail available — fall back to bare action row
+    return (
+      <View style={s.activityCard}>
+        <ActivityHeader username={username} action="upscored" time={timeAgo(item.created_at)} avatar={avatar} s={s} />
+      </View>
+    );
+  }
+
+  const jacket = first.jacket_url || first.background_url;
+  const jacketUrl = typeof jacket === 'string' ? fullImageUrl(jacket) : undefined;
+  const delta = (first.new_score ?? 0) - (first.old_score ?? 0);
+
+  return (
+    <View style={s.activityCard}>
+      <ActivityHeader
+        username={username}
+        action={more > 0 ? `upscored ${entries.length} charts` : 'upscored'}
+        time={timeAgo(item.created_at)}
+        avatar={avatar}
+        s={s}
+      />
+      <View style={s.activityBody}>
+        {jacketUrl ? (
+          <Image source={{ uri: jacketUrl }} style={s.activityJacket} contentFit="cover" transition={150} />
+        ) : (
+          <View style={[s.activityJacket, s.jacketFallback]} />
+        )}
+        <View style={s.activityBodyMain}>
+          <Text style={s.songTitle} numberOfLines={2}>{first.song_title || 'Unknown song'}</Text>
+          <View style={s.metaChipsRow}>
+            {first.mode ? <Text style={s.modeChip}>{first.mode}</Text> : null}
+            {typeof first.level === 'number' && first.level > 0 ? (
+              <Text style={s.levelChip}>Lv {first.level}</Text>
+            ) : null}
+          </View>
+        </View>
+        <View style={s.activityScoreCol}>
+          <Text style={s.scoreDelta}>+{fmtNum(delta)}</Text>
+          <Text style={s.scoreFromTo}>{fmtNum(first.old_score)} → {fmtNum(first.new_score)}</Text>
+        </View>
+      </View>
+      {(more > 0 || (Number.isFinite(pumbGain) && pumbGain > 0)) ? (
+        <Text style={s.activityFooter}>
+          {more > 0 ? `+ ${more} more` : ''}
+          {more > 0 && Number.isFinite(pumbGain) && pumbGain > 0 ? ' · ' : ''}
+          {Number.isFinite(pumbGain) && pumbGain > 0 ? `+${pumbGain} pumb` : ''}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+function WeeklyChallengeRow({ item, s }: { item: FeedItem; s: Styles }) {
+  const username = String(item.username || 'anonymous');
+  const avatar = typeof item.avatar === 'string' ? fullImageUrl(item.avatar) : undefined;
+  const totalCharts = Number((item as Record<string, unknown>).total_charts_played);
+  const totalPts = Number((item as Record<string, unknown>).total_rating_points);
+  const plays = parseList<WeeklyChallengePlay>((item as Record<string, unknown>).plays_json);
+  const charts = Number.isFinite(totalCharts) && totalCharts > 0 ? totalCharts : plays.length;
+  const ptsLabel = Number.isFinite(totalPts) && totalPts > 0 ? ` · ${fmtNum(totalPts)} pts` : '';
+
+  return (
+    <View style={s.activityCard}>
+      <ActivityHeader
+        username={username}
+        action="played a weekly challenge"
+        time={timeAgo(item.created_at)}
+        avatar={avatar}
+        s={s}
+      />
+      {charts > 0 ? (
+        <Text style={s.activityFooter}>
+          {charts} chart{charts === 1 ? '' : 's'}{ptsLabel}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -135,17 +302,21 @@ export default function SocialScreen() {
         <FlatList
           data={data ?? []}
           keyExtractor={(item, i) => `${item.type}:${item.id}:${i}`}
-          renderItem={({ item }) => (
-            item.type === 'post' ? (
-              <PostCard
-                item={item}
-                s={s}
-                onPress={() => router.push({ pathname: '/post/[id]', params: { id: String(item.id) } })}
-              />
-            ) : (
-              <ActivityRow item={item} s={s} />
-            )
-          )}
+          renderItem={({ item }) => {
+            if (item.type === 'post') {
+              return (
+                <PostCard
+                  item={item}
+                  s={s}
+                  onPress={() => router.push({ pathname: '/post/[id]', params: { id: String(item.id) } })}
+                />
+              );
+            }
+            if (item.type === 'clear') return <ClearRow item={item} s={s} />;
+            if (item.type === 'upscore') return <UpscoreRow item={item} s={s} />;
+            if (item.type === 'weekly_challenge') return <WeeklyChallengeRow item={item} s={s} />;
+            return null;
+          }}
           contentContainerStyle={s.listContent}
           ItemSeparatorComponent={() => <View style={s.separator} />}
           ListEmptyComponent={() => <Text style={s.empty}>Your feed is empty. Follow people to see their activity here.</Text>}
@@ -178,7 +349,7 @@ const makeStyles = (t: ThemeColors) => ({
   cardHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10 },
   avatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: t.surfaceMuted },
   avatarFallback: { alignItems: 'center' as const, justifyContent: 'center' as const },
-  avatarLetter: { fontSize: 16, fontWeight: '700' as const, color: t.textMuted },
+  avatarLetter: { fontSize: 14, fontWeight: '700' as const, color: t.textMuted },
   headerInfo: { flex: 1, gap: 1 },
   username: { fontSize: 14, fontWeight: '700' as const, color: t.text },
   time: { fontSize: 11, color: t.textDim },
@@ -187,19 +358,64 @@ const makeStyles = (t: ThemeColors) => ({
   cardFooter: { flexDirection: 'row' as const, gap: 16, paddingTop: 4 },
   metric: { fontSize: 12, color: t.textMuted, fontWeight: '700' as const },
 
-  activityRow: {
+  // Activity card (clear/upscore/weekly_challenge)
+  activityCard: {
+    backgroundColor: t.card,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: t.border,
+    padding: 12,
+    gap: 10,
+  },
+  activityHeader: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    gap: 10,
-    padding: 12,
-    backgroundColor: t.surfaceMuted,
-    borderRadius: 10,
+    gap: 8,
   },
-  activityAvatar: { width: 28, height: 28, borderRadius: 14, backgroundColor: t.surfaceMuted },
-  activityAvatarLetter: { fontSize: 12, fontWeight: '700' as const, color: t.textMuted },
-  activityMain: { flex: 1, gap: 1 },
-  activityText: { fontSize: 13, color: t.text },
-  activityUser: { fontWeight: '700' as const, color: t.text },
-  activityLabel: { color: t.textMuted },
+  activityAvatar: { width: 24, height: 24, borderRadius: 12, backgroundColor: t.surfaceMuted },
+  activityHeaderText: { flex: 1, fontSize: 13, color: t.textMuted },
+  activityUser: { fontWeight: '800' as const, color: t.text },
+  activityVerb: { color: t.textMuted },
   activityTime: { fontSize: 11, color: t.textDim },
+
+  activityBody: {
+    flexDirection: 'row' as const,
+    gap: 10,
+    alignItems: 'center' as const,
+  },
+  activityJacket: { width: 44, height: 44, borderRadius: 6, backgroundColor: t.surfaceMuted },
+  jacketFallback: {},
+  activityBodyMain: { flex: 1, minWidth: 0, gap: 4 },
+  songTitle: { fontSize: 14, fontWeight: '700' as const, color: t.text, lineHeight: 18 },
+  metaChipsRow: { flexDirection: 'row' as const, gap: 6, flexWrap: 'wrap' as const },
+  modeChip: {
+    fontSize: 10,
+    fontWeight: '800' as const,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    backgroundColor: t.surfaceMuted,
+    color: t.textMuted,
+    overflow: 'hidden' as const,
+  },
+  levelChip: {
+    fontSize: 10,
+    fontWeight: '800' as const,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    backgroundColor: t.accentTint,
+    color: t.accent,
+    overflow: 'hidden' as const,
+  },
+
+  activityScoreCol: { alignItems: 'flex-end' as const, gap: 2, minWidth: 96 },
+  scoreValue: { fontSize: 14, fontWeight: '800' as const, color: t.text, fontVariant: ['tabular-nums' as const] },
+  scoreDelta: { fontSize: 14, fontWeight: '800' as const, color: t.success, fontVariant: ['tabular-nums' as const] },
+  scoreFromTo: { fontSize: 10, color: t.textMuted, fontVariant: ['tabular-nums' as const] },
+  gradeRow: { flexDirection: 'row' as const, gap: 4 },
+  gradeText: { fontSize: 11, fontWeight: '800' as const, color: t.accent },
+  plateText: { fontSize: 11, fontWeight: '700' as const, color: t.textMuted },
+
+  activityFooter: { fontSize: 11, color: t.textMuted, marginTop: -2 },
 });

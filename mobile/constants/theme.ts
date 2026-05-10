@@ -96,16 +96,16 @@ const dark: ThemeColors = {
 };
 
 const light: ThemeColors = {
-  bg: BRAND.white,
+  bg: '#F2F4F8',
   surface: '#FFFFFF',
   card: '#FFFFFF',
-  surfaceMuted: 'rgba(5,5,5,0.04)',
-  border: 'rgba(5,5,5,0.08)',
-  borderStrong: 'rgba(5,5,5,0.16)',
+  surfaceMuted: 'rgba(5,5,5,0.05)',
+  border: 'rgba(5,5,5,0.1)',
+  borderStrong: 'rgba(5,5,5,0.2)',
   accent: BRAND.goldDeep,
   accentMuted: BRAND.gold,
   accentDeep: '#B27D00',
-  accentTint: 'rgba(242,169,0,0.12)',
+  accentTint: 'rgba(242,169,0,0.1)',
   text: BRAND.black,
   textMuted: '#3F3F46',
   textDim: BRAND.muted,

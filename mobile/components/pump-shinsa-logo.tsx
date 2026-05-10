@@ -8,10 +8,10 @@ interface Props {
   size?: number;
 }
 
-const SOURCES: Record<Variant, ReturnType<typeof require>> = {
-  horizontal: require('@/assets/brand/both.png'),
-  icon: require('@/assets/brand/icon.png'),
-  wordmark: require('@/assets/brand/text.png'),
+const SOURCES: Record<Variant, number> = {
+  horizontal: require('@/assets/brand/both.png') as number,
+  icon: require('@/assets/brand/icon.png') as number,
+  wordmark: require('@/assets/brand/text.png') as number,
 };
 
 const ASPECT: Record<Variant, number> = {
