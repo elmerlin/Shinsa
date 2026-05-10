@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -13,9 +14,9 @@ function formatDate(input?: string): string {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-function TournamentRow({ t }: { t: Tournament }) {
+function TournamentRow({ t, onPress }: { t: Tournament; onPress: () => void }) {
   return (
-    <View style={styles.row}>
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}>
       <View style={styles.rowMain}>
         <ThemedText style={styles.rowTitle} numberOfLines={1}>{t.name}</ThemedText>
         <Text style={styles.rowMeta} numberOfLines={1}>
@@ -25,7 +26,7 @@ function TournamentRow({ t }: { t: Tournament }) {
       {typeof t.current_round === 'number' && typeof t.total_rounds === 'number' && t.total_rounds > 0 ? (
         <Text style={styles.rowBadge}>R{t.current_round}/{t.total_rounds}</Text>
       ) : null}
-    </View>
+    </Pressable>
   );
 }
 
@@ -78,6 +79,7 @@ function Section<T>({ title, items, render, empty }: {
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { data, isLoading, isError, error, refetch, isRefetching } = useQuery({
     queryKey: ['dashboard'],
     queryFn: () => dashboardApi.get(),
@@ -108,7 +110,12 @@ export default function HomeScreen() {
               title="Tournaments"
               items={data.tournaments.slice(0, 10)}
               empty="No active tournaments"
-              render={(t) => <TournamentRow t={t} />}
+              render={(t) => (
+                <TournamentRow
+                  t={t}
+                  onPress={() => router.push({ pathname: '/tournament/[id]', params: { id: t.id } })}
+                />
+              )}
             />
             <Section
               title="Recent duels"
@@ -163,7 +170,8 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(148,163,184,0.15)',
     gap: 12,
   },
-  rowMain: { flex: 1, gap: 2 },
+  rowPressed: { backgroundColor: 'rgba(59,130,246,0.08)' },
+  rowMain: { flex: 1, gap: 2, minWidth: 0 },
   rowTitle: { fontSize: 15, fontWeight: '600' },
   rowMeta: { fontSize: 12, opacity: 0.55 },
   rowBadge: {

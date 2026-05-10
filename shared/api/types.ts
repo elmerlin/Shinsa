@@ -55,6 +55,10 @@ export interface LoginPayload {
 
 // --- Domain types ---
 
+/**
+ * Tournament. NOTE: list endpoint returns `config` as serialized JSON string;
+ * detail endpoint returns it as an object. Consumers should be defensive.
+ */
 export interface Tournament {
   id: string;
   name: string;
@@ -63,10 +67,14 @@ export interface Tournament {
   phase?: string;
   current_round?: number;
   total_rounds?: number;
-  config?: Record<string, unknown>;
+  config?: string | Record<string, unknown>;
   avatar?: string;
   archived?: boolean | number;
   created_at?: string;
+  current_phase_id?: string | null;
+  poster_bg?: string;
+  gif_avatar?: string;
+  placement_snapshots?: unknown;
   [key: string]: unknown;
 }
 
@@ -152,4 +160,61 @@ export interface ChartDetailResponse {
   progression?: unknown[];
   history?: unknown[];
   friend_records?: unknown[];
+}
+
+export interface Match {
+  id: string;
+  tournament_id: string;
+  round_number?: number;
+  player1_id?: string | null;
+  player2_id?: string | null;
+  winner_id?: string | null;
+  difficulty_min?: number;
+  difficulty_max?: number;
+  is_bye?: boolean | number;
+  status?: string;
+  drawn_songs?: Song[];
+  [key: string]: unknown;
+}
+
+export interface Player {
+  id: string;
+  tournament_id?: string;
+  name: string;
+  skill_title?: string;
+  skill_level?: number;
+  pumbility?: number;
+  description?: string;
+  avatar?: string;
+  gender?: string;
+  wins?: number;
+  losses?: number;
+  points?: number;
+  buchholz?: number;
+  seed_rank?: number;
+  is_active?: boolean | number;
+  created_at?: string;
+  user_id?: string;
+  nationality?: string;
+  eliminated_at_phase?: string;
+  [key: string]: unknown;
+}
+
+export interface DiscussionMessage {
+  id: string;
+  tournament_id?: string;
+  user_id?: string;
+  parent_id?: string | null;
+  username?: string;
+  avatar?: string;
+  body?: string;
+  created_at?: string;
+  pumps?: number;
+  pumped_by_viewer?: boolean;
+  [key: string]: unknown;
+}
+
+export interface DiscussionResponse {
+  threads: DiscussionMessage[];
+  viewer_count?: number;
 }
