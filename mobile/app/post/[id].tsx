@@ -2,12 +2,13 @@ import { useQuery } from '@tanstack/react-query';
 import { Image } from 'expo-image';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
 import { LiveSessionCard } from '@/components/live-session-card';
+import { useTheme } from '@/contexts/theme-context';
+import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { socialApi } from '@/lib/api';
 import { fullImageUrl } from '@/lib/images';
 import { parseLiveSessionMarker } from '@/lib/liveSessionMarker';
+import type { ThemeColors } from '@/constants/theme';
 import type { Comment, Post } from '@shared/api';
 
 function timeAgo(input?: string): string {
@@ -15,9 +16,9 @@ function timeAgo(input?: string): string {
   const d = new Date(input);
   if (Number.isNaN(d.getTime())) return input;
   const ms = Date.now() - d.getTime();
-  const s = Math.floor(ms / 1000);
-  if (s < 60) return `${s}s ago`;
-  const m = Math.floor(s / 60);
+  const secs = Math.floor(ms / 1000);
+  if (secs < 60) return `${secs}s ago`;
+  const m = Math.floor(secs / 60);
   if (m < 60) return `${m}m ago`;
   const h = Math.floor(m / 60);
   if (h < 24) return `${h}h ago`;
@@ -36,23 +37,25 @@ function parseImages(raw: Post['images']): string[] {
   }
 }
 
-function CommentRow({ c }: { c: Comment }) {
+type Styles = ReturnType<typeof useThemedStyles<ReturnType<typeof makeStyles>>>;
+
+function CommentRow({ c, s }: { c: Comment; s: Styles }) {
   const avatar = typeof c.avatar === 'string' ? fullImageUrl(c.avatar) : undefined;
   return (
-    <View style={[styles.commentRow, c.parent_id ? styles.commentReply : null]}>
+    <View style={[s.commentRow, c.parent_id ? s.commentReply : null]}>
       {avatar ? (
-        <Image source={{ uri: avatar }} style={styles.commentAvatar} contentFit="cover" />
+        <Image source={{ uri: avatar }} style={s.commentAvatar} contentFit="cover" />
       ) : (
-        <View style={[styles.commentAvatar, styles.avatarFallback]}>
-          <Text style={styles.avatarLetter}>{(c.username || '?').charAt(0).toUpperCase()}</Text>
+        <View style={[s.commentAvatar, s.avatarFallback]}>
+          <Text style={s.avatarLetter}>{(c.username || '?').charAt(0).toUpperCase()}</Text>
         </View>
       )}
-      <View style={styles.commentMain}>
-        <View style={styles.commentHeader}>
-          <ThemedText style={styles.commentUser}>{c.username || 'anonymous'}</ThemedText>
-          <Text style={styles.commentTime}>{timeAgo(c.created_at)}</Text>
+      <View style={s.commentMain}>
+        <View style={s.commentHeader}>
+          <Text style={s.commentUser}>{c.username || 'anonymous'}</Text>
+          <Text style={s.commentTime}>{timeAgo(c.created_at)}</Text>
         </View>
-        {c.content ? <Text style={styles.commentBody}>{c.content}</Text> : null}
+        {c.content ? <Text style={s.commentBody}>{c.content}</Text> : null}
       </View>
     </View>
   );
@@ -61,6 +64,8 @@ function CommentRow({ c }: { c: Comment }) {
 export default function PostDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const postId = id ?? '';
+  const { theme } = useTheme();
+  const s = useThemedStyles(makeStyles);
 
   const postQuery = useQuery({
     queryKey: ['post', postId],
@@ -83,16 +88,16 @@ export default function PostDetailScreen() {
   const { content: postContent, summary: liveSummary } = parseLiveSessionMarker(post?.content);
 
   return (
-    <ThemedView style={styles.container}>
+    <View style={s.container}>
       <Stack.Screen options={{ title: post?.username ? `@${post.username}` : 'Post' }} />
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView contentContainerStyle={s.scroll}>
         {postQuery.isLoading && (
-          <View style={styles.center}><ActivityIndicator color="#ff3366" /></View>
+          <View style={s.center}><ActivityIndicator color={theme.spinner} /></View>
         )}
 
         {postQuery.isError && (
-          <View style={styles.errorBox}>
-            <Text style={styles.errorText}>
+          <View style={s.errorBox}>
+            <Text style={s.errorText}>
               {postQuery.error instanceof Error ? postQuery.error.message : 'Failed to load post'}
             </Text>
           </View>
@@ -100,106 +105,99 @@ export default function PostDetailScreen() {
 
         {post && (
           <>
-            <View style={styles.postHeader}>
+            <View style={s.postHeader}>
               {avatar ? (
-                <Image source={{ uri: avatar }} style={styles.postAvatar} contentFit="cover" />
+                <Image source={{ uri: avatar }} style={s.postAvatar} contentFit="cover" />
               ) : (
-                <View style={[styles.postAvatar, styles.avatarFallback]}>
-                  <Text style={styles.postAvatarLetter}>{(post.username || '?').charAt(0).toUpperCase()}</Text>
+                <View style={[s.postAvatar, s.avatarFallback]}>
+                  <Text style={s.postAvatarLetter}>{(post.username || '?').charAt(0).toUpperCase()}</Text>
                 </View>
               )}
-              <View style={styles.postHeaderInfo}>
-                <ThemedText style={styles.postUsername}>@{post.username || 'anonymous'}</ThemedText>
-                <Text style={styles.postTime}>{timeAgo(post.created_at)}</Text>
+              <View style={s.postHeaderInfo}>
+                <Text style={s.postUsername}>@{post.username || 'anonymous'}</Text>
+                <Text style={s.postTime}>{timeAgo(post.created_at)}</Text>
               </View>
             </View>
 
             {liveSummary ? <LiveSessionCard summary={liveSummary} /> : null}
-            {postContent ? (
-              <ThemedText style={styles.postContent}>{postContent}</ThemedText>
-            ) : null}
+            {postContent ? <Text style={s.postContent}>{postContent}</Text> : null}
 
             {images.length > 0 && (
-              <View style={styles.imagesList}>
+              <View style={s.imagesList}>
                 {images.map((img, i) => {
                   const url = fullImageUrl(img);
                   return url ? (
-                    <Image key={i} source={{ uri: url }} style={styles.postImage} contentFit="cover" transition={150} />
+                    <Image key={i} source={{ uri: url }} style={s.postImage} contentFit="cover" transition={150} />
                   ) : null;
                 })}
               </View>
             )}
 
-            <View style={styles.postFooter}>
+            <View style={s.postFooter}>
               {typeof post.pump_count === 'number' ? (
-                <Text style={styles.metric}>↑ {post.pump_count}</Text>
+                <Text style={s.metric}>↑ {post.pump_count}</Text>
               ) : null}
               {typeof post.comment_count === 'number' ? (
-                <Text style={styles.metric}>💬 {post.comment_count}</Text>
+                <Text style={s.metric}>💬 {post.comment_count}</Text>
               ) : null}
             </View>
 
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <ThemedText type="subtitle">Comments</ThemedText>
-                <Text style={styles.sectionCount}>{comments.length}</Text>
+            <View style={s.section}>
+              <View style={s.sectionHeader}>
+                <Text style={s.sectionTitle}>Comments</Text>
+                <Text style={s.sectionCount}>{comments.length}</Text>
               </View>
               {commentsQuery.isLoading ? (
-                <ActivityIndicator color="#ff3366" style={{ padding: 24 }} />
+                <ActivityIndicator color={theme.spinner} style={{ padding: 24 }} />
               ) : comments.length === 0 ? (
-                <Text style={styles.empty}>No comments yet</Text>
+                <Text style={s.empty}>No comments yet</Text>
               ) : (
-                <View style={styles.commentsList}>
-                  {comments.map((c) => <CommentRow key={c.id} c={c} />)}
+                <View style={s.commentsList}>
+                  {comments.map((c) => <CommentRow key={c.id} c={c} s={s} />)}
                 </View>
               )}
             </View>
           </>
         )}
       </ScrollView>
-    </ThemedView>
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1 },
+const makeStyles = (t: ThemeColors) => ({
+  container: { flex: 1, backgroundColor: t.bg },
   scroll: { padding: 20, gap: 16, paddingBottom: 60 },
-  center: { padding: 32, alignItems: 'center' },
+  center: { padding: 32, alignItems: 'center' as const },
 
-  postHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  postAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#1e293b' },
-  postAvatarLetter: { fontSize: 20, fontWeight: '700', color: '#94a3b8' },
+  postHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10 },
+  postAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: t.surfaceMuted },
+  postAvatarLetter: { fontSize: 20, fontWeight: '800' as const, color: t.textMuted },
   postHeaderInfo: { flex: 1, gap: 2 },
-  postUsername: { fontSize: 15, fontWeight: '700' },
-  postTime: { fontSize: 12, opacity: 0.5 },
-  postContent: { fontSize: 15, lineHeight: 22 },
+  postUsername: { fontSize: 15, fontWeight: '800' as const, color: t.text },
+  postTime: { fontSize: 12, color: t.textDim },
+  postContent: { fontSize: 15, lineHeight: 22, color: t.text },
   imagesList: { gap: 8 },
-  postImage: { width: '100%', aspectRatio: 16 / 9, borderRadius: 10, backgroundColor: '#1e293b' },
-  postFooter: { flexDirection: 'row', gap: 16, paddingVertical: 8, borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: 'rgba(148,163,184,0.15)' },
-  metric: { fontSize: 13, fontWeight: '600' },
+  postImage: { width: '100%' as const, aspectRatio: 16 / 9, borderRadius: 10, backgroundColor: t.surfaceMuted },
+  postFooter: { flexDirection: 'row' as const, gap: 16, paddingVertical: 8, borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: t.border },
+  metric: { fontSize: 13, fontWeight: '700' as const, color: t.textMuted },
 
   section: { gap: 8, marginTop: 8 },
-  sectionHeader: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
-  sectionCount: { fontSize: 12, opacity: 0.5 },
-  commentsList: { backgroundColor: '#141428', borderRadius: 12, padding: 4 },
-  commentRow: { flexDirection: 'row', gap: 10, padding: 10 },
+  sectionTitle: { fontSize: 18, fontWeight: '700' as const, color: t.text },
+  sectionHeader: { flexDirection: 'row' as const, alignItems: 'baseline' as const, justifyContent: 'space-between' as const },
+  sectionCount: { fontSize: 12, color: t.textDim },
+  commentsList: { backgroundColor: t.card, borderRadius: 12, borderWidth: 1, borderColor: t.border, padding: 4 },
+  commentRow: { flexDirection: 'row' as const, gap: 10, padding: 10 },
   commentReply: { paddingLeft: 36, opacity: 0.85 },
-  commentAvatar: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#1e293b' },
-  avatarFallback: { alignItems: 'center', justifyContent: 'center' },
-  avatarLetter: { fontSize: 12, fontWeight: '700', color: '#94a3b8' },
+  commentAvatar: { width: 28, height: 28, borderRadius: 14, backgroundColor: t.surfaceMuted },
+  avatarFallback: { alignItems: 'center' as const, justifyContent: 'center' as const },
+  avatarLetter: { fontSize: 12, fontWeight: '800' as const, color: t.textMuted },
   commentMain: { flex: 1, gap: 2 },
-  commentHeader: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
-  commentUser: { fontSize: 13, fontWeight: '600' },
-  commentTime: { fontSize: 11, opacity: 0.5 },
-  commentBody: { fontSize: 14, lineHeight: 20 },
+  commentHeader: { flexDirection: 'row' as const, alignItems: 'baseline' as const, gap: 8 },
+  commentUser: { fontSize: 13, fontWeight: '700' as const, color: t.text },
+  commentTime: { fontSize: 11, color: t.textDim },
+  commentBody: { fontSize: 14, lineHeight: 20, color: t.text },
 
-  empty: { padding: 16, textAlign: 'center', opacity: 0.5 },
-  errorBox: {
-    backgroundColor: 'rgba(239,68,68,0.1)',
-    borderColor: 'rgba(239,68,68,0.3)',
-    borderWidth: 1,
-    padding: 12,
-    borderRadius: 8,
-  },
-  errorText: { color: '#fca5a5', fontSize: 14 },
+  empty: { padding: 16, textAlign: 'center' as const, color: t.textDim },
+  errorBox: { backgroundColor: t.dangerBg, borderColor: t.dangerBorder, borderWidth: 1, padding: 12, borderRadius: 8 },
+  errorText: { color: t.danger, fontSize: 14 },
 });

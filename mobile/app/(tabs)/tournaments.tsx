@@ -2,9 +2,10 @@ import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
+import { useTheme } from '@/contexts/theme-context';
+import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { tournamentsApi } from '@/lib/api';
+import type { ThemeColors } from '@/constants/theme';
 import type { Tournament } from '@shared/api';
 
 function formatDate(input?: string): string {
@@ -14,33 +15,25 @@ function formatDate(input?: string): string {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-const PHASE_COLORS: Record<string, { bg: string; fg: string }> = {
-  COMPLETED: { bg: 'rgba(148,163,184,0.15)', fg: '#94a3b8' },
-  DRAW: { bg: 'rgba(255,51,102,0.15)', fg: '#ff6b8a' },
-  PLAYING: { bg: 'rgba(34,197,94,0.15)', fg: '#4ade80' },
-  PENDING: { bg: 'rgba(234,179,8,0.15)', fg: '#facc15' },
-};
+type Styles = ReturnType<typeof useThemedStyles<ReturnType<typeof makeStyles>>>;
 
-function TournamentRow({ t, onPress }: { t: Tournament; onPress: () => void }) {
-  const phaseStyle = (t.phase && PHASE_COLORS[t.phase]) || PHASE_COLORS.PENDING;
+function TournamentRow({ t, onPress, s }: { t: Tournament; onPress: () => void; s: Styles }) {
   const initial = t.name.charAt(0).toUpperCase();
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}>
-      <View style={styles.avatarPlaceholder}>
-        <Text style={styles.avatarLetter}>{initial}</Text>
+    <Pressable onPress={onPress} style={({ pressed }) => [s.row, pressed && s.rowPressed]}>
+      <View style={s.avatarPlaceholder}>
+        <Text style={s.avatarLetter}>{initial}</Text>
       </View>
-      <View style={styles.rowMain}>
-        <ThemedText style={styles.rowTitle} numberOfLines={1}>{t.name}</ThemedText>
-        <Text style={styles.rowMeta} numberOfLines={1}>
+      <View style={s.rowMain}>
+        <Text style={s.rowTitle} numberOfLines={1}>{t.name}</Text>
+        <Text style={s.rowMeta} numberOfLines={1}>
           {[formatDate(t.date), t.location].filter(Boolean).join(' · ') || '—'}
         </Text>
       </View>
-      <View style={styles.rowRight}>
-        {t.phase ? (
-          <Text style={[styles.phaseChip, { backgroundColor: phaseStyle.bg, color: phaseStyle.fg }]}>{t.phase}</Text>
-        ) : null}
+      <View style={s.rowRight}>
+        {t.phase ? <Text style={s.phaseChip}>{t.phase}</Text> : null}
         {typeof t.current_round === 'number' && typeof t.total_rounds === 'number' && t.total_rounds > 0 ? (
-          <Text style={styles.roundChip}>R{t.current_round}/{t.total_rounds}</Text>
+          <Text style={s.roundChip}>R{t.current_round}/{t.total_rounds}</Text>
         ) : null}
       </View>
     </Pressable>
@@ -50,81 +43,80 @@ function TournamentRow({ t, onPress }: { t: Tournament; onPress: () => void }) {
 export default function TournamentsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { theme } = useTheme();
+  const s = useThemedStyles(makeStyles);
   const { data, isLoading, isError, error, refetch, isRefetching } = useQuery({
     queryKey: ['tournaments'],
     queryFn: () => tournamentsApi.list(),
   });
 
   return (
-    <ThemedView style={styles.container}>
-      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <ThemedText type="title" style={styles.heading}>Tournaments</ThemedText>
+    <View style={s.container}>
+      <View style={[s.header, { paddingTop: insets.top + 12 }]}>
+        <Text style={s.heading}>Tournaments</Text>
       </View>
 
       {isLoading ? (
-        <View style={styles.center}>
-          <ActivityIndicator color="#ff3366" />
-        </View>
+        <View style={s.center}><ActivityIndicator color={theme.spinner} /></View>
       ) : isError ? (
-        <View style={styles.center}>
-          <Text style={styles.errorText}>{error instanceof Error ? error.message : 'Failed to load tournaments'}</Text>
+        <View style={s.center}>
+          <Text style={s.errorText}>{error instanceof Error ? error.message : 'Failed to load tournaments'}</Text>
         </View>
       ) : (
         <FlatList
           data={data ?? []}
           keyExtractor={(t) => t.id}
           renderItem={({ item }) => (
-            <TournamentRow
-              t={item}
-              onPress={() => router.push({ pathname: '/tournament/[id]', params: { id: item.id } })}
-            />
+            <TournamentRow s={s} t={item} onPress={() => router.push({ pathname: '/tournament/[id]', params: { id: item.id } })} />
           )}
           contentContainerStyle={{ paddingBottom: 80 }}
-          ItemSeparatorComponent={() => <View style={styles.separator} />}
-          ListEmptyComponent={() => <Text style={styles.empty}>No active tournaments</Text>}
-          refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor="#ff3366" />}
+          ItemSeparatorComponent={() => <View style={s.separator} />}
+          ListEmptyComponent={() => <Text style={s.empty}>No active tournaments</Text>}
+          refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={theme.spinner} />}
         />
       )}
-    </ThemedView>
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1 },
+const makeStyles = (t: ThemeColors) => ({
+  container: { flex: 1, backgroundColor: t.bg },
   header: { paddingHorizontal: 20, paddingBottom: 12 },
-  heading: { fontSize: 28, fontWeight: '700', letterSpacing: 4 },
-  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 16, gap: 12 },
-  rowPressed: { backgroundColor: 'rgba(255,51,102,0.08)' },
+  heading: { fontSize: 28, fontWeight: '800' as const, color: t.text, letterSpacing: 2 },
+  row: { flexDirection: 'row' as const, alignItems: 'center' as const, paddingVertical: 12, paddingHorizontal: 16, gap: 12 },
+  rowPressed: { backgroundColor: t.accentTint },
   avatarPlaceholder: {
     width: 48,
     height: 48,
     borderRadius: 8,
-    backgroundColor: 'rgba(255,51,102,0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: t.accentTint,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
   },
-  avatarLetter: { fontSize: 22, fontWeight: '700', color: '#ff6b8a' },
+  avatarLetter: { fontSize: 22, fontWeight: '800' as const, color: t.accent },
   rowMain: { flex: 1, gap: 2, minWidth: 0 },
-  rowTitle: { fontSize: 15, fontWeight: '600' },
-  rowMeta: { fontSize: 12, opacity: 0.55 },
-  rowRight: { alignItems: 'flex-end', gap: 4 },
+  rowTitle: { fontSize: 15, fontWeight: '600' as const, color: t.text },
+  rowMeta: { fontSize: 12, color: t.textMuted },
+  rowRight: { alignItems: 'flex-end' as const, gap: 4 },
   phaseChip: {
     fontSize: 10,
-    fontWeight: '700',
+    fontWeight: '800' as const,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
+    backgroundColor: t.surfaceMuted,
+    color: t.textMuted,
     letterSpacing: 0.5,
   },
   roundChip: {
     fontSize: 11,
-    fontWeight: '700',
-    color: '#94a3b8',
+    fontWeight: '700' as const,
+    color: t.accent,
     paddingHorizontal: 6,
     paddingVertical: 2,
   },
-  separator: { height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(148,163,184,0.15)', marginLeft: 76 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
-  empty: { textAlign: 'center', padding: 32, opacity: 0.5 },
-  errorText: { color: '#fca5a5', textAlign: 'center' },
+  separator: { height: StyleSheet.hairlineWidth, backgroundColor: t.border, marginLeft: 76 },
+  center: { flex: 1, alignItems: 'center' as const, justifyContent: 'center' as const, padding: 32 },
+  empty: { textAlign: 'center' as const, padding: 32, color: t.textDim },
+  errorText: { color: t.danger, textAlign: 'center' as const },
 });

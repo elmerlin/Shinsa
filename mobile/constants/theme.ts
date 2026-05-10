@@ -1,55 +1,150 @@
 /**
- * Theme tokens for Shinsa mobile.
+ * Pump Shinsa theme tokens.
  *
- * The `Piu` palette mirrors `client/tailwind.config.js` (the web product). When
- * styling new components, prefer importing from `Piu` over hardcoding hex values
- * so the design stays consistent with pumpshinsa.com.
+ * Two themes only: Pump Gold Dark (default) and Pump Gold Light. Tokens are
+ * sourced from `mobile/assets/brand/` (the brand pack) — see
+ * `feedback_avoid_swiftui_ios_design.md` in user memory.
+ *
+ * Always read colors via `useTheme()` / `useThemedStyles(...)`; never hardcode
+ * hex values in screen styles.
  */
 
 import { Platform } from 'react-native';
 
-export const Piu = {
-  bg: '#0a0a1a',
-  card: '#141428',
-  dark: '#0d0d20',
-  border: '#2a2a4a',
-  accent: '#ff3366',
-  accentMuted: '#ff6b8a',
-  gold: '#ffd700',
-  silver: '#c0c0c0',
-  bronze: '#cd7f32',
-  blue: '#4488ff',
-  green: '#33ff66',
-  text: '#ECEDEE',
-  textMuted: '#94a3b8',
-  textDim: '#64748b',
-  danger: '#ef4444',
-  dangerText: '#fca5a5',
-  /** Pink accent at the given alpha. */
-  accentRgba: (a: number) => `rgba(255,51,102,${a})`,
-  /** Subtle gray surface (used for chips, dividers, faint backdrops). */
-  surfaceRgba: (a: number) => `rgba(148,163,184,${a})`,
+export type ThemeKey = 'dark' | 'light';
+
+export interface ThemeColors {
+  /** Page background. */
+  bg: string;
+  /** Slightly raised surface (tab bar bg, header bg). */
+  surface: string;
+  /** Card background (post card, list section, etc.). */
+  card: string;
+  /** Translucent neutral fill — used for input bg, faint chips. */
+  surfaceMuted: string;
+  /** Subtle hairline border. */
+  border: string;
+  /** Stronger border for emphasized cards. */
+  borderStrong: string;
+  /** Brand accent (used for active states, CTAs, highlights). */
+  accent: string;
+  /** Lighter accent for hover/secondary emphasis. */
+  accentMuted: string;
+  /** Deeper accent for pressed/legible-on-light states. */
+  accentDeep: string;
+  /** Subtle accent backdrop (used as low-opacity fill). */
+  accentTint: string;
+  /** Primary text on bg. */
+  text: string;
+  /** De-emphasized text (subtitles, meta). */
+  textMuted: string;
+  /** Very dim text (footnotes, placeholder). */
+  textDim: string;
+  /** Inverse text (used on accent buttons). */
+  textOnAccent: string;
+  /** Error/warning text. */
+  danger: string;
+  dangerBg: string;
+  dangerBorder: string;
+  /** Success/clear color. */
+  success: string;
+  /** Skill/category accent (kept distinct from gold). */
+  skill: string;
+  /** Tier colors (gold/silver/bronze). */
+  gold: string;
+  silver: string;
+  bronze: string;
+  /** Loading spinner color. */
+  spinner: string;
+}
+
+const BRAND = {
+  gold: '#FFC400',
+  goldHighlight: '#FFE06B',
+  goldDeep: '#F2A900',
+  white: '#F7FAFF',
+  black: '#050505',
+  charcoal: '#101012',
+  graphite: '#1B1B1E',
+  muted: '#7C7C82',
 };
 
-const tintColorLight = Piu.accent;
-const tintColorDark = Piu.accent;
+const dark: ThemeColors = {
+  bg: BRAND.black,
+  surface: BRAND.charcoal,
+  card: BRAND.graphite,
+  surfaceMuted: 'rgba(124,124,130,0.12)',
+  border: 'rgba(124,124,130,0.18)',
+  borderStrong: 'rgba(124,124,130,0.32)',
+  accent: BRAND.gold,
+  accentMuted: BRAND.goldHighlight,
+  accentDeep: BRAND.goldDeep,
+  accentTint: 'rgba(255,196,0,0.12)',
+  text: BRAND.white,
+  textMuted: '#A8A8AE',
+  textDim: BRAND.muted,
+  textOnAccent: BRAND.black,
+  danger: '#ef4444',
+  dangerBg: 'rgba(239,68,68,0.1)',
+  dangerBorder: 'rgba(239,68,68,0.3)',
+  success: '#33ff66',
+  skill: '#c084fc',
+  gold: BRAND.gold,
+  silver: '#c0c0c0',
+  bronze: '#cd7f32',
+  spinner: BRAND.gold,
+};
 
+const light: ThemeColors = {
+  bg: BRAND.white,
+  surface: '#FFFFFF',
+  card: '#FFFFFF',
+  surfaceMuted: 'rgba(5,5,5,0.04)',
+  border: 'rgba(5,5,5,0.08)',
+  borderStrong: 'rgba(5,5,5,0.16)',
+  accent: BRAND.goldDeep,
+  accentMuted: BRAND.gold,
+  accentDeep: '#B27D00',
+  accentTint: 'rgba(242,169,0,0.12)',
+  text: BRAND.black,
+  textMuted: '#3F3F46',
+  textDim: BRAND.muted,
+  textOnAccent: BRAND.black,
+  danger: '#dc2626',
+  dangerBg: 'rgba(220,38,38,0.08)',
+  dangerBorder: 'rgba(220,38,38,0.2)',
+  success: '#16a34a',
+  skill: '#9333ea',
+  gold: BRAND.goldDeep,
+  silver: '#737373',
+  bronze: '#a16207',
+  spinner: BRAND.goldDeep,
+};
+
+export const themes: Record<ThemeKey, ThemeColors> = { dark, light };
+
+export const DEFAULT_THEME_KEY: ThemeKey = 'dark';
+
+/**
+ * Legacy export kept for the Expo template's `Colors[colorScheme].tint` usage
+ * in (tabs)/_layout.tsx — those will move to `useTheme()` going forward.
+ */
 export const Colors = {
   light: {
-    text: '#11181C',
-    background: '#fff',
-    tint: tintColorLight,
-    icon: '#687076',
-    tabIconDefault: '#687076',
-    tabIconSelected: tintColorLight,
+    text: light.text,
+    background: light.bg,
+    tint: light.accent,
+    icon: light.textMuted,
+    tabIconDefault: light.textMuted,
+    tabIconSelected: light.accent,
   },
   dark: {
-    text: Piu.text,
-    background: Piu.bg,
-    tint: tintColorDark,
-    icon: Piu.textMuted,
-    tabIconDefault: Piu.textMuted,
-    tabIconSelected: tintColorDark,
+    text: dark.text,
+    background: dark.bg,
+    tint: dark.accent,
+    icon: dark.textMuted,
+    tabIconDefault: dark.textMuted,
+    tabIconSelected: dark.accent,
   },
 };
 

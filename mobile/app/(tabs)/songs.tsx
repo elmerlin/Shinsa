@@ -4,10 +4,11 @@ import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
+import { useTheme } from '@/contexts/theme-context';
+import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { songsApi } from '@/lib/api';
 import { fullImageUrl } from '@/lib/images';
+import type { ThemeColors } from '@/constants/theme';
 import type { Song } from '@shared/api';
 
 function useDebounced<T>(value: T, delay = 300): T {
@@ -19,23 +20,23 @@ function useDebounced<T>(value: T, delay = 300): T {
   return debounced;
 }
 
-function SongRow({ song, onPress }: { song: Song; onPress: () => void }) {
+function SongRow({ song, onPress, s }: { song: Song; onPress: () => void; s: ReturnType<typeof useThemedStyles<ReturnType<typeof makeStyles>>> }) {
   const jacket = fullImageUrl(song.jacket_url);
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}>
+    <Pressable onPress={onPress} style={({ pressed }) => [s.row, pressed && s.rowPressed]}>
       {jacket ? (
-        <Image source={{ uri: jacket }} style={styles.jacket} contentFit="cover" transition={150} />
+        <Image source={{ uri: jacket }} style={s.jacket} contentFit="cover" transition={150} />
       ) : (
-        <View style={[styles.jacket, styles.jacketPlaceholder]} />
+        <View style={[s.jacket, s.jacketPlaceholder]} />
       )}
-      <View style={styles.rowMain}>
-        <ThemedText style={styles.rowTitle} numberOfLines={1}>{song.title}</ThemedText>
-        <Text style={styles.rowMeta} numberOfLines={1}>{song.artist}</Text>
+      <View style={s.rowMain}>
+        <Text style={s.rowTitle} numberOfLines={1}>{song.title}</Text>
+        <Text style={s.rowMeta} numberOfLines={1}>{song.artist}</Text>
       </View>
-      <View style={styles.rowRight}>
-        {song.mode ? <Text style={styles.modeChip}>{song.mode[0]}</Text> : null}
+      <View style={s.rowRight}>
+        {song.mode ? <Text style={s.modeChip}>{song.mode[0]}</Text> : null}
         {typeof song.level === 'number' && song.level > 0 ? (
-          <Text style={styles.levelChip}>{song.level}</Text>
+          <Text style={s.levelChip}>{song.level}</Text>
         ) : null}
       </View>
     </Pressable>
@@ -45,6 +46,8 @@ function SongRow({ song, onPress }: { song: Song; onPress: () => void }) {
 export default function SongsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { theme } = useTheme();
+  const s = useThemedStyles(makeStyles);
   const [query, setQuery] = useState('');
   const debouncedQuery = useDebounced(query, 300);
 
@@ -54,15 +57,15 @@ export default function SongsScreen() {
   });
 
   return (
-    <ThemedView style={styles.container}>
-      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <ThemedText type="title" style={styles.heading}>Songs</ThemedText>
+    <View style={s.container}>
+      <View style={[s.header, { paddingTop: insets.top + 12 }]}>
+        <Text style={s.heading}>Songs</Text>
         <TextInput
-          style={styles.search}
+          style={s.search}
           value={query}
           onChangeText={setQuery}
           placeholder="Search title or artist…"
-          placeholderTextColor="#64748b"
+          placeholderTextColor={theme.textDim}
           autoCapitalize="none"
           autoCorrect={false}
           returnKeyType="search"
@@ -71,81 +74,81 @@ export default function SongsScreen() {
       </View>
 
       {isLoading ? (
-        <View style={styles.center}>
-          <ActivityIndicator color="#ff3366" />
+        <View style={s.center}>
+          <ActivityIndicator color={theme.spinner} />
         </View>
       ) : isError ? (
-        <View style={styles.center}>
-          <Text style={styles.errorText}>{error instanceof Error ? error.message : 'Failed to load songs'}</Text>
+        <View style={s.center}>
+          <Text style={s.errorText}>{error instanceof Error ? error.message : 'Failed to load songs'}</Text>
         </View>
       ) : (
         <FlatList
           data={data ?? []}
-          keyExtractor={(s) => String(s.id)}
+          keyExtractor={(item) => String(item.id)}
           renderItem={({ item }) => (
-            <SongRow song={item} onPress={() => router.push({ pathname: '/song/[id]', params: { id: String(item.id) } })} />
+            <SongRow song={item} s={s} onPress={() => router.push({ pathname: '/song/[id]', params: { id: String(item.id) } })} />
           )}
           contentContainerStyle={{ paddingBottom: 80 }}
-          ItemSeparatorComponent={() => <View style={styles.separator} />}
+          ItemSeparatorComponent={() => <View style={s.separator} />}
           ListEmptyComponent={() => (
-            <Text style={styles.empty}>{debouncedQuery ? 'No songs match your search.' : 'No songs found.'}</Text>
+            <Text style={s.empty}>{debouncedQuery ? 'No songs match your search.' : 'No songs found.'}</Text>
           )}
         />
       )}
-    </ThemedView>
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1 },
+const makeStyles = (t: ThemeColors) => ({
+  container: { flex: 1, backgroundColor: t.bg },
   header: { paddingHorizontal: 20, paddingBottom: 12, gap: 12 },
-  heading: { fontSize: 28, fontWeight: '700', letterSpacing: 4 },
+  heading: { fontSize: 28, fontWeight: '800' as const, color: t.text, letterSpacing: 2 },
   search: {
-    backgroundColor: 'rgba(148,163,184,0.1)',
-    color: '#fff',
+    backgroundColor: t.surfaceMuted,
+    color: t.text,
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 10,
     fontSize: 15,
   },
   row: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
     paddingVertical: 8,
     paddingHorizontal: 16,
     gap: 12,
   },
-  rowPressed: { backgroundColor: 'rgba(255,51,102,0.08)' },
-  jacket: { width: 48, height: 48, borderRadius: 6, backgroundColor: '#1e293b' },
-  jacketPlaceholder: { backgroundColor: '#1e293b' },
+  rowPressed: { backgroundColor: t.accentTint },
+  jacket: { width: 48, height: 48, borderRadius: 6, backgroundColor: t.card },
+  jacketPlaceholder: { backgroundColor: t.card },
   rowMain: { flex: 1, gap: 2, minWidth: 0 },
-  rowTitle: { fontSize: 15, fontWeight: '600' },
-  rowMeta: { fontSize: 12, opacity: 0.55 },
-  rowRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  rowTitle: { fontSize: 15, fontWeight: '600' as const, color: t.text },
+  rowMeta: { fontSize: 12, color: t.textMuted },
+  rowRight: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6 },
   modeChip: {
     fontSize: 10,
-    fontWeight: '700',
+    fontWeight: '700' as const,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
-    backgroundColor: 'rgba(148,163,184,0.2)',
-    color: '#94a3b8',
+    backgroundColor: t.surfaceMuted,
+    color: t.textMuted,
     minWidth: 18,
-    textAlign: 'center',
+    textAlign: 'center' as const,
   },
   levelChip: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '700' as const,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
-    backgroundColor: 'rgba(255,51,102,0.15)',
-    color: '#ff6b8a',
+    backgroundColor: t.accentTint,
+    color: t.accent,
     minWidth: 28,
-    textAlign: 'center',
+    textAlign: 'center' as const,
   },
-  separator: { height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(148,163,184,0.15)', marginLeft: 76 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
-  empty: { textAlign: 'center', padding: 32, opacity: 0.5 },
-  errorText: { color: '#fca5a5', textAlign: 'center' },
+  separator: { height: StyleSheet.hairlineWidth, backgroundColor: t.border, marginLeft: 76 },
+  center: { flex: 1, alignItems: 'center' as const, justifyContent: 'center' as const, padding: 32 },
+  empty: { textAlign: 'center' as const, padding: 32, color: t.textDim },
+  errorText: { color: t.danger, textAlign: 'center' as const },
 });

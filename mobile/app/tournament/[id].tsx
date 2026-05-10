@@ -2,9 +2,10 @@ import { useQuery } from '@tanstack/react-query';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useMemo } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
+import { useTheme } from '@/contexts/theme-context';
+import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { tournamentsApi } from '@/lib/api';
+import type { ThemeColors } from '@/constants/theme';
 import type { DiscussionMessage, Match, Player } from '@shared/api';
 
 function formatDate(input?: string): string {
@@ -14,31 +15,33 @@ function formatDate(input?: string): string {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-function MatchRow({ m, players }: { m: Match; players: Map<string, Player> }) {
+type Styles = ReturnType<typeof useThemedStyles<ReturnType<typeof makeStyles>>>;
+
+function MatchRow({ m, players, s }: { m: Match; players: Map<string, Player>; s: Styles }) {
   const p1 = m.player1_id ? players.get(m.player1_id) : undefined;
   const p2 = m.player2_id ? players.get(m.player2_id) : undefined;
   const isBye = !!m.is_bye;
   const winnerId = m.winner_id;
 
   return (
-    <View style={styles.matchRow}>
-      <View style={styles.matchHeader}>
+    <View style={s.matchRow}>
+      <View style={s.matchHeader}>
         {typeof m.round_number === 'number' && m.round_number > 0 ? (
-          <Text style={styles.matchRound}>R{m.round_number}</Text>
+          <Text style={s.matchRound}>R{m.round_number}</Text>
         ) : null}
-        {m.status ? <Text style={styles.matchStatus}>{m.status}</Text> : null}
+        {m.status ? <Text style={s.matchStatus}>{m.status}</Text> : null}
         {typeof m.difficulty_min === 'number' && typeof m.difficulty_max === 'number' ? (
-          <Text style={styles.matchDifficulty}>
+          <Text style={s.matchDifficulty}>
             Lv {m.difficulty_min === m.difficulty_max ? m.difficulty_min : `${m.difficulty_min}-${m.difficulty_max}`}
           </Text>
         ) : null}
       </View>
-      <View style={styles.matchPlayers}>
-        <Text style={[styles.matchPlayer, winnerId && winnerId === p1?.id && styles.matchWinner]}>
+      <View style={s.matchPlayers}>
+        <Text style={[s.matchPlayer, winnerId && winnerId === p1?.id && s.matchWinner]}>
           {p1?.name ?? '—'}
         </Text>
-        <Text style={styles.matchVs}>{isBye ? 'BYE' : 'vs'}</Text>
-        <Text style={[styles.matchPlayer, styles.matchPlayerRight, winnerId && winnerId === p2?.id && styles.matchWinner]}>
+        <Text style={s.matchVs}>{isBye ? 'BYE' : 'vs'}</Text>
+        <Text style={[s.matchPlayer, s.matchPlayerRight, winnerId && winnerId === p2?.id && s.matchWinner]}>
           {p2?.name ?? (isBye ? '' : '—')}
         </Text>
       </View>
@@ -46,31 +49,31 @@ function MatchRow({ m, players }: { m: Match; players: Map<string, Player> }) {
   );
 }
 
-function PlayerRow({ p, rank }: { p: Player; rank: number }) {
+function PlayerRow({ p, rank, s }: { p: Player; rank: number; s: Styles }) {
   const wl = `${p.wins ?? 0}-${p.losses ?? 0}`;
   return (
-    <View style={styles.playerRow}>
-      <Text style={styles.playerRank}>{rank}</Text>
-      <View style={styles.playerMain}>
-        <ThemedText style={styles.playerName} numberOfLines={1}>{p.name}</ThemedText>
-        {p.skill_title ? <Text style={styles.playerSkill}>{p.skill_title}</Text> : null}
+    <View style={s.playerRow}>
+      <Text style={s.playerRank}>{rank}</Text>
+      <View style={s.playerMain}>
+        <Text style={s.playerName} numberOfLines={1}>{p.name}</Text>
+        {p.skill_title ? <Text style={s.playerSkill}>{p.skill_title}</Text> : null}
       </View>
-      <View style={styles.playerStats}>
-        <Text style={styles.playerWL}>{wl}</Text>
-        {typeof p.points === 'number' ? <Text style={styles.playerPts}>{p.points} pts</Text> : null}
+      <View style={s.playerStats}>
+        <Text style={s.playerWL}>{wl}</Text>
+        {typeof p.points === 'number' ? <Text style={s.playerPts}>{p.points} pts</Text> : null}
       </View>
     </View>
   );
 }
 
-function DiscussionRow({ msg }: { msg: DiscussionMessage }) {
+function DiscussionRow({ msg, s }: { msg: DiscussionMessage; s: Styles }) {
   return (
-    <View style={styles.msgRow}>
-      <View style={styles.msgHeader}>
-        <ThemedText style={styles.msgUser}>{msg.username || 'anonymous'}</ThemedText>
-        {msg.created_at ? <Text style={styles.msgTime}>{formatDate(msg.created_at)}</Text> : null}
+    <View style={s.msgRow}>
+      <View style={s.msgHeader}>
+        <Text style={s.msgUser}>{msg.username || 'anonymous'}</Text>
+        {msg.created_at ? <Text style={s.msgTime}>{formatDate(msg.created_at)}</Text> : null}
       </View>
-      {msg.body ? <Text style={styles.msgBody}>{msg.body}</Text> : null}
+      {msg.body ? <Text style={s.msgBody}>{msg.body}</Text> : null}
     </View>
   );
 }
@@ -78,6 +81,8 @@ function DiscussionRow({ msg }: { msg: DiscussionMessage }) {
 export default function TournamentDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const tournamentId = id ?? '';
+  const { theme } = useTheme();
+  const s = useThemedStyles(makeStyles);
 
   const tournamentQuery = useQuery({
     queryKey: ['tournament', tournamentId],
@@ -128,18 +133,16 @@ export default function TournamentDetailScreen() {
   );
 
   return (
-    <ThemedView style={styles.container}>
+    <View style={s.container}>
       <Stack.Screen options={{ title: t?.name || 'Tournament' }} />
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView contentContainerStyle={s.scroll}>
         {tournamentQuery.isLoading && (
-          <View style={styles.center}>
-            <ActivityIndicator color="#ff3366" />
-          </View>
+          <View style={s.center}><ActivityIndicator color={theme.spinner} /></View>
         )}
 
         {tournamentQuery.isError && (
-          <View style={styles.errorBox}>
-            <Text style={styles.errorText}>
+          <View style={s.errorBox}>
+            <Text style={s.errorText}>
               {tournamentQuery.error instanceof Error ? tournamentQuery.error.message : 'Failed to load tournament'}
             </Text>
           </View>
@@ -147,149 +150,122 @@ export default function TournamentDetailScreen() {
 
         {t && (
           <>
-            <View style={styles.headerCard}>
-              <ThemedText type="title" style={styles.title} numberOfLines={2}>{t.name}</ThemedText>
-              <View style={styles.metaRow}>
-                {t.phase ? <Text style={styles.metaChip}>{t.phase}</Text> : null}
-                {t.date ? <Text style={styles.metaChip}>{formatDate(t.date)}</Text> : null}
-                {t.location ? <Text style={styles.metaChip}>{t.location}</Text> : null}
+            <View style={s.headerCard}>
+              <Text style={s.title} numberOfLines={2}>{t.name}</Text>
+              <View style={s.metaRow}>
+                {t.phase ? <Text style={s.metaChip}>{t.phase}</Text> : null}
+                {t.date ? <Text style={s.metaChip}>{formatDate(t.date)}</Text> : null}
+                {t.location ? <Text style={s.metaChip}>{t.location}</Text> : null}
                 {typeof t.current_round === 'number' && typeof t.total_rounds === 'number' && t.total_rounds > 0 ? (
-                  <Text style={[styles.metaChip, styles.roundChip]}>R{t.current_round}/{t.total_rounds}</Text>
+                  <Text style={[s.metaChip, s.roundChip]}>R{t.current_round}/{t.total_rounds}</Text>
                 ) : null}
               </View>
             </View>
 
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <ThemedText type="subtitle">Standings</ThemedText>
-                <Text style={styles.sectionCount}>{standings.length}</Text>
+            <View style={s.section}>
+              <View style={s.sectionHeader}>
+                <Text style={s.sectionTitle}>Standings</Text>
+                <Text style={s.sectionCount}>{standings.length}</Text>
               </View>
               {playersQuery.isLoading ? (
-                <ActivityIndicator color="#ff3366" style={{ padding: 24 }} />
+                <ActivityIndicator color={theme.spinner} style={{ padding: 24 }} />
               ) : standings.length === 0 ? (
-                <Text style={styles.empty}>No players yet</Text>
+                <Text style={s.empty}>No players yet</Text>
               ) : (
-                <View style={styles.list}>
-                  {standings.map((p, i) => <PlayerRow key={p.id} p={p} rank={i + 1} />)}
+                <View style={s.list}>
+                  {standings.map((p, i) => <PlayerRow key={p.id} p={p} rank={i + 1} s={s} />)}
                 </View>
               )}
             </View>
 
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <ThemedText type="subtitle">Matches</ThemedText>
-                <Text style={styles.sectionCount}>{matches.length}</Text>
+            <View style={s.section}>
+              <View style={s.sectionHeader}>
+                <Text style={s.sectionTitle}>Matches</Text>
+                <Text style={s.sectionCount}>{matches.length}</Text>
               </View>
               {matchesQuery.isLoading ? (
-                <ActivityIndicator color="#ff3366" style={{ padding: 24 }} />
+                <ActivityIndicator color={theme.spinner} style={{ padding: 24 }} />
               ) : matches.length === 0 ? (
-                <Text style={styles.empty}>No matches yet</Text>
+                <Text style={s.empty}>No matches yet</Text>
               ) : (
-                <View style={styles.list}>
-                  {matches.map((m) => <MatchRow key={m.id} m={m} players={playersById} />)}
+                <View style={s.list}>
+                  {matches.map((m) => <MatchRow key={m.id} m={m} players={playersById} s={s} />)}
                 </View>
               )}
             </View>
 
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <ThemedText type="subtitle">Discussion</ThemedText>
-                <Text style={styles.sectionCount}>{topLevelDiscussion.length}</Text>
+            <View style={s.section}>
+              <View style={s.sectionHeader}>
+                <Text style={s.sectionTitle}>Discussion</Text>
+                <Text style={s.sectionCount}>{topLevelDiscussion.length}</Text>
               </View>
               {discussionQuery.isLoading ? (
-                <ActivityIndicator color="#ff3366" style={{ padding: 24 }} />
+                <ActivityIndicator color={theme.spinner} style={{ padding: 24 }} />
               ) : topLevelDiscussion.length === 0 ? (
-                <Text style={styles.empty}>No discussion yet</Text>
+                <Text style={s.empty}>No discussion yet</Text>
               ) : (
-                <View style={styles.list}>
-                  {topLevelDiscussion.map((m) => <DiscussionRow key={m.id} msg={m} />)}
+                <View style={s.list}>
+                  {topLevelDiscussion.map((m) => <DiscussionRow key={m.id} msg={m} s={s} />)}
                 </View>
               )}
             </View>
           </>
         )}
       </ScrollView>
-    </ThemedView>
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1 },
+const makeStyles = (t: ThemeColors) => ({
+  container: { flex: 1, backgroundColor: t.bg },
   scroll: { padding: 20, gap: 24, paddingBottom: 60 },
-  center: { padding: 32, alignItems: 'center' },
-
+  center: { padding: 32, alignItems: 'center' as const },
   headerCard: { gap: 8 },
-  title: { fontSize: 24, fontWeight: '700', lineHeight: 30 },
-  metaRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
+  title: { fontSize: 24, fontWeight: '800' as const, lineHeight: 30, color: t.text },
+  metaRow: { flexDirection: 'row' as const, gap: 6, flexWrap: 'wrap' as const },
   metaChip: {
     fontSize: 11,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
-    backgroundColor: 'rgba(148,163,184,0.15)',
-    color: '#cbd5e1',
-    fontWeight: '600',
+    backgroundColor: t.surfaceMuted,
+    color: t.textMuted,
+    fontWeight: '700' as const,
   },
-  roundChip: { backgroundColor: 'rgba(255,51,102,0.2)', color: '#ff6b8a' },
-
+  roundChip: { backgroundColor: t.accentTint, color: t.accent },
   section: { gap: 8 },
-  sectionHeader: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
-  sectionCount: { fontSize: 12, opacity: 0.5 },
-  list: { backgroundColor: '#141428', borderRadius: 12, overflow: 'hidden' },
+  sectionTitle: { fontSize: 18, fontWeight: '700' as const, color: t.text },
+  sectionHeader: { flexDirection: 'row' as const, alignItems: 'baseline' as const, justifyContent: 'space-between' as const },
+  sectionCount: { fontSize: 12, color: t.textDim },
+  list: { backgroundColor: t.card, borderRadius: 12, borderWidth: 1, borderColor: t.border, overflow: 'hidden' as const },
 
-  matchRow: {
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(148,163,184,0.15)',
-    gap: 6,
-  },
-  matchHeader: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-  matchRound: { fontSize: 10, fontWeight: '700', color: '#ff6b8a' },
-  matchStatus: { fontSize: 10, fontWeight: '600', color: '#94a3b8', letterSpacing: 0.5 },
-  matchDifficulty: { fontSize: 10, fontWeight: '600', color: '#94a3b8', marginLeft: 'auto' },
-  matchPlayers: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  matchPlayer: { flex: 1, fontSize: 14, color: '#cbd5e1' },
-  matchPlayerRight: { textAlign: 'right' },
-  matchWinner: { color: '#fff', fontWeight: '700' },
-  matchVs: { fontSize: 11, opacity: 0.4, fontWeight: '600' },
+  matchRow: { paddingVertical: 12, paddingHorizontal: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: t.border, gap: 6 },
+  matchHeader: { flexDirection: 'row' as const, gap: 8, alignItems: 'center' as const },
+  matchRound: { fontSize: 10, fontWeight: '800' as const, color: t.accent },
+  matchStatus: { fontSize: 10, fontWeight: '700' as const, color: t.textMuted, letterSpacing: 0.5 },
+  matchDifficulty: { fontSize: 10, fontWeight: '700' as const, color: t.textMuted, marginLeft: 'auto' as const },
+  matchPlayers: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8 },
+  matchPlayer: { flex: 1, fontSize: 14, color: t.textMuted },
+  matchPlayerRight: { textAlign: 'right' as const },
+  matchWinner: { color: t.text, fontWeight: '800' as const },
+  matchVs: { fontSize: 11, color: t.textDim, fontWeight: '700' as const },
 
-  playerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(148,163,184,0.15)',
-  },
-  playerRank: { width: 24, fontSize: 13, fontWeight: '700', color: '#94a3b8', textAlign: 'center' },
+  playerRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, paddingVertical: 12, paddingHorizontal: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: t.border },
+  playerRank: { width: 24, fontSize: 13, fontWeight: '800' as const, color: t.textMuted, textAlign: 'center' as const },
   playerMain: { flex: 1, gap: 2, minWidth: 0 },
-  playerName: { fontSize: 15, fontWeight: '600' },
-  playerSkill: { fontSize: 11, opacity: 0.55 },
-  playerStats: { alignItems: 'flex-end', gap: 2 },
-  playerWL: { fontSize: 13, fontWeight: '700', color: '#cbd5e1' },
-  playerPts: { fontSize: 11, color: '#ff6b8a', fontWeight: '600' },
+  playerName: { fontSize: 15, fontWeight: '700' as const, color: t.text },
+  playerSkill: { fontSize: 11, color: t.textMuted },
+  playerStats: { alignItems: 'flex-end' as const, gap: 2 },
+  playerWL: { fontSize: 13, fontWeight: '700' as const, color: t.text },
+  playerPts: { fontSize: 11, color: t.accent, fontWeight: '700' as const },
 
-  msgRow: {
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(148,163,184,0.15)',
-    gap: 6,
-  },
-  msgHeader: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
-  msgUser: { fontSize: 13, fontWeight: '600' },
-  msgTime: { fontSize: 11, opacity: 0.4 },
-  msgBody: { fontSize: 14, color: '#cbd5e1', lineHeight: 20 },
+  msgRow: { paddingVertical: 12, paddingHorizontal: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: t.border, gap: 6 },
+  msgHeader: { flexDirection: 'row' as const, alignItems: 'baseline' as const, justifyContent: 'space-between' as const },
+  msgUser: { fontSize: 13, fontWeight: '700' as const, color: t.text },
+  msgTime: { fontSize: 11, color: t.textDim },
+  msgBody: { fontSize: 14, color: t.text, lineHeight: 20 },
 
-  empty: { padding: 16, textAlign: 'center', opacity: 0.5 },
-  errorBox: {
-    backgroundColor: 'rgba(239,68,68,0.1)',
-    borderColor: 'rgba(239,68,68,0.3)',
-    borderWidth: 1,
-    padding: 12,
-    borderRadius: 8,
-  },
-  errorText: { color: '#fca5a5', fontSize: 14 },
+  empty: { padding: 16, textAlign: 'center' as const, color: t.textDim },
+  errorBox: { backgroundColor: t.dangerBg, borderColor: t.dangerBorder, borderWidth: 1, padding: 12, borderRadius: 8 },
+  errorText: { color: t.danger, fontSize: 14 },
 });

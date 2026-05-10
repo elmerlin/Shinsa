@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title>Pump Shinsa icon</title>
+  <desc>Octagonal rhythm-panel-inspired Pump Shinsa PS monogram.</desc>
+  <defs>
+    <linearGradient id="gold" x1="150" y1="80" x2="860" y2="960" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFE06B"/>
+      <stop offset="0.44" stop-color="#FFC400"/>
+      <stop offset="1" stop-color="#F2A900"/>
+    </linearGradient>
+    <linearGradient id="appBg" x1="0" y1="0" x2="1024" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#202024"/>
+      <stop offset="1" stop-color="#050506"/>
+    </linearGradient>
+    <pattern id="dotGrid" width="72" height="72" patternUnits="userSpaceOnUse">
+      <circle cx="36" cy="36" r="9" fill="#FFC400" opacity="0.82"/>
+    </pattern>
+    <clipPath id="panelClip">
+      <polygon points="280.0,186.0 744.0,186.0 838.0,280.0 838.0,744.0 744.0,838.0 280.0,838.0 186.0,744.0 186.0,280.0"/>
+    </clipPath>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="16" stdDeviation="18" flood-color="#000000" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <rect x="0" y="0" width="1024" height="1024" rx="180" fill="url(#appBg)"/>
+  <g filter="url(#softShadow)">
+    <polygon points="250.0,50.0 774.0,50.0 974.0,250.0 974.0,774.0 774.0,974.0 250.0,974.0 50.0,774.0 50.0,250.0" fill="url(#gold)"/>
+    <polygon points="258.0,92.0 766.0,92.0 932.0,258.0 932.0,766.0 766.0,932.0 258.0,932.0 92.0,766.0 92.0,258.0" fill="#050505"/>
+    <polygon points="264.0,122.0 760.0,122.0 902.0,264.0 902.0,760.0 760.0,902.0 264.0,902.0 122.0,760.0 122.0,264.0" fill="#F7FAFF"/>
+    <polygon points="270.0,152.0 754.0,152.0 872.0,270.0 872.0,754.0 754.0,872.0 270.0,872.0 152.0,754.0 152.0,270.0" fill="#050505"/>
+    <polygon points="274.0,176.0 750.0,176.0 848.0,274.0 848.0,750.0 750.0,848.0 274.0,848.0 176.0,750.0 176.0,274.0" fill="url(#gold)"/>
+    <polygon points="280.0,206.0 744.0,206.0 818.0,280.0 818.0,744.0 744.0,818.0 280.0,818.0 206.0,744.0 206.0,280.0" fill="#050505"/>
+    <rect x="170" y="170" width="684" height="684" fill="url(#dotGrid)" clip-path="url(#panelClip)" opacity="0.64"/>
+    <polygon points="286.0,232.0 738.0,232.0 792.0,286.0 792.0,738.0 738.0,792.0 286.0,792.0 232.0,738.0 232.0,286.0" fill="none" stroke="#FFC400" stroke-width="14" opacity="0.7"/>
+  </g>
+
+  <g stroke="#050505" stroke-linejoin="round" stroke-linecap="square">
+    <path d="M292 244 H622 L752 364 L644 504 H424 L392 646 L252 788 L292 244 Z M418 350 H606 L652 390 L606 432 H408 Z"
+          fill="url(#gold)" fill-rule="evenodd" stroke-width="36"/>
+    <path d="M456 526 H774 L704 636 H552 L522 672 H726 L652 794 H320 L392 684 H534 L562 646 H362 Z"
+          fill="#F7FAFF" stroke-width="36"/>
+  </g>
+</svg>

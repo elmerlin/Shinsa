@@ -1,13 +1,13 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import { ThemeProvider as NavThemeProvider } from '@react-navigation/native';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import 'react-native-reanimated';
 
-import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider, useAuth } from '@/contexts/auth-context';
+import { ThemeProvider, useTheme } from '@/contexts/theme-context';
 import { queryClient } from '@/lib/query-client';
 
 export const unstable_settings = {
@@ -16,6 +16,7 @@ export const unstable_settings = {
 
 function AuthGate() {
   const { user, loading } = useAuth();
+  const { theme } = useTheme();
   const segments = useSegments();
   const router = useRouter();
 
@@ -36,15 +37,15 @@ function AuthGate() {
           flex: 1,
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor: '#0a0a1a',
+          backgroundColor: theme.bg,
         }}>
-        <ActivityIndicator size="large" color="#ff3366" />
+        <ActivityIndicator size="large" color={theme.spinner} />
       </View>
     );
   }
 
   return (
-    <Stack>
+    <Stack screenOptions={{ headerStyle: { backgroundColor: theme.surface }, headerTintColor: theme.text, headerTitleStyle: { color: theme.text } }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="(auth)" options={{ headerShown: false }} />
       <Stack.Screen name="song/[id]" options={{ title: 'Song', headerBackTitle: 'Songs' }} />
@@ -55,17 +56,47 @@ function AuthGate() {
   );
 }
 
-export default function RootLayout() {
-  const colorScheme = useColorScheme();
+function ThemedShell({ children }: { children: React.ReactNode }) {
+  const { theme, themeKey } = useTheme();
+  const navTheme = useMemo(
+    () => ({
+      dark: themeKey === 'dark',
+      colors: {
+        primary: theme.accent,
+        background: theme.bg,
+        card: theme.surface,
+        text: theme.text,
+        border: theme.border,
+        notification: theme.danger,
+      },
+      fonts: {
+        regular: { fontFamily: 'System', fontWeight: '400' as const },
+        medium: { fontFamily: 'System', fontWeight: '500' as const },
+        bold: { fontFamily: 'System', fontWeight: '700' as const },
+        heavy: { fontFamily: 'System', fontWeight: '900' as const },
+      },
+    }),
+    [theme, themeKey]
+  );
 
   return (
+    <NavThemeProvider value={navTheme}>
+      {children}
+      <StatusBar style={themeKey === 'dark' ? 'light' : 'dark'} />
+    </NavThemeProvider>
+  );
+}
+
+export default function RootLayout() {
+  return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-          <AuthGate />
-          <StatusBar style="auto" />
-        </ThemeProvider>
-      </AuthProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <ThemedShell>
+            <AuthGate />
+          </ThemedShell>
+        </AuthProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }
