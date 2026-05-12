@@ -54,9 +54,15 @@ function getBadgeLabel(mode?: string, level?: number | string): string {
   // Mode is conveyed by badge color (red=Single, green=Double, blue=CoOp,
   // purple=UCS) so we drop the letter prefix and show only the level number.
   // UCS doesn't have a numeric level, so it keeps its label.
+  // Co-op is the exception: PIU encodes player-count in the chart label
+  // (C2/C3/C4/C5) and there's no separate "difficulty" number, so a bare `2`
+  // would read as a singles chart at level 2. Always prefix `C` for Co-op.
   if (getModeShort(mode) === 'UCS') return 'UCS';
   const parsed = parseInt(String(level ?? ''), 10);
-  if (Number.isFinite(parsed) && parsed > 0) return String(parsed);
+  const isCoOp = String(mode || '').trim() === 'CoOp';
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return isCoOp ? `C${parsed}` : String(parsed);
+  }
   return String(level || '').trim() || '?';
 }
 

@@ -2,11 +2,14 @@ import {
   ApiClient,
   createAuthApi,
   createDashboardApi,
+  createLiveApi,
   createNoticesApi,
+  createPiugameApi,
   createSocialApi,
   createSongsApi,
   createTournamentsApi,
   createWeeklyChallengesApi,
+  createYoutubeApi,
 } from '@shared/api';
 import { getToken } from '@/lib/storage';
 
@@ -23,6 +26,9 @@ export const songsApi = createSongsApi(apiClient);
 export const tournamentsApi = createTournamentsApi(apiClient);
 export const socialApi = createSocialApi(apiClient);
 export const noticesApi = createNoticesApi(apiClient);
+export const liveApi = createLiveApi(apiClient);
+export const piugameApi = createPiugameApi(apiClient);
 export const weeklyChallengesApi = createWeeklyChallengesApi(apiClient);
+export const youtubeApi = createYoutubeApi(apiClient);
 
 export const apiBaseUrl = baseUrl.replace(/\/$/, '');

@@ -5,5 +5,8 @@ export * from './notices';
 export * from './songs';
 export * from './tournaments';
 export * from './social';
+export * from './live';
+export * from './piugame';
 export * from './weekly-challenges';
+export * from './youtube';
 export * from './types';

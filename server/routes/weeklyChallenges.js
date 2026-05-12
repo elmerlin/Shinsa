@@ -56,12 +56,13 @@ function setCache(key, data) {
   cache.set(key, { data, expiresAt: Date.now() + CACHE_TTL_MS });
 }
 
-function getLiveWeekAggregate(db, week) {
+function getLiveWeekAggregate(db, week, division = 'main') {
   if (!week?.id) return null;
-  const cacheKey = `aggregate:${week.id}`;
+  // Cache by division so the main + coop divisions don't clobber each other.
+  const cacheKey = `aggregate:${week.id}:${division}`;
   let aggregate = getCached(cacheKey);
   if (!aggregate) {
-    aggregate = aggregateWeeklyResults(db, week.id);
+    aggregate = aggregateWeeklyResults(db, week.id, division);
     if (aggregate) setCache(cacheKey, aggregate);
   }
   return aggregate;
@@ -152,6 +153,40 @@ router.get('/home', optionalAuth, (req, res) => {
         }
       }
 
+      // Co-op summary tile — small payload so the dashboard can show
+      // "Co-op WC is live, here are the picks + top 3" without hitting a
+      // second endpoint. Wraps the same frozen/live readers but scoped to
+      // division='coop' and capped at top-3 leaderboard rows.
+      let coopSummary = null;
+      try {
+        if (week.status === 'finalized') {
+          const frozen = getFrozenChartResults(db, week.id, 'coop');
+          const coopLb = getFrozenLeaderboard(db, week.id, 'both', 'all', 'coop');
+          const coopParticipantsRow = db.prepare(`
+            SELECT COUNT(DISTINCT r.user_id) as cnt
+            FROM weekly_challenge_results r
+            JOIN weekly_challenge_charts wc ON wc.id = r.weekly_chart_id
+            WHERE wc.week_id = ? AND wc.division = 'coop'
+          `).get(week.id);
+          coopSummary = {
+            chartCount: frozen.charts.length,
+            participantCount: coopParticipantsRow?.cnt || 0,
+            top3: coopLb.slice(0, 3),
+          };
+        } else {
+          const coopAgg = getLiveWeekAggregate(db, week, 'coop');
+          if (coopAgg) {
+            coopSummary = {
+              chartCount: coopAgg.weeklyCharts?.length || 0,
+              participantCount: coopAgg.participantCount || 0,
+              top3: getAggregateLeaderboard(coopAgg, 'both', 'all').slice(0, 3),
+            };
+          }
+        }
+      } catch (err) {
+        console.error('[WeeklyChallenges] /home coopSummary error:', err.message);
+      }
+
       publicData = {
         week: {
           week_key: week.week_key,
@@ -164,6 +199,7 @@ router.get('/home', optionalAuth, (req, res) => {
         participantCount,
         awards,
         challengePreviews,
+        coopSummary,
       };
       setCache(cacheKey, publicData);
     }
@@ -274,6 +310,11 @@ function sendWeekDetail(req, res, resolvedWeekKey = null) {
     ensureCurrentWeeklyChallengeWeek(db);
 
     const weekKey = resolvedWeekKey || req.params.weekKey;
+    // 'main' (S/D) is the default — pre-existing clients keep working without
+    // touching the query string. 'coop' opts into the Co-op WC division.
+    const division = String(req.query.division || 'main').trim().toLowerCase() === 'coop'
+      ? 'coop'
+      : 'main';
     const chartMode = req.query.chart_mode || 'both';
     const leaderboardMode = req.query.leaderboard_mode || 'both';
     const skillFamily = req.query.skill_family || 'all';
@@ -281,7 +322,7 @@ function sendWeekDetail(req, res, resolvedWeekKey = null) {
     const week = db.prepare('SELECT * FROM weekly_challenge_weeks WHERE week_key = ?').get(weekKey);
     if (!week) return res.status(404).json({ error: 'Week not found' });
 
-    const cacheKey = `week:${weekKey}:${chartMode}:${leaderboardMode}:${skillFamily}`;
+    const cacheKey = `week:${weekKey}:${division}:${chartMode}:${leaderboardMode}:${skillFamily}`;
     let publicData = getCached(cacheKey);
 
     if (!publicData) {
@@ -289,30 +330,36 @@ function sendWeekDetail(req, res, resolvedWeekKey = null) {
       let charts, chartResults, leaderboard, awards;
 
       if (isFinalized) {
-        const frozen = getFrozenChartResults(db, week.id);
+        // Frozen readers are division-aware — for Co-op, weeks finalized
+        // before the feature existed return empty arrays (no Co-op rows
+        // were ever persisted) and the UI's empty state takes over.
+        const frozen = getFrozenChartResults(db, week.id, division);
         charts = frozen.charts;
         chartResults = frozen.results;
-        leaderboard = getFrozenLeaderboard(db, week.id, leaderboardMode, skillFamily);
+        leaderboard = getFrozenLeaderboard(db, week.id, leaderboardMode, skillFamily, division);
         awards = db.prepare(
-          'SELECT * FROM weekly_challenge_awards WHERE week_id = ? ORDER BY award_key, rank'
-        ).all(week.id);
+          'SELECT * FROM weekly_challenge_awards WHERE week_id = ? AND division = ? ORDER BY award_key, rank'
+        ).all(week.id, division);
         awards = enrichFrozenWeeklyChallengeAwards(db, week.id, awards);
       } else {
-        const agg = getLiveWeekAggregate(db, week);
+        const agg = getLiveWeekAggregate(db, week, division);
         charts = agg?.weeklyCharts || [];
         chartResults = agg?.chartResults || {};
         leaderboard = agg ? getAggregateLeaderboard(agg, leaderboardMode, skillFamily) : [];
 
-        // Live awards
+        // Live awards. Co-op has only one podium (no S/D split, no skill
+        // family bucket) since every chart is CoOp.
         awards = [];
         if (agg) {
-          const configs = [
-            { key: 'overall', label: 'Weekly Overall', scope: 'both', family: 'all' },
-            { key: 'singles', label: 'Weekly Singles', scope: 'single', family: 'all' },
-            { key: 'doubles', label: 'Weekly Doubles', scope: 'double', family: 'all' },
-            { key: 'advanced', label: 'Weekly Advanced', scope: 'both', family: 'advanced' },
-            { key: 'intermediate', label: 'Weekly Intermediate', scope: 'both', family: 'intermediate' },
-          ];
+          const configs = division === 'coop'
+            ? [{ key: 'coop', label: 'Weekly Co-Op', scope: 'both', family: 'all' }]
+            : [
+                { key: 'overall', label: 'Weekly Overall', scope: 'both', family: 'all' },
+                { key: 'singles', label: 'Weekly Singles', scope: 'single', family: 'all' },
+                { key: 'doubles', label: 'Weekly Doubles', scope: 'double', family: 'all' },
+                { key: 'advanced', label: 'Weekly Advanced', scope: 'both', family: 'advanced' },
+                { key: 'intermediate', label: 'Weekly Intermediate', scope: 'both', family: 'intermediate' },
+              ];
           for (const cfg of configs) {
             const lb = getAggregateLeaderboard(agg, cfg.scope, cfg.family);
             for (const entry of lb.slice(0, 3)) {
@@ -333,12 +380,16 @@ function sendWeekDetail(req, res, resolvedWeekKey = null) {
         }
       }
 
-      // Filter charts by mode
+      // Filter charts by mode. `chart_mode` is meaningless for the Co-op
+      // division (every chart is CoOp), so we skip filtering there and just
+      // pass through whatever the aggregator already scoped.
       let filteredCharts = charts;
-      if (chartMode === 'single') {
-        filteredCharts = charts.filter(c => c.mode === 'Single');
-      } else if (chartMode === 'double') {
-        filteredCharts = charts.filter(c => c.mode === 'Double');
+      if (division === 'main') {
+        if (chartMode === 'single') {
+          filteredCharts = charts.filter(c => c.mode === 'Single');
+        } else if (chartMode === 'double') {
+          filteredCharts = charts.filter(c => c.mode === 'Double');
+        }
       }
 
       // Group charts by level
@@ -372,6 +423,7 @@ function sendWeekDetail(req, res, resolvedWeekKey = null) {
           challenge_min_level: week.challenge_min_level,
           challenge_max_level: week.challenge_max_level,
         },
+        division,
         awards,
         leaderboard,
         groupedByLevel,
@@ -380,13 +432,13 @@ function sendWeekDetail(req, res, resolvedWeekKey = null) {
       setCache(cacheKey, publicData);
     }
 
-    // Compose viewer data post-cache
+    // Compose viewer data post-cache. Now division-aware on both code paths.
     let viewerSummary = null;
     if (req.user?.id) {
       if (week.status === 'finalized') {
-        viewerSummary = getViewerWeeklyBests(db, week.id, req.user.id);
+        viewerSummary = getViewerWeeklyBests(db, week.id, req.user.id, division);
       } else {
-        const agg = getLiveWeekAggregate(db, week);
+        const agg = getLiveWeekAggregate(db, week, division);
         if (agg) {
           viewerSummary = getActiveViewerBests(agg.userChartBests, req.user.id);
           // Also find viewer rank
@@ -399,11 +451,11 @@ function sendWeekDetail(req, res, resolvedWeekKey = null) {
       }
 
       if (viewerSummary && week.status === 'finalized') {
-        // Get viewer rank from frozen leaderboard
+        // Get viewer rank from frozen leaderboard, scoped to this division.
         const viewerLb = db.prepare(`
           SELECT rank FROM weekly_challenge_leaderboard
-          WHERE week_id = ? AND user_id = ? AND scope_mode = 'both'
-        `).get(week.id, req.user.id);
+          WHERE week_id = ? AND user_id = ? AND scope_mode = 'both' AND division = ?
+        `).get(week.id, req.user.id, division);
         if (viewerLb) viewerSummary.rank = viewerLb.rank;
       }
     }

@@ -30,3 +30,15 @@ async function removeItem(key: string): Promise<void> {
 export const getToken = () => getItem(TOKEN_KEY);
 export const setToken = (token: string) => setItem(TOKEN_KEY, token);
 export const clearToken = () => removeItem(TOKEN_KEY);
+
+/**
+ * Generic preferences API for non-secret user settings (tier filters, default
+ * mode, songs-per-row, etc). Same backend as the auth token (SecureStore on
+ * native, localStorage on web) — overkill for prefs but keeps the surface
+ * area small and avoids pulling in another storage library.
+ */
+export const prefs = {
+  get: getItem,
+  set: setItem,
+  remove: removeItem,
+};

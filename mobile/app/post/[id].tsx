@@ -1,13 +1,28 @@
 import { useQuery } from '@tanstack/react-query';
 import { Image } from 'expo-image';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { AchievementBadgePost } from '@/components/achievement-badge-post';
+import { DefaultAvatar } from '@/components/default-avatar';
+import { SystemAvatar } from '@/components/system-avatar';
 import { LiveSessionCard } from '@/components/live-session-card';
+import { SessionPlanCard } from '@/components/session-plan-card';
+import { SessionShareCard } from '@/components/session-share-card';
+import { SessionSummaryCard } from '@/components/session-summary-card';
+import { WcSummaryCard } from '@/components/wc-summary-card';
+import { WcPersonalCard } from '@/components/wc-personal-card';
+import { YouTubeEmbed } from '@/components/youtube-embed';
 import { useTheme } from '@/contexts/theme-context';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { socialApi } from '@/lib/api';
+import { parseAchievementBadgePost } from '@/lib/achievementBadgePost';
 import { fullImageUrl } from '@/lib/images';
 import { parseLiveSessionMarker } from '@/lib/liveSessionMarker';
+import { splitSessionPlanContent } from '@/lib/sessionPlanMarker';
+import { splitSessionShareContent } from '@/lib/sessionShareMarker';
+import { splitSessionSummaryContent } from '@/lib/sessionSummaryMarker';
+import { splitWcSummaryContent, type WcSummary } from '@/lib/weeklyChallengeSummaryMarker';
+import { splitWcPersonalContent, type WcPersonalSummary } from '@/lib/weeklyChallengePersonalMarker';
 import type { ThemeColors } from '@/constants/theme';
 import type { Comment, Post } from '@shared/api';
 
@@ -39,20 +54,23 @@ function parseImages(raw: Post['images']): string[] {
 
 type Styles = ReturnType<typeof useThemedStyles<ReturnType<typeof makeStyles>>>;
 
-function CommentRow({ c, s }: { c: Comment; s: Styles }) {
+function CommentRow({ c, s, onProfile }: { c: Comment; s: Styles; onProfile: (username: string) => void }) {
   const avatar = typeof c.avatar === 'string' ? fullImageUrl(c.avatar) : undefined;
+  const goProfile = () => c.username && onProfile(c.username);
   return (
     <View style={[s.commentRow, c.parent_id ? s.commentReply : null]}>
-      {avatar ? (
-        <Image source={{ uri: avatar }} style={s.commentAvatar} contentFit="cover" />
-      ) : (
-        <View style={[s.commentAvatar, s.avatarFallback]}>
-          <Text style={s.avatarLetter}>{(c.username || '?').charAt(0).toUpperCase()}</Text>
-        </View>
-      )}
+      <Pressable onPress={goProfile} hitSlop={4} style={({ pressed }) => [pressed && { opacity: 0.7 }]}>
+        {avatar ? (
+          <Image source={{ uri: avatar }} style={s.commentAvatar} contentFit="cover" />
+        ) : (
+          <DefaultAvatar size={28} />
+        )}
+      </Pressable>
       <View style={s.commentMain}>
         <View style={s.commentHeader}>
-          <Text style={s.commentUser}>{c.username || 'anonymous'}</Text>
+          <Pressable onPress={goProfile} hitSlop={4} style={({ pressed }) => [pressed && { opacity: 0.7 }]}>
+            <Text style={s.commentUser}>{c.username || 'anonymous'}</Text>
+          </Pressable>
           <Text style={s.commentTime}>{timeAgo(c.created_at)}</Text>
         </View>
         {c.content ? <Text style={s.commentBody}>{c.content}</Text> : null}
@@ -63,9 +81,12 @@ function CommentRow({ c, s }: { c: Comment; s: Styles }) {
 
 export default function PostDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
   const postId = id ?? '';
   const { theme } = useTheme();
   const s = useThemedStyles(makeStyles);
+  const goProfile = (username: string) =>
+    router.push({ pathname: '/profile/[id]', params: { id: `@${username}` } });
 
   const postQuery = useQuery({
     queryKey: ['post', postId],
@@ -85,7 +106,25 @@ export default function PostDetailScreen() {
     ? fullImageUrl((post.user_avatar || post.avatar) as string)
     : undefined;
   const images = parseImages(post?.images);
-  const { content: postContent, summary: liveSummary } = parseLiveSessionMarker(post?.content);
+  const { content: afterLive, summary: liveSummary } = parseLiveSessionMarker(post?.content);
+  const { text: afterWcSummary, summary: wcMarkerSummary } = splitWcSummaryContent(afterLive);
+  const wcAttached = post ? ((post as Record<string, unknown>).wc_summary_payload as WcSummary | null | undefined) : undefined;
+  const wcSummary = wcAttached ?? wcMarkerSummary;
+
+  const { text: afterPersonal, personal: wcPersonalMarker } = splitWcPersonalContent(afterWcSummary);
+  const wcPersonalAttached = post ? ((post as Record<string, unknown>).wc_personal_payload as WcPersonalSummary | null | undefined) : undefined;
+  const wcPersonal = wcPersonalAttached ?? wcPersonalMarker;
+
+  // Decode the rest of the structured share markers so we can render the
+  // proper card instead of falling back to "🔗 Shared link".
+  const { text: afterShare, share: sessionShare } = splitSessionShareContent(afterPersonal);
+  const { text: afterSummary, summary: sessionSummary } = splitSessionSummaryContent(afterShare);
+  const { text: afterPlan, plan: sessionPlan } = splitSessionPlanContent(afterSummary);
+  const postContent = String(afterPlan || '').replace(/\[\[SHINSA_[A-Z_]+_V\d+:[^\]]+\]\]/g, '').trim();
+
+  // Render badge-unlock posts as a compact card with a small thumbnail
+  // instead of the default full-width image gallery.
+  const badgePost = parseAchievementBadgePost(postContent, images);
 
   return (
     <View style={s.container}>
@@ -105,32 +144,50 @@ export default function PostDetailScreen() {
 
         {post && (
           <>
-            <View style={s.postHeader}>
+            <Pressable
+              onPress={() => post.username && goProfile(post.username)}
+              style={({ pressed }) => [s.postHeader, pressed && { opacity: 0.7 }]}>
               {avatar ? (
                 <Image source={{ uri: avatar }} style={s.postAvatar} contentFit="cover" />
+              ) : post.username === '__shinsa__' ? (
+                <SystemAvatar size={44} />
               ) : (
-                <View style={[s.postAvatar, s.avatarFallback]}>
-                  <Text style={s.postAvatarLetter}>{(post.username || '?').charAt(0).toUpperCase()}</Text>
-                </View>
+                <DefaultAvatar size={44} />
               )}
               <View style={s.postHeaderInfo}>
                 <Text style={s.postUsername}>@{post.username || 'anonymous'}</Text>
                 <Text style={s.postTime}>{timeAgo(post.created_at)}</Text>
               </View>
-            </View>
+            </Pressable>
 
             {liveSummary ? <LiveSessionCard summary={liveSummary} /> : null}
-            {postContent ? <Text style={s.postContent}>{postContent}</Text> : null}
+            {wcSummary ? <WcSummaryCard summary={wcSummary} /> : null}
+            {wcPersonal ? <WcPersonalCard summary={wcPersonal} /> : null}
+            {sessionShare ? <SessionShareCard share={sessionShare} /> : null}
+            {sessionSummary ? <SessionSummaryCard summary={sessionSummary} /> : null}
+            {sessionPlan ? <SessionPlanCard plan={sessionPlan} /> : null}
 
-            {images.length > 0 && (
-              <View style={s.imagesList}>
-                {images.map((img, i) => {
-                  const url = fullImageUrl(img);
-                  return url ? (
-                    <Image key={i} source={{ uri: url }} style={s.postImage} contentFit="cover" transition={150} />
-                  ) : null;
-                })}
-              </View>
+            {badgePost ? (
+              <AchievementBadgePost
+                badgeName={badgePost.badgeName}
+                supportingCopy={badgePost.supportingCopy}
+                image={badgePost.image}
+              />
+            ) : (
+              <>
+                {postContent ? <Text style={s.postContent}>{postContent}</Text> : null}
+                {post.youtube_url ? <YouTubeEmbed url={post.youtube_url} /> : null}
+                {images.length > 0 && (
+                  <View style={s.imagesList}>
+                    {images.map((img, i) => {
+                      const url = fullImageUrl(img);
+                      return url ? (
+                        <Image key={i} source={{ uri: url }} style={s.postImage} contentFit="cover" transition={150} />
+                      ) : null;
+                    })}
+                  </View>
+                )}
+              </>
             )}
 
             <View style={s.postFooter}>
@@ -153,7 +210,7 @@ export default function PostDetailScreen() {
                 <Text style={s.empty}>No comments yet</Text>
               ) : (
                 <View style={s.commentsList}>
-                  {comments.map((c) => <CommentRow key={c.id} c={c} s={s} />)}
+                  {comments.map((c) => <CommentRow key={c.id} c={c} s={s} onProfile={goProfile} />)}
                 </View>
               )}
             </View>

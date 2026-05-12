@@ -38,8 +38,9 @@ export class ApiClient {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs ?? this.defaultTimeoutMs);
 
+    const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
     const finalHeaders: Record<string, string> = {
-      'Content-Type': 'application/json',
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       ...(headers as Record<string, string> | undefined),
     };
 
@@ -48,11 +49,20 @@ export class ApiClient {
       if (token) finalHeaders.Authorization = `Bearer ${token}`;
     }
 
+    let serializedBody: BodyInit | undefined;
+    if (body === undefined) {
+      serializedBody = undefined;
+    } else if (isFormData) {
+      serializedBody = body as FormData;
+    } else {
+      serializedBody = JSON.stringify(body);
+    }
+
     try {
       const res = await fetch(url, {
         ...rest,
         headers: finalHeaders,
-        body: body === undefined ? undefined : JSON.stringify(body),
+        body: serializedBody,
         signal: controller.signal,
       });
 

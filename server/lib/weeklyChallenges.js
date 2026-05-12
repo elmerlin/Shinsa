@@ -175,7 +175,6 @@ function hashSeed(weekKey, mode, level) {
 }
 
 function selectWeeklyCharts(db, weekRow) {
-  const aliases = getAliases();
   const weekId = weekRow.id;
   const weekKey = weekRow.week_key;
 
@@ -196,7 +195,6 @@ function selectWeeklyCharts(db, weekRow) {
   }
 
   // Get chart IDs used in previous 4 weeks to avoid repeats
-  const recentChartIds = new Set();
   const recentWeeks = db.prepare(`
     SELECT wc.chart_id, wc.mode, wc.level
     FROM weekly_challenge_charts wc
@@ -214,8 +212,8 @@ function selectWeeklyCharts(db, weekRow) {
   const maxLevel = weekRow.challenge_max_level;
   const insertStmt = db.prepare(`
     INSERT INTO weekly_challenge_charts
-      (week_id, chart_id, mode, level, sort_order, song_title_snapshot, artist_snapshot, jacket_url_snapshot)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      (week_id, chart_id, mode, level, sort_order, song_title_snapshot, artist_snapshot, jacket_url_snapshot, division)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   let sortOrder = 0;
@@ -239,14 +237,114 @@ function selectWeeklyCharts(db, weekRow) {
 
       insertStmt.run(
         weekId, picked.id, mode, level, sortOrder++,
-        picked.title, picked.artist, picked.jacket_url || ''
+        picked.title, picked.artist, picked.jacket_url || '', 'main'
       );
       chartCount++;
     }
   }
 
   db.prepare('UPDATE weekly_challenge_weeks SET chart_count = ? WHERE id = ?').run(chartCount, weekId);
+
+  // Co-op WC division — its own pick stream. Scoped to 2-player charts for
+  // now (per design decision); 3P/4P/5P deferred. Runs as a separate phase
+  // so it can be back-filled into an existing week independently of the
+  // main S/D picks (see `ensureCoopWeeklyChartsForWeek` below).
+  selectCoopWeeklyCharts(db, weekRow);
+
   return chartCount;
+}
+
+/** Number of Co-op WC picks per week. Higher than the per-level S/D count
+ *  because Co-op is its own division — a smaller pool would feel barren. */
+const COOP_WEEKLY_CHART_COUNT = 5;
+
+/**
+ * Pick the Co-op WC charts for a given week. Idempotent — if any
+ * `division='coop'` rows already exist for the week, the function bails
+ * without re-picking (so re-running on the same week doesn't churn).
+ * Returns the number of Co-op picks inserted (0 if the week was already
+ * populated, or if the catalog has no 2P Co-op charts).
+ */
+function selectCoopWeeklyCharts(db, weekRow) {
+  const weekId = weekRow.id;
+  const weekKey = weekRow.week_key;
+
+  const existingCount = db.prepare(
+    "SELECT COUNT(*) AS c FROM weekly_challenge_charts WHERE week_id = ? AND division = 'coop'"
+  ).get(weekId)?.c || 0;
+  if (existingCount > 0) return 0;
+
+  // Pool: 2-player Co-op charts. In our schema, CoOp `level` encodes the
+  // player count (C2 → level 2, C3 → level 3, …). The user's design
+  // decision is to ship 2P only for v1.
+  const candidates = db.prepare(`
+    SELECT id, title, artist, jacket_url, mode, level
+    FROM songs
+    WHERE mode = 'CoOp' AND level = 2
+    ORDER BY title
+  `).all();
+  if (candidates.length === 0) return 0;
+
+  // Anti-repeat: previous 4 weeks' Co-op picks. If filtering would empty
+  // the pool, allow repeats — better to recycle than ship an empty week.
+  const recent = new Set(
+    db.prepare(`
+      SELECT wc.chart_id
+      FROM weekly_challenge_charts wc
+      JOIN weekly_challenge_weeks w ON wc.week_id = w.id
+      WHERE wc.division = 'coop'
+        AND w.week_key != ?
+        AND w.id >= (SELECT COALESCE(MAX(id) - 4, 0) FROM weekly_challenge_weeks)
+    `).all(weekKey).map(r => r.chart_id),
+  );
+  let pool = candidates.filter(c => !recent.has(c.id));
+  if (pool.length === 0) pool = candidates;
+
+  // Deterministic shuffle of the pool, then take the top N. Same week +
+  // same pool yields the same picks, so re-running the function is safe.
+  const seeded = pool
+    .map((c, i) => ({
+      chart: c,
+      // Different hash input per chart-index so we get distinct keys for
+      // sorting (otherwise every chart would tie on the same week-level
+      // seed and the sort would be stable but boring).
+      key: hashSeed(weekKey, 'CoOp', 2 + i).readUInt32BE(0),
+    }))
+    .sort((a, b) => a.key - b.key)
+    .map(e => e.chart);
+
+  const count = Math.min(COOP_WEEKLY_CHART_COUNT, seeded.length);
+  const picks = seeded.slice(0, count);
+
+  const insertStmt = db.prepare(`
+    INSERT INTO weekly_challenge_charts
+      (week_id, chart_id, mode, level, sort_order, song_title_snapshot, artist_snapshot, jacket_url_snapshot, division)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'coop')
+  `);
+  // Sort order continues after the main picks so the Co-op division renders
+  // below S/D when both are listed together. Each pick gets sequential
+  // order within the Co-op division.
+  const maxSortOrder = db.prepare(
+    'SELECT COALESCE(MAX(sort_order), -1) AS m FROM weekly_challenge_charts WHERE week_id = ?'
+  ).get(weekId)?.m || -1;
+  let sortOrder = maxSortOrder + 1;
+  for (const picked of picks) {
+    insertStmt.run(
+      weekId, picked.id, picked.mode, picked.level, sortOrder++,
+      picked.title, picked.artist, picked.jacket_url || '',
+    );
+  }
+  return picks.length;
+}
+
+/**
+ * Backfill Co-op picks for an existing week if it's missing them. Safe to
+ * call on every server start — `selectCoopWeeklyCharts` is idempotent and
+ * returns 0 immediately when the week already has Co-op picks.
+ */
+function ensureCoopWeeklyChartsForWeek(db, weekRow) {
+  if (!weekRow) return 0;
+  return selectCoopWeeklyCharts(db, weekRow);
 }
 
 // ---------------------------------------------------------------------------
@@ -261,6 +359,15 @@ function ensureCurrentWeeklyChallengeWeek(db, now = new Date()) {
   if (week) {
     // Repair: publish summaries for any finalized weeks that failed during rollover
     repairMissingSummaryPosts(db);
+    // Back-fill the Co-op WC division for weeks that were generated before
+    // Co-op support existed. Idempotent — no-op if Co-op picks are already
+    // populated. This ensures the current week gets its Co-op picks on the
+    // first request after the server boots with the feature enabled.
+    try {
+      ensureCoopWeeklyChartsForWeek(db, week);
+    } catch (err) {
+      console.error('[WC Co-op] back-fill failed:', err.message);
+    }
     return week;
   }
 
@@ -315,16 +422,32 @@ function ensureCurrentWeeklyChallengeWeek(db, now = new Date()) {
 // Result aggregation (active week — live from user_recently_played)
 // ---------------------------------------------------------------------------
 
-function aggregateWeeklyResults(db, weekId) {
+/**
+ * Aggregate live results for a weekly challenge week.
+ *
+ * @param {object} db
+ * @param {number} weekId
+ * @param {'main' | 'coop'} division  Which division to aggregate. 'main'
+ *   (default) covers the Singles + Doubles picks and is what every
+ *   pre-existing caller already wants. 'coop' covers the Co-op WC division
+ *   — only Co-op charts are loaded, and only Co-op plays are scanned, so
+ *   the leaderboard for each division is fully isolated.
+ */
+function aggregateWeeklyResults(db, weekId, division = 'main') {
   const week = db.prepare('SELECT * FROM weekly_challenge_weeks WHERE id = ?').get(weekId);
   if (!week) return null;
 
   const aliases = getAliases();
+  const isCoop = division === 'coop';
+  // Mode allowlist that controls both the weekly-chart filter and the
+  // recently-played play scan. Kept in sync so we can't accidentally try to
+  // match Co-op plays against a Singles chart (or vice versa).
+  const playModeFilter = isCoop ? ['CoOp'] : ['Single', 'Double'];
 
-  // Load persisted weekly charts
+  // Load persisted weekly charts for this division
   const weeklyCharts = db.prepare(
-    'SELECT * FROM weekly_challenge_charts WHERE week_id = ? ORDER BY sort_order'
-  ).all(weekId);
+    'SELECT * FROM weekly_challenge_charts WHERE week_id = ? AND division = ? ORDER BY sort_order'
+  ).all(weekId, division);
 
   // Build chart key lookup: chartKey -> weeklyChart
   const chartKeyLookup = {};
@@ -339,7 +462,9 @@ function aggregateWeeklyResults(db, weekId) {
     directLookup[`${wc.song_title_snapshot}|${wc.mode}|${wc.level}`] = wc;
   }
 
-  // Fetch all plays in the week window
+  // Fetch all plays in the week window scoped to this division's modes.
+  // (Inlined IN-list because `prepare` doesn't expand array placeholders.)
+  const modePlaceholders = playModeFilter.map(() => '?').join(',');
   const plays = db.prepare(`
     SELECT rp.*, u.username, u.nationality, u.skill_title, u.skill_level
     FROM user_recently_played rp
@@ -347,8 +472,8 @@ function aggregateWeeklyResults(db, weekId) {
     WHERE COALESCE(NULLIF(rp.played_at_utc, ''), rp.date_played) >= ?
       AND COALESCE(NULLIF(rp.played_at_utc, ''), rp.date_played) <= ?
       AND rp.score > 0
-      AND rp.mode IN ('Single', 'Double')
-  `).all(week.starts_at_utc, week.ends_at_utc);
+      AND rp.mode IN (${modePlaceholders})
+  `).all(week.starts_at_utc, week.ends_at_utc, ...playModeFilter);
 
   // Match plays to weekly charts
   // userChartBests: Map<`${userId}|${weeklyChartId}`, { play, weeklyChart }>
@@ -662,28 +787,29 @@ function buildLeaderboard(userTotals, scopeMode = 'both', skillFamily = 'all', s
 // Week finalization
 // ---------------------------------------------------------------------------
 
-function finalizeWeek(db, weekId) {
-  const week = db.prepare('SELECT * FROM weekly_challenge_weeks WHERE id = ?').get(weekId);
-  if (!week || week.status === 'finalized') return;
-
-  const agg = aggregateWeeklyResults(db, weekId);
+/**
+ * Per-division finalize: freezes results, leaderboard, and awards for a
+ * single division. Called once for 'main' (Singles + Doubles) and once
+ * for 'coop' so each division persists its own snapshot.
+ */
+function finalizeWeekDivision(db, weekId, division, snapshots) {
+  const agg = aggregateWeeklyResults(db, weekId, division);
   if (!agg) return;
 
-  // Load snapshots for family filtering
-  const snapshotRows = db.prepare(
-    'SELECT * FROM weekly_challenge_user_snapshots WHERE week_id = ?'
-  ).all(weekId);
-  const snapshots = {};
-  for (const s of snapshotRows) snapshots[s.user_id] = s;
+  // Skip the freeze if this division had nothing happening this week.
+  // Avoids writing zero leaderboard rows that would later confuse the
+  // frozen readers into thinking there was participation.
+  if (agg.userChartBests.size === 0 && Object.keys(agg.userTotals).length === 0) {
+    return;
+  }
 
-  // Persist frozen results
+  // Persist frozen per-chart results (chart already carries its division).
   const insertResult = db.prepare(`
     INSERT OR REPLACE INTO weekly_challenge_results
       (weekly_chart_id, user_id, score, raw_grade, resolved_grade, plate,
        perfect, great, good, bad, miss, max_combo, rating_points, played_at, source_play_id)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
-
   for (const [, entry] of agg.userChartBests) {
     const p = entry.play;
     insertResult.run(
@@ -692,63 +818,80 @@ function finalizeWeek(db, weekId) {
       p.perfect || 0, p.great || 0, p.good || 0, p.bad || 0, p.miss || 0,
       p.max_combo || 0, entry.ratingPoints,
       p.played_at_utc || p.date_played || '',
-      p.id || null
+      p.id || null,
     );
   }
 
-  // Persist frozen leaderboard for each scope
+  // Scope modes vary by division: main has the per-mode S/D split, but
+  // Co-op only has one scope (every chart is CoOp, so the split is moot).
+  const scopes = division === 'coop' ? ['both'] : ['both', 'single', 'double'];
   const insertLeaderboard = db.prepare(`
     INSERT OR REPLACE INTO weekly_challenge_leaderboard
-      (week_id, user_id, scope_mode, points, clears, total_score, best_result_achieved_at, rank)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      (week_id, user_id, scope_mode, division, points, clears,
+       total_score, best_result_achieved_at, rank)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
-
-  for (const scope of ['both', 'single', 'double']) {
+  for (const scope of scopes) {
     const lb = buildLeaderboard(agg.userTotals, scope, 'all', snapshots);
     for (const entry of lb) {
       insertLeaderboard.run(
-        weekId, entry.user_id, scope,
+        weekId, entry.user_id, scope, division,
         entry.points, entry.clears, entry.total_score,
-        entry.best_result_achieved_at, entry.rank
+        entry.best_result_achieved_at, entry.rank,
       );
     }
   }
 
-  // Generate awards
-  const awardConfigs = [
-    { key: 'overall', label: 'Weekly Overall', scopeMode: 'both', skillFamily: 'all' },
-    { key: 'singles', label: 'Weekly Singles', scopeMode: 'single', skillFamily: 'all' },
-    { key: 'doubles', label: 'Weekly Doubles', scopeMode: 'double', skillFamily: 'all' },
-    { key: 'advanced', label: 'Weekly Advanced', scopeMode: 'both', skillFamily: 'advanced' },
-    { key: 'intermediate', label: 'Weekly Intermediate', scopeMode: 'both', skillFamily: 'intermediate' },
-  ];
-
+  // Award podiums. Main division ships its 5 categories; Co-op ships a
+  // single 'coop' podium since there's no S/D or skill family split.
+  const awardConfigs = division === 'coop'
+    ? [{ key: 'coop', label: 'Weekly Co-Op', scopeMode: 'both', skillFamily: 'all' }]
+    : [
+        { key: 'overall', label: 'Weekly Overall', scopeMode: 'both', skillFamily: 'all' },
+        { key: 'singles', label: 'Weekly Singles', scopeMode: 'single', skillFamily: 'all' },
+        { key: 'doubles', label: 'Weekly Doubles', scopeMode: 'double', skillFamily: 'all' },
+        { key: 'advanced', label: 'Weekly Advanced', scopeMode: 'both', skillFamily: 'advanced' },
+        { key: 'intermediate', label: 'Weekly Intermediate', scopeMode: 'both', skillFamily: 'intermediate' },
+      ];
   const insertAward = db.prepare(`
     INSERT OR REPLACE INTO weekly_challenge_awards
-      (week_id, award_key, award_label, scope_mode, skill_family,
+      (week_id, award_key, award_label, scope_mode, skill_family, division,
        user_id, rank, points, clears, total_score, best_result_achieved_at,
        username_snapshot, avatar_snapshot, nationality_snapshot, skill_title_snapshot)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
-
   for (const cfg of awardConfigs) {
     const lb = buildLeaderboard(agg.userTotals, cfg.scopeMode, cfg.skillFamily, snapshots);
     const podium = lb.slice(0, 3);
     for (const entry of podium) {
       const snap = snapshots[entry.user_id] || {};
       insertAward.run(
-        weekId, cfg.key, cfg.label, cfg.scopeMode, cfg.skillFamily,
+        weekId, cfg.key, cfg.label, cfg.scopeMode, cfg.skillFamily, division,
         entry.user_id, entry.rank, entry.points, entry.clears, entry.total_score,
         entry.best_result_achieved_at,
         snap.username_snapshot || entry.username,
         snap.avatar_snapshot || entry.avatar,
         snap.nationality_snapshot || entry.nationality,
-        snap.skill_title_snapshot || entry.skill_title
+        snap.skill_title_snapshot || entry.skill_title,
       );
     }
   }
+}
 
-  // Mark week as finalized
+function finalizeWeek(db, weekId) {
+  const week = db.prepare('SELECT * FROM weekly_challenge_weeks WHERE id = ?').get(weekId);
+  if (!week || week.status === 'finalized') return;
+
+  // Snapshots are shared across divisions — load once.
+  const snapshotRows = db.prepare(
+    'SELECT * FROM weekly_challenge_user_snapshots WHERE week_id = ?'
+  ).all(weekId);
+  const snapshots = {};
+  for (const s of snapshotRows) snapshots[s.user_id] = s;
+
+  finalizeWeekDivision(db, weekId, 'main', snapshots);
+  finalizeWeekDivision(db, weekId, 'coop', snapshots);
+
   db.prepare("UPDATE weekly_challenge_weeks SET status = 'finalized', closed_at = datetime('now') WHERE id = ?")
     .run(weekId);
 }
@@ -766,14 +909,14 @@ function toRatingBonusApiFields(breakdown) {
   };
 }
 
-function getFrozenBonusTotalsByUser(db, weekId, scopeMode = 'both') {
+function getFrozenBonusTotalsByUser(db, weekId, scopeMode = 'both', division = 'main') {
   const rows = db.prepare(`
     SELECT r.user_id, r.score, r.resolved_grade, r.plate, r.rating_points,
            wc.mode, wc.level
     FROM weekly_challenge_results r
     JOIN weekly_challenge_charts wc ON wc.id = r.weekly_chart_id
-    WHERE wc.week_id = ?
-  `).all(weekId);
+    WHERE wc.week_id = ? AND wc.division = ?
+  `).all(weekId, division);
 
   const totals = {};
   for (const row of rows) {
@@ -797,11 +940,15 @@ function getFrozenBonusTotalsByUser(db, weekId, scopeMode = 'both') {
 }
 
 function enrichFrozenWeeklyChallengeAwards(db, weekId, awards = []) {
-  const byScope = {};
+  // Key the bonus cache by (division, scope) since main and Co-op
+  // bonuses are computed off different chart pools.
+  const byKey = {};
   return (Array.isArray(awards) ? awards : []).map((award) => {
     const scope = award.scope_mode || 'both';
-    if (!byScope[scope]) byScope[scope] = getFrozenBonusTotalsByUser(db, weekId, scope);
-    const bonus = byScope[scope]?.[award.user_id] || {};
+    const division = award.division || 'main';
+    const key = `${division}|${scope}`;
+    if (!byKey[key]) byKey[key] = getFrozenBonusTotalsByUser(db, weekId, scope, division);
+    const bonus = byKey[key]?.[award.user_id] || {};
     return {
       ...award,
       pg_bonus_points: bonus.pg_bonus_points || 0,
@@ -810,10 +957,10 @@ function enrichFrozenWeeklyChallengeAwards(db, weekId, awards = []) {
   });
 }
 
-function getFrozenChartResults(db, weekId) {
+function getFrozenChartResults(db, weekId, division = 'main') {
   const charts = db.prepare(
-    'SELECT * FROM weekly_challenge_charts WHERE week_id = ? ORDER BY sort_order'
-  ).all(weekId);
+    'SELECT * FROM weekly_challenge_charts WHERE week_id = ? AND division = ? ORDER BY sort_order'
+  ).all(weekId, division);
 
   const results = {};
   for (const chart of charts) {
@@ -861,18 +1008,18 @@ function getFrozenChartResults(db, weekId) {
   return { charts, results };
 }
 
-function getFrozenLeaderboard(db, weekId, scopeMode = 'both', skillFamily = 'all') {
-  const bonusByUser = getFrozenBonusTotalsByUser(db, weekId, scopeMode);
+function getFrozenLeaderboard(db, weekId, scopeMode = 'both', skillFamily = 'all', division = 'main') {
+  const bonusByUser = getFrozenBonusTotalsByUser(db, weekId, scopeMode, division);
 
-  // Get frozen leaderboard rows for this scope
+  // Get frozen leaderboard rows for this scope + division
   const rows = db.prepare(`
     SELECT lb.*, s.username_snapshot, s.avatar_snapshot, s.nationality_snapshot,
            s.skill_title_snapshot, s.skill_family_snapshot
     FROM weekly_challenge_leaderboard lb
     JOIN weekly_challenge_user_snapshots s ON s.week_id = lb.week_id AND s.user_id = lb.user_id
-    WHERE lb.week_id = ? AND lb.scope_mode = ?
+    WHERE lb.week_id = ? AND lb.scope_mode = ? AND lb.division = ?
     ORDER BY lb.rank ASC
-  `).all(weekId, scopeMode);
+  `).all(weekId, scopeMode, division);
 
   // Apply family filter and rerank
   let filtered = rows;
@@ -904,14 +1051,14 @@ function getFrozenLeaderboard(db, weekId, scopeMode = 'both', skillFamily = 'all
   });
 }
 
-function getViewerWeeklyBests(db, weekId, userId) {
+function getViewerWeeklyBests(db, weekId, userId, division = 'main') {
   if (!userId) return null;
   const rows = db.prepare(`
     SELECT r.*, wc.mode, wc.level, wc.song_title_snapshot
     FROM weekly_challenge_results r
     JOIN weekly_challenge_charts wc ON wc.id = r.weekly_chart_id
-    WHERE wc.week_id = ? AND r.user_id = ?
-  `).all(weekId, userId);
+    WHERE wc.week_id = ? AND r.user_id = ? AND wc.division = ?
+  `).all(weekId, userId, division);
 
   if (rows.length === 0) return null;
 

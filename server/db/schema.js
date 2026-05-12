@@ -2929,6 +2929,62 @@ function initializeDb() {
     }
   }
 
+  // Migration: normalize Co-op `mode` casing.
+  // Historically the PIUGame scraper emitted `'Co-op'` (with hyphen) while the
+  // chart catalog and every other code path used `'CoOp'` — meaning Co-op plays
+  // never joined to charts. The scraper now emits `'CoOp'` directly; this block
+  // backfills any pre-existing rows so the join works for historical data too.
+  // Idempotent: only runs the UPDATEs when there's at least one stale row.
+  try {
+    const staleCoopRow = db.prepare(`
+      SELECT 1 FROM (
+        SELECT mode FROM user_recently_played WHERE mode = 'Co-op' LIMIT 1
+        UNION ALL SELECT mode FROM user_best_scores WHERE mode = 'Co-op' LIMIT 1
+        UNION ALL SELECT mode FROM user_new_clears WHERE mode = 'Co-op' LIMIT 1
+        UNION ALL SELECT mode FROM user_pumbility_scores WHERE mode = 'Co-op' LIMIT 1
+        UNION ALL SELECT mode FROM live_session_plays WHERE mode = 'Co-op' LIMIT 1
+        UNION ALL SELECT mode FROM over_level_rankings WHERE mode = 'Co-op' LIMIT 1
+        UNION ALL SELECT mode FROM weekly_challenge_charts WHERE mode = 'Co-op' LIMIT 1
+        UNION ALL SELECT mode FROM songs WHERE mode = 'Co-op' LIMIT 1
+        UNION ALL SELECT mode FROM chart_tiers WHERE mode = 'Co-op' LIMIT 1
+        UNION ALL SELECT 1 FROM user_upscores WHERE upscores_json LIKE '%"mode":"Co-op"%' LIMIT 1
+      ) LIMIT 1
+    `).get();
+    if (staleCoopRow) {
+      const normalize = db.transaction(() => {
+        let total = 0;
+        const targets = [
+          'user_recently_played',
+          'user_best_scores',
+          'user_new_clears',
+          'user_pumbility_scores',
+          'live_session_plays',
+          'over_level_rankings',
+          'weekly_challenge_charts',
+          'songs',
+          'chart_tiers',
+        ];
+        for (const table of targets) {
+          const r = db.prepare(`UPDATE ${table} SET mode = 'CoOp' WHERE mode = 'Co-op'`).run();
+          total += r.changes;
+        }
+        // upscores_json is a JSON blob with `"mode":"Co-op"` baked into the
+        // string. SQLite's REPLACE() handles it without needing a JSON parse.
+        const upscoreRes = db.prepare(`
+          UPDATE user_upscores
+             SET upscores_json = REPLACE(upscores_json, '"mode":"Co-op"', '"mode":"CoOp"')
+           WHERE upscores_json LIKE '%"mode":"Co-op"%'
+        `).run();
+        total += upscoreRes.changes;
+        return total;
+      });
+      const updated = normalize();
+      if (updated > 0) console.log(`Normalized ${updated} 'Co-op' → 'CoOp' rows across mode columns`);
+    }
+  } catch (err) {
+    console.error('Failed to normalize Co-op casing:', err.message);
+  }
+
   // Migration: normalize all short cut chart titles into their own title bucket.
   try {
     const shortCutRows = db.prepare(`
@@ -3806,7 +3862,12 @@ function initializeDb() {
       song_title_snapshot TEXT DEFAULT '',
       artist_snapshot TEXT DEFAULT '',
       jacket_url_snapshot TEXT DEFAULT '',
-      UNIQUE(week_id, mode, level)
+      -- 'main' = Singles/Doubles picks; 'coop' = Co-op WC division (all 2P
+      -- charts share level=2 in our schema so the old UNIQUE(week, mode,
+      -- level) constraint blocked multiple Co-op picks per week — replaced
+      -- with UNIQUE(week, chart) which still prevents duplicates.
+      division TEXT NOT NULL DEFAULT 'main',
+      UNIQUE(week_id, chart_id)
     );
 
     CREATE TABLE IF NOT EXISTS weekly_challenge_user_snapshots (
@@ -3848,12 +3909,15 @@ function initializeDb() {
       week_id INTEGER NOT NULL REFERENCES weekly_challenge_weeks(id) ON DELETE CASCADE,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       scope_mode TEXT NOT NULL DEFAULT 'both',
+      -- 'main' = Singles/Doubles WC; 'coop' = parallel Co-Op division.
+      -- Each division has its own (user, scope_mode) leaderboard rows.
+      division TEXT NOT NULL DEFAULT 'main',
       points INTEGER NOT NULL DEFAULT 0,
       clears INTEGER NOT NULL DEFAULT 0,
       total_score INTEGER NOT NULL DEFAULT 0,
       best_result_achieved_at TEXT,
       rank INTEGER DEFAULT 0,
-      UNIQUE(week_id, user_id, scope_mode)
+      UNIQUE(week_id, user_id, scope_mode, division)
     );
 
     CREATE TABLE IF NOT EXISTS weekly_challenge_awards (
@@ -3863,6 +3927,9 @@ function initializeDb() {
       award_label TEXT DEFAULT '',
       scope_mode TEXT DEFAULT '',
       skill_family TEXT DEFAULT '',
+      -- 'main' or 'coop'. Each division has its own podiums; the Co-op
+      -- division ships a single 'overall' award_key.
+      division TEXT NOT NULL DEFAULT 'main',
       user_id TEXT NOT NULL,
       rank INTEGER NOT NULL,
       points INTEGER DEFAULT 0,
@@ -3873,7 +3940,7 @@ function initializeDb() {
       avatar_snapshot TEXT DEFAULT '',
       nationality_snapshot TEXT DEFAULT '',
       skill_title_snapshot TEXT DEFAULT '',
-      UNIQUE(week_id, award_key, rank)
+      UNIQUE(week_id, award_key, rank, division)
     );
 
     CREATE TABLE IF NOT EXISTS user_weekly_challenge_plays (
@@ -3969,6 +4036,132 @@ function initializeDb() {
   try {
     db.exec(`ALTER TABLE tournament_discussion_messages ADD COLUMN thread_emoji TEXT DEFAULT ''`);
   } catch { /* column already exists */ }
+
+  // Migration: weekly_challenge_charts.division.
+  // Adds the column for the Co-op WC division (`'main'` vs `'coop'`), and
+  // rebuilds the table to relax the old `UNIQUE(week_id, mode, level)`
+  // constraint — multiple 2P Co-op charts in the same week all share
+  // `level=2` (player count), so the original constraint blocked picking
+  // more than one Co-op chart per week. The new constraint keys on
+  // `(week_id, chart_id)` instead, which still prevents accidental
+  // duplicate picks of the same chart.
+  const weeklyChallengeChartCols = db.prepare(
+    "PRAGMA table_info(weekly_challenge_charts)",
+  ).all().map((c) => c.name);
+  if (!weeklyChallengeChartCols.includes('division')) {
+    // Idempotent rebuild — runs once. Inside a transaction so the table
+    // is never observed in a half-migrated state.
+    db.transaction(() => {
+      db.exec(`
+        CREATE TABLE weekly_challenge_charts_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          week_id INTEGER NOT NULL REFERENCES weekly_challenge_weeks(id) ON DELETE CASCADE,
+          chart_id INTEGER NOT NULL REFERENCES songs(id),
+          mode TEXT NOT NULL,
+          level INTEGER NOT NULL,
+          sort_order INTEGER DEFAULT 0,
+          song_title_snapshot TEXT DEFAULT '',
+          artist_snapshot TEXT DEFAULT '',
+          jacket_url_snapshot TEXT DEFAULT '',
+          division TEXT NOT NULL DEFAULT 'main',
+          UNIQUE(week_id, chart_id)
+        );
+      `);
+      db.exec(`
+        INSERT INTO weekly_challenge_charts_new
+          (id, week_id, chart_id, mode, level, sort_order,
+           song_title_snapshot, artist_snapshot, jacket_url_snapshot, division)
+        SELECT
+           id, week_id, chart_id, mode, level, sort_order,
+           song_title_snapshot, artist_snapshot, jacket_url_snapshot, 'main'
+        FROM weekly_challenge_charts;
+      `);
+      db.exec(`DROP TABLE weekly_challenge_charts;`);
+      db.exec(`ALTER TABLE weekly_challenge_charts_new RENAME TO weekly_challenge_charts;`);
+    })();
+  }
+
+  // Migration: weekly_challenge_leaderboard.division + relaxed UNIQUE.
+  // Adds the column for the Co-op division and rebuilds to include
+  // division in the (week, user, scope, division) uniqueness constraint
+  // so Co-op leaderboard rows can sit beside main-division ones.
+  const wcLeaderboardCols = db.prepare(
+    "PRAGMA table_info(weekly_challenge_leaderboard)",
+  ).all().map((c) => c.name);
+  if (!wcLeaderboardCols.includes('division')) {
+    db.transaction(() => {
+      db.exec(`
+        CREATE TABLE weekly_challenge_leaderboard_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          week_id INTEGER NOT NULL REFERENCES weekly_challenge_weeks(id) ON DELETE CASCADE,
+          user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          scope_mode TEXT NOT NULL DEFAULT 'both',
+          division TEXT NOT NULL DEFAULT 'main',
+          points INTEGER NOT NULL DEFAULT 0,
+          clears INTEGER NOT NULL DEFAULT 0,
+          total_score INTEGER NOT NULL DEFAULT 0,
+          best_result_achieved_at TEXT,
+          rank INTEGER DEFAULT 0,
+          UNIQUE(week_id, user_id, scope_mode, division)
+        );
+      `);
+      db.exec(`
+        INSERT INTO weekly_challenge_leaderboard_new
+          (id, week_id, user_id, scope_mode, division, points, clears,
+           total_score, best_result_achieved_at, rank)
+        SELECT id, week_id, user_id, scope_mode, 'main', points, clears,
+               total_score, best_result_achieved_at, rank
+        FROM weekly_challenge_leaderboard;
+      `);
+      db.exec(`DROP TABLE weekly_challenge_leaderboard;`);
+      db.exec(`ALTER TABLE weekly_challenge_leaderboard_new RENAME TO weekly_challenge_leaderboard;`);
+    })();
+  }
+
+  // Migration: weekly_challenge_awards.division + relaxed UNIQUE.
+  const wcAwardsCols = db.prepare(
+    "PRAGMA table_info(weekly_challenge_awards)",
+  ).all().map((c) => c.name);
+  if (!wcAwardsCols.includes('division')) {
+    db.transaction(() => {
+      db.exec(`
+        CREATE TABLE weekly_challenge_awards_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          week_id INTEGER NOT NULL REFERENCES weekly_challenge_weeks(id) ON DELETE CASCADE,
+          award_key TEXT NOT NULL,
+          award_label TEXT DEFAULT '',
+          scope_mode TEXT DEFAULT '',
+          skill_family TEXT DEFAULT '',
+          division TEXT NOT NULL DEFAULT 'main',
+          user_id TEXT NOT NULL,
+          rank INTEGER NOT NULL,
+          points INTEGER DEFAULT 0,
+          clears INTEGER DEFAULT 0,
+          total_score INTEGER DEFAULT 0,
+          best_result_achieved_at TEXT,
+          username_snapshot TEXT DEFAULT '',
+          avatar_snapshot TEXT DEFAULT '',
+          nationality_snapshot TEXT DEFAULT '',
+          skill_title_snapshot TEXT DEFAULT '',
+          UNIQUE(week_id, award_key, rank, division)
+        );
+      `);
+      db.exec(`
+        INSERT INTO weekly_challenge_awards_new
+          (id, week_id, award_key, award_label, scope_mode, skill_family,
+           division, user_id, rank, points, clears, total_score,
+           best_result_achieved_at, username_snapshot, avatar_snapshot,
+           nationality_snapshot, skill_title_snapshot)
+        SELECT id, week_id, award_key, award_label, scope_mode, skill_family,
+               'main', user_id, rank, points, clears, total_score,
+               best_result_achieved_at, username_snapshot, avatar_snapshot,
+               nationality_snapshot, skill_title_snapshot
+        FROM weekly_challenge_awards;
+      `);
+      db.exec(`DROP TABLE weekly_challenge_awards;`);
+      db.exec(`ALTER TABLE weekly_challenge_awards_new RENAME TO weekly_challenge_awards;`);
+    })();
+  }
 
   // Tournament discussion message pumps
   db.exec(`

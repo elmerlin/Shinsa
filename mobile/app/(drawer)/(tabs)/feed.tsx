@@ -1,20 +1,41 @@
-import { useInfiniteQuery, useMutation, useQueryClient, type InfiniteData } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { AchievementBadgePost } from '@/components/achievement-badge-post';
 import { ChartJacket } from '@/components/chart-jacket';
+import { CommentsSheet } from '@/components/comments-sheet';
+import { DefaultAvatar } from '@/components/default-avatar';
+import { SystemAvatar } from '@/components/system-avatar';
 import { GradeChip } from '@/components/grade-chip';
 import { HamburgerButton } from '@/components/hamburger-button';
 import { LiveSessionCard } from '@/components/live-session-card';
 import { PlateBadge } from '@/components/plate-badge';
+import { ReplayModal } from '@/components/replay-modal';
+import { ScoreCardSheet, type ScoreCardData } from '@/components/score-card-sheet';
+import { SessionPlanCard } from '@/components/session-plan-card';
+import { SessionShareCard } from '@/components/session-share-card';
+import { SessionSummaryCard } from '@/components/session-summary-card';
+import { WcSummaryCard } from '@/components/wc-summary-card';
+import { WcPersonalCard } from '@/components/wc-personal-card';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { YouTubeEmbed } from '@/components/youtube-embed';
+import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/contexts/theme-context';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
-import { socialApi } from '@/lib/api';
+import { socialApi, songsApi } from '@/lib/api';
+import { parseAchievementBadgePost } from '@/lib/achievementBadgePost';
+import { findChartIdInLibrary } from '@/lib/chartLookup';
 import { fullImageUrl } from '@/lib/images';
 import { parseLiveSessionMarker } from '@/lib/liveSessionMarker';
+import { splitSessionPlanContent } from '@/lib/sessionPlanMarker';
+import { splitSessionShareContent } from '@/lib/sessionShareMarker';
+import { splitSessionSummaryContent } from '@/lib/sessionSummaryMarker';
+import { splitWcSummaryContent, type WcSummary } from '@/lib/weeklyChallengeSummaryMarker';
+import { splitWcPersonalContent, type WcPersonalSummary } from '@/lib/weeklyChallengePersonalMarker';
+import { toCanonicalSongTitle } from '@/lib/songAliases';
 import type { ThemeColors } from '@/constants/theme';
 import type { FeedItem, PumpResponse } from '@shared/api';
 
@@ -79,14 +100,45 @@ interface UpscoreEntry {
   pumbility_gain?: number;
   over_top100_rank?: number;
   replay_embed_url?: string;
+  chart_id?: number;
+  play_id?: number;
+  perfect?: number;
+  great?: number;
+  good?: number;
+  bad?: number;
+  miss?: number;
+  max_combo?: number;
+  is_stage_break?: number | boolean;
+  played_at_utc?: string;
+  date_played?: string;
+  machine_name?: string;
 }
 
 interface WeeklyChallengePlay {
   song_title?: string;
   mode?: string;
   level?: number;
+  chart_id?: number;
   score?: number;
   grade?: string;
+  plate?: string;
+  jacket_url?: string;
+  background_url?: string;
+  /** Per-play rating-points the chart contributed to the user's WC total. */
+  rating_points?: number;
+  /** User's rank on the chart's weekly leaderboard (1-based). */
+  weekly_challenge_rank?: number;
+  weekly_challenge_week_key?: string;
+  perfect?: number;
+  great?: number;
+  good?: number;
+  bad?: number;
+  miss?: number;
+  max_combo?: number;
+  replay_embed_url?: string;
+  date_played?: string;
+  played_at_utc?: string;
+  play_id?: number;
 }
 
 type Styles = ReturnType<typeof useThemedStyles<ReturnType<typeof makeStyles>>>;
@@ -173,18 +225,33 @@ function CardHeader({
   rightChildren?: React.ReactNode;
   s: Styles;
 }) {
+  const router = useRouter();
+  const goToProfile = (e: { stopPropagation?: () => void }) => {
+    e.stopPropagation?.();
+    if (!username || username === 'anonymous') return;
+    router.push({ pathname: '/profile/[id]', params: { id: `@${username}` } });
+  };
   return (
     <View style={s.cardHeader}>
-      {avatar ? (
-        <Image source={{ uri: avatar }} style={s.avatar} contentFit="cover" />
-      ) : (
-        <View style={[s.avatar, s.avatarFallback]}>
-          <Text style={s.avatarLetter}>{username.charAt(0).toUpperCase()}</Text>
-        </View>
-      )}
+      <Pressable onPress={goToProfile} hitSlop={4} style={({ pressed }) => [pressed && { opacity: 0.7 }]}>
+        {avatar ? (
+          <Image source={{ uri: avatar }} style={s.avatar} contentFit="cover" />
+        ) : username === '__shinsa__' ? (
+          // System bot (weekly challenge recaps, announcements) gets its own
+          // sprite so it reads as a system message, not a missing avatar.
+          <SystemAvatar size={36} />
+        ) : (
+          // Anyone showing up in the feed is, by definition, an active player
+          // (they posted/upscored/cleared) — fall back to the animated Pixellab
+          // sprite rather than a generic letter chip.
+          <DefaultAvatar size={36} />
+        )}
+      </Pressable>
       <View style={s.headerInfo}>
         <View style={s.headerLine}>
-          <Text style={s.username}>{username}</Text>
+          <Pressable onPress={goToProfile} hitSlop={4} style={({ pressed }) => [pressed && { opacity: 0.7 }]}>
+            <Text style={s.username}>{username}</Text>
+          </Pressable>
           {rightChildren}
         </View>
         <Text style={s.time}>{time}</Text>
@@ -197,10 +264,12 @@ function ActionFooter({
   item,
   s,
   onPump,
+  onComments,
 }: {
   item: FeedItem;
   s: Styles;
   onPump: (item: FeedItem) => void;
+  onComments: (item: FeedItem) => void;
 }) {
   const { theme } = useTheme();
   const pumped = !!item.user_pumped;
@@ -215,10 +284,13 @@ function ActionFooter({
         <IconSymbol name="arrow.up" size={14} color={pumpColor} />
         <Text style={[s.actionCount, { color: pumpColor }]}>{item.pump_count ?? 0}</Text>
       </Pressable>
-      <View style={s.actionItem}>
+      <Pressable
+        onPress={() => onComments(item)}
+        hitSlop={6}
+        style={({ pressed }) => [s.actionItem, pressed && { opacity: 0.6 }]}>
         <IconSymbol name="bubble.left.and.bubble.right.fill" size={14} color={theme.textMuted} />
         <Text style={s.actionCount}>{item.comment_count ?? 0}</Text>
-      </View>
+      </Pressable>
       <View style={s.actionItem}>
         <IconSymbol name="paperplane.fill" size={14} color={theme.textMuted} />
       </View>
@@ -226,11 +298,43 @@ function ActionFooter({
   );
 }
 
-function PostCard({ item, onPress, onPump, s }: { item: FeedItem; onPress: () => void; onPump: (i: FeedItem) => void; s: Styles }) {
+function PostCard({ item, onPress, onPump, onComments, s }: { item: FeedItem; onPress: () => void; onPump: (i: FeedItem) => void; onComments: (i: FeedItem) => void; s: Styles }) {
   const avatar = typeof item.avatar === 'string' ? fullImageUrl(item.avatar) : undefined;
   const images = parseImages(item.images);
   const firstImage = images[0] ? fullImageUrl(images[0]) : undefined;
   const { content, summary } = parseLiveSessionMarker(item.content);
+
+  // System-generated weekly_challenge_summary posts attach a structured
+  // payload server-side (wc_summary_payload). For older rows the marker may
+  // still live inside content — try both.
+  const { text: afterWc, summary: wcMarkerSummary } = splitWcSummaryContent(content);
+  const wcAttached = (item as Record<string, unknown>).wc_summary_payload as WcSummary | null | undefined;
+  const wcSummary = wcAttached ?? wcMarkerSummary;
+
+  // Per-player weekly_challenge_personal posts use the same pattern: server
+  // attaches `wc_personal_payload`, with the marker available as a fallback
+  // for older rows that haven't been backfilled.
+  const { text: afterPersonal, personal: wcPersonalMarker } = splitWcPersonalContent(afterWc);
+  const wcPersonalAttached = (item as Record<string, unknown>).wc_personal_payload as WcPersonalSummary | null | undefined;
+  const wcPersonal = wcPersonalAttached ?? wcPersonalMarker;
+
+  // Decode the remaining structured share markers (session share, session
+  // summary, session plan). Each parser strips its own marker from the text
+  // and returns the decoded payload — so by the end `afterPlan` is the human
+  // body with all markers removed.
+  const { text: afterShare, share: sessionShare } = splitSessionShareContent(afterPersonal);
+  const { text: afterSummary, summary: sessionSummary } = splitSessionSummaryContent(afterShare);
+  const { text: afterPlan, plan: sessionPlan } = splitSessionPlanContent(afterSummary);
+
+  // Anything still wrapped in [[SHINSA_*_V1:…]] is a share type we don't
+  // render yet — strip it so the body doesn't show raw base64.
+  const displayBody = String(afterPlan || '').replace(/\[\[SHINSA_[A-Z_]+_V\d+:[^\]]+\]\]/g, '').trim();
+  const youtubeUrl = typeof item.youtube_url === 'string' ? item.youtube_url : '';
+
+  // "New badge unlocked: …" posts have a single attached image and a
+  // recognisable heading; render the badge as a compact thumb instead of a
+  // full-width hero so the pixel-art badge stays crisp.
+  const badgePost = parseAchievementBadgePost(displayBody, images);
 
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [s.card, pressed && s.cardPressed]}>
@@ -241,16 +345,40 @@ function PostCard({ item, onPress, onPump, s }: { item: FeedItem; onPress: () =>
         s={s}
       />
       {summary ? <LiveSessionCard summary={summary} /> : null}
-      {content ? <Text style={s.content} numberOfLines={6}>{content}</Text> : null}
-      {firstImage ? (
-        <Image source={{ uri: firstImage }} style={s.cardImage} contentFit="cover" transition={150} />
-      ) : null}
-      <ActionFooter item={item} s={s} onPump={onPump} />
+      {wcSummary ? <WcSummaryCard summary={wcSummary} /> : null}
+      {wcPersonal ? <WcPersonalCard summary={wcPersonal} /> : null}
+      {sessionShare ? <SessionShareCard share={sessionShare} /> : null}
+      {sessionSummary ? <SessionSummaryCard summary={sessionSummary} /> : null}
+      {sessionPlan ? <SessionPlanCard plan={sessionPlan} /> : null}
+      {badgePost ? (
+        <AchievementBadgePost
+          badgeName={badgePost.badgeName}
+          supportingCopy={badgePost.supportingCopy}
+          image={badgePost.image}
+        />
+      ) : (
+        <>
+          {displayBody ? <Text style={s.content} numberOfLines={6}>{displayBody}</Text> : null}
+          {youtubeUrl ? <YouTubeEmbed url={youtubeUrl} /> : null}
+          {firstImage ? (
+            <Image source={{ uri: firstImage }} style={s.cardImage} contentFit="cover" transition={150} />
+          ) : null}
+        </>
+      )}
+      <ActionFooter item={item} s={s} onPump={onPump} onComments={onComments} />
     </Pressable>
   );
 }
 
-function UpscoreCard({ item, onPump, s }: { item: FeedItem; onPump: (i: FeedItem) => void; s: Styles }) {
+function UpscoreCard({ item, onPump, onComments, onJacket, onScore, onReplay, s }: {
+  item: FeedItem;
+  onPump: (i: FeedItem) => void;
+  onComments: (i: FeedItem) => void;
+  onJacket: (chartId: number, songTitle: string, mode: string, level: number) => void;
+  onScore: (data: ScoreCardData) => void;
+  onReplay: (url: string, title: string) => void;
+  s: Styles;
+}) {
   const { theme } = useTheme();
   const [showAll, setShowAll] = useState(false);
   const username = String(item.username || 'anonymous');
@@ -290,9 +418,15 @@ function UpscoreCard({ item, onPump, s }: { item: FeedItem; onPump: (i: FeedItem
           const jacket = u.jacket_url || u.background_url;
           const jacketUrl = typeof jacket === 'string' ? fullImageUrl(jacket) : undefined;
           const delta = (u.new_score ?? 0) - (u.old_score ?? 0);
+          const chartId = Number(u.chart_id) || 0;
           return (
             <View key={i} style={s.upscoreRow}>
-              <ChartJacket jacketUrl={jacketUrl} mode={u.mode} level={u.level} size="sm" />
+              <Pressable
+                onPress={() => onJacket(chartId, u.song_title || '', u.mode || '', Number(u.level) || 0)}
+                hitSlop={4}
+                style={({ pressed }) => [pressed && { opacity: 0.7 }]}>
+                <ChartJacket jacketUrl={jacketUrl} mode={u.mode} level={u.level} size="sm" />
+              </Pressable>
               <View style={s.entryMain}>
                 <Text style={s.songTitle} numberOfLines={1}>{u.song_title || 'Unknown song'}</Text>
                 <View style={s.metaChipsRow}>
@@ -303,11 +437,17 @@ function UpscoreCard({ item, onPump, s }: { item: FeedItem; onPump: (i: FeedItem
                 </View>
               </View>
               {u.replay_embed_url ? (
-                <View style={s.replayBtn}>
+                <Pressable
+                  onPress={() => onReplay(u.replay_embed_url as string, `${u.song_title || 'Song'} · ${u.mode || ''}${u.level ? ` ${u.level}` : ''}`)}
+                  hitSlop={6}
+                  style={({ pressed }) => [s.replayBtn, pressed && { opacity: 0.7 }]}>
                   <IconSymbol name="play.rectangle.fill" size={14} color="#7dd3fc" />
-                </View>
+                </Pressable>
               ) : null}
-              <View style={s.scoresCol}>
+              <Pressable
+                onPress={() => onScore({ ...u, username: item.username, avatar: item.avatar as string | undefined })}
+                hitSlop={4}
+                style={({ pressed }) => [s.scoresCol, pressed && { opacity: 0.7 }]}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
                   <Text style={s.scoreNumOld}>{fmtNum(u.old_score)}</Text>
                   <GradeChip grade={u.old_grade} score={u.old_score ?? 0} size="xs" />
@@ -316,7 +456,7 @@ function UpscoreCard({ item, onPump, s }: { item: FeedItem; onPump: (i: FeedItem
                   <GradeChip grade={u.new_grade} score={u.new_score ?? 0} size="xs" />
                 </View>
                 <Text style={s.delta}>+{fmtNum(delta)}</Text>
-              </View>
+              </Pressable>
             </View>
           );
         })}
@@ -330,12 +470,19 @@ function UpscoreCard({ item, onPump, s }: { item: FeedItem; onPump: (i: FeedItem
         </Pressable>
       ) : null}
 
-      <ActionFooter item={item} s={s} onPump={onPump} />
+      <ActionFooter item={item} s={s} onPump={onPump} onComments={onComments} />
     </View>
   );
 }
 
-function ClearCard({ item, onPump, s }: { item: FeedItem; onPump: (i: FeedItem) => void; s: Styles }) {
+function ClearCard({ item, onPump, onComments, onJacket, onScore, s }: {
+  item: FeedItem;
+  onPump: (i: FeedItem) => void;
+  onComments: (i: FeedItem) => void;
+  onJacket: (chartId: number, songTitle: string, mode: string, level: number) => void;
+  onScore: (data: ScoreCardData) => void;
+  s: Styles;
+}) {
   const username = String(item.username || 'anonymous');
   const avatar = typeof item.avatar === 'string' ? fullImageUrl(item.avatar) : undefined;
   const itemRec = item as Record<string, unknown>;
@@ -345,7 +492,34 @@ function ClearCard({ item, onPump, s }: { item: FeedItem; onPump: (i: FeedItem) 
   const score = Number(itemRec.score);
   const grade = String(itemRec.grade ?? '');
   const plate = itemRec.plate;
-  const jacket = typeof itemRec.background_url === 'string' ? fullImageUrl(itemRec.background_url) : undefined;
+  const jacketRaw = (itemRec.jacket_url as string | undefined) || (itemRec.background_url as string | undefined);
+  const jacket = jacketRaw ? fullImageUrl(jacketRaw) : undefined;
+  const chartId = Number(itemRec.chart_id) || 0;
+
+  const buildScore = (): ScoreCardData => ({
+    song_title: songTitle,
+    mode,
+    level: Number.isFinite(level) ? level : undefined,
+    score,
+    grade,
+    plate: typeof plate === 'string' ? plate : undefined,
+    jacket_url: jacketRaw,
+    chart_id: chartId,
+    play_id: Number(itemRec.play_id) || undefined,
+    perfect: Number(itemRec.perfect) || 0,
+    great: Number(itemRec.great) || 0,
+    good: Number(itemRec.good) || 0,
+    bad: Number(itemRec.bad) || 0,
+    miss: Number(itemRec.miss) || 0,
+    max_combo: Number(itemRec.max_combo) || 0,
+    is_stage_break: Boolean(itemRec.is_stage_break),
+    over_top100_rank: Number(itemRec.over_top100_rank) || 0,
+    played_at_utc: typeof itemRec.played_at_utc === 'string' ? itemRec.played_at_utc : undefined,
+    machine_name: typeof itemRec.machine_name === 'string' ? itemRec.machine_name : undefined,
+    replay_embed_url: typeof itemRec.replay_embed_url === 'string' ? itemRec.replay_embed_url : undefined,
+    username: item.username,
+    avatar: typeof item.avatar === 'string' ? item.avatar : undefined,
+  });
 
   return (
     <View style={s.card}>
@@ -358,33 +532,67 @@ function ClearCard({ item, onPump, s }: { item: FeedItem; onPump: (i: FeedItem) 
       />
 
       <View style={s.upscoreRow}>
-        <ChartJacket jacketUrl={jacket} mode={mode} level={Number.isFinite(level) ? level : undefined} size="sm" />
+        <Pressable
+          onPress={() => onJacket(chartId, songTitle, mode, Number.isFinite(level) ? level : 0)}
+          hitSlop={4}
+          style={({ pressed }) => [pressed && { opacity: 0.7 }]}>
+          <ChartJacket jacketUrl={jacket} mode={mode} level={Number.isFinite(level) ? level : undefined} size="sm" />
+        </Pressable>
         <View style={s.entryMain}>
           <Text style={s.songTitle} numberOfLines={1}>{songTitle}</Text>
           <View style={s.metaChipsRow}>
             <PlateBadge plate={plate} size="xs" />
           </View>
         </View>
-        <View style={s.scoresCol}>
+        <Pressable
+          onPress={() => onScore(buildScore())}
+          hitSlop={4}
+          style={({ pressed }) => [s.scoresCol, pressed && { opacity: 0.7 }]}>
           <Text style={s.scoreNum}>{fmtNum(score)}</Text>
           <GradeChip grade={grade} score={score} size="sm" />
-        </View>
+        </Pressable>
       </View>
 
-      <ActionFooter item={item} s={s} onPump={onPump} />
+      <ActionFooter item={item} s={s} onPump={onPump} onComments={onComments} />
     </View>
   );
 }
 
-function WeeklyChallengeCard({ item, onPump, s }: { item: FeedItem; onPump: (i: FeedItem) => void; s: Styles }) {
+function WeeklyChallengeCard({ item, onPump, onComments, onJacket, onScore, onReplay, s }: {
+  item: FeedItem;
+  onPump: (i: FeedItem) => void;
+  onComments: (i: FeedItem) => void;
+  onJacket: (chartId: number, songTitle: string, mode: string, level: number) => void;
+  onScore: (data: ScoreCardData) => void;
+  onReplay: (url: string, title: string) => void;
+  s: Styles;
+}) {
+  const { theme } = useTheme();
+  const [showAll, setShowAll] = useState(false);
   const username = String(item.username || 'anonymous');
   const avatar = typeof item.avatar === 'string' ? fullImageUrl(item.avatar) : undefined;
   const itemRec = item as Record<string, unknown>;
-  const totalCharts = Number(itemRec.total_charts_played);
   const totalPts = Number(itemRec.total_rating_points);
+  const weekKey = String(itemRec.week_key || '');
   const plays = parseList<WeeklyChallengePlay>(itemRec.plays_json);
-  const charts = Number.isFinite(totalCharts) && totalCharts > 0 ? totalCharts : plays.length;
-  const ptsLabel = Number.isFinite(totalPts) && totalPts > 0 ? ` · ${fmtNum(totalPts)} pts` : '';
+  const visible = showAll ? plays : plays.slice(0, 5);
+  const hasMore = plays.length > 5;
+
+  if (plays.length === 0) {
+    return (
+      <View style={s.card}>
+        <CardHeader
+          username={username}
+          avatar={avatar}
+          time={timeAgo(item.created_at)}
+          s={s}
+          rightChildren={<Text style={s.clearedVerb}>played a weekly challenge</Text>}
+        />
+        <Text style={s.wcSummary}>Logged a weekly challenge attempt</Text>
+        <ActionFooter item={item} s={s} onPump={onPump} onComments={onComments} />
+      </View>
+    );
+  }
 
   return (
     <View style={s.card}>
@@ -393,12 +601,98 @@ function WeeklyChallengeCard({ item, onPump, s }: { item: FeedItem; onPump: (i: 
         avatar={avatar}
         time={timeAgo(item.created_at)}
         s={s}
-        rightChildren={<Text style={s.clearedVerb}>played a weekly challenge</Text>}
+        rightChildren={
+          <>
+            <Text style={s.wcVerb}>weekly challenge!</Text>
+            {weekKey ? <Text style={s.wcWeekPill}>{weekKey}</Text> : null}
+            {Number.isFinite(totalPts) && totalPts > 0 ? (
+              <Text style={s.wcTotalPill}>{fmtNum(totalPts)} pts</Text>
+            ) : null}
+          </>
+        }
       />
-      {charts > 0 ? (
-        <Text style={s.wcSummary}>{charts} chart{charts === 1 ? '' : 's'}{ptsLabel}</Text>
+
+      <View style={s.entriesList}>
+        {visible.map((play, i) => {
+          const jacket = play.jacket_url || play.background_url;
+          const jacketUrl = typeof jacket === 'string' ? fullImageUrl(jacket) : undefined;
+          const chartId = Number(play.chart_id) || 0;
+          const rank = Number(play.weekly_challenge_rank) || 0;
+          const pts = Number(play.rating_points) || 0;
+          return (
+            <View key={i} style={s.upscoreRow}>
+              <Pressable
+                onPress={() => onJacket(chartId, play.song_title || '', play.mode || '', Number(play.level) || 0)}
+                hitSlop={4}
+                style={({ pressed }) => [pressed && { opacity: 0.7 }]}>
+                <ChartJacket jacketUrl={jacketUrl} mode={play.mode} level={play.level} size="sm" />
+              </Pressable>
+              <View style={s.entryMain}>
+                <Text style={s.songTitle} numberOfLines={1}>{play.song_title || 'Unknown song'}</Text>
+                <View style={s.metaChipsRow}>
+                  {rank > 0 ? (
+                    <Text style={s.wcRankChip}>WC #{rank}</Text>
+                  ) : null}
+                  {pts > 0 ? (
+                    <Text style={s.wcPtsChip}>{pts} pts</Text>
+                  ) : null}
+                  <PlateBadge plate={play.plate} size="xs" />
+                </View>
+              </View>
+              {play.replay_embed_url ? (
+                <Pressable
+                  onPress={() => onReplay(
+                    play.replay_embed_url as string,
+                    `${play.song_title || 'Song'} · ${play.mode || ''}${play.level ? ` ${play.level}` : ''}`,
+                  )}
+                  hitSlop={6}
+                  style={({ pressed }) => [s.replayBtn, pressed && { opacity: 0.7 }]}>
+                  <IconSymbol name="play.rectangle.fill" size={14} color="#7dd3fc" />
+                </Pressable>
+              ) : null}
+              <Pressable
+                onPress={() => onScore({
+                  song_title: play.song_title,
+                  mode: play.mode,
+                  level: play.level,
+                  chart_id: play.chart_id,
+                  score: play.score,
+                  grade: play.grade,
+                  plate: play.plate,
+                  jacket_url: play.jacket_url || play.background_url,
+                  background_url: play.background_url,
+                  perfect: play.perfect,
+                  great: play.great,
+                  good: play.good,
+                  bad: play.bad,
+                  miss: play.miss,
+                  max_combo: play.max_combo,
+                  replay_embed_url: play.replay_embed_url,
+                  played_at_utc: play.played_at_utc,
+                  date_played: play.date_played,
+                  play_id: play.play_id,
+                  username: item.username,
+                  avatar: typeof item.avatar === 'string' ? item.avatar : undefined,
+                })}
+                hitSlop={4}
+                style={({ pressed }) => [s.scoresCol, pressed && { opacity: 0.7 }]}>
+                <Text style={s.scoreNum}>{fmtNum(play.score)}</Text>
+                <GradeChip grade={play.grade} score={play.score ?? 0} size="xs" />
+              </Pressable>
+            </View>
+          );
+        })}
+      </View>
+
+      {hasMore ? (
+        <Pressable onPress={() => setShowAll((v) => !v)} hitSlop={8}>
+          <Text style={[s.showMoreBtn, { color: theme.accent }]}>
+            {showAll ? 'Show less' : `Show ${plays.length - 5} more`}
+          </Text>
+        </Pressable>
       ) : null}
-      <ActionFooter item={item} s={s} onPump={onPump} />
+
+      <ActionFooter item={item} s={s} onPump={onPump} onComments={onComments} />
     </View>
   );
 }
@@ -407,8 +701,38 @@ export default function FeedScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { theme } = useTheme();
+  const { user } = useAuth();
   const s = useThemedStyles(makeStyles);
   const onPump = usePumpFeedItem();
+  const [commentTarget, setCommentTarget] = useState<{ type: FeedItem['type']; id: string | number } | null>(null);
+  const onComments = (item: FeedItem) => setCommentTarget({ type: item.type, id: item.id });
+  const [scoreTarget, setScoreTarget] = useState<ScoreCardData | null>(null);
+  const [replayTarget, setReplayTarget] = useState<{ url: string; title: string } | null>(null);
+
+  // Fetch the songs library lazily (cached) so jacket-clicks for entries
+  // missing `chart_id` can still resolve to a chart via title+mode+level.
+  const libraryQuery = useQuery({
+    queryKey: ['songs-library', user?.id ?? null],
+    queryFn: () => songsApi.library(user?.id ? { user_id: user.id } : {}),
+    staleTime: 5 * 60_000,
+  });
+
+  const onJacket = (chartId: number, songTitle: string, mode: string, level: number) => {
+    if (chartId) {
+      router.push({ pathname: '/song/[id]', params: { id: String(chartId) } });
+      return;
+    }
+    const resolved = findChartIdInLibrary(libraryQuery.data, songTitle, mode, level);
+    if (resolved) {
+      router.push({ pathname: '/song/[id]', params: { id: String(resolved) } });
+      return;
+    }
+    // Last resort: pre-fill the songs library search with the canonical title.
+    const q = toCanonicalSongTitle(songTitle) || songTitle;
+    router.push({ pathname: '/songs', params: { q } });
+  };
+  const onScore = (data: ScoreCardData) => setScoreTarget(data);
+  const onReplay = (url: string, title: string) => setReplayTarget({ url, title });
 
   const {
     data,
@@ -459,13 +783,14 @@ export default function FeedScreen() {
                   item={item}
                   s={s}
                   onPump={onPump}
+                  onComments={onComments}
                   onPress={() => router.push({ pathname: '/post/[id]', params: { id: String(item.id) } })}
                 />
               );
             }
-            if (item.type === 'upscore') return <UpscoreCard item={item} s={s} onPump={onPump} />;
-            if (item.type === 'clear') return <ClearCard item={item} s={s} onPump={onPump} />;
-            if (item.type === 'weekly_challenge') return <WeeklyChallengeCard item={item} s={s} onPump={onPump} />;
+            if (item.type === 'upscore') return <UpscoreCard item={item} s={s} onPump={onPump} onComments={onComments} onJacket={onJacket} onScore={onScore} onReplay={onReplay} />;
+            if (item.type === 'clear') return <ClearCard item={item} s={s} onPump={onPump} onComments={onComments} onJacket={onJacket} onScore={onScore} />;
+            if (item.type === 'weekly_challenge') return <WeeklyChallengeCard item={item} s={s} onPump={onPump} onComments={onComments} onJacket={onJacket} onScore={onScore} onReplay={onReplay} />;
             return null;
           }}
           contentContainerStyle={s.listContent}
@@ -490,6 +815,27 @@ export default function FeedScreen() {
           refreshControl={<RefreshControl refreshing={isRefetching && !isFetchingNextPage} onRefresh={refetch} tintColor={theme.spinner} />}
         />
       )}
+
+      <CommentsSheet
+        visible={!!commentTarget}
+        itemType={commentTarget?.type}
+        itemId={commentTarget?.id}
+        onClose={() => setCommentTarget(null)}
+      />
+
+      <ScoreCardSheet
+        visible={!!scoreTarget}
+        data={scoreTarget}
+        onClose={() => setScoreTarget(null)}
+        onReplay={onReplay}
+      />
+
+      <ReplayModal
+        visible={!!replayTarget}
+        url={replayTarget?.url}
+        title={replayTarget?.title}
+        onClose={() => setReplayTarget(null)}
+      />
     </View>
   );
 }
@@ -613,6 +959,60 @@ const makeStyles = (t: ThemeColors) => ({
   actionCount: { fontSize: 11, fontWeight: '700' as const, color: t.textMuted },
 
   wcSummary: { fontSize: 13, color: t.textMuted },
+  // Header chips for the WC play card. "weekly challenge!" verb plus a
+  // pill for the week key (purple) and another for total RP (emerald).
+  wcVerb: { fontSize: 12, fontWeight: '800' as const, color: '#c4b5fd', letterSpacing: 0.2 },
+  wcWeekPill: {
+    fontSize: 9,
+    fontWeight: '900' as const,
+    color: '#c4b5fd',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    backgroundColor: 'rgba(168, 85, 247, 0.15)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(168, 85, 247, 0.35)',
+    overflow: 'hidden' as const,
+    letterSpacing: 0.4,
+  },
+  wcTotalPill: {
+    fontSize: 9,
+    fontWeight: '900' as const,
+    color: '#6ee7b7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(16, 185, 129, 0.35)',
+    overflow: 'hidden' as const,
+    letterSpacing: 0.4,
+  },
+  // Per-play chips inside each row: leaderboard rank + RP awarded.
+  wcRankChip: {
+    fontSize: 9,
+    fontWeight: '900' as const,
+    color: '#c4b5fd',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    backgroundColor: 'rgba(168, 85, 247, 0.15)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(168, 85, 247, 0.35)',
+    overflow: 'hidden' as const,
+    letterSpacing: 0.4,
+  },
+  wcPtsChip: {
+    fontSize: 9,
+    fontWeight: '900' as const,
+    color: '#6ee7b7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    overflow: 'hidden' as const,
+    letterSpacing: 0.4,
+  },
 
   loadMore: {
     paddingVertical: 16,

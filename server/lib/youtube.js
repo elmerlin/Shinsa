@@ -51,9 +51,21 @@ function decryptToken(encrypted, iv, authTag) {
   return decrypted.toString('utf8');
 }
 
+// Schemes accepted as `next_path` for OAuth callback redirects. `/path` keeps
+// the original web behaviour; `shinsa://` is the mobile app's deep-link
+// scheme (see mobile/app.json); `exp://` is what Expo Go uses during dev so
+// engineers can test the OAuth flow without a production build. Anything
+// else (other custom schemes, `https://attacker.com`) is rejected to prevent
+// open-redirect.
+const NEXT_PATH_ALLOWED_SCHEMES = ['shinsa://', 'exp://', 'exp+shinsa://'];
+
 function normalizeNextPath(value, fallback = '/account?tab=youtube') {
   const raw = String(value || '').trim();
-  if (!raw || !raw.startsWith('/') || raw.startsWith('//')) return fallback;
+  if (!raw) return fallback;
+  if (NEXT_PATH_ALLOWED_SCHEMES.some((scheme) => raw.startsWith(scheme))) {
+    return raw;
+  }
+  if (!raw.startsWith('/') || raw.startsWith('//')) return fallback;
   return raw;
 }
 

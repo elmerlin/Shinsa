@@ -63,9 +63,11 @@ function buildPumbilityCandidates(bestScores, options = {}) {
   const metric = String(options.metric || '').trim()
     || (modeFilter ? modeFilter.toLowerCase() : 'overall');
 
-  // Defensive: only use passing scores
+  // Defensive: only use passing scores. Co-op is excluded from Pumbility — its
+  // score belongs to whichever PIUGame account played, not necessarily the
+  // controller-holder, so it would inflate single-player rankings unfairly.
   const passingScores = (bestScores || []).filter(
-    (row) => isPassingScore(row.score, row.grade),
+    (row) => isPassingScore(row.score, row.grade) && String(row.mode || '') !== 'CoOp',
   );
 
   const sourceScores = modeFilter

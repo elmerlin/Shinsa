@@ -4,6 +4,9 @@ import { useRouter } from 'expo-router';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DailyHighlights } from '@/components/dashboard/daily-highlights';
+import { DefaultAvatar } from '@/components/default-avatar';
+import { SystemAvatar } from '@/components/system-avatar';
+import { LiveNowStrip } from '@/components/dashboard/live-now-strip';
 import { NoticeBoard } from '@/components/dashboard/notice-board';
 import { SongOfWeekStrip } from '@/components/dashboard/song-of-week-strip';
 import { WeeklyChallengesSummary } from '@/components/dashboard/weekly-challenges-summary';
@@ -143,8 +146,10 @@ function ActivityRow({ a, s }: { a: ActivityItem; s: Styles }) {
       <Text style={s.activityIcon}>{icon}</Text>
       {avatar ? (
         <Image source={{ uri: avatar }} style={s.activityAvatar} contentFit="cover" />
+      ) : a.username === '__shinsa__' ? (
+        <SystemAvatar size={22} />
       ) : (
-        <View style={s.activityAvatarPlaceholder} />
+        <DefaultAvatar size={22} />
       )}
       <Text style={s.activityMessage} numberOfLines={1}>{a.message}</Text>
       <Text style={s.activityTime}>{timeAgo(a.created_at)}</Text>
@@ -234,6 +239,7 @@ export default function HomeScreen() {
         )}
 
         <NoticeBoard />
+        <LiveNowStrip />
 
         {activityQuery.data && activityQuery.data.length > 0 && (
           <View style={s.section}>

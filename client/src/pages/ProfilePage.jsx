@@ -4095,12 +4095,14 @@ export default function ProfilePage() {
               </div>
             )}
 
-            {/* Mode filter: All, Co-op */}
+            {/* Mode filter: All, Co-op. Co-op uses the camel-case `CoOp` to
+                match the canonical mode value emitted by the scraper and
+                stored in user_best_scores. */}
             <div className="flex items-center gap-2 mb-4 flex-wrap">
               <div className="flex gap-1">
                 {[
                   { key: '', label: 'All' },
-                  { key: 'Co-op', label: 'Co-op' },
+                  { key: 'CoOp', label: 'Co-op' },
                 ].map(m => (
                   <button
                     key={m.key}

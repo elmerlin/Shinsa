@@ -101,6 +101,13 @@ export default function WeeklyChallengesPage() {
   const [chartMode, setChartMode] = useState('both');
   const [leaderboardMode, setLeaderboardMode] = useState('both');
   const [skillFamily, setSkillFamily] = useState('all');
+  // WC division: 'main' (Singles + Doubles) or 'coop' (parallel Co-Op WC).
+  // Each division has its own pool + leaderboard on the server. Honour the
+  // `?division=coop` query param so the dashboard tile can deep-link into
+  // the Co-op tab.
+  const [division, setDivision] = useState(
+    searchParams.get('division') === 'coop' ? 'coop' : 'main',
+  );
 
   // Chart scores modal
   const [selectedChart, setSelectedChart] = useState(null);
@@ -128,6 +135,7 @@ export default function WeeklyChallengesPage() {
     if (chartMode !== 'both') params.chart_mode = chartMode;
     if (leaderboardMode !== 'both') params.leaderboard_mode = leaderboardMode;
     if (skillFamily !== 'all') params.skill_family = skillFamily;
+    if (division !== 'main') params.division = division;
 
     const requestedWeekKey = weekKey || 'current';
     getWeeklyChallengeWeek(requestedWeekKey, params)
@@ -141,7 +149,7 @@ export default function WeeklyChallengesPage() {
       })
       .catch(() => setWeekData(null))
       .finally(() => setLoading(false));
-  }, [weekKey, chartMode, leaderboardMode, skillFamily, navigate]);
+  }, [weekKey, chartMode, leaderboardMode, skillFamily, division, navigate]);
 
   useEffect(() => {
     if (canonicalizingWeekRef.current) {
@@ -211,6 +219,34 @@ export default function WeeklyChallengesPage() {
             />
           )}
 
+          {/* Division switcher — Singles+Doubles vs Co-Op. Two parallel
+              weekly challenges; each has its own pool, leaderboard, and
+              podium. Sits above the podium so it's the first decision. */}
+          <div className="mb-4 flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              onClick={() => setDivision('main')}
+              className={`px-3.5 py-1.5 rounded-full font-display text-[11px] sm:text-xs font-black uppercase tracking-[0.12em] transition-colors ${
+                division === 'main'
+                  ? 'bg-piu-accent text-white shadow-[0_0_12px_rgba(99,102,241,0.4)]'
+                  : 'bg-white/[0.04] text-white/55 border border-white/[0.06] hover:bg-white/[0.08]'
+              }`}
+            >
+              Singles + Doubles
+            </button>
+            <button
+              type="button"
+              onClick={() => setDivision('coop')}
+              className={`px-3.5 py-1.5 rounded-full font-display text-[11px] sm:text-xs font-black uppercase tracking-[0.12em] transition-colors ${
+                division === 'coop'
+                  ? 'bg-piu-accent text-white shadow-[0_0_12px_rgba(99,102,241,0.4)]'
+                  : 'bg-white/[0.04] text-white/55 border border-white/[0.06] hover:bg-white/[0.08]'
+              }`}
+            >
+              Co-Op
+            </button>
+          </div>
+
           {/* Podium strip */}
           {weekData.awards?.length > 0 && (
             <div className="mb-5">
@@ -260,16 +296,22 @@ export default function WeeklyChallengesPage() {
                   Challenges
                   {week && (
                     <span className="ml-1.5 text-white/20 normal-case tracking-normal font-bold">
-                      Lv.{week.challenge_min_level || 10}–{week.challenge_max_level}
+                      {division === 'coop'
+                        ? '2-Player'
+                        : `Lv.${week.challenge_min_level || 10}–${week.challenge_max_level}`}
                     </span>
                   )}
                 </h3>
-                <div className="flex gap-1 items-center">
-                  <span className="text-[10px] font-display font-bold text-white/25 uppercase mr-1 tracking-wider">Charts</span>
-                  <FilterChip label="Both" active={chartMode === 'both'} onClick={() => setChartMode('both')} />
-                  <FilterChip label="S" active={chartMode === 'single'} onClick={() => setChartMode('single')} />
-                  <FilterChip label="D" active={chartMode === 'double'} onClick={() => setChartMode('double')} />
-                </div>
+                {/* Singles/Doubles/Both is meaningless for Co-op (every
+                    chart is CoOp) — hide it for that division. */}
+                {division === 'main' ? (
+                  <div className="flex gap-1 items-center">
+                    <span className="text-[10px] font-display font-bold text-white/25 uppercase mr-1 tracking-wider">Charts</span>
+                    <FilterChip label="Both" active={chartMode === 'both'} onClick={() => setChartMode('both')} />
+                    <FilterChip label="S" active={chartMode === 'single'} onClick={() => setChartMode('single')} />
+                    <FilterChip label="D" active={chartMode === 'double'} onClick={() => setChartMode('double')} />
+                  </div>
+                ) : null}
               </div>
               {levels.length === 0 && (
                 <p className="text-center text-zinc-500 text-sm py-8">No challenges for this filter</p>

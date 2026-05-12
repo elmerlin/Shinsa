@@ -32,8 +32,11 @@ const PLATE_MAP = {
   rg: 'RG', roughgame: 'RG',
 };
 
-// Mode letter mapping from image URLs
-const MODE_MAP = { s: 'Single', d: 'Double', c: 'Co-op', u: 'UCS' };
+// Mode letter mapping from image URLs. NOTE: Co-op uses the camel-case spelling
+// `'CoOp'` to match the chart catalog (see schema.js#ensureCoOpChartsFromJson)
+// and the mobile UI's gradient lookup. Older rows that landed as `'Co-op'` (with
+// the hyphen) are normalized to `'CoOp'` by the inline migration in schema.js.
+const MODE_MAP = { s: 'Single', d: 'Double', c: 'CoOp', u: 'UCS' };
 const JUDGMENT_ORDER = ['perfect', 'great', 'good', 'bad', 'miss'];
 const OVER_RANKING_PAGE_SIZE = 10;
 

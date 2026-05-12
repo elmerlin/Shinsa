@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -69,7 +69,12 @@ export default function SongsScreen() {
   const { theme } = useTheme();
   const { user } = useAuth();
   const s = useThemedStyles(makeStyles);
-  const [search, setSearch] = useState('');
+  const params = useLocalSearchParams<{ q?: string }>();
+  const initialQ = typeof params.q === 'string' ? params.q : '';
+  const [search, setSearch] = useState(initialQ);
+  useEffect(() => {
+    if (initialQ) setSearch(initialQ);
+  }, [initialQ]);
   const debouncedSearch = useDebounced(search, 250);
 
   const { data, isLoading, isError, error } = useQuery({

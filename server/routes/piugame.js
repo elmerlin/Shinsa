@@ -660,6 +660,11 @@ function compareRatedPumbilityEntries(a, b) {
 }
 
 function modeMatchesFilter(mode, modeFilter = '') {
+  // Pumbility is Single + Double only — Co-op scores never count toward
+  // single-player rankings (the score is recorded against whichever PIUGame
+  // account played, not necessarily the controller-holder, so including it
+  // would inflate ratings).
+  if (String(mode || '').trim() === 'CoOp') return false;
   if (!modeFilter) return true;
   return String(mode || '').trim() === String(modeFilter || '').trim();
 }

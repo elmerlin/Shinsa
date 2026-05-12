@@ -42,10 +42,16 @@ export function ChartBadge({ mode, level, size = 'sm' }: Props) {
   const colors = MODE_GRADIENTS[mode || ''] ?? MODE_GRADIENTS.CoOp;
   const short = getModeShort(mode);
   // Mode is conveyed by colour (red/green/blue/purple), so we drop the letter
-  // prefix and show only the level number. UCS keeps its label.
+  // prefix for S/D and show only the level number. UCS keeps its label, and
+  // Co-op keeps the `C` prefix because the "level" is actually the player
+  // count (C2/C3/C4/C5) — a bare `2` would read as a singles chart.
+  const parsed = parseInt(String(level ?? ''), 10);
+  const isCoOp = String(mode || '').trim() === 'CoOp';
   const label = short === 'UCS'
     ? 'UCS'
-    : String(parseInt(String(level ?? ''), 10) || level || '?');
+    : isCoOp && Number.isFinite(parsed) && parsed > 0
+      ? `C${parsed}`
+      : String(parsed || level || '?');
 
   return (
     <View style={[styles.outer, { width: dim.dim + 14, height: dim.dim }]}>

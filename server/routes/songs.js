@@ -2245,7 +2245,7 @@ router.get('/skills/missing', (req, res) => {
   let modeFilter = ['Single', 'Double'];
   if (modeRaw && modeRaw !== 'both' && modeRaw !== 'all') {
     const mode = normalizeMode(modeRaw);
-    if (!mode || mode === 'CoOp') return res.status(400).json({ error: 'Invalid mode filter' });
+    if (!mode) return res.status(400).json({ error: 'Invalid mode filter' });
     modeFilter = [mode];
   }
 
@@ -2360,7 +2360,7 @@ router.get('/skill/:skillSlug', optionalAuth, (req, res) => {
   let modeFilter = ['Single', 'Double'];
   if (modeRaw && modeRaw !== 'both' && modeRaw !== 'all') {
     const mode = normalizeMode(modeRaw);
-    if (!mode || mode === 'CoOp') return res.status(400).json({ error: 'Invalid mode filter' });
+    if (!mode) return res.status(400).json({ error: 'Invalid mode filter' });
     modeFilter = [mode];
   }
 
@@ -2576,11 +2576,14 @@ router.get('/library', optionalAuth, (req, res) => {
   const db = getDb();
   const aliases = loadSongAliases();
   const modeFilter = normalizeMode(req.query.mode);
-  const songCatalog = getSongCatalog(
-    db,
-    aliases,
-    modeFilter === 'CoOp' ? ['CoOp'] : ['Single', 'Double']
-  );
+  // When the caller asks for a specific mode we return just that mode's
+  // charts; otherwise return the full catalog (S + D + CoOp). Historically
+  // the default was S+D only because Co-op was hidden — the gate is gone now
+  // so the chart browser shows every mode by default.
+  const catalogModes = modeFilter
+    ? [modeFilter]
+    : ['Single', 'Double', 'CoOp'];
+  const songCatalog = getSongCatalog(db, aliases, catalogModes);
 
   const search = String(req.query.search || '').trim().toLowerCase();
   const levelFilter = parseLevelQuery(req.query.level);
@@ -2700,6 +2703,24 @@ router.get('/lists', requireAuth, (req, res) => {
   // Build attempt counts in one pass
   const allPlays = db.prepare('SELECT song_title, mode, level, score, grade, date_played FROM user_recently_played WHERE user_id = ?').all(userId);
 
+  // Pull the user's current best score per chart so we can compute the
+  // target-aware `isComplete` flag. Without this the list summary can't
+  // tell "PASS achieved" apart from "target S achieved", and a chart with
+  // a bare-pass best score wrongly showed as 100% done against an S goal.
+  const allBest = db.prepare(`
+    SELECT song_title, mode, level, score, grade
+    FROM user_best_scores
+    WHERE user_id = ?
+  `).all(userId);
+  const bestByChartKey = new Map();
+  for (const row of allBest) {
+    const key = makeChartKey(row.song_title, row.mode, row.level, aliases);
+    if (!key) continue;
+    const enriched = { ...row, is_pass: isPassRecord(row) };
+    const prev = bestByChartKey.get(key);
+    bestByChartKey.set(key, prev ? compareRecords(prev, enriched) : enriched);
+  }
+
   const itemsByList = {};
   for (const item of allItems) {
     if (!itemsByList[item.list_id]) itemsByList[item.list_id] = [];
@@ -2718,6 +2739,11 @@ router.get('/lists', requireAuth, (req, res) => {
       }
     }
 
+    const bestRecord = chartKey ? bestByChartKey.get(chartKey) || null : null;
+    const bestScore = parseInt(bestRecord?.score, 10) || 0;
+    const bestGrade = bestRecord?.grade || '';
+    const isComplete = isTrackedListItemComplete(item, bestRecord, passesSinceAdded);
+
     itemsByList[item.list_id] = itemsByList[item.list_id] || [];
     itemsByList[item.list_id].push({
       id: item.id,
@@ -2735,6 +2761,11 @@ router.get('/lists', requireAuth, (req, res) => {
       sortOrder: item.sort_order || 0,
       attempts,
       passesSinceAdded,
+      // Server-computed completion: factors in `target` + the user's
+      // current best score, not just whether any pass exists.
+      bestScore,
+      bestGrade,
+      isComplete,
     });
   }
 
@@ -3654,8 +3685,8 @@ router.get('/analytics/grade-goals/:userId', (req, res) => {
   if (!userExists) return res.status(404).json({ error: 'User not found' });
 
   const mode = normalizeMode(req.query.mode);
-  if (!mode || mode === 'CoOp') {
-    return res.status(400).json({ error: 'mode is required (Single or Double)' });
+  if (!mode) {
+    return res.status(400).json({ error: 'mode is required (Single, Double, or CoOp)' });
   }
 
   const level = parseLevelQuery(req.query.level);
@@ -4096,8 +4127,8 @@ router.get('/analytics/level-leaderboard', (req, res) => {
   const db = getDb();
 
   const mode = normalizeMode(req.query.mode);
-  if (!mode || mode === 'CoOp') {
-    return res.status(400).json({ error: 'mode is required (Single or Double)' });
+  if (!mode) {
+    return res.status(400).json({ error: 'mode is required (Single, Double, or CoOp)' });
   }
   const level = parseLevelQuery(req.query.level);
   if (!level) {

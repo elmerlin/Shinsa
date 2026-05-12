@@ -25,26 +25,26 @@ const PRIMARY_NAV: NavItem[] = [
   { label: 'Home', path: '/' },
   { label: 'Feed', path: '/feed' },
   { label: 'Songs', path: '/songs' },
-  { label: 'Tiers', path: '/tiers', stub: true },
+  { label: 'Tiers', path: '/tiers' },
   { label: 'Profile', path: '/profile' },
 ];
 
 const SECONDARY_NAV: NavItem[] = [
   { label: 'Tournaments', path: '/tournaments' },
-  { label: 'Live', path: '/live', stub: true },
-  { label: 'Weekly Challenges', path: '/weekly-challenges', stub: true },
-  { label: 'Lists', path: '/lists', stub: true },
-  { label: 'Training', path: '/training', stub: true },
+  { label: 'Live', path: '/live' },
+  { label: 'Weekly Challenges', path: '/weekly-challenges' },
+  { label: 'Lists', path: '/lists' },
+  { label: 'Training', path: '/training' },
   { label: 'What to play', path: '/what-to-play', stub: true },
   { label: 'Skills', path: '/skill', stub: true },
   { label: 'Leaderboards', path: '/leaderboards', stub: true },
   { label: 'World Max', path: '/world-max', stub: true },
-  { label: 'Shoes', path: '/shoes', stub: true },
+  { label: 'Shoes', path: '/shoes' },
   { label: 'Messages', path: '/messages', stub: true },
 ];
 
 const ACCOUNT_NAV: NavItem[] = [
-  { label: 'My Account', path: '/account', stub: true },
+  { label: 'My Account', path: '/account' },
   { label: 'Changelog', path: '/changelog', stub: true },
 ];
 

@@ -6,7 +6,7 @@ import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { weeklyChallengesApi } from '@/lib/api';
 import { fullImageUrl } from '@/lib/images';
 import type { ThemeColors } from '@/constants/theme';
-import type { WeeklyChallengeAward } from '@shared/api';
+import type { WeeklyChallengeAward, WeeklyChallengeLeaderboardRow } from '@shared/api';
 
 const RANK_COLORS = ['#FFC400', '#c0c0c0', '#cd7f32']; // gold / silver / bronze
 
@@ -39,6 +39,32 @@ function PodiumRow({ award, s }: { award: WeeklyChallengeAward; s: ReturnType<ty
   );
 }
 
+/** Variant of PodiumRow that reads from a leaderboard row (Co-op's top3
+ *  comes back as WeeklyChallengeLeaderboardRow, not Award). Keeps the same
+ *  visual treatment so the user doesn't see two different row designs. */
+function CoopPodiumRow({ row, s }: { row: WeeklyChallengeLeaderboardRow; s: ReturnType<typeof useThemedStyles<ReturnType<typeof makeStyles>>> }) {
+  const avatar = row.avatar ? fullImageUrl(row.avatar) : undefined;
+  const rankColor = RANK_COLORS[row.rank - 1] || s.fallbackRankColor.color;
+  return (
+    <View style={s.row}>
+      <View style={[s.rankBadge, { backgroundColor: rankColor }]}>
+        <Text style={s.rankText}>#{row.rank}</Text>
+      </View>
+      {avatar ? (
+        <Image source={{ uri: avatar }} style={s.avatar} contentFit="cover" />
+      ) : (
+        <View style={[s.avatar, s.avatarFallback]} />
+      )}
+      <View style={s.rowMain}>
+        <Text style={s.username} numberOfLines={1}>{row.username || 'unknown'}</Text>
+        <Text style={s.subline}>
+          {fmt(row.points)} pts · {row.clears ?? 0} clears
+        </Text>
+      </View>
+    </View>
+  );
+}
+
 export function WeeklyChallengesSummary() {
   const s = useThemedStyles(makeStyles);
   const router = useRouter();
@@ -51,37 +77,88 @@ export function WeeklyChallengesSummary() {
   if (!data) return null;
   const week = data.week;
   const overall = (data.awards || []).filter((a) => a.award_key === 'overall').slice(0, 3);
-  if (overall.length === 0) return null;
+  const coop = data.coopSummary;
+  const hasCoop = !!(coop && coop.chartCount > 0);
+  // Hide the entire tile only when BOTH divisions are empty (no main podium
+  // AND no Co-op activity). Co-op alone is enough to render the card.
+  if (overall.length === 0 && !hasCoop) return null;
 
   return (
-    <Pressable onPress={() => router.push('/weekly-challenges')} style={({ pressed }) => [s.wrap, pressed && { opacity: 0.85 }]}>
-      <View style={s.headerRow}>
-        <Text style={s.eyebrow}>WEEKLY CHALLENGES</Text>
-        <Text style={s.weekKey}>{week?.week_key}</Text>
-      </View>
-      <View style={s.statsRow}>
-        <View style={s.statCell}>
-          <Text style={s.statLabel}>Charts</Text>
-          <Text style={s.statValue}>{week?.chart_count ?? 0}</Text>
+    <View style={s.wrap}>
+      {/* Main division summary — outer card stays tappable so users can
+          drill straight into the WC screen with one tap from the dashboard. */}
+      <Pressable
+        onPress={() => router.push('/weekly-challenges')}
+        style={({ pressed }) => [s.section, pressed && { opacity: 0.85 }]}>
+        <View style={s.headerRow}>
+          <Text style={s.eyebrow}>WEEKLY CHALLENGES</Text>
+          <Text style={s.weekKey}>{week?.week_key}</Text>
         </View>
-        <View style={s.statCell}>
-          <Text style={s.statLabel}>Players</Text>
-          <Text style={s.statValue}>{data.participantCount ?? 0}</Text>
-        </View>
-        <View style={s.statCell}>
-          <Text style={s.statLabel}>Max Lv</Text>
-          <Text style={s.statValue}>{week?.challenge_max_level ?? 0}</Text>
-        </View>
-      </View>
-      <View style={s.podium}>
-        {overall.map((a) => <PodiumRow key={`${a.award_key}-${a.rank}-${a.user_id}`} award={a} s={s} />)}
-      </View>
-    </Pressable>
+        {overall.length > 0 ? (
+          <>
+            <View style={s.statsRow}>
+              <View style={s.statCell}>
+                <Text style={s.statLabel}>Charts</Text>
+                <Text style={s.statValue}>{week?.chart_count ?? 0}</Text>
+              </View>
+              <View style={s.statCell}>
+                <Text style={s.statLabel}>Players</Text>
+                <Text style={s.statValue}>{data.participantCount ?? 0}</Text>
+              </View>
+              <View style={s.statCell}>
+                <Text style={s.statLabel}>Max Lv</Text>
+                <Text style={s.statValue}>{week?.challenge_max_level ?? 0}</Text>
+              </View>
+            </View>
+            <View style={s.podium}>
+              {overall.map((a) => <PodiumRow key={`${a.award_key}-${a.rank}-${a.user_id}`} award={a} s={s} />)}
+            </View>
+          </>
+        ) : null}
+      </Pressable>
+
+      {/* Co-op division — its own tap target. Carries `?division=coop` as
+          a navigation param so the WC screen auto-selects the Co-op tab
+          on arrival (parsed in weekly-challenges.tsx). */}
+      {hasCoop ? (
+        <Pressable
+          onPress={() => router.push({ pathname: '/weekly-challenges', params: { division: 'coop' } })}
+          style={({ pressed }) => [s.section, s.coopSection, pressed && { opacity: 0.85 }]}>
+          <View style={s.headerRow}>
+            <Text style={[s.eyebrow, s.coopEyebrow]}>CO-OP DIVISION</Text>
+            <Text style={s.weekKey}>2-Player</Text>
+          </View>
+          <View style={s.statsRow}>
+            <View style={s.statCell}>
+              <Text style={s.statLabel}>Charts</Text>
+              <Text style={s.statValue}>{coop.chartCount}</Text>
+            </View>
+            <View style={s.statCell}>
+              <Text style={s.statLabel}>Players</Text>
+              <Text style={s.statValue}>{coop.participantCount}</Text>
+            </View>
+          </View>
+          {coop.top3 && coop.top3.length > 0 ? (
+            <View style={s.podium}>
+              {coop.top3.map((row) => (
+                <CoopPodiumRow key={`coop-${row.rank}-${row.user_id}`} row={row} s={s} />
+              ))}
+            </View>
+          ) : (
+            <Text style={s.emptyHint}>No Co-op plays this week yet — be the first.</Text>
+          )}
+        </Pressable>
+      ) : null}
+    </View>
   );
 }
 
 const makeStyles = (t: ThemeColors) => ({
-  wrap: {
+  // Outer container — pure layout, no chrome. Each child section carries
+  // its own card style so main + Co-op are visually two separate tiles
+  // that stack vertically (each with its own tap target).
+  wrap: { gap: 10 },
+  section: {
     backgroundColor: t.card,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: t.border,
@@ -89,6 +166,14 @@ const makeStyles = (t: ThemeColors) => ({
     padding: 12,
     gap: 10,
   },
+  // Co-op section: subtle cyan tint to differentiate from main, matching
+  // the Co-op accent we use elsewhere (chart-jacket / score-card).
+  coopSection: {
+    borderColor: 'rgba(125, 211, 252, 0.35)',
+    backgroundColor: 'rgba(125, 211, 252, 0.06)',
+  },
+  coopEyebrow: { color: '#7dd3fc' },
+  emptyHint: { fontSize: 11, color: t.textDim, fontStyle: 'italic' as const, paddingHorizontal: 2 },
   headerRow: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, alignItems: 'baseline' as const },
   eyebrow: {
     fontSize: 13,

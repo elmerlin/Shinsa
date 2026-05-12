@@ -145,11 +145,81 @@ export interface Chart {
 }
 
 export interface ChartUserSummary {
-  best_score?: number | null;
-  best_grade?: string;
+  user?: {
+    id?: string;
+    username?: string;
+    avatar?: string;
+  } | null;
+  best?: ChartBest | null;
+  highest_replay?: ChartReplayLink | null;
+  [key: string]: unknown;
+}
+
+export interface ChartBest {
+  id?: number | string;
+  source?: 'best' | 'recent' | string;
+  score?: number;
+  grade?: string;
+  plate?: string;
+  rating?: number;
   is_pass?: boolean;
   is_stage_break?: boolean;
+  date_played?: string;
+  perfect?: number;
+  great?: number;
+  good?: number;
+  bad?: number;
+  miss?: number;
+  max_combo?: number;
   [key: string]: unknown;
+}
+
+export interface ChartReplayLink {
+  url?: string;
+  score?: number;
+  grade?: string;
+  play_id?: number | string;
+  [key: string]: unknown;
+}
+
+export interface ChartHistoryEntry {
+  id: number | string;
+  source: string;
+  score: number;
+  grade: string;
+  plate?: string;
+  is_pass: boolean;
+  is_stage_break: boolean;
+  date_played: string;
+  rating?: number;
+  perfect?: number;
+  great?: number;
+  good?: number;
+  bad?: number;
+  miss?: number;
+  max_combo?: number;
+}
+
+export interface ChartProgressionPoint {
+  idx: number;
+  score: number;
+  grade: string;
+  is_pass: boolean;
+  is_stage_break: boolean;
+  date_played: string;
+  label: string;
+}
+
+export interface ChartFriendRecord {
+  user: {
+    id: string;
+    username: string;
+    avatar?: string;
+  };
+  best: ChartBest;
+  highest_replay?: ChartReplayLink | null;
+  youtube_url?: string;
+  session_youtube_url?: string;
 }
 
 export interface ChartDetailResponse {
@@ -157,9 +227,9 @@ export interface ChartDetailResponse {
   user_summary: ChartUserSummary | null;
   user_youtube_url?: string;
   user_session_youtube_url?: string;
-  progression?: unknown[];
-  history?: unknown[];
-  friend_records?: unknown[];
+  progression?: ChartProgressionPoint[];
+  history?: ChartHistoryEntry[];
+  friend_records?: ChartFriendRecord[];
 }
 
 /** A song from /api/songs/library — bundles all charts for one song. */
@@ -348,9 +418,84 @@ export interface ReplayHighlight {
   [key: string]: unknown;
 }
 
+export interface UpscoreHighlight {
+  upscore_id?: number;
+  user_id?: string;
+  song_title?: string;
+  mode?: string;
+  level?: number;
+  chart_id?: number;
+  jacket_url?: string;
+  background_url?: string;
+  /** Old (pre-upscore) score and grade. */
+  old_score?: number;
+  old_grade?: string;
+  /** New score and grade — same fields as a regular play. */
+  new_score?: number;
+  new_grade?: string;
+  /** Some payloads also expose `score`/`grade` aliases for the new value. */
+  score?: number;
+  grade?: string;
+  plate?: string;
+  perfect?: number;
+  great?: number;
+  good?: number;
+  bad?: number;
+  miss?: number;
+  max_combo?: number;
+  pumbility_gain?: number;
+  score_delta?: number;
+  username?: string;
+  avatar?: string;
+  nationality?: string;
+  played_at_utc?: string;
+  date_played?: string;
+  machine_name?: string;
+  replay_embed_url?: string;
+  [key: string]: unknown;
+}
+
+export interface ClearHighlight {
+  clear_id?: number;
+  user_id?: string;
+  song_title?: string;
+  mode?: string;
+  level?: number;
+  chart_id?: number;
+  jacket_url?: string;
+  background_url?: string;
+  score?: number;
+  grade?: string;
+  plate?: string;
+  perfect?: number;
+  great?: number;
+  good?: number;
+  bad?: number;
+  miss?: number;
+  max_combo?: number;
+  pumbility_gain?: number;
+  username?: string;
+  avatar?: string;
+  nationality?: string;
+  played_at_utc?: string;
+  date_played?: string;
+  machine_name?: string;
+  replay_embed_url?: string;
+  [key: string]: unknown;
+}
+
 export interface DailyHighlights {
+  /** Daily mix-tape reel — present in the payload but the mobile client
+   *  intentionally ignores it (the feature is web-only / experimental). */
   mixTape: unknown | null;
   topReplays: ReplayHighlight[];
+  /** UTC date key the replays come from — set when `topReplaysIsFallback` is true. */
+  topReplaysDateKey?: string;
+  topReplaysIsFallback?: boolean;
+  topUpscores: UpscoreHighlight[];
+  topUpscoresIsFallback?: boolean;
+  topClears: ClearHighlight[];
+  topClearsIsFallback?: boolean;
 }
 
 // --- Weekly Challenges home ---
@@ -382,6 +527,150 @@ export interface WeeklyChallengesHome {
   week: WeeklyChallengeWeek;
   participantCount: number;
   awards: WeeklyChallengeAward[];
+  /** Optional preview of the parallel Co-Op WC division. Present when the
+   *  picker has populated Co-op charts for the week. */
+  coopSummary?: {
+    chartCount: number;
+    participantCount: number;
+    top3: WeeklyChallengeLeaderboardRow[];
+  } | null;
+}
+
+// --- Weekly Challenge week index (`/weeks`) ---
+
+export interface WeeklyChallengeWeekIndexEntry {
+  week_key: string;
+  starts_at_utc: string;
+  ends_at_utc: string;
+  status: 'active' | 'finalized' | string;
+  chart_count: number;
+  challenge_max_level?: number;
+  participant_count: number;
+}
+
+// --- Full week detail (`/week/{weekKey}`) ---
+
+export interface WeeklyChallengeChartTopEntry {
+  rank: number;
+  user_id: string;
+  username: string;
+  avatar?: string;
+  nationality?: string;
+  score: number;
+  grade: string;
+  rating_points: number;
+  base_rating_points: number;
+  pg_bonus_points: number;
+  pg_bonus_percent: number;
+  has_pg_bonus: boolean;
+  plate?: string | null;
+}
+
+export interface WeeklyChallengeChart {
+  id: number;
+  week_id: number;
+  chart_id: number;
+  mode: string;
+  level: number;
+  sort_order: number;
+  song_title_snapshot: string;
+  artist_snapshot?: string;
+  jacket_url_snapshot?: string;
+  top3: WeeklyChallengeChartTopEntry[];
+  participantCount: number;
+  clearCount: number;
+}
+
+export interface WeeklyChallengeLeaderboardRow {
+  rank: number;
+  user_id: string;
+  username: string;
+  avatar?: string;
+  nationality?: string;
+  skill_title?: string;
+  points: number;
+  clears: number;
+  pg_bonus_points: number;
+  pg_bonus_count: number;
+}
+
+/** Per-chart best for the viewer — keyed by `chart_id` (the WC chart id, not
+ *  the underlying song chart). Server omits this if the user is unauthed. */
+export interface WeeklyChallengeViewerBest {
+  score: number;
+  grade: string;
+  rating_points: number;
+  base_rating_points: number;
+  pg_bonus_points: number;
+  pg_bonus_percent: number;
+  has_pg_bonus: boolean;
+  plate?: string | null;
+}
+
+export interface WeeklyChallengeViewerSummary {
+  bests: Record<string, WeeklyChallengeViewerBest>;
+  totalPoints: number;
+  totalClears: number;
+  pgBonusPoints: number;
+  pgBonusCount: number;
+  rank: number | null;
+}
+
+export interface WeeklyChallengeFullWeek {
+  week: WeeklyChallengeWeek & {
+    challenge_min_level?: number;
+  };
+  /** Which division this payload was scoped to. Defaults to 'main' for
+   *  pre-existing callers that don't pass the query param. */
+  division?: 'main' | 'coop';
+  participantCount: number;
+  awards: WeeklyChallengeAward[];
+  leaderboard: WeeklyChallengeLeaderboardRow[];
+  groupedByLevel: Record<string, WeeklyChallengeChart[]>;
+  viewerSummary: WeeklyChallengeViewerSummary | null;
+}
+
+// --- Single-chart leaderboard (`/charts/{chartId}/scores`) ---
+
+export interface WeeklyChallengeChartScore {
+  rank: number;
+  user_id: string;
+  username: string;
+  avatar?: string;
+  nationality?: string;
+  skill_title?: string;
+  score: number;
+  grade: string;
+  plate?: string | null;
+  perfect?: number;
+  great?: number;
+  good?: number;
+  bad?: number;
+  miss?: number;
+  max_combo?: number;
+  rating_points: number;
+  base_rating_points: number;
+  pg_bonus_points: number;
+  pg_bonus_percent: number;
+  has_pg_bonus: boolean;
+  attempt_count: number;
+  play_id?: string | number;
+  replay_embed_url?: string;
+  background_url?: string;
+}
+
+export interface WeeklyChallengeChartScoresResponse {
+  chart: {
+    id: number;
+    song_title: string;
+    artist: string;
+    mode: string;
+    level: number;
+    jacket_url?: string;
+    week_key: string;
+  };
+  total_attempts: number;
+  scores: WeeklyChallengeChartScore[];
 }
 
 // --- Song of the Week ---
@@ -433,6 +722,184 @@ export interface ActivityItem {
   nationality?: string;
   created_at?: string;
   [key: string]: unknown;
+}
+
+// --- Live Sessions ---
+
+export interface LiveSessionHost {
+  id?: string;
+  username?: string;
+  avatar?: string;
+  nationality?: string;
+  skill_title?: string;
+  pumbility?: number;
+  [key: string]: unknown;
+}
+
+export interface LiveSessionSummary {
+  id: string;
+  host_user_id?: string;
+  title?: string;
+  status?: string;
+  started_at?: string;
+  viewer_count?: number;
+  stream_url?: string;
+  live_url?: string;
+  session_type?: string;
+  is_unlisted?: boolean | number;
+  [key: string]: unknown;
+}
+
+export interface LiveLastPlay {
+  song_title?: string;
+  mode?: string;
+  level?: number;
+  score?: number;
+  grade?: string;
+  background_url?: string;
+  pumbility_gain?: number;
+  hop_rating_points_earned?: number;
+  [key: string]: unknown;
+}
+
+export interface LiveDirectoryItem {
+  session: LiveSessionSummary;
+  host?: LiveSessionHost;
+  hop?: Record<string, unknown> | null;
+  last_play?: LiveLastPlay | null;
+  request_counts?: { open?: number; queued?: number; played?: number; skipped?: number };
+  active_vote?: Record<string, unknown> | null;
+  is_following?: boolean | number;
+  [key: string]: unknown;
+}
+
+export interface LiveSessionsResponse {
+  sessions: LiveDirectoryItem[];
+}
+
+// --- Live session detail (`/sessions/:id`) ---
+
+export interface LiveSessionPlay {
+  id: number;
+  live_session_id: string;
+  user_id: string;
+  recently_played_id?: number;
+  song_title: string;
+  mode: string;
+  level: number;
+  score: number;
+  grade: string;
+  plate?: string;
+  machine_name?: string;
+  date_played?: string;
+  perfect?: number;
+  great?: number;
+  good?: number;
+  bad?: number;
+  miss?: number;
+  max_combo?: number;
+  kcal?: number;
+  shoe_make?: string;
+  shoe_model?: string;
+  shoe_colorway?: string;
+  username?: string;
+  avatar?: string;
+  nationality?: string;
+  skill_title?: string;
+  participant_role?: string;
+  pumbility_gain?: number;
+  singles_pumbility_gain?: number;
+  rating?: number;
+  background_url?: string;
+  [key: string]: unknown;
+}
+
+/** Aggregate stats the server computes for the session. Includes top plays
+ *  by score + rating, judgment totals, calorie estimate, etc. Used for the
+ *  Summary panel in the viewer. */
+export interface LiveSessionSummaryPayload {
+  version: number;
+  sessionId: string;
+  sessionTitle?: string;
+  sessionDateLabel?: string;
+  sessionTimeRange?: string;
+  sessionDurationMinutes?: number;
+  sessionDurationLabel?: string;
+  sessionMachineName?: string;
+  sessionShoeLabel?: string;
+  songCount: number;
+  clearCount: number;
+  clearRate: number;
+  totalSteps: number;
+  trainingLoad: number;
+  estimatedKcal: number;
+  estimatedKcalPerHour?: number;
+  singleCount: number;
+  doubleCount: number;
+  otherCount: number;
+  judgmentTotals: { perfect: number; great: number; good: number; bad: number; miss: number };
+  perfectRate: number;
+  averageScore: number;
+  averageLevel: number;
+  averageRating?: number;
+  topSongsByScore?: LiveSessionPlay[];
+  topSongsByRating?: LiveSessionPlay[];
+  viewerCount: number;
+  viewerPeak: number;
+  messageCount: number;
+  streamUrl?: string;
+  hostUsername?: string;
+  postText?: string;
+  [key: string]: unknown;
+}
+
+export interface LiveSessionFull extends LiveSessionSummary {
+  status_text?: string;
+  stream_url?: string;
+  youtube_broadcast_id?: string | null;
+  youtube_video_id?: string | null;
+  viewer_peak?: number;
+  ended_at?: string | null;
+  host?: LiveSessionHost;
+  cohost_count?: number;
+  participants?: { user_id: string; role: string; status: string; username?: string; avatar?: string; nationality?: string }[];
+  hop_started_at?: string | null;
+  hop_ends_at?: string | null;
+}
+
+export interface LiveSessionMessage {
+  id: string;
+  live_session_id: string;
+  user_id: string;
+  username: string;
+  avatar?: string;
+  message: string;
+  /** 'chat' | 'session_start' | 'session_end' | 'song_played' | 'request_*' | ... */
+  message_type: string;
+  metadata?: Record<string, unknown>;
+  created_at: string;
+  is_system?: boolean;
+  skill_title?: string;
+  pumbility?: number;
+  nationality?: string;
+  is_host?: boolean;
+  is_participant?: boolean;
+  participant_role?: string;
+  pump_count?: number;
+  user_pumped?: boolean;
+  [key: string]: unknown;
+}
+
+export interface LiveSessionSnapshot {
+  session: LiveSessionFull;
+  viewer_state?: Record<string, unknown>;
+  summary?: LiveSessionSummaryPayload;
+  hop?: Record<string, unknown> | null;
+  plays?: LiveSessionPlay[];
+  messages?: LiveSessionMessage[];
+  requests?: Record<string, unknown>[];
+  active_vote?: Record<string, unknown> | null;
+  last_play?: LiveSessionPlay | null;
 }
 
 // --- Communities ---

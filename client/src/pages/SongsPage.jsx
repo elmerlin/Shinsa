@@ -6,18 +6,32 @@ import RecommendModal from '../components/RecommendModal';
 import { useI18n } from '../i18n/TranslationContext';
 
 function ChartBadge({ chart }) {
-  const isSingle = chart.mode === 'Single';
-  const baseColor = isSingle
-    ? 'from-red-500 to-red-700 border-red-300/50'
-    : 'from-green-500 to-emerald-700 border-green-300/50';
+  // Mode → gradient. Co-op gets the cyan/blue treatment used elsewhere
+  // (chart-jacket, score cards) so it's instantly distinguishable from S/D.
+  const mode = chart.mode;
+  let baseColor;
+  let prefix;
+  if (mode === 'Single') {
+    baseColor = 'from-red-500 to-red-700 border-red-300/50';
+    prefix = 'S';
+  } else if (mode === 'CoOp') {
+    baseColor = 'from-cyan-500 to-blue-700 border-cyan-300/50';
+    prefix = 'C';
+  } else {
+    baseColor = 'from-green-500 to-emerald-700 border-green-300/50';
+    prefix = 'D';
+  }
+  // Co-op encodes player count in `level` (2/3/4/5) — show `C2` rather than a
+  // bare `2` that would read like a singles chart.
+  const display = mode === 'CoOp' ? `C${chart.level}` : chart.level;
 
   return (
     <Link
       to={`/songs/chart/${chart.chart_id}`}
       className={`inline-flex items-center justify-center min-w-[42px] h-[42px] text-sm rounded-full border bg-gradient-to-b ${baseColor} text-white font-display font-black shadow-md hover:brightness-110 transition-all`}
-      title={`${isSingle ? 'S' : 'D'}${chart.level}`}
+      title={`${prefix}${chart.level}`}
     >
-      {chart.level}
+      {display}
     </Link>
   );
 }
@@ -218,7 +232,7 @@ export default function SongsPage() {
                     <ChartBadge chart={chart} />
                     {chart.is_pass && (
                       <span className="absolute -bottom-1 -right-1 text-[9px] px-1 rounded-full bg-piu-dark border border-piu-border text-piu-accent font-mono">
-                        {chart.mode === 'Single' ? 'S' : 'D'}
+                        {chart.mode === 'Single' ? 'S' : chart.mode === 'CoOp' ? 'C' : 'D'}
                       </span>
                     )}
                   </div>

@@ -114,10 +114,11 @@ export default function WeeklyChallengesSummary() {
 
   if (!data?.week) return null;
 
-  const { week, awards, challengePreviews, participantCount, viewerSummary } = data;
+  const { week, awards, challengePreviews, participantCount, viewerSummary, coopSummary } = data;
   const overallAwards = (awards || []).filter(a => a.award_key === 'overall');
   const singlesFirst = (awards || []).find(a => a.award_key === 'singles' && a.rank === 1);
   const doublesFirst = (awards || []).find(a => a.award_key === 'doubles' && a.rank === 1);
+  const hasCoop = !!(coopSummary && coopSummary.chartCount > 0);
 
   return (
     <div className="mb-6">
@@ -201,6 +202,58 @@ export default function WeeklyChallengesSummary() {
             {viewerSummary.totalClears || 0} clears
           </span>
         </div>
+      )}
+
+      {/* Co-op division strip. Cyan-tinted to differentiate from main, and
+          its own Link target so the WC page lands on the Co-op tab. */}
+      {hasCoop && (
+        <Link
+          to="/weekly-challenges?division=coop"
+          className="mt-2 block rounded-md border border-sky-400/25 bg-sky-500/[0.05] hover:bg-sky-500/[0.08] transition-colors p-2"
+        >
+          <div className="flex items-center justify-between mb-1.5">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-display font-black uppercase tracking-wider text-sky-300">
+                Co-Op Division
+              </span>
+              <span className="text-[8px] text-white/40 font-display">2-Player</span>
+            </div>
+            <span className="text-[9px] text-white/30">
+              {coopSummary.chartCount} chart{coopSummary.chartCount === 1 ? '' : 's'} · {coopSummary.participantCount} player{coopSummary.participantCount === 1 ? '' : 's'}
+            </span>
+          </div>
+          {coopSummary.top3 && coopSummary.top3.length > 0 ? (
+            <div className="flex flex-wrap gap-1.5">
+              {coopSummary.top3.map((row) => {
+                const medal = row.rank === 1 ? '🥇' : row.rank === 2 ? '🥈' : row.rank === 3 ? '🥉' : '';
+                const avatar = row.avatar ? getAvatarUrl(row.avatar, 'sm') : '';
+                return (
+                  <div
+                    key={`coop-${row.rank}-${row.user_id}`}
+                    className="flex items-center gap-1 px-1.5 py-1 rounded border border-white/[0.06] bg-white/[0.03] flex-1 min-w-[100px]"
+                  >
+                    <span className="text-[10px]">{medal}</span>
+                    {avatar && (
+                      <img
+                        src={avatar}
+                        alt=""
+                        className="h-[14px] w-[14px] shrink-0 rounded-full border border-white/20 object-cover"
+                        loading="lazy"
+                        decoding="async"
+                      />
+                    )}
+                    <span className="truncate text-[9px] font-display font-bold text-white/70">{row.username}</span>
+                    <span className="ml-auto text-[8px] font-display text-white/40">
+                      {(row.points || 0).toLocaleString()}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-[9px] italic text-white/40">No Co-op plays this week yet — be the first.</p>
+          )}
+        </Link>
       )}
 
       {/* CTA */}

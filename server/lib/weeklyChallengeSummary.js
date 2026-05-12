@@ -54,7 +54,7 @@ function computeBonusTotalsByScope(db, weekId) {
            wc.mode, wc.level
     FROM weekly_challenge_results r
     JOIN weekly_challenge_charts wc ON wc.id = r.weekly_chart_id
-    WHERE wc.week_id = ?
+    WHERE wc.week_id = ? AND wc.division = 'main'
   `).all(weekId);
 
   for (const row of rows) {
@@ -120,7 +120,7 @@ function computeSuperlatives(db, weekId, week, snapshots) {
     SELECT r.user_id, COUNT(*) as cnt
     FROM weekly_challenge_results r
     JOIN weekly_challenge_charts wc ON wc.id = r.weekly_chart_id
-    WHERE wc.week_id = ?
+    WHERE wc.week_id = ? AND wc.division = 'main'
       AND r.resolved_grade IN ('SSS', 'SSS+')
     GROUP BY r.user_id
     HAVING cnt > 0
@@ -137,13 +137,13 @@ function computeSuperlatives(db, weekId, week, snapshots) {
     };
   });
 
-  // highest_clear_percentage: clears / chart_count * 100
+  // highest_clear_percentage: clears / chart_count * 100 (main division only)
   const chartCount = week.chart_count || 1;
   const pctRows = db.prepare(`
     SELECT lb.user_id, lb.clears,
            CAST(lb.clears AS REAL) / ? * 100.0 as pct
     FROM weekly_challenge_leaderboard lb
-    WHERE lb.week_id = ? AND lb.scope_mode = 'both'
+    WHERE lb.week_id = ? AND lb.scope_mode = 'both' AND lb.division = 'main'
     ORDER BY pct DESC, lb.clears DESC, lb.user_id ASC
     LIMIT 3
   `).all(chartCount, weekId);
@@ -164,7 +164,7 @@ function computeSuperlatives(db, weekId, week, snapshots) {
            COUNT(*) as clear_count
     FROM weekly_challenge_results r
     JOIN weekly_challenge_charts wc ON wc.id = r.weekly_chart_id
-    WHERE wc.week_id = ?
+    WHERE wc.week_id = ? AND wc.division = 'main'
     GROUP BY r.user_id
     HAVING clear_count >= 3
     ORDER BY avg_rating DESC, clear_count DESC, r.user_id ASC
@@ -190,9 +190,10 @@ function computeSuperlatives(db, weekId, week, snapshots) {
 function computeBiggestImprovements(db, weekId, week, snapshots) {
   const aliases = getAliases();
 
-  // Load all weekly charts
+  // Load all weekly charts (main division only — Co-op has its own summary
+  // path and shouldn't pollute the main-division improvements list).
   const weeklyCharts = db.prepare(
-    'SELECT * FROM weekly_challenge_charts WHERE week_id = ? ORDER BY sort_order'
+    "SELECT * FROM weekly_challenge_charts WHERE week_id = ? AND division = 'main' ORDER BY sort_order"
   ).all(weekId);
 
   // Load all frozen results for this week
@@ -200,7 +201,7 @@ function computeBiggestImprovements(db, weekId, week, snapshots) {
     SELECT r.*, wc.song_title_snapshot, wc.mode, wc.level
     FROM weekly_challenge_results r
     JOIN weekly_challenge_charts wc ON wc.id = r.weekly_chart_id
-    WHERE wc.week_id = ?
+    WHERE wc.week_id = ? AND wc.division = 'main'
   `).all(weekId);
 
   // Build chart key lookup for alias-aware matching
@@ -461,15 +462,16 @@ function buildWeeklyChallengeSummary(db, weekId, targetWeekId = null) {
     .get(weekId, 'finalized');
   if (!week) return null;
 
-  // 2. Check participant count — skip empty weeks
+  // 2. Check participant count — skip empty weeks (main division only;
+  // Co-op has a separate post path).
   const participantCount = db.prepare(
-    "SELECT COUNT(DISTINCT user_id) as cnt FROM weekly_challenge_leaderboard WHERE week_id = ? AND scope_mode = 'both'"
+    "SELECT COUNT(DISTINCT user_id) as cnt FROM weekly_challenge_leaderboard WHERE week_id = ? AND scope_mode = 'both' AND division = 'main'"
   ).get(weekId)?.cnt || 0;
   if (participantCount === 0) return null;
 
-  // 3. Load frozen awards
+  // 3. Load frozen awards (main division)
   const awardRows = db.prepare(
-    'SELECT * FROM weekly_challenge_awards WHERE week_id = ? ORDER BY award_key, rank'
+    "SELECT * FROM weekly_challenge_awards WHERE week_id = ? AND division = 'main' ORDER BY award_key, rank"
   ).all(weekId);
   const bonusTotalsByScope = computeBonusTotalsByScope(db, weekId);
 
@@ -492,11 +494,11 @@ function buildWeeklyChallengeSummary(db, weekId, targetWeekId = null) {
     if (awards[a.award_key]) awards[a.award_key].push(entry);
   }
 
-  // 4. Aggregate stats from frozen leaderboard
+  // 4. Aggregate stats from frozen leaderboard (main division)
   const lbStats = db.prepare(`
     SELECT SUM(clears) as total_clears
     FROM weekly_challenge_leaderboard
-    WHERE week_id = ? AND scope_mode = 'both'
+    WHERE week_id = ? AND scope_mode = 'both' AND division = 'main'
   `).get(weekId);
   const totalClears = lbStats?.total_clears || 0;
 
@@ -537,7 +539,7 @@ function buildWeeklyChallengeSummary(db, weekId, targetWeekId = null) {
     const nw = db.prepare('SELECT * FROM weekly_challenge_weeks WHERE id = ?').get(targetWeekId);
     if (nw) {
       const previewCharts = db.prepare(
-        'SELECT song_title_snapshot, mode, level, jacket_url_snapshot FROM weekly_challenge_charts WHERE week_id = ? ORDER BY sort_order LIMIT 6'
+        "SELECT song_title_snapshot, mode, level, jacket_url_snapshot FROM weekly_challenge_charts WHERE week_id = ? AND division = 'main' ORDER BY sort_order LIMIT 6"
       ).all(targetWeekId);
       nextWeek = {
         weekId: nw.id,
@@ -615,7 +617,7 @@ function buildPersonalSummaries(db, weekId) {
     SELECT r.user_id, AVG(r.score) as avg_score, COUNT(*) as clears
     FROM weekly_challenge_results r
     JOIN weekly_challenge_charts wc ON wc.id = r.weekly_chart_id
-    WHERE wc.week_id = ?
+    WHERE wc.week_id = ? AND wc.division = 'main'
     GROUP BY r.user_id
   `).all(weekId)) {
     avgScoreMap[row.user_id] = { avgScore: Math.round(row.avg_score || 0), clears: row.clears || 0 };
@@ -628,7 +630,7 @@ function buildPersonalSummaries(db, weekId) {
            wc.song_title_snapshot, wc.mode, wc.level, wc.jacket_url_snapshot
     FROM weekly_challenge_results r
     JOIN weekly_challenge_charts wc ON wc.id = r.weekly_chart_id
-    WHERE wc.week_id = ?
+    WHERE wc.week_id = ? AND wc.division = 'main'
     ORDER BY r.rating_points DESC, r.score DESC
   `).all(weekId)) {
     if (!bestPlayMap[row.user_id]) {
@@ -662,14 +664,16 @@ function buildPersonalSummaries(db, weekId) {
     SELECT r.user_id, COUNT(*) as sss_count
     FROM weekly_challenge_results r
     JOIN weekly_challenge_charts wc ON wc.id = r.weekly_chart_id
-    WHERE wc.week_id = ? AND r.resolved_grade IN ('SSS', 'SSS+')
+    WHERE wc.week_id = ? AND wc.division = 'main' AND r.resolved_grade IN ('SSS', 'SSS+')
     GROUP BY r.user_id
   `).all(weekId)) {
     sssMap[row.user_id] = row.sss_count || 0;
   }
 
-  // Leaderboard: group by user_id with sub-maps by scope_mode
-  const lbRows = db.prepare('SELECT * FROM weekly_challenge_leaderboard WHERE week_id = ?').all(weekId);
+  // Leaderboard (main division): group by user_id with sub-maps by scope_mode
+  const lbRows = db.prepare(
+    "SELECT * FROM weekly_challenge_leaderboard WHERE week_id = ? AND division = 'main'"
+  ).all(weekId);
   const lbByUser = {};
   const scopeTotals = {};
   for (const row of lbRows) {
@@ -678,9 +682,11 @@ function buildPersonalSummaries(db, weekId) {
     scopeTotals[row.scope_mode] = (scopeTotals[row.scope_mode] || 0) + 1;
   }
 
-  // Awards/podiums: group by user_id
+  // Awards/podiums (main division): group by user_id
   const awardsByUser = {};
-  for (const row of db.prepare('SELECT * FROM weekly_challenge_awards WHERE week_id = ?').all(weekId)) {
+  for (const row of db.prepare(
+    "SELECT * FROM weekly_challenge_awards WHERE week_id = ? AND division = 'main'"
+  ).all(weekId)) {
     if (!awardsByUser[row.user_id]) awardsByUser[row.user_id] = [];
     awardsByUser[row.user_id].push({
       awardKey: row.award_key || '',
