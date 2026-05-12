@@ -60,6 +60,27 @@ describe('weekly challenge rating points', () => {
     );
   });
 
+  it('uses the Co-op base table for CoOp plays (level encodes player count)', () => {
+    // Co-op stores player count in `level` (C2 → level=2). The main-division
+    // LEVEL_BASE_POINTS table only covers 10–28, so without the CoOp branch
+    // every Co-op play scored 0 points. Verify the COOP_BASE_POINTS path:
+    //   500 (C2 base) × 1.50 (SSS+) × 1.10 (PG) = 825
+    assert.equal(
+      calculateWeeklyChallengeRatingPoints(2, 'SSS+', 1000000, 'PG', null, 'CoOp'),
+      Math.round(500 * 1.50 * 1.10)
+    );
+    // Same pass without PG → no bonus
+    assert.equal(
+      calculateWeeklyChallengeRatingPoints(2, 'SSS+', 996000, 'UG', null, 'CoOp'),
+      Math.round(500 * 1.50)
+    );
+    // Without mode='CoOp', a level=2 play falls through to the main table → 0 pts
+    assert.equal(
+      calculateWeeklyChallengeRatingPoints(2, 'SSS+', 1000000, 'PG'),
+      0
+    );
+  });
+
   it('uses the PG bonus in active weekly challenge leaderboard rankings', () => {
     const week = {
       id: 7,
@@ -123,7 +144,7 @@ describe('weekly challenge rating points', () => {
         if (sql === 'SELECT * FROM weekly_challenge_weeks WHERE id = ?') {
           return { get: () => week };
         }
-        if (sql === 'SELECT * FROM weekly_challenge_charts WHERE week_id = ? ORDER BY sort_order') {
+        if (sql === 'SELECT * FROM weekly_challenge_charts WHERE week_id = ? AND division = ? ORDER BY sort_order') {
           return { all: () => [chart] };
         }
         if (sql.includes('FROM user_recently_played rp') && sql.includes('JOIN users u ON rp.user_id = u.id')) {

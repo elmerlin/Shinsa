@@ -64,7 +64,8 @@ function computeBonusTotalsByScope(db, weekId) {
       row.score,
       row.plate,
       row.rating_points,
-      row.resolved_grade
+      row.resolved_grade,
+      row.mode,
     );
     if (!breakdown.hasPgBonus) continue;
 
@@ -415,7 +416,8 @@ function selectReplayHighlights(db, weekId, awards) {
       r.score,
       r.plate,
       r.rating_points,
-      r.resolved_grade
+      r.resolved_grade,
+      r.mode,
     );
     selected.push({
       user_id: r.user_id,
@@ -640,7 +642,8 @@ function buildPersonalSummaries(db, weekId) {
         row.score,
         row.plate,
         row.rating_points,
-        row.resolved_grade
+        row.resolved_grade,
+        row.mode,
       );
       bestPlayMap[row.user_id] = {
         songTitle: row.song_title_snapshot || '',

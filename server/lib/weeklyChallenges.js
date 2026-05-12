@@ -529,7 +529,11 @@ function aggregateWeeklyResults(db, weekId, division = 'main') {
     const existing = userChartBests.get(key);
 
     if (!existing || isBetterPlay(play, resolved, existing.play, existing.resolvedGrade)) {
-      const ratingBreakdown = getWeeklyChallengeRatingBreakdown(wc.level, play.grade, play.score, play.plate, resolved);
+      // Pass `wc.mode` so Co-op plays use COOP_BASE_POINTS instead of the
+      // main level table — without this every Co-op play scored 0 points.
+      const ratingBreakdown = getWeeklyChallengeRatingBreakdown(
+        wc.level, play.grade, play.score, play.plate, resolved, wc.mode,
+      );
       userChartBests.set(key, {
         play,
         weeklyChart: wc,
@@ -929,7 +933,8 @@ function getFrozenBonusTotalsByUser(db, weekId, scopeMode = 'both', division = '
       row.score,
       row.plate,
       row.rating_points,
-      row.resolved_grade
+      row.resolved_grade,
+      row.mode,
     );
     if (!breakdown.hasPgBonus) continue;
     if (!totals[row.user_id]) totals[row.user_id] = { pg_bonus_points: 0, pg_bonus_count: 0 };
@@ -986,7 +991,8 @@ function getFrozenChartResults(db, weekId, division = 'main') {
           r.score,
           r.plate,
           r.rating_points,
-          r.resolved_grade
+          r.resolved_grade,
+          chart.mode,
         );
         return {
           rank: i + 1,
@@ -1074,7 +1080,8 @@ function getViewerWeeklyBests(db, weekId, userId, division = 'main') {
       r.score,
       r.plate,
       r.rating_points,
-      r.resolved_grade
+      r.resolved_grade,
+      r.mode,
     );
     bests[r.weekly_chart_id] = {
       score: r.score,
@@ -1356,7 +1363,10 @@ function buildWeeklyChallengePlayEntry(play) {
   const level = parseInt(play?.level, 10) || 0;
   const score = parseInt(play?.score, 10) || 0;
   const grade = String(play?.grade || '').trim();
-  const ratingBreakdown = getWeeklyChallengeRatingBreakdown(level, grade, score, play?.plate);
+  const mode = String(play?.mode || '').trim();
+  // Pass mode so Co-op plays use COOP_BASE_POINTS rather than the
+  // main-division level table (which would yield 0 pts for level=2).
+  const ratingBreakdown = getWeeklyChallengeRatingBreakdown(level, grade, score, play?.plate, null, mode);
   return {
     song_title: String(play?.song_title || ''),
     mode: String(play?.mode || ''),

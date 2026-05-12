@@ -571,7 +571,9 @@ router.get('/charts/:chartId/scores', (req, res) => {
     for (const row of scoredRows) {
       if (seen.has(row.user_id)) continue;
       seen.add(row.user_id);
-      const ratingBreakdown = getWeeklyChallengeRatingBreakdown(chart.level, row.grade, row.score, row.plate);
+      // Pass chart.mode so Co-op chart leaderboards use COOP_BASE_POINTS
+      // (level=2/3/… isn't in the main LEVEL_BASE_POINTS table → would be 0).
+      const ratingBreakdown = getWeeklyChallengeRatingBreakdown(chart.level, row.grade, row.score, row.plate, null, chart.mode);
       scores.push({
         ...row,
         rating_points: ratingBreakdown.ratingPoints,
