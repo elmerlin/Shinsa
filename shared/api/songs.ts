@@ -178,7 +178,212 @@ export function createSongsApi(client: ApiClient) {
       if (params.user_id) search.set('user_id', params.user_id);
       return client.request<LevelLeaderboardResponse>(`/api/songs/analytics/level-leaderboard?${search.toString()}`);
     },
+
+    /** Head-to-head comparison between two players — used by the Rival page.
+     *  `mode` accepts 'Single' | 'Double' | 'Both' (default Both), `level`
+     *  is optional and narrows every metric to a single difficulty. */
+    headToHead(params: HeadToHeadParams) {
+      const search = new URLSearchParams();
+      search.set('user_a_id', params.user_a_id);
+      search.set('user_b_id', params.user_b_id);
+      if (params.mode) search.set('mode', params.mode);
+      if (params.level != null && String(params.level) !== '') search.set('level', String(params.level));
+      return client.request<HeadToHeadResponse>(`/api/songs/analytics/head-to-head?${search.toString()}`);
+    },
+
+    /** What-to-play recommendations. `goal` is 'title' or 'pumbility'; the
+     *  `mode` allowed depends on goal (see server validation). `seed` is an
+     *  arbitrary number — pass a fresh value (Date.now()) to reroll picks. */
+    goalRecommendations(params: GoalRecommendationParams = {}) {
+      const search = new URLSearchParams();
+      if (params.goal) search.set('goal', params.goal);
+      if (params.mode) search.set('mode', params.mode);
+      if (params.seed != null) search.set('seed', String(params.seed));
+      if (params.limit != null) search.set('limit', String(params.limit));
+      const qs = search.toString();
+      return client.request<GoalRecommendationsResponse>(`/api/songs/recommendations/goals${qs ? `?${qs}` : ''}`);
+    },
+
+    /** Save private chart feedback (your "read" + a private note). Pass
+     *  `passability_rating: null` to clear the read; `note: ''` clears the
+     *  note. Server stores per-user, per-chart. */
+    saveChartFeedback(chartId: number | string, payload: SaveChartFeedbackPayload) {
+      return client.request<{ ok: true; feedback: ChartFeedback }>(
+        `/api/songs/chart/${encodeURIComponent(String(chartId))}/feedback`,
+        { method: 'PUT', body: payload },
+      );
+    },
   };
+}
+
+// --- Head to Head ---
+
+export interface HeadToHeadParams {
+  user_a_id: string;
+  user_b_id: string;
+  mode?: 'Single' | 'Double' | 'Both';
+  level?: number | string;
+}
+
+export interface HeadToHeadUser {
+  id?: string;
+  username?: string;
+  avatar?: string;
+  pumbility?: number;
+}
+
+export interface HeadToHeadCompetitiveLevel {
+  level?: number;
+  average_score?: number;
+  average_grade?: string;
+  passed_charts?: number;
+  total_charts?: number;
+}
+
+export interface HeadToHeadHighlightedStats {
+  pumbility?: { a?: number; b?: number };
+  singles_pumbility?: { a?: number; b?: number };
+  doubles_competitive_level?: { a?: HeadToHeadCompetitiveLevel | null; b?: HeadToHeadCompetitiveLevel | null };
+  singles_competitive_level?: { a?: HeadToHeadCompetitiveLevel | null; b?: HeadToHeadCompetitiveLevel | null };
+}
+
+export interface HeadToHeadComparison {
+  level: number | null;
+  mode: string;
+  shared_chart_count: number;
+  wins: { a: number; b: number; ties: number };
+  rating: { a: number; b: number };
+  total_passed: { a: number; b: number };
+  metric_wins: {
+    higher_score: 'a' | 'b' | null;
+    rating_total: 'a' | 'b' | null;
+    total_passed: 'a' | 'b' | null;
+  };
+  clear_cut_winner: string | null;
+}
+
+export interface HeadToHeadLevelSeriesRow {
+  level: number;
+  cleared_charts?: number;
+  total_charts?: number;
+  rating_total?: number;
+  average_score?: number;
+  average_grade?: string;
+}
+
+export interface HeadToHeadLevelSeries {
+  single?: { a?: HeadToHeadLevelSeriesRow[]; b?: HeadToHeadLevelSeriesRow[] };
+  double?: { a?: HeadToHeadLevelSeriesRow[]; b?: HeadToHeadLevelSeriesRow[] };
+  both?: { a?: HeadToHeadLevelSeriesRow[]; b?: HeadToHeadLevelSeriesRow[] };
+}
+
+export interface HeadToHeadSongDiff {
+  chart_id: number | null;
+  title: string;
+  mode: string;
+  level: number;
+  jacket_url?: string;
+  score_a: number;
+  grade_a: string;
+  rating_a?: number;
+  score_b: number;
+  grade_b: string;
+  rating_b?: number;
+  winner: 'a' | 'b' | 'tie';
+}
+
+export interface HeadToHeadResponse {
+  users: { a: HeadToHeadUser; b: HeadToHeadUser };
+  highlighted_stats: HeadToHeadHighlightedStats;
+  comparison: HeadToHeadComparison;
+  level_series: HeadToHeadLevelSeries;
+  top_song_diffs: HeadToHeadSongDiff[];
+}
+
+// --- What to Play (goal recommendations) ---
+
+export interface GoalRecommendationParams {
+  goal?: 'title' | 'pumbility';
+  /** Allowed values depend on goal — title: single|double, pumbility: single|both. */
+  mode?: 'single' | 'double' | 'both';
+  seed?: number;
+  limit?: number;
+}
+
+export interface GoalRecommendationFeedback {
+  passability_rating?: 1 | 2 | 3 | 4 | 5 | null;
+  passability_label?: string;
+  note?: string;
+  note_updated_at?: string | null;
+}
+
+export interface GoalRecommendationPlayHistory {
+  logged_plays?: number;
+  logged_passes?: number;
+}
+
+export interface GoalRecommendation {
+  chart_id: number;
+  song_title: string;
+  artist?: string;
+  mode: string;
+  level: number;
+  jacket_url?: string;
+  background_url?: string;
+  reason_type?: string;
+  reason_label?: string;
+  reasoning?: string;
+  tier_name?: string;
+  skills?: string[];
+  // Title goal fields
+  best_score?: number | null;
+  best_grade?: string | null;
+  fail_score?: number | null;
+  // Pumbility goal fields
+  current_score?: number | null;
+  current_grade?: string | null;
+  next_grade?: string | null;
+  score_needed?: number | null;
+  pumbility_gain?: number | null;
+  // Per-user state
+  player_feedback?: GoalRecommendationFeedback | null;
+  play_history?: GoalRecommendationPlayHistory | null;
+}
+
+export interface TitleGoalSummary {
+  current_title?: { name?: string; skill_title?: string; required_points?: number } | null;
+  next_title?: { name?: string; skill_title?: string; required_points?: number } | null;
+  points_remaining?: number;
+  estimated_passes?: number;
+  estimate_label?: string;
+}
+
+export interface PumbilityGoalSummary {
+  current_pumbility?: number;
+  frontier_size?: number;
+  selection_note?: string;
+}
+
+export interface GoalRecommendationsResponse {
+  status?: 'ok' | 'needs_import' | 'all_completed';
+  goal?: 'title' | 'pumbility';
+  mode?: string;
+  summary?: TitleGoalSummary | PumbilityGoalSummary | null;
+  recommendations?: GoalRecommendation[];
+}
+
+// --- Chart feedback ---
+
+export interface SaveChartFeedbackPayload {
+  passability_rating: 1 | 2 | 3 | 4 | 5 | null;
+  note?: string;
+}
+
+export interface ChartFeedback {
+  passability_rating?: 1 | 2 | 3 | 4 | 5 | null;
+  passability_label?: string;
+  note?: string;
+  note_updated_at?: string | null;
 }
 
 export interface LevelLeaderboardParams {
