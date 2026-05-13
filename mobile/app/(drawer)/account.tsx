@@ -21,6 +21,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme, type ThemePreference } from '@/contexts/theme-context';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
+import { useWebPush } from '@/hooks/use-web-push';
 import { piugameApi, youtubeApi } from '@/lib/api';
 import type { ThemeColors } from '@/constants/theme';
 
@@ -507,6 +508,50 @@ function YoutubeLinkSection({ s }: { s: Styles }) {
   );
 }
 
+function PushNotificationsSection({ s }: { s: Styles }) {
+  const { status, enable, disable } = useWebPush();
+
+  // On native, the hook reports `supported: false` (we'll wire APNS/FCM
+  // later). Hide the whole section until then so iOS users don't see a
+  // dead toggle.
+  if (!status.supported) return null;
+
+  const isOn = status.active;
+  const isDenied = status.permission === 'denied';
+
+  return (
+    <View style={s.section}>
+      <Text style={s.eyebrow}>NOTIFICATIONS</Text>
+      <View style={s.notifCard}>
+        <View style={{ flex: 1, gap: 4 }}>
+          <Text style={s.notifTitle}>System notifications</Text>
+          <Text style={s.notifBody}>
+            {isDenied
+              ? 'Notifications are blocked in your browser settings. Re-enable them, then come back to turn this on.'
+              : isOn
+                ? 'You\'ll get pushes even when this tab is closed. Tap a notification to jump back in.'
+                : 'Get pushes for replies, weekly challenge results, and squad chats — even when the tab is closed.'}
+          </Text>
+          {status.error ? <Text style={s.notifError}>{status.error}</Text> : null}
+        </View>
+        <Pressable
+          onPress={() => (isOn ? disable() : enable())}
+          disabled={status.syncing || isDenied}
+          style={({ pressed }) => [
+            s.notifToggle,
+            isOn && s.notifToggleOn,
+            (status.syncing || isDenied) && { opacity: 0.5 },
+            pressed && { opacity: 0.85 },
+          ]}>
+          <Text style={[s.notifToggleText, isOn && s.notifToggleTextOn]}>
+            {status.syncing ? '…' : isOn ? 'On' : 'Enable'}
+          </Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
 export default function AccountScreen() {
   const insets = useSafeAreaInsets();
   const { user, signOut } = useAuth();
@@ -543,6 +588,8 @@ export default function AccountScreen() {
               })}
             </View>
           </View>
+
+          <PushNotificationsSection s={s} />
 
           <Pressable onPress={signOut} style={({ pressed }) => [s.logoutBtn, pressed && { opacity: 0.6 }]}>
             <Text style={s.logoutText}>Log out</Text>
@@ -682,4 +729,30 @@ const makeStyles = (t: ThemeColors) => ({
     alignItems: 'center' as const,
   },
   logoutText: { color: t.danger, fontWeight: '700' as const, fontSize: 15 },
+
+  // Notifications card (web push)
+  notifCard: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 12,
+    backgroundColor: t.card,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: t.border,
+    padding: 14,
+  },
+  notifTitle: { fontSize: 14, fontWeight: '900' as const, color: t.text },
+  notifBody: { fontSize: 12, color: t.textMuted, lineHeight: 17 },
+  notifError: { fontSize: 11, color: t.danger, marginTop: 2 },
+  notifToggle: {
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 999,
+    backgroundColor: t.surfaceMuted,
+    borderWidth: 1,
+    borderColor: t.border,
+  },
+  notifToggleOn: { backgroundColor: t.accent, borderColor: t.accent },
+  notifToggleText: { fontSize: 12, fontWeight: '900' as const, color: t.text, letterSpacing: 0.4 },
+  notifToggleTextOn: { color: t.bg },
 });

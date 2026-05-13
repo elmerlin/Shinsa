@@ -17,14 +17,64 @@ export default function Root({ children }: PropsWithChildren) {
       <head>
         <meta charSet="utf-8" />
         <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
-        <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+        {/* viewport-fit=cover so the iOS notch + bottom inset are reachable
+            once the user installs the PWA. `user-scalable=no` would block
+            pinch-zoom, so we leave it off — accessibility wins. */}
+        <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover" />
+
+        {/* PWA bits — manifest + theme color + iOS standalone hints. */}
+        <link rel="manifest" href="/manifest.webmanifest" />
+        <meta name="theme-color" content="#050505" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="Shinsa" />
+        <link rel="apple-touch-icon" href="/icons/app-icon-180.png" />
+        <link rel="apple-touch-icon" sizes="152x152" href="/icons/app-icon-152.png" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/icons/app-icon-180.png" />
+        <link rel="icon" type="image/png" sizes="192x192" href="/icons/app-icon-192.png" />
+        <link rel="icon" type="image/png" sizes="512x512" href="/icons/app-icon-512.png" />
+
         <ScrollViewStyleReset />
         <style dangerouslySetInnerHTML={{ __html: SCROLLBAR_CSS }} />
+
+        {/* Register the service worker. Runs on every page load — calling
+            register again with the same URL is a no-op so this is safe.
+            Must run AFTER the body so the page paints first; we use `defer`. */}
+        <script defer dangerouslySetInnerHTML={{ __html: SW_REGISTER_JS }} />
       </head>
       <body>{children}</body>
     </html>
   );
 }
+
+// Service worker bootstrap. Registers /push-sw.js after page load so it
+// doesn't block first paint, and listens for `controllerchange` to nudge
+// pending updates through. Push subscription itself is opt-in via
+// useWebPush() — not auto-subscribed here.
+const SW_REGISTER_JS = `
+  (function () {
+    if (!('serviceWorker' in navigator)) return;
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('/push-sw.js', { scope: '/' }).then(function (reg) {
+        if (!reg) return;
+        if (reg.waiting) {
+          reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+        }
+        reg.addEventListener && reg.addEventListener('updatefound', function () {
+          var installing = reg.installing;
+          if (!installing) return;
+          installing.addEventListener('statechange', function () {
+            if (installing.state === 'installed' && navigator.serviceWorker.controller) {
+              installing.postMessage && installing.postMessage({ type: 'SKIP_WAITING' });
+            }
+          });
+        });
+      }).catch(function (err) {
+        console && console.warn && console.warn('Service worker registration failed:', err && err.message);
+      });
+    });
+  })();
+`;
 
 const SCROLLBAR_CSS = `
   /* Hide the document-level scrollbar — the page scrolls inside RN scrollers. */

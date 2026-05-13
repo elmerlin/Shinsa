@@ -56,7 +56,43 @@ export function createAuthApi(client: ApiClient) {
     getPublicPet(id: string) {
       return client.request<{ pet: Record<string, unknown> | null; username?: string }>(`/api/pets/user/${encodeURIComponent(id)}`);
     },
+
+    // --- Web push (VAPID) ---
+
+    /** Server-side VAPID public key + whether push is configured. The web
+     *  build uses this to subscribe through `pushManager.subscribe`. */
+    pushPublicKey() {
+      return client.request<{ enabled: boolean; public_key: string }>(`/api/auth/push/public-key`);
+    },
+
+    /** Persist a `PushSubscription.toJSON()` for the current user.
+     *  Idempotent on `endpoint` (server upserts so re-subscribing from the
+     *  same browser refreshes the row). */
+    savePushSubscription(payload: PushSubscriptionJSON) {
+      return client.request<{ success: boolean }>(`/api/auth/push/subscribe`, {
+        method: 'POST',
+        body: { subscription: payload },
+      });
+    },
+
+    /** Remove a push subscription by its endpoint. Server scopes the
+     *  delete to the current user so endpoints from other accounts stay
+     *  intact. */
+    removePushSubscription(endpoint: string) {
+      return client.request<{ success: boolean }>(`/api/auth/push/subscribe`, {
+        method: 'DELETE',
+        body: { endpoint },
+      });
+    },
   };
+}
+
+/** Minimal subset of the browser's `PushSubscriptionJSON` we forward to
+ *  the server. Mirrors what `subscription.toJSON()` returns. */
+export interface PushSubscriptionJSON {
+  endpoint: string;
+  expirationTime?: number | null;
+  keys?: { p256dh?: string; auth?: string };
 }
 
 /**
