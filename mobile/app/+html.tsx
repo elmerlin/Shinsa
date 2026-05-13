@@ -80,6 +80,26 @@ const SCROLLBAR_CSS = `
   /* Hide the document-level scrollbar — the page scrolls inside RN scrollers. */
   html, body {
     scrollbar-width: none;
+    /* Stop the page from rubber-banding past the top/bottom on mobile.
+       Without this, dragging up from the bottom-tab bar would lift the
+       whole app and reveal a strip of body background behind it. */
+    overscroll-behavior: none;
+    overflow: hidden;
+    /* Lock the viewport to the actual visual height — visualViewport
+       measurements aren't supported on every browser, so fall back to
+       100% when needed. Combined with overflow:hidden above, this kills
+       the bounce-by-dragging-the-tab-bar bug entirely. */
+    height: 100%;
+    width: 100%;
+    position: fixed;
+    overscroll-behavior-y: none;
+  }
+  body {
+    /* RN ScrollViews live inside body and handle their own scroll, so
+       body itself never needs to scroll. Setting touch-action stops
+       Chrome's pull-to-refresh from firing when a finger drags down
+       from the top of the page. */
+    touch-action: pan-x pan-y;
   }
   html::-webkit-scrollbar,
   body::-webkit-scrollbar {

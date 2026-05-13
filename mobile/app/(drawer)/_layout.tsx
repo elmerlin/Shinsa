@@ -144,6 +144,11 @@ export default function DrawerLayout() {
         // Hamburger lives top-right now (see top-bar.tsx) so the drawer
         // slides in from the same side — keeps swipe-to-open intuitive.
         drawerPosition: 'right',
+        // Swipe-to-open is disabled because users were triggering it
+        // accidentally when scrolling near the right edge. The drawer
+        // still opens via the hamburger button and closes via swipe or
+        // backdrop tap.
+        swipeEnabled: false,
         sceneStyle: { backgroundColor: theme.bg },
       }}>
       <Drawer.Screen name="(tabs)" options={{ drawerItemStyle: { display: 'none' } }} />

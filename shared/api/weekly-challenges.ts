@@ -53,7 +53,26 @@ export function createWeeklyChallengesApi(client: ApiClient) {
         `/api/weekly-challenges/charts/${encodeURIComponent(String(chartId))}/scores`,
       );
     },
+    /** Profile competitions tab: a user's participation across every
+     *  finalized week, with overall/singles/doubles ranks + clears +
+     *  any awards earned. Empty array if the user never charted. */
+    userHistory(userId: string) {
+      return client.request<UserWeeklyChallengeHistoryEntry[]>(
+        `/api/weekly-challenges/users/${encodeURIComponent(userId)}/history`,
+      );
+    },
   };
+}
+
+export interface UserWeeklyChallengeHistoryEntry {
+  week_key: string;
+  starts_at_utc: string;
+  ends_at_utc: string;
+  participant_count: number;
+  overall: { rank: number; points: number; clears: number } | null;
+  singles: { rank: number; points: number; clears: number } | null;
+  doubles: { rank: number; points: number; clears: number } | null;
+  awards: { award_key: string; rank: number }[];
 }
 
 export type WeeklyChallengesApi = ReturnType<typeof createWeeklyChallengesApi>;

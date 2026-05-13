@@ -4,8 +4,10 @@ import type {
   LiveLastPlay,
   LiveSessionHost,
   LiveSessionMessage,
+  LiveSessionPlay,
   LiveSessionSnapshot,
   LiveSessionSummary,
+  LiveSessionSummaryPayload,
   LiveSessionsResponse,
 } from './types';
 
@@ -26,9 +28,20 @@ export interface LiveSessionsParams {
   limit?: number;
 }
 
+/** Wrapper the server returns for ended sessions on the profile Live tab.
+ *  Matches `buildProfileEndedSessionPayload` in server/routes/live.js. */
+export interface ProfileEndedLiveSession {
+  session: LiveSessionSummary;
+  summary: LiveSessionSummaryPayload | null;
+  hop: Record<string, unknown> | null;
+  last_play: LiveSessionPlay | null;
+  message_count: number;
+  play_count: number;
+}
+
 export interface LiveProfileResponse {
   active_session: LiveDirectoryItem | null;
-  ended_sessions: LiveSessionSummary[];
+  ended_sessions: ProfileEndedLiveSession[];
 }
 
 export interface CreateLiveSessionPayload {

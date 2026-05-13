@@ -33,7 +33,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/contexts/theme-context';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
-import { authApi, liveApi, messagesApi, piugameApi, socialApi, songsApi } from '@/lib/api';
+import { authApi, liveApi, messagesApi, piugameApi, socialApi, songsApi, weeklyChallengesApi } from '@/lib/api';
 import { getMessagesInboxQueryKey } from '@/lib/messagesQueries';
 import { fullImageUrl } from '@/lib/images';
 import { resolveChartJacketUrl } from '@/lib/jacketMap';
@@ -43,6 +43,7 @@ import { toCanonicalSongTitle } from '@/lib/songAliases';
 import type { ThemeColors } from '@/constants/theme';
 import type {
   FollowEntry,
+  LiveProfileResponse,
   LiveSessionSummary,
   PiugameBestScore,
   PiugamePumbility,
@@ -60,6 +61,7 @@ import type {
   User,
   UserAchievement,
   UserActivityItem,
+  UserWeeklyChallengeHistoryEntry,
 } from '@shared/api';
 
 type Tab =
@@ -84,7 +86,8 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'live', label: 'Live' },
   { key: 'competitions', label: 'Competitions' },
   { key: 'shoes', label: 'Shoes' },
-  { key: 'followers', label: 'Followers' },
+  // Followers/Following moved to the header pumbility cell taps —
+  // the standalone tab was redundant.
   { key: 'posts', label: 'Posts' },
   { key: 'activity', label: 'Activity' },
 ];
@@ -219,11 +222,37 @@ function ScoreRow({ score, s, onPress, onReplay, jacketMap }: {
   );
 }
 
-function PostRow({ post, s, onPress }: { post: Post; s: Styles; onPress: () => void }) {
+/** Loose subset of the post fields we lean on here — the server may
+ *  attach extras (images JSON, youtube_url, structured share payloads)
+ *  that aren't in the strict `Post` shared type. */
+type ProfilePost = Post & {
+  images?: unknown;
+  youtube_url?: string;
+};
+
+function parsePostImages(raw: unknown): string[] {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw.filter((v): v is string => typeof v === 'string');
+  try {
+    const parsed = JSON.parse(String(raw));
+    return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function PostRow({ post, s, onPress }: { post: ProfilePost; s: Styles; onPress: () => void }) {
   const { content, summary } = parseLiveSessionMarker(post.content);
-  const stripped = String(content || '').replace(/\[\[SHINSA_[A-Z]+_V\d+:[^\]]+\]\]/g, '').trim();
+  // Strip any other structured share markers ([[SHINSA_*_V1:...]]) so we
+  // don't dump raw base64 into the body — the marker decoders live on
+  // the feed PostCard; profile listing just shows the human text + media.
+  const stripped = String(content || '').replace(/\[\[SHINSA_[A-Z_]+_V\d+:[^\]]+\]\]/g, '').trim();
   const placeholder = summary ? 'Live session recap' : '';
   const display = stripped || placeholder;
+  const images = parsePostImages(post.images);
+  const firstImage = images[0] ? fullImageUrl(images[0]) : undefined;
+  const youtubeUrl = typeof post.youtube_url === 'string' ? post.youtube_url.trim() : '';
+
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [s.postRow, pressed && { opacity: 0.85 }]}>
       <View style={s.postHeader}>
@@ -233,26 +262,75 @@ function PostRow({ post, s, onPress }: { post: Post; s: Styles; onPress: () => v
           <Text style={s.postMetric}>💬 {post.comment_count ?? 0}</Text>
         </View>
       </View>
-      {display ? <Text style={s.postBody} numberOfLines={4}>{display}</Text> : null}
+      {display ? <Text style={s.postBody} numberOfLines={6}>{display}</Text> : null}
+      {firstImage ? (
+        <Image
+          source={{ uri: firstImage }}
+          style={s.postImage}
+          contentFit="cover"
+          transition={150}
+        />
+      ) : null}
+      {youtubeUrl ? (
+        <View style={s.postYoutubeBadge}>
+          <IconSymbol name="play.rectangle.fill" size={12} color="#7dd3fc" />
+          <Text style={s.postYoutubeText}>YouTube attached</Text>
+        </View>
+      ) : null}
+      {/* Empty-state safety: if the post has no body/image/video, surface
+          something rather than rendering an invisible card so the user can
+          still see "this post exists" and tap through. */}
+      {!display && !firstImage && !youtubeUrl ? (
+        <Text style={s.postBodyMuted}>Tap to view post</Text>
+      ) : null}
     </Pressable>
   );
 }
 
+/**
+ * Activity icon table. Keys match the `type` values emitted by
+ * `GET /api/auth/user/:id/activity` (see server/routes/auth.js#L2299+).
+ * The fallback resolver below covers the *_reply / *_comment family
+ * with a single comment glyph so we don't have to enumerate every
+ * surface (post/upscore/clear/community × comment/reply).
+ */
 const ACTIVITY_ICONS: Record<string, string> = {
   new_user: '👤',
   upscore: '📈',
   new_clear: '🎯',
   new_post: '📝',
+  post_created: '📝',
   new_tournament: '🏆',
-  new_duel: '⚔️',
-  new_online_duel: '🌐',
+  tournament_join: '🏟️',
   tournament_win: '🥇',
+  new_duel: '⚔️',
   duel_win: '🏅',
+  duel_participation: '⚔️',
+  new_online_duel: '🌐',
   online_duel_win: '🏅',
+  online_duel_participation: '🌐',
+  community_created: '🌱',
+  community_joined: '🤝',
+  community_moderator: '🛡️',
 };
 
+function activityIcon(type: string, category: string): string {
+  if (ACTIVITY_ICONS[type]) return ACTIVITY_ICONS[type];
+  // Comment-family fallback: post_comment, post_reply, upscore_comment,
+  // clear_reply, community_comment, …
+  if (/comment|reply/i.test(type)) return '💬';
+  if (/duel/i.test(type)) return '⚔️';
+  if (/tournament/i.test(type)) return '🏆';
+  // Category-level fallback if the server hands us an unrecognized type.
+  if (category === 'comments') return '💬';
+  if (category === 'posts') return '📝';
+  if (category === 'scores') return '📈';
+  if (category === 'competitions') return '🏆';
+  return '•';
+}
+
 function ActivityRow({ item, s }: { item: UserActivityItem; s: Styles }) {
-  const icon = ACTIVITY_ICONS[String(item.type || '')] || '•';
+  const icon = activityIcon(String(item.type || ''), String(item.category || ''));
   return (
     <View style={s.activityRow}>
       <Text style={s.activityIcon}>{icon}</Text>
@@ -443,6 +521,15 @@ export function ProfileBody({ lookup }: { lookup: string }) {
   const statsQuery = useQuery({
     queryKey: ['user-stats', profileId],
     queryFn: () => authApi.getUserStats(profileId),
+    enabled: !!profileId && tab === 'competitions',
+    staleTime: 60_000,
+  });
+
+  // Weekly Challenge participation history. Only loaded when the
+  // Competitions tab is open since the user might never visit it.
+  const wcHistoryQuery = useQuery({
+    queryKey: ['wc-user-history', profileId],
+    queryFn: () => weeklyChallengesApi.userHistory(profileId),
     enabled: !!profileId && tab === 'competitions',
     staleTime: 60_000,
   });
@@ -1297,8 +1384,11 @@ export function ProfileBody({ lookup }: { lookup: string }) {
             tournaments={statsQuery.data?.tournamentPlayers ?? []}
             duelStats={statsQuery.data?.duelStats ?? []}
             onlineDuelStats={statsQuery.data?.onlineDuelStats ?? []}
+            wcHistory={wcHistoryQuery.data ?? []}
+            wcHistoryLoading={wcHistoryQuery.isLoading}
             s={s}
             onTournamentPress={(id) => router.push({ pathname: '/tournament/[id]', params: { id: String(id) } })}
+            onWeekPress={(weekKey) => router.push({ pathname: '/weekly-challenges', params: { week: weekKey } })}
           />
         )}
 
@@ -1321,6 +1411,7 @@ export function ProfileBody({ lookup }: { lookup: string }) {
             data={liveProfileQuery.data}
             isLoading={liveProfileQuery.isLoading}
             error={liveProfileQuery.error}
+            onSessionPress={(sessionId) => router.push({ pathname: '/live/[id]', params: { id: sessionId } })}
             s={s}
           />
         )}
@@ -2110,23 +2201,74 @@ function PumbilityRow({ entry, rank, jacketMap, s, onPress }: {
   );
 }
 
-function CompetitionsTab({ isLoading, error, tournaments, duelStats, onlineDuelStats, s, onTournamentPress }: {
+function CompetitionsTab({ isLoading, error, tournaments, duelStats, onlineDuelStats, wcHistory, wcHistoryLoading, s, onTournamentPress, onWeekPress }: {
   isLoading: boolean;
   error: Error | null;
   tournaments: TournamentParticipation[];
   duelStats: { duel: Record<string, unknown>; songs: Record<string, unknown>[] }[];
   onlineDuelStats: { duel: Record<string, unknown>; songs: Record<string, unknown>[] }[];
+  wcHistory: UserWeeklyChallengeHistoryEntry[];
+  wcHistoryLoading: boolean;
   s: Styles;
   onTournamentPress: (id: string) => void;
+  onWeekPress: (weekKey: string) => void;
 }) {
   if (isLoading) return <View style={s.center}><ActivityIndicator /></View>;
   if (error) return <Text style={s.errorText}>{error.message}</Text>;
   const allDuels = [...duelStats, ...onlineDuelStats];
-  if (tournaments.length === 0 && allDuels.length === 0) {
+  if (tournaments.length === 0 && allDuels.length === 0 && !wcHistoryLoading && wcHistory.length === 0) {
     return <View style={s.emptyCard}><Text style={s.emptyText}>No competitions yet</Text></View>;
   }
   return (
     <View style={s.section}>
+      {/* Weekly Challenges section — finalized weeks the user actually
+          competed in. Tap a week to deep-link into Weekly Challenges. */}
+      {wcHistoryLoading ? (
+        <View style={s.section}>
+          <Text style={s.eyebrow}>WEEKLY CHALLENGES</Text>
+          <View style={s.center}><ActivityIndicator /></View>
+        </View>
+      ) : wcHistory.length > 0 ? (
+        <View style={s.section}>
+          <View style={s.sectionHeaderRow}>
+            <Text style={s.eyebrow}>WEEKLY CHALLENGES</Text>
+            <Text style={s.sectionCount}>{wcHistory.length}</Text>
+          </View>
+          <View style={s.listCard}>
+            {wcHistory.slice(0, 30).map((wc) => {
+              const overall = wc.overall;
+              const subParts: string[] = [];
+              if (overall) subParts.push(`#${overall.rank} overall · ${formatNumber(overall.points)} pts`);
+              if (wc.singles) subParts.push(`Singles #${wc.singles.rank}`);
+              if (wc.doubles) subParts.push(`Doubles #${wc.doubles.rank}`);
+              return (
+                <Pressable
+                  key={wc.week_key}
+                  onPress={() => onWeekPress(wc.week_key)}
+                  style={({ pressed }) => [s.competitionRow, pressed && { opacity: 0.7 }]}>
+                  <View style={s.competitionMain}>
+                    <Text style={s.competitionTitle} numberOfLines={1}>{wc.week_key}</Text>
+                    <Text style={s.competitionMeta} numberOfLines={1}>
+                      {subParts.length > 0 ? subParts.join(' · ') : 'Participated'}
+                    </Text>
+                    {wc.awards.length > 0 ? (
+                      <View style={s.wcAwardRow}>
+                        {wc.awards.slice(0, 4).map((a) => (
+                          <View key={a.award_key} style={s.wcAwardChip}>
+                            <Text style={s.wcAwardText}>{a.award_key.replace(/_/g, ' ')} #{a.rank}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    ) : null}
+                  </View>
+                  <Text style={s.competitionRight}>{overall ? `${overall.clears}` : '—'}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      ) : null}
+
       {tournaments.length > 0 && (
         <View style={s.section}>
           <View style={s.sectionHeaderRow}>
@@ -2248,18 +2390,28 @@ function FollowersTab({ followers, following, myFollowingIds, currentUserId, isL
   );
 }
 
-function LiveTab({ data, isLoading, error, s }: {
-  data: { active_session: unknown | null; ended_sessions: LiveSessionSummary[] } | undefined;
+function formatDuration(minutes: number | undefined): string {
+  const m = Math.max(0, Math.round(Number(minutes) || 0));
+  if (m <= 0) return '—';
+  if (m < 60) return `${m}m`;
+  const hours = Math.floor(m / 60);
+  const rem = m % 60;
+  return rem ? `${hours}h ${rem}m` : `${hours}h`;
+}
+
+function LiveTab({ data, isLoading, error, onSessionPress, s }: {
+  data: LiveProfileResponse | undefined;
   isLoading: boolean;
   error: Error | null;
+  onSessionPress: (sessionId: string) => void;
   s: Styles;
 }) {
   if (isLoading) return <View style={s.center}><ActivityIndicator /></View>;
   if (error) return <Text style={s.errorText}>{error.message}</Text>;
-  const active = data?.active_session as { session?: LiveSessionSummary } | LiveSessionSummary | null;
-  const activeSession: LiveSessionSummary | null = active && 'session' in (active as Record<string, unknown>)
-    ? ((active as { session?: LiveSessionSummary }).session ?? null)
-    : (active as LiveSessionSummary | null);
+  // active_session is a LiveDirectoryItem wrapper ({ session, host, ... }).
+  // ended_sessions is a list of ProfileEndedLiveSession wrappers.
+  const activeWrapper = data?.active_session ?? null;
+  const activeSession = activeWrapper?.session ?? null;
   const ended = data?.ended_sessions ?? [];
   if (!activeSession && ended.length === 0) {
     return <View style={s.emptyCard}><Text style={s.emptyText}>No live sessions yet</Text></View>;
@@ -2269,15 +2421,26 @@ function LiveTab({ data, isLoading, error, s }: {
       {activeSession ? (
         <View style={s.section}>
           <Text style={s.eyebrow}>LIVE NOW</Text>
-          <View style={s.liveCard}>
-            <View style={s.liveDot} />
-            <View style={s.competitionMain}>
-              <Text style={s.competitionTitle} numberOfLines={1}>{activeSession.title || 'Live session'}</Text>
-              <Text style={s.competitionMeta}>
-                Started {formatDate(activeSession.started_at)} · {activeSession.viewer_count ?? 0} watching
+          <Pressable
+            onPress={() => onSessionPress(activeSession.id)}
+            style={({ pressed }) => [s.liveActiveCard, pressed && { opacity: 0.85 }]}>
+            <View style={s.liveActiveHeader}>
+              <View style={s.liveLivePill}>
+                <View style={s.liveLivePillDot} />
+                <Text style={s.liveLivePillText}>LIVE</Text>
+              </View>
+              <Text style={s.liveActiveViewers}>
+                {activeSession.viewer_count ?? 0} watching
               </Text>
             </View>
-          </View>
+            <Text style={s.liveActiveTitle} numberOfLines={2}>
+              {activeSession.title || 'Live session'}
+            </Text>
+            <Text style={s.liveActiveMeta}>
+              Started {formatDate(activeSession.started_at)}
+              {activeWrapper?.last_play?.song_title ? ` · Last: ${activeWrapper.last_play.song_title}` : ''}
+            </Text>
+          </Pressable>
         </View>
       ) : null}
       {ended.length > 0 && (
@@ -2286,15 +2449,58 @@ function LiveTab({ data, isLoading, error, s }: {
             <Text style={s.eyebrow}>PAST SESSIONS</Text>
             <Text style={s.sectionCount}>{ended.length}</Text>
           </View>
-          <View style={s.listCard}>
-            {ended.map((sess) => (
-              <View key={String(sess.id)} style={s.competitionRow}>
-                <View style={s.competitionMain}>
-                  <Text style={s.competitionTitle} numberOfLines={1}>{sess.title || 'Live session'}</Text>
-                  <Text style={s.competitionMeta}>{formatDate(sess.started_at)}</Text>
-                </View>
-              </View>
-            ))}
+          <View style={s.endedList}>
+            {ended.map((wrapper) => {
+              const sess = wrapper.session;
+              const summary = wrapper.summary;
+              const lastPlay = wrapper.last_play;
+              const startedLabel = formatDate(sess.started_at);
+              const duration = summary?.sessionDurationLabel || formatDuration(summary?.sessionDurationMinutes);
+              return (
+                <Pressable
+                  key={String(sess.id)}
+                  onPress={() => onSessionPress(sess.id)}
+                  style={({ pressed }) => [s.endedCard, pressed && { opacity: 0.85 }]}>
+                  <View style={s.endedHeader}>
+                    <Text style={s.endedTitle} numberOfLines={1}>{sess.title || 'Live session'}</Text>
+                    <Text style={s.endedDate}>{startedLabel}</Text>
+                  </View>
+                  {summary ? (
+                    <View style={s.endedStatsRow}>
+                      <View style={s.endedStatCell}>
+                        <Text style={s.endedStatValue}>{formatNumber(wrapper.play_count)}</Text>
+                        <Text style={s.endedStatLabel}>SONGS</Text>
+                      </View>
+                      <View style={s.endedStatCell}>
+                        <Text style={s.endedStatValue}>{Math.round((summary.clearRate ?? 0) * 100)}%</Text>
+                        <Text style={s.endedStatLabel}>CLEAR RATE</Text>
+                      </View>
+                      <View style={s.endedStatCell}>
+                        <Text style={s.endedStatValue}>{duration}</Text>
+                        <Text style={s.endedStatLabel}>DURATION</Text>
+                      </View>
+                      <View style={s.endedStatCell}>
+                        <Text style={s.endedStatValue}>{formatNumber(wrapper.message_count)}</Text>
+                        <Text style={s.endedStatLabel}>MESSAGES</Text>
+                      </View>
+                    </View>
+                  ) : (
+                    <Text style={s.endedMeta}>{wrapper.play_count} songs · {wrapper.message_count} messages</Text>
+                  )}
+                  {lastPlay?.song_title ? (
+                    <View style={s.endedLastPlay}>
+                      <Text style={s.endedLastPlayLabel}>LAST</Text>
+                      <Text style={s.endedLastPlayText} numberOfLines={1}>
+                        {lastPlay.song_title}
+                        {lastPlay.mode ? ` · ${lastPlay.mode}` : ''}
+                        {lastPlay.level ? ` ${lastPlay.level}` : ''}
+                        {lastPlay.grade ? ` · ${lastPlay.grade}` : ''}
+                      </Text>
+                    </View>
+                  ) : null}
+                </Pressable>
+              );
+            })}
           </View>
         </View>
       )}
@@ -2337,18 +2543,30 @@ function TitlesTab({ data, isLoading, error, s }: {
 
       <Text style={s.eyebrow}>ALL TITLES</Text>
       <View style={s.listCard}>
-        {titles.slice(0, 60).map((t) => (
-          <View key={String(t.id ?? t.name)} style={s.titleRow}>
-            <View style={[s.titleDot, !!t.unlocked && s.titleDotOn]} />
-            <View style={s.competitionMain}>
-              <Text style={[s.competitionTitle, !t.unlocked ? { opacity: 0.5 } : null]}>{t.name}</Text>
-              {t.skill_title ? <Text style={s.competitionMeta}>{t.skill_title}</Text> : null}
+        {/* Sort highest-tier first so the player's hardest unlocks are
+            at the top — matches the order the web pages titles in. */}
+        {[...titles]
+          .sort((a, b) => {
+            const ar = Number(a.required_points) || 0;
+            const br = Number(b.required_points) || 0;
+            if (br !== ar) return br - ar;
+            // Tiebreak by current points so partially-progressed titles
+            // sit above untouched ones at the same threshold.
+            return (Number(b.current_points) || 0) - (Number(a.current_points) || 0);
+          })
+          .slice(0, 60)
+          .map((t) => (
+            <View key={String(t.id ?? t.name)} style={s.titleRow}>
+              <View style={[s.titleDot, !!t.unlocked && s.titleDotOn]} />
+              <View style={s.competitionMain}>
+                <Text style={[s.competitionTitle, !t.unlocked ? { opacity: 0.5 } : null]}>{t.name}</Text>
+                {t.skill_title ? <Text style={s.competitionMeta}>{t.skill_title}</Text> : null}
+              </View>
+              <Text style={s.titleRight}>
+                {t.unlocked ? '✓' : `${formatNumber(t.current_points)}/${formatNumber(t.required_points)}`}
+              </Text>
             </View>
-            <Text style={s.titleRight}>
-              {t.unlocked ? '✓' : `${formatNumber(t.current_points)}/${formatNumber(t.required_points)}`}
-            </Text>
-          </View>
-        ))}
+          ))}
       </View>
     </View>
   );
@@ -2734,6 +2952,26 @@ const makeStyles = (t: ThemeColors) => ({
   postMetrics: { flexDirection: 'row' as const, gap: 12 },
   postMetric: { fontSize: 11, fontWeight: '700' as const, color: t.textMuted },
   postBody: { fontSize: 13, color: t.text, lineHeight: 18 },
+  postBodyMuted: { fontSize: 12, fontStyle: 'italic' as const, color: t.textMuted },
+  postImage: {
+    width: '100%' as const,
+    aspectRatio: 16 / 9,
+    borderRadius: 10,
+    backgroundColor: t.surfaceMuted,
+  },
+  postYoutubeBadge: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 6,
+    alignSelf: 'flex-start' as const,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: 'rgba(125,211,252,0.18)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(125,211,252,0.4)',
+  },
+  postYoutubeText: { fontSize: 10, fontWeight: '900' as const, color: '#7dd3fc', letterSpacing: 0.5 },
 
   activityRow: {
     flexDirection: 'row' as const,
@@ -2792,6 +3030,24 @@ const makeStyles = (t: ThemeColors) => ({
   competitionTitle: { fontSize: 13, fontWeight: '700' as const, color: t.text },
   competitionMeta: { fontSize: 11, color: t.textMuted },
   competitionRight: { fontSize: 11, color: t.textDim },
+  // WC award chips on the Competitions tab — small amber pills for each
+  // award the user earned that week (e.g. "highest_singles_score #2").
+  wcAwardRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 4, marginTop: 4 },
+  wcAwardChip: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    backgroundColor: 'rgba(251,191,36,0.18)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(251,191,36,0.4)',
+  },
+  wcAwardText: {
+    fontSize: 9,
+    fontWeight: '900' as const,
+    color: '#fbbf24',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase' as const,
+  },
 
   // Followers
   subTabsRow: {
@@ -2842,6 +3098,91 @@ const makeStyles = (t: ThemeColors) => ({
     shadowOpacity: 0.7,
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 0 },
+  },
+  // Profile Live tab — richer cards (active hero + ended session
+  // summaries with the same stats the web shows).
+  liveActiveCard: {
+    backgroundColor: t.card,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(244,63,94,0.45)',
+    padding: 14,
+    gap: 8,
+  },
+  liveActiveHeader: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+  },
+  liveLivePill: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    backgroundColor: 'rgba(244,63,94,0.18)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(244,63,94,0.5)',
+  },
+  liveLivePillDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#f43f5e' },
+  liveLivePillText: { fontSize: 10, fontWeight: '900' as const, color: '#fda4af', letterSpacing: 0.8 },
+  liveActiveViewers: { fontSize: 11, color: t.textMuted, fontWeight: '700' as const },
+  liveActiveTitle: { fontSize: 15, fontWeight: '900' as const, color: t.text, lineHeight: 19 },
+  liveActiveMeta: { fontSize: 11, color: t.textMuted },
+
+  endedList: { gap: 10 },
+  endedCard: {
+    backgroundColor: t.card,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: t.border,
+    padding: 12,
+    gap: 10,
+  },
+  endedHeader: {
+    flexDirection: 'row' as const,
+    alignItems: 'baseline' as const,
+    justifyContent: 'space-between' as const,
+    gap: 10,
+  },
+  endedTitle: { flex: 1, fontSize: 14, fontWeight: '800' as const, color: t.text, minWidth: 0 },
+  endedDate: { fontSize: 10, color: t.textDim, fontWeight: '700' as const },
+  endedMeta: { fontSize: 11, color: t.textMuted },
+  endedStatsRow: {
+    flexDirection: 'row' as const,
+    gap: 6,
+    backgroundColor: 'rgba(0,0,0,0.28)',
+    borderRadius: 10,
+    padding: 8,
+  },
+  endedStatCell: { flex: 1, alignItems: 'center' as const, gap: 2, minWidth: 0 },
+  endedStatValue: {
+    fontSize: 14,
+    fontWeight: '900' as const,
+    color: t.text,
+    fontVariant: ['tabular-nums' as const],
+  },
+  endedStatLabel: { fontSize: 9, fontWeight: '900' as const, color: t.textDim, letterSpacing: 0.6 },
+  endedLastPlay: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 6,
+    paddingTop: 4,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: t.border,
+  },
+  endedLastPlayLabel: {
+    fontSize: 9,
+    fontWeight: '900' as const,
+    color: t.textDim,
+    letterSpacing: 0.6,
+  },
+  endedLastPlayText: {
+    flex: 1,
+    fontSize: 11,
+    color: t.textMuted,
+    minWidth: 0,
   },
 
   // Titles
