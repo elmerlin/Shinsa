@@ -2545,9 +2545,14 @@ function LiveTab({ data, isLoading, error, jacketMap, onSessionPress, s }: {
             {ended.map((wrapper) => {
               const sess = wrapper.session;
               const summary = wrapper.summary;
-              const lastPlay = wrapper.last_play;
               const startedLabel = formatDate(sess.started_at);
               const duration = summary?.sessionDurationLabel || formatDuration(summary?.sessionDurationMinutes);
+              // Server returns clearRate already as a 0–100 percentage
+              // (see lib/liveSessionSummary.js — `Math.round((clears /
+              // songs) * 100)`). Multiplying again was producing the
+              // 6800% bug; just clamp + round here.
+              const clearRatePct = Math.max(0, Math.min(100, Math.round(Number(summary?.clearRate ?? 0))));
+              const machine = String(summary?.sessionMachineName || '').trim();
               return (
                 <Pressable
                   key={String(sess.id)}
@@ -2564,7 +2569,7 @@ function LiveTab({ data, isLoading, error, jacketMap, onSessionPress, s }: {
                         <Text style={s.endedStatLabel}>SONGS</Text>
                       </View>
                       <View style={s.endedStatCell}>
-                        <Text style={s.endedStatValue}>{Math.round((summary.clearRate ?? 0) * 100)}%</Text>
+                        <Text style={s.endedStatValue}>{clearRatePct}%</Text>
                         <Text style={s.endedStatLabel}>CLEAR RATE</Text>
                       </View>
                       <View style={s.endedStatCell}>
@@ -2583,15 +2588,12 @@ function LiveTab({ data, isLoading, error, jacketMap, onSessionPress, s }: {
                       (`topSongsByRating`, falling back to topSongsByScore).
                       Server already trimmed the lists so we just render. */}
                   {summary ? <ProfileLiveTopSongs summary={summary} jacketMap={jacketMap} s={s} /> : null}
-                  {lastPlay?.song_title ? (
+                  {/* Machine / location footer — surfaces where the
+                      session was hosted (e.g. "London Pump Dojo 1"). */}
+                  {machine ? (
                     <View style={s.endedLastPlay}>
-                      <Text style={s.endedLastPlayLabel}>LAST</Text>
-                      <Text style={s.endedLastPlayText} numberOfLines={1}>
-                        {lastPlay.song_title}
-                        {lastPlay.mode ? ` · ${lastPlay.mode}` : ''}
-                        {lastPlay.level ? ` ${lastPlay.level}` : ''}
-                        {lastPlay.grade ? ` · ${lastPlay.grade}` : ''}
-                      </Text>
+                      <Text style={s.endedLastPlayLabel}>AT</Text>
+                      <Text style={s.endedLastPlayText} numberOfLines={1}>{machine}</Text>
                     </View>
                   ) : null}
                 </Pressable>
