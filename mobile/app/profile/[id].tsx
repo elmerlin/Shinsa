@@ -663,59 +663,11 @@ export function ProfileBody({ lookup }: { lookup: string }) {
 
   const onReplay = (url: string, title: string) => setReplayTarget({ url, title });
 
-  if (profileQuery.isLoading) {
-    return (
-      <View style={s.container}>
-        <Stack.Screen options={{ title: 'Profile' }} />
-        <View style={s.center}><ActivityIndicator color={theme.spinner} /></View>
-      </View>
-    );
-  }
-
-  if (profileQuery.isError || !profile) {
-    return (
-      <View style={s.container}>
-        <Stack.Screen options={{ title: 'Profile' }} />
-        <View style={s.center}>
-          <Text style={s.errorText}>
-            {profileQuery.error instanceof Error ? profileQuery.error.message : 'Profile not found'}
-          </Text>
-        </View>
-      </View>
-    );
-  }
-
-  const avatarUrl = typeof profile.avatar === 'string' ? fullImageUrl(profile.avatar) : undefined;
-  const counts = countsQuery.data;
-  const isFollowing = !!followStatusQuery.data?.following;
-  const analytics = analyticsQuery.data;
-  const nationality = getCountryFlag(typeof profile.nationality === 'string' ? profile.nationality : '');
-  const genderSymbol = getGenderSymbol(typeof profile.gender === 'string' ? profile.gender : '');
-  const age = profile.show_age && typeof profile.date_of_birth === 'string'
-    ? getAge(profile.date_of_birth)
-    : null;
-  const groupBadges = Array.isArray(profile.group_badges) ? (profile.group_badges as Record<string, unknown>[]) : [];
-  const pet = petQuery.data?.pet ?? null;
-  // Group achievements by series, keeping only the highest tier per series.
-  // Mirrors `client/src/pages/ProfilePage.jsx#achievementSeriesDisplay`.
-  const achievements = (() => {
-    const all = achievementsQuery.data?.achievements ?? [];
-    if (all.length === 0) return [];
-    const bySeries: Record<string, UserAchievement> = {};
-    for (const badge of all) {
-      const sid = String(badge.series_id ?? badge.series_key ?? badge.name ?? '');
-      if (!sid) continue;
-      const current = bySeries[sid];
-      const currentThreshold = Number(current?.threshold) || 0;
-      const badgeThreshold = Number(badge.threshold) || 0;
-      if (!current || badgeThreshold > currentThreshold) {
-        bySeries[sid] = badge;
-      }
-    }
-    return Object.values(bySeries);
-  })();
-
-  // Best scores: simple client-side pagination + filter pass-only.
+  // Best-scores derivations live above the early-returns below — moving
+  // them down was a Rules-of-Hooks violation: the first render bailed at
+  // the loading branch with N hooks, then once profileQuery resolved we
+  // suddenly had N+3 hooks, which production React turns into a silent
+  // white-screen via its "Rendered more hooks" invariant.
   const allBest = bestScoresQuery.data?.scores ?? [];
   // Flat score-desc list — still used for the Top Scores section on Overview.
   const sortedBest = useMemo(
@@ -784,6 +736,61 @@ export function ProfileBody({ lookup }: { lookup: string }) {
       .sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
   }, [allBest, bestMode, bestLevel]);
 
+  if (profileQuery.isLoading) {
+    return (
+      <View style={s.container}>
+        <Stack.Screen options={{ title: 'Profile' }} />
+        <View style={s.center}><ActivityIndicator color={theme.spinner} /></View>
+      </View>
+    );
+  }
+
+  if (profileQuery.isError || !profile) {
+    return (
+      <View style={s.container}>
+        <Stack.Screen options={{ title: 'Profile' }} />
+        <View style={s.center}>
+          <Text style={s.errorText}>
+            {profileQuery.error instanceof Error ? profileQuery.error.message : 'Profile not found'}
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  const avatarUrl = typeof profile.avatar === 'string' ? fullImageUrl(profile.avatar) : undefined;
+  const counts = countsQuery.data;
+  const isFollowing = !!followStatusQuery.data?.following;
+  const analytics = analyticsQuery.data;
+  const nationality = getCountryFlag(typeof profile.nationality === 'string' ? profile.nationality : '');
+  const genderSymbol = getGenderSymbol(typeof profile.gender === 'string' ? profile.gender : '');
+  const age = profile.show_age && typeof profile.date_of_birth === 'string'
+    ? getAge(profile.date_of_birth)
+    : null;
+  const groupBadges = Array.isArray(profile.group_badges) ? (profile.group_badges as Record<string, unknown>[]) : [];
+  const pet = petQuery.data?.pet ?? null;
+  // Group achievements by series, keeping only the highest tier per series.
+  // Mirrors `client/src/pages/ProfilePage.jsx#achievementSeriesDisplay`.
+  const achievements = (() => {
+    const all = achievementsQuery.data?.achievements ?? [];
+    if (all.length === 0) return [];
+    const bySeries: Record<string, UserAchievement> = {};
+    for (const badge of all) {
+      const sid = String(badge.series_id ?? badge.series_key ?? badge.name ?? '');
+      if (!sid) continue;
+      const current = bySeries[sid];
+      const currentThreshold = Number(current?.threshold) || 0;
+      const badgeThreshold = Number(badge.threshold) || 0;
+      if (!current || badgeThreshold > currentThreshold) {
+        bySeries[sid] = badge;
+      }
+    }
+    return Object.values(bySeries);
+  })();
+
+  // Best-scores chevron-picker derivations — non-hook, can stay below the
+  // early-return; the hooks themselves are hoisted above it (see top of
+  // this function for the rationale).
   const bestLevelIdx = bestLevel != null ? availableBestLevels.indexOf(bestLevel) : -1;
   const canBestPrev = bestLevelIdx >= 0 && bestLevelIdx < availableBestLevels.length - 1;
   const canBestNext = bestLevelIdx > 0;
