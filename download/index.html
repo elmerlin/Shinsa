@@ -925,12 +925,324 @@
     .footer-inner a { color: var(--text-muted); }
     .footer-inner a:hover { color: var(--gold); }
 
+    /* ─────────────────────────────────────────────────────────────
+       NEW COMPONENT STYLES — added for the v4 feature buildouts
+       ───────────────────────────────────────────────────────────── */
+
+    /* RIVALS: per-level head-to-head bars */
+    .lvl-bar {
+      display: grid; grid-template-columns: 36px 1fr 56px;
+      align-items: center; gap: 8px;
+      font: 700 10px/1 var(--font-body);
+    }
+    .lvl-tag {
+      font: 900 italic 11px/1 var(--font-display);
+      color: var(--text-muted); letter-spacing: 0.4px;
+    }
+    .lvl-fill {
+      height: 8px; background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border);
+      position: relative; overflow: hidden;
+    }
+    .lvl-fill i { display: block; height: 100%; }
+    .lvl-side { font: 800 9px/1 var(--font-display); letter-spacing: 1px; text-transform: uppercase; }
+    .lvl-side.l { color: var(--gold); text-align: left; }
+    .lvl-side.r { color: var(--rose); text-align: left; }
+
+    /* TRAINING: status banner + form ratio + cells */
+    .train-status {
+      display: flex; flex-wrap: wrap; gap: 6px;
+      margin-bottom: 12px;
+    }
+    .train-status-pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 5px 10px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      font: 800 10px/1 var(--font-display);
+      color: var(--text); letter-spacing: 0.8px; text-transform: uppercase;
+    }
+    .ts-dot { width: 6px; height: 6px; border-radius: 50%; }
+    .train-ratio-row {
+      margin-bottom: 12px;
+      padding: 12px;
+      background: rgba(251,146,60,0.06);
+      border: 1px solid rgba(251,146,60,0.24);
+      clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px));
+    }
+    .trr-head {
+      display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+    }
+    .trr-l { font: 800 10px/1 var(--font-display); letter-spacing: 1.2px; text-transform: uppercase; color: var(--text-muted); }
+    .trr-v { font: 900 italic 12px/1 var(--font-display); color: var(--text); }
+    .trr-bar {
+      margin-top: 8px;
+      height: 10px; background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      position: relative; overflow: hidden;
+    }
+    .trr-fill { display: block; height: 100%; }
+    .trr-marker {
+      position: absolute; top: 100%; right: 0;
+      transform: translateX(50%);
+      margin-top: 2px;
+      font: 800 9px/1 var(--font-body); color: var(--text-dim);
+    }
+    .trr-foot { margin-top: 14px; font: 700 11px/1 var(--font-body); color: var(--text-muted); }
+
+    /* LISTS: affordance pills + directory rows */
+    .list-pillrow {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;
+      margin-bottom: 12px;
+    }
+    .list-pill {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 10px;
+      background: rgba(167,139,250,0.06);
+      border: 1px solid rgba(167,139,250,0.3);
+      clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px));
+    }
+    .lp-ico {
+      width: 24px; height: 24px;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(167,139,250,0.18);
+      color: var(--violet); font-size: 14px;
+    }
+    .lp-h { font: 800 10px/1 var(--font-display); letter-spacing: 0.8px; text-transform: uppercase; color: var(--text); }
+    .lp-s { margin-top: 3px; font: 700 9px/1.2 var(--font-body); color: var(--text-dim); }
+
+    .list-dir { display: flex; flex-direction: column; gap: 2px; }
+    .ldir-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 0;
+      border-top: 1px solid var(--border);
+    }
+    .ldir-row:first-child { border-top: 0; padding-top: 4px; }
+    .ldir-ico {
+      width: 24px; height: 24px;
+      display: flex; align-items: center; justify-content: center;
+      font: 900 12px/1 var(--font-display);
+    }
+    .ldir-ico.v { background: rgba(167,139,250,0.2); color: var(--violet); }
+    .ldir-ico.c { background: rgba(125,211,252,0.2); color: var(--cyan); }
+    .ldir-ico.p { background: rgba(110,231,183,0.2); color: var(--emerald); }
+    .ldir-body { flex: 1; min-width: 0; }
+    .ldir-h {
+      font: 800 12px/1.25 var(--font-body); color: var(--text);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .ldir-s { margin-top: 3px; font: 700 10px/1 var(--font-body); color: var(--text-dim); }
+    .ldir-pct {
+      font: 900 italic 13px/1 var(--font-display);
+      color: var(--violet); font-variant-numeric: tabular-nums;
+    }
+
+    /* LIVE: 2-col grid (chat | plays) + chat bubbles */
+    .live-grid {
+      margin-top: 12px;
+      display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+    }
+    @media (max-width: 720px) { .live-grid { grid-template-columns: 1fr; } }
+    .live-col {
+      background: rgba(0,0,0,0.4);
+      border: 1px solid var(--border);
+      padding: 8px;
+      display: flex; flex-direction: column; gap: 6px;
+      min-height: 0;
+    }
+    .live-col-h {
+      font: 800 9px/1 var(--font-display); letter-spacing: 1.2px; text-transform: uppercase;
+      color: var(--text-dim); padding: 0 2px;
+    }
+    .chat { display: flex; flex-direction: column; gap: 5px; }
+    .cmsg {
+      display: flex; align-items: flex-start; gap: 6px;
+      padding: 4px 0;
+    }
+    .cmsg .cu { font: 800 9px/1.2 var(--font-body); flex-shrink: 0; padding-top: 2px; }
+    .cmsg .cb {
+      flex: 1; min-width: 0;
+      font: 600 10px/1.35 var(--font-body); color: var(--text-muted);
+    }
+    .cmsg.sys .cb { color: var(--text-dim); font-style: italic; }
+    .cmsg.sys .cb b { color: var(--text); font-style: normal; font-weight: 800; }
+    .cmsg.sys.gold .cb { color: var(--gold); }
+    .cmsg.sys.gold .cb b { color: var(--gold-bright); }
+    .csys { color: var(--gold); font-style: normal; font-weight: 900; }
+    .chat-composer {
+      display: flex; align-items: center; gap: 6px;
+      padding: 6px 8px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      margin-top: 4px;
+    }
+    .cci { color: var(--text-dim); font-size: 14px; }
+    .cct { flex: 1; font: 500 10px/1 var(--font-body); color: var(--text-dim); }
+    .ccs { color: var(--gold); font-weight: 900; font-size: 12px; }
+
+    .live-plays { display: flex; flex-direction: column; gap: 4px; }
+    .lp-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--border);
+    }
+    .lp-row.new {
+      background: rgba(244,63,94,0.08);
+      border-color: rgba(244,63,94,0.32);
+      animation: lp-flash 1.2s ease-out;
+    }
+    @keyframes lp-flash {
+      0%   { background: rgba(244,63,94,0.32); }
+      100% { background: rgba(244,63,94,0.08); }
+    }
+    .lp-meta { flex: 1; min-width: 0; }
+    .lp-t {
+      font: 700 11px/1.2 var(--font-body); color: var(--text);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .lp-s { margin-top: 3px; font: 700 9px/1 var(--font-body); color: var(--text-dim); }
+    .lp-n {
+      font: 800 11px/1 var(--font-body); color: var(--text);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* FEED: per-card friend updates + YT replay thumb */
+    .feed-card {
+      background: rgba(0,0,0,0.4);
+      border: 1px solid var(--border);
+      padding: 10px;
+      margin-bottom: 10px;
+      clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+    }
+    .feed-card:last-child { margin-bottom: 0; }
+    .feed-head {
+      display: flex; align-items: center; gap: 8px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .feed-av {
+      width: 32px; height: 32px;
+      clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+      display: flex; align-items: center; justify-content: center;
+      font: 900 italic 14px/1 var(--font-display); color: #fff;
+    }
+    .feed-av.gold   { background: linear-gradient(135deg, var(--gold), var(--gold-deep)); color: #050505; }
+    .feed-av.rose   { background: linear-gradient(135deg, var(--rose), #4c1d95); }
+    .feed-av.violet { background: linear-gradient(135deg, var(--violet), #4c1d95); }
+    .feed-meta { flex: 1; min-width: 0; }
+    .feed-name {
+      font: 800 11px/1.2 var(--font-body); color: var(--text);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .feed-verb { color: var(--emerald); font-weight: 700; margin-left: 4px; }
+    .feed-when { margin-top: 3px; font: 700 10px/1 var(--font-body); color: var(--text-dim); }
+    .feed-post {
+      padding: 10px 4px 4px;
+      font: 500 12px/1.5 var(--font-body); color: var(--text);
+    }
+    .feed-foot {
+      display: flex; gap: 14px;
+      padding-top: 8px; margin-top: 4px;
+      border-top: 1px solid var(--border);
+    }
+    .ff-act {
+      font: 700 11px/1 var(--font-body); color: var(--text-dim);
+    }
+    .yt-thumb {
+      width: 36px; height: 26px;
+      background: linear-gradient(135deg, #ef4444, #7f1d1d);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      border: 1px solid rgba(255,255,255,0.18);
+      transition: transform 0.15s ease;
+    }
+    .yt-thumb:hover { transform: scale(1.05); }
+    .yt-play { color: #fff; font-size: 12px; }
+
+    /* WHAT TO PLAY: mode pills + impact rows */
+    .wtp-mode {
+      display: flex; gap: 6px;
+      margin-bottom: 12px;
+    }
+    .wtp-modepill {
+      flex: 1;
+      padding: 7px 10px;
+      text-align: center;
+      font: 800 10px/1 var(--font-display);
+      letter-spacing: 1.2px; text-transform: uppercase;
+      color: var(--text-dim);
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+    }
+    .wtp-modepill.on {
+      background: var(--gold-tint);
+      border-color: var(--border-strong);
+      color: var(--gold);
+    }
+    .wtp-list { display: flex; flex-direction: column; gap: 10px; }
+    .wtp-pick {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 10px;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--border);
+    }
+    .wtp-body { flex: 1; min-width: 0; }
+    .wtp-h {
+      font: 800 13px/1.2 var(--font-body); color: var(--text);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .wtp-row {
+      margin-top: 6px;
+      display: flex; flex-wrap: wrap; gap: 4px;
+    }
+    .wtp-tag {
+      font: 800 9px/1 var(--font-body);
+      padding: 3px 6px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+    }
+    .wtp-tag.impact { color: var(--gold); border-color: var(--border-strong); background: rgba(255,196,0,0.1); }
+    .wtp-tag.impact b { font: 900 italic 10px/1 var(--font-display); }
+    .wtp-tag.ease.easy { color: var(--emerald); border-color: rgba(52,211,153,0.4); background: rgba(52,211,153,0.1); }
+    .wtp-tag.ease.med  { color: var(--orange);  border-color: rgba(251,146,60,0.4); background: rgba(251,146,60,0.1); }
+    .wtp-bars {
+      margin-top: 8px;
+      display: grid; grid-template-columns: auto 1fr; column-gap: 8px; row-gap: 4px;
+      align-items: center;
+    }
+    .wtp-barlbl {
+      font: 800 8px/1 var(--font-display); letter-spacing: 1px;
+      color: var(--text-dim); text-transform: uppercase;
+    }
+    .wtp-bar {
+      height: 5px; background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+    .wtp-bar i { display: block; height: 100%; }
+    .wtp-totals {
+      margin-top: 12px;
+      padding: 10px;
+      background: linear-gradient(135deg, rgba(255,196,0,0.10), rgba(255,196,0,0.02));
+      border: 1px solid var(--border-strong);
+      display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+    }
+    .wtp-t-lbl {
+      font: 800 10px/1 var(--font-display); letter-spacing: 1px; text-transform: uppercase;
+      color: var(--text-muted);
+    }
+    .wtp-t-val { font: 700 11px/1.4 var(--font-body); color: var(--text-muted); text-align: right; }
+    .wtp-t-val em { font: 900 italic 16px/1 var(--font-display); color: var(--gold); font-style: italic; font-variant-numeric: tabular-nums; }
+    .wtp-t-val b { color: var(--gold); font-weight: 800; font-variant-numeric: tabular-nums; }
+
     /* Reveal */
     .reveal { opacity: 0; transform: translateY(24px); transition: opacity 0.6s ease, transform 0.6s ease; }
     .reveal.in { opacity: 1; transform: none; }
     @media (prefers-reduced-motion: reduce) {
       .reveal { opacity: 1; transform: none; transition: none; }
-      .phone, .live-pill .pulse, .bg-scan { animation: none; }
+      .phone, .live-pill .pulse, .bg-scan, .lp-row.new { animation: none; }
     }
   </style>
 </head>
@@ -1113,30 +1425,67 @@
         <div class="feature reveal">
           <div class="feature-eye"><span class="pip"></span>WHAT TO PLAY</div>
           <h3>Picks engineered for your goal</h3>
-          <p>Choose <i>next skill title</i> or <i>raise pumbility</i>; the app surfaces 10 charts that move your needle hardest right now. Below — h4chi's actual top-rated picks.</p>
-          <div class="feature-pills"><span>NEXT TITLE</span><span>+PUMBILITY</span><span>REPLAY</span></div>
+          <p>Pick a goal — <i>next skill title</i>, <i>raise pumbility</i>, <i>chase AAA</i> — and the app ranks charts by hypothetical impact <b>and</b> how realistic the upgrade is given your current form. Each pick shows the points you'd add to your Pumbility if you nail it.</p>
+          <div class="feature-pills"><span>+PUMBILITY</span><span>NEXT TITLE</span><span>AAA CHASE</span></div>
           <div class="surface">
-            <div class="wtp">
-              <div class="card" style="background-image:url('https://pumpshinsa.com/jackets/pump/MEGAHEARTZ.jpg');">
-                <span class="tag">+437 pts</span>
-                <div class="nm">MEGAHEARTZ</div>
-                <div class="mt">Single 17 · need AAA+</div>
+            <!-- Mode segmented header -->
+            <div class="wtp-mode">
+              <div class="wtp-modepill on">+ PUMBILITY</div>
+              <div class="wtp-modepill">NEXT TITLE</div>
+              <div class="wtp-modepill">AAA CHASE</div>
+            </div>
+            <!-- Picks with impact + ease -->
+            <div class="wtp-list">
+              <div class="wtp-pick">
+                <div class="chart-jacket" style="width:48px;height:48px;background-image:url('https://pumpshinsa.com/jackets/pump/MEGAHEARTZ.jpg');"><span class="lvl s">17</span></div>
+                <div class="wtp-body">
+                  <div class="wtp-h">MEGAHEARTZ</div>
+                  <div class="wtp-row">
+                    <span class="wtp-tag impact"><b>+437</b> PMB</span>
+                    <span class="wtp-tag ease easy">Easy lift</span>
+                    <span class="wtp-tag">need AAA+ (now AAA)</span>
+                  </div>
+                  <div class="wtp-bars">
+                    <div class="wtp-barlbl">IMPACT</div><div class="wtp-bar"><i style="width:92%;background:linear-gradient(90deg,var(--gold),var(--gold-bright));"></i></div>
+                    <div class="wtp-barlbl">EASE</div><div class="wtp-bar"><i style="width:78%;background:linear-gradient(90deg,var(--emerald),#15803d);"></i></div>
+                  </div>
+                </div>
               </div>
-              <div class="card" style="background-image:url('https://pumpshinsa.com/jackets/pump/Spooky_Macaron.jpg');">
-                <span class="tag">+399 pts</span>
-                <div class="nm">Spooky Macaron</div>
-                <div class="mt">Single 17 · need AA+</div>
+              <div class="wtp-pick">
+                <div class="chart-jacket" style="width:48px;height:48px;background-image:url('https://pumpshinsa.com/jackets/pump/Spooky_Macaron.jpg');"><span class="lvl s">17</span></div>
+                <div class="wtp-body">
+                  <div class="wtp-h">Spooky Macaron</div>
+                  <div class="wtp-row">
+                    <span class="wtp-tag impact"><b>+399</b> PMB</span>
+                    <span class="wtp-tag ease med">Stretch</span>
+                    <span class="wtp-tag">need AA+ (now AA)</span>
+                  </div>
+                  <div class="wtp-bars">
+                    <div class="wtp-barlbl">IMPACT</div><div class="wtp-bar"><i style="width:84%;background:linear-gradient(90deg,var(--gold),var(--gold-bright));"></i></div>
+                    <div class="wtp-barlbl">EASE</div><div class="wtp-bar"><i style="width:55%;background:linear-gradient(90deg,var(--orange),#9a3412);"></i></div>
+                  </div>
+                </div>
               </div>
-              <div class="card" style="background-image:url('https://pumpshinsa.com/jackets/pump/Nostalgia.jpg');">
-                <span class="tag">+399 pts</span>
-                <div class="nm">Nostalgia</div>
-                <div class="mt">Single 17 · need AA+</div>
+              <div class="wtp-pick">
+                <div class="chart-jacket" style="width:48px;height:48px;background-image:url('https://pumpshinsa.com/jackets/pump/Crimson_hood.jpg');"><span class="lvl s">16</span></div>
+                <div class="wtp-body">
+                  <div class="wtp-h">Crimson Hood</div>
+                  <div class="wtp-row">
+                    <span class="wtp-tag impact"><b>+357</b> PMB</span>
+                    <span class="wtp-tag ease easy">Easy lift</span>
+                    <span class="wtp-tag">need AAA+ (now AAA+)</span>
+                  </div>
+                  <div class="wtp-bars">
+                    <div class="wtp-barlbl">IMPACT</div><div class="wtp-bar"><i style="width:74%;background:linear-gradient(90deg,var(--gold),var(--gold-bright));"></i></div>
+                    <div class="wtp-barlbl">EASE</div><div class="wtp-bar"><i style="width:88%;background:linear-gradient(90deg,var(--emerald),#15803d);"></i></div>
+                  </div>
+                </div>
               </div>
-              <div class="card" style="background-image:url('https://pumpshinsa.com/jackets/pump/Crimson_hood.jpg');">
-                <span class="tag">+357 pts</span>
-                <div class="nm">Crimson Hood</div>
-                <div class="mt">Single 16 · need AAA+</div>
-              </div>
+            </div>
+            <!-- Total potential gain -->
+            <div class="wtp-totals">
+              <div class="wtp-t-lbl">If you nail all 3:</div>
+              <div class="wtp-t-val"><em>+1,193</em> PMB · pushes you over <b>75,730</b></div>
             </div>
           </div>
         </div>
@@ -1146,27 +1495,37 @@
           <div class="feature-eye"><span class="pip"></span>RIVALS</div>
           <h3>Pick someone, scout them</h3>
           <p>Side-by-side scores, gaps you can close, songs they haven't touched. Live machine sync means as soon as either of you upscores, the gap updates. Fire a "beat my score" challenge straight into DMs.</p>
-          <div class="feature-pills"><span>HEAD-TO-HEAD</span><span>SHARE CHALLENGE</span><span>PER MODE</span></div>
+          <div class="feature-pills"><span>HEAD-TO-HEAD</span><span>LEVEL DELTA</span><span>SHARE CHALLENGE</span></div>
           <div class="surface">
             <div class="vs">
               <div class="side">
                 <div class="av gold">E</div>
-                <div class="nm">@ELMER</div>
+                <div class="nm">@ELMER <span style="opacity:0.6;">🇬🇧</span></div>
                 <div class="pmb">74,537</div>
                 <div class="rk">PMB · #306</div>
               </div>
               <div class="dvs">VS</div>
               <div class="side">
-                <div class="av rose">S</div>
-                <div class="nm">@Soft</div>
-                <div class="pmb">69,120</div>
-                <div class="rk">PMB · #586</div>
+                <div class="av rose">A</div>
+                <div class="nm">@Afii <span style="opacity:0.6;">🇧🇩</span></div>
+                <div class="pmb">62,966</div>
+                <div class="rk">PMB · this week #1</div>
               </div>
             </div>
             <div class="vs-bars">
-              <div class="vs-bar-row"><span class="v-l">S25 AAA+</span><span class="lbl">Equiv level</span><span class="v-r">S24 S</span></div>
-              <div class="vs-bar-row"><span class="v-l">1,491</span><span class="lbl">Avg rating</span><span class="v-r">1,382</span></div>
-              <div class="vs-bar-row"><span class="v-l">+5,417</span><span class="lbl">Gap</span><span class="v-r">—</span></div>
+              <div class="vs-bar-row"><span class="v-l">1,491</span><span class="lbl">Avg rating</span><span class="v-r">1,259</span></div>
+              <div class="vs-bar-row"><span class="v-l">S25</span><span class="lbl">Equiv level</span><span class="v-r">S24</span></div>
+              <div class="vs-bar-row"><span class="v-l">AAA+</span><span class="lbl">Equiv grade</span><span class="v-r">AAA</span></div>
+              <div class="vs-bar-row"><span class="v-l">1,449</span><span class="lbl">Min entry</span><span class="v-r">1,208</span></div>
+            </div>
+            <!-- Per-level head-to-head: who's ahead on each difficulty band -->
+            <div style="margin-top:14px;display:flex;flex-direction:column;gap:5px;">
+              <div style="font:800 9px/1 var(--font-display);letter-spacing:1.2px;text-transform:uppercase;color:var(--text-dim);padding:0 4px;">SINGLES BY LEVEL · who leads</div>
+              <div class="lvl-bar"><span class="lvl-tag">S20</span><div class="lvl-fill"><i style="background:linear-gradient(90deg,var(--gold),var(--gold-bright));width:64%"></i></div><span class="lvl-side l">ELMER</span></div>
+              <div class="lvl-bar"><span class="lvl-tag">S21</span><div class="lvl-fill"><i style="background:linear-gradient(90deg,var(--gold),var(--gold-bright));width:58%"></i></div><span class="lvl-side l">ELMER</span></div>
+              <div class="lvl-bar"><span class="lvl-tag">S22</span><div class="lvl-fill"><i style="background:linear-gradient(90deg,var(--rose),#4c1d95);width:52%;float:right"></i></div><span class="lvl-side r">AFII</span></div>
+              <div class="lvl-bar"><span class="lvl-tag">S23</span><div class="lvl-fill"><i style="background:linear-gradient(90deg,var(--rose),#4c1d95);width:71%;float:right"></i></div><span class="lvl-side r">AFII</span></div>
+              <div class="lvl-bar"><span class="lvl-tag">S24</span><div class="lvl-fill"><i style="background:linear-gradient(90deg,var(--rose),#4c1d95);width:83%;float:right"></i></div><span class="lvl-side r">AFII</span></div>
             </div>
           </div>
         </div>
@@ -1174,15 +1533,33 @@
         <!-- TRAINING ─────────────────────────────────────────── -->
         <div class="feature reveal" data-tone="orange">
           <div class="feature-eye"><span class="pip"></span>TRAINING</div>
-          <h3>Your sweat, quantified</h3>
-          <p>Average rating, equivalent level, peaking vs cooked. The Training tab tells you exactly where your competitive level sits, and what min-entry song you'd need to clear to push it higher.</p>
-          <div class="feature-pills"><span>BASE SKILL</span><span>WEEKLY LOAD</span><span>RECOVERY</span></div>
+          <h3>Cruising, peaking, or cooked?</h3>
+          <p>Compares your <i>current form</i> (4-week load) against your <i>base skill</i> (long-term load) per mode, and tells you when you're warming up, cruising at your level, peaking for a push, or cooked. Surfaces the next level you can <i>likely pass</i> with a confidence read.</p>
+          <div class="feature-pills"><span>BASE SKILL</span><span>FORM</span><span>LIKELY PASS</span></div>
           <div class="surface">
+            <!-- Status banner — real ELMER training status -->
+            <div class="train-status">
+              <div class="train-status-pill"><span class="ts-dot" style="background:#3B82F6;"></span>SINGLES · CRUISING</div>
+              <div class="train-status-pill"><span class="ts-dot" style="background:#EAB308;"></span>DOUBLES · WARMING UP</div>
+            </div>
+            <!-- Form ratio bar -->
+            <div class="train-ratio-row">
+              <div class="trr-head">
+                <span class="trr-l">Current form</span>
+                <span class="trr-v">83% of base · Singles</span>
+              </div>
+              <div class="trr-bar">
+                <i class="trr-fill" style="width:83.4%;background:linear-gradient(90deg,#3B82F6,#60A5FA);"></i>
+                <span class="trr-marker" style="left:100%;">100%</span>
+              </div>
+              <div class="trr-foot">Form 2,914 / Base 3,492 · 41 play days · 4.58 chronic clear/day</div>
+            </div>
+            <!-- Insight cells -->
             <div class="train-cells">
-              <div class="tc"><div class="tcv">1,491</div><div class="tcl">AVG RATING</div></div>
-              <div class="tc"><div class="tcv">S25</div><div class="tcl">EQUIV LEVEL</div></div>
-              <div class="tc"><div class="tcv">AAA+</div><div class="tcl">EQUIV GRADE</div></div>
-              <div class="tc"><div class="tcv">1,449</div><div class="tcl">MIN ENTRY</div></div>
+              <div class="tc"><div class="tcv">L 21</div><div class="tcl">COMFORTABLE</div></div>
+              <div class="tc"><div class="tcv">L 24</div><div class="tcl">LIKELY PASS · MED</div></div>
+              <div class="tc"><div class="tcv">763</div><div class="tcl">AVG PLAY LOAD</div></div>
+              <div class="tc"><div class="tcv">46d</div><div class="tcl">SESSIONS YTD</div></div>
             </div>
           </div>
         </div>
@@ -1191,33 +1568,58 @@
         <div class="feature reveal" data-tone="violet">
           <div class="feature-eye"><span class="pip"></span>LISTS</div>
           <h3>Chart sets that travel with you</h3>
-          <p>Build lists for Friday warmup, Doubles tournament prep, AAA chase, Co-op sets — anything. Share a list with one tap and your friends inherit your full chart picker. Below — h4chi's actual L11 routine.</p>
-          <div class="feature-pills"><span>SHARE LINK</span><span>GROUP ROUTE</span><span>SESSION QUEUE</span></div>
+          <p>Bundle charts into named sets — Friday warmup, Doubles tournament prep, AAA chase, Co-op routes. Tap once to send everyone on the floor a deep link that opens the same picker, in the same order. Use one as a session queue and tick charts off as you clear them.</p>
+          <div class="feature-pills"><span>SHARE LINK</span><span>SESSION QUEUE</span><span>GROUP ROUTE</span></div>
           <div class="surface">
+            <!-- "What lists do" — affordances row -->
+            <div class="list-pillrow">
+              <div class="list-pill"><span class="lp-ico">🔗</span><div class="lp-body"><div class="lp-h">Share link</div><div class="lp-s">/list/abc opens for anyone</div></div></div>
+              <div class="list-pill"><span class="lp-ico">↻</span><div class="lp-body"><div class="lp-h">Sync clears</div><div class="lp-s">ticks update as you play</div></div></div>
+              <div class="list-pill"><span class="lp-ico">⇄</span><div class="lp-body"><div class="lp-h">Group route</div><div class="lp-s">friends inherit your order</div></div></div>
+            </div>
+            <!-- Example list directory — multiple lists owned/shared -->
+            <div class="list-dir">
+              <div class="ldir-row">
+                <div class="ldir-ico v">≣</div>
+                <div class="ldir-body">
+                  <div class="ldir-h">London Friday warmup</div>
+                  <div class="ldir-s">5/8 cleared · @ELMER · shared with 4</div>
+                </div>
+                <div class="ldir-pct">63%</div>
+              </div>
+              <div class="ldir-row">
+                <div class="ldir-ico c">★</div>
+                <div class="ldir-body">
+                  <div class="ldir-h">SSS+ stretch goals</div>
+                  <div class="ldir-s">21 charts · @h4chi · session queue</div>
+                </div>
+                <div class="ldir-pct">38%</div>
+              </div>
+              <div class="ldir-row">
+                <div class="ldir-ico p">▣</div>
+                <div class="ldir-body">
+                  <div class="ldir-h">Doubles 18–20 ladder</div>
+                  <div class="ldir-s">12 charts · @Soft · route mode</div>
+                </div>
+                <div class="ldir-pct">85%</div>
+              </div>
+            </div>
+            <!-- Tap-to-expand list contents preview -->
+            <div style="margin-top:10px;padding-top:8px;border-top:1px dashed var(--border);font:800 9px/1 var(--font-display);letter-spacing:1.2px;text-transform:uppercase;color:var(--text-dim);">Inside · @h4chi's L11 routine</div>
             <div class="list-row">
-              <div class="chart-jacket" style="width:36px;height:36px;background-image:url('https://pumpshinsa.com/jackets/pump/1602.jpg');"><span class="lvl s">11</span></div>
+              <div class="chart-jacket" style="width:30px;height:30px;background-image:url('https://pumpshinsa.com/jackets/pump/1602.jpg');"><span class="lvl s" style="min-width:16px;height:16px;font-size:8px;">11</span></div>
               <div class="text">Switronic</div>
               <div class="grade-num">997,110 <em>SSS+</em></div>
             </div>
             <div class="list-row">
-              <div class="chart-jacket" style="width:36px;height:36px;background-image:url('https://pumpshinsa.com/jackets/pump/Demon_of_Laplace.jpg');"><span class="lvl s">10</span></div>
+              <div class="chart-jacket" style="width:30px;height:30px;background-image:url('https://pumpshinsa.com/jackets/pump/Demon_of_Laplace.jpg');"><span class="lvl s" style="min-width:16px;height:16px;font-size:8px;">10</span></div>
               <div class="text">Demon of Laplace</div>
               <div class="grade-num">994,864 <em>SSS</em></div>
             </div>
             <div class="list-row">
-              <div class="chart-jacket" style="width:36px;height:36px;background-image:url('https://pumpshinsa.com/jackets/pump/1697.jpg');"><span class="lvl s">11</span></div>
+              <div class="chart-jacket" style="width:30px;height:30px;background-image:url('https://pumpshinsa.com/jackets/pump/1697.jpg');"><span class="lvl s" style="min-width:16px;height:16px;font-size:8px;">11</span></div>
               <div class="text">BRAIN POWER</div>
               <div class="grade-num">989,366 <em>SS+</em></div>
-            </div>
-            <div class="list-row">
-              <div class="chart-jacket" style="width:36px;height:36px;background-image:url('https://pumpshinsa.com/jackets/pump/Big_Daddy.jpg');"><span class="lvl s">11</span></div>
-              <div class="text">Big Daddy</div>
-              <div class="grade-num">989,358 <em>SS+</em></div>
-            </div>
-            <div class="list-row">
-              <div class="chart-jacket" style="width:36px;height:36px;background-image:url('https://pumpshinsa.com/jackets/pump/PANDORA.jpg');"><span class="lvl s">11</span></div>
-              <div class="text">PANDORA</div>
-              <div class="grade-num">988,975 <em>SS+</em></div>
             </div>
           </div>
         </div>
@@ -1226,19 +1628,76 @@
         <div class="feature reveal" data-tone="red">
           <div class="feature-eye"><span class="pip"></span>LIVE</div>
           <h3>Host the session, broadcast the run</h3>
-          <p>Start a Shinsa Live session, optionally pipe in your YouTube stream, take song requests from chat. The recap card builds itself — top 6 plays, clear rate, duration, message count.</p>
-          <div class="feature-pills"><span>YOUTUBE EMBED</span><span>REQUESTS</span><span>RECAP CARD</span></div>
+          <p>Start a Shinsa Live session, pipe in your YouTube stream, take song requests from chat. Plays land in the viewer in real time as you sync — viewers see what you just hit while the conversation runs alongside it.</p>
+          <div class="feature-pills"><span>YOUTUBE EMBED</span><span>LIVE CHAT</span><span>REAL-TIME PLAYS</span></div>
           <div class="surface">
+            <!-- Header pill — live session metadata -->
             <div class="live-row">
               <div class="live-pill"><span class="pulse"></span>LIVE</div>
               <div class="body">
                 <div class="name">London Pump Dojo 1 — wc PT2</div>
-                <div class="stats">19 plays · 23 messages · 68% clear</div>
+                <div class="stats">19 plays · 23 messages · 68% clear · 1 watching</div>
               </div>
               <div class="duration">1h 8m</div>
             </div>
-            <!-- Top-6 recap grid (real ELMER plays from the ended session) -->
-            <div class="top6-grid">
+
+            <!-- Two-column: live chat | live-arriving plays -->
+            <div class="live-grid">
+              <!-- Chat column -->
+              <div class="live-col">
+                <div class="live-col-h">CHAT</div>
+                <div class="chat">
+                  <div class="cmsg"><span class="cu" style="color:var(--gold);">@Afii</span><div class="cb">gg on R.I.P. that was clean 🔥</div></div>
+                  <div class="cmsg sys"><div class="cb"><span class="csys">▶</span> requested <b>Cygnus D21</b></div></div>
+                  <div class="cmsg"><span class="cu" style="color:var(--violet);">@h4chi</span><div class="cb">99K SSS+ on Up & Up is wild</div></div>
+                  <div class="cmsg sys"><div class="cb"><span class="csys">●</span> song started · <b>Overblow SC S18</b></div></div>
+                  <div class="cmsg"><span class="cu" style="color:var(--cyan);">@ATKY</span><div class="cb">vote: stamina set next</div></div>
+                  <div class="cmsg sys gold"><div class="cb"><span class="csys">★</span> ELMER <b>cleared</b> Overblow SC · 999,005 SSS+</div></div>
+                  <div class="cmsg"><span class="cu" style="color:var(--rose);">@Soft</span><div class="cb">how is your D21 ratio so high</div></div>
+                </div>
+                <div class="chat-composer">
+                  <span class="cci">⊕</span>
+                  <span class="cct">Type a message…</span>
+                  <span class="ccs">➤</span>
+                </div>
+              </div>
+
+              <!-- Live plays column — newest at top -->
+              <div class="live-col">
+                <div class="live-col-h">PLAYS · INCOMING</div>
+                <div class="live-plays">
+                  <div class="lp-row new">
+                    <div class="chart-jacket" style="width:32px;height:32px;background-image:url('https://pumpshinsa.com/jackets/pump/116.jpg');"><span class="lvl s" style="min-width:16px;height:16px;font-size:8px;">18</span></div>
+                    <div class="lp-meta"><div class="lp-t">Overblow SC</div><div class="lp-s">just now · SSS+</div></div>
+                    <div class="lp-n">999,005</div>
+                  </div>
+                  <div class="lp-row">
+                    <div class="chart-jacket" style="width:32px;height:32px;background-image:url('https://pumpshinsa.com/jackets/pump/RIP.jpg');"><span class="lvl s" style="min-width:16px;height:16px;font-size:8px;">22</span></div>
+                    <div class="lp-meta"><div class="lp-t">R.I.P.</div><div class="lp-s">2m ago · AAA+</div></div>
+                    <div class="lp-n">964,072</div>
+                  </div>
+                  <div class="lp-row">
+                    <div class="chart-jacket" style="width:32px;height:32px;background-image:url('https://pumpshinsa.com/jackets/pump/241.jpg');"><span class="lvl s" style="min-width:16px;height:16px;font-size:8px;">21</span></div>
+                    <div class="lp-meta"><div class="lp-t">Get Up</div><div class="lp-s">5m · SSS</div></div>
+                    <div class="lp-n">992,593</div>
+                  </div>
+                  <div class="lp-row">
+                    <div class="chart-jacket" style="width:32px;height:32px;background-image:url('https://pumpshinsa.com/jackets/pump/16B4.jpg');"><span class="lvl d" style="min-width:16px;height:16px;font-size:8px;">21</span></div>
+                    <div class="lp-meta"><div class="lp-t">Cygnus</div><div class="lp-s">8m · SSS</div></div>
+                    <div class="lp-n">992,314</div>
+                  </div>
+                  <div class="lp-row">
+                    <div class="chart-jacket" style="width:32px;height:32px;background-image:url('https://pumpshinsa.com/jackets/pump/1538.jpg');"><span class="lvl s" style="min-width:16px;height:16px;font-size:8px;">17</span></div>
+                    <div class="lp-meta"><div class="lp-t">Up &amp; Up</div><div class="lp-s">11m · SSS+</div></div>
+                    <div class="lp-n">999,115</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Session recap — top 6 plays jacket grid -->
+            <div style="margin-top:14px;padding-top:10px;border-top:1px dashed var(--border);font:800 9px/1 var(--font-display);letter-spacing:1.2px;text-transform:uppercase;color:var(--text-dim);">Recap card · top 6 plays</div>
+            <div class="top6-grid" style="margin-top:6px;">
               <div class="top6-tile" style="background-image:url('https://pumpshinsa.com/jackets/pump/1538.jpg');">
                 <span class="rchip">R690</span><span class="mchip">S17</span>
                 <span class="grade-chip grade sssp">SSS+</span>
@@ -1254,21 +1713,6 @@
                 <span class="grade-chip grade sss">SSS</span>
                 <span class="score-chip">992,314</span>
               </div>
-              <div class="top6-tile" style="background-image:url('https://pumpshinsa.com/jackets/pump/241.jpg');">
-                <span class="rchip">R570</span><span class="mchip">S21</span>
-                <span class="grade-chip grade sss">SSS</span>
-                <span class="score-chip">992,593</span>
-              </div>
-              <div class="top6-tile" style="background-image:url('https://pumpshinsa.com/jackets/pump/92.jpg');">
-                <span class="rchip">R520</span><span class="mchip">S20</span>
-                <span class="grade-chip grade ss">SS</span>
-                <span class="score-chip">981,770</span>
-              </div>
-              <div class="top6-tile" style="background-image:url('https://pumpshinsa.com/jackets/pump/RIP.jpg');">
-                <span class="rchip">R454</span><span class="mchip">S22</span>
-                <span class="grade-chip grade aaa">AAA+</span>
-                <span class="score-chip">964,072</span>
-              </div>
             </div>
           </div>
         </div>
@@ -1277,40 +1721,77 @@
         <div class="feature reveal" data-tone="emerald">
           <div class="feature-eye"><span class="pip"></span>FEED</div>
           <h3>Every clear, every upscore</h3>
-          <p>Follow players you respect; their session highlights drop into your feed in real time. Pump posts, comment on plays, share a score card straight to a friend's DMs. Below — ELMER's actual most-recent plays.</p>
-          <div class="feature-pills"><span>FOLLOW</span><span>SCORE CARD</span><span>DM SHARE</span></div>
+          <p>Follow players you respect; their clears and upscores drop into your feed in real time, complete with their YouTube replay if the session was streamed. Pump posts, comment on plays, share a score card straight to a friend's DMs.</p>
+          <div class="feature-pills"><span>FOLLOW</span><span>YT REPLAY</span><span>SCORE CARD</span><span>DM SHARE</span></div>
           <div class="surface">
-            <div class="upscore-row">
-              <div class="chart-jacket" style="background-image:url('https://pumpshinsa.com/jackets/pump/1538.jpg');"><span class="lvl s">17</span></div>
-              <div class="entry-main">
-                <div class="title">Up &amp; Up (Produced by AWAL)</div>
-                <div class="meta-chips"><span class="plate ug">UG</span><span class="meta-chip">London Dojo 1</span></div>
+            <!-- ELMER upscores -->
+            <div class="feed-card">
+              <div class="feed-head">
+                <div class="feed-av gold">E</div>
+                <div class="feed-meta">
+                  <div class="feed-name">@ELMER <span style="opacity:0.55;">🇬🇧</span> <span class="feed-verb">improved 3 scores</span></div>
+                  <div class="feed-when">2m · London Pump Dojo 1</div>
+                </div>
               </div>
-              <div class="scores-col"><div class="score-num">999,115</div><div class="grade sssp">SSS+</div></div>
+              <div class="upscore-row" style="border-top:0;padding-top:6px;">
+                <div class="chart-jacket" style="background-image:url('https://pumpshinsa.com/jackets/pump/1538.jpg');"><span class="lvl s">17</span></div>
+                <div class="entry-main">
+                  <div class="title">Up &amp; Up (Produced by AWAL)</div>
+                  <div class="meta-chips"><span class="plate ug">UG</span><span class="meta-chip cyan">WC PT2</span></div>
+                </div>
+                <!-- YouTube replay thumb pulled from feed item replay_embed_url -->
+                <a class="yt-thumb" href="https://www.youtube.com/watch?v=FK3uYW71JkI" aria-label="Replay on YouTube"><span class="yt-play">▶</span></a>
+                <div class="scores-col"><div class="score-num">999,115</div><div class="grade sssp">SSS+</div></div>
+              </div>
+              <div class="upscore-row">
+                <div class="chart-jacket" style="background-image:url('https://pumpshinsa.com/jackets/pump/116.jpg');"><span class="lvl s">18</span></div>
+                <div class="entry-main">
+                  <div class="title">Overblow - SHORT CUT -</div>
+                  <div class="meta-chips"><span class="plate ug">UG</span><span class="meta-chip cyan">WC #1</span></div>
+                </div>
+                <a class="yt-thumb" href="https://www.youtube.com/watch?v=FK3uYW71JkI" aria-label="Replay on YouTube"><span class="yt-play">▶</span></a>
+                <div class="scores-col"><div class="score-num">999,005</div><div class="grade sssp">SSS+</div></div>
+              </div>
+              <div class="feed-foot">
+                <span class="ff-act">↑ 1</span><span class="ff-act">💬 0</span><span class="ff-act">➤</span>
+              </div>
             </div>
-            <div class="upscore-row">
-              <div class="chart-jacket" style="background-image:url('https://pumpshinsa.com/jackets/pump/116.jpg');"><span class="lvl s">18</span></div>
-              <div class="entry-main">
-                <div class="title">Overblow - SHORT CUT -</div>
-                <div class="meta-chips"><span class="plate ug">UG</span><span class="meta-chip cyan">WC #1</span></div>
+
+            <!-- Afii new clear -->
+            <div class="feed-card">
+              <div class="feed-head">
+                <div class="feed-av rose">A</div>
+                <div class="feed-meta">
+                  <div class="feed-name">@Afii <span style="opacity:0.55;">🇧🇩</span> <span class="feed-verb" style="color:var(--cyan);">cleared a chart</span></div>
+                  <div class="feed-when">11h · WC bracket</div>
+                </div>
               </div>
-              <div class="scores-col"><div class="score-num">999,005</div><div class="grade sssp">SSS+</div></div>
+              <div class="upscore-row" style="border-top:0;padding-top:6px;">
+                <div class="chart-jacket" style="background-image:url('https://pumpshinsa.com/jackets/pump/Crimson_hood.jpg');"><span class="lvl s">16</span></div>
+                <div class="entry-main">
+                  <div class="title">Crimson Hood</div>
+                  <div class="meta-chips"><span class="plate fg">FG</span><span class="meta-chip cyan">WC #1</span></div>
+                </div>
+                <div class="scores-col"><div class="score-num">968,520</div><div class="grade aaa">AAA+</div></div>
+              </div>
+              <div class="feed-foot">
+                <span class="ff-act">↑ 2</span><span class="ff-act">💬 1</span><span class="ff-act">➤</span>
+              </div>
             </div>
-            <div class="upscore-row">
-              <div class="chart-jacket" style="background-image:url('https://pumpshinsa.com/jackets/pump/RIP.jpg');"><span class="lvl s">22</span></div>
-              <div class="entry-main">
-                <div class="title">R.I.P.</div>
-                <div class="meta-chips"><span class="plate fg">FG</span><span class="meta-chip cyan">WC #1</span></div>
+
+            <!-- h4chi posted -->
+            <div class="feed-card">
+              <div class="feed-head">
+                <div class="feed-av violet">h</div>
+                <div class="feed-meta">
+                  <div class="feed-name">@h4chi <span class="feed-verb" style="color:var(--violet);">posted</span></div>
+                  <div class="feed-when">1d</div>
+                </div>
               </div>
-              <div class="scores-col"><div class="score-num">964,072</div><div class="grade aaa">AAA+</div></div>
-            </div>
-            <div class="upscore-row">
-              <div class="chart-jacket" style="background-image:url('https://pumpshinsa.com/jackets/pump/16B4.jpg');"><span class="lvl d">21</span></div>
-              <div class="entry-main">
-                <div class="title">Cygnus</div>
-                <div class="meta-chips"><span class="plate mg">MG</span><span class="meta-chip cyan">WC #1</span></div>
+              <div class="feed-post">"L11 grind paying off. Switronic SSS+ tonight 🔥"</div>
+              <div class="feed-foot">
+                <span class="ff-act">↑ 4</span><span class="ff-act">💬 2</span><span class="ff-act">➤</span>
               </div>
-              <div class="scores-col"><div class="score-num">992,314</div><div class="grade sss">SSS</div></div>
             </div>
           </div>
         </div>
