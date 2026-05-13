@@ -44,8 +44,10 @@ export function QuickNavButton({
             style={styles.highlight}
           />
           <View style={styles.inner}>
-            <IconSymbol name={icon} size={20} color="#FFFFFF" />
-            <Text style={styles.label}>{label}</Text>
+            <IconSymbol name={icon} size={18} color="#FFFFFF" />
+            <Text style={styles.label} numberOfLines={1} ellipsizeMode="clip">
+              {label}
+            </Text>
           </View>
         </LinearGradient>
       </View>
@@ -66,8 +68,10 @@ const styles = StyleSheet.create({
   gradient: {
     borderRadius: 14,
     borderWidth: 1,
-    minHeight: 52,
-    paddingHorizontal: 8,
+    // Shorter chip — was 52 and felt boxy on phones; 44 reads as a quick-action
+    // pill while still tappable.
+    minHeight: 44,
+    paddingHorizontal: 6,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
@@ -79,14 +83,24 @@ const styles = StyleSheet.create({
     right: 0,
     height: '52%',
   },
-  inner: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  inner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    // Let the label shrink before the icon so long words like "Training"
+    // don't push past the chip edge.
+    flexShrink: 1,
+    minWidth: 0,
+  },
   label: {
     color: '#FFFFFF',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '900',
-    letterSpacing: 0.7,
+    letterSpacing: 0.4,
     textShadowColor: 'rgba(0,0,0,0.35)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
+    flexShrink: 1,
+    minWidth: 0,
   },
 });

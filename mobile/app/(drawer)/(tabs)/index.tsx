@@ -277,7 +277,7 @@ const makeStyles = (t: ThemeColors) => ({
   brandRow: { flexDirection: 'row' as const, alignItems: 'center' as const, marginBottom: 0, paddingHorizontal: 4 },
   brandCenter: { flex: 1, alignItems: 'center' as const },
   brandSpacer: { width: 32 },
-  quickNav: { flexDirection: 'row' as const, gap: 10, paddingTop: 4 },
+  quickNav: { flexDirection: 'row' as const, gap: 8, paddingTop: 4 },
   center: { padding: 32, alignItems: 'center' as const },
   errorBox: {
     backgroundColor: t.dangerBg,
