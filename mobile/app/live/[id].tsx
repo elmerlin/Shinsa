@@ -343,6 +343,24 @@ export default function LiveSessionScreen() {
 
         {summary ? <SummaryStats summary={summary} s={s} /> : null}
 
+        {/* Chat sits above the plays list — viewers care about the
+            live conversation more than the play log, and the composer
+            is anchored at the bottom of the screen, so keeping the
+            chat thread close to the composer reduces eye-jumping. */}
+        {messages.length > 0 ? (
+          <View style={s.section}>
+            <View style={s.sectionHeader}>
+              <Text style={s.sectionTitle}>CHAT</Text>
+              <Text style={s.sectionCount}>{messages.filter((m) => !m.is_system).length}</Text>
+            </View>
+            <View style={s.chatList}>
+              {messages.slice(0, 30).map((m) => (
+                <ChatRow key={m.id} message={m} hostUserId={session.host_user_id} s={s} />
+              ))}
+            </View>
+          </View>
+        ) : null}
+
         {plays.length > 0 ? (
           <View style={s.section}>
             <View style={s.sectionHeader}>
@@ -363,20 +381,6 @@ export default function LiveSessionScreen() {
               {visiblePlays.length === 0 ? (
                 <Text style={s.playsEmpty}>No plays match these filters yet.</Text>
               ) : null}
-            </View>
-          </View>
-        ) : null}
-
-        {messages.length > 0 ? (
-          <View style={s.section}>
-            <View style={s.sectionHeader}>
-              <Text style={s.sectionTitle}>CHAT</Text>
-              <Text style={s.sectionCount}>{messages.filter((m) => !m.is_system).length}</Text>
-            </View>
-            <View style={s.chatList}>
-              {messages.slice(0, 30).map((m) => (
-                <ChatRow key={m.id} message={m} hostUserId={session.host_user_id} s={s} />
-              ))}
             </View>
           </View>
         ) : null}

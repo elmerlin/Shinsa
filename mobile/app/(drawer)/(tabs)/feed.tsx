@@ -444,14 +444,6 @@ function UpscoreCard({ item, onPump, onComments, onShare, onJacket, onScore, onR
                   ) : null}
                 </View>
               </View>
-              {u.replay_embed_url ? (
-                <Pressable
-                  onPress={() => onReplay(u.replay_embed_url as string, `${u.song_title || 'Song'} · ${u.mode || ''}${u.level ? ` ${u.level}` : ''}`)}
-                  hitSlop={6}
-                  style={({ pressed }) => [s.replayBtn, pressed && { opacity: 0.7 }]}>
-                  <IconSymbol name="play.rectangle.fill" size={14} color="#7dd3fc" />
-                </Pressable>
-              ) : null}
               {/* Score column — stacked vertically so the long numbers
                   (1,000,000 SSS+) don't overflow the card on a phone-
                   sized layout. New score on top (most prominent), prev
@@ -471,6 +463,18 @@ function UpscoreCard({ item, onPump, onComments, onShare, onJacket, onScore, onR
                 </View>
                 {delta > 0 ? <Text style={s.delta}>+{fmtNum(delta)}</Text> : null}
               </Pressable>
+              {/* Replay button moved to the far right of the row so the
+                  song title gets the full middle column width — having
+                  it between title and score was eating ~34px of title
+                  space and clipping every entry to "Black S…". */}
+              {u.replay_embed_url ? (
+                <Pressable
+                  onPress={() => onReplay(u.replay_embed_url as string, `${u.song_title || 'Song'} · ${u.mode || ''}${u.level ? ` ${u.level}` : ''}`)}
+                  hitSlop={6}
+                  style={({ pressed }) => [s.replayBtn, pressed && { opacity: 0.7 }]}>
+                  <IconSymbol name="play.rectangle.fill" size={14} color="#7dd3fc" />
+                </Pressable>
+              ) : null}
             </View>
           );
         })}
@@ -655,17 +659,6 @@ function WeeklyChallengeCard({ item, onPump, onComments, onShare, onJacket, onSc
                   <PlateBadge plate={play.plate} size="xs" />
                 </View>
               </View>
-              {play.replay_embed_url ? (
-                <Pressable
-                  onPress={() => onReplay(
-                    play.replay_embed_url as string,
-                    `${play.song_title || 'Song'} · ${play.mode || ''}${play.level ? ` ${play.level}` : ''}`,
-                  )}
-                  hitSlop={6}
-                  style={({ pressed }) => [s.replayBtn, pressed && { opacity: 0.7 }]}>
-                  <IconSymbol name="play.rectangle.fill" size={14} color="#7dd3fc" />
-                </Pressable>
-              ) : null}
               <Pressable
                 onPress={() => onScore({
                   song_title: play.song_title,
@@ -695,6 +688,20 @@ function WeeklyChallengeCard({ item, onPump, onComments, onShare, onJacket, onSc
                 <Text style={s.scoreNum}>{fmtNum(play.score)}</Text>
                 <GradeChip grade={play.grade} score={play.score ?? 0} size="xs" />
               </Pressable>
+              {/* Replay sits at the far right of the row so the song
+                  title gets the full middle column — was clipping every
+                  entry to "Up & Up …" / "Overblo…" before the move. */}
+              {play.replay_embed_url ? (
+                <Pressable
+                  onPress={() => onReplay(
+                    play.replay_embed_url as string,
+                    `${play.song_title || 'Song'} · ${play.mode || ''}${play.level ? ` ${play.level}` : ''}`,
+                  )}
+                  hitSlop={6}
+                  style={({ pressed }) => [s.replayBtn, pressed && { opacity: 0.7 }]}>
+                  <IconSymbol name="play.rectangle.fill" size={14} color="#7dd3fc" />
+                </Pressable>
+              ) : null}
             </View>
           );
         })}
