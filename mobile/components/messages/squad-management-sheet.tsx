@@ -18,6 +18,7 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Image } from 'expo-image';
+import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -36,11 +37,22 @@ import { DefaultAvatar } from '@/components/default-avatar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useTheme } from '@/contexts/theme-context';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
-import { authApi, messagesApi } from '@/lib/api';
+import { authApi, messagesApi, songsApi } from '@/lib/api';
 import { fullImageUrl } from '@/lib/images';
 import { getConversationQueryKey, getMessagesInboxQueryKey } from '@/lib/messagesQueries';
+import {
+  CHAT_THEME_KEYS,
+  CHAT_THEME_META,
+  type ChatThemeKey,
+} from '@/components/messages/chat-themes';
 import type { ThemeColors } from '@/constants/theme';
-import type { SquadDetailResponse, SquadMember, User } from '@shared/api';
+import type {
+  ConversationMessage,
+  SharedListSummary,
+  SquadDetailResponse,
+  SquadMember,
+  User,
+} from '@shared/api';
 
 interface Props {
   conversationId: string;
@@ -51,14 +63,26 @@ interface Props {
   /** Called after a successful "leave squad" so the screen can navigate
    *  back out of the (now-inaccessible) thread. */
   onLeft?: () => void;
+  /** Messages from the active thread — used by the Activity tab to extract
+   *  shared videos, scores, and links. The thread already loads them so
+   *  there's no need to fetch a second time. */
+  messages?: ConversationMessage[];
 }
 
 const SQUAD_QUERY_KEY = (conversationId: string) =>
   ['messages', 'squad', conversationId] as const;
 
-type Tab = 'members' | 'settings';
+type Tab = 'members' | 'lists' | 'activity' | 'theme' | 'settings';
 
-export function SquadManagementSheet({ conversationId, visible, onClose, viewerId, onLeft }: Props) {
+const TAB_LIST: { value: Tab; label: string }[] = [
+  { value: 'members', label: 'Members' },
+  { value: 'lists', label: 'Lists' },
+  { value: 'activity', label: 'Activity' },
+  { value: 'theme', label: 'Theme' },
+  { value: 'settings', label: 'Settings' },
+];
+
+export function SquadManagementSheet({ conversationId, visible, onClose, viewerId, onLeft, messages = [] }: Props) {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const s = useThemedStyles(makeStyles);
@@ -147,6 +171,42 @@ export function SquadManagementSheet({ conversationId, visible, onClose, viewerI
     onSuccess: () => invalidateAll(),
   });
 
+  // Set the chat theme. Optimistically tint the conversation cache so the
+  // bubble colors flip immediately while the request is in flight.
+  const themeMutation = useMutation({
+    mutationFn: (theme: string) => messagesApi.setConversationTheme(conversationId, theme),
+    onMutate: async (theme) => {
+      await queryClient.cancelQueries({ queryKey: getConversationQueryKey(conversationId) });
+      const prev = queryClient.getQueryData<SquadDetailResponse>(SQUAD_QUERY_KEY(conversationId));
+      if (prev?.conversation) {
+        queryClient.setQueryData<SquadDetailResponse>(SQUAD_QUERY_KEY(conversationId), {
+          ...prev,
+          conversation: { ...prev.conversation, theme },
+        });
+      }
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(SQUAD_QUERY_KEY(conversationId), ctx.prev);
+    },
+    onSuccess: () => invalidateAll(),
+  });
+
+  // Shared lists tied to this conversation (Lists tab).
+  const listsQuery = useQuery({
+    queryKey: ['messages', 'squad', conversationId, 'shared-lists'],
+    queryFn: () => songsApi.sharedListsByConversation(conversationId),
+    enabled: visible && tab === 'lists' && !!conversationId,
+    staleTime: 30_000,
+  });
+
+  const joinListMutation = useMutation({
+    mutationFn: (sharedListId: number) => songsApi.joinSharedList(sharedListId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['messages', 'squad', conversationId, 'shared-lists'] });
+    },
+  });
+
   // --- Add-member typeahead ----------------------------------------------
   const [addQuery, setAddQuery] = useState('');
   const [debouncedAddQuery, setDebouncedAddQuery] = useState('');
@@ -213,22 +273,27 @@ export function SquadManagementSheet({ conversationId, visible, onClose, viewerI
             </Pressable>
           </View>
 
-          {/* Tab bar */}
+          {/* Tab bar — five tabs barely fit at the mobile preset width, so
+              keep labels short and surface the member count as a small chip
+              after the active tab pill. */}
           <View style={s.tabBar}>
-            {(['members', 'settings'] as Tab[]).map((value) => {
+            {TAB_LIST.map(({ value, label }) => {
               const active = tab === value;
               return (
                 <Pressable
                   key={value}
                   onPress={() => setTab(value)}
                   style={({ pressed }) => [s.tabBtn, active && s.tabBtnActive, pressed && !active && { opacity: 0.7 }]}>
-                  <Text style={[s.tabLabel, active && s.tabLabelActive]}>
-                    {value === 'members' ? `Members · ${members.length}` : 'Settings'}
+                  <Text style={[s.tabLabel, active && s.tabLabelActive]} numberOfLines={1}>
+                    {label}
                   </Text>
                 </Pressable>
               );
             })}
           </View>
+          {tab === 'members' ? (
+            <Text style={s.tabSubcount}>{members.length} member{members.length === 1 ? '' : 's'}</Text>
+          ) : null}
 
           {squadQuery.isLoading ? (
             <View style={s.center}><ActivityIndicator color={theme.spinner} /></View>
@@ -307,6 +372,77 @@ export function SquadManagementSheet({ conversationId, visible, onClose, viewerI
                 <Text style={s.leaveText}>Leave squad</Text>
               </Pressable>
             </ScrollView>
+          ) : tab === 'lists' ? (
+            <ScrollView
+              style={{ maxHeight: 540 }}
+              contentContainerStyle={{ gap: 8 }}
+              keyboardShouldPersistTaps="handled">
+              {listsQuery.isLoading ? (
+                <View style={s.center}><ActivityIndicator color={theme.spinner} /></View>
+              ) : listsQuery.isError ? (
+                <Text style={s.errorText}>
+                  {listsQuery.error instanceof Error ? listsQuery.error.message : 'Failed to load lists'}
+                </Text>
+              ) : (listsQuery.data?.sharedLists?.length || 0) === 0 ? (
+                <View style={s.emptyBox}>
+                  <Text style={s.emptyTitle}>No lists shared yet</Text>
+                  <Text style={s.emptyBody}>
+                    Share a list from your Lists page to surface it in this squad.
+                  </Text>
+                </View>
+              ) : (
+                (listsQuery.data?.sharedLists ?? []).map((sl: SharedListSummary) => (
+                  <SharedListRow
+                    key={sl.id}
+                    sl={sl}
+                    joining={joinListMutation.isPending && joinListMutation.variables === sl.id}
+                    onJoin={() => joinListMutation.mutate(sl.id)}
+                  />
+                ))
+              )}
+            </ScrollView>
+          ) : tab === 'activity' ? (
+            <ActivityTab messages={messages} />
+          ) : tab === 'theme' ? (
+            <ScrollView
+              style={{ maxHeight: 540 }}
+              contentContainerStyle={{ paddingBottom: 8 }}>
+              <Text style={s.sectionLabel}>Chat theme</Text>
+              <Text style={s.sectionHint}>
+                Skin the squad chat with classic messenger vibes. Anyone in the squad sees the same theme.
+              </Text>
+              <View style={s.themeGrid}>
+                {CHAT_THEME_KEYS.map((key) => {
+                  const meta = CHAT_THEME_META[key];
+                  const active = (squad?.conversation?.theme ?? '') === key;
+                  const pending = themeMutation.isPending && themeMutation.variables === key;
+                  return (
+                    <Pressable
+                      key={key || 'default'}
+                      onPress={() => themeMutation.mutate(key)}
+                      disabled={pending}
+                      style={({ pressed }) => [
+                        s.themeCard,
+                        active && s.themeCardActive,
+                        pressed && !active && { opacity: 0.7 },
+                        pending && { opacity: 0.6 },
+                      ]}>
+                      {/* Theme swatch — small filled tile with the picker preview colors. */}
+                      <View
+                        style={[
+                          s.themeSwatch,
+                          { backgroundColor: meta.swatch.bg, borderColor: meta.swatch.border },
+                        ]}
+                      />
+                      <Text style={[s.themeLabel, active && s.themeLabelActive]} numberOfLines={1}>
+                        {meta.label}
+                      </Text>
+                      <Text style={s.themeDesc} numberOfLines={1}>{meta.description}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </ScrollView>
           ) : (
             // Settings tab: identity edit + notifications
             <ScrollView
@@ -353,6 +489,223 @@ export function SquadManagementSheet({ conversationId, visible, onClose, viewerI
         </View>
       </View>
     </Modal>
+  );
+}
+
+/**
+ * Activity tab — extracts shared media from the thread's recent messages
+ * and groups them. Buckets:
+ *   - Videos: link_share kind=replay or with youtubeVideoId
+ *   - Scores: link_share kind=score_share
+ *   - Sessions: session_share embeds
+ *   - Lists: list_share embeds
+ *   - Challenges: challenge_card embeds
+ */
+function ActivityTab({ messages }: { messages: ConversationMessage[] }) {
+  const router = useRouter();
+  const s = useThemedStyles(makeStyles);
+
+  type Bucket = 'videos' | 'scores' | 'sessions' | 'lists' | 'challenges';
+  const [bucket, setBucket] = useState<Bucket>('videos');
+
+  const sorted = [...messages].sort(
+    (a, b) => Date.parse(b.created_at) - Date.parse(a.created_at),
+  );
+
+  const items = sorted.filter((m) => {
+    if (m.is_unsent) return false;
+    switch (bucket) {
+      case 'videos':
+        return !!(m.link_share?.youtubeVideoId || m.link_share?.replayVideoId || m.link_share?.replayUrl);
+      case 'scores':
+        return m.link_share?.kind === 'score_share';
+      case 'sessions':
+        return !!m.share;
+      case 'lists':
+        return !!m.list_share;
+      case 'challenges':
+        return !!m.challenge_card;
+      default:
+        return false;
+    }
+  });
+
+  const buckets: { value: Bucket; label: string; emoji: string }[] = [
+    { value: 'videos', label: 'Videos', emoji: '🎬' },
+    { value: 'scores', label: 'Scores', emoji: '🏆' },
+    { value: 'sessions', label: 'Sessions', emoji: '🔴' },
+    { value: 'lists', label: 'Lists', emoji: '📋' },
+    { value: 'challenges', label: 'Challenges', emoji: '🎯' },
+  ];
+
+  return (
+    <ScrollView
+      style={{ maxHeight: 540 }}
+      contentContainerStyle={{ gap: 8 }}
+      keyboardShouldPersistTaps="handled">
+      <Text style={s.sectionHint}>
+        Anything shared in the thread, grouped by kind. Tap to jump.
+      </Text>
+
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.bucketRow}>
+        {buckets.map((b) => {
+          const active = bucket === b.value;
+          return (
+            <Pressable
+              key={b.value}
+              onPress={() => setBucket(b.value)}
+              style={({ pressed }) => [s.bucketChip, active && s.bucketChipActive, pressed && !active && { opacity: 0.7 }]}>
+              <Text style={s.bucketEmoji}>{b.emoji}</Text>
+              <Text style={[s.bucketLabel, active && s.bucketLabelActive]}>{b.label}</Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+
+      {items.length === 0 ? (
+        <View style={s.emptyBox}>
+          <Text style={s.emptyTitle}>Nothing yet</Text>
+          <Text style={s.emptyBody}>
+            When someone shares a {bucket === 'videos' ? 'replay or YouTube link' : bucket.replace(/s$/, '')} here it&apos;ll surface in this list.
+          </Text>
+        </View>
+      ) : (
+        items.map((m) => (
+          <ActivityRow
+            key={m.id}
+            message={m}
+            bucket={bucket}
+            onPress={() => {
+              // Best-effort deep-link from the embed's path or relevant field.
+              const path = m.link_share?.chartPath
+                || m.link_share?.path
+                || m.challenge_card?.chartPath
+                || m.challenge_card?.path;
+              if (!path) return;
+              const m1 = path.match(/^\/song(?:s)?\/chart\/(\d+)/) || path.match(/^\/song\/(\d+)/);
+              if (m1) router.push({ pathname: '/song/[id]', params: { id: m1[1] } });
+              else if (m.list_share) router.push({ pathname: '/shared-list/[id]', params: { id: String(m.list_share.sharedListId) } });
+            }}
+          />
+        ))
+      )}
+    </ScrollView>
+  );
+}
+
+function ActivityRow({
+  message,
+  bucket,
+  onPress,
+}: {
+  message: ConversationMessage;
+  bucket: 'videos' | 'scores' | 'sessions' | 'lists' | 'challenges';
+  onPress: () => void;
+}) {
+  const s = useThemedStyles(makeStyles);
+  const sender = message.sender.username || 'unknown';
+  const when = formatActivityTime(message.created_at);
+
+  const title = (() => {
+    if (bucket === 'videos') {
+      return message.link_share?.songTitle
+        || message.link_share?.title
+        || 'Shared video';
+    }
+    if (bucket === 'scores') {
+      return message.link_share?.songTitle || message.link_share?.title || 'Score share';
+    }
+    if (bucket === 'sessions') {
+      return message.share?.sessionTitle || 'Live session';
+    }
+    if (bucket === 'lists') {
+      return message.list_share?.listName || 'Song list';
+    }
+    return message.challenge_card?.title || message.challenge_card?.songTitle || 'Challenge';
+  })();
+
+  const subtitle = (() => {
+    if (bucket === 'videos' && message.link_share?.mode && message.link_share?.level) {
+      return `${message.link_share.mode === 'Single' ? 'S' : 'D'}${message.link_share.level}`;
+    }
+    if (bucket === 'scores' && message.link_share?.score) {
+      const grade = String(message.link_share.grade || '').trim();
+      return grade ? `${grade} · ${message.link_share.score.toLocaleString()}` : message.link_share.score.toLocaleString();
+    }
+    if (bucket === 'sessions' && message.share?.countedClearCount) {
+      return `${message.share.countedClearCount} clears${message.share.totalRatingPoints ? ` · ${message.share.totalRatingPoints.toLocaleString()} RP` : ''}`;
+    }
+    if (bucket === 'lists' && message.list_share?.itemCount) {
+      return `${message.list_share.itemCount} song${message.list_share.itemCount === 1 ? '' : 's'}`;
+    }
+    if (bucket === 'challenges' && message.challenge_card?.targetLabel) {
+      return message.challenge_card.targetLabel;
+    }
+    return '';
+  })();
+
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [s.listRow, pressed && { opacity: 0.85 }]}>
+      <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+        <Text style={s.listName} numberOfLines={1}>{title}</Text>
+        <Text style={s.listMeta} numberOfLines={1}>
+          @{sender}{when ? ` · ${when}` : ''}{subtitle ? ` · ${subtitle}` : ''}
+        </Text>
+      </View>
+      <IconSymbol name="chevron.right" size={14} color="#666" />
+    </Pressable>
+  );
+}
+
+function formatActivityTime(iso?: string): string {
+  if (!iso) return '';
+  const t = new Date(String(iso).includes('T') ? iso : `${iso.replace(' ', 'T')}Z`).getTime();
+  if (!Number.isFinite(t)) return '';
+  const days = Math.floor((Date.now() - t) / 86_400_000);
+  if (days < 1) return 'today';
+  if (days < 2) return 'yesterday';
+  if (days < 7) return `${days}d`;
+  return new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+function SharedListRow({
+  sl,
+  joining,
+  onJoin,
+}: {
+  sl: SharedListSummary;
+  joining: boolean;
+  onJoin: () => void;
+}) {
+  const router = useRouter();
+  const s = useThemedStyles(makeStyles);
+  return (
+    <Pressable
+      onPress={() => router.push({ pathname: '/shared-list/[id]', params: { id: String(sl.id) } })}
+      style={({ pressed }) => [s.listRow, pressed && { opacity: 0.85 }]}>
+      <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+        <Text style={s.listName} numberOfLines={1}>{sl.name}</Text>
+        <Text style={s.listMeta} numberOfLines={1}>
+          {sl.owner?.username ? `by @${sl.owner.username}` : 'Shared list'}
+          {' · '}
+          {sl.itemCount} song{sl.itemCount === 1 ? '' : 's'}
+          {' · '}
+          {sl.memberCount} member{sl.memberCount === 1 ? '' : 's'}
+        </Text>
+      </View>
+      {(sl as { isMember?: boolean }).isMember ? (
+        <View style={s.joinedPill}>
+          <Text style={s.joinedPillText}>Joined</Text>
+        </View>
+      ) : (
+        <Pressable
+          onPress={(e) => { e.stopPropagation(); onJoin(); }}
+          disabled={joining}
+          style={({ pressed }) => [s.joinPill, pressed && { opacity: 0.7 }, joining && { opacity: 0.5 }]}>
+          <Text style={s.joinPillText}>{joining ? '…' : 'Join'}</Text>
+        </Pressable>
+      )}
+    </Pressable>
   );
 }
 
@@ -501,10 +854,11 @@ const makeStyles = (t: ThemeColors) => ({
     gap: 2,
     marginBottom: 8,
   },
-  tabBtn: { flex: 1, paddingVertical: 8, alignItems: 'center' as const, borderRadius: 999 },
+  tabBtn: { flex: 1, paddingVertical: 8, paddingHorizontal: 4, alignItems: 'center' as const, borderRadius: 999 },
   tabBtnActive: { backgroundColor: t.bg },
-  tabLabel: { fontSize: 12, fontWeight: '800' as const, color: t.textMuted },
+  tabLabel: { fontSize: 11, fontWeight: '800' as const, color: t.textMuted },
   tabLabelActive: { color: t.accent },
+  tabSubcount: { fontSize: 10, fontWeight: '800' as const, color: t.textDim, paddingHorizontal: 4, paddingVertical: 4, letterSpacing: 0.4 },
 
   sectionLabel: {
     fontSize: 10,
@@ -622,4 +976,69 @@ const makeStyles = (t: ThemeColors) => ({
     alignItems: 'center' as const,
   },
   saveBtnText: { color: t.bg, fontSize: 13, fontWeight: '900' as const, letterSpacing: 0.4 },
+
+  // Lists tab
+  emptyBox: { alignItems: 'center' as const, gap: 6, paddingVertical: 28 },
+  emptyTitle: { fontSize: 14, fontWeight: '900' as const, color: t.text },
+  emptyBody: { fontSize: 12, color: t.textMuted, textAlign: 'center' as const, paddingHorizontal: 24 },
+  listRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 10,
+    padding: 12,
+    backgroundColor: t.card,
+    borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: t.border,
+  },
+  listName: { fontSize: 14, fontWeight: '800' as const, color: t.text },
+  listMeta: { fontSize: 11, color: t.textMuted },
+  joinPill: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, backgroundColor: t.accent },
+  joinPillText: { color: t.bg, fontSize: 11, fontWeight: '900' as const, letterSpacing: 0.3 },
+  joinedPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: 'rgba(52,211,153,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(52,211,153,0.45)',
+  },
+  joinedPillText: { color: '#34d399', fontSize: 10, fontWeight: '900' as const, letterSpacing: 0.4 },
+
+  // Activity tab
+  bucketRow: { gap: 6, paddingVertical: 6, alignItems: 'center' as const },
+  bucketChip: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: t.surfaceMuted,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'transparent',
+  },
+  bucketChipActive: { backgroundColor: t.accentTint, borderColor: t.accent },
+  bucketEmoji: { fontSize: 11 },
+  bucketLabel: { fontSize: 11, fontWeight: '800' as const, color: t.textMuted },
+  bucketLabelActive: { color: t.accent },
+
+  // Theme tab
+  sectionHint: { fontSize: 11, color: t.textMuted, paddingHorizontal: 4, marginBottom: 8 },
+  themeGrid: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8 },
+  themeCard: {
+    width: '31%' as const,
+    padding: 8,
+    borderRadius: 12,
+    backgroundColor: t.card,
+    borderWidth: 1,
+    borderColor: t.border,
+    gap: 4,
+    alignItems: 'center' as const,
+  },
+  themeCardActive: { borderColor: t.accent, backgroundColor: t.accentTint },
+  themeSwatch: { width: 36, height: 36, borderRadius: 8, borderWidth: 2 },
+  themeLabel: { fontSize: 11, fontWeight: '900' as const, color: t.text },
+  themeLabelActive: { color: t.accent },
+  themeDesc: { fontSize: 9, color: t.textDim, textAlign: 'center' as const },
 });

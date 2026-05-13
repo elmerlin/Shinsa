@@ -36,6 +36,11 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DefaultAvatar } from '@/components/default-avatar';
+import {
+  getChatThemePalette,
+  type ChatThemeKey,
+  type ChatThemePalette,
+} from '@/components/messages/chat-themes';
 import { MessageActionSheet, type MessageActionTarget } from '@/components/messages/message-action-sheet';
 import { MessageEmbed } from '@/components/messages/message-embed';
 import { ReactionBar } from '@/components/messages/message-reactions';
@@ -298,6 +303,14 @@ export default function ConversationScreen() {
       : fullImageUrl(conversation.partner?.avatar))
     : undefined;
 
+  // Resolve the per-conversation chat theme palette. Defaults pick up the
+  // app theme (so the "Default" chat theme always blends in light/dark).
+  const themeKey = (conversation?.theme as ChatThemeKey) || '';
+  const chatTheme: ChatThemePalette = useMemo(
+    () => getChatThemePalette(themeKey, theme),
+    [themeKey, theme],
+  );
+
   // Scroll to bottom when:
   //  - the screen first loads, or
   //  - new messages arrive AND the user is reading near the bottom
@@ -317,7 +330,7 @@ export default function ConversationScreen() {
   };
 
   return (
-    <View style={s.container}>
+    <View style={[s.container, { backgroundColor: chatTheme.viewportBg }]}>
       <Stack.Screen
         options={{
           headerShown: true,
@@ -399,6 +412,7 @@ export default function ConversationScreen() {
                   key={m.id}
                   message={m}
                   isSquad={conversation?.kind === 'squad'}
+                  chatTheme={chatTheme}
                   onLongPress={() => setActionTarget({
                     messageId: m.id,
                     own: m.is_own,
@@ -483,6 +497,7 @@ export default function ConversationScreen() {
           onClose={() => setSquadOpen(false)}
           viewerId={user?.id || ''}
           onLeft={() => router.back()}
+          messages={query.data?.messages ?? []}
         />
       ) : null}
     </View>
@@ -495,11 +510,13 @@ export default function ConversationScreen() {
 function MessageBubble({
   message,
   isSquad,
+  chatTheme,
   onLongPress,
   onReactionToggle,
 }: {
   message: GroupedMessage;
   isSquad: boolean;
+  chatTheme: ChatThemePalette;
   onLongPress: () => void;
   onReactionToggle: (key: string) => void;
 }) {
@@ -511,6 +528,13 @@ function MessageBubble({
   );
   const senderAvatar = message.sender.avatar ? fullImageUrl(message.sender.avatar) : undefined;
   const hasContent = !isUnsent && !!message.content;
+
+  // Per-theme bubble colors. Falls back to the StyleSheet defaults when the
+  // theme matches Default (own bubble = accent, other = card).
+  const bubbleStyle = own
+    ? { backgroundColor: chatTheme.ownBubbleBg, borderColor: chatTheme.bubbleBorder || 'transparent' }
+    : { backgroundColor: chatTheme.otherBubbleBg, borderColor: chatTheme.bubbleBorder || 'transparent' };
+  const bubbleTextColor = own ? chatTheme.ownBubbleText : chatTheme.otherBubbleText;
 
   return (
     <View>
@@ -544,6 +568,7 @@ function MessageBubble({
             style={[
               s.bubble,
               own ? s.bubbleOwn : s.bubbleOther,
+              bubbleStyle,
               isUnsent && s.bubbleUnsent,
               hasEmbed && s.bubbleEmbed,
             ]}>
@@ -553,11 +578,13 @@ function MessageBubble({
               <View style={{ gap: 6 }}>
                 <MessageEmbed message={message} own={own} />
                 {hasContent ? (
-                  <Text style={[s.bubbleText, own && s.bubbleTextOwn]}>{message.content}</Text>
+                  <Text style={[s.bubbleText, { color: bubbleTextColor }]}>{message.content}</Text>
                 ) : null}
               </View>
             ) : (
-              <Text style={[s.bubbleText, own && s.bubbleTextOwn]}>{message.content}</Text>
+              <Text style={[s.bubbleText, { color: bubbleTextColor }, chatTheme.monospace && s.bubbleTextMono]}>
+                {message.content}
+              </Text>
             )}
           </Pressable>
 
@@ -669,6 +696,8 @@ const makeBubbleStyles = (t: ThemeColors) => ({
 
   bubbleText: { fontSize: 14, color: t.text, lineHeight: 19 },
   bubbleTextOwn: { color: t.bg, fontWeight: '600' as const },
+  // Used when the active chat theme requests monospace (e.g. CLI).
+  bubbleTextMono: { fontFamily: Platform.select({ ios: 'Courier', android: 'monospace', default: 'monospace' }) },
   unsentText: { fontSize: 13, color: t.textDim, fontStyle: 'italic' as const },
 
   timestamp: { fontSize: 10, color: t.textDim, fontWeight: '700' as const, textAlign: 'center' as const, marginTop: 12, marginBottom: 4 },

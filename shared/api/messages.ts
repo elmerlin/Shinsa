@@ -410,6 +410,16 @@ export function createMessagesApi(client: ApiClient) {
       );
     },
 
+    /** Set the conversation's chat theme. Server validates against an
+     *  allow-list ('', cli, aim, yahoo, msn, skype, winamp, icq, wechat,
+     *  discord, qq, nxa, kakao, line). Empty string resets to default. */
+    setConversationTheme(conversationId: string, theme: string) {
+      return client.request<{ conversation: ConversationSummary }>(
+        `/api/messages/conversations/${encodeURIComponent(conversationId)}/theme`,
+        { method: 'PUT', body: { theme } },
+      );
+    },
+
     /** Toggle a reaction on a message. Pass `reaction: ''` to clear the
      *  viewer's existing reaction. Server is single-reaction-per-user-per-
      *  message — sending a different reaction key replaces the prior one. */

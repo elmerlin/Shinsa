@@ -168,6 +168,13 @@ export function createSongsApi(client: ApiClient) {
         method: 'DELETE',
       });
     },
+    /** All shared lists scoped to a single conversation. Used by the squad
+     *  settings sheet "Lists" tab. */
+    sharedListsByConversation(conversationId: string) {
+      return client.request<{ sharedLists: SharedListSummary[] }>(
+        `/api/songs/lists/shared/by-conversation/${encodeURIComponent(conversationId)}`,
+      );
+    },
     /** Per-(mode,level) leaderboard ranked by average best-score across the
      *  user's clears at that level. Used by the profile Rankings drill-down. */
     levelLeaderboard(params: LevelLeaderboardParams) {
