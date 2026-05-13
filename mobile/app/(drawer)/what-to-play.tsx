@@ -301,7 +301,6 @@ function RecommendationCard({
       style={{
         opacity: fadeAnim,
         transform: [{ translateY: liftAnim }],
-        flex: 1,
       }}>
       <Pressable
         onPress={onPress}
