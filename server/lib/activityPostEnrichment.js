@@ -235,6 +235,39 @@ function findSessionReplayLink(db, { userId, songTitle, mode, level }) {
   };
 }
 
+/**
+ * Common title variants that show up because the upstream piugame scraper
+ * sometimes drops trailing punctuation ("R.I.P" vs the songs DB's "R.I.P.")
+ * or normalizes whitespace differently. We try the literal title first,
+ * then a few cheap variants before falling through to the jacket-URL match.
+ */
+function buildTitleVariants(rawTitle) {
+  const seen = new Set();
+  const out = [];
+  const push = (value) => {
+    const trimmed = String(value || '').trim();
+    if (!trimmed) return;
+    const key = trimmed.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(trimmed);
+  };
+
+  push(rawTitle);
+  if (!rawTitle) return out;
+  // Toggle a trailing period — handles "R.I.P" ↔ "R.I.P."
+  if (rawTitle.endsWith('.')) push(rawTitle.replace(/\.+$/, ''));
+  else push(`${rawTitle}.`);
+  // Strip all trailing punctuation, then re-add a single dot — handles
+  // weirder cases like "R.I.P!" or "R.I.P …" coming from bad scrapes.
+  const stripped = rawTitle.replace(/[\s.!?…]+$/u, '');
+  if (stripped && stripped !== rawTitle) {
+    push(stripped);
+    push(`${stripped}.`);
+  }
+  return out;
+}
+
 function findSongChartMetadata(db, { songTitle, mode, level, jacketUrl = '' }) {
   const normalizedTitle = String(songTitle || '').trim();
   const normalizedMode = String(mode || '').trim();
@@ -242,8 +275,11 @@ function findSongChartMetadata(db, { songTitle, mode, level, jacketUrl = '' }) {
   if (!normalizedMode || numericLevel <= 0) return null;
 
   if (normalizedTitle) {
-    const exactMatch = getSongChartByExactStmt(db).get(normalizedTitle, normalizedMode, numericLevel) || null;
-    if (exactMatch) return exactMatch;
+    const stmt = getSongChartByExactStmt(db);
+    for (const variant of buildTitleVariants(normalizedTitle)) {
+      const match = stmt.get(variant, normalizedMode, numericLevel);
+      if (match) return match;
+    }
   }
 
   const normalizedJacketUrl = String(jacketUrl || '').trim();
