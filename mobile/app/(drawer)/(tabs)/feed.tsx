@@ -1042,13 +1042,15 @@ const makeStyles = (t: ThemeColors) => ({
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
   },
-  // The score column is fixed-width on the right; the song title column
-  // shrinks to fit. maxWidth caps how much horizontal real estate the
-  // score block can claim so it never blows past the card's right edge.
+  // Right-side score column. Sizes to its content (capped at 130px so a
+  // freak long delta like "+1,234,567" can't blow past the card edge)
+  // — was previously pinned to width:130 which baked in 40+ px of slack
+  // on Weekly Challenge rows where the score block is just `1,000,000`
+  // over `SSS+`, clipping titles to "Horang …" / "Utsushiy…". Title
+  // column reclaims that space via `flex: 1` on entryMain.
   scoresCol: {
     alignItems: 'flex-end' as const,
     gap: 2,
-    width: 130,
     maxWidth: 130,
     flexShrink: 0,
   },
