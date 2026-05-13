@@ -1,17 +1,24 @@
 /**
  * Squad management bottom sheet — opened from the conversation header
- * when the active chat is a squad. Surfaces:
- *   - Member list with role chip + per-member actions (promote/demote/
- *     remove) when the viewer has permission
- *   - "Add member" search-and-pick row
- *   - Leave squad action for the viewer (creators must transfer first;
- *     server enforces this — we just surface the error)
+ * when the active chat is a squad. Tabbed into Members + Settings:
  *
- * Mirrors the liketu chat squad-hub-dialog pattern.
+ *   Members tab
+ *     - Member list with avatar + username + role chip
+ *     - Promote/Demote action (creator only, on non-creator members)
+ *     - Remove action (managers only, on non-creator members)
+ *     - Add member: search-and-pick row using authApi typeahead
+ *     - "Leave squad" destructive action with Alert confirm
+ *
+ *   Settings tab
+ *     - Identity edit (creator only): squad name input + Save
+ *     - Notifications: toggle "All messages" + "Mentions only"
+ *
+ * Mirrors web client SquadSettingsModal.jsx pattern. Voice/avatar
+ * picker, theme picker, shared-lists, and resources tabs are deferred.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Image } from 'expo-image';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -19,6 +26,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -48,11 +56,14 @@ interface Props {
 const SQUAD_QUERY_KEY = (conversationId: string) =>
   ['messages', 'squad', conversationId] as const;
 
+type Tab = 'members' | 'settings';
+
 export function SquadManagementSheet({ conversationId, visible, onClose, viewerId, onLeft }: Props) {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const s = useThemedStyles(makeStyles);
   const queryClient = useQueryClient();
+  const [tab, setTab] = useState<Tab>('members');
 
   const squadQuery = useQuery({
     queryKey: SQUAD_QUERY_KEY(conversationId),
@@ -61,28 +72,18 @@ export function SquadManagementSheet({ conversationId, visible, onClose, viewerI
     staleTime: 5_000,
   });
 
+  // Reset to Members tab each time the sheet opens.
+  useEffect(() => {
+    if (visible) setTab('members');
+  }, [visible]);
+
   const squad: SquadDetailResponse | undefined = squadQuery.data;
   const members = squad?.members ?? [];
-  const viewerRole = squad?.viewer_role ?? 'member';
-  const canManageMembers = !!squad?.permissions?.can_manage_members;
-  const canManageRoles = !!squad?.permissions?.can_manage_roles;
-
-  // Add-member typeahead
-  const [addQuery, setAddQuery] = useState('');
-  const [debouncedAddQuery, setDebouncedAddQuery] = useState('');
-  const userSearchQuery = useQuery({
-    queryKey: ['user-search', debouncedAddQuery],
-    queryFn: () => authApi.searchUsers(debouncedAddQuery),
-    enabled: visible && debouncedAddQuery.length >= 2 && canManageMembers,
-    staleTime: 10_000,
-  });
-
-  // Debounce the add-member input
-  useState(() => {
-    if (typeof window === 'undefined') return;
-    const t = setTimeout(() => setDebouncedAddQuery(addQuery.trim()), 220);
-    return () => clearTimeout(t);
-  });
+  const viewerMembership = squad?.viewer_membership;
+  const viewerRole = viewerMembership?.role ?? 'member';
+  const canManageMembers = !!viewerMembership?.permissions?.can_manage_members;
+  const canManageRoles = !!viewerMembership?.permissions?.can_manage_roles;
+  const canEditIdentity = !!viewerMembership?.permissions?.can_edit_identity;
 
   const invalidateAll = () => {
     void queryClient.invalidateQueries({ queryKey: SQUAD_QUERY_KEY(conversationId) });
@@ -90,13 +91,10 @@ export function SquadManagementSheet({ conversationId, visible, onClose, viewerI
     void queryClient.invalidateQueries({ queryKey: getMessagesInboxQueryKey(viewerId) });
   };
 
+  // --- Member mutations ---------------------------------------------------
   const addMutation = useMutation({
     mutationFn: (userId: string) => messagesApi.addSquadMember(conversationId, userId),
-    onSuccess: () => {
-      setAddQuery('');
-      setDebouncedAddQuery('');
-      invalidateAll();
-    },
+    onSuccess: () => invalidateAll(),
   });
 
   const removeMutation = useMutation({
@@ -117,6 +115,52 @@ export function SquadManagementSheet({ conversationId, visible, onClose, viewerI
     onSuccess: () => invalidateAll(),
   });
 
+  // --- Settings mutations -------------------------------------------------
+  const notifMutation = useMutation({
+    mutationFn: (payload: { notifications_enabled?: boolean; notify_mentions?: boolean }) =>
+      messagesApi.setSquadNotifications(conversationId, payload),
+    // Optimistic flip so the Switch animates smoothly even if the request
+    // is slow. Server returns the refreshed squad response on success.
+    onMutate: async (payload) => {
+      await queryClient.cancelQueries({ queryKey: SQUAD_QUERY_KEY(conversationId) });
+      const prev = queryClient.getQueryData<SquadDetailResponse>(SQUAD_QUERY_KEY(conversationId));
+      if (prev?.viewer_membership) {
+        queryClient.setQueryData<SquadDetailResponse>(SQUAD_QUERY_KEY(conversationId), {
+          ...prev,
+          viewer_membership: {
+            ...prev.viewer_membership,
+            notifications_enabled: payload.notifications_enabled ?? prev.viewer_membership.notifications_enabled,
+            notify_mentions: payload.notify_mentions ?? prev.viewer_membership.notify_mentions,
+          },
+        });
+      }
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(SQUAD_QUERY_KEY(conversationId), ctx.prev);
+    },
+    onSuccess: () => invalidateAll(),
+  });
+
+  const renameMutation = useMutation({
+    mutationFn: (title: string) => messagesApi.updateSquad(conversationId, { title }),
+    onSuccess: () => invalidateAll(),
+  });
+
+  // --- Add-member typeahead ----------------------------------------------
+  const [addQuery, setAddQuery] = useState('');
+  const [debouncedAddQuery, setDebouncedAddQuery] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedAddQuery(addQuery.trim()), 220);
+    return () => clearTimeout(t);
+  }, [addQuery]);
+  const userSearchQuery = useQuery({
+    queryKey: ['user-search', debouncedAddQuery],
+    queryFn: () => authApi.searchUsers(debouncedAddQuery),
+    enabled: visible && debouncedAddQuery.length >= 2 && canManageMembers,
+    staleTime: 10_000,
+  });
+
   const handleLeave = () => {
     Alert.alert(
       'Leave squad?',
@@ -134,7 +178,7 @@ export function SquadManagementSheet({ conversationId, visible, onClose, viewerI
 
   const handleRemoveMember = (member: SquadMember) => {
     Alert.alert(
-      `Remove @${member.username}?`,
+      `Remove @${member.user.username}?`,
       'They lose access to the conversation. You can re-add them later.',
       [
         { text: 'Cancel', style: 'cancel' },
@@ -153,6 +197,8 @@ export function SquadManagementSheet({ conversationId, visible, onClose, viewerI
     (u: User) => u.id && !memberIds.has(u.id) && u.id !== viewerId,
   );
 
+  const squadTitle = squad?.conversation?.title || '';
+
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={s.backdrop}>
@@ -161,10 +207,27 @@ export function SquadManagementSheet({ conversationId, visible, onClose, viewerI
           <View style={s.handle} />
 
           <View style={s.header}>
-            <Text style={s.title}>{squad?.title || 'Squad'}</Text>
+            <Text style={s.title} numberOfLines={1}>{squadTitle || 'Squad'}</Text>
             <Pressable onPress={onClose} hitSlop={8} style={({ pressed }) => [s.closeBtn, pressed && { opacity: 0.7 }]}>
               <IconSymbol name="xmark" size={16} color={theme.textMuted} />
             </Pressable>
+          </View>
+
+          {/* Tab bar */}
+          <View style={s.tabBar}>
+            {(['members', 'settings'] as Tab[]).map((value) => {
+              const active = tab === value;
+              return (
+                <Pressable
+                  key={value}
+                  onPress={() => setTab(value)}
+                  style={({ pressed }) => [s.tabBtn, active && s.tabBtnActive, pressed && !active && { opacity: 0.7 }]}>
+                  <Text style={[s.tabLabel, active && s.tabLabelActive]}>
+                    {value === 'members' ? `Members · ${members.length}` : 'Settings'}
+                  </Text>
+                </Pressable>
+              );
+            })}
           </View>
 
           {squadQuery.isLoading ? (
@@ -173,14 +236,11 @@ export function SquadManagementSheet({ conversationId, visible, onClose, viewerI
             <Text style={s.errorText}>
               {squadQuery.error instanceof Error ? squadQuery.error.message : 'Failed to load squad'}
             </Text>
-          ) : (
+          ) : tab === 'members' ? (
             <ScrollView
               style={{ maxHeight: 540 }}
               contentContainerStyle={{ gap: 4 }}
               keyboardShouldPersistTaps="handled">
-              <Text style={s.sectionLabel}>
-                Members · {members.length}
-              </Text>
               {members.map((m) => (
                 <SquadMemberRow
                   key={m.user_id}
@@ -189,6 +249,7 @@ export function SquadManagementSheet({ conversationId, visible, onClose, viewerI
                   canManage={canManageMembers}
                   canManageRoles={canManageRoles}
                   viewerRole={viewerRole}
+                  pending={removeMutation.isPending || roleMutation.isPending}
                   onChangeRole={(role) => roleMutation.mutate({ userId: m.user_id, role })}
                   onRemove={() => handleRemoveMember(m)}
                 />
@@ -201,12 +262,7 @@ export function SquadManagementSheet({ conversationId, visible, onClose, viewerI
                     <IconSymbol name="magnifyingglass" size={14} color={theme.textDim} />
                     <TextInput
                       value={addQuery}
-                      onChangeText={(v) => {
-                        setAddQuery(v);
-                        // Debounce inline to avoid double-state.
-                        const trimmed = v.trim();
-                        setTimeout(() => setDebouncedAddQuery(trimmed), 220);
-                      }}
+                      onChangeText={setAddQuery}
                       placeholder="Search by username"
                       placeholderTextColor={theme.textDim}
                       style={s.searchInput}
@@ -251,10 +307,97 @@ export function SquadManagementSheet({ conversationId, visible, onClose, viewerI
                 <Text style={s.leaveText}>Leave squad</Text>
               </Pressable>
             </ScrollView>
+          ) : (
+            // Settings tab: identity edit + notifications
+            <ScrollView
+              style={{ maxHeight: 540 }}
+              contentContainerStyle={{ gap: 12 }}
+              keyboardShouldPersistTaps="handled">
+              {canEditIdentity ? (
+                <SquadIdentityEditor
+                  initialTitle={squadTitle}
+                  saving={renameMutation.isPending}
+                  onSave={(title) => renameMutation.mutate(title)}
+                />
+              ) : null}
+
+              <View style={s.settingsCard}>
+                <Text style={s.sectionLabel}>Notifications</Text>
+                <View style={s.settingsRow}>
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={s.settingsLabel}>All messages</Text>
+                    <Text style={s.settingsHint}>Notify me when anyone posts.</Text>
+                  </View>
+                  <Switch
+                    value={!!viewerMembership?.notifications_enabled}
+                    onValueChange={(value) => notifMutation.mutate({ notifications_enabled: value })}
+                    trackColor={{ false: theme.border, true: theme.accent }}
+                    thumbColor={theme.bg}
+                  />
+                </View>
+                <View style={s.settingsRow}>
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={s.settingsLabel}>Mentions</Text>
+                    <Text style={s.settingsHint}>Always notify when @-mentioned.</Text>
+                  </View>
+                  <Switch
+                    value={!!viewerMembership?.notify_mentions}
+                    onValueChange={(value) => notifMutation.mutate({ notify_mentions: value })}
+                    trackColor={{ false: theme.border, true: theme.accent }}
+                    thumbColor={theme.bg}
+                  />
+                </View>
+              </View>
+            </ScrollView>
           )}
         </View>
       </View>
     </Modal>
+  );
+}
+
+function SquadIdentityEditor({
+  initialTitle,
+  saving,
+  onSave,
+}: {
+  initialTitle: string;
+  saving: boolean;
+  onSave: (title: string) => void;
+}) {
+  const s = useThemedStyles(makeStyles);
+  const { theme } = useTheme();
+  const [draft, setDraft] = useState(initialTitle);
+  // Keep the draft in sync if the server-side title changes underneath us.
+  useEffect(() => { setDraft(initialTitle); }, [initialTitle]);
+  const dirty = draft.trim().length > 0 && draft.trim() !== initialTitle.trim();
+
+  return (
+    <View style={s.settingsCard}>
+      <Text style={s.sectionLabel}>Squad name</Text>
+      <TextInput
+        value={draft}
+        onChangeText={setDraft}
+        placeholder="Squad name"
+        placeholderTextColor={theme.textDim}
+        style={s.identityInput}
+        maxLength={60}
+      />
+      <Pressable
+        onPress={() => onSave(draft.trim())}
+        disabled={!dirty || saving}
+        style={({ pressed }) => [
+          s.saveBtn,
+          (!dirty || saving) && { opacity: 0.4 },
+          pressed && dirty && { opacity: 0.85 },
+        ]}>
+        {saving ? (
+          <ActivityIndicator size="small" color={theme.bg} />
+        ) : (
+          <Text style={s.saveBtnText}>Save</Text>
+        )}
+      </Pressable>
+    </View>
   );
 }
 
@@ -264,6 +407,7 @@ function SquadMemberRow({
   canManage,
   canManageRoles,
   viewerRole,
+  pending,
   onChangeRole,
   onRemove,
 }: {
@@ -272,16 +416,18 @@ function SquadMemberRow({
   canManage: boolean;
   canManageRoles: boolean;
   viewerRole: string;
+  pending: boolean;
   onChangeRole: (role: string) => void;
   onRemove: () => void;
 }) {
   const s = useThemedStyles(makeStyles);
   const { theme } = useTheme();
-  const avatar = member.avatar ? fullImageUrl(member.avatar) : undefined;
+  const username = member.user?.username || 'Unknown';
+  const avatar = member.user?.avatar ? fullImageUrl(member.user.avatar) : undefined;
 
-  // The viewer can never demote themselves to non-creator if they're the
-  // sole creator (server rejects), and can never edit a higher role than
-  // their own. Hide actions where they don't apply.
+  // Action permissions:
+  //  - Cannot act on yourself or on a creator
+  //  - Cannot promote/demote unless you ARE the creator
   const canActOnThis = !isYou && canManage && member.role !== 'creator';
   const showRolePicker = !isYou && canManageRoles && viewerRole === 'creator' && member.role !== 'creator';
 
@@ -299,7 +445,7 @@ function SquadMemberRow({
       )}
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={s.memberName} numberOfLines={1}>
-          {member.username}{isYou ? ' (you)' : ''}
+          @{username}{isYou ? ' (you)' : ''}
         </Text>
         <Text style={[s.memberRole, { color: roleColor }]} numberOfLines={1}>
           {member.role}
@@ -308,7 +454,8 @@ function SquadMemberRow({
       {showRolePicker ? (
         <Pressable
           onPress={() => onChangeRole(member.role === 'moderator' ? 'member' : 'moderator')}
-          style={({ pressed }) => [s.actionPill, pressed && { opacity: 0.7 }]}>
+          disabled={pending}
+          style={({ pressed }) => [s.actionPill, pressed && { opacity: 0.7 }, pending && { opacity: 0.5 }]}>
           <Text style={s.actionPillText}>
             {member.role === 'moderator' ? 'Demote' : 'Promote'}
           </Text>
@@ -318,7 +465,8 @@ function SquadMemberRow({
         <Pressable
           onPress={onRemove}
           hitSlop={8}
-          style={({ pressed }) => [s.removeBtn, pressed && { opacity: 0.7 }]}>
+          disabled={pending}
+          style={({ pressed }) => [s.removeBtn, pressed && { opacity: 0.7 }, pending && { opacity: 0.5 }]}>
           <IconSymbol name="trash" size={14} color={theme.danger} />
         </Pressable>
       ) : null}
@@ -341,8 +489,22 @@ const makeStyles = (t: ThemeColors) => ({
   handle: { alignSelf: 'center' as const, width: 40, height: 4, borderRadius: 2, backgroundColor: t.border, marginBottom: 6 },
 
   header: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, marginBottom: 8 },
-  title: { fontSize: 17, fontWeight: '900' as const, color: t.text, letterSpacing: 0.3 },
+  title: { fontSize: 17, fontWeight: '900' as const, color: t.text, letterSpacing: 0.3, flex: 1, paddingRight: 8 },
   closeBtn: { padding: 6 },
+
+  // Tab bar
+  tabBar: {
+    flexDirection: 'row' as const,
+    backgroundColor: t.surfaceMuted,
+    borderRadius: 999,
+    padding: 3,
+    gap: 2,
+    marginBottom: 8,
+  },
+  tabBtn: { flex: 1, paddingVertical: 8, alignItems: 'center' as const, borderRadius: 999 },
+  tabBtnActive: { backgroundColor: t.bg },
+  tabLabel: { fontSize: 12, fontWeight: '800' as const, color: t.textMuted },
+  tabLabelActive: { color: t.accent },
 
   sectionLabel: {
     fontSize: 10,
@@ -350,8 +512,7 @@ const makeStyles = (t: ThemeColors) => ({
     letterSpacing: 1.4,
     color: t.textDim,
     textTransform: 'uppercase' as const,
-    marginTop: 8,
-    marginBottom: 4,
+    marginBottom: 6,
     paddingHorizontal: 4,
   },
 
@@ -427,4 +588,38 @@ const makeStyles = (t: ThemeColors) => ({
     marginTop: 8,
   },
   leaveText: { color: t.danger, fontSize: 13, fontWeight: '800' as const },
+
+  // Settings tab
+  settingsCard: {
+    backgroundColor: t.card,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: t.border,
+    padding: 12,
+    gap: 8,
+  },
+  settingsRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 12,
+    paddingVertical: 6,
+  },
+  settingsLabel: { fontSize: 14, fontWeight: '800' as const, color: t.text },
+  settingsHint: { fontSize: 11, color: t.textMuted },
+
+  identityInput: {
+    backgroundColor: t.surfaceMuted,
+    color: t.text,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+  },
+  saveBtn: {
+    paddingVertical: 11,
+    borderRadius: 10,
+    backgroundColor: t.accent,
+    alignItems: 'center' as const,
+  },
+  saveBtnText: { color: t.bg, fontSize: 13, fontWeight: '900' as const, letterSpacing: 0.4 },
 });
