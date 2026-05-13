@@ -35,6 +35,7 @@ import { useTheme } from '@/contexts/theme-context';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { authApi, liveApi, messagesApi, piugameApi, socialApi, songsApi, weeklyChallengesApi } from '@/lib/api';
 import { getMessagesInboxQueryKey } from '@/lib/messagesQueries';
+import { getGradeDisplayLabel, getGradeTier, TIER_COLORS } from '@/lib/grades';
 import { fullImageUrl } from '@/lib/images';
 import { resolveChartJacketUrl } from '@/lib/jacketMap';
 import { parseLiveSessionMarker } from '@/lib/liveSessionMarker';
@@ -45,6 +46,7 @@ import type {
   FollowEntry,
   LiveProfileResponse,
   LiveSessionSummary,
+  LiveSessionSummaryPayload,
   PiugameBestScore,
   PiugamePumbility,
   PiugamePumbilityScore,
@@ -1411,6 +1413,7 @@ export function ProfileBody({ lookup }: { lookup: string }) {
             data={liveProfileQuery.data}
             isLoading={liveProfileQuery.isLoading}
             error={liveProfileQuery.error}
+            jacketMap={jacketMap}
             onSessionPress={(sessionId) => router.push({ pathname: '/live/[id]', params: { id: sessionId } })}
             s={s}
           />
@@ -2399,10 +2402,99 @@ function formatDuration(minutes: number | undefined): string {
   return rem ? `${hours}h ${rem}m` : `${hours}h`;
 }
 
-function LiveTab({ data, isLoading, error, onSessionPress, s }: {
+/** Mode-letter prefix the web uses on the live-tile badges
+ *  (Single → "S", Double → "D", CoOp → "C"). */
+function liveModeShort(mode: string | undefined): string {
+  const raw = String(mode || '').trim().toLowerCase();
+  if (raw.startsWith('s')) return 'S';
+  if (raw.startsWith('d')) return 'D';
+  if (raw.startsWith('c')) return 'C';
+  return raw.slice(0, 1).toUpperCase() || '?';
+}
+
+/**
+ * Top-6 best plays grid for the profile Live tab. Mirrors web's
+ * `ProfileLiveTopSongTile` — jacket art with rating chip top-left,
+ * mode+level chip top-right, grade chip bottom-left, score bottom-right.
+ * Picks the same `topSongsByRating` source the web uses (falls back to
+ * topSongsByScore if the server hasn't filled the rating slot).
+ */
+function ProfileLiveTopSongs({
+  summary,
+  jacketMap,
+  s,
+}: {
+  summary: LiveSessionSummaryPayload;
+  jacketMap: Record<string, string> | undefined;
+  s: Styles;
+}) {
+  const rows = (summary.topSongsByRating?.length ? summary.topSongsByRating : summary.topSongsByScore) ?? [];
+  const top = rows.slice(0, 6);
+  if (top.length === 0) return null;
+  return (
+    <View style={s.liveTopSongsGrid}>
+      {top.map((row, idx) => {
+        const score = Number(row?.score) || 0;
+        const rating = Number(row?.rating) || 0;
+        const grade = String(row?.grade || '').trim();
+        const gradeLabel = getGradeDisplayLabel(grade, score);
+        const gradeColor = TIER_COLORS[getGradeTier(grade, score)];
+        const jacketRel = resolveChartJacketUrl({
+          title: row?.song_title,
+          mode: row?.mode,
+          level: row?.level,
+          jacketLookup: jacketMap,
+          // background_url + jacket_url come back as `unknown` via the
+          // LiveSessionPlay index signature — coerce to string here.
+          backgroundUrl: typeof row?.background_url === 'string' ? row.background_url : '',
+          jacketUrl: typeof row?.jacket_url === 'string' ? row.jacket_url : '',
+        });
+        const jacketUrl = jacketRel ? fullImageUrl(jacketRel) : undefined;
+        const modeLabel = `${liveModeShort(row?.mode)}${Number(row?.level) || '?'}`;
+        return (
+          <View
+            key={`${row?.song_title || 'song'}-${row?.mode || 'mode'}-${row?.level || idx}-${idx}`}
+            style={s.liveTopSongTile}>
+            {jacketUrl ? (
+              <Image source={{ uri: jacketUrl }} style={StyleSheet.absoluteFill} contentFit="cover" />
+            ) : (
+              <View style={[StyleSheet.absoluteFill, s.liveTopSongFallback]}>
+                <Text style={s.liveTopSongFallbackText}>
+                  {String(row?.song_title || '?').trim().charAt(0).toUpperCase() || '?'}
+                </Text>
+              </View>
+            )}
+            <View style={[StyleSheet.absoluteFill, s.liveTopSongScrim]} />
+            {rating > 0 ? (
+              <View style={s.liveTopRatingChip}>
+                <Text style={s.liveTopRatingText}>R{formatNumber(rating)}</Text>
+              </View>
+            ) : null}
+            <View style={s.liveTopModeChip}>
+              <Text style={s.liveTopModeText}>{modeLabel}</Text>
+            </View>
+            <View style={s.liveTopBottomRow}>
+              <View style={s.liveTopGradeChip}>
+                <Text style={[s.liveTopGradeText, { color: gradeColor }]}>{gradeLabel || '-'}</Text>
+              </View>
+              <View style={s.liveTopScoreChip}>
+                <Text style={s.liveTopScoreText} numberOfLines={1}>
+                  {score > 0 ? formatNumber(score) : '-'}
+                </Text>
+              </View>
+            </View>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+function LiveTab({ data, isLoading, error, jacketMap, onSessionPress, s }: {
   data: LiveProfileResponse | undefined;
   isLoading: boolean;
   error: Error | null;
+  jacketMap: Record<string, string> | undefined;
   onSessionPress: (sessionId: string) => void;
   s: Styles;
 }) {
@@ -2487,6 +2579,10 @@ function LiveTab({ data, isLoading, error, onSessionPress, s }: {
                   ) : (
                     <Text style={s.endedMeta}>{wrapper.play_count} songs · {wrapper.message_count} messages</Text>
                   )}
+                  {/* Top 6 best plays — same shape the web profile uses
+                      (`topSongsByRating`, falling back to topSongsByScore).
+                      Server already trimmed the lists so we just render. */}
+                  {summary ? <ProfileLiveTopSongs summary={summary} jacketMap={jacketMap} s={s} /> : null}
                   {lastPlay?.song_title ? (
                     <View style={s.endedLastPlay}>
                       <Text style={s.endedLastPlayLabel}>LAST</Text>
@@ -3183,6 +3279,89 @@ const makeStyles = (t: ThemeColors) => ({
     fontSize: 11,
     color: t.textMuted,
     minWidth: 0,
+  },
+  // Top-6 best-plays grid in the Live tab — three across, two rows.
+  // Tiles are 4:3 jacket art with rating/mode/grade/score chips on top,
+  // matching the web's ProfileLiveTopSongTile.
+  liveTopSongsGrid: {
+    flexDirection: 'row' as const,
+    flexWrap: 'wrap' as const,
+    gap: 6,
+    backgroundColor: 'rgba(0,0,0,0.32)',
+    borderRadius: 10,
+    padding: 6,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: t.border,
+  },
+  liveTopSongTile: {
+    // (100% - 6px gutter * 2) / 3 = ~32%; flexBasis trick avoids brittle %s.
+    flexGrow: 0,
+    flexShrink: 0,
+    flexBasis: '32%' as const,
+    aspectRatio: 4 / 3,
+    borderRadius: 8,
+    overflow: 'hidden' as const,
+    backgroundColor: t.surfaceMuted,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: t.border,
+  },
+  liveTopSongFallback: { alignItems: 'center' as const, justifyContent: 'center' as const, backgroundColor: t.surfaceMuted },
+  liveTopSongFallbackText: { fontSize: 18, fontWeight: '900' as const, color: t.textMuted },
+  liveTopSongScrim: { backgroundColor: 'rgba(5,8,22,0.55)' },
+  liveTopRatingChip: {
+    position: 'absolute' as const,
+    top: 4,
+    left: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 4,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,196,0,0.45)',
+  },
+  liveTopRatingText: { fontSize: 8, fontWeight: '900' as const, color: '#FFC400', letterSpacing: 0.3 },
+  liveTopModeChip: {
+    position: 'absolute' as const,
+    top: 4,
+    right: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 4,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.18)',
+  },
+  liveTopModeText: { fontSize: 9, fontWeight: '900' as const, color: '#fff', letterSpacing: 0.3 },
+  liveTopBottomRow: {
+    position: 'absolute' as const,
+    left: 4,
+    right: 4,
+    bottom: 4,
+    flexDirection: 'row' as const,
+    alignItems: 'flex-end' as const,
+    justifyContent: 'space-between' as const,
+    gap: 4,
+  },
+  liveTopGradeChip: {
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 4,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+  },
+  liveTopGradeText: { fontSize: 10, fontWeight: '900' as const, letterSpacing: 0.3 },
+  liveTopScoreChip: {
+    flexShrink: 1,
+    minWidth: 0,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 4,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+  },
+  liveTopScoreText: {
+    fontSize: 10,
+    fontWeight: '800' as const,
+    color: '#fff',
+    fontVariant: ['tabular-nums' as const],
   },
 
   // Titles
