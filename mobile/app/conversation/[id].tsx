@@ -442,7 +442,11 @@ export default function ConversationScreen() {
           </View>
         ) : null}
 
-        {/* Composer */}
+        {/* Composer — single-line. Multi-line auto-grow caused the
+            placeholder text + the wrapping textarea to render at 2+ lines
+            of height even when empty (RN Web textareas default to multiple
+            rows). Fixed-height input keeps the placeholder vertically
+            centered with the send button. */}
         <View style={[s.composer, { paddingBottom: insets.bottom + 8 }]}>
           <TextInput
             style={s.input}
@@ -454,9 +458,10 @@ export default function ConversationScreen() {
             }}
             placeholder="Message…"
             placeholderTextColor={theme.textDim}
-            multiline
             maxLength={4000}
             editable={!sendMutation.isPending}
+            returnKeyType="send"
+            onSubmitEditing={handleSend}
           />
           <Pressable
             onPress={handleSend}
@@ -624,7 +629,10 @@ const makeStyles = (t: ThemeColors) => ({
 
   composer: {
     flexDirection: 'row' as const,
-    alignItems: 'flex-end' as const,
+    // 'center' vertically aligns the input text + placeholder with the
+    // send button. Was 'flex-end' which only worked when the input was
+    // the same height as the button — flaky as soon as paddings changed.
+    alignItems: 'center' as const,
     gap: 8,
     paddingHorizontal: 8,
     paddingTop: 8,
@@ -634,15 +642,17 @@ const makeStyles = (t: ThemeColors) => ({
   },
   input: {
     flex: 1,
+    // Fixed height matches the send button so the row stays balanced and
+    // the placeholder text sits dead-center with the button icon.
+    height: 38,
     backgroundColor: t.surfaceMuted,
     color: t.text,
-    borderRadius: 18,
+    borderRadius: 19,
     paddingHorizontal: 14,
-    paddingVertical: 9,
-    paddingTop: 9,
+    // No vertical padding — the height + lineHeight do the centering.
+    paddingVertical: 0,
     fontSize: 14,
-    maxHeight: 110,
-    minHeight: 38,
+    lineHeight: 18,
   },
   sendBtn: {
     width: 38,
