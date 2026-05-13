@@ -1,10 +1,23 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import {
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  Share,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PlateBadge } from '@/components/plate-badge';
+import { SendToMessageSheet } from '@/components/messages/send-to-message-sheet';
+import { ScoreCommentsSheet } from '@/components/score-comments-sheet';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { apiBaseUrl } from '@/lib/api';
 import { useTheme } from '@/contexts/theme-context';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { getGradeDisplayLabel, getGradeTier, TIER_COLORS } from '@/lib/grades';
@@ -12,6 +25,7 @@ import { fullImageUrl } from '@/lib/images';
 import { getPlateName } from '@/lib/plates';
 import { toCanonicalSongTitle } from '@/lib/songAliases';
 import type { ThemeColors } from '@/constants/theme';
+import type { ChallengeCardEmbed, EmbedSendPayload, LinkShareEmbed } from '@shared/api';
 
 export interface ScoreCardData {
   song_title?: string;
@@ -115,6 +129,12 @@ export function ScoreCardSheet({ visible, data, onClose, onReplay }: Props) {
   const router = useRouter();
   const { theme } = useTheme();
   const s = useThemedStyles(makeStyles);
+  // Score-card secondary sheets — each can be open independently of the
+  // others. State lives at the card level so closing the score card closes
+  // them too.
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [challengeOpen, setChallengeOpen] = useState(false);
 
   if (!data) {
     return (
@@ -148,11 +168,77 @@ export function ScoreCardSheet({ visible, data, onClose, onReplay }: Props) {
   const chartId = parseInt(String(data.chart_id ?? 0), 10) || 0;
 
   const modeGradient = MODE_GRADIENTS[mode] || MODE_GRADIENTS.CoOp;
+  const playId = data.play_id != null ? String(data.play_id) : '';
 
   const handleTitlePress = () => {
     if (!chartId) return;
     onClose();
     router.push({ pathname: '/song/[id]', params: { id: String(chartId) } });
+  };
+
+  // Build the link_share + challenge_card embeds the DM picker will ship.
+  // Mirrors the web ScoreSnapshotModal payload shape so the recipient gets
+  // the same rich card on either platform.
+  const chartPath = chartId ? `/songs/chart/${chartId}` : '';
+  const linkSharePayload: LinkShareEmbed | null = chartPath ? {
+    version: 1,
+    kind: isUpscore ? 'score_share' : 'score_share',
+    path: chartPath,
+    chartPath,
+    title: songTitle,
+    songTitle,
+    mode,
+    level,
+    score: displayScore,
+    grade,
+    plate: data.plate,
+    isStageBreak: !!data.is_stage_break,
+    playerName: data.username,
+    playerAvatar: data.avatar,
+    jacketUrl: data.jacket_url || data.background_url,
+    perfect: data.perfect,
+    great: data.great,
+    good: data.good,
+    bad: data.bad,
+    miss: data.miss,
+    replayUrl: data.replay_embed_url,
+    overTop100Rank: data.over_top100_rank,
+    oldScore: isUpscore ? oldScore : undefined,
+    oldGrade: isUpscore ? data.old_grade : undefined,
+    scoreDelta: isUpscore ? delta : undefined,
+    playedAt: data.played_at_utc || data.date_played,
+  } : null;
+  const challengeCardPayload: ChallengeCardEmbed | null = chartPath ? {
+    version: 1,
+    kind: 'beat_score',
+    path: chartPath,
+    chartPath,
+    title: `Beat my score on ${songTitle}`,
+    subtitle: `${grade} · ${displayScore.toLocaleString()}`,
+    targetLabel: `Beat ${displayScore.toLocaleString()}`,
+    detailLabel: grade,
+    songTitle,
+    mode,
+    level,
+    targetScore: displayScore,
+    targetGrade: grade,
+  } : null;
+  const sharePayload: EmbedSendPayload = linkSharePayload ? { link_share: linkSharePayload } : {};
+  const challengePayload: EmbedSendPayload = challengeCardPayload ? { challenge_card: challengeCardPayload } : {};
+
+  // Native share — opens the OS share sheet with the chart URL.
+  const handleShareLink = async () => {
+    if (!chartPath) return;
+    const url = `${apiBaseUrl}${chartPath}`;
+    try {
+      await Share.share({
+        message: `${songTitle} · ${grade} · ${displayScore.toLocaleString()}\n${url}`,
+        url, // iOS uses `url` separately from `message`; Android ignores it.
+        title: songTitle,
+      });
+    } catch {
+      // User dismissed — no-op.
+    }
   };
 
   return (
@@ -252,15 +338,121 @@ export function ScoreCardSheet({ visible, data, onClose, onReplay }: Props) {
 
               <JudgmentGrid data={data} s={s} />
 
-              <Pressable onPress={onClose} hitSlop={8} style={({ pressed }) => [s.closeBtn, pressed && { opacity: 0.7 }]}>
-                <IconSymbol name="xmark" size={14} color="#fff" />
-                <Text style={s.closeText}>Close</Text>
-              </Pressable>
+              {/* Action chips — match the web ScoreSnapshotModal action set:
+                  Comment / Send to DM / Challenge / Share link / Close. */}
+              <View style={s.actionRow}>
+                {playId ? (
+                  <ActionChip
+                    icon="bubble.left.and.bubble.right.fill"
+                    label="Comment"
+                    onPress={() => setCommentsOpen(true)}
+                  />
+                ) : null}
+                {chartPath ? (
+                  <ActionChip
+                    icon="paperplane.fill"
+                    label="Send"
+                    accent
+                    onPress={() => setShareOpen(true)}
+                  />
+                ) : null}
+                {chartPath ? (
+                  <ActionChip
+                    icon="trophy.fill"
+                    label="Challenge"
+                    amber
+                    onPress={() => setChallengeOpen(true)}
+                  />
+                ) : null}
+                {chartPath ? (
+                  <ActionChip
+                    icon="link"
+                    label="Share link"
+                    onPress={handleShareLink}
+                  />
+                ) : null}
+                <ActionChip
+                  icon="xmark"
+                  label="Close"
+                  onPress={onClose}
+                />
+              </View>
             </View>
           </View>
         </ScrollView>
       </View>
+
+      {/* Comments sheet */}
+      {playId ? (
+        <ScoreCommentsSheet
+          playId={playId}
+          visible={commentsOpen}
+          onClose={() => setCommentsOpen(false)}
+          contextLine={`${songTitle} · ${grade} · ${displayScore.toLocaleString()}`}
+        />
+      ) : null}
+
+      {/* Send-to-DM picker */}
+      <SendToMessageSheet
+        visible={shareOpen}
+        onClose={() => setShareOpen(false)}
+        title={`Send "${songTitle}"`}
+        description={`${grade} · ${displayScore.toLocaleString()}`}
+        payload={sharePayload}
+      />
+
+      {/* Challenge picker (amber tone) */}
+      <SendToMessageSheet
+        visible={challengeOpen}
+        onClose={() => setChallengeOpen(false)}
+        title={`Challenge: ${songTitle}`}
+        description={`Target ${displayScore.toLocaleString()} ${grade}`}
+        payload={challengePayload}
+        tone="amber"
+      />
     </Modal>
+  );
+}
+
+function ActionChip({
+  icon,
+  label,
+  onPress,
+  accent,
+  amber,
+}: {
+  icon: string;
+  label: string;
+  onPress: () => void;
+  accent?: boolean;
+  amber?: boolean;
+}) {
+  const s = useThemedStyles(makeStyles);
+  const { theme } = useTheme();
+  const tint = amber ? '#fbbf24' : accent ? theme.accent : '#fff';
+  const bg = amber
+    ? 'rgba(251,191,36,0.18)'
+    : accent
+      ? theme.accentTint
+      : 'rgba(255,255,255,0.08)';
+  const border = amber
+    ? 'rgba(251,191,36,0.45)'
+    : accent
+      ? theme.accent
+      : 'rgba(255,255,255,0.18)';
+  return (
+    <Pressable
+      onPress={onPress}
+      hitSlop={4}
+      style={({ pressed }) => [
+        s.actionChip,
+        { backgroundColor: bg, borderColor: border },
+        pressed && { opacity: 0.75 },
+      ]}>
+      {/* IconSymbol's name prop is typed to a closed enum — relax to string */}
+      <IconSymbol name={icon as never} size={13} color={tint} />
+      <Text style={[s.actionChipText, { color: tint }]}>{label}</Text>
+    </Pressable>
   );
 }
 
@@ -378,17 +570,23 @@ const makeStyles = (_t: ThemeColors) => ({
   judgmentLabel: { fontSize: 9, fontWeight: '900' as const, letterSpacing: 0.6 },
   judgmentValue: { fontSize: 14, fontWeight: '700' as const, color: '#fff', fontVariant: ['tabular-nums' as const] },
 
-  closeBtn: {
-    alignSelf: 'flex-end' as const,
+  // Action chip row at the bottom of the score card. Wraps so we can fit
+  // 4-5 chips on a single mobile width without horizontal overflow.
+  actionRow: {
+    flexDirection: 'row' as const,
+    flexWrap: 'wrap' as const,
+    gap: 6,
+    justifyContent: 'flex-end' as const,
+    marginTop: 8,
+  },
+  actionChip: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    gap: 4,
+    gap: 5,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.18)',
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    borderWidth: 1,
   },
-  closeText: { fontSize: 11, fontWeight: '700' as const, color: '#fff', letterSpacing: 0.5 },
+  actionChipText: { fontSize: 11, fontWeight: '900' as const, letterSpacing: 0.4 },
 });

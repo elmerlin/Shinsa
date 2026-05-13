@@ -340,6 +340,20 @@ export interface SendMessagePayload {
   reply_to_message_id?: string;
 }
 
+/** Send-message payload variant that carries an embed (rather than just
+ *  text). Match what the server's `normalizeConversationInput` accepts. */
+export interface EmbedSendPayload {
+  content?: string;
+  reply_to_message_id?: string;
+  session_share?: SessionShareEmbed | null;
+  link_share?: LinkShareEmbed | null;
+  challenge_card?: ChallengeCardEmbed | null;
+  list_share?: ListShareEmbed | null;
+}
+
+/** Also extend sendMessage so callers can pass embeds. */
+export type AnyMessagePayload = SendMessagePayload | EmbedSendPayload;
+
 export interface ConversationParams {
   /** Cursor for older messages. Pass the oldest known message id. */
   before?: string;
@@ -367,8 +381,9 @@ export function createMessagesApi(client: ApiClient) {
       );
     },
 
-    /** Send a new message. Server validates either `content` or an embed. */
-    sendMessage(conversationId: string, payload: SendMessagePayload) {
+    /** Send a new message. Server validates either `content` or an embed
+     *  (session_share / link_share / challenge_card / list_share). */
+    sendMessage(conversationId: string, payload: SendMessagePayload | EmbedSendPayload) {
       return client.request<{ message: ConversationMessage }>(
         `/api/messages/conversations/${encodeURIComponent(conversationId)}/messages`,
         { method: 'POST', body: payload },
@@ -394,11 +409,13 @@ export function createMessagesApi(client: ApiClient) {
     },
 
     /** Get the DM conversation with `userId`, creating it if one doesn't
-     *  exist yet. Returns the same shape as a list row. */
-    getOrCreateDirect(userId: string) {
-      return client.request<{ conversation: ConversationSummary }>(
+     *  exist yet. When `payload` carries content/embeds the server posts
+     *  it as the first message of the conversation in the same call —
+     *  matching the web's "send to DM" flow. */
+    getOrCreateDirect(userId: string, payload: SendMessagePayload | EmbedSendPayload = {}) {
+      return client.request<{ conversation: ConversationSummary; message: ConversationMessage | null }>(
         `/api/messages/direct/${encodeURIComponent(userId)}`,
-        { method: 'POST', body: {} },
+        { method: 'POST', body: payload },
       );
     },
 

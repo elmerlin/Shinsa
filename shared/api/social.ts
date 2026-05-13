@@ -100,6 +100,22 @@ export function createSocialApi(client: ApiClient) {
         body: JSON.stringify({ content, parent_id: parentId ?? null }),
       });
     },
+    /** Comments on a single play row — backs the score-card sheet's
+     *  comment toggle. */
+    playComments(playId: string) {
+      return client.request<Comment[]>(`/api/social/plays/${playId}/comments`);
+    },
+    addPlayComment(playId: string, content: string, parentId?: string | null) {
+      return client.request<Comment>(`/api/social/plays/${playId}/comments`, {
+        method: 'POST',
+        body: JSON.stringify({ content, parent_id: parentId ?? null }),
+      });
+    },
+    deletePlayComment(playId: string, commentId: string) {
+      return client.request<{ ok: true }>(`/api/social/plays/${playId}/comments/${commentId}`, {
+        method: 'DELETE',
+      });
+    },
     // Toggle pump on a feed item. All return { pumped, pump_count }.
     pumpPost(id: string) {
       return client.request<PumpResponse>(`/api/social/posts/${id}/pump`, { method: 'POST' });

@@ -16,6 +16,7 @@ import { PlateBadge } from '@/components/plate-badge';
 import { ReplayModal } from '@/components/replay-modal';
 import { ScoreCardSheet, type ScoreCardData } from '@/components/score-card-sheet';
 import { SessionPlanCard } from '@/components/session-plan-card';
+import { SendToMessageSheet } from '@/components/messages/send-to-message-sheet';
 import { SessionShareCard } from '@/components/session-share-card';
 import { SessionSummaryCard } from '@/components/session-summary-card';
 import { WcSummaryCard } from '@/components/wc-summary-card';
@@ -37,7 +38,7 @@ import { splitWcSummaryContent, type WcSummary } from '@/lib/weeklyChallengeSumm
 import { splitWcPersonalContent, type WcPersonalSummary } from '@/lib/weeklyChallengePersonalMarker';
 import { toCanonicalSongTitle } from '@/lib/songAliases';
 import type { ThemeColors } from '@/constants/theme';
-import type { FeedItem, PumpResponse } from '@shared/api';
+import type { EmbedSendPayload, FeedItem, LinkShareEmbed, PumpResponse } from '@shared/api';
 
 const FEED_QUERY_KEY = ['social-feed'] as const;
 
@@ -265,11 +266,14 @@ function ActionFooter({
   s,
   onPump,
   onComments,
+  onShare,
 }: {
   item: FeedItem;
   s: Styles;
   onPump: (item: FeedItem) => void;
   onComments: (item: FeedItem) => void;
+  /** Opens the SendToMessageSheet picker for this feed item. */
+  onShare: (item: FeedItem) => void;
 }) {
   const { theme } = useTheme();
   const pumped = !!item.user_pumped;
@@ -291,14 +295,17 @@ function ActionFooter({
         <IconSymbol name="bubble.left.and.bubble.right.fill" size={14} color={theme.textMuted} />
         <Text style={s.actionCount}>{item.comment_count ?? 0}</Text>
       </Pressable>
-      <View style={s.actionItem}>
+      <Pressable
+        onPress={() => onShare(item)}
+        hitSlop={6}
+        style={({ pressed }) => [s.actionItem, pressed && { opacity: 0.6 }]}>
         <IconSymbol name="paperplane.fill" size={14} color={theme.textMuted} />
-      </View>
+      </Pressable>
     </View>
   );
 }
 
-function PostCard({ item, onPress, onPump, onComments, s }: { item: FeedItem; onPress: () => void; onPump: (i: FeedItem) => void; onComments: (i: FeedItem) => void; s: Styles }) {
+function PostCard({ item, onPress, onPump, onComments, onShare, s }: { item: FeedItem; onPress: () => void; onPump: (i: FeedItem) => void; onComments: (i: FeedItem) => void; onShare: (i: FeedItem) => void; s: Styles }) {
   const avatar = typeof item.avatar === 'string' ? fullImageUrl(item.avatar) : undefined;
   const images = parseImages(item.images);
   const firstImage = images[0] ? fullImageUrl(images[0]) : undefined;
@@ -365,15 +372,16 @@ function PostCard({ item, onPress, onPump, onComments, s }: { item: FeedItem; on
           ) : null}
         </>
       )}
-      <ActionFooter item={item} s={s} onPump={onPump} onComments={onComments} />
+      <ActionFooter item={item} s={s} onPump={onPump} onComments={onComments} onShare={onShare} />
     </Pressable>
   );
 }
 
-function UpscoreCard({ item, onPump, onComments, onJacket, onScore, onReplay, s }: {
+function UpscoreCard({ item, onPump, onComments, onShare, onJacket, onScore, onReplay, s }: {
   item: FeedItem;
   onPump: (i: FeedItem) => void;
   onComments: (i: FeedItem) => void;
+  onShare: (i: FeedItem) => void;
   onJacket: (chartId: number, songTitle: string, mode: string, level: number) => void;
   onScore: (data: ScoreCardData) => void;
   onReplay: (url: string, title: string) => void;
@@ -470,15 +478,16 @@ function UpscoreCard({ item, onPump, onComments, onJacket, onScore, onReplay, s 
         </Pressable>
       ) : null}
 
-      <ActionFooter item={item} s={s} onPump={onPump} onComments={onComments} />
+      <ActionFooter item={item} s={s} onPump={onPump} onComments={onComments} onShare={onShare} />
     </View>
   );
 }
 
-function ClearCard({ item, onPump, onComments, onJacket, onScore, s }: {
+function ClearCard({ item, onPump, onComments, onShare, onJacket, onScore, s }: {
   item: FeedItem;
   onPump: (i: FeedItem) => void;
   onComments: (i: FeedItem) => void;
+  onShare: (i: FeedItem) => void;
   onJacket: (chartId: number, songTitle: string, mode: string, level: number) => void;
   onScore: (data: ScoreCardData) => void;
   s: Styles;
@@ -553,15 +562,16 @@ function ClearCard({ item, onPump, onComments, onJacket, onScore, s }: {
         </Pressable>
       </View>
 
-      <ActionFooter item={item} s={s} onPump={onPump} onComments={onComments} />
+      <ActionFooter item={item} s={s} onPump={onPump} onComments={onComments} onShare={onShare} />
     </View>
   );
 }
 
-function WeeklyChallengeCard({ item, onPump, onComments, onJacket, onScore, onReplay, s }: {
+function WeeklyChallengeCard({ item, onPump, onComments, onShare, onJacket, onScore, onReplay, s }: {
   item: FeedItem;
   onPump: (i: FeedItem) => void;
   onComments: (i: FeedItem) => void;
+  onShare: (i: FeedItem) => void;
   onJacket: (chartId: number, songTitle: string, mode: string, level: number) => void;
   onScore: (data: ScoreCardData) => void;
   onReplay: (url: string, title: string) => void;
@@ -589,7 +599,7 @@ function WeeklyChallengeCard({ item, onPump, onComments, onJacket, onScore, onRe
           rightChildren={<Text style={s.clearedVerb}>played a weekly challenge</Text>}
         />
         <Text style={s.wcSummary}>Logged a weekly challenge attempt</Text>
-        <ActionFooter item={item} s={s} onPump={onPump} onComments={onComments} />
+        <ActionFooter item={item} s={s} onPump={onPump} onComments={onComments} onShare={onShare} />
       </View>
     );
   }
@@ -692,7 +702,7 @@ function WeeklyChallengeCard({ item, onPump, onComments, onJacket, onScore, onRe
         </Pressable>
       ) : null}
 
-      <ActionFooter item={item} s={s} onPump={onPump} onComments={onComments} />
+      <ActionFooter item={item} s={s} onPump={onPump} onComments={onComments} onShare={onShare} />
     </View>
   );
 }
@@ -708,6 +718,11 @@ export default function FeedScreen() {
   const onComments = (item: FeedItem) => setCommentTarget({ type: item.type, id: item.id });
   const [scoreTarget, setScoreTarget] = useState<ScoreCardData | null>(null);
   const [replayTarget, setReplayTarget] = useState<{ url: string; title: string } | null>(null);
+  // Send-to-DM target — captures the feed item the user tapped the
+  // paperplane on so the DM picker sheet can build a link_share payload
+  // that points back at the original post / upscore / clear.
+  const [shareTarget, setShareTarget] = useState<FeedItem | null>(null);
+  const onShare = (item: FeedItem) => setShareTarget(item);
 
   // Fetch the songs library lazily (cached) so jacket-clicks for entries
   // missing `chart_id` can still resolve to a chart via title+mode+level.
@@ -784,13 +799,14 @@ export default function FeedScreen() {
                   s={s}
                   onPump={onPump}
                   onComments={onComments}
+                  onShare={onShare}
                   onPress={() => router.push({ pathname: '/post/[id]', params: { id: String(item.id) } })}
                 />
               );
             }
-            if (item.type === 'upscore') return <UpscoreCard item={item} s={s} onPump={onPump} onComments={onComments} onJacket={onJacket} onScore={onScore} onReplay={onReplay} />;
-            if (item.type === 'clear') return <ClearCard item={item} s={s} onPump={onPump} onComments={onComments} onJacket={onJacket} onScore={onScore} />;
-            if (item.type === 'weekly_challenge') return <WeeklyChallengeCard item={item} s={s} onPump={onPump} onComments={onComments} onJacket={onJacket} onScore={onScore} onReplay={onReplay} />;
+            if (item.type === 'upscore') return <UpscoreCard item={item} s={s} onPump={onPump} onComments={onComments} onShare={onShare} onJacket={onJacket} onScore={onScore} onReplay={onReplay} />;
+            if (item.type === 'clear') return <ClearCard item={item} s={s} onPump={onPump} onComments={onComments} onShare={onShare} onJacket={onJacket} onScore={onScore} />;
+            if (item.type === 'weekly_challenge') return <WeeklyChallengeCard item={item} s={s} onPump={onPump} onComments={onComments} onShare={onShare} onJacket={onJacket} onScore={onScore} onReplay={onReplay} />;
             return null;
           }}
           contentContainerStyle={s.listContent}
@@ -836,8 +852,77 @@ export default function FeedScreen() {
         title={replayTarget?.title}
         onClose={() => setReplayTarget(null)}
       />
+
+      {/* Send-to-DM picker — built from the active feed item. Builds a
+          link_share that points back at the post / upscore / clear so the
+          recipient gets a tappable card matching the web link_share embed. */}
+      <SendToMessageSheet
+        visible={!!shareTarget}
+        onClose={() => setShareTarget(null)}
+        title={buildFeedShareTitle(shareTarget)}
+        description={buildFeedShareSubtitle(shareTarget)}
+        payload={buildFeedSharePayload(shareTarget)}
+      />
     </View>
   );
+}
+
+// ---------------------------------------------------------------------------
+// Feed-item → DM payload helpers
+// ---------------------------------------------------------------------------
+
+function buildFeedShareTitle(item: FeedItem | null): string {
+  if (!item) return 'Share to chat';
+  if (item.type === 'post') return `Share post by @${String(item.username || 'unknown')}`;
+  if (item.type === 'upscore') return `Share upscore on ${String(item.song_title || '')}`.trim();
+  if (item.type === 'clear') return `Share clear on ${String(item.song_title || '')}`.trim();
+  if (item.type === 'weekly_challenge') return `Share weekly play: ${String(item.song_title || '')}`.trim();
+  return 'Share to chat';
+}
+
+function buildFeedShareSubtitle(item: FeedItem | null): string {
+  if (!item) return '';
+  const score = parseInt(String((item as Record<string, unknown>).score ?? (item as Record<string, unknown>).new_score ?? 0), 10) || 0;
+  const grade = String((item as Record<string, unknown>).grade ?? (item as Record<string, unknown>).new_grade ?? '').trim();
+  if (score > 0 && grade) return `${grade} · ${score.toLocaleString()}`;
+  if (score > 0) return score.toLocaleString();
+  return '';
+}
+
+function buildFeedSharePayload(item: FeedItem | null): EmbedSendPayload {
+  if (!item) return {};
+  // Map feed item type → server route path the recipient can deep-link into.
+  const path = (() => {
+    if (item.type === 'post') return `/post/${String(item.id)}`;
+    if (item.type === 'upscore') return `/upscore/${String(item.id)}`;
+    if (item.type === 'clear') return `/clear/${String(item.id)}`;
+    if (item.type === 'weekly_challenge') return `/weekly-play/${String(item.id)}`;
+    return '';
+  })();
+  if (!path) return {};
+  const data = item as Record<string, unknown>;
+  const songTitle = String(data.song_title ?? '');
+  const mode = String(data.mode ?? '');
+  const level = parseInt(String(data.level ?? 0), 10) || 0;
+  const score = parseInt(String(data.score ?? data.new_score ?? 0), 10) || 0;
+  const grade = String(data.grade ?? data.new_grade ?? '').trim();
+  const link_share: LinkShareEmbed = {
+    version: 1,
+    kind: item.type === 'post' ? 'link' : 'score_share',
+    path,
+    title: songTitle || (item.type === 'post' ? `Post by @${String(data.username ?? '')}` : ''),
+    songTitle,
+    mode,
+    level,
+    score,
+    grade,
+    playerName: String(data.username ?? ''),
+    playerAvatar: typeof data.avatar === 'string' ? data.avatar : undefined,
+    jacketUrl: (typeof data.jacket_url === 'string' && data.jacket_url)
+      || (typeof data.background_url === 'string' && data.background_url)
+      || undefined,
+  };
+  return { link_share };
 }
 
 const makeStyles = (t: ThemeColors) => ({
