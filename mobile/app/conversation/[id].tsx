@@ -36,6 +36,9 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DefaultAvatar } from '@/components/default-avatar';
+import { MessageActionSheet, type MessageActionTarget } from '@/components/messages/message-action-sheet';
+import { MessageEmbed } from '@/components/messages/message-embed';
+import { ReactionBar } from '@/components/messages/message-reactions';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/contexts/theme-context';
@@ -113,15 +116,6 @@ function groupMessages(messages: ConversationMessage[]): GroupedMessage[] {
   return out;
 }
 
-function embedLabel(messageType: string): string {
-  switch (messageType) {
-    case 'session_share': return '🔴 Live session';
-    case 'challenge_card': return '🎯 Challenge';
-    case 'link_share': return '🔗 Link';
-    case 'list_share': return '📋 Song list';
-    default: return '✨ Shared content';
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Screen
@@ -144,6 +138,8 @@ export default function ConversationScreen() {
   // Tracks scrollTop so we don't auto-scroll the user back to the bottom
   // while they're reading older messages.
   const isNearBottomRef = useRef(true);
+  // Long-press target (drives the bottom action sheet).
+  const [actionTarget, setActionTarget] = useState<MessageActionTarget | null>(null);
 
   const threadKey = getConversationQueryKey(conversationId);
   const query = useQuery({
@@ -208,6 +204,78 @@ export default function ConversationScreen() {
       // any back-end-applied normalization (e.g. trimmed whitespace).
       void queryClient.invalidateQueries({ queryKey: threadKey });
       // Also refetch inbox so the row's last-message preview updates.
+      void queryClient.invalidateQueries({ queryKey: getMessagesInboxQueryKey(user?.id) });
+    },
+  });
+
+  // Toggle a reaction. Server is single-reaction-per-user-per-message —
+  // sending the viewer's existing reaction clears it; sending a different
+  // key replaces it. Patch the cache optimistically so the chip
+  // highlights/de-highlights immediately.
+  const reactMutation = useMutation({
+    mutationFn: (vars: { messageId: string; key: string }) =>
+      messagesApi.setReaction(conversationId, vars.messageId, vars.key),
+    onMutate: async (vars) => {
+      await queryClient.cancelQueries({ queryKey: threadKey });
+      const prev = queryClient.getQueryData<ConversationDetailResponse>(threadKey);
+      if (!prev) return { prev };
+      queryClient.setQueryData<ConversationDetailResponse>(threadKey, {
+        ...prev,
+        messages: prev.messages.map((m) => {
+          if (m.id !== vars.messageId) return m;
+          const wasMine = m.viewer_reaction === vars.key;
+          // Decrement the prior reaction; increment the new one.
+          const without = m.reactions.filter((r) => r.key !== (m.viewer_reaction || ''))
+            .map((r) => r.key === (m.viewer_reaction || '')
+              ? { ...r, count: Math.max(0, r.count - 1) }
+              : r)
+            .filter((r) => r.count > 0);
+          const decremented = m.viewer_reaction && m.viewer_reaction !== vars.key
+            ? without.map((r) => r) // already removed above
+            : without;
+          if (wasMine) {
+            // toggle off
+            return { ...m, viewer_reaction: '', reactions: decremented };
+          }
+          const idx = decremented.findIndex((r) => r.key === vars.key);
+          const nextReactions = idx >= 0
+            ? decremented.map((r, i) => i === idx ? { ...r, count: r.count + 1 } : r)
+            : [...decremented, { key: vars.key, count: 1 }];
+          nextReactions.sort((a, b) => b.count - a.count || a.key.localeCompare(b.key));
+          return { ...m, viewer_reaction: vars.key, reactions: nextReactions };
+        }),
+      });
+      return { prev };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(threadKey, ctx.prev);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: threadKey });
+    },
+  });
+
+  // Unsend (soft-delete) a message I sent. Server marks deleted_at and
+  // strips body/embeds; the row stays in place rendered as "Message unsent".
+  const unsendMutation = useMutation({
+    mutationFn: (messageId: string) => messagesApi.unsendMessage(conversationId, messageId),
+    onMutate: async (messageId) => {
+      await queryClient.cancelQueries({ queryKey: threadKey });
+      const prev = queryClient.getQueryData<ConversationDetailResponse>(threadKey);
+      if (!prev) return { prev };
+      queryClient.setQueryData<ConversationDetailResponse>(threadKey, {
+        ...prev,
+        messages: prev.messages.map((m) => m.id === messageId
+          ? { ...m, is_unsent: true, content: '', message_type: 'unsent', share: null, link_share: null, challenge_card: null, list_share: null, note_thread: null, reactions: [], viewer_reaction: '' }
+          : m),
+      });
+      return { prev };
+    },
+    onError: (_err, _id, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(threadKey, ctx.prev);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: threadKey });
       void queryClient.invalidateQueries({ queryKey: getMessagesInboxQueryKey(user?.id) });
     },
   });
@@ -306,6 +374,13 @@ export default function ConversationScreen() {
                   key={m.id}
                   message={m}
                   isSquad={conversation?.kind === 'squad'}
+                  onLongPress={() => setActionTarget({
+                    messageId: m.id,
+                    own: m.is_own,
+                    body: m.content || '',
+                    viewerReaction: m.viewer_reaction,
+                  })}
+                  onReactionToggle={(key) => reactMutation.mutate({ messageId: m.id, key })}
                 />
               ))
             )}
@@ -348,6 +423,13 @@ export default function ConversationScreen() {
           </View>
         ) : null}
       </KeyboardAvoidingView>
+
+      <MessageActionSheet
+        target={actionTarget}
+        onClose={() => setActionTarget(null)}
+        onReact={(messageId, key) => reactMutation.mutate({ messageId, key })}
+        onUnsend={(messageId) => unsendMutation.mutate(messageId)}
+      />
     </View>
   );
 }
@@ -358,17 +440,22 @@ export default function ConversationScreen() {
 function MessageBubble({
   message,
   isSquad,
+  onLongPress,
+  onReactionToggle,
 }: {
   message: GroupedMessage;
   isSquad: boolean;
+  onLongPress: () => void;
+  onReactionToggle: (key: string) => void;
 }) {
   const s = useThemedStyles(makeBubbleStyles);
   const own = message.is_own;
   const isUnsent = message.is_unsent;
   const hasEmbed = !isUnsent && message.message_type !== 'text' && !!(
-    message.share || message.challenge_card || message.link_share || message.list_share
+    message.share || message.challenge_card || message.link_share || message.list_share || message.note_thread
   );
   const senderAvatar = message.sender.avatar ? fullImageUrl(message.sender.avatar) : undefined;
+  const hasContent = !isUnsent && !!message.content;
 
   return (
     <View>
@@ -396,24 +483,37 @@ function MessageBubble({
             <Text style={s.senderLabel}>{message.sender.username}</Text>
           ) : null}
 
-          <View style={[
-            s.bubble,
-            own ? s.bubbleOwn : s.bubbleOther,
-            isUnsent && s.bubbleUnsent,
-          ]}>
+          <Pressable
+            onLongPress={isUnsent ? undefined : onLongPress}
+            delayLongPress={280}
+            style={[
+              s.bubble,
+              own ? s.bubbleOwn : s.bubbleOther,
+              isUnsent && s.bubbleUnsent,
+              hasEmbed && s.bubbleEmbed,
+            ]}>
             {isUnsent ? (
               <Text style={s.unsentText}>Message unsent</Text>
             ) : hasEmbed ? (
-              <View>
-                <Text style={[s.embedLabel, own && s.embedLabelOwn]}>{embedLabel(message.message_type)}</Text>
-                {message.content ? (
+              <View style={{ gap: 6 }}>
+                <MessageEmbed message={message} own={own} />
+                {hasContent ? (
                   <Text style={[s.bubbleText, own && s.bubbleTextOwn]}>{message.content}</Text>
                 ) : null}
               </View>
             ) : (
               <Text style={[s.bubbleText, own && s.bubbleTextOwn]}>{message.content}</Text>
             )}
-          </View>
+          </Pressable>
+
+          {!isUnsent ? (
+            <ReactionBar
+              reactions={message.reactions}
+              viewerReaction={message.viewer_reaction}
+              own={own}
+              onToggle={onReactionToggle}
+            />
+          ) : null}
         </View>
       </View>
     </View>
@@ -495,13 +595,13 @@ const makeBubbleStyles = (t: ThemeColors) => ({
   bubbleOwn: { backgroundColor: t.accent, borderBottomRightRadius: 4 },
   bubbleOther: { backgroundColor: t.card, borderBottomLeftRadius: 4, borderWidth: StyleSheet.hairlineWidth, borderColor: t.border },
   bubbleUnsent: { opacity: 0.6 },
+  // Tighter padding around embeds so the embed card's own border is the
+  // visual edge.
+  bubbleEmbed: { paddingHorizontal: 6, paddingVertical: 6 },
 
   bubbleText: { fontSize: 14, color: t.text, lineHeight: 19 },
   bubbleTextOwn: { color: t.bg, fontWeight: '600' as const },
   unsentText: { fontSize: 13, color: t.textDim, fontStyle: 'italic' as const },
-
-  embedLabel: { fontSize: 11, fontWeight: '900' as const, color: t.textMuted, letterSpacing: 0.3, marginBottom: 2 },
-  embedLabelOwn: { color: t.bg, opacity: 0.85 },
 
   timestamp: { fontSize: 10, color: t.textDim, fontWeight: '700' as const, textAlign: 'center' as const, marginTop: 12, marginBottom: 4 },
 });

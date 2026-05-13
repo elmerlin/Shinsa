@@ -16,7 +16,8 @@ export interface ConversationPartner {
 
 /** Lightweight preview of the most recent message in a conversation.
  *  Server may include share/challenge_card/link_share/list_share metadata —
- *  mobile only renders text + share-kind placeholders for embeds. */
+ *  the inbox preview just needs the human-readable `preview` line; the full
+ *  embed renderers live on the thread screen. */
 export interface ConversationLastMessage {
   id: string;
   sender_user_id: string;
@@ -25,11 +26,11 @@ export interface ConversationLastMessage {
   /** Short human-readable preview from the server (used in the list). */
   preview: string;
   created_at: string;
-  share?: unknown;
-  link_share?: unknown;
-  challenge_card?: unknown;
-  list_share?: unknown;
-  note_thread?: unknown;
+  share?: SessionShareEmbed | null;
+  link_share?: LinkShareEmbed | null;
+  challenge_card?: ChallengeCardEmbed | null;
+  list_share?: ListShareEmbed | null;
+  note_thread?: NoteThreadEmbed | null;
 }
 
 export interface ConversationStompState {
@@ -90,9 +91,7 @@ export interface MessageReaction {
   users?: { user_id: string; username?: string }[];
 }
 
-/** Server-normalized message row. Mobile renders `text` and `unsent` directly;
- *  any other message_type is shown via a "[Shared chart]" / "[Challenge]" /
- *  etc placeholder until the embed renderers ship. */
+/** Server-normalized message row. Renderers live in the mobile thread screen. */
 export interface ConversationMessage {
   id: string;
   conversation_id: string;
@@ -103,14 +102,217 @@ export interface ConversationMessage {
   is_unsent: boolean;
   is_own: boolean;
   sender: ConversationSender;
-  share?: unknown;
-  link_share?: unknown;
-  challenge_card?: unknown;
-  list_share?: unknown;
-  note_thread?: unknown;
-  reply_to?: unknown;
+  share?: SessionShareEmbed | null;
+  link_share?: LinkShareEmbed | null;
+  challenge_card?: ChallengeCardEmbed | null;
+  list_share?: ListShareEmbed | null;
+  note_thread?: NoteThreadEmbed | null;
+  reply_to?: ReplyTarget | null;
   reactions: MessageReaction[];
   viewer_reaction?: string;
+}
+
+// --- Embed payloads (mirror server/lib/directMessages.js sanitizers) -------
+
+/** Live session / Hour-of-Power recap card. Subset of fields relevant to
+ *  the mobile renderer; server returns more (rows[], judgmentTotals, etc). */
+export interface SessionShareEmbed {
+  version?: number;
+  shareType?: 'hour_of_power' | 'session_share';
+  sessionId?: string;
+  sessionTitle?: string;
+  streamUrl?: string;
+  sessionDateLabel?: string;
+  sessionTimeRange?: string;
+  sessionDurationMinutes?: number;
+  sessionDurationLabel?: string;
+  sessionMachineName?: string;
+  filterMode?: string;
+  minGrade?: string;
+  minGradeLabel?: string;
+  hasLevelRange?: boolean;
+  levelRangeLabel?: string;
+  songCount?: number;
+  clearCount?: number;
+  clearRate?: number;
+  averageScore?: number;
+  totalRatingPoints?: number;
+  averageRatingPoints?: number;
+  averageLevel?: number;
+  highestRatingPoints?: number;
+  countedClearCount?: number;
+  completed?: boolean;
+  leaderboardEligible?: boolean;
+  perfectRate?: number;
+  judgmentTotals?: {
+    perfect?: number;
+    great?: number;
+    good?: number;
+    bad?: number;
+    miss?: number;
+  };
+  /** Server may include up to N preview rows. */
+  rows?: Array<{
+    song_title?: string;
+    mode?: string;
+    level?: number;
+    score?: number;
+    grade?: string;
+    rating_points?: number;
+    jacket_url?: string;
+  }>;
+}
+
+/** Adaptive link card — the `kind` switches the visual treatment. */
+export interface LinkShareEmbed {
+  version?: number;
+  /** 'replay' | 'score_share' | 'chart_compare' | 'chart_challenge' |
+   *  'live_session' | 'achievement_badge' | 'pet_share' | 'story_share' |
+   *  'list' | 'link' (fallback). Server passes the raw kind through. */
+  kind?: string;
+  path?: string;
+  url?: string;
+  chartPath?: string;
+  title?: string;
+  subtitle?: string;
+  buttonLabel?: string;
+  postType?: string;
+  achievementBadgeName?: string;
+  achievementSupportingCopy?: string;
+  previewImage?: string;
+  songTitle?: string;
+  mode?: string;
+  level?: number;
+  score?: number;
+  grade?: string;
+  isStageBreak?: boolean;
+  playerName?: string;
+  playerAvatar?: string;
+  playerSkillTitle?: string;
+  playerRoleLabel?: string;
+  contextLabel?: string;
+  liveSessionType?: string;
+  isUnlisted?: boolean;
+  youtubeVideoId?: string;
+  playedAt?: string;
+  jacketUrl?: string;
+  oldScore?: number;
+  oldGrade?: string;
+  scoreDelta?: number;
+  overTop100Rank?: number;
+  plate?: string;
+  perfect?: number;
+  great?: number;
+  good?: number;
+  bad?: number;
+  miss?: number;
+  replayUrl?: string;
+  replayVideoId?: string;
+  replayStartSeconds?: number;
+  replayEndSeconds?: number;
+  targetScore?: number;
+  challengeKind?: string;
+  sourceMessageId?: string;
+  statusKind?: string;
+  statusLabel?: string;
+  storyId?: string;
+  storyOwnerId?: string;
+  storyOwnerUsername?: string;
+  storyOwnerAvatar?: string;
+  storyType?: string;
+  storySourceKind?: string;
+  storyCaption?: string;
+  storyCreatedAt?: string;
+  storyMediaUrl?: string;
+  storyFallbackPath?: string;
+  storyFallbackUrl?: string;
+  previewItems?: Array<{
+    songTitle?: string;
+    mode?: string;
+    level?: number;
+    score?: number;
+    grade?: string;
+    plate?: string;
+    jacketUrl?: string;
+    scoreDelta?: number;
+  }>;
+  totalItemCount?: number;
+  extraItemCount?: number;
+  petUserId?: string;
+  petUsername?: string;
+  petPreview?: {
+    character?: string;
+    nickname?: string;
+    level?: number;
+    hunger?: number;
+    happiness?: number;
+    weight_state?: string;
+    mood?: string;
+    bond_rank?: { label?: string } | null;
+    form?: { label?: string } | null;
+    equipped_hat?: string;
+    equipped_top?: string;
+    hat_color?: string;
+    top_color?: string;
+  } | null;
+}
+
+/** Challenge card — invites recipient to play a chart for a target. */
+export interface ChallengeCardEmbed {
+  version?: number;
+  kind?: string;
+  sourceKind?: string;
+  sourceId?: string;
+  path?: string;
+  chartPath?: string;
+  title?: string;
+  subtitle?: string;
+  targetLabel?: string;
+  detailLabel?: string;
+  buttonLabel?: string;
+  songTitle?: string;
+  mode?: string;
+  level?: number;
+  targetScore?: number;
+  targetGrade?: string;
+  originUsername?: string;
+  sourceMessageId?: string;
+  statusKind?: string;
+  statusLabel?: string;
+}
+
+/** Shared squad-list reference. */
+export interface ListShareEmbed {
+  version?: number;
+  sharedListId: number;
+  listName: string;
+  itemCount?: number;
+  ownerUsername?: string;
+}
+
+/** Pinned note thread (time-limited). */
+export interface NoteThreadEmbed {
+  version?: number;
+  threadKey: string;
+  noteId?: string;
+  ownerUserId?: string;
+  ownerUsername?: string;
+  noteText?: string;
+  noteKind?: string;
+  createdAt?: string;
+  expiresAt?: string;
+  linkPath?: string;
+  linkUrl?: string;
+  linkLabel?: string;
+}
+
+/** Reply-to target — small quoted snippet of the parent message. */
+export interface ReplyTarget {
+  messageId?: string;
+  senderUserId?: string;
+  senderUsername?: string;
+  messageType?: string;
+  previewText?: string;
 }
 
 export interface ConversationReadReceipt {
@@ -207,7 +409,123 @@ export function createMessagesApi(client: ApiClient) {
         { method: 'PUT', body: { pinned } },
       );
     },
+
+    /** Toggle a reaction on a message. Pass `reaction: ''` to clear the
+     *  viewer's existing reaction. Server is single-reaction-per-user-per-
+     *  message — sending a different reaction key replaces the prior one. */
+    setReaction(conversationId: string, messageId: string, reaction: string) {
+      return client.request<{ reactions: MessageReaction[]; viewer_reaction: string }>(
+        `/api/messages/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}/reactions`,
+        { method: 'POST', body: { reaction } },
+      );
+    },
+
+    /** Notify the server (and other members) that the viewer is typing.
+     *  Throttle on the client; server expires the indicator after ~7s. */
+    sendTyping(conversationId: string) {
+      return client.request<{ ok: true }>(
+        `/api/messages/conversations/${encodeURIComponent(conversationId)}/typing`,
+        { method: 'POST', body: {} },
+      );
+    },
+
+    /** Fetch active typing entries — returns who is currently typing in
+     *  this conversation (excludes the viewer). Poll on a short interval. */
+    typing(conversationId: string) {
+      return client.request<TypingResponse>(
+        `/api/messages/conversations/${encodeURIComponent(conversationId)}/typing`,
+      );
+    },
+
+    /** Fuzzy-search conversation members for @-mention autocomplete.
+     *  Squad-only; the server returns 200 with empty users for direct DMs. */
+    searchMentions(conversationId: string, q: string) {
+      return client.request<{ users: MentionUser[] }>(
+        `/api/messages/conversations/${encodeURIComponent(conversationId)}/mentions?q=${encodeURIComponent(q)}`,
+      );
+    },
+
+    /** Stories highlights — friends/squads with active stories. Used by the
+     *  inbox top-strip. Returns the viewer's own story bucket plus circles. */
+    highlights() {
+      return client.request<HighlightsResponse>(`/api/messages/highlights`);
+    },
+
+    /** Fetch a user's story stack for the viewer (own or peer). */
+    story(userId: string) {
+      return client.request<StoryResponse>(
+        `/api/messages/highlights/${encodeURIComponent(userId)}/story`,
+      );
+    },
+
+    /** Mark a story as viewed (debounced; safe to call multiple times). */
+    markStoryViewed(userId: string, storyId: string) {
+      return client.request<{ ok: true }>(
+        `/api/messages/highlights/${encodeURIComponent(userId)}/story/${encodeURIComponent(storyId)}/view`,
+        { method: 'POST' },
+      );
+    },
   };
+}
+
+export interface TypingEntry {
+  user_id: string;
+  username: string;
+  avatar?: string;
+  /** Server-side ISO expiry when this typing flag goes stale. */
+  expires_at?: string;
+}
+export interface TypingResponse {
+  typing: TypingEntry[];
+}
+
+export interface MentionUser {
+  user_id: string;
+  username: string;
+  avatar?: string;
+  /** Optional display name for squads where the user has a custom title. */
+  display_name?: string;
+}
+
+export interface StoryHighlightCircle {
+  user: {
+    id: string;
+    username: string;
+    avatar?: string;
+    nationality?: string;
+  };
+  has_story: boolean;
+  is_self?: boolean;
+  /** When true, the viewer hasn't seen the latest story yet. */
+  has_unseen?: boolean;
+  note?: { text?: string; created_at?: string } | null;
+}
+
+export interface HighlightsResponse {
+  me: StoryHighlightCircle | null;
+  circles: StoryHighlightCircle[];
+}
+
+export interface StoryItem {
+  id: string;
+  user_id: string;
+  username: string;
+  avatar?: string;
+  /** 'image' | 'video' | 'replay' | 'achievement' | 'note' | …  */
+  story_type: string;
+  source_kind?: string;
+  caption?: string;
+  media_url?: string;
+  fallback_path?: string;
+  fallback_url?: string;
+  created_at: string;
+  expires_at?: string;
+  is_viewed?: boolean;
+}
+
+export interface StoryResponse {
+  user: { id: string; username: string; avatar?: string };
+  stories: StoryItem[];
 }
 
 export type MessagesApi = ReturnType<typeof createMessagesApi>;

@@ -16,11 +16,13 @@
  *    don't write yet)
  *  - Realtime via WebSocket (liketu uses one; shinsa polls)
  */
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
+import { useState } from 'react';
 import {
   ActivityIndicator,
+  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -96,6 +98,8 @@ export default function MessagesScreen() {
   const { theme } = useTheme();
   const s = useThemedStyles(makeStyles);
   const queryClient = useQueryClient();
+  // Long-press target → opens the pin/mute action sheet.
+  const [actionTarget, setActionTarget] = useState<ConversationSummary | null>(null);
 
   const inboxKey = getMessagesInboxQueryKey(user?.id);
   const query = useQuery({
@@ -104,6 +108,31 @@ export default function MessagesScreen() {
     enabled: !!user?.id,
     refetchInterval: INBOX_REFETCH_INTERVAL_MS,
     refetchOnWindowFocus: true,
+  });
+
+  // Pin/unpin a conversation. Optimistically flip the flag in the inbox
+  // cache so the row reorders instantly; server confirms.
+  const pinMutation = useMutation({
+    mutationFn: (vars: { id: string; pinned: boolean }) =>
+      messagesApi.pinConversation(vars.id, vars.pinned),
+    onMutate: async (vars) => {
+      await queryClient.cancelQueries({ queryKey: inboxKey });
+      const prev = queryClient.getQueryData<ConversationsResponse>(inboxKey);
+      if (!prev) return { prev };
+      queryClient.setQueryData<ConversationsResponse>(inboxKey, {
+        ...prev,
+        conversations: prev.conversations.map((c) =>
+          c.id === vars.id ? { ...c, is_pinned: vars.pinned } : c,
+        ),
+      });
+      return { prev };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(inboxKey, ctx.prev);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: inboxKey });
+    },
   });
 
   const conversations = query.data?.conversations ?? [];
@@ -185,11 +214,49 @@ export default function MessagesScreen() {
                 viewerId={user.id}
                 onPressIn={() => prefetchConversationForIntent({ queryClient, conversationId: c.id })}
                 onPress={() => openConversation(c.id)}
+                onLongPress={() => setActionTarget(c)}
               />
             ))}
           </View>
         )}
       </ScrollView>
+
+      {/* Long-press action sheet — pin/unpin */}
+      <Modal
+        visible={!!actionTarget}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setActionTarget(null)}>
+        <Pressable style={s.actionBackdrop} onPress={() => setActionTarget(null)}>
+          <Pressable
+            style={[s.actionSheet, { paddingBottom: insets.bottom + 12 }]}
+            onPress={(e) => e.stopPropagation()}>
+            <View style={s.actionHandle} />
+            {actionTarget ? (
+              <>
+                <Text style={s.actionHeader} numberOfLines={1}>{actionTarget.title}</Text>
+                <Pressable
+                  onPress={() => {
+                    if (actionTarget) pinMutation.mutate({ id: actionTarget.id, pinned: !actionTarget.is_pinned });
+                    setActionTarget(null);
+                  }}
+                  style={({ pressed }) => [s.actionItem, pressed && { opacity: 0.7 }]}>
+                  <Text style={s.actionItemEmoji}>{actionTarget.is_pinned ? '📍' : '📌'}</Text>
+                  <Text style={s.actionItemLabel}>
+                    {actionTarget.is_pinned ? 'Unpin conversation' : 'Pin to top'}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => setActionTarget(null)}
+                  style={({ pressed }) => [s.actionItem, pressed && { opacity: 0.7 }]}>
+                  <Text style={s.actionItemEmoji}>✕</Text>
+                  <Text style={[s.actionItemLabel, { color: theme.textMuted }]}>Cancel</Text>
+                </Pressable>
+              </>
+            ) : null}
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -199,11 +266,13 @@ function ConversationRow({
   viewerId,
   onPress,
   onPressIn,
+  onLongPress,
 }: {
   conversation: ConversationSummary;
   viewerId: string;
   onPress: () => void;
   onPressIn: () => void;
+  onLongPress: () => void;
 }) {
   const s = useThemedStyles(makeRowStyles);
   const { theme } = useTheme();
@@ -221,6 +290,8 @@ function ConversationRow({
     <Pressable
       onPress={onPress}
       onPressIn={onPressIn}
+      onLongPress={onLongPress}
+      delayLongPress={280}
       style={({ pressed }) => [s.row, isUnread && s.rowUnread, pressed && { opacity: 0.85 }]}>
       <View style={s.avatarWrap}>
         {avatarUrl ? (
@@ -306,6 +377,30 @@ const makeStyles = (t: ThemeColors) => ({
   emptyEmoji: { fontSize: 32, marginBottom: 4 },
   emptyTitle: { fontSize: 16, fontWeight: '900' as const, color: t.text, textAlign: 'center' as const },
   emptyBody: { fontSize: 13, color: t.textMuted, textAlign: 'center' as const, lineHeight: 19 },
+
+  // Long-press action sheet
+  actionBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' as const },
+  actionSheet: {
+    backgroundColor: t.bg,
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    borderTopWidth: 1,
+    borderColor: t.border,
+    paddingTop: 8,
+    paddingHorizontal: 12,
+  },
+  actionHandle: { alignSelf: 'center' as const, width: 40, height: 4, borderRadius: 2, backgroundColor: t.border, marginBottom: 8 },
+  actionHeader: { fontSize: 13, fontWeight: '900' as const, color: t.textMuted, paddingHorizontal: 14, paddingBottom: 8, textAlign: 'center' as const },
+  actionItem: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    borderRadius: 10,
+  },
+  actionItemEmoji: { fontSize: 18, width: 24 },
+  actionItemLabel: { fontSize: 15, fontWeight: '700' as const, color: t.text },
 });
 
 const makeRowStyles = (t: ThemeColors) => ({
