@@ -41,7 +41,7 @@ const SECONDARY_NAV: NavItem[] = [
   { label: 'Leaderboards', path: '/leaderboards' },
   { label: 'World Max', path: '/world-max', stub: true },
   { label: 'Shoes', path: '/shoes' },
-  { label: 'Messages', path: '/messages', stub: true },
+  { label: 'Messages', path: '/messages' },
 ];
 
 const ACCOUNT_NAV: NavItem[] = [
@@ -135,7 +135,11 @@ export default function DrawerLayout() {
       drawerContent={(props) => <DrawerContent {...props} />}
       screenOptions={{
         headerShown: false,
-        drawerStyle: { backgroundColor: theme.surface, width: 300 },
+        // 260 fits the longest label ("Weekly Challenges" + optional SOON
+        // badge) with a comfortable margin while leaving more of the page
+        // visible behind the drawer. Don't shrink further without re-checking
+        // the longest label after a translation pass.
+        drawerStyle: { backgroundColor: theme.surface, width: 260 },
         drawerType: 'front',
         sceneStyle: { backgroundColor: theme.bg },
       }}>

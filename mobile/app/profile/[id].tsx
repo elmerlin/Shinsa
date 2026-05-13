@@ -33,7 +33,8 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/contexts/theme-context';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
-import { authApi, liveApi, piugameApi, socialApi, songsApi } from '@/lib/api';
+import { authApi, liveApi, messagesApi, piugameApi, socialApi, songsApi } from '@/lib/api';
+import { getMessagesInboxQueryKey } from '@/lib/messagesQueries';
 import { fullImageUrl } from '@/lib/images';
 import { resolveChartJacketUrl } from '@/lib/jacketMap';
 import { parseLiveSessionMarker } from '@/lib/liveSessionMarker';
@@ -619,6 +620,20 @@ export function ProfileBody({ lookup }: { lookup: string }) {
     },
   });
 
+  // Open (or create) a 1:1 DM with this profile and route into the thread.
+  // Mirrors liketu's `getOrCreateChatDirectConversation` flow — server is
+  // idempotent so tapping Message twice on the same profile reuses the
+  // existing conversation.
+  const openDirectMessageMutation = useMutation({
+    mutationFn: () => messagesApi.getOrCreateDirect(profileId),
+    onSuccess: (result) => {
+      // Warm the inbox so the new (or surfaced) row shows up if the user
+      // backs out of the thread before sending anything.
+      queryClient.invalidateQueries({ queryKey: getMessagesInboxQueryKey(currentUser?.id) });
+      router.push({ pathname: '/conversation/[id]', params: { id: result.conversation.id } });
+    },
+  });
+
   const buildScoreData = (entry: PiugameBestScore | PiugameRecentPlay): ScoreCardData => ({
     song_title: entry.song_title,
     artist: entry.artist,
@@ -894,9 +909,14 @@ export function ProfileBody({ lookup }: { lookup: string }) {
                 </Text>
               </Pressable>
               <Pressable
-                onPress={() => router.push('/messages')}
+                onPress={() => openDirectMessageMutation.mutate()}
+                disabled={openDirectMessageMutation.isPending}
                 style={({ pressed }) => [s.messageBtn, pressed && { opacity: 0.7 }]}>
-                <IconSymbol name="bubble.left.and.bubble.right.fill" size={14} color={theme.text} />
+                {openDirectMessageMutation.isPending ? (
+                  <ActivityIndicator size="small" color={theme.text} />
+                ) : (
+                  <IconSymbol name="bubble.left.and.bubble.right.fill" size={14} color={theme.text} />
+                )}
                 <Text style={s.messageText}>Message</Text>
               </Pressable>
               <Pressable

@@ -6,6 +6,7 @@ export * from './songs';
 export * from './tournaments';
 export * from './social';
 export * from './live';
+export * from './messages';
 export * from './piugame';
 export * from './weekly-challenges';
 export * from './youtube';

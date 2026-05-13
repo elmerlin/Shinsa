@@ -3,6 +3,7 @@ import {
   createAuthApi,
   createDashboardApi,
   createLiveApi,
+  createMessagesApi,
   createNoticesApi,
   createPiugameApi,
   createSocialApi,
@@ -27,6 +28,7 @@ export const tournamentsApi = createTournamentsApi(apiClient);
 export const socialApi = createSocialApi(apiClient);
 export const noticesApi = createNoticesApi(apiClient);
 export const liveApi = createLiveApi(apiClient);
+export const messagesApi = createMessagesApi(apiClient);
 export const piugameApi = createPiugameApi(apiClient);
 export const weeklyChallengesApi = createWeeklyChallengesApi(apiClient);
 export const youtubeApi = createYoutubeApi(apiClient);
