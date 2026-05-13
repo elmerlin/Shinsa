@@ -80,7 +80,14 @@ export function TierSettingsSheet({ visible, settings, onChange, onClose }: Prop
             </Pressable>
           </View>
 
-          <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+          {/* flex:1 + minHeight:0 so the ScrollView claims the remaining
+              space inside the maxHeight-capped sheet and scrolls internally
+              instead of overflowing past the viewport (which on Chrome
+              mobile triggered a zoom-out). */}
+          <ScrollView
+            style={s.scrollHost}
+            contentContainerStyle={s.scroll}
+            showsVerticalScrollIndicator={false}>
             <Section label="Display" s={s}>
               <SegmentedRow
                 value={settings.displayMode}
@@ -273,6 +280,7 @@ const makeStyles = (t: ThemeColors) => ({
   title: { fontSize: 16, fontWeight: '800' as const, color: t.text, letterSpacing: 0.5 },
   closeBtn: { padding: 6 },
 
+  scrollHost: { flex: 1, minHeight: 0 },
   scroll: { gap: 18, paddingVertical: 8 },
 
   section: { gap: 8 },
