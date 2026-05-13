@@ -1,0 +1,1065 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#050505" />
+  <title>Shinsa — train smarter on Pump It Up</title>
+  <meta name="description" content="The Pump It Up companion that turns every machine session into measurable progress. Track scores, tier-list every chart, find rivals, and host live sessions with friends." />
+
+  <link rel="icon" href="/download/icon.png" type="image/png" />
+  <link rel="apple-touch-icon" href="/download/app-icon.png" />
+
+  <!-- Social card -->
+  <meta property="og:title" content="Shinsa — Pump It Up companion" />
+  <meta property="og:description" content="Tier-listing, rival comparisons, weekly challenges, live sessions, training plans — everything you'd hand-roll on a spreadsheet, fully automated." />
+  <meta property="og:image" content="/download/app-icon.png" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://pumpshinsa.com/download" />
+
+  <!-- Self-hosted Inter (system fall-back if it 404s) -->
+  <link rel="preconnect" href="https://rsms.me/" />
+  <link rel="stylesheet" href="https://rsms.me/inter/inter.css" />
+
+  <style>
+    /* ─────────────────────────────────────────────────────────────
+       Tokens — Pump Gold over deep black, mirrors mobile theme.
+       ───────────────────────────────────────────────────────────── */
+    :root {
+      --bg: #050505;
+      --bg-2: #0a0d18;
+      --surface: #11141f;
+      --surface-2: #181c2b;
+      --border: rgba(255, 255, 255, 0.08);
+      --text: #ffffff;
+      --text-muted: rgba(255, 255, 255, 0.66);
+      --text-dim: rgba(255, 255, 255, 0.42);
+      --accent: #ffc400;
+      --accent-glow: rgba(255, 196, 0, 0.45);
+      --accent-tint: rgba(255, 196, 0, 0.16);
+      --feed-cyan: #22d3ee;
+      --songs-emerald: #34d399;
+      --lists-violet: #a78bfa;
+      --train-orange: #fb923c;
+      --rival-rose: #fb7185;
+      --live-red: #f43f5e;
+      --tier-sky: #38bdf8;
+      --maxw: 1180px;
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      font-feature-settings: 'cv11', 'ss01';
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      scroll-behavior: smooth;
+      overflow-x: hidden;
+    }
+    img { display: block; max-width: 100%; }
+    a { color: inherit; text-decoration: none; }
+    h1, h2, h3, h4 { margin: 0; line-height: 1.15; letter-spacing: -0.01em; }
+    p { margin: 0; line-height: 1.55; color: var(--text-muted); }
+
+    /* ─────────────────────────────────────────────────────────────
+       Animated background — slow-rotating gold ember behind the
+       hero, with a subtle particle haze. Pure CSS, GPU-friendly.
+       ───────────────────────────────────────────────────────────── */
+    .ember {
+      position: fixed;
+      inset: 0;
+      z-index: -2;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at 20% 10%, rgba(255, 196, 0, 0.12), transparent 45%),
+        radial-gradient(circle at 80% 30%, rgba(244, 63, 94, 0.07), transparent 55%),
+        radial-gradient(circle at 50% 90%, rgba(125, 211, 252, 0.06), transparent 60%),
+        var(--bg);
+    }
+    .grain {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      pointer-events: none;
+      opacity: 0.04;
+      background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.9" stitchTiles="stitch" /></filter><rect width="100%25" height="100%25" filter="url(%23n)" /></svg>');
+    }
+
+    /* ─────────────────────────────────────────────────────────────
+       Top nav — sticky, blurred, brand mark on the left.
+       ───────────────────────────────────────────────────────────── */
+    .nav {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      backdrop-filter: blur(14px) saturate(140%);
+      -webkit-backdrop-filter: blur(14px) saturate(140%);
+      background: rgba(5, 5, 5, 0.6);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-inner {
+      max-width: var(--maxw);
+      margin: 0 auto;
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+    }
+    .brand img { width: 28px; height: 28px; border-radius: 6px; }
+    .brand-name { font-size: 14px; color: var(--text); }
+    .brand-name b { color: var(--accent); }
+    .nav-cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 16px;
+      border-radius: 999px;
+      background: var(--accent);
+      color: #050505;
+      font-weight: 800;
+      font-size: 13px;
+      letter-spacing: 0.2px;
+      transition: transform 0.15s ease, box-shadow 0.25s ease;
+      box-shadow: 0 8px 24px -8px var(--accent-glow);
+    }
+    .nav-cta:hover { transform: translateY(-1px); box-shadow: 0 12px 28px -8px var(--accent-glow); }
+
+    /* ─────────────────────────────────────────────────────────────
+       Hero
+       ───────────────────────────────────────────────────────────── */
+    .hero {
+      max-width: var(--maxw);
+      margin: 0 auto;
+      padding: 96px 24px 56px;
+      display: grid;
+      grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+      gap: 56px;
+      align-items: center;
+      position: relative;
+    }
+    @media (max-width: 880px) {
+      .hero { grid-template-columns: 1fr; padding-top: 56px; gap: 40px; }
+    }
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: var(--accent-tint);
+      border: 1px solid rgba(255, 196, 0, 0.35);
+      color: var(--accent);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 1.4px;
+      text-transform: uppercase;
+    }
+    .eyebrow .dot {
+      width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
+      box-shadow: 0 0 10px var(--accent-glow);
+    }
+    .hero h1 {
+      margin-top: 18px;
+      font-size: clamp(40px, 6vw, 68px);
+      font-weight: 900;
+      letter-spacing: -0.025em;
+    }
+    .hero h1 .grad {
+      background: linear-gradient(135deg, #fff 30%, var(--accent) 90%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    .hero p.lede {
+      margin-top: 18px;
+      font-size: 17px;
+      max-width: 540px;
+      color: var(--text-muted);
+    }
+    .hero-cta-row {
+      margin-top: 30px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+    }
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 22px;
+      border-radius: 12px;
+      background: var(--accent);
+      color: #050505;
+      font-weight: 800;
+      font-size: 15px;
+      box-shadow: 0 16px 36px -10px var(--accent-glow);
+      transition: transform 0.15s ease, box-shadow 0.25s ease;
+    }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 20px 44px -10px var(--accent-glow); }
+    .btn-primary svg { width: 18px; height: 18px; }
+    .btn-secondary {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 13px 20px;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-weight: 700;
+      font-size: 14px;
+      transition: background 0.2s ease, border-color 0.2s ease;
+    }
+    .btn-secondary:hover { background: rgba(255,255,255,0.09); border-color: rgba(255,255,255,0.18); }
+    .hero-meta {
+      margin-top: 28px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 18px;
+      color: var(--text-dim);
+      font-size: 12px;
+    }
+    .hero-meta b { color: var(--text); font-weight: 700; }
+
+    /* Right-side phone hero */
+    .hero-phone {
+      position: relative;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .hero-phone::before {
+      content: "";
+      position: absolute;
+      inset: -10% -10% -10% -10%;
+      background: radial-gradient(closest-side, rgba(255,196,0,0.18), transparent 70%);
+      filter: blur(40px);
+      z-index: -1;
+    }
+
+    /* ─────────────────────────────────────────────────────────────
+       Phone frame — pure CSS, no images required. Shows a stylized
+       app preview tagged with feature accents.
+       ───────────────────────────────────────────────────────────── */
+    .phone {
+      width: 280px;
+      height: 580px;
+      border-radius: 38px;
+      background: linear-gradient(160deg, #1a1d2c, #050610);
+      border: 1px solid rgba(255,255,255,0.12);
+      box-shadow:
+        0 60px 100px -40px rgba(0,0,0,0.7),
+        0 24px 60px -20px rgba(255,196,0,0.18),
+        inset 0 0 0 6px #050505,
+        inset 0 0 0 7px rgba(255,255,255,0.05);
+      padding: 14px;
+      position: relative;
+      overflow: hidden;
+      animation: floaty 6s ease-in-out infinite;
+    }
+    @keyframes floaty {
+      0%, 100% { transform: translateY(0); }
+      50%      { transform: translateY(-8px); }
+    }
+    .phone .notch {
+      position: absolute;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 100px;
+      height: 22px;
+      background: #050505;
+      border-radius: 0 0 14px 14px;
+      z-index: 2;
+    }
+    .phone-screen {
+      width: 100%;
+      height: 100%;
+      border-radius: 26px;
+      background: #050505;
+      overflow: hidden;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+    }
+    .phone-screen img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: top;
+    }
+
+    /* ─────────────────────────────────────────────────────────────
+       Stylized app mockup (used inside the hero phone)
+       ───────────────────────────────────────────────────────────── */
+    .mock {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 26px 14px 14px;
+      background: linear-gradient(180deg, #050505 0%, #0a0d18 100%);
+      gap: 14px;
+    }
+    .mock-topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .mock-topbar .logo {
+      font-weight: 900;
+      font-size: 13px;
+      letter-spacing: -0.02em;
+    }
+    .mock-topbar .logo b { color: var(--accent); }
+    .mock-topbar .icons {
+      display: flex; gap: 10px; color: var(--text-dim); font-size: 14px;
+    }
+    .mock-quicknav {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+    }
+    .mock-quicknav .pill {
+      height: 38px;
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 9px; font-weight: 900; color: #fff; letter-spacing: 0.5px;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.18);
+    }
+    .pill.live  { background: linear-gradient(135deg, #22d3ee, #1d4ed8); }
+    .pill.songs { background: linear-gradient(135deg, #34d399, #0f766e); }
+    .pill.lists { background: linear-gradient(135deg, #a78bfa, #6d28d9); }
+    .pill.train { background: linear-gradient(135deg, #fbbf24, #c2410c); }
+    .mock-eyebrow {
+      font-size: 9px; font-weight: 900; color: var(--accent);
+      letter-spacing: 1.4px; padding-top: 4px;
+    }
+    .mock-row {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .mock-row .ico {
+      width: 22px; height: 22px; border-radius: 5px;
+      background: var(--accent-tint); border: 1px solid rgba(255,196,0,0.4);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px;
+    }
+    .mock-row .body {
+      flex: 1; min-width: 0;
+    }
+    .mock-row .body p {
+      margin: 0; color: #fff; font-size: 10px; font-weight: 700;
+    }
+    .mock-row .body span {
+      display: block; color: var(--text-dim); font-size: 8px; margin-top: 2px;
+    }
+    .mock-row .pts {
+      font-size: 9px; font-weight: 900; color: #6ee7b7;
+    }
+
+    /* ─────────────────────────────────────────────────────────────
+       Section headers
+       ───────────────────────────────────────────────────────────── */
+    section { padding: 80px 24px; }
+    .section-inner { max-width: var(--maxw); margin: 0 auto; }
+    .section-eyebrow {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 6px 12px; border-radius: 999px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      font-size: 10px; font-weight: 800; letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--text-dim);
+    }
+    .section-h {
+      margin-top: 16px;
+      font-size: clamp(32px, 4vw, 44px);
+      font-weight: 900;
+      letter-spacing: -0.025em;
+      max-width: 780px;
+    }
+    .section-h em {
+      font-style: normal;
+      background: linear-gradient(120deg, #fff, var(--accent) 80%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    .section-sub {
+      margin-top: 14px;
+      font-size: 15px;
+      color: var(--text-muted);
+      max-width: 640px;
+    }
+
+    /* ─────────────────────────────────────────────────────────────
+       Feature grid
+       ───────────────────────────────────────────────────────────── */
+    .features {
+      margin-top: 56px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 24px;
+    }
+    @media (max-width: 720px) { .features { grid-template-columns: 1fr; } }
+    .feature {
+      position: relative;
+      background: linear-gradient(180deg, var(--surface) 0%, rgba(17,20,31,0.6) 100%);
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      padding: 28px;
+      overflow: hidden;
+      transition: transform 0.25s ease, border-color 0.25s ease;
+    }
+    .feature:hover {
+      transform: translateY(-4px);
+      border-color: rgba(255,255,255,0.16);
+    }
+    .feature::before {
+      content: '';
+      position: absolute;
+      top: -1px; left: -1px; right: -1px;
+      height: 3px;
+      background: var(--accent);
+      opacity: 0.7;
+    }
+    .feature[data-tone="feed"]::before  { background: var(--feed-cyan); }
+    .feature[data-tone="songs"]::before { background: var(--songs-emerald); }
+    .feature[data-tone="tiers"]::before { background: var(--tier-sky); }
+    .feature[data-tone="rival"]::before { background: var(--rival-rose); }
+    .feature[data-tone="train"]::before { background: var(--train-orange); }
+    .feature[data-tone="lists"]::before { background: var(--lists-violet); }
+    .feature[data-tone="live"]::before  { background: var(--live-red); }
+    .feature[data-tone="play"]::before  { background: var(--accent); }
+
+    .feature-icon {
+      width: 44px; height: 44px;
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px;
+      background: var(--accent-tint);
+      border: 1px solid rgba(255,196,0,0.35);
+      color: var(--accent);
+      margin-bottom: 18px;
+    }
+    .feature[data-tone="feed"]  .feature-icon { background: rgba(34,211,238,0.14); border-color: rgba(34,211,238,0.4); color: var(--feed-cyan); }
+    .feature[data-tone="songs"] .feature-icon { background: rgba(52,211,153,0.14); border-color: rgba(52,211,153,0.4); color: var(--songs-emerald); }
+    .feature[data-tone="tiers"] .feature-icon { background: rgba(56,189,248,0.14); border-color: rgba(56,189,248,0.4); color: var(--tier-sky); }
+    .feature[data-tone="rival"] .feature-icon { background: rgba(251,113,133,0.14); border-color: rgba(251,113,133,0.4); color: var(--rival-rose); }
+    .feature[data-tone="train"] .feature-icon { background: rgba(251,146,60,0.14); border-color: rgba(251,146,60,0.4); color: var(--train-orange); }
+    .feature[data-tone="lists"] .feature-icon { background: rgba(167,139,250,0.14); border-color: rgba(167,139,250,0.4); color: var(--lists-violet); }
+    .feature[data-tone="live"]  .feature-icon { background: rgba(244,63,94,0.14);  border-color: rgba(244,63,94,0.4);  color: var(--live-red); }
+
+    .feature h3 { font-size: 22px; font-weight: 900; }
+    .feature p  { margin-top: 10px; font-size: 14px; }
+
+    .feature-pills {
+      margin-top: 18px;
+      display: flex; flex-wrap: wrap; gap: 6px;
+    }
+    .feature-pills span {
+      font-size: 10px; font-weight: 800; letter-spacing: 0.5px;
+      padding: 4px 9px; border-radius: 999px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+    }
+
+    /* Mini visualizations inside feature cards */
+    .feature-visual {
+      margin-top: 22px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      padding: 12px;
+      background: rgba(0,0,0,0.35);
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .vrow {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 11px;
+    }
+    .vrow .vbar {
+      flex: 1; height: 6px; border-radius: 999px;
+      background: rgba(255,255,255,0.08); overflow: hidden;
+    }
+    .vrow .vbar i {
+      display: block; height: 100%; border-radius: 999px;
+      background: linear-gradient(90deg, var(--accent), #fff);
+    }
+    .vrow .vlabel { width: 90px; color: var(--text); font-weight: 700; }
+    .vrow .vnum   { width: 60px; text-align: right; font-variant-numeric: tabular-nums; color: var(--text-muted); font-weight: 700; }
+
+    /* Tier grid mini */
+    .tier-grid {
+      display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px;
+    }
+    .tier-grid .cell {
+      aspect-ratio: 4/3; border-radius: 4px;
+      background: linear-gradient(135deg, #050a18, #0d1429);
+      border: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px; font-weight: 900; color: var(--tier-sky);
+      letter-spacing: 0.5px;
+    }
+
+    /* Rival vs card */
+    .vs-card {
+      display: grid; grid-template-columns: 1fr auto 1fr;
+      align-items: center; gap: 8px;
+      background: rgba(0,0,0,0.4);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+    }
+    .vs-side {
+      display: flex; flex-direction: column; align-items: center; gap: 6px;
+    }
+    .vs-avatar {
+      width: 40px; height: 40px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--rival-rose), #4c1d95);
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 900; color: #fff;
+    }
+    .vs-name { font-size: 11px; font-weight: 800; color: #fff; }
+    .vs-stat { font-size: 10px; color: var(--text-dim); }
+    .vs-vs   { font-size: 14px; font-weight: 900; color: var(--rival-rose); letter-spacing: 1px; }
+
+    /* Live now mini-card */
+    .live-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px;
+      border-radius: 10px;
+      border: 1px solid rgba(244,63,94,0.4);
+      background: linear-gradient(180deg, rgba(244,63,94,0.12), transparent);
+    }
+    .live-pill {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 3px 8px; border-radius: 999px;
+      background: rgba(244,63,94,0.2);
+      font-size: 9px; font-weight: 900; color: #fda4af; letter-spacing: 0.6px;
+    }
+    .live-pill .dotpulse {
+      width: 6px; height: 6px; border-radius: 50%; background: var(--live-red);
+      animation: pulse 1.6s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%      { opacity: 0.5; transform: scale(0.7); }
+    }
+
+    /* Lists feature */
+    .list-mini {
+      background: rgba(0,0,0,0.4);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .list-mini .lrow {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 10px;
+      border-top: 1px solid var(--border);
+    }
+    .list-mini .lrow:first-child { border-top: 0; }
+    .list-mini .ltick {
+      width: 14px; height: 14px; border-radius: 4px;
+      background: rgba(167,139,250,0.18);
+      border: 1px solid rgba(167,139,250,0.5);
+      display: flex; align-items: center; justify-content: center;
+      color: var(--lists-violet); font-size: 9px; font-weight: 900;
+    }
+    .list-mini .ltext { flex: 1; font-size: 11px; color: #fff; font-weight: 700; }
+    .list-mini .lmeta { font-size: 10px; color: var(--text-dim); }
+
+    /* What-to-play card */
+    .wtp-grid {
+      display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;
+    }
+    .wtp-card {
+      aspect-ratio: 1.4/1;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--accent-tint), rgba(255,255,255,0.02));
+      border: 1px solid rgba(255,196,0,0.3);
+      padding: 10px;
+      display: flex; flex-direction: column; justify-content: space-between;
+    }
+    .wtp-title { font-size: 11px; font-weight: 800; color: #fff; }
+    .wtp-meta  { font-size: 9px; color: var(--text-dim); margin-top: 2px; }
+    .wtp-tag   { font-size: 9px; font-weight: 900; color: var(--accent); letter-spacing: 0.5px; align-self: flex-start; }
+
+    /* Training tree */
+    .train-cells {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+    }
+    .train-cells .tc {
+      border-radius: 10px;
+      padding: 10px;
+      background: rgba(251,146,60,0.08);
+      border: 1px solid rgba(251,146,60,0.3);
+    }
+    .train-cells .tcv { font-size: 14px; font-weight: 900; color: #fff; font-variant-numeric: tabular-nums; }
+    .train-cells .tcl { font-size: 9px; color: var(--text-dim); margin-top: 2px; letter-spacing: 0.5px; font-weight: 700; }
+
+    /* ─────────────────────────────────────────────────────────────
+       Stats strip + "what's inside" callout
+       ───────────────────────────────────────────────────────────── */
+    .strip {
+      max-width: var(--maxw); margin: 56px auto 0; padding: 0 24px;
+    }
+    .strip-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+    }
+    @media (max-width: 720px) { .strip-grid { grid-template-columns: repeat(2, 1fr); } }
+    .strip-card {
+      padding: 18px 16px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+    }
+    .strip-card .num {
+      font-size: 26px; font-weight: 900; color: var(--text);
+      font-variant-numeric: tabular-nums; letter-spacing: -0.02em;
+    }
+    .strip-card .lbl {
+      margin-top: 6px; font-size: 11px; color: var(--text-dim);
+      font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase;
+    }
+
+    /* ─────────────────────────────────────────────────────────────
+       Download card
+       ───────────────────────────────────────────────────────────── */
+    .download-card {
+      max-width: var(--maxw); margin: 0 auto;
+      padding: 56px;
+      background: linear-gradient(135deg, rgba(255,196,0,0.08), rgba(255,196,0,0.02));
+      border: 1px solid rgba(255,196,0,0.2);
+      border-radius: 28px;
+      display: grid;
+      grid-template-columns: minmax(0,1fr) auto;
+      gap: 32px;
+      align-items: center;
+    }
+    @media (max-width: 720px) { .download-card { grid-template-columns: 1fr; padding: 36px; } }
+    .download-card h2 {
+      font-size: clamp(28px, 4vw, 38px); font-weight: 900;
+      letter-spacing: -0.02em;
+    }
+    .download-card p { margin-top: 12px; font-size: 15px; }
+    .download-actions {
+      display: flex; flex-direction: column; gap: 12px;
+      min-width: 240px;
+    }
+    .pkg-meta {
+      font-size: 11px; color: var(--text-dim); margin-top: 6px;
+      letter-spacing: 0.4px;
+    }
+    .pkg-meta .ok { color: var(--songs-emerald); font-weight: 800; }
+
+    /* ─────────────────────────────────────────────────────────────
+       Footer
+       ───────────────────────────────────────────────────────────── */
+    footer {
+      padding: 40px 24px 60px;
+      border-top: 1px solid var(--border);
+      margin-top: 80px;
+      color: var(--text-dim);
+      font-size: 12px;
+    }
+    .footer-inner {
+      max-width: var(--maxw); margin: 0 auto;
+      display: flex; justify-content: space-between; align-items: center;
+      flex-wrap: wrap; gap: 12px;
+    }
+    .footer-inner a { color: var(--text-muted); }
+    .footer-inner a:hover { color: var(--accent); }
+
+    /* ─────────────────────────────────────────────────────────────
+       Reveal-on-scroll
+       ───────────────────────────────────────────────────────────── */
+    .reveal {
+      opacity: 0;
+      transform: translateY(28px);
+      transition: opacity 0.7s ease, transform 0.7s ease;
+    }
+    .reveal.in {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .reveal { opacity: 1; transform: none; transition: none; }
+      .phone { animation: none; }
+      .live-pill .dotpulse { animation: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="ember"></div>
+  <div class="grain"></div>
+
+  <!-- ─── NAV ──────────────────────────────────────────────────── -->
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="https://pumpshinsa.com/" class="brand" aria-label="Pump Shinsa">
+        <img src="/download/icon.png" alt="" />
+        <span class="brand-name">Pump<b>Shinsa</b></span>
+      </a>
+      <a href="#download" class="nav-cta">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Get the app
+      </a>
+    </div>
+  </nav>
+
+  <!-- ─── HERO ─────────────────────────────────────────────────── -->
+  <section class="hero">
+    <div class="reveal">
+      <span class="eyebrow"><span class="dot"></span>Now in Beta · Android · Web</span>
+      <h1>Pump It Up,<br/>but with the <span class="grad">stats</span><br/>you've been missing.</h1>
+      <p class="lede">
+        Shinsa is the companion that turns every machine session into measurable progress —
+        tier-list every chart, scout your rivals, host live sessions, and let weekly
+        challenges set the pace. Built by players, sharpened on the sweat of London Pump Dojo.
+      </p>
+      <div class="hero-cta-row">
+        <a href="#download" class="btn-primary">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Download the APK
+        </a>
+        <a href="https://new.pumpshinsa.com/" class="btn-secondary">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+          Open in browser
+        </a>
+      </div>
+      <div class="hero-meta">
+        <span><b>4,500+</b> charts indexed</span>
+        <span><b>Weekly</b> rotating challenges</span>
+        <span><b>Real-time</b> machine sync</span>
+      </div>
+    </div>
+
+    <div class="hero-phone reveal">
+      <div class="phone" aria-hidden="true">
+        <div class="notch"></div>
+        <div class="phone-screen">
+          <div class="mock">
+            <div class="mock-topbar">
+              <div class="logo">PUMP<b>SHINSA</b></div>
+              <div class="icons">✉ 🔔 ☰</div>
+            </div>
+            <div class="mock-quicknav">
+              <div class="pill live">LIVE</div>
+              <div class="pill songs">SONGS</div>
+              <div class="pill lists">LISTS</div>
+              <div class="pill train">TRAIN</div>
+            </div>
+            <div class="mock-eyebrow">RECENT ACTIVITY</div>
+            <div class="mock-row">
+              <div class="ico">🎯</div>
+              <div class="body"><p>ELMER cleared 3 new songs</p><span>12 May · weekly challenge</span></div>
+              <div class="pts">+690</div>
+            </div>
+            <div class="mock-row">
+              <div class="ico">📈</div>
+              <div class="body"><p>ELMER improved 5 scores</p><span>Black Swan · Energy · Spray</span></div>
+              <div class="pts">+1,821</div>
+            </div>
+            <div class="mock-row">
+              <div class="ico">🥇</div>
+              <div class="body"><p>Up &amp; Up · WC #2</p><span>Single 17 · SSS+</span></div>
+              <div class="pts">999K</div>
+            </div>
+            <div class="mock-row">
+              <div class="ico">⚔️</div>
+              <div class="body"><p>Rival match: Afii</p><span>S20 · Doubles set</span></div>
+              <div class="pts">VS</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── STATS STRIP ──────────────────────────────────────────── -->
+  <div class="strip reveal">
+    <div class="strip-grid">
+      <div class="strip-card"><div class="num">4,568</div><div class="lbl">Charts indexed</div></div>
+      <div class="strip-card"><div class="num">639</div><div class="lbl">Songs library</div></div>
+      <div class="strip-card"><div class="num">11</div><div class="lbl">Profile tabs</div></div>
+      <div class="strip-card"><div class="num">100%</div><div class="lbl">Open beta</div></div>
+    </div>
+  </div>
+
+  <!-- ─── WHAT'S INSIDE ────────────────────────────────────────── -->
+  <section>
+    <div class="section-inner">
+      <div class="reveal">
+        <span class="section-eyebrow">What's inside</span>
+        <h2 class="section-h">Eight tools you'd otherwise <em>hand-roll on a spreadsheet.</em></h2>
+        <p class="section-sub">
+          Every feature is built to mirror the way serious players already think about Pump:
+          per-chart, per-mode, per-skill, per-week. The app just removes the bookkeeping.
+        </p>
+      </div>
+
+      <div class="features">
+
+        <!-- TIERS ─────────────────────────────────────────────── -->
+        <div class="feature reveal" data-tone="tiers">
+          <div class="feature-icon">▦</div>
+          <h3>Tiers — every chart, ranked at a glance</h3>
+          <p>Per-mode, per-level grids. Overrated, Easy, Hard, Brutal. Hide unplayed, swap to scores, switch density. The fastest way to spot the chart you should be grinding next.</p>
+          <div class="feature-pills">
+            <span>SINGLES</span><span>DOUBLES</span><span>CO-OP</span><span>SHARE IMAGE</span>
+          </div>
+          <div class="feature-visual">
+            <div class="tier-grid">
+              <div class="cell">SSS+</div><div class="cell">SSS+</div><div class="cell">SSS+</div>
+              <div class="cell">SSS+</div><div class="cell">SSS</div><div class="cell">SSS</div>
+              <div class="cell">SS+</div><div class="cell">SS+</div><div class="cell">SS</div>
+              <div class="cell">S+</div><div class="cell">S</div><div class="cell">A+</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- WHAT TO PLAY ──────────────────────────────────────── -->
+        <div class="feature reveal" data-tone="play">
+          <div class="feature-icon">★</div>
+          <h3>What to Play — picks for your goal</h3>
+          <p>Choose <i>next skill title</i> or <i>raise pumbility</i>, and the app surfaces 10 charts that move the needle hardest. Refresh for new picks. Tap to jump straight to the chart page.</p>
+          <div class="feature-pills">
+            <span>NEXT TITLE</span><span>+PUMBILITY</span><span>REPLAY</span>
+          </div>
+          <div class="feature-visual">
+            <div class="wtp-grid">
+              <div class="wtp-card">
+                <span class="wtp-tag">+34 pts</span>
+                <div>
+                  <div class="wtp-title">R.I.P.</div>
+                  <div class="wtp-meta">Single 22 · need AAA+</div>
+                </div>
+              </div>
+              <div class="wtp-card">
+                <span class="wtp-tag">+28 pts</span>
+                <div>
+                  <div class="wtp-title">Cygnus</div>
+                  <div class="wtp-meta">Double 21 · need SSS</div>
+                </div>
+              </div>
+              <div class="wtp-card">
+                <span class="wtp-tag">+22 pts</span>
+                <div>
+                  <div class="wtp-title">Get Up</div>
+                  <div class="wtp-meta">Single 21 · need SSS+</div>
+                </div>
+              </div>
+              <div class="wtp-card">
+                <span class="wtp-tag">+18 pts</span>
+                <div>
+                  <div class="wtp-title">Overblow</div>
+                  <div class="wtp-meta">Single 20 · need S+</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- RIVALS ────────────────────────────────────────────── -->
+        <div class="feature reveal" data-tone="rival">
+          <div class="feature-icon">⚔</div>
+          <h3>Rivals — pick someone, scout them</h3>
+          <p>Side-by-side scores, gaps you can close, songs they haven't touched. Live machine sync means as soon as you upscore, the gap updates. Send a "beat my score" challenge straight into DMs.</p>
+          <div class="feature-pills">
+            <span>HEAD-TO-HEAD</span><span>SHARE CHALLENGE</span><span>PER MODE</span>
+          </div>
+          <div class="feature-visual">
+            <div class="vs-card">
+              <div class="vs-side">
+                <div class="vs-avatar">E</div>
+                <div class="vs-name">@ELMER</div>
+                <div class="vs-stat">PMB 74,537</div>
+              </div>
+              <div class="vs-vs">VS</div>
+              <div class="vs-side">
+                <div class="vs-avatar" style="background:linear-gradient(135deg,#fb7185,#7c2d12)">A</div>
+                <div class="vs-name">@Afii</div>
+                <div class="vs-stat">PMB 81,002</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TRAINING ─────────────────────────────────────────── -->
+        <div class="feature reveal" data-tone="train">
+          <div class="feature-icon">↗</div>
+          <h3>Training — your sweat, quantified</h3>
+          <p>Base skill, weekly load, sustained-vs-stamina balance. The Training tab tells you when you're peaking and when you're cooked. Built so you can plan a session, not just react to one.</p>
+          <div class="feature-pills">
+            <span>BASE SKILL</span><span>LOAD</span><span>RECOVERY</span>
+          </div>
+          <div class="feature-visual">
+            <div class="train-cells">
+              <div class="tc"><div class="tcv">1,247</div><div class="tcl">BASE SKILL</div></div>
+              <div class="tc"><div class="tcv">+18%</div><div class="tcl">WEEKLY LOAD</div></div>
+              <div class="tc"><div class="tcv">68m</div><div class="tcl">PEAK SESSION</div></div>
+              <div class="tc"><div class="tcv">B+</div><div class="tcl">RECOVERY</div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- LISTS ────────────────────────────────────────────── -->
+        <div class="feature reveal" data-tone="lists">
+          <div class="feature-icon">≡</div>
+          <h3>Lists — chart sets that travel with you</h3>
+          <p>Build lists for Friday session, Doubles tournament prep, AAA chase, Co-op sets — anything. Share a list with one tap, and your friends inherit your full chart picker.</p>
+          <div class="feature-pills">
+            <span>SHARE LINK</span><span>GROUP ROUTE</span><span>SESSION QUEUE</span>
+          </div>
+          <div class="feature-visual">
+            <div class="list-mini">
+              <div class="lrow"><div class="ltick">✓</div><div class="ltext">Friday warmup · 8 charts</div><div class="lmeta">5/8 cleared</div></div>
+              <div class="lrow"><div class="ltick">✓</div><div class="ltext">Doubles 18-20 ladder</div><div class="lmeta">Routed</div></div>
+              <div class="lrow"><div class="ltick">✓</div><div class="ltext">SSS+ stretch goals</div><div class="lmeta">Tap-to-queue</div></div>
+              <div class="lrow"><div class="ltick">✓</div><div class="ltext">London Dojo Friday set</div><div class="lmeta">Shared</div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- LIVE ─────────────────────────────────────────────── -->
+        <div class="feature reveal" data-tone="live">
+          <div class="feature-icon">●</div>
+          <h3>Live — host the session, broadcast the run</h3>
+          <p>Start a Shinsa Live session, optionally pipe in your YouTube stream, take song requests from chat. The recap card builds itself: top 6 plays, clear rate, duration, message count.</p>
+          <div class="feature-pills">
+            <span>YOUTUBE EMBED</span><span>REQUESTS</span><span>RECAP CARD</span>
+          </div>
+          <div class="feature-visual">
+            <div class="live-row">
+              <div class="live-pill"><span class="dotpulse"></span>LIVE</div>
+              <div style="flex:1;min-width:0;">
+                <div style="font-size:12px;font-weight:800;color:#fff;">London Pump Dojo 1</div>
+                <div style="font-size:10px;color:var(--text-dim);">19 plays · 23 messages · Peak 1</div>
+              </div>
+              <div style="font-size:11px;font-weight:900;color:var(--live-red);">1h 8m</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- FEED ─────────────────────────────────────────────── -->
+        <div class="feature reveal" data-tone="feed">
+          <div class="feature-icon">≣</div>
+          <h3>Feed — every clear, every upscore</h3>
+          <p>Follow players you respect; their session highlights drop into your feed in real time. Pump posts, comment on plays, share a score card straight to a friend's DMs.</p>
+          <div class="feature-pills">
+            <span>FOLLOW</span><span>SCORE CARD</span><span>DM SHARE</span>
+          </div>
+          <div class="feature-visual">
+            <div class="vrow"><span class="vlabel">Black Swan</span><span class="vbar"><i style="width:99%;"></i></span><span class="vnum">1,000,000</span></div>
+            <div class="vrow"><span class="vlabel">Energy</span><span class="vbar"><i style="width:97%;"></i></span><span class="vnum">998,179</span></div>
+            <div class="vrow"><span class="vlabel">Spray</span><span class="vbar"><i style="width:96%;"></i></span><span class="vnum">998,701</span></div>
+          </div>
+        </div>
+
+        <!-- SONGS ────────────────────────────────────────────── -->
+        <div class="feature reveal" data-tone="songs">
+          <div class="feature-icon">♪</div>
+          <h3>Songs — the whole library, one search</h3>
+          <p>4,568 charts across 639 songs, with proper jacket art, exact mode + level filters, and a quick-tap chart sheet that opens to your personal best, judgements, and replay if available.</p>
+          <div class="feature-pills">
+            <span>4,568 CHARTS</span><span>JACKET MAP</span><span>REPLAY</span>
+          </div>
+          <div class="feature-visual">
+            <div class="vrow"><span class="vlabel">After LIKE</span><span class="vbar"><i style="width:80%;"></i></span><span class="vnum">S 13</span></div>
+            <div class="vrow"><span class="vlabel">Airplane</span><span class="vbar"><i style="width:55%;"></i></span><span class="vnum">D 8</span></div>
+            <div class="vrow"><span class="vlabel">Alone</span><span class="vbar"><i style="width:65%;"></i></span><span class="vnum">S 11</span></div>
+            <div class="vrow"><span class="vlabel">R.I.P.</span><span class="vbar"><i style="width:90%;"></i></span><span class="vnum">S 22</span></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── DOWNLOAD ─────────────────────────────────────────────── -->
+  <section id="download">
+    <div class="download-card reveal">
+      <div>
+        <span class="section-eyebrow">Get the app</span>
+        <h2>Carry your Pump bookkeeping<br/>in your pocket.</h2>
+        <p>Direct APK install for Android while we wait on store review. The web app at <a href="https://new.pumpshinsa.com/" style="color:var(--accent);font-weight:700;">new.pumpshinsa.com</a> works on iOS and desktop today — install it as a PWA from Safari for the same icon-on-the-homescreen feel.</p>
+      </div>
+      <div class="download-actions">
+        <a href="/download/shinsa.apk" class="btn-primary" id="apk-link" download>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Download for Android
+        </a>
+        <a href="https://new.pumpshinsa.com/" class="btn-secondary">
+          Open the web app
+        </a>
+        <div class="pkg-meta">
+          <span class="ok">●</span> Signed APK · v1.0.0 · Android 7.0+
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── FOOTER ───────────────────────────────────────────────── -->
+  <footer>
+    <div class="footer-inner">
+      <div>
+        <strong style="color:var(--text);">Shinsa</strong> · companion app for Pump It Up. Not affiliated with Andamiro.
+      </div>
+      <div>
+        <a href="https://pumpshinsa.com/">pumpshinsa.com</a>
+        &nbsp;·&nbsp;
+        <a href="https://new.pumpshinsa.com/">web app</a>
+        &nbsp;·&nbsp;
+        <a href="mailto:elmer.lin@gmail.com">contact</a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // Reveal on scroll — sets `.in` once the element crosses ~12% into view.
+    const io = new IntersectionObserver((entries) => {
+      for (const e of entries) {
+        if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+      }
+    }, { threshold: 0.12, rootMargin: '0px 0px -8% 0px' });
+    document.querySelectorAll('.reveal').forEach((el) => io.observe(el));
+
+    // Probe the APK so we can hide the link if the build hasn't shipped yet.
+    fetch('/download/shinsa.apk', { method: 'HEAD' })
+      .then((r) => {
+        if (!r.ok) {
+          const link = document.getElementById('apk-link');
+          if (link) {
+            link.removeAttribute('download');
+            link.removeAttribute('href');
+            link.style.opacity = '0.55';
+            link.style.cursor = 'not-allowed';
+            link.querySelector('svg').remove();
+            link.textContent = 'APK building — check back soon';
+          }
+        }
+      })
+      .catch(() => {});
+  </script>
+</body>
+</html>
