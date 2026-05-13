@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#050505" />
   <title>Pump Shinsa — train smarter on Pump It Up</title>
-  <meta name="description" content="The Pump It Up companion that turns every London Pump Dojo session into measurable progress. Track 4,500+ charts, scout rivals, host live sessions, climb the weekly challenge ladder." />
+  <meta name="description" content="The Pump It Up companion that turns every London Pump Dojo session into measurable progress. Track 4,568 charts, scout rivals, host live sessions, climb the weekly challenge ladder." />
 
   <link rel="icon" href="/download/icon.png" type="image/png" />
   <link rel="apple-touch-icon" href="/download/app-icon.png" />
@@ -15,49 +15,61 @@
   <meta property="og:image" content="/download/app-icon.png" />
   <meta property="og:url" content="https://pumpshinsa.com/download" />
 
-  <!-- Italic-display headers + grotesk body. Russo One mirrors the
-       PUMP SHINSA wordmark's bold italic angular feel; Inter does
-       the long-form reading. Both self-host fall-back if blocked. -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Russo+One&family=Saira+Condensed:ital,wght@1,700;1,800;1,900&display=swap" rel="stylesheet" />
 
   <style>
     /* ─────────────────────────────────────────────────────────────
-       Tokens — locked to the PUMP SHINSA wordmark palette: deep
-       black + Pump-gold (#FFC400) + cool steel + neon accents.
+       TOKENS — exact same palette the mobile app uses
+       (mobile/constants/theme.ts): #050505 / #101012 / #1B1B1E /
+       #FFC400 + RN border alpha rgba(124,124,130,0.18).
        ───────────────────────────────────────────────────────────── */
     :root {
       --bg: #050505;
-      --bg-2: #0a0d18;
-      --bg-3: #0f1320;
-      --surface: #11141f;
-      --surface-2: #181c2b;
-      --border: rgba(255, 196, 0, 0.10);
+      --bg-2: #0a0a0d;
+      --surface: #101012;
+      --card: #1B1B1E;
+      --border: rgba(124, 124, 130, 0.18);
       --border-strong: rgba(255, 196, 0, 0.32);
       --grid: rgba(255, 196, 0, 0.04);
 
       --text: #ffffff;
-      --text-muted: rgba(255, 255, 255, 0.66);
+      --text-muted: #A8A8AE;
       --text-dim: rgba(255, 255, 255, 0.40);
 
-      --gold: #ffc400;
-      --gold-bright: #ffe06b;
-      --gold-deep: #c2410c;
+      --gold: #FFC400;
+      --gold-bright: #FFE06B;
+      --gold-deep: #C2410C;
       --gold-glow: rgba(255, 196, 0, 0.55);
-      --gold-tint: rgba(255, 196, 0, 0.16);
+      --gold-tint: rgba(255, 196, 0, 0.18);
 
-      --cyan: #38bdf8;
-      --emerald: #34d399;
-      --violet: #a78bfa;
-      --orange: #fb923c;
-      --rose: #fb7185;
-      --red: #f43f5e;
+      --cyan: #7DD3FC;
+      --emerald: #34D399;
+      --violet: #A78BFA;
+      --orange: #FB923C;
+      --rose: #FB7185;
+      --red: #F43F5E;
+
+      /* Grade tier colors — mirror mobile/lib/grades.ts TIER_COLORS */
+      --grade-s: #7DD3FC; /* SS+/SSS/SSS+ — cyan tier */
+      --grade-a: #6EE7B7; /* GREAT/AAA hue */
+      --grade-y: #FDE047; /* SS/S+ — yellow tier */
+      --grade-w: #D1D5DB; /* AA — silver */
+      --grade-f: #FDA4AF; /* F — rose */
+
+      /* Plate badges — UG / FG / MG / PG */
+      --plate-ug: #38BDF8;  /* Ultimate Game / Single 18+ */
+      --plate-fg: #FB923C;  /* Fair Game */
+      --plate-mg: #FDE047;  /* Marvelous Game */
+      --plate-pg: #6EE7B7;  /* Perfect Game */
+      --plate-tg: #C084FC;  /* Talented Game */
+      --plate-rg: #A8A8AE;  /* Rolling Game */
 
       --maxw: 1180px;
 
-      --font-display: "Saira Condensed", "Russo One", system-ui, -apple-system, sans-serif;
-      --font-stencil: "Russo One", "Saira Condensed", system-ui, sans-serif;
+      --font-display: "Saira Condensed", system-ui, sans-serif;
+      --font-stencil: "Russo One", system-ui, sans-serif;
       --font-body: "Inter", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
     }
 
@@ -76,10 +88,7 @@
     h1, h2, h3, h4 { margin: 0; line-height: 1; letter-spacing: -0.01em; }
     p   { margin: 0; line-height: 1.55; color: var(--text-muted); }
 
-    /* ─────────────────────────────────────────────────────────────
-       Backdrop — soft gold ember + a faint Tron-style grid that
-       fades into the page. No raster.
-       ───────────────────────────────────────────────────────────── */
+    /* Tron grid + scan-line backdrop */
     .bg-grid, .bg-ember, .bg-scan {
       position: fixed; inset: 0; pointer-events: none;
     }
@@ -89,15 +98,15 @@
         linear-gradient(var(--grid) 1px, transparent 1px),
         linear-gradient(90deg, var(--grid) 1px, transparent 1px);
       background-size: 48px 48px;
-      mask-image: radial-gradient(ellipse at 50% 30%, #000 0%, transparent 70%);
-      -webkit-mask-image: radial-gradient(ellipse at 50% 30%, #000 0%, transparent 70%);
+      mask-image: radial-gradient(ellipse at 50% 25%, #000 0%, transparent 65%);
+      -webkit-mask-image: radial-gradient(ellipse at 50% 25%, #000 0%, transparent 65%);
     }
     .bg-ember {
       z-index: -2;
       background:
-        radial-gradient(circle at 18% 8%,  rgba(255, 196, 0, 0.18), transparent 40%),
-        radial-gradient(circle at 82% 18%, rgba(244, 63, 94, 0.10), transparent 50%),
-        radial-gradient(circle at 50% 90%, rgba(125, 211, 252, 0.07), transparent 60%),
+        radial-gradient(circle at 18% 8%,  rgba(255, 196, 0, 0.16), transparent 40%),
+        radial-gradient(circle at 82% 18%, rgba(244, 63, 94, 0.08),  transparent 50%),
+        radial-gradient(circle at 50% 90%, rgba(125, 211, 252, 0.06), transparent 60%),
         var(--bg);
     }
     .bg-scan {
@@ -117,14 +126,12 @@
       to   { background-position: 0 200px; }
     }
 
-    /* ─────────────────────────────────────────────────────────────
-       Brand mark — uses the actual logo image to stay 1:1 with app
-       ───────────────────────────────────────────────────────────── */
+    /* ─── NAV ──────────────────────────────────────────────────── */
     .nav {
       position: sticky; top: 0; z-index: 50;
       backdrop-filter: blur(14px) saturate(140%);
       -webkit-backdrop-filter: blur(14px) saturate(140%);
-      background: rgba(5, 5, 5, 0.72);
+      background: rgba(5, 5, 5, 0.74);
       border-bottom: 1px solid var(--border);
     }
     .nav-inner {
@@ -133,29 +140,29 @@
       display: flex; align-items: center; justify-content: space-between; gap: 16px;
     }
     .brand-mark { display: flex; align-items: center; }
-    .brand-mark img { height: 32px; width: auto; filter: drop-shadow(0 0 12px rgba(255,196,0,0.35)); }
+    .brand-mark img { height: 28px; width: auto; filter: drop-shadow(0 0 12px rgba(255,196,0,0.35)); }
     .nav-cta {
       display: inline-flex; align-items: center; gap: 8px;
-      padding: 9px 18px; border-radius: 0;
+      padding: 9px 18px;
       clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
       background: linear-gradient(135deg, var(--gold), var(--gold-bright));
-      color: #050505; font-weight: 800; font-size: 13px; letter-spacing: 0.4px;
-      transition: transform 0.15s ease, box-shadow 0.25s ease, filter 0.2s ease;
+      color: #050505;
+      font: 800 12px/1 var(--font-display);
+      letter-spacing: 1.4px; text-transform: uppercase;
+      transition: transform 0.15s ease, filter 0.2s ease;
       box-shadow: 0 6px 18px -4px var(--gold-glow);
     }
     .nav-cta:hover { transform: translateY(-1px); filter: brightness(1.1); }
 
-    /* ─────────────────────────────────────────────────────────────
-       Hero
-       ───────────────────────────────────────────────────────────── */
+    /* ─── HERO ─────────────────────────────────────────────────── */
     .hero {
       max-width: var(--maxw); margin: 0 auto;
-      padding: 88px 24px 64px;
-      display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+      padding: 72px 24px 56px;
+      display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
       gap: 56px; align-items: center;
     }
     @media (max-width: 880px) {
-      .hero { grid-template-columns: 1fr; padding-top: 56px; gap: 48px; }
+      .hero { grid-template-columns: 1fr; padding-top: 40px; padding-bottom: 32px; gap: 36px; }
     }
     .eyebrow {
       display: inline-flex; align-items: center; gap: 8px;
@@ -172,71 +179,71 @@
       transform: rotate(45deg);
     }
 
+    /* IMPORTANT: smaller + tighter so the hero copy never overflows */
     h1.hero-title {
-      margin-top: 18px;
+      margin-top: 16px;
       font-family: var(--font-display);
       font-style: italic;
       font-weight: 900;
-      font-size: clamp(48px, 7vw, 84px);
-      line-height: 0.92;
-      letter-spacing: -0.025em;
+      font-size: clamp(34px, 5vw, 60px);
+      line-height: 0.95;
+      letter-spacing: -0.02em;
       text-transform: uppercase;
     }
     h1.hero-title .grad {
       background: linear-gradient(120deg, #fff 30%, var(--gold) 60%, var(--gold-bright) 90%);
       -webkit-background-clip: text; background-clip: text;
       color: transparent;
-      filter: drop-shadow(0 0 20px rgba(255, 196, 0, 0.25));
+      filter: drop-shadow(0 0 16px rgba(255, 196, 0, 0.22));
     }
     h1.hero-title .skew { display: inline-block; transform: skewX(-6deg); }
 
     .lede {
-      margin-top: 22px;
-      font-size: 17px;
+      margin-top: 18px;
+      font-size: 16px;
       max-width: 540px;
       color: var(--text-muted);
     }
 
     .hero-cta-row {
-      margin-top: 32px;
+      margin-top: 28px;
       display: flex; flex-wrap: wrap; gap: 12px; align-items: center;
     }
     .btn-primary {
       display: inline-flex; align-items: center; gap: 10px;
-      padding: 16px 26px;
+      padding: 14px 22px;
       clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
       background: linear-gradient(135deg, var(--gold), var(--gold-bright));
       color: #050505;
-      font: 900 14px/1 var(--font-display);
-      letter-spacing: 1.2px; text-transform: uppercase;
-      box-shadow: 0 16px 36px -10px var(--gold-glow);
+      font: 900 13px/1 var(--font-display);
+      letter-spacing: 1.4px; text-transform: uppercase;
+      box-shadow: 0 14px 32px -10px var(--gold-glow);
       transition: transform 0.15s ease, filter 0.2s ease;
     }
     .btn-primary:hover { transform: translateY(-2px); filter: brightness(1.08); }
-    .btn-primary svg { width: 18px; height: 18px; }
+    .btn-primary svg { width: 16px; height: 16px; }
     .btn-secondary {
       display: inline-flex; align-items: center; gap: 10px;
-      padding: 15px 22px;
+      padding: 13px 20px;
       clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
       background: rgba(255,255,255,0.04);
       border: 1px solid var(--border-strong);
       color: var(--text);
-      font: 800 13px/1 var(--font-display);
-      letter-spacing: 1.1px; text-transform: uppercase;
+      font: 800 12px/1 var(--font-display);
+      letter-spacing: 1.2px; text-transform: uppercase;
       transition: background 0.2s ease;
     }
     .btn-secondary:hover { background: rgba(255,196,0,0.06); }
 
     .hero-meta {
-      margin-top: 26px;
+      margin-top: 24px;
       display: flex; flex-wrap: wrap; gap: 22px;
       color: var(--text-dim); font-size: 12px;
-      letter-spacing: 0.2px;
     }
     .hero-meta b { color: var(--text); font-weight: 700; }
 
     /* ─────────────────────────────────────────────────────────────
-       Hero "phone" — actual app surface, populated with live data
+       PHONE FRAME — for the hero only, slightly smaller
        ───────────────────────────────────────────────────────────── */
     .hero-phone {
       position: relative;
@@ -244,12 +251,12 @@
     }
     .hero-phone::before {
       content: "";
-      position: absolute; inset: -10%;
+      position: absolute; inset: -8%;
       background: radial-gradient(closest-side, rgba(255,196,0,0.22), transparent 70%);
-      filter: blur(40px); z-index: -1;
+      filter: blur(36px); z-index: -1;
     }
     .phone {
-      width: 296px; height: 612px;
+      width: 280px; height: 580px;
       border-radius: 38px;
       background: linear-gradient(160deg, #1a1d2c, #050610);
       border: 1px solid rgba(255,196,0,0.18);
@@ -258,7 +265,7 @@
         0 24px 60px -20px rgba(255,196,0,0.22),
         inset 0 0 0 6px #050505,
         inset 0 0 0 7px rgba(255,196,0,0.08);
-      padding: 14px;
+      padding: 12px;
       position: relative; overflow: hidden;
       animation: floaty 6s ease-in-out infinite;
     }
@@ -268,125 +275,122 @@
     }
     .phone .notch {
       position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
-      width: 100px; height: 22px; background: #050505;
+      width: 92px; height: 22px; background: #050505;
       border-radius: 0 0 14px 14px; z-index: 2;
     }
     .phone-screen {
       width: 100%; height: 100%;
-      border-radius: 26px; background: #050505;
+      border-radius: 28px; background: var(--bg);
       overflow: hidden; position: relative;
       display: flex; flex-direction: column;
     }
 
     /* ─────────────────────────────────────────────────────────────
-       App-fidelity surfaces — these mirror the actual mobile UI
-       1:1 (gradient pills, top bar, score rows, etc.)
+       APP-FIDELITY SURFACES — these mirror the mobile components
+       pixel-for-pixel, using the same colors / sizing tokens that
+       live in mobile/constants/theme.ts.
        ───────────────────────────────────────────────────────────── */
+
+    /* TopBar (mobile/components/top-bar.tsx) */
     .app-topbar {
       display: flex; align-items: center; justify-content: space-between;
-      padding: 30px 12px 8px;
+      padding: 22px 8px 10px;
     }
-    .app-topbar img { height: 26px; width: auto; }
+    .app-topbar img { height: 24px; width: auto; }
     .app-topbar .icons {
-      display: flex; gap: 4px; color: rgba(255,255,255,0.7);
+      display: flex; gap: 2px; color: var(--text-muted);
     }
-    .app-topbar .icons span {
+    .app-topbar .icons .ib {
+      width: 22px; height: 22px;
       display: inline-flex; align-items: center; justify-content: center;
-      width: 24px; height: 24px; font-size: 13px;
-      position: relative;
+      font-size: 13px; position: relative;
     }
     .app-topbar .badge {
-      position: absolute; top: 0; right: 0;
-      min-width: 14px; height: 14px;
-      border-radius: 7px;
+      position: absolute; top: -2px; right: -2px;
+      min-width: 12px; height: 12px; border-radius: 6px;
       background: var(--red);
-      font: 800 9px/14px var(--font-body);
+      font: 800 8px/12px var(--font-body);
       color: #fff; padding: 0 3px; text-align: center;
     }
+    .app-topbar .badge.cyan { background: #06b6d4; }
 
+    /* QuickNav row (mobile/components/quick-nav-button.tsx) */
     .app-quicknav {
       display: grid; grid-template-columns: repeat(4, 1fr);
-      gap: 6px; padding: 0 12px;
+      gap: 6px; padding: 0 8px;
     }
     .qn {
-      height: 42px;
+      height: 40px;
       display: flex; align-items: center; justify-content: center; gap: 4px;
       border-radius: 14px;
-      font: 900 10px/1 var(--font-display);
+      font: 800 10px/1 var(--font-display);
       color: #fff; letter-spacing: 0.5px;
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.22);
+      border: 1px solid rgba(255,255,255,0.18);
     }
     .qn.live  { background: linear-gradient(135deg, #22d3ee, #1d4ed8); }
     .qn.songs { background: linear-gradient(135deg, #34d399, #0f766e); }
     .qn.lists { background: linear-gradient(135deg, #a78bfa, #6d28d9); }
     .qn.train { background: linear-gradient(135deg, #fbbf24, #c2410c); }
 
+    /* Eyebrow header (mobile s.eyebrow) */
     .app-eyebrow {
       padding: 14px 12px 6px;
-      font: 900 10px/1 var(--font-display);
+      font: 800 11px/1 var(--font-body);
       letter-spacing: 1.6px; color: var(--gold);
       text-transform: uppercase;
     }
 
-    .app-section {
-      padding: 0 12px;
-      display: flex; flex-direction: column; gap: 8px;
-    }
+    .app-section { padding: 0 12px; display: flex; flex-direction: column; gap: 8px; }
+
+    /* Activity row (mobile/app/(drawer)/(tabs)/index.tsx s.activityRow) */
     .activity-row {
-      display: flex; align-items: center; gap: 8px;
+      display: flex; align-items: center; gap: 10px;
       padding: 8px;
-      background: var(--surface);
-      border: 1px solid rgba(255,255,255,0.05);
+      background: var(--card);
+      border: 1px solid var(--border);
       border-radius: 10px;
     }
     .activity-row .ico {
-      width: 22px; height: 22px;
+      width: 24px; height: 24px;
       display: flex; align-items: center; justify-content: center;
       font-size: 13px;
       background: rgba(255,255,255,0.04);
-      border-radius: 5px;
+      border-radius: 6px;
     }
-    .activity-row .body {
-      flex: 1; min-width: 0;
-    }
+    .activity-row .body { flex: 1; min-width: 0; }
     .activity-row .body p {
-      margin: 0; font: 700 10px/1.3 var(--font-body); color: #fff;
+      margin: 0; font: 700 11px/1.3 var(--font-body); color: var(--text);
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     .activity-row .body span {
-      display: block; font-size: 8px; color: var(--text-dim); margin-top: 2px;
+      display: block; font-size: 9px; color: var(--text-dim); margin-top: 2px;
     }
-    .activity-row .pts {
-      font: 800 9px/1 var(--font-body);
-      color: var(--emerald);
-    }
-    .activity-row .pts.warn { color: var(--gold); }
+    .activity-row .pts { font: 800 9px/1 var(--font-body); color: var(--emerald); }
+    .activity-row .pts.gold { color: var(--gold); }
 
     /* ─────────────────────────────────────────────────────────────
-       Stats strip
+       STATS STRIP
        ───────────────────────────────────────────────────────────── */
-    .strip { max-width: var(--maxw); margin: 56px auto 0; padding: 0 24px; }
+    .strip { max-width: var(--maxw); margin: 48px auto 0; padding: 0 24px; }
     .strip-grid {
-      display: grid; gap: 14px;
+      display: grid; gap: 12px;
       grid-template-columns: repeat(4, 1fr);
     }
     @media (max-width: 720px) { .strip-grid { grid-template-columns: repeat(2, 1fr); } }
     .strip-card {
-      padding: 22px 20px;
-      background:
-        linear-gradient(135deg, rgba(255,196,0,0.08), rgba(255,255,255,0.02));
+      padding: 20px 18px;
+      background: linear-gradient(135deg, rgba(255,196,0,0.08), rgba(255,255,255,0.02));
       border: 1px solid var(--border-strong);
       clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
     }
     .strip-num {
-      font: 900 italic 36px/1 var(--font-display);
-      color: #fff;
+      font: 900 italic 32px/1 var(--font-display);
+      color: var(--text);
       font-variant-numeric: tabular-nums;
       letter-spacing: -0.025em;
     }
-    .strip-num em {
-      font-style: italic; color: var(--gold);
-    }
+    .strip-num em { font-style: italic; color: var(--gold); }
     .strip-lbl {
       margin-top: 6px;
       font: 800 11px/1.2 var(--font-body);
@@ -394,9 +398,9 @@
     }
 
     /* ─────────────────────────────────────────────────────────────
-       Section
+       SECTION
        ───────────────────────────────────────────────────────────── */
-    section { padding: 88px 24px; position: relative; }
+    section { padding: 72px 24px; position: relative; }
     .section-inner { max-width: var(--maxw); margin: 0 auto; }
     .section-eyebrow {
       display: inline-flex; align-items: center; gap: 8px;
@@ -409,62 +413,62 @@
       color: var(--gold);
     }
     .section-h {
-      margin-top: 18px;
+      margin-top: 16px;
       font-family: var(--font-display);
       font-style: italic; font-weight: 900;
       text-transform: uppercase;
-      font-size: clamp(34px, 5vw, 54px);
+      font-size: clamp(28px, 4vw, 44px);
       letter-spacing: -0.025em;
-      max-width: 820px;
-      line-height: 0.95;
+      max-width: 760px;
+      line-height: 0.98;
     }
     .section-h em {
       font-style: italic;
       background: linear-gradient(120deg, #fff, var(--gold) 70%, var(--gold-bright));
       -webkit-background-clip: text; background-clip: text;
       color: transparent;
-      filter: drop-shadow(0 0 16px rgba(255,196,0,0.3));
+      filter: drop-shadow(0 0 16px rgba(255,196,0,0.25));
     }
     .section-sub {
-      margin-top: 16px;
-      font-size: 16px;
+      margin-top: 14px;
+      font-size: 15px;
       color: var(--text-muted);
       max-width: 660px;
     }
 
     /* ─────────────────────────────────────────────────────────────
-       Feature card
+       FEATURE CARD GRID
        ───────────────────────────────────────────────────────────── */
     .features {
-      margin-top: 56px;
+      margin-top: 44px;
       display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 24px;
+      gap: 20px;
+      align-items: start;
     }
     @media (max-width: 720px) { .features { grid-template-columns: 1fr; } }
 
     .feature {
       position: relative;
-      background: linear-gradient(180deg, var(--surface), rgba(17,20,31,0.45));
+      background: linear-gradient(180deg, var(--card), rgba(17,20,31,0.5));
       border: 1px solid var(--border);
-      border-radius: 0;
-      clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px));
-      padding: 28px;
+      clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+      padding: 22px;
       overflow: hidden;
       transition: transform 0.25s ease, border-color 0.25s ease;
     }
-    .feature:hover { transform: translateY(-4px); border-color: var(--border-strong); }
+    .feature:hover { transform: translateY(-3px); border-color: var(--border-strong); }
     .feature::before {
       content: "";
       position: absolute; top: 0; left: 0; right: 0;
       height: 2px; background: var(--gold);
-      box-shadow: 0 0 16px var(--gold-glow);
+      box-shadow: 0 0 14px var(--gold-glow);
     }
-    .feature[data-tone="cyan"]::before    { background: var(--cyan);    box-shadow: 0 0 16px rgba(56,189,248,0.55); }
-    .feature[data-tone="emerald"]::before { background: var(--emerald); box-shadow: 0 0 16px rgba(52,211,153,0.55); }
-    .feature[data-tone="violet"]::before  { background: var(--violet);  box-shadow: 0 0 16px rgba(167,139,250,0.55); }
-    .feature[data-tone="orange"]::before  { background: var(--orange);  box-shadow: 0 0 16px rgba(251,146,60,0.55); }
-    .feature[data-tone="rose"]::before    { background: var(--rose);    box-shadow: 0 0 16px rgba(251,113,133,0.55); }
-    .feature[data-tone="red"]::before     { background: var(--red);     box-shadow: 0 0 16px rgba(244,63,94,0.55); }
+    .feature[data-tone="cyan"]::before    { background: var(--cyan);    box-shadow: 0 0 14px rgba(125,211,252,0.55); }
+    .feature[data-tone="emerald"]::before { background: var(--emerald); box-shadow: 0 0 14px rgba(52,211,153,0.55); }
+    .feature[data-tone="violet"]::before  { background: var(--violet);  box-shadow: 0 0 14px rgba(167,139,250,0.55); }
+    .feature[data-tone="orange"]::before  { background: var(--orange);  box-shadow: 0 0 14px rgba(251,146,60,0.55); }
+    .feature[data-tone="rose"]::before    { background: var(--rose);    box-shadow: 0 0 14px rgba(251,113,133,0.55); }
+    .feature[data-tone="red"]::before     { background: var(--red);     box-shadow: 0 0 14px rgba(244,63,94,0.55); }
 
     .feature-eye {
       display: inline-flex; align-items: center; gap: 6px;
@@ -481,206 +485,276 @@
     .feature-eye .pip { width: 6px; height: 6px; transform: rotate(45deg); background: currentColor; }
 
     .feature h3 {
-      margin-top: 14px;
-      font: italic 900 28px/1 var(--font-display);
-      letter-spacing: -0.01em;
+      margin-top: 12px;
+      font: italic 900 22px/1.05 var(--font-display);
+      letter-spacing: -0.005em;
       text-transform: uppercase;
     }
-    .feature p { margin-top: 12px; font-size: 14.5px; }
+    .feature p { margin-top: 10px; font-size: 13.5px; line-height: 1.5; }
 
     .feature-pills {
-      margin-top: 18px;
-      display: flex; flex-wrap: wrap; gap: 6px;
+      margin-top: 14px;
+      display: flex; flex-wrap: wrap; gap: 5px;
     }
     .feature-pills span {
-      font: 800 10px/1 var(--font-display);
-      letter-spacing: 1.2px; text-transform: uppercase;
-      padding: 5px 10px;
-      clip-path: polygon(6px 0, 100% 0, calc(100% - 6px) 100%, 0 100%);
+      font: 800 9px/1 var(--font-display);
+      letter-spacing: 1px; text-transform: uppercase;
+      padding: 4px 8px;
+      clip-path: polygon(5px 0, 100% 0, calc(100% - 5px) 100%, 0 100%);
       background: rgba(255,255,255,0.04);
       border: 1px solid var(--border);
       color: var(--text-muted);
     }
 
-    /* In-card "device" — a real-app-fidelity surface that cards drop in */
+    /* Card "surface" — same backdrop & padding as a mobile bottom-
+       sheet content block. */
     .surface {
-      margin-top: 22px;
-      border: 1px solid rgba(255,255,255,0.08);
-      background: rgba(0,0,0,0.45);
-      padding: 12px;
+      margin-top: 18px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      padding: 10px;
       clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
     }
 
-    /* ─── Score row (mirrors the upscore row in mobile feed) ───── */
-    .scorerow {
-      display: flex; align-items: center; gap: 8px;
-      padding: 8px 0;
-      border-top: 1px solid rgba(255,255,255,0.05);
-    }
-    .scorerow:first-child { border-top: 0; padding-top: 0; }
-    .scorerow .jacket {
-      width: 40px; height: 40px;
-      border-radius: 5px; flex-shrink: 0;
+    /* ─────────────────────────────────────────────────────────────
+       APP COMPONENT: ChartJacket with level badge
+       (mobile/components/chart-jacket.tsx)
+       ───────────────────────────────────────────────────────────── */
+    .chart-jacket {
+      width: 44px; height: 44px;
+      border-radius: 6px;
       background-position: center; background-size: cover;
-      position: relative;
-      box-shadow: 0 4px 14px -4px rgba(0,0,0,0.6);
+      background-color: var(--surface);
+      position: relative; flex-shrink: 0;
+      box-shadow: 0 6px 16px -6px rgba(0,0,0,0.5);
     }
-    .scorerow .jacket .lvl-badge {
-      position: absolute; bottom: -4px; right: -4px;
-      width: 18px; height: 18px; border-radius: 50%;
+    .chart-jacket.lg { width: 64px; height: 64px; border-radius: 8px; }
+    .chart-jacket .lvl {
+      position: absolute; bottom: -3px; right: -3px;
+      min-width: 20px; height: 20px; padding: 0 4px;
+      border-radius: 10px;
       display: flex; align-items: center; justify-content: center;
-      font: 900 9px/1 var(--font-body); color: #fff;
-      border: 2px solid #050505;
-    }
-    .lvl-badge.s   { background: linear-gradient(135deg, #fb7185, #be123c); }
-    .lvl-badge.d   { background: linear-gradient(135deg, #34d399, #047857); }
-    .lvl-badge.c   { background: linear-gradient(135deg, #38bdf8, #1d4ed8); }
-    .scorerow .body {
-      flex: 1; min-width: 0;
-    }
-    .scorerow .body .title {
-      font: 700 12px/1.25 var(--font-body); color: #fff;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-    .scorerow .body .meta {
-      display: flex; gap: 4px; margin-top: 4px;
-    }
-    .meta-chip {
-      font: 800 9px/1 var(--font-body);
-      color: #cbd5e1;
-      padding: 2px 5px; border-radius: 3px;
-      background: rgba(255,255,255,0.05);
-      border: 1px solid rgba(255,255,255,0.06);
-    }
-    .meta-chip.gold  { color: var(--gold);   background: rgba(255,196,0,0.12); border-color: rgba(255,196,0,0.32); }
-    .meta-chip.cyan  { color: var(--cyan);   background: rgba(56,189,248,0.12); border-color: rgba(56,189,248,0.32); }
-    .meta-chip.rose  { color: var(--rose);   background: rgba(251,113,133,0.12); border-color: rgba(251,113,133,0.32); }
-    .meta-chip.violet{ color: var(--violet); background: rgba(167,139,250,0.12); border-color: rgba(167,139,250,0.32); }
-    .scorerow .scorebox {
-      text-align: right; min-width: 90px;
-    }
-    .scorerow .score {
-      font: 800 13px/1 var(--font-body); color: #fff;
+      font: 900 10px/1 var(--font-body); color: #fff;
+      border: 2px solid var(--card);
       font-variant-numeric: tabular-nums;
     }
-    .scorerow .grade {
-      font: 900 italic 11px/1 var(--font-display);
-      margin-top: 4px;
-      letter-spacing: 0.5px;
-    }
-    .grade.sssp { color: #7dd3fc; }
-    .grade.sss  { color: #7dd3fc; }
-    .grade.ssp  { color: #fde047; }
-    .grade.ss   { color: #fde047; }
-    .grade.s    { color: #fde047; }
-    .grade.aaap { color: #fde047; }
-    .grade.aaa  { color: #fde047; }
-    .grade.aa   { color: #d1d5db; }
-    .grade.f    { color: #fda4af; }
+    .lvl.s   { background: linear-gradient(135deg, #ff7a7a, #d93d62); }
+    .lvl.d   { background: linear-gradient(135deg, #4cf4aa, #16b77f); }
+    .lvl.c   { background: linear-gradient(135deg, #69c8ff, #2b88de); }
 
-    /* ─── Tier grid mini ───────────────────────────────────────── */
+    /* ─────────────────────────────────────────────────────────────
+       APP COMPONENT: PlateBadge + GradeChip
+       (mobile/components/plate-badge.tsx + grade-chip.tsx)
+       ───────────────────────────────────────────────────────────── */
+    .plate {
+      font: 800 9px/1 var(--font-display);
+      letter-spacing: 1px;
+      padding: 3px 6px;
+      border-radius: 4px;
+      border: 1px solid;
+      text-transform: uppercase;
+    }
+    .plate.ug { color: var(--plate-ug); background: rgba(56,189,248,0.12);  border-color: rgba(56,189,248,0.4); }
+    .plate.fg { color: var(--plate-fg); background: rgba(251,146,60,0.12);  border-color: rgba(251,146,60,0.4); }
+    .plate.mg { color: var(--plate-mg); background: rgba(253,224,71,0.12);  border-color: rgba(253,224,71,0.4); }
+    .plate.pg { color: var(--plate-pg); background: rgba(110,231,183,0.12); border-color: rgba(110,231,183,0.4); }
+    .plate.tg { color: var(--plate-tg); background: rgba(192,132,252,0.12); border-color: rgba(192,132,252,0.4); }
+    .plate.rg { color: var(--plate-rg); background: rgba(168,168,174,0.12); border-color: rgba(168,168,174,0.4); }
+
+    .meta-chip {
+      font: 800 9px/1 var(--font-body);
+      color: var(--text-muted);
+      padding: 3px 6px; border-radius: 4px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+    }
+    .meta-chip.cyan  { color: var(--cyan);   background: rgba(125,211,252,0.12); border-color: rgba(125,211,252,0.32); }
+    .meta-chip.gold  { color: var(--gold);   background: rgba(255,196,0,0.12);   border-color: rgba(255,196,0,0.32); }
+    .meta-chip.violet{ color: var(--violet); background: rgba(167,139,250,0.12); border-color: rgba(167,139,250,0.32); }
+    .meta-chip.rose  { color: var(--rose);   background: rgba(251,113,133,0.12); border-color: rgba(251,113,133,0.32); }
+
+    .grade {
+      font: 900 italic 12px/1 var(--font-display);
+      letter-spacing: 0.4px;
+    }
+    .grade.sssp, .grade.sss { color: var(--grade-s); }
+    .grade.ssp, .grade.ss   { color: var(--grade-y); }
+    .grade.aaap, .grade.aaa { color: var(--grade-y); }
+    .grade.aa               { color: var(--grade-w); }
+    .grade.s, .grade.sp     { color: var(--grade-y); }
+    .grade.f                { color: var(--grade-f); }
+
+    /* ─────────────────────────────────────────────────────────────
+       APP COMPONENT: Upscore / WeeklyChallenge row
+       (mobile/app/(drawer)/(tabs)/feed.tsx s.upscoreRow)
+       ───────────────────────────────────────────────────────────── */
+    .upscore-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 0;
+      border-top: 1px solid var(--border);
+    }
+    .upscore-row:first-child { border-top: 0; padding-top: 4px; }
+    .upscore-row .entry-main {
+      flex: 1; min-width: 0;
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .upscore-row .title {
+      font: 700 12px/1.25 var(--font-body); color: var(--text);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .upscore-row .meta-chips {
+      display: flex; gap: 4px; flex-wrap: wrap;
+    }
+    .upscore-row .scores-col {
+      text-align: right; min-width: 78px;
+      display: flex; flex-direction: column; align-items: flex-end; gap: 2px;
+    }
+    .upscore-row .score-num {
+      font: 800 13px/1 var(--font-body);
+      color: var(--text); font-variant-numeric: tabular-nums;
+    }
+
+    /* ─────────────────────────────────────────────────────────────
+       APP COMPONENT: Tier card cell with grade overlay
+       (mobile/app/(drawer)/(tabs)/tiers.tsx)
+       ───────────────────────────────────────────────────────────── */
     .tier-grid {
       display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px;
     }
-    .tier-grid .cell {
+    .tier-cell {
       aspect-ratio: 4/3;
       background-position: center; background-size: cover;
-      border: 1px solid rgba(56,189,248,0.18);
+      background-color: var(--surface);
       position: relative;
+      border: 1px solid rgba(125,211,252,0.18);
       display: flex; align-items: center; justify-content: center;
       overflow: hidden;
     }
-    .tier-grid .cell::after {
+    .tier-cell::after {
       content: "";
       position: absolute; inset: 0;
-      background: linear-gradient(180deg, rgba(0,0,0,0.4), rgba(0,0,0,0.6));
+      background: linear-gradient(180deg, rgba(0,0,0,0.35), rgba(0,0,0,0.65));
     }
-    .tier-grid .cell .gtxt {
+    .tier-cell .gtxt {
       position: relative; z-index: 1;
-      font: 900 italic 14px/1 var(--font-display);
-      color: var(--cyan);
+      font: 900 italic 16px/1 var(--font-display);
+      color: var(--grade-s);
       letter-spacing: 0.5px;
-      text-shadow: 0 2px 6px rgba(0,0,0,0.85);
+      text-shadow: 0 2px 8px rgba(0,0,0,0.95);
     }
-    .tier-grid .cell.gold .gtxt { color: var(--gold); }
+    .tier-cell.y .gtxt { color: var(--grade-y); }
+    .tier-cell.w .gtxt { color: var(--grade-w); }
 
-    /* ─── Rivals VS card ───────────────────────────────────────── */
-    .vs {
-      display: grid; grid-template-columns: 1fr auto 1fr;
-      align-items: center; gap: 12px;
+    /* ─────────────────────────────────────────────────────────────
+       APP COMPONENT: What-to-play card
+       (mobile/app/(drawer)/what-to-play.tsx)
+       ───────────────────────────────────────────────────────────── */
+    .wtp {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
     }
-    .vs .side { text-align: center; }
-    .vs .av {
-      width: 56px; height: 56px;
-      margin: 0 auto;
-      clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
-      display: flex; align-items: center; justify-content: center;
-      font: 900 italic 22px/1 var(--font-display);
-      color: #fff;
-    }
-    .av.gold  { background: linear-gradient(135deg, var(--gold), var(--gold-deep)); }
-    .av.rose  { background: linear-gradient(135deg, var(--rose), #4c1d95); }
-    .av.cyan  { background: linear-gradient(135deg, var(--cyan), #1d4ed8); }
-    .vs .nm   { margin-top: 8px; font: 800 12px/1 var(--font-body); color: #fff; letter-spacing: 0.4px; }
-    .vs .pmb  { margin-top: 6px; font: 900 italic 18px/1 var(--font-display); color: var(--gold); font-variant-numeric: tabular-nums; }
-    .vs .rank { margin-top: 4px; font: 700 10px/1 var(--font-body); color: var(--text-dim); }
-    .vs .dvs  {
-      font: 900 italic 26px/1 var(--font-display);
-      color: var(--rose);
-      letter-spacing: 1.5px;
-      filter: drop-shadow(0 0 12px rgba(251,113,133,0.5));
-    }
-
-    /* ─── Lists card ───────────────────────────────────────────── */
-    .lists {
-      display: flex; flex-direction: column; gap: 4px;
-    }
-    .lists .lrow {
-      display: flex; align-items: center; gap: 10px;
-      padding: 8px 0;
-      border-top: 1px solid rgba(255,255,255,0.05);
-    }
-    .lists .lrow:first-child { border-top: 0; padding-top: 0; }
-    .lists .lrow .check {
-      width: 16px; height: 16px;
-      background: rgba(167,139,250,0.18);
-      border: 1px solid rgba(167,139,250,0.5);
-      color: var(--violet);
-      display: flex; align-items: center; justify-content: center;
-      font: 900 10px/1 var(--font-body);
-      transform: rotate(45deg);
-    }
-    .lists .lrow .check span { transform: rotate(-45deg); }
-    .lists .lrow .text { flex: 1; font: 700 12px/1.3 var(--font-body); color: #fff; }
-    .lists .lrow .meta { font: 700 10px/1 var(--font-body); color: var(--text-dim); }
-
-    /* ─── What-to-play card ────────────────────────────────────── */
-    .wtp { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .wtp .card {
-      aspect-ratio: 1.4/1;
+      aspect-ratio: 1.5/1;
       background-position: center; background-size: cover;
-      position: relative; padding: 10px;
-      display: flex; flex-direction: column; justify-content: space-between;
+      background-color: var(--surface);
+      position: relative; overflow: hidden;
       border: 1px solid rgba(255,196,0,0.32);
-      overflow: hidden;
     }
     .wtp .card::after {
       content: ""; position: absolute; inset: 0;
-      background: linear-gradient(180deg, rgba(0,0,0,0.35), rgba(0,0,0,0.78));
+      background: linear-gradient(180deg, rgba(0,0,0,0.25), rgba(0,0,0,0.8));
     }
     .wtp .card > * { position: relative; z-index: 1; }
     .wtp .tag {
-      font: 900 italic 11px/1 var(--font-display);
+      position: absolute; top: 6px; left: 6px;
+      font: 900 italic 10px/1 var(--font-display);
       color: var(--gold-bright);
-      align-self: flex-start;
       padding: 3px 6px;
       background: rgba(0,0,0,0.55);
       border: 1px solid rgba(255,196,0,0.45);
     }
-    .wtp .nm { font: 800 11px/1.2 var(--font-body); color: #fff; }
-    .wtp .mt { font: 700 9px/1 var(--font-body); color: var(--text-muted); margin-top: 2px; }
+    .wtp .nm {
+      position: absolute; left: 8px; right: 8px; bottom: 14px;
+      font: 800 11px/1.2 var(--font-body); color: #fff;
+      text-shadow: 0 1px 4px rgba(0,0,0,0.9);
+    }
+    .wtp .mt {
+      position: absolute; left: 8px; right: 8px; bottom: 4px;
+      font: 700 9px/1 var(--font-body); color: rgba(255,255,255,0.7);
+      text-shadow: 0 1px 4px rgba(0,0,0,0.9);
+    }
 
-    /* ─── Live / Training / Songs cards ────────────────────────── */
+    /* ─────────────────────────────────────────────────────────────
+       APP COMPONENT: Rivals VS card (mobile head-to-head.tsx)
+       ───────────────────────────────────────────────────────────── */
+    .vs {
+      display: grid; grid-template-columns: 1fr auto 1fr;
+      align-items: center; gap: 16px;
+      padding: 8px 4px;
+    }
+    .vs .side { text-align: center; }
+    .vs .av {
+      width: 52px; height: 52px;
+      margin: 0 auto;
+      clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+      display: flex; align-items: center; justify-content: center;
+      font: 900 italic 20px/1 var(--font-display);
+      color: #fff;
+    }
+    .av.gold { background: linear-gradient(135deg, var(--gold), var(--gold-deep)); color: #050505; }
+    .av.rose { background: linear-gradient(135deg, var(--rose), #4c1d95); }
+    .vs .nm  { margin-top: 8px; font: 800 11px/1 var(--font-body); color: var(--text); }
+    .vs .pmb { margin-top: 6px; font: 900 italic 18px/1 var(--font-display); color: var(--gold); font-variant-numeric: tabular-nums; }
+    .vs .rk  { margin-top: 4px; font: 700 9px/1 var(--font-body); color: var(--text-dim); letter-spacing: 0.5px; }
+    .vs .dvs {
+      font: 900 italic 24px/1 var(--font-display);
+      color: var(--rose);
+      letter-spacing: 1px;
+      filter: drop-shadow(0 0 12px rgba(251,113,133,0.5));
+    }
+    .vs-bars {
+      margin-top: 12px;
+      display: flex; flex-direction: column; gap: 6px;
+    }
+    .vs-bar-row {
+      display: grid; grid-template-columns: 1fr auto 1fr;
+      align-items: center; gap: 8px;
+      font: 700 10px/1 var(--font-body);
+    }
+    .vs-bar-row .lbl {
+      text-align: center; color: var(--text-dim);
+      font: 800 9px/1 var(--font-display); letter-spacing: 1px; text-transform: uppercase;
+    }
+    .vs-bar-row .v-l, .vs-bar-row .v-r {
+      font: 800 11px/1 var(--font-body); color: var(--text);
+      font-variant-numeric: tabular-nums;
+    }
+    .vs-bar-row .v-l { text-align: right; }
+
+    /* ─────────────────────────────────────────────────────────────
+       APP COMPONENT: Training cells (mobile/app/(drawer)/training.tsx)
+       ───────────────────────────────────────────────────────────── */
+    .train-cells { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .train-cells .tc {
+      padding: 12px;
+      border: 1px solid rgba(251,146,60,0.32);
+      background: rgba(251,146,60,0.06);
+      clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px));
+    }
+    .train-cells .tcv {
+      font: 900 italic 22px/1 var(--font-display);
+      color: var(--text); font-variant-numeric: tabular-nums;
+      letter-spacing: -0.01em;
+    }
+    .train-cells .tcl {
+      margin-top: 4px;
+      font: 800 9px/1 var(--font-body);
+      color: var(--text-dim); letter-spacing: 1px; text-transform: uppercase;
+    }
+
+    /* ─────────────────────────────────────────────────────────────
+       APP COMPONENT: Live row + Top-6 plays grid
+       (mobile/app/profile/[id].tsx ProfileLiveTopSongs)
+       ───────────────────────────────────────────────────────────── */
     .live-row {
       display: flex; align-items: center; gap: 10px;
       padding: 12px;
@@ -696,7 +770,7 @@
       color: #fda4af; letter-spacing: 1px;
     }
     .live-pill .pulse {
-      width: 7px; height: 7px;
+      width: 6px; height: 6px;
       background: var(--red);
       transform: rotate(45deg);
       animation: pulse 1.6s ease-in-out infinite;
@@ -706,40 +780,89 @@
       50%      { opacity: 0.4; transform: rotate(45deg) scale(0.65); }
     }
     .live-row .body { flex: 1; min-width: 0; }
-    .live-row .body .name { font: 800 12px/1.2 var(--font-body); color: #fff; }
+    .live-row .body .name { font: 800 12px/1.2 var(--font-body); color: var(--text); }
     .live-row .body .stats { margin-top: 4px; font: 700 10px/1 var(--font-body); color: var(--text-dim); }
     .live-row .duration {
       font: 900 italic 14px/1 var(--font-display);
       color: var(--rose); letter-spacing: 0.5px;
     }
 
-    .train-cells { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-    .train-cells .tc {
-      padding: 12px;
-      border: 1px solid rgba(251,146,60,0.32);
-      background: rgba(251,146,60,0.06);
-      clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px));
+    .top6-grid {
+      margin-top: 10px;
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;
     }
-    .train-cells .tcv {
-      font: 900 italic 22px/1 var(--font-display);
+    .top6-tile {
+      position: relative;
+      aspect-ratio: 4/3;
+      background-position: center; background-size: cover;
+      background-color: var(--surface);
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+    .top6-tile::after {
+      content: ""; position: absolute; inset: 0;
+      background: linear-gradient(180deg, rgba(0,0,0,0.3), rgba(0,0,0,0.78));
+    }
+    .top6-tile > * { position: relative; z-index: 1; }
+    .top6-tile .rchip {
+      position: absolute; top: 4px; left: 4px;
+      padding: 2px 4px;
+      background: rgba(0,0,0,0.55);
+      border: 1px solid rgba(255,196,0,0.45);
+      font: 900 8px/1 var(--font-body);
+      color: var(--gold);
+    }
+    .top6-tile .mchip {
+      position: absolute; top: 4px; right: 4px;
+      padding: 2px 4px;
+      background: rgba(0,0,0,0.7);
+      border: 1px solid rgba(255,255,255,0.18);
+      font: 900 8px/1 var(--font-body);
+      color: #fff;
+    }
+    .top6-tile .grade-chip {
+      position: absolute; bottom: 4px; left: 4px;
+      padding: 2px 4px;
+      background: rgba(0,0,0,0.7);
+      font: 900 italic 10px/1 var(--font-display);
+    }
+    .top6-tile .score-chip {
+      position: absolute; bottom: 4px; right: 4px;
+      padding: 2px 4px;
+      background: rgba(0,0,0,0.7);
+      font: 800 10px/1 var(--font-body);
       color: #fff; font-variant-numeric: tabular-nums;
-      letter-spacing: -0.01em;
-    }
-    .train-cells .tcl {
-      margin-top: 4px;
-      font: 800 9px/1 var(--font-body);
-      color: var(--text-dim); letter-spacing: 1px; text-transform: uppercase;
     }
 
     /* ─────────────────────────────────────────────────────────────
-       Weekly leaderboard (real WC top-3)
+       APP COMPONENT: Lists row (mobile/app/(drawer)/lists.tsx)
+       ───────────────────────────────────────────────────────────── */
+    .list-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 0;
+      border-top: 1px solid var(--border);
+    }
+    .list-row:first-child { border-top: 0; padding-top: 4px; }
+    .list-row .text {
+      flex: 1; min-width: 0;
+      font: 700 12px/1.3 var(--font-body); color: var(--text);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .list-row .grade-num {
+      font: 800 11px/1 var(--font-body); color: var(--text-muted);
+      font-variant-numeric: tabular-nums;
+    }
+    .list-row .grade-num em { font-style: normal; color: var(--cyan); font-weight: 900; }
+
+    /* ─────────────────────────────────────────────────────────────
+       APP COMPONENT: Weekly leaderboard row (mobile WC tab)
        ───────────────────────────────────────────────────────────── */
     .leader {
       display: flex; align-items: center; gap: 12px;
-      padding: 10px 0;
-      border-top: 1px solid rgba(255,255,255,0.05);
+      padding: 10px 4px;
+      border-top: 1px solid var(--border);
     }
-    .leader:first-child { border-top: 0; padding-top: 0; }
+    .leader:first-child { border-top: 0; padding-top: 4px; }
     .leader .rank {
       width: 28px; height: 28px;
       display: flex; align-items: center; justify-content: center;
@@ -749,56 +872,48 @@
     .leader .rank.r1 { background: linear-gradient(135deg, var(--gold), var(--gold-deep)); color: #050505; }
     .leader .rank.r2 { background: linear-gradient(135deg, #cbd5e1, #64748b); color: #050505; }
     .leader .rank.r3 { background: linear-gradient(135deg, #fb923c, #9a3412); color: #050505; }
+    .leader .id { flex: 1; min-width: 0; }
     .leader .name {
-      flex: 1; min-width: 0;
       font: 800 13px/1 var(--font-body);
-      color: #fff;
+      color: var(--text);
+      display: flex; align-items: center; gap: 6px;
     }
-    .leader .name span { color: var(--text-dim); margin-left: 4px; font-weight: 600; font-size: 11px; }
-    .leader .pts { font: 900 italic 14px/1 var(--font-display); color: var(--gold); font-variant-numeric: tabular-nums; }
-    .leader .clears { font: 700 10px/1 var(--font-body); color: var(--text-dim); margin-top: 4px; }
+    .leader .clears { margin-top: 4px; font: 700 10px/1 var(--font-body); color: var(--text-dim); }
+    .leader .pts { font: 900 italic 16px/1 var(--font-display); color: var(--gold); font-variant-numeric: tabular-nums; }
 
     /* ─────────────────────────────────────────────────────────────
-       Download CTA
+       DOWNLOAD CTA
        ───────────────────────────────────────────────────────────── */
     .download-card {
       max-width: var(--maxw); margin: 0 auto;
-      padding: 56px;
+      padding: 48px;
       background: linear-gradient(135deg, rgba(255,196,0,0.10), rgba(255,196,0,0.02));
       border: 1px solid var(--border-strong);
-      clip-path: polygon(0 0, calc(100% - 22px) 0, 100% 22px, 100% 100%, 22px 100%, 0 calc(100% - 22px));
+      clip-path: polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 20px 100%, 0 calc(100% - 20px));
       display: grid;
       grid-template-columns: minmax(0,1fr) auto;
       gap: 32px; align-items: center;
       position: relative;
     }
-    .download-card::after {
-      content: "";
-      position: absolute; inset: 0;
-      background: linear-gradient(45deg, transparent 30%, rgba(255,196,0,0.05));
-      pointer-events: none;
-    }
-    @media (max-width: 720px) { .download-card { grid-template-columns: 1fr; padding: 36px; } }
+    @media (max-width: 720px) { .download-card { grid-template-columns: 1fr; padding: 32px; } }
     .download-card h2 {
-      font: italic 900 clamp(28px, 4vw, 40px)/0.95 var(--font-display);
+      font: italic 900 clamp(26px, 3.5vw, 36px)/0.95 var(--font-display);
       text-transform: uppercase;
-      letter-spacing: -0.025em;
+      letter-spacing: -0.02em;
     }
-    .download-card p { margin-top: 14px; font-size: 15px; }
-    .download-actions { display: flex; flex-direction: column; gap: 12px; min-width: 240px; position: relative; z-index: 1; }
+    .download-card p { margin-top: 12px; font-size: 14px; }
+    .download-actions { display: flex; flex-direction: column; gap: 10px; min-width: 240px; position: relative; z-index: 1; }
     .pkg-meta {
       font: 700 11px/1 var(--font-body);
-      color: var(--text-dim); letter-spacing: 0.4px; margin-top: 4px;
+      color: var(--text-dim); margin-top: 4px;
     }
     .pkg-meta .ok { color: var(--emerald); font-weight: 800; }
 
-    /* ─────────────────────────────────────────────────────────────
-       Footer
-       ───────────────────────────────────────────────────────────── */
+    /* ─── FOOTER ───────────────────────────────────────────────── */
     footer {
       padding: 40px 24px 80px;
       border-top: 1px solid var(--border);
-      margin-top: 96px;
+      margin-top: 80px;
       color: var(--text-dim);
       font-size: 12px;
     }
@@ -810,8 +925,8 @@
     .footer-inner a { color: var(--text-muted); }
     .footer-inner a:hover { color: var(--gold); }
 
-    /* ─── Reveal ────────────────────────────────────────────────── */
-    .reveal { opacity: 0; transform: translateY(28px); transition: opacity 0.7s ease, transform 0.7s ease; }
+    /* Reveal */
+    .reveal { opacity: 0; transform: translateY(24px); transition: opacity 0.6s ease, transform 0.6s ease; }
     .reveal.in { opacity: 1; transform: none; }
     @media (prefers-reduced-motion: reduce) {
       .reveal { opacity: 1; transform: none; transition: none; }
@@ -824,7 +939,6 @@
   <div class="bg-ember"></div>
   <div class="bg-scan"></div>
 
-  <!-- ─── NAV ──────────────────────────────────────────────────── -->
   <nav class="nav">
     <div class="nav-inner">
       <a href="https://pumpshinsa.com/" class="brand-mark" aria-label="Pump Shinsa">
@@ -840,22 +954,19 @@
       <span class="eyebrow"><span class="dot"></span>Live in beta · Android · Web</span>
       <h1 class="hero-title">
         <span class="skew">Pump It Up,</span><br/>
-        <span class="grad">but with the stats</span><br/>
+        <span class="grad">with the stats</span><br/>
         <span class="skew">you've been missing.</span>
       </h1>
       <p class="lede">
-        Shinsa is the companion that turns every London Pump Dojo session into measurable
-        progress. Tier-list every chart, scout your rivals, host live sessions, and let weekly
-        challenges set the pace. Built by players, sharpened on real machine sweat.
+        Shinsa turns every London Pump Dojo session into measurable progress. Tier-list every
+        chart, scout rivals, host live sessions, and let weekly challenges set the pace.
       </p>
       <div class="hero-cta-row">
         <a href="#download" class="btn-primary">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           Download APK
         </a>
-        <a href="https://new.pumpshinsa.com/" class="btn-secondary">
-          Open in browser →
-        </a>
+        <a href="https://new.pumpshinsa.com/" class="btn-secondary">Open in browser →</a>
       </div>
       <div class="hero-meta">
         <span><b>4,568</b> charts indexed</span>
@@ -864,7 +975,7 @@
       </div>
     </div>
 
-    <!-- Hero "phone" — actual ELMER home view, real numbers -->
+    <!-- Hero phone: real ELMER home view with real recent plays -->
     <div class="hero-phone reveal">
       <div class="phone" aria-hidden="true">
         <div class="notch"></div>
@@ -872,9 +983,9 @@
           <div class="app-topbar">
             <img src="/download/both.png" alt="" />
             <div class="icons">
-              <span>✉</span>
-              <span>🔔<span class="badge">3</span></span>
-              <span>☰</span>
+              <div class="ib">✉<span class="badge cyan">2</span></div>
+              <div class="ib">🔔<span class="badge">3</span></div>
+              <div class="ib">☰</div>
             </div>
           </div>
           <div class="app-quicknav">
@@ -886,29 +997,29 @@
           <div class="app-eyebrow">RECENT ACTIVITY</div>
           <div class="app-section">
             <div class="activity-row">
-              <div class="ico">📈</div>
-              <div class="body"><p>ELMER improved 5 scores</p><span>Up &amp; Up · S17 · 999,115 SSS+</span></div>
+              <div class="chart-jacket" style="background-image:url('https://pumpshinsa.com/jackets/pump/1538.jpg');width:32px;height:32px;border-radius:5px;"></div>
+              <div class="body"><p>ELMER cleared Up &amp; Up</p><span>Single 17 · 999,115 SSS+</span></div>
               <div class="pts">+1.8K</div>
             </div>
             <div class="activity-row">
-              <div class="ico">🎯</div>
-              <div class="body"><p>ELMER cleared 3 new songs</p><span>WC #2 · 8,937 pts</span></div>
-              <div class="pts">+690</div>
-            </div>
-            <div class="activity-row">
-              <div class="ico">🥇</div>
+              <div class="chart-jacket" style="background-image:url('https://pumpshinsa.com/jackets/pump/116.jpg');width:32px;height:32px;border-radius:5px;"></div>
               <div class="body"><p>Overblow · WC #1</p><span>Single 18 · 999,005 SSS+</span></div>
-              <div class="pts">UG</div>
+              <div class="pts gold">UG</div>
             </div>
             <div class="activity-row">
-              <div class="ico">⚔️</div>
-              <div class="body"><p>Soft just upscored</p><span>Another Truth · D21 · 993,701</span></div>
-              <div class="pts warn">+12</div>
+              <div class="chart-jacket" style="background-image:url('https://pumpshinsa.com/jackets/pump/RIP.jpg');width:32px;height:32px;border-radius:5px;"></div>
+              <div class="body"><p>R.I.P. · Weekly #1</p><span>Single 22 · 964,072 AAA+</span></div>
+              <div class="pts">FG</div>
             </div>
             <div class="activity-row">
-              <div class="ico">🏆</div>
-              <div class="body"><p>WC 2026-W20 · Singles #1</p><span>5,578 pts · 9 clears</span></div>
-              <div class="pts">★</div>
+              <div class="chart-jacket" style="background-image:url('https://pumpshinsa.com/jackets/pump/16B4.jpg');width:32px;height:32px;border-radius:5px;"></div>
+              <div class="body"><p>Cygnus</p><span>Double 21 · 992,314 SSS</span></div>
+              <div class="pts">+1.2K</div>
+            </div>
+            <div class="activity-row">
+              <div class="chart-jacket" style="background-image:url('https://pumpshinsa.com/jackets/pump/241.jpg');width:32px;height:32px;border-radius:5px;"></div>
+              <div class="body"><p>Get Up · WC #1</p><span>Single 21 · 992,593 SSS</span></div>
+              <div class="pts gold">MG</div>
             </div>
           </div>
         </div>
@@ -919,22 +1030,10 @@
   <!-- ─── STATS STRIP ──────────────────────────────────────────── -->
   <div class="strip reveal">
     <div class="strip-grid">
-      <div class="strip-card">
-        <div class="strip-num"><em>4,568</em></div>
-        <div class="strip-lbl">Charts indexed</div>
-      </div>
-      <div class="strip-card">
-        <div class="strip-num">639</div>
-        <div class="strip-lbl">Songs library</div>
-      </div>
-      <div class="strip-card">
-        <div class="strip-num"><em>2,199</em></div>
-        <div class="strip-lbl">ELMER's best scores</div>
-      </div>
-      <div class="strip-card">
-        <div class="strip-num">#306</div>
-        <div class="strip-lbl">Pumbility ranking tracked</div>
-      </div>
+      <div class="strip-card"><div class="strip-num"><em>4,568</em></div><div class="strip-lbl">Charts indexed</div></div>
+      <div class="strip-card"><div class="strip-num">639</div><div class="strip-lbl">Songs library</div></div>
+      <div class="strip-card"><div class="strip-num"><em>2,199</em></div><div class="strip-lbl">ELMER's best scores</div></div>
+      <div class="strip-card"><div class="strip-num">#306</div><div class="strip-lbl">Pumbility rank tracked</div></div>
     </div>
   </div>
 
@@ -945,34 +1044,44 @@
         <span class="section-eyebrow"><span style="display:inline-block;width:6px;height:6px;background:var(--gold);transform:rotate(45deg);"></span>What's inside</span>
         <h2 class="section-h">Eight tools you'd otherwise <em>hand-roll on a spreadsheet.</em></h2>
         <p class="section-sub">
-          Every surface mirrors the way serious players already think about Pump:
-          per-chart, per-mode, per-skill, per-week. The data you see below is real —
-          ELMER, Soft, Afii, h4chi, ATKY — pulled live from the machine sync.
+          Every surface mirrors how serious players already think about Pump:
+          per-chart, per-mode, per-skill, per-week. The data here is sampled
+          live from the API — ELMER, Soft, Afii, h4chi, ATKY — real plays,
+          real jackets.
         </p>
       </div>
 
       <div class="features">
 
-        <!-- WEEKLY LEADERBOARD ─────────────────────────────────── -->
+        <!-- WEEKLY CHALLENGE ─────────────────────────────────── -->
         <div class="feature reveal">
           <div class="feature-eye"><span class="pip"></span>WEEKLY CHALLENGE</div>
           <h3>This week, 2026-W20</h3>
-          <p>Every Monday a new 34-chart bracket drops. Singles + Doubles + Co-op divisions, each with their own podium. PG bonuses on top. Compete from your machine; rankings update as you sync.</p>
+          <p>Every Monday a fresh 34-chart bracket drops. Singles + Doubles + Co-op divisions, each with their own podium and PG bonuses. Rankings update as you sync from the machine.</p>
           <div class="feature-pills"><span>34 CHARTS</span><span>3 DIVISIONS</span><span>PG BONUS</span></div>
           <div class="surface">
             <div class="leader">
               <div class="rank r1">1</div>
-              <div class="name">Afii<span>🇧🇩</span><div class="clears">18 clears · +182 PG</div></div>
+              <div class="id">
+                <div class="name">Afii <span style="font-size:12px;">🇧🇩</span></div>
+                <div class="clears">18 clears · +182 PG bonus</div>
+              </div>
               <div class="pts">10,922</div>
             </div>
             <div class="leader">
               <div class="rank r2">2</div>
-              <div class="name">ELMER<span>🇬🇧</span><div class="clears">16 clears · +158 PG</div></div>
+              <div class="id">
+                <div class="name">ELMER <span style="font-size:12px;">🇬🇧</span></div>
+                <div class="clears">16 clears · +158 PG bonus</div>
+              </div>
               <div class="pts">8,937</div>
             </div>
             <div class="leader">
               <div class="rank r3">3</div>
-              <div class="name">ATKY<span>🇲🇾</span><div class="clears">1 clear</div></div>
+              <div class="id">
+                <div class="name">ATKY <span style="font-size:12px;">🇲🇾</span></div>
+                <div class="clears">1 clear</div>
+              </div>
               <div class="pts">220</div>
             </div>
           </div>
@@ -982,20 +1091,20 @@
         <div class="feature reveal" data-tone="cyan">
           <div class="feature-eye"><span class="pip"></span>TIERS</div>
           <h3>Every chart, ranked at a glance</h3>
-          <p>Per-mode, per-level grids show every chart you've touched, sorted into Overrated, Easy, Hard, Brutal. Tap any cell for the full score sheet. Hide unplayed, swap to scores, change density.</p>
+          <p>Per-mode, per-level grids. Tap any cell for the full score sheet. Hide unplayed, swap to scores, change density. The fastest way to spot the chart you should be grinding next.</p>
           <div class="feature-pills"><span>SINGLES</span><span>DOUBLES</span><span>CO-OP</span><span>SHARE IMG</span></div>
           <div class="surface">
             <div class="tier-grid">
-              <div class="cell"><span class="gtxt">SSS+</span></div>
-              <div class="cell"><span class="gtxt">SSS+</span></div>
-              <div class="cell"><span class="gtxt">SSS+</span></div>
-              <div class="cell"><span class="gtxt">SSS</span></div>
-              <div class="cell"><span class="gtxt">SSS</span></div>
-              <div class="cell"><span class="gtxt">SS+</span></div>
-              <div class="cell"><span class="gtxt">SS+</span></div>
-              <div class="cell"><span class="gtxt">SS</span></div>
-              <div class="cell gold"><span class="gtxt">S+</span></div>
-              <div class="cell gold"><span class="gtxt">S</span></div>
+              <div class="tier-cell" style="background-image:url('https://pumpshinsa.com/jackets/pump/MEGAHEARTZ.jpg');"><span class="gtxt">SSS+</span></div>
+              <div class="tier-cell" style="background-image:url('https://pumpshinsa.com/jackets/pump/Spooky_Macaron.jpg');"><span class="gtxt">SSS+</span></div>
+              <div class="tier-cell" style="background-image:url('https://pumpshinsa.com/jackets/pump/Nostalgia.jpg');"><span class="gtxt">SSS</span></div>
+              <div class="tier-cell" style="background-image:url('https://pumpshinsa.com/jackets/pump/Crimson_hood.jpg');"><span class="gtxt">SSS</span></div>
+              <div class="tier-cell y" style="background-image:url('https://pumpshinsa.com/jackets/pump/1602.jpg');"><span class="gtxt">SS+</span></div>
+              <div class="tier-cell" style="background-image:url('https://pumpshinsa.com/jackets/pump/Demon_of_Laplace.jpg');"><span class="gtxt">SSS</span></div>
+              <div class="tier-cell y" style="background-image:url('https://pumpshinsa.com/jackets/pump/1697.jpg');"><span class="gtxt">SS+</span></div>
+              <div class="tier-cell y" style="background-image:url('https://pumpshinsa.com/jackets/pump/Big_Daddy.jpg');"><span class="gtxt">SS</span></div>
+              <div class="tier-cell y" style="background-image:url('https://pumpshinsa.com/jackets/pump/PANDORA.jpg');"><span class="gtxt">SS</span></div>
+              <div class="tier-cell w" style="background-image:url('https://pumpshinsa.com/jackets/pump/RIP.jpg');"><span class="gtxt">AAA+</span></div>
             </div>
           </div>
         </div>
@@ -1004,25 +1113,29 @@
         <div class="feature reveal">
           <div class="feature-eye"><span class="pip"></span>WHAT TO PLAY</div>
           <h3>Picks engineered for your goal</h3>
-          <p>Choose <i>next skill title</i> or <i>raise pumbility</i>; the app surfaces 10 charts that move your needle hardest right now. Refreshable. Tap to jump to the chart sheet. Below — h4chi's actual top-rated picks.</p>
+          <p>Choose <i>next skill title</i> or <i>raise pumbility</i>; the app surfaces 10 charts that move your needle hardest right now. Below — h4chi's actual top-rated picks.</p>
           <div class="feature-pills"><span>NEXT TITLE</span><span>+PUMBILITY</span><span>REPLAY</span></div>
           <div class="surface">
             <div class="wtp">
-              <div class="card">
+              <div class="card" style="background-image:url('https://pumpshinsa.com/jackets/pump/MEGAHEARTZ.jpg');">
                 <span class="tag">+437 pts</span>
-                <div><div class="nm">MEGAHEARTZ</div><div class="mt">Single 17 · need AAA+</div></div>
+                <div class="nm">MEGAHEARTZ</div>
+                <div class="mt">Single 17 · need AAA+</div>
               </div>
-              <div class="card">
+              <div class="card" style="background-image:url('https://pumpshinsa.com/jackets/pump/Spooky_Macaron.jpg');">
                 <span class="tag">+399 pts</span>
-                <div><div class="nm">Spooky Macaron</div><div class="mt">Single 17 · need AA+</div></div>
+                <div class="nm">Spooky Macaron</div>
+                <div class="mt">Single 17 · need AA+</div>
               </div>
-              <div class="card">
+              <div class="card" style="background-image:url('https://pumpshinsa.com/jackets/pump/Nostalgia.jpg');">
                 <span class="tag">+399 pts</span>
-                <div><div class="nm">Nostalgia</div><div class="mt">Single 17 · need AA+</div></div>
+                <div class="nm">Nostalgia</div>
+                <div class="mt">Single 17 · need AA+</div>
               </div>
-              <div class="card">
+              <div class="card" style="background-image:url('https://pumpshinsa.com/jackets/pump/Crimson_hood.jpg');">
                 <span class="tag">+357 pts</span>
-                <div><div class="nm">Crimson Hood</div><div class="mt">Single 16 · need AAA+</div></div>
+                <div class="nm">Crimson Hood</div>
+                <div class="mt">Single 16 · need AAA+</div>
               </div>
             </div>
           </div>
@@ -1032,7 +1145,7 @@
         <div class="feature reveal" data-tone="rose">
           <div class="feature-eye"><span class="pip"></span>RIVALS</div>
           <h3>Pick someone, scout them</h3>
-          <p>Side-by-side scores, gaps you can close, songs they haven't touched. As soon as either of you upscores, the gap updates. Fire a "beat my score" challenge straight into DMs.</p>
+          <p>Side-by-side scores, gaps you can close, songs they haven't touched. Live machine sync means as soon as either of you upscores, the gap updates. Fire a "beat my score" challenge straight into DMs.</p>
           <div class="feature-pills"><span>HEAD-TO-HEAD</span><span>SHARE CHALLENGE</span><span>PER MODE</span></div>
           <div class="surface">
             <div class="vs">
@@ -1040,15 +1153,20 @@
                 <div class="av gold">E</div>
                 <div class="nm">@ELMER</div>
                 <div class="pmb">74,537</div>
-                <div class="rank">PMB · #306</div>
+                <div class="rk">PMB · #306</div>
               </div>
               <div class="dvs">VS</div>
               <div class="side">
                 <div class="av rose">S</div>
                 <div class="nm">@Soft</div>
                 <div class="pmb">69,120</div>
-                <div class="rank">PMB · #586</div>
+                <div class="rk">PMB · #586</div>
               </div>
+            </div>
+            <div class="vs-bars">
+              <div class="vs-bar-row"><span class="v-l">S25 AAA+</span><span class="lbl">Equiv level</span><span class="v-r">S24 S</span></div>
+              <div class="vs-bar-row"><span class="v-l">1,491</span><span class="lbl">Avg rating</span><span class="v-r">1,382</span></div>
+              <div class="vs-bar-row"><span class="v-l">+5,417</span><span class="lbl">Gap</span><span class="v-r">—</span></div>
             </div>
           </div>
         </div>
@@ -1057,7 +1175,7 @@
         <div class="feature reveal" data-tone="orange">
           <div class="feature-eye"><span class="pip"></span>TRAINING</div>
           <h3>Your sweat, quantified</h3>
-          <p>Average rating, equivalent level, peaking vs cooked. The Training tab tells you where your competitive level sits, and what min-entry song you'd need to clear to push it higher.</p>
+          <p>Average rating, equivalent level, peaking vs cooked. The Training tab tells you exactly where your competitive level sits, and what min-entry song you'd need to clear to push it higher.</p>
           <div class="feature-pills"><span>BASE SKILL</span><span>WEEKLY LOAD</span><span>RECOVERY</span></div>
           <div class="surface">
             <div class="train-cells">
@@ -1076,12 +1194,30 @@
           <p>Build lists for Friday warmup, Doubles tournament prep, AAA chase, Co-op sets — anything. Share a list with one tap and your friends inherit your full chart picker. Below — h4chi's actual L11 routine.</p>
           <div class="feature-pills"><span>SHARE LINK</span><span>GROUP ROUTE</span><span>SESSION QUEUE</span></div>
           <div class="surface">
-            <div class="lists">
-              <div class="lrow"><div class="check"><span>✓</span></div><div class="text">Switronic · S11</div><div class="meta">997,110 SSS+</div></div>
-              <div class="lrow"><div class="check"><span>✓</span></div><div class="text">Demon of Laplace · S10</div><div class="meta">994,864 SSS</div></div>
-              <div class="lrow"><div class="check"><span>✓</span></div><div class="text">BRAIN POWER · S11</div><div class="meta">989,366 SS+</div></div>
-              <div class="lrow"><div class="check"><span>✓</span></div><div class="text">Big Daddy · S11</div><div class="meta">989,358 SS+</div></div>
-              <div class="lrow"><div class="check"><span>✓</span></div><div class="text">PANDORA · S11</div><div class="meta">988,975 SS+</div></div>
+            <div class="list-row">
+              <div class="chart-jacket" style="width:36px;height:36px;background-image:url('https://pumpshinsa.com/jackets/pump/1602.jpg');"><span class="lvl s">11</span></div>
+              <div class="text">Switronic</div>
+              <div class="grade-num">997,110 <em>SSS+</em></div>
+            </div>
+            <div class="list-row">
+              <div class="chart-jacket" style="width:36px;height:36px;background-image:url('https://pumpshinsa.com/jackets/pump/Demon_of_Laplace.jpg');"><span class="lvl s">10</span></div>
+              <div class="text">Demon of Laplace</div>
+              <div class="grade-num">994,864 <em>SSS</em></div>
+            </div>
+            <div class="list-row">
+              <div class="chart-jacket" style="width:36px;height:36px;background-image:url('https://pumpshinsa.com/jackets/pump/1697.jpg');"><span class="lvl s">11</span></div>
+              <div class="text">BRAIN POWER</div>
+              <div class="grade-num">989,366 <em>SS+</em></div>
+            </div>
+            <div class="list-row">
+              <div class="chart-jacket" style="width:36px;height:36px;background-image:url('https://pumpshinsa.com/jackets/pump/Big_Daddy.jpg');"><span class="lvl s">11</span></div>
+              <div class="text">Big Daddy</div>
+              <div class="grade-num">989,358 <em>SS+</em></div>
+            </div>
+            <div class="list-row">
+              <div class="chart-jacket" style="width:36px;height:36px;background-image:url('https://pumpshinsa.com/jackets/pump/PANDORA.jpg');"><span class="lvl s">11</span></div>
+              <div class="text">PANDORA</div>
+              <div class="grade-num">988,975 <em>SS+</em></div>
             </div>
           </div>
         </div>
@@ -1097,59 +1233,84 @@
               <div class="live-pill"><span class="pulse"></span>LIVE</div>
               <div class="body">
                 <div class="name">London Pump Dojo 1 — wc PT2</div>
-                <div class="stats">19 plays · 23 messages · 68% clear · Peak 1</div>
+                <div class="stats">19 plays · 23 messages · 68% clear</div>
               </div>
               <div class="duration">1h 8m</div>
+            </div>
+            <!-- Top-6 recap grid (real ELMER plays from the ended session) -->
+            <div class="top6-grid">
+              <div class="top6-tile" style="background-image:url('https://pumpshinsa.com/jackets/pump/1538.jpg');">
+                <span class="rchip">R690</span><span class="mchip">S17</span>
+                <span class="grade-chip grade sssp">SSS+</span>
+                <span class="score-chip">999,115</span>
+              </div>
+              <div class="top6-tile" style="background-image:url('https://pumpshinsa.com/jackets/pump/116.jpg');">
+                <span class="rchip">R690</span><span class="mchip">S18</span>
+                <span class="grade-chip grade sssp">SSS+</span>
+                <span class="score-chip">999,005</span>
+              </div>
+              <div class="top6-tile" style="background-image:url('https://pumpshinsa.com/jackets/pump/16B4.jpg');">
+                <span class="rchip">R588</span><span class="mchip">D21</span>
+                <span class="grade-chip grade sss">SSS</span>
+                <span class="score-chip">992,314</span>
+              </div>
+              <div class="top6-tile" style="background-image:url('https://pumpshinsa.com/jackets/pump/241.jpg');">
+                <span class="rchip">R570</span><span class="mchip">S21</span>
+                <span class="grade-chip grade sss">SSS</span>
+                <span class="score-chip">992,593</span>
+              </div>
+              <div class="top6-tile" style="background-image:url('https://pumpshinsa.com/jackets/pump/92.jpg');">
+                <span class="rchip">R520</span><span class="mchip">S20</span>
+                <span class="grade-chip grade ss">SS</span>
+                <span class="score-chip">981,770</span>
+              </div>
+              <div class="top6-tile" style="background-image:url('https://pumpshinsa.com/jackets/pump/RIP.jpg');">
+                <span class="rchip">R454</span><span class="mchip">S22</span>
+                <span class="grade-chip grade aaa">AAA+</span>
+                <span class="score-chip">964,072</span>
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- FEED — real ELMER recents ───────────────────────────── -->
+        <!-- FEED ─────────────────────────────────────────────── -->
         <div class="feature reveal" data-tone="emerald">
           <div class="feature-eye"><span class="pip"></span>FEED</div>
           <h3>Every clear, every upscore</h3>
-          <p>Follow players you respect; their session highlights drop into your feed in real time. Pump posts, comment on plays, share a score card straight to a friend's DMs. Below — ELMER's most-recent real plays.</p>
+          <p>Follow players you respect; their session highlights drop into your feed in real time. Pump posts, comment on plays, share a score card straight to a friend's DMs. Below — ELMER's actual most-recent plays.</p>
           <div class="feature-pills"><span>FOLLOW</span><span>SCORE CARD</span><span>DM SHARE</span></div>
           <div class="surface">
-            <div class="scorerow">
-              <div class="jacket" style="background:linear-gradient(135deg,#7e22ce,#1e1b4b);">
-                <div class="lvl-badge s">17</div>
-              </div>
-              <div class="body">
+            <div class="upscore-row">
+              <div class="chart-jacket" style="background-image:url('https://pumpshinsa.com/jackets/pump/1538.jpg');"><span class="lvl s">17</span></div>
+              <div class="entry-main">
                 <div class="title">Up &amp; Up (Produced by AWAL)</div>
-                <div class="meta"><span class="meta-chip gold">UG</span><span class="meta-chip">London Dojo 1</span></div>
+                <div class="meta-chips"><span class="plate ug">UG</span><span class="meta-chip">London Dojo 1</span></div>
               </div>
-              <div class="scorebox"><div class="score">999,115</div><div class="grade sssp">SSS+</div></div>
+              <div class="scores-col"><div class="score-num">999,115</div><div class="grade sssp">SSS+</div></div>
             </div>
-            <div class="scorerow">
-              <div class="jacket" style="background:linear-gradient(135deg,#1e3a8a,#0c4a6e);">
-                <div class="lvl-badge s">18</div>
-              </div>
-              <div class="body">
+            <div class="upscore-row">
+              <div class="chart-jacket" style="background-image:url('https://pumpshinsa.com/jackets/pump/116.jpg');"><span class="lvl s">18</span></div>
+              <div class="entry-main">
                 <div class="title">Overblow - SHORT CUT -</div>
-                <div class="meta"><span class="meta-chip gold">UG</span><span class="meta-chip cyan">WC #1</span></div>
+                <div class="meta-chips"><span class="plate ug">UG</span><span class="meta-chip cyan">WC #1</span></div>
               </div>
-              <div class="scorebox"><div class="score">999,005</div><div class="grade sssp">SSS+</div></div>
+              <div class="scores-col"><div class="score-num">999,005</div><div class="grade sssp">SSS+</div></div>
             </div>
-            <div class="scorerow">
-              <div class="jacket" style="background:linear-gradient(135deg,#374151,#111827);">
-                <div class="lvl-badge s">22</div>
-              </div>
-              <div class="body">
+            <div class="upscore-row">
+              <div class="chart-jacket" style="background-image:url('https://pumpshinsa.com/jackets/pump/RIP.jpg');"><span class="lvl s">22</span></div>
+              <div class="entry-main">
                 <div class="title">R.I.P.</div>
-                <div class="meta"><span class="meta-chip">FG</span><span class="meta-chip cyan">WC #1</span></div>
+                <div class="meta-chips"><span class="plate fg">FG</span><span class="meta-chip cyan">WC #1</span></div>
               </div>
-              <div class="scorebox"><div class="score">964,072</div><div class="grade aaa">AAA+</div></div>
+              <div class="scores-col"><div class="score-num">964,072</div><div class="grade aaa">AAA+</div></div>
             </div>
-            <div class="scorerow">
-              <div class="jacket" style="background:linear-gradient(135deg,#0f766e,#064e3b);">
-                <div class="lvl-badge d">21</div>
-              </div>
-              <div class="body">
+            <div class="upscore-row">
+              <div class="chart-jacket" style="background-image:url('https://pumpshinsa.com/jackets/pump/16B4.jpg');"><span class="lvl d">21</span></div>
+              <div class="entry-main">
                 <div class="title">Cygnus</div>
-                <div class="meta"><span class="meta-chip">MG</span><span class="meta-chip cyan">WC #1</span></div>
+                <div class="meta-chips"><span class="plate mg">MG</span><span class="meta-chip cyan">WC #1</span></div>
               </div>
-              <div class="scorebox"><div class="score">992,314</div><div class="grade sss">SSS</div></div>
+              <div class="scores-col"><div class="score-num">992,314</div><div class="grade sss">SSS</div></div>
             </div>
           </div>
         </div>
@@ -1166,8 +1327,7 @@
         <h2>Carry your Pump<br/>bookkeeping in your pocket.</h2>
         <p>Direct APK install for Android while we wait on store review. The web app at
           <a href="https://new.pumpshinsa.com/" style="color:var(--gold);font-weight:700;">new.pumpshinsa.com</a>
-          works on iOS and desktop today — install it as a PWA from Safari for the same
-          icon-on-the-homescreen feel.</p>
+          works on iOS and desktop today — install it as a PWA from Safari for the same icon-on-the-homescreen feel.</p>
       </div>
       <div class="download-actions">
         <a href="/download/shinsa.apk" class="btn-primary" id="apk-link" download>
@@ -1180,7 +1340,6 @@
     </div>
   </section>
 
-  <!-- ─── FOOTER ───────────────────────────────────────────────── -->
   <footer>
     <div class="footer-inner">
       <div>
@@ -1198,7 +1357,6 @@
   </footer>
 
   <script>
-    // Reveal-on-scroll
     const io = new IntersectionObserver((entries) => {
       for (const e of entries) {
         if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
@@ -1206,8 +1364,6 @@
     }, { threshold: 0.10, rootMargin: '0px 0px -8% 0px' });
     document.querySelectorAll('.reveal').forEach((el) => io.observe(el));
 
-    // Hide APK button if file missing (defensive — keeps the page clean
-    // during a CI window where the build is mid-flight)
     fetch('/download/shinsa.apk', { method: 'HEAD' })
       .then((r) => {
         if (!r.ok) {
