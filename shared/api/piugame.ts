@@ -346,7 +346,185 @@ export function createPiugameApi(client: ApiClient) {
     trainingPopulation(userId: string) {
       return client.request<TrainingPopulationResponse>(`/api/piugame/training-population/${encodeURIComponent(userId)}`);
     },
+
+    /** Global Pumbility leaderboard (overall vs singles), paginated. The
+     *  payload includes `current_user` so the UI can pin "you" to the top. */
+    pumbilityLeaderboard(params: PumbilityLeaderboardParams = {}) {
+      const search = new URLSearchParams();
+      if (params.metric) search.set('metric', params.metric);
+      if (params.sort_by) search.set('sort_by', params.sort_by);
+      if (params.sort_order) search.set('sort_order', params.sort_order);
+      if (params.page) search.set('page', String(params.page));
+      if (params.limit) search.set('limit', String(params.limit));
+      const qs = search.toString();
+      return client.request<PumbilityLeaderboardResponse>(`/api/piugame/leaderboards/pumbility${qs ? `?${qs}` : ''}`);
+    },
+
+    /** All OVER (level 20+) ranking levels, with chart counts per level. */
+    over20Levels() {
+      return client.request<Over20LevelsResponse>(`/api/piugame/leaderboards/over20/levels`);
+    },
+
+    /** Charts for one OVER level. `mode` accepts 'all' | 'single' | 'double'. */
+    over20Charts(params: { level: number | string; mode?: 'all' | 'single' | 'double' }) {
+      const search = new URLSearchParams();
+      search.set('level', String(params.level));
+      if (params.mode && params.mode !== 'all') search.set('mode', params.mode);
+      return client.request<Over20ChartsResponse>(`/api/piugame/leaderboards/over20/charts?${search.toString()}`);
+    },
+
+    /** Top 100 scores for a specific OVER chart (by chart_key). */
+    over20ChartTop100(chartKey: string) {
+      return client.request<Over20ChartTop100Response>(
+        `/api/piugame/leaderboards/over20/chart?chart_key=${encodeURIComponent(chartKey)}`,
+      );
+    },
+
+    /** Current user's stored Top-100 chart scores (anywhere they hit the
+     *  global top 100 for a chart). Paginated. */
+    myTop100Scores(params: { page?: number; limit?: number } = {}) {
+      const search = new URLSearchParams();
+      if (params.page) search.set('page', String(params.page));
+      if (params.limit) search.set('limit', String(params.limit));
+      const qs = search.toString();
+      return client.request<MyTop100ScoresResponse>(`/api/piugame/leaderboards/my-top100-scores${qs ? `?${qs}` : ''}`);
+    },
   };
+}
+
+// --- Pumbility leaderboard ---
+
+export interface PumbilityLeaderboardParams {
+  metric?: 'overall' | 'singles';
+  sort_by?: 'pumbility' | 'avg_grade' | 'avg_level' | 'competitive_level';
+  sort_order?: 'asc' | 'desc';
+  page?: number;
+  limit?: number;
+}
+
+export interface PumbilityLeaderboardRow {
+  rank: number;
+  user_id?: string;
+  username: string;
+  avatar?: string;
+  local_avatar?: string;
+  piugame_avatar?: string;
+  piugame_avatar_url?: string;
+  nationality?: string;
+  is_local_user?: boolean;
+  global_rank?: number;
+  global_prev_rank?: number;
+  global_rank_delta?: number;
+  overall_pumbility?: number;
+  singles_pumbility?: number;
+  overall_average_grade?: string;
+  overall_average_level?: number;
+  singles_average_grade?: string;
+  singles_average_level?: number;
+  singles_competitive_level?: number;
+  doubles_competitive_level?: number;
+  competitive_level?: number;
+  competitive_mode?: string;
+  overall_breakdown_count?: number;
+  singles_breakdown_count?: number;
+}
+
+export interface PumbilityLeaderboardResponse {
+  metric: 'overall' | 'singles';
+  sort_by: string;
+  sort_order: 'asc' | 'desc';
+  page: number;
+  limit: number;
+  total: number;
+  total_pages: number;
+  rows: PumbilityLeaderboardRow[];
+  current_user: {
+    sort_rank: number;
+    user_id: string;
+    username: string;
+    global_rank: number;
+    global_prev_rank: number;
+    global_rank_delta: number;
+    overall_pumbility: number;
+    singles_pumbility: number;
+  } | null;
+  source: string;
+}
+
+// --- OVER (level 20+) chart leaderboards ---
+
+export interface Over20Level {
+  level: number;
+  chart_count: number;
+}
+export interface Over20LevelsResponse {
+  levels: Over20Level[];
+  total_levels: number;
+  total_charts: number;
+}
+
+export interface Over20Chart {
+  chart_key: string;
+  song_title: string;
+  mode: string;
+  level: number;
+  jacket_url?: string;
+  source_no?: string;
+  top100_count: number;
+  min_score: number;
+  last_sync?: string | null;
+}
+export interface Over20ChartsResponse {
+  level: number;
+  mode: string;
+  total_charts: number;
+  charts: Over20Chart[];
+}
+
+export interface Over20ChartScore {
+  rank: number;
+  score: number;
+  grade: string;
+  player_name: string;
+  player_avatar?: string;
+  player_avatar_url?: string;
+  prev_rank?: number;
+  rank_delta?: number;
+  local_avatar?: string;
+  piugame_avatar?: string;
+  is_local_user?: boolean;
+  played_at?: string;
+}
+export interface Over20ChartTop100Response {
+  chart: Over20Chart;
+  total_scores: number;
+  scores: Over20ChartScore[];
+}
+
+// --- My top-100 across all OVER charts ---
+
+export interface MyTop100ScoreRow {
+  id: number;
+  song_title: string;
+  mode: string;
+  level: number;
+  score: number;
+  grade: string;
+  plate?: string;
+  player_name?: string;
+  jacket_url?: string;
+  chart_key?: string;
+  over_top100_rank: number;
+  over_top100_prev_rank?: number;
+  over_top100_rank_delta?: number;
+  top100_count?: number;
+}
+export interface MyTop100ScoresResponse {
+  page: number;
+  limit: number;
+  total: number;
+  total_pages: number;
+  rows: MyTop100ScoreRow[];
 }
 
 // --- Training-load shapes (mirrors server/routes/piugame.js#computeAllProfiles) ---

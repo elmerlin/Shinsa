@@ -311,14 +311,37 @@ export default function ChartDetailScreen() {
           <>
             <HeaderCard chart={chart} s={s} />
 
-            {user ? (
-              <Pressable
-                onPress={() => setSaveListOpen(true)}
-                style={({ pressed }) => [s.saveListBtn, pressed && { opacity: 0.85 }]}
-                accessibilityLabel="Save chart to a list">
-                <IconSymbol name="list.bullet" size={16} color={theme.text} />
-                <Text style={s.saveListBtnText}>Save to list</Text>
-              </Pressable>
+            {(user || (chart.level ?? 0) >= 20) ? (
+              <View style={s.actionRow}>
+                {user ? (
+                  <Pressable
+                    onPress={() => setSaveListOpen(true)}
+                    style={({ pressed }) => [s.actionBtn, pressed && { opacity: 0.85 }]}
+                    accessibilityLabel="Save chart to a list">
+                    <IconSymbol name="list.bullet" size={15} color={theme.text} />
+                    <Text style={s.actionBtnText}>Save to list</Text>
+                  </Pressable>
+                ) : null}
+                {(chart.level ?? 0) >= 20 ? (
+                  // Charts at level 20+ are tracked in PIU's global OVER Top 100
+                  // ranking. Deep-link straight to the right tab + chart selection.
+                  <Pressable
+                    onPress={() => router.push({
+                      pathname: '/leaderboards',
+                      params: {
+                        tab: 'over20',
+                        level: String(chart.level || ''),
+                        song: String(chart.title || ''),
+                        mode: String(chart.mode || ''),
+                      },
+                    })}
+                    style={({ pressed }) => [s.actionBtnAccent, pressed && { opacity: 0.85 }]}
+                    accessibilityLabel="View Over Top 100">
+                    <IconSymbol name="trophy.fill" size={15} color={theme.bg} />
+                    <Text style={s.actionBtnAccentText}>OVER Top 100</Text>
+                  </Pressable>
+                ) : null}
+              </View>
             ) : null}
 
             {best ? (
@@ -391,9 +414,14 @@ export default function ChartDetailScreen() {
                 </View>
                 <View style={s.skillsRow}>
                   {chart.skills.map((sk) => (
-                    <View key={sk.slug} style={s.skillChip}>
+                    // Tap any skill chip to deep-link into the per-skill index
+                    // (mobile Skills detail screen with description + charts).
+                    <Pressable
+                      key={sk.slug}
+                      onPress={() => router.push({ pathname: '/skill/[slug]', params: { slug: sk.slug } })}
+                      style={({ pressed }) => [s.skillChip, pressed && { opacity: 0.7 }]}>
                       <Text style={s.skillChipText}>{sk.name}</Text>
-                    </View>
+                    </Pressable>
                   ))}
                 </View>
               </View>
@@ -442,20 +470,35 @@ const makeStyles = (t: ThemeColors) => ({
   scroll: { padding: 16, paddingBottom: 60, gap: 18 },
   center: { padding: 32, alignItems: 'center' as const },
 
-  saveListBtn: {
+  // Action button row (Save to list / OVER Top 100). Single button keeps full
+  // width; two buttons split evenly.
+  actionRow: { flexDirection: 'row' as const, gap: 8, marginTop: -8 },
+  actionBtn: {
+    flex: 1,
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
-    gap: 8,
+    gap: 6,
     paddingVertical: 11,
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     borderRadius: 10,
     backgroundColor: t.surfaceMuted,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: t.border,
-    marginTop: -8,
   },
-  saveListBtnText: { fontSize: 14, fontWeight: '700' as const, color: t.text, letterSpacing: 0.3 },
+  actionBtnText: { fontSize: 13, fontWeight: '700' as const, color: t.text, letterSpacing: 0.3 },
+  actionBtnAccent: {
+    flex: 1,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    gap: 6,
+    paddingVertical: 11,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    backgroundColor: t.accent,
+  },
+  actionBtnAccentText: { fontSize: 13, fontWeight: '900' as const, color: t.bg, letterSpacing: 0.3 },
 
   headerCard: {
     borderRadius: 16,

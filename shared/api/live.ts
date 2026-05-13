@@ -126,7 +126,78 @@ export function createLiveApi(client: ApiClient) {
         body: {},
       });
     },
+
+    /** Hour-of-Power global leaderboard (sorted by best HoP total rating). */
+    hopLeaderboard(params: { limit?: number } = {}) {
+      const search = new URLSearchParams();
+      if (params.limit) search.set('limit', String(params.limit));
+      const qs = search.toString();
+      return client.request<HopLeaderboardResponse>(`/api/live/hop/leaderboard${qs ? `?${qs}` : ''}`);
+    },
+
+    /** Recent HoP attempts for one player (defaults to current user). */
+    hopAttempts(params: { user_id?: string; limit?: number } = {}) {
+      const search = new URLSearchParams();
+      if (params.user_id) search.set('user_id', params.user_id);
+      if (params.limit) search.set('limit', String(params.limit));
+      const qs = search.toString();
+      return client.request<HopAttemptsResponse>(`/api/live/hop/attempts${qs ? `?${qs}` : ''}`);
+    },
   };
+}
+
+// --- Hour of Power ---
+
+export interface HopLeaderboardRow {
+  user_id: string;
+  username: string;
+  avatar?: string;
+  nationality?: string;
+  skill_title?: string;
+  /** Rank assigned client-side after fetch — server returns sorted but unranked. */
+  rank?: number;
+  /** Best HoP attempt total rating points for this player. */
+  best_total_rating_points: number;
+  best_average_rating_points?: number;
+  best_average_level?: number;
+  best_session_id?: string;
+  best_attempt_started_at?: string;
+  completed_attempts?: number;
+}
+
+export interface HopLeaderboardResponse {
+  rows: HopLeaderboardRow[];
+  current_user?: { rank?: number; row?: HopLeaderboardRow | null } | null;
+}
+
+export interface HopAttemptRow {
+  session_id: string;
+  user_id: string;
+  username?: string;
+  avatar?: string;
+  nationality?: string;
+  skill_title?: string;
+  title?: string;
+  /** True once the HoP window finished. */
+  completed: boolean;
+  /** True if the attempt qualifies for the global leaderboard. */
+  leaderboard_eligible: boolean;
+  started_at?: string;
+  ended_at?: string;
+  warmup_started_at?: string;
+  session_duration_minutes?: number;
+  counted_clear_count: number;
+  total_rating_points: number;
+  average_rating_points?: number;
+  average_level?: number;
+  highest_rating_points?: number;
+  lowest_rating_points?: number;
+  live_url?: string;
+}
+
+export interface HopAttemptsResponse {
+  user_id: string;
+  attempts: HopAttemptRow[];
 }
 
 export type LiveApi = ReturnType<typeof createLiveApi>;
