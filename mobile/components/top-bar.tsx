@@ -25,6 +25,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { authApi, messagesApi } from '@/lib/api';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/contexts/theme-context';
+import { useBreakpoint } from '@/hooks/use-breakpoint';
 
 interface Props {
   /** Optional element rendered to the left of the messages icon. Use this
@@ -38,6 +39,7 @@ export function TopBar({ rightExtra }: Props) {
   const navigation = useNavigation<DrawerNavigationProp<Record<string, object | undefined>>>();
   const { user } = useAuth();
   const { theme } = useTheme();
+  const { isDesktop } = useBreakpoint();
 
   // Same 15-second refetch cadence the web NotificationContext uses, so
   // badges feel live without spinning up a SSE channel for the PWA.
@@ -66,13 +68,15 @@ export function TopBar({ rightExtra }: Props) {
   );
 
   return (
-    <View style={styles.row}>
-      <Pressable
-        onPress={() => router.push('/')}
-        hitSlop={8}
-        style={({ pressed }) => [styles.brand, pressed && styles.pressed]}>
-        <PumpShinsaLogo variant="horizontal" size={36} />
-      </Pressable>
+    <View style={[styles.row, isDesktop && styles.rowDesktop]}>
+      {!isDesktop ? (
+        <Pressable
+          onPress={() => router.push('/')}
+          hitSlop={8}
+          style={({ pressed }) => [styles.brand, pressed && styles.pressed]}>
+          <PumpShinsaLogo variant="horizontal" size={36} />
+        </Pressable>
+      ) : null}
 
       <View style={styles.rightCluster}>
         {rightExtra}
@@ -92,12 +96,14 @@ export function TopBar({ rightExtra }: Props) {
           color={theme.text}
           accessibilityLabel="Notifications"
         />
-        <IconBtn
-          icon="line.horizontal.3"
-          onPress={() => navigation.openDrawer?.()}
-          color={theme.text}
-          accessibilityLabel="Open menu"
-        />
+        {!isDesktop ? (
+          <IconBtn
+            icon="line.horizontal.3"
+            onPress={() => navigation.openDrawer?.()}
+            color={theme.text}
+            accessibilityLabel="Open menu"
+          />
+        ) : null}
       </View>
     </View>
   );
@@ -142,6 +148,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 4,
+  },
+  rowDesktop: {
+    // No logo or hamburger on desktop — just the utility cluster aligned
+    // right. The sidebar handles brand + nav, so this bar shrinks to a
+    // toolbar row hugging the top-right corner of the route content.
+    justifyContent: 'flex-end',
+    paddingHorizontal: 0,
   },
   brand: { paddingVertical: 2, paddingRight: 8 },
   rightCluster: { flexDirection: 'row', alignItems: 'center', gap: 4 },

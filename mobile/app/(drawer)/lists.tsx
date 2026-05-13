@@ -21,6 +21,7 @@ import { DefaultAvatar } from '@/components/default-avatar';
 import { TopBar } from '@/components/top-bar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useTheme } from '@/contexts/theme-context';
+import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { songsApi } from '@/lib/api';
 import { fullImageUrl } from '@/lib/images';
@@ -100,6 +101,7 @@ export default function ListsScreen() {
   const [mode, setMode] = useState<Mode>({ kind: 'idle' });
   const [draftName, setDraftName] = useState('');
   const [sort, setSort] = useState<SortKey>('recent');
+  const { isDesktop } = useBreakpoint();
 
   const listsQuery = useQuery({
     queryKey: LISTS_QUERY_KEY,
@@ -282,18 +284,19 @@ export default function ListsScreen() {
               </ScrollView>
             ) : null}
 
-            <View style={s.listGroup}>
+            <View style={[s.listGroup, isDesktop && s.listGroupDesktop]}>
               {sortedLists.map((list) => (
-                <ListCard
-                  key={list.id}
-                  list={list}
-                  s={s}
-                  theme={theme}
-                  onOpen={() => router.push({ pathname: '/list/[id]', params: { id: String(list.id) } })}
-                  onRename={() => openRename(list)}
-                  onClone={() => openClone(list)}
-                  onDelete={() => confirmDelete(list)}
-                />
+                <View key={list.id} style={isDesktop ? s.listCellDesktop : undefined}>
+                  <ListCard
+                    list={list}
+                    s={s}
+                    theme={theme}
+                    onOpen={() => router.push({ pathname: '/list/[id]', params: { id: String(list.id) } })}
+                    onRename={() => openRename(list)}
+                    onClone={() => openClone(list)}
+                    onDelete={() => confirmDelete(list)}
+                  />
+                </View>
               ))}
             </View>
 
@@ -303,15 +306,16 @@ export default function ListsScreen() {
                   <Text style={s.sharedHeading}>SHARED WITH YOU</Text>
                   <Text style={s.sharedCount}>{sharedLists.length}</Text>
                 </View>
-                <View style={s.listGroup}>
+                <View style={[s.listGroup, isDesktop && s.listGroupDesktop]}>
                   {sharedLists.map((sl) => (
-                    <SharedListCard
-                      key={sl.id}
-                      summary={sl}
-                      s={s}
-                      theme={theme}
-                      onOpen={() => router.push({ pathname: '/shared-list/[id]', params: { id: String(sl.id) } })}
-                    />
+                    <View key={sl.id} style={isDesktop ? s.listCellDesktop : undefined}>
+                      <SharedListCard
+                        summary={sl}
+                        s={s}
+                        theme={theme}
+                        onOpen={() => router.push({ pathname: '/shared-list/[id]', params: { id: String(sl.id) } })}
+                      />
+                    </View>
                   ))}
                 </View>
               </View>
@@ -547,6 +551,15 @@ const makeStyles = (t: ThemeColors) => ({
   emptyCtaText: { color: t.bg, fontSize: 14, fontWeight: '800' as const },
 
   listGroup: { gap: 10 },
+  listGroupDesktop: {
+    flexDirection: 'row' as const,
+    flexWrap: 'wrap' as const,
+    gap: 12,
+  },
+  listCellDesktop: {
+    width: '48.5%' as const,
+    minWidth: 280,
+  },
 
   card: {
     flexDirection: 'row' as const,

@@ -21,6 +21,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { ChartScoresSheet } from '@/components/wc-chart-scores-sheet';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/contexts/theme-context';
+import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { weeklyChallengesApi } from '@/lib/api';
 import { fullImageUrl } from '@/lib/images';
@@ -110,6 +111,7 @@ export default function WeeklyChallengesScreen() {
 
   const [weekKey, setWeekKey] = useState<string>('current');
   const [pickerOpen, setPickerOpen] = useState(false);
+  const { isDesktop } = useBreakpoint();
   const [division, setDivision] = useState<WeeklyChallengeDivision>(initialDivision);
   const [chartMode, setChartMode] = useState<WeeklyChallengeChartMode>('both');
   const [skillFamily, setSkillFamily] = useState<WeeklyChallengeSkillFamily>('all');
@@ -203,18 +205,54 @@ export default function WeeklyChallengesScreen() {
       <View style={[s.topBar, { paddingTop: insets.top + 8 }]}>
         <TopBar
           rightExtra={
-            <Pressable
-              onPress={() => setPickerOpen(true)}
-              hitSlop={6}
-              style={({ pressed }) => [s.weekPickerBtn, pressed && { opacity: 0.7 }]}>
-              <Text style={s.weekPickerText}>{week?.week_key ?? 'Loading…'}</Text>
-              <IconSymbol name="chevron.right" size={14} color={theme.textMuted} />
-            </Pressable>
+            !isDesktop ? (
+              <Pressable
+                onPress={() => setPickerOpen(true)}
+                hitSlop={6}
+                style={({ pressed }) => [s.weekPickerBtn, pressed && { opacity: 0.7 }]}>
+                <Text style={s.weekPickerText}>{week?.week_key ?? 'Loading…'}</Text>
+                <IconSymbol name="chevron.right" size={14} color={theme.textMuted} />
+              </Pressable>
+            ) : null
           }
         />
       </View>
 
+      <View style={isDesktop ? s.deskBody : { flex: 1 }}>
+      {isDesktop ? (
+        <View style={s.deskWeeksRail}>
+          <Text style={s.deskWeeksRailTitle}>Weeks</Text>
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={s.deskWeeksRailContent}>
+            {(weeksQuery.data ?? []).map((w) => {
+              const active = (week?.week_key && w.week_key === week.week_key)
+                || (!week && weekKey === w.week_key);
+              return (
+                <Pressable
+                  key={w.week_key}
+                  onPress={() => setWeekKey(w.week_key)}
+                  onHoverIn={() => undefined}
+                  onHoverOut={() => undefined}
+                  style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [
+                    s.deskWeekRow,
+                    hovered && !active && { backgroundColor: theme.surfaceMuted },
+                    active && s.deskWeekRowActive,
+                    pressed && { opacity: 0.8 },
+                  ]}>
+                  <Text style={[s.deskWeekRowLabel, active && s.deskWeekRowLabelActive]} numberOfLines={1}>
+                    {w.week_key}
+                  </Text>
+                  <Text style={s.deskWeekRowMeta} numberOfLines={1}>
+                    {w.status === 'active' ? 'Live' : w.status}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+      ) : null}
+
       <ScrollView
+        style={isDesktop ? { flex: 1 } : undefined}
         contentContainerStyle={[s.scroll, { paddingBottom: insets.bottom + 60 }]}
         refreshControl={<RefreshControl refreshing={weekQuery.isRefetching} onRefresh={onRefresh} tintColor={theme.spinner} />}>
         {weekQuery.isLoading ? (
@@ -270,7 +308,9 @@ export default function WeeklyChallengesScreen() {
               <AwardsStrip categories={awardsByCategory} onProfile={goProfile} s={s} />
             ) : null}
 
-            {data && data.leaderboard.length > 0 ? (
+            {/* Leaderboard renders inline on mobile and in a right rail on
+                desktop (see the deskLeaderboardRail below the scroll). */}
+            {!isDesktop && data && data.leaderboard.length > 0 ? (
               <LeaderboardSection
                 leaderboard={data.leaderboard}
                 viewerUserId={user?.id}
@@ -331,6 +371,28 @@ export default function WeeklyChallengesScreen() {
           </>
         ) : null}
       </ScrollView>
+
+      {isDesktop && data && data.leaderboard.length > 0 ? (
+        <View style={s.deskLeaderboardRail}>
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={s.deskLeaderboardScroll}
+            showsVerticalScrollIndicator={false}>
+            <LeaderboardSection
+              leaderboard={data.leaderboard}
+              viewerUserId={user?.id}
+              onProfile={goProfile}
+              chartMode={chartMode}
+              onChartMode={setChartMode}
+              skillFamily={skillFamily}
+              onSkillFamily={setSkillFamily}
+              showModeFilter={!isCoop}
+              s={s}
+            />
+          </ScrollView>
+        </View>
+      ) : null}
+      </View>
 
       <WeekPickerSheet
         visible={pickerOpen}
@@ -1220,4 +1282,43 @@ const makeStyles = (t: ThemeColors) => ({
   weekLivePulse: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#34d399' },
   weekStatusChipText: { fontSize: 9, fontWeight: '900' as const, letterSpacing: 1, color: t.textDim },
   weekStatusChipTextLive: { color: '#34d399' },
+
+  // Desktop: weeks rail on left replaces the modal week picker.
+  deskBody: { flex: 1, flexDirection: 'row' as const },
+  deskWeeksRail: {
+    width: 280,
+    borderRightWidth: StyleSheet.hairlineWidth,
+    borderRightColor: t.border,
+    backgroundColor: t.surface,
+  },
+  deskWeeksRailTitle: {
+    fontSize: 11,
+    fontWeight: '900' as const,
+    letterSpacing: 1.6,
+    color: t.textDim,
+    textTransform: 'uppercase' as const,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  deskWeeksRailContent: { paddingHorizontal: 8, paddingBottom: 16, gap: 2 },
+  deskWeekRow: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    gap: 2,
+  },
+  deskWeekRowActive: { backgroundColor: t.accentTint },
+  deskWeekRowLabel: { fontSize: 13, fontWeight: '700' as const, color: t.text },
+  deskWeekRowLabelActive: { color: t.accent, fontWeight: '800' as const },
+  deskWeekRowMeta: { fontSize: 11, color: t.textDim, letterSpacing: 0.3 },
+
+  // Desktop right rail — persistent leaderboard alongside the charts pool.
+  deskLeaderboardRail: {
+    width: 360,
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderLeftColor: t.border,
+    backgroundColor: t.surface,
+  },
+  deskLeaderboardScroll: { padding: 12, paddingBottom: 40 },
 });

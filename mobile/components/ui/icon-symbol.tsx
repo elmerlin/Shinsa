@@ -57,6 +57,17 @@ const MAPPING = {
   'square.and.arrow.up': 'ios-share',
   // Used by the new top-right icon row (messages + bell + hamburger).
   'message.fill': 'chat',
+  // Sidebar nav icons (web desktop only). Names must be valid SF Symbols so
+  // the iOS variant of IconSymbol (icon-symbol.ios.tsx) still type-checks —
+  // the sidebar itself never renders on iOS, but the union is shared.
+  'calendar': 'calendar-today',
+  'flag.fill': 'flag',
+  'sparkles': 'auto-awesome',
+  'lightbulb.fill': 'lightbulb',
+  'list.number': 'leaderboard',
+  'figure.run': 'directions-run',
+  'gearshape.fill': 'settings',
+  'arrow.right.circle.fill': 'logout',
 } as IconMapping;
 
 export function IconSymbol({

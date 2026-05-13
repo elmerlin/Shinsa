@@ -23,6 +23,7 @@ import { TopBar } from '@/components/top-bar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/contexts/theme-context';
+import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { authApi, socialApi, songsApi } from '@/lib/api';
 import { fullImageUrl } from '@/lib/images';
@@ -461,6 +462,7 @@ export default function HeadToHeadScreen() {
   const { theme } = useTheme();
   const s = useThemedStyles(makeStyles);
   const queryClient = useQueryClient();
+  const { isDesktop } = useBreakpoint();
 
   const [opponent, setOpponent] = useState<PlayerLite | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -574,7 +576,7 @@ export default function HeadToHeadScreen() {
 
   if (!user) {
     return (
-      <View style={s.container}>
+      <View style={[s.container, isDesktop && s.containerDesktop]}>
         <View style={[s.topBar, { paddingTop: insets.top + 8 }]}>
           <TopBar />
         </View>
@@ -588,7 +590,7 @@ export default function HeadToHeadScreen() {
   const meId = user.id;
 
   return (
-    <View style={s.container}>
+    <View style={[s.container, isDesktop && s.containerDesktop]}>
       <View style={[s.topBar, { paddingTop: insets.top + 8 }]}>
         <TopBar
           rightExtra={opponent ? (
@@ -883,12 +885,51 @@ export default function HeadToHeadScreen() {
               />
             </View>
 
-            {/* Top diffs */}
-            <View style={s.statsCard}>
-              <Text style={s.cardTitle}>Top score gaps</Text>
-              <Text style={s.cardSub}>Biggest score differences across charts you both passed</Text>
-              <SongDiffList rows={result.top_song_diffs ?? []} userA={userA} userB={userB ?? opponent} />
-            </View>
+            {/* Top diffs — mobile keeps a single list; desktop splits into
+                three columns: where you lead, tied within 5K, where they lead. */}
+            {isDesktop ? (
+              <View style={s.deskDiffGrid}>
+                <View style={[s.statsCard, s.deskDiffCol]}>
+                  <Text style={[s.cardTitle, { color: theme.success }]}>Where you lead</Text>
+                  <Text style={s.cardSub}>Your score wins by 5K+</Text>
+                  <SongDiffList
+                    rows={(result.top_song_diffs ?? []).filter((r) =>
+                      r.winner === 'a' && Math.abs((r.score_a || 0) - (r.score_b || 0)) >= 5000,
+                    )}
+                    userA={userA}
+                    userB={userB ?? opponent}
+                  />
+                </View>
+                <View style={[s.statsCard, s.deskDiffCol]}>
+                  <Text style={[s.cardTitle, { color: theme.accent }]}>Tied within 5K</Text>
+                  <Text style={s.cardSub}>Either could take it any session</Text>
+                  <SongDiffList
+                    rows={(result.top_song_diffs ?? []).filter((r) =>
+                      Math.abs((r.score_a || 0) - (r.score_b || 0)) < 5000,
+                    )}
+                    userA={userA}
+                    userB={userB ?? opponent}
+                  />
+                </View>
+                <View style={[s.statsCard, s.deskDiffCol]}>
+                  <Text style={[s.cardTitle, { color: theme.danger }]}>Where they lead</Text>
+                  <Text style={s.cardSub}>Their score wins by 5K+</Text>
+                  <SongDiffList
+                    rows={(result.top_song_diffs ?? []).filter((r) =>
+                      r.winner === 'b' && Math.abs((r.score_a || 0) - (r.score_b || 0)) >= 5000,
+                    )}
+                    userA={userA}
+                    userB={userB ?? opponent}
+                  />
+                </View>
+              </View>
+            ) : (
+              <View style={s.statsCard}>
+                <Text style={s.cardTitle}>Top score gaps</Text>
+                <Text style={s.cardSub}>Biggest score differences across charts you both passed</Text>
+                <SongDiffList rows={result.top_song_diffs ?? []} userA={userA} userB={userB ?? opponent} />
+              </View>
+            )}
           </Animated.View>
         ) : null}
 
@@ -1064,6 +1105,11 @@ function SongDiffList({
 // ---------------------------------------------------------------------------
 const makeStyles = (t: ThemeColors) => ({
   container: { flex: 1, backgroundColor: t.bg },
+  // Desktop: cap reading width and center.
+  containerDesktop: { maxWidth: 1180, alignSelf: 'center' as const, width: '100%' as const },
+  // Desktop: 3-col where-you-lead / tied / they-lead.
+  deskDiffGrid: { flexDirection: 'row' as const, gap: 12, alignItems: 'flex-start' as const },
+  deskDiffCol: { flex: 1, minWidth: 0 },
   topBar: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,

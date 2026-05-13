@@ -13,6 +13,7 @@ import { WcSummaryCard } from '@/components/wc-summary-card';
 import { WcPersonalCard } from '@/components/wc-personal-card';
 import { YouTubeEmbed } from '@/components/youtube-embed';
 import { useTheme } from '@/contexts/theme-context';
+import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { socialApi } from '@/lib/api';
 import { parseAchievementBadgePost } from '@/lib/achievementBadgePost';
@@ -85,6 +86,7 @@ export default function PostDetailScreen() {
   const postId = id ?? '';
   const { theme } = useTheme();
   const s = useThemedStyles(makeStyles);
+  const { isDesktop } = useBreakpoint();
   const goProfile = (username: string) =>
     router.push({ pathname: '/profile/[id]', params: { id: `@${username}` } });
 
@@ -126,6 +128,99 @@ export default function PostDetailScreen() {
   // instead of the default full-width image gallery.
   const badgePost = parseAchievementBadgePost(postContent, images);
 
+  const bodyEl = post ? (
+    <>
+      <Pressable
+        onPress={() => post.username && goProfile(post.username)}
+        style={({ pressed }) => [s.postHeader, pressed && { opacity: 0.7 }]}>
+        {avatar ? (
+          <Image source={{ uri: avatar }} style={s.postAvatar} contentFit="cover" />
+        ) : post.username === '__shinsa__' ? (
+          <SystemAvatar size={44} />
+        ) : (
+          <DefaultAvatar size={44} />
+        )}
+        <View style={s.postHeaderInfo}>
+          <Text style={s.postUsername}>@{post.username || 'anonymous'}</Text>
+          <Text style={s.postTime}>{timeAgo(post.created_at)}</Text>
+        </View>
+      </Pressable>
+
+      {liveSummary ? <LiveSessionCard summary={liveSummary} /> : null}
+      {wcSummary ? <WcSummaryCard summary={wcSummary} /> : null}
+      {wcPersonal ? <WcPersonalCard summary={wcPersonal} /> : null}
+      {sessionShare ? <SessionShareCard share={sessionShare} /> : null}
+      {sessionSummary ? <SessionSummaryCard summary={sessionSummary} /> : null}
+      {sessionPlan ? <SessionPlanCard plan={sessionPlan} /> : null}
+
+      {badgePost ? (
+        <AchievementBadgePost
+          badgeName={badgePost.badgeName}
+          supportingCopy={badgePost.supportingCopy}
+          image={badgePost.image}
+        />
+      ) : (
+        <>
+          {postContent ? <Text style={s.postContent}>{postContent}</Text> : null}
+          {post.youtube_url ? <YouTubeEmbed url={post.youtube_url} /> : null}
+          {images.length > 0 && (
+            <View style={s.imagesList}>
+              {images.map((img, i) => {
+                const url = fullImageUrl(img);
+                return url ? (
+                  <Image key={i} source={{ uri: url }} style={s.postImage} contentFit="cover" transition={150} />
+                ) : null;
+              })}
+            </View>
+          )}
+        </>
+      )}
+
+      <View style={s.postFooter}>
+        {typeof post.pump_count === 'number' ? (
+          <Text style={s.metric}>↑ {post.pump_count}</Text>
+        ) : null}
+        {typeof post.comment_count === 'number' ? (
+          <Text style={s.metric}>💬 {post.comment_count}</Text>
+        ) : null}
+      </View>
+    </>
+  ) : null;
+
+  const commentsEl = (
+    <View style={s.section}>
+      <View style={s.sectionHeader}>
+        <Text style={s.sectionTitle}>Comments</Text>
+        <Text style={s.sectionCount}>{comments.length}</Text>
+      </View>
+      {commentsQuery.isLoading ? (
+        <ActivityIndicator color={theme.spinner} style={{ padding: 24 }} />
+      ) : comments.length === 0 ? (
+        <Text style={s.empty}>No comments yet</Text>
+      ) : (
+        <View style={s.commentsList}>
+          {comments.map((c) => <CommentRow key={c.id} c={c} s={s} onProfile={goProfile} />)}
+        </View>
+      )}
+    </View>
+  );
+
+  if (isDesktop && post) {
+    return (
+      <View style={s.container}>
+        <Stack.Screen options={{ title: post.username ? `@${post.username}` : 'Post' }} />
+        <View style={s.deskRow}>
+          <ScrollView style={s.deskBody} contentContainerStyle={s.scroll}>
+            {bodyEl}
+          </ScrollView>
+          <View style={s.deskRail}>
+            <ScrollView contentContainerStyle={s.deskRailContent}>{commentsEl}</ScrollView>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={s.container}>
       <Stack.Screen options={{ title: post?.username ? `@${post.username}` : 'Post' }} />
@@ -144,76 +239,8 @@ export default function PostDetailScreen() {
 
         {post && (
           <>
-            <Pressable
-              onPress={() => post.username && goProfile(post.username)}
-              style={({ pressed }) => [s.postHeader, pressed && { opacity: 0.7 }]}>
-              {avatar ? (
-                <Image source={{ uri: avatar }} style={s.postAvatar} contentFit="cover" />
-              ) : post.username === '__shinsa__' ? (
-                <SystemAvatar size={44} />
-              ) : (
-                <DefaultAvatar size={44} />
-              )}
-              <View style={s.postHeaderInfo}>
-                <Text style={s.postUsername}>@{post.username || 'anonymous'}</Text>
-                <Text style={s.postTime}>{timeAgo(post.created_at)}</Text>
-              </View>
-            </Pressable>
-
-            {liveSummary ? <LiveSessionCard summary={liveSummary} /> : null}
-            {wcSummary ? <WcSummaryCard summary={wcSummary} /> : null}
-            {wcPersonal ? <WcPersonalCard summary={wcPersonal} /> : null}
-            {sessionShare ? <SessionShareCard share={sessionShare} /> : null}
-            {sessionSummary ? <SessionSummaryCard summary={sessionSummary} /> : null}
-            {sessionPlan ? <SessionPlanCard plan={sessionPlan} /> : null}
-
-            {badgePost ? (
-              <AchievementBadgePost
-                badgeName={badgePost.badgeName}
-                supportingCopy={badgePost.supportingCopy}
-                image={badgePost.image}
-              />
-            ) : (
-              <>
-                {postContent ? <Text style={s.postContent}>{postContent}</Text> : null}
-                {post.youtube_url ? <YouTubeEmbed url={post.youtube_url} /> : null}
-                {images.length > 0 && (
-                  <View style={s.imagesList}>
-                    {images.map((img, i) => {
-                      const url = fullImageUrl(img);
-                      return url ? (
-                        <Image key={i} source={{ uri: url }} style={s.postImage} contentFit="cover" transition={150} />
-                      ) : null;
-                    })}
-                  </View>
-                )}
-              </>
-            )}
-
-            <View style={s.postFooter}>
-              {typeof post.pump_count === 'number' ? (
-                <Text style={s.metric}>↑ {post.pump_count}</Text>
-              ) : null}
-              {typeof post.comment_count === 'number' ? (
-                <Text style={s.metric}>💬 {post.comment_count}</Text>
-              ) : null}
-            </View>
-
-            <View style={s.section}>
-              <View style={s.sectionHeader}>
-                <Text style={s.sectionTitle}>Comments</Text>
-                <Text style={s.sectionCount}>{comments.length}</Text>
-              </View>
-              {commentsQuery.isLoading ? (
-                <ActivityIndicator color={theme.spinner} style={{ padding: 24 }} />
-              ) : comments.length === 0 ? (
-                <Text style={s.empty}>No comments yet</Text>
-              ) : (
-                <View style={s.commentsList}>
-                  {comments.map((c) => <CommentRow key={c.id} c={c} s={s} onProfile={goProfile} />)}
-                </View>
-              )}
-            </View>
+            {bodyEl}
+            {commentsEl}
           </>
         )}
       </ScrollView>
@@ -257,4 +284,15 @@ const makeStyles = (t: ThemeColors) => ({
   empty: { padding: 16, textAlign: 'center' as const, color: t.textDim },
   errorBox: { backgroundColor: t.dangerBg, borderColor: t.dangerBorder, borderWidth: 1, padding: 12, borderRadius: 8 },
   errorText: { color: t.danger, fontSize: 14 },
+
+  // Desktop: 8-col post body + 4-col comments rail.
+  deskRow: { flex: 1, flexDirection: 'row' as const },
+  deskBody: { flex: 1 },
+  deskRail: {
+    width: 380,
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderLeftColor: t.border,
+    backgroundColor: t.surface,
+  },
+  deskRailContent: { padding: 16, paddingBottom: 60 },
 });

@@ -20,6 +20,7 @@ import { TopBar } from '@/components/top-bar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme, type ThemePreference } from '@/contexts/theme-context';
+import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { useWebPush } from '@/hooks/use-web-push';
 import { piugameApi, youtubeApi } from '@/lib/api';
@@ -552,13 +553,136 @@ function PushNotificationsSection({ s }: { s: Styles }) {
   );
 }
 
+/**
+ * Render the Appearance segment picker. Used by both mobile (inline in the
+ * scroll) and the desktop right pane.
+ */
+function AppearanceSection({ s }: { s: Styles }) {
+  const { preference, setPreference } = useTheme();
+  return (
+    <View style={s.section}>
+      <Text style={s.eyebrow}>APPEARANCE</Text>
+      <View style={s.segments}>
+        {PREFERENCE_OPTIONS.map((opt) => {
+          const active = preference === opt.value;
+          return (
+            <Pressable
+              key={opt.value}
+              onPress={() => setPreference(opt.value)}
+              style={({ pressed }) => [s.segment, active && s.segmentActive, pressed && { opacity: 0.7 }]}>
+              <Text style={[s.segmentText, active && s.segmentTextActive]}>{opt.label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+/** The desktop Account screen — Linear/Stripe-style settings shell. */
+type AccountSectionKey = 'appearance' | 'integrations' | 'notifications' | 'signout';
+
+interface AccountNavItem {
+  key: AccountSectionKey;
+  label: string;
+  hint: string;
+}
+
+const ACCOUNT_NAV: AccountNavItem[] = [
+  { key: 'appearance', label: 'Appearance', hint: 'Theme' },
+  { key: 'integrations', label: 'Integrations', hint: 'PIUGame, YouTube' },
+  { key: 'notifications', label: 'Notifications', hint: 'Web push' },
+  { key: 'signout', label: 'Sign out', hint: '' },
+];
+
+function AccountDesktop({ s, userId }: { s: Styles; userId: string }) {
+  const { signOut } = useAuth();
+  const { theme } = useTheme();
+  const [active, setActive] = useState<AccountSectionKey>('appearance');
+
+  const renderPane = () => {
+    switch (active) {
+      case 'appearance':
+        return <AppearanceSection s={s} />;
+      case 'integrations':
+        return (
+          <View style={s.deskGroup}>
+            <PiugameLinkSection s={s} userId={userId} />
+            <YoutubeLinkSection s={s} />
+          </View>
+        );
+      case 'notifications':
+        return <PushNotificationsSection s={s} />;
+      case 'signout':
+        return (
+          <View style={s.section}>
+            <Text style={s.eyebrow}>SIGN OUT</Text>
+            <View style={s.card}>
+              <Text style={s.cardTitle}>End this session</Text>
+              <Text style={s.cardHint}>
+                You'll need to sign in again to access your scores, posts, and conversations.
+              </Text>
+              <Pressable
+                onPress={signOut}
+                style={({ pressed }) => [s.logoutBtn, { marginTop: 0 }, pressed && { opacity: 0.6 }]}>
+                <Text style={s.logoutText}>Log out</Text>
+              </Pressable>
+            </View>
+          </View>
+        );
+    }
+  };
+
+  return (
+    <View style={s.deskRoot}>
+      <View style={s.deskTopBar}>
+        <Text style={s.deskHeading}>Settings</Text>
+        <TopBar />
+      </View>
+      <View style={s.deskBody}>
+        <View style={s.deskNav}>
+          {ACCOUNT_NAV.map((item) => {
+            const isActive = active === item.key;
+            return (
+              <Pressable
+                key={item.key}
+                onPress={() => setActive(item.key)}
+                onHoverIn={() => undefined}
+                onHoverOut={() => undefined}
+                style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [
+                  s.deskNavRow,
+                  hovered && !isActive && { backgroundColor: theme.surfaceMuted },
+                  isActive && s.deskNavRowActive,
+                  pressed && { opacity: 0.7 },
+                ]}>
+                <Text style={[s.deskNavLabel, isActive && s.deskNavLabelActive]}>{item.label}</Text>
+                {item.hint ? (
+                  <Text style={[s.deskNavHint, isActive && { color: theme.accent }]}>{item.hint}</Text>
+                ) : null}
+              </Pressable>
+            );
+          })}
+        </View>
+
+        <ScrollView style={s.deskPane} contentContainerStyle={s.deskPaneContent}>
+          {renderPane()}
+        </ScrollView>
+      </View>
+    </View>
+  );
+}
+
 export default function AccountScreen() {
   const insets = useSafeAreaInsets();
   const { user, signOut } = useAuth();
-  const { preference, setPreference } = useTheme();
   const s = useThemedStyles(makeStyles);
+  const { isDesktop } = useBreakpoint();
 
   if (!user) return null;
+
+  if (isDesktop) {
+    return <AccountDesktop s={s} userId={user.id} />;
+  }
 
   return (
     <View style={s.container}>
@@ -570,24 +694,7 @@ export default function AccountScreen() {
 
           <PiugameLinkSection s={s} userId={user.id} />
           <YoutubeLinkSection s={s} />
-
-          <View style={s.section}>
-            <Text style={s.eyebrow}>APPEARANCE</Text>
-            <View style={s.segments}>
-              {PREFERENCE_OPTIONS.map((opt) => {
-                const active = preference === opt.value;
-                return (
-                  <Pressable
-                    key={opt.value}
-                    onPress={() => setPreference(opt.value)}
-                    style={({ pressed }) => [s.segment, active && s.segmentActive, pressed && { opacity: 0.7 }]}>
-                    <Text style={[s.segmentText, active && s.segmentTextActive]}>{opt.label}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-
+          <AppearanceSection s={s} />
           <PushNotificationsSection s={s} />
 
           <Pressable onPress={signOut} style={({ pressed }) => [s.logoutBtn, pressed && { opacity: 0.6 }]}>
@@ -754,4 +861,37 @@ const makeStyles = (t: ThemeColors) => ({
   notifToggleOn: { backgroundColor: t.accent, borderColor: t.accent },
   notifToggleText: { fontSize: 12, fontWeight: '900' as const, color: t.text, letterSpacing: 0.4 },
   notifToggleTextOn: { color: t.bg },
+
+  // Desktop ("deskX") — settings-shell layout. Single-column scroll above
+  // becomes a fixed left nav + scrollable right pane.
+  deskRoot: { flex: 1, backgroundColor: t.bg, paddingHorizontal: 24, paddingTop: 18 },
+  deskTopBar: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+    paddingBottom: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: t.border,
+  },
+  deskHeading: {
+    fontSize: 22,
+    fontWeight: '800' as const,
+    color: t.text,
+    letterSpacing: 0.5,
+  },
+  deskBody: { flex: 1, flexDirection: 'row' as const, gap: 24, paddingTop: 18 },
+  deskNav: { width: 220, gap: 2 },
+  deskNavRow: {
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 8,
+    gap: 2,
+  },
+  deskNavRowActive: { backgroundColor: t.accentTint },
+  deskNavLabel: { fontSize: 13.5, fontWeight: '700' as const, color: t.text },
+  deskNavLabelActive: { color: t.accent, fontWeight: '800' as const },
+  deskNavHint: { fontSize: 11, color: t.textDim },
+  deskPane: { flex: 1 },
+  deskPaneContent: { gap: 18, paddingBottom: 40, maxWidth: 720 },
+  deskGroup: { gap: 18 },
 });

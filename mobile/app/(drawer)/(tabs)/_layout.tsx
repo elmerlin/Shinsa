@@ -5,16 +5,24 @@ import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { ProfileTabIcon } from '@/components/ui/profile-tab-icon';
 import { useTheme } from '@/contexts/theme-context';
+import { useBreakpoint } from '@/hooks/use-breakpoint';
 
 export default function TabLayout() {
   const { theme } = useTheme();
+  const { isDesktop } = useBreakpoint();
 
   return (
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: theme.accent,
         tabBarInactiveTintColor: theme.textMuted,
-        tabBarStyle: { backgroundColor: theme.surface, borderTopColor: theme.border },
+        // Desktop drops the bottom tab bar entirely — the persistent
+        // sidebar covers the same nav. `display: 'none'` keeps the Tabs
+        // component intact so routing/active state still resolves, but
+        // hides the visual bar.
+        tabBarStyle: isDesktop
+          ? { display: 'none' }
+          : { backgroundColor: theme.surface, borderTopColor: theme.border },
         headerShown: false,
         tabBarButton: HapticTab,
       }}>

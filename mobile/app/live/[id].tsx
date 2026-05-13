@@ -28,6 +28,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { YouTubeEmbed } from '@/components/youtube-embed';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/contexts/theme-context';
+import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { parseGrade } from '@/lib/grades';
 import { liveApi } from '@/lib/api';
@@ -139,6 +140,7 @@ export default function LiveSessionScreen() {
   const { theme } = useTheme();
   const s = useThemedStyles(makeStyles);
   const queryClient = useQueryClient();
+  const { isDesktop } = useBreakpoint();
   // Tick state for the duration counter; only used to force a re-render every
   // 30s so "12m live" stays accurate without a network round-trip.
   const [, setTick] = useState(0);
@@ -310,99 +312,201 @@ export default function LiveSessionScreen() {
           ) : undefined,
         }}
       />
-      <ScrollView
-        contentContainerStyle={s.scroll}
-        refreshControl={<RefreshControl refreshing={query.isRefetching} onRefresh={() => query.refetch()} tintColor={theme.spinner} />}>
+      {isDesktop ? (
+        <View style={s.deskBody}>
+          {/* Left 8/12 — stream embed, hero, plays log. */}
+          <ScrollView
+            style={s.deskMain}
+            contentContainerStyle={s.deskMainContent}
+            refreshControl={<RefreshControl refreshing={query.isRefetching} onRefresh={() => query.refetch()} tintColor={theme.spinner} />}>
+            <HeroCard session={session} lastPlay={lastPlay} isLive={isLive} duration={duration} s={s} />
 
-        <HeroCard session={session} lastPlay={lastPlay} isLive={isLive} duration={duration} s={s} />
+            {hasYouTubeEmbed ? (
+              <View style={s.streamEmbedWrap}>
+                <YouTubeEmbed url={`https://www.youtube.com/watch?v=${youtubeVideoId}`} />
+              </View>
+            ) : hasNonYouTubeStream ? (
+              <Pressable
+                onPress={handleStreamOpen}
+                style={({ pressed }) => [s.streamCta, pressed && { opacity: 0.85 }]}>
+                <IconSymbol name="tv.fill" size={18} color="#fff" />
+                <Text style={s.streamCtaText} numberOfLines={1}>Watch the stream</Text>
+                <IconSymbol name="link" size={14} color="rgba(255,255,255,0.7)" />
+              </Pressable>
+            ) : null}
 
-        {hasYouTubeEmbed ? (
-          <View style={s.streamEmbedWrap}>
-            <YouTubeEmbed url={`https://www.youtube.com/watch?v=${youtubeVideoId}`} />
+            {summary ? <SummaryStats summary={summary} s={s} /> : null}
+
+            {plays.length > 0 ? (
+              <View style={s.section}>
+                <View style={s.sectionHeader}>
+                  <Text style={s.sectionTitle}>RECENT PLAYS</Text>
+                  <Text style={s.sectionCount}>{visiblePlays.length} / {plays.length}</Text>
+                </View>
+                <PlaysFilterBar
+                  mode={playModeFilter}
+                  onModeChange={setPlayModeFilter}
+                  passOnly={playPassOnly}
+                  onTogglePass={() => setPlayPassOnly((v) => !v)}
+                  s={s}
+                />
+                <View style={s.playList}>
+                  {visiblePlays.slice(0, 24).map((play) => (
+                    <PlayRow key={play.id} play={play} onPress={() => setSelectedPlay(play)} s={s} />
+                  ))}
+                  {visiblePlays.length === 0 ? (
+                    <Text style={s.playsEmpty}>No plays match these filters yet.</Text>
+                  ) : null}
+                </View>
+              </View>
+            ) : null}
+
+            {!isLive && summary?.postText ? (
+              <View style={s.recapCard}>
+                <Text style={s.recapEyebrow}>RECAP</Text>
+                <Text style={s.recapText}>{summary.postText}</Text>
+              </View>
+            ) : null}
+          </ScrollView>
+
+          {/* Right 4/12 — cohosts at top, chat thread scrollable in the
+              middle, composer pinned at the bottom. */}
+          <View style={s.deskRail}>
+            <ScrollView
+              style={{ flex: 1 }}
+              contentContainerStyle={s.deskRailContent}
+              showsVerticalScrollIndicator={false}>
+              <CohostsCard
+                host={session.host}
+                hostUserId={session.host_user_id}
+                cohosts={activeCohosts}
+                canManage={isHost && isLive}
+                onManage={() => setCohostManagerOpen(true)}
+                s={s}
+              />
+              {messages.length > 0 ? (
+                <View style={s.section}>
+                  <View style={s.sectionHeader}>
+                    <Text style={s.sectionTitle}>CHAT</Text>
+                    <Text style={s.sectionCount}>{messages.filter((m) => !m.is_system).length}</Text>
+                  </View>
+                  <View style={s.chatList}>
+                    {messages.slice(0, 60).map((m) => (
+                      <ChatRow key={m.id} message={m} hostUserId={session.host_user_id} s={s} />
+                    ))}
+                  </View>
+                </View>
+              ) : (
+                <Text style={s.playsEmpty}>No chat yet — be the first.</Text>
+              )}
+            </ScrollView>
+            {user && isLive ? (
+              <ChatComposer
+                sessionId={String(id)}
+                onSent={() => query.refetch()}
+                s={s}
+                bottomInset={insets.bottom}
+              />
+            ) : null}
           </View>
-        ) : hasNonYouTubeStream ? (
-          <Pressable
-            onPress={handleStreamOpen}
-            style={({ pressed }) => [s.streamCta, pressed && { opacity: 0.85 }]}>
-            <IconSymbol name="tv.fill" size={18} color="#fff" />
-            <Text style={s.streamCtaText} numberOfLines={1}>
-              Watch the stream
-            </Text>
-            <IconSymbol name="link" size={14} color="rgba(255,255,255,0.7)" />
-          </Pressable>
-        ) : null}
+        </View>
+      ) : (
+        <>
+          <ScrollView
+            contentContainerStyle={s.scroll}
+            refreshControl={<RefreshControl refreshing={query.isRefetching} onRefresh={() => query.refetch()} tintColor={theme.spinner} />}>
 
-        <CohostsCard
-          host={session.host}
-          hostUserId={session.host_user_id}
-          cohosts={activeCohosts}
-          canManage={isHost && isLive}
-          onManage={() => setCohostManagerOpen(true)}
-          s={s}
-        />
+            <HeroCard session={session} lastPlay={lastPlay} isLive={isLive} duration={duration} s={s} />
 
-        {summary ? <SummaryStats summary={summary} s={s} /> : null}
+            {hasYouTubeEmbed ? (
+              <View style={s.streamEmbedWrap}>
+                <YouTubeEmbed url={`https://www.youtube.com/watch?v=${youtubeVideoId}`} />
+              </View>
+            ) : hasNonYouTubeStream ? (
+              <Pressable
+                onPress={handleStreamOpen}
+                style={({ pressed }) => [s.streamCta, pressed && { opacity: 0.85 }]}>
+                <IconSymbol name="tv.fill" size={18} color="#fff" />
+                <Text style={s.streamCtaText} numberOfLines={1}>
+                  Watch the stream
+                </Text>
+                <IconSymbol name="link" size={14} color="rgba(255,255,255,0.7)" />
+              </Pressable>
+            ) : null}
 
-        {/* Chat sits above the plays list — viewers care about the
-            live conversation more than the play log, and the composer
-            is anchored at the bottom of the screen, so keeping the
-            chat thread close to the composer reduces eye-jumping. */}
-        {messages.length > 0 ? (
-          <View style={s.section}>
-            <View style={s.sectionHeader}>
-              <Text style={s.sectionTitle}>CHAT</Text>
-              <Text style={s.sectionCount}>{messages.filter((m) => !m.is_system).length}</Text>
-            </View>
-            <View style={s.chatList}>
-              {messages.slice(0, 30).map((m) => (
-                <ChatRow key={m.id} message={m} hostUserId={session.host_user_id} s={s} />
-              ))}
-            </View>
-          </View>
-        ) : null}
-
-        {plays.length > 0 ? (
-          <View style={s.section}>
-            <View style={s.sectionHeader}>
-              <Text style={s.sectionTitle}>RECENT PLAYS</Text>
-              <Text style={s.sectionCount}>{visiblePlays.length} / {plays.length}</Text>
-            </View>
-            <PlaysFilterBar
-              mode={playModeFilter}
-              onModeChange={setPlayModeFilter}
-              passOnly={playPassOnly}
-              onTogglePass={() => setPlayPassOnly((v) => !v)}
+            <CohostsCard
+              host={session.host}
+              hostUserId={session.host_user_id}
+              cohosts={activeCohosts}
+              canManage={isHost && isLive}
+              onManage={() => setCohostManagerOpen(true)}
               s={s}
             />
-            <View style={s.playList}>
-              {visiblePlays.slice(0, 24).map((play) => (
-                <PlayRow key={play.id} play={play} onPress={() => setSelectedPlay(play)} s={s} />
-              ))}
-              {visiblePlays.length === 0 ? (
-                <Text style={s.playsEmpty}>No plays match these filters yet.</Text>
-              ) : null}
-            </View>
-          </View>
-        ) : null}
 
-        {/* Recap shows only after the session ends — during a live session we
-            don't surface the auto-generated post text in the viewer feed. */}
-        {!isLive && summary?.postText ? (
-          <View style={s.recapCard}>
-            <Text style={s.recapEyebrow}>RECAP</Text>
-            <Text style={s.recapText}>{summary.postText}</Text>
-          </View>
-        ) : null}
-      </ScrollView>
+            {summary ? <SummaryStats summary={summary} s={s} /> : null}
 
-      {user && isLive ? (
-        <ChatComposer
-          sessionId={String(id)}
-          onSent={() => query.refetch()}
-          s={s}
-          bottomInset={insets.bottom}
-        />
-      ) : null}
+            {/* Chat sits above the plays list — viewers care about the
+                live conversation more than the play log, and the composer
+                is anchored at the bottom of the screen, so keeping the
+                chat thread close to the composer reduces eye-jumping. */}
+            {messages.length > 0 ? (
+              <View style={s.section}>
+                <View style={s.sectionHeader}>
+                  <Text style={s.sectionTitle}>CHAT</Text>
+                  <Text style={s.sectionCount}>{messages.filter((m) => !m.is_system).length}</Text>
+                </View>
+                <View style={s.chatList}>
+                  {messages.slice(0, 30).map((m) => (
+                    <ChatRow key={m.id} message={m} hostUserId={session.host_user_id} s={s} />
+                  ))}
+                </View>
+              </View>
+            ) : null}
+
+            {plays.length > 0 ? (
+              <View style={s.section}>
+                <View style={s.sectionHeader}>
+                  <Text style={s.sectionTitle}>RECENT PLAYS</Text>
+                  <Text style={s.sectionCount}>{visiblePlays.length} / {plays.length}</Text>
+                </View>
+                <PlaysFilterBar
+                  mode={playModeFilter}
+                  onModeChange={setPlayModeFilter}
+                  passOnly={playPassOnly}
+                  onTogglePass={() => setPlayPassOnly((v) => !v)}
+                  s={s}
+                />
+                <View style={s.playList}>
+                  {visiblePlays.slice(0, 24).map((play) => (
+                    <PlayRow key={play.id} play={play} onPress={() => setSelectedPlay(play)} s={s} />
+                  ))}
+                  {visiblePlays.length === 0 ? (
+                    <Text style={s.playsEmpty}>No plays match these filters yet.</Text>
+                  ) : null}
+                </View>
+              </View>
+            ) : null}
+
+            {/* Recap shows only after the session ends — during a live session we
+                don't surface the auto-generated post text in the viewer feed. */}
+            {!isLive && summary?.postText ? (
+              <View style={s.recapCard}>
+                <Text style={s.recapEyebrow}>RECAP</Text>
+                <Text style={s.recapText}>{summary.postText}</Text>
+              </View>
+            ) : null}
+          </ScrollView>
+
+          {user && isLive ? (
+            <ChatComposer
+              sessionId={String(id)}
+              onSent={() => query.refetch()}
+              s={s}
+              bottomInset={insets.bottom}
+            />
+          ) : null}
+        </>
+      )}
 
       <CohostManagerSheet
         visible={cohostManagerOpen}
@@ -895,6 +999,20 @@ const makeStyles = (t: ThemeColors) => ({
   container: { flex: 1, backgroundColor: t.bg },
   scroll: { paddingBottom: 60, gap: 14 },
   center: { padding: 32, alignItems: 'center' as const },
+
+  // Desktop: 8/12 stream + plays on the left, 4/12 chat rail on the right
+  // with the composer pinned at the bottom (Twitch-style).
+  deskBody: { flex: 1, flexDirection: 'row' as const },
+  deskMain: { flex: 2, minWidth: 0 },
+  deskMainContent: { paddingHorizontal: 16, paddingBottom: 48, gap: 14 },
+  deskRail: {
+    width: 360,
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderLeftColor: t.border,
+    backgroundColor: t.surface,
+  },
+  deskRailContent: { padding: 12, gap: 12, paddingBottom: 12 },
+
 
   empty: { padding: 32, alignItems: 'center' as const, gap: 10 },
   emptyTitle: { fontSize: 16, fontWeight: '800' as const, color: t.text },

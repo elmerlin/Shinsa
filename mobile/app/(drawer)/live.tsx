@@ -18,6 +18,7 @@ import { TopBar } from '@/components/top-bar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/contexts/theme-context';
+import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { liveApi } from '@/lib/api';
 import { fullImageUrl } from '@/lib/images';
@@ -50,6 +51,7 @@ export default function LiveScreen() {
   const { theme } = useTheme();
   const s = useThemedStyles(makeStyles);
   const [createOpen, setCreateOpen] = useState(false);
+  const { isDesktop } = useBreakpoint();
 
   // Polled every 15s — server caches the directory aggregation, and most
   // changes (new session, ended session, viewer count) are stale-tolerant on
@@ -68,7 +70,7 @@ export default function LiveScreen() {
   const followingCount = liveSessions.filter((s) => s.is_following).length;
 
   return (
-    <View style={s.container}>
+    <View style={[s.container, isDesktop && s.containerDesktop]}>
       <View style={[s.topBar, { paddingTop: insets.top + 8 }]}>
         <TopBar
           rightExtra={user ? (
@@ -271,6 +273,9 @@ function SessionCard({
 
 const makeStyles = (t: ThemeColors) => ({
   container: { flex: 1, backgroundColor: t.bg },
+  // Desktop: cap reading width and center. 8-col stream + 4-col chat layout
+  // is on the detail screen — this list page just gets sensible width.
+  containerDesktop: { maxWidth: 1100, alignSelf: 'center' as const, width: '100%' as const },
   topBar: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,

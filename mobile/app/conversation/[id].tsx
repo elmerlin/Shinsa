@@ -128,10 +128,32 @@ function groupMessages(messages: ConversationMessage[]): GroupedMessage[] {
 // Screen
 // ---------------------------------------------------------------------------
 export default function ConversationScreen() {
-  const insets = useSafeAreaInsets();
-  const router = useRouter();
   const params = useLocalSearchParams<{ id: string }>();
   const conversationId = String(params.id || '');
+  return <ConversationView conversationId={conversationId} />;
+}
+
+/**
+ * Reusable conversation thread body. The route screen above is a thin
+ * wrapper around this; messages.tsx renders it inline in the center pane
+ * on desktop so the inbox stays visible (Slack/Linear layout).
+ *
+ * Pass `embedded` when rendering inside messages.tsx so the navigation
+ * Stack.Screen header is suppressed (the messages route owns its own
+ * header) and `onClose` is wired to clear the parent's selection rather
+ * than calling `router.back()`.
+ */
+export function ConversationView({
+  conversationId,
+  embedded = false,
+  onClose,
+}: {
+  conversationId: string;
+  embedded?: boolean;
+  onClose?: () => void;
+}) {
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { user } = useAuth();
   const { theme } = useTheme();
   const s = useThemedStyles(makeStyles);
@@ -331,52 +353,86 @@ export default function ConversationScreen() {
 
   return (
     <View style={[s.container, { backgroundColor: chatTheme.viewportBg }]}>
-      <Stack.Screen
-        options={{
-          headerShown: true,
-          // Custom title block in the navigation header so we can show the
-          // partner avatar + a subtitle (member count / skill title).
-          headerTitle: () => (
+      {!embedded ? (
+        <Stack.Screen
+          options={{
+            headerShown: true,
+            // Custom title block in the navigation header so we can show the
+            // partner avatar + a subtitle (member count / skill title).
+            headerTitle: () => (
+              <Pressable
+                disabled={!conversation?.partner?.user_id && conversation?.kind !== 'squad'}
+                onPress={() => {
+                  if (conversation?.kind === 'squad') {
+                    setSquadOpen(true);
+                    return;
+                  }
+                  if (conversation?.partner?.user_id) {
+                    router.push({ pathname: '/profile/[id]', params: { id: conversation.partner.user_id } });
+                  }
+                }}
+                style={({ pressed }) => [
+                  s.headerInner,
+                  pressed && (conversation?.partner?.user_id || conversation?.kind === 'squad') && { opacity: 0.7 },
+                ]}>
+                {headerAvatar ? (
+                  <Image source={{ uri: headerAvatar }} style={s.headerAvatar} contentFit="cover" />
+                ) : (
+                  <DefaultAvatar size={32} />
+                )}
+                <View style={{ minWidth: 0 }}>
+                  <Text style={s.headerTitle} numberOfLines={1}>{headerTitle}</Text>
+                  <Text style={s.headerSubtitle} numberOfLines={1}>{headerSubtitle}</Text>
+                </View>
+              </Pressable>
+            ),
+            // Right-side info button to open the squad management sheet.
+            headerRight: conversation?.kind === 'squad'
+              ? () => (
+                  <Pressable
+                    onPress={() => setSquadOpen(true)}
+                    hitSlop={8}
+                    style={({ pressed }) => [{ paddingHorizontal: 8 }, pressed && { opacity: 0.7 }]}>
+                    <IconSymbol name="info.circle" size={22} color={theme.text} />
+                  </Pressable>
+                )
+              : undefined,
+            headerBackTitle: 'Messages',
+          }}
+        />
+      ) : (
+        /* Embedded mode renders its own inline header — the parent route
+           (messages.tsx desktop) owns the navigation chrome. */
+        <View style={s.embeddedHeader}>
+          <Pressable
+            disabled={!conversation?.partner?.user_id && conversation?.kind !== 'squad'}
+            onPress={() => {
+              if (conversation?.kind === 'squad') { setSquadOpen(true); return; }
+              if (conversation?.partner?.user_id) {
+                router.push({ pathname: '/profile/[id]', params: { id: conversation.partner.user_id } });
+              }
+            }}
+            style={({ pressed }) => [s.headerInner, pressed && { opacity: 0.7 }]}>
+            {headerAvatar ? (
+              <Image source={{ uri: headerAvatar }} style={s.headerAvatar} contentFit="cover" />
+            ) : (
+              <DefaultAvatar size={32} />
+            )}
+            <View style={{ minWidth: 0, flex: 1 }}>
+              <Text style={s.headerTitle} numberOfLines={1}>{headerTitle}</Text>
+              <Text style={s.headerSubtitle} numberOfLines={1}>{headerSubtitle}</Text>
+            </View>
+          </Pressable>
+          {conversation?.kind === 'squad' ? (
             <Pressable
-              disabled={!conversation?.partner?.user_id && conversation?.kind !== 'squad'}
-              onPress={() => {
-                if (conversation?.kind === 'squad') {
-                  setSquadOpen(true);
-                  return;
-                }
-                if (conversation?.partner?.user_id) {
-                  router.push({ pathname: '/profile/[id]', params: { id: conversation.partner.user_id } });
-                }
-              }}
-              style={({ pressed }) => [
-                s.headerInner,
-                pressed && (conversation?.partner?.user_id || conversation?.kind === 'squad') && { opacity: 0.7 },
-              ]}>
-              {headerAvatar ? (
-                <Image source={{ uri: headerAvatar }} style={s.headerAvatar} contentFit="cover" />
-              ) : (
-                <DefaultAvatar size={32} />
-              )}
-              <View style={{ minWidth: 0 }}>
-                <Text style={s.headerTitle} numberOfLines={1}>{headerTitle}</Text>
-                <Text style={s.headerSubtitle} numberOfLines={1}>{headerSubtitle}</Text>
-              </View>
+              onPress={() => setSquadOpen(true)}
+              hitSlop={8}
+              style={({ pressed }) => [{ padding: 6 }, pressed && { opacity: 0.7 }]}>
+              <IconSymbol name="info.circle" size={20} color={theme.text} />
             </Pressable>
-          ),
-          // Right-side info button to open the squad management sheet.
-          headerRight: conversation?.kind === 'squad'
-            ? () => (
-                <Pressable
-                  onPress={() => setSquadOpen(true)}
-                  hitSlop={8}
-                  style={({ pressed }) => [{ paddingHorizontal: 8 }, pressed && { opacity: 0.7 }]}>
-                  <IconSymbol name="info.circle" size={22} color={theme.text} />
-                </Pressable>
-              )
-            : undefined,
-          headerBackTitle: 'Messages',
-        }}
-      />
+          ) : null}
+        </View>
+      )}
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
@@ -501,7 +557,7 @@ export default function ConversationScreen() {
           visible={squadOpen}
           onClose={() => setSquadOpen(false)}
           viewerId={user?.id || ''}
-          onLeft={() => router.back()}
+          onLeft={() => (embedded && onClose ? onClose() : router.back())}
           messages={query.data?.messages ?? []}
         />
       ) : null}
@@ -613,6 +669,16 @@ function MessageBubble({
 const makeStyles = (t: ThemeColors) => ({
   container: { flex: 1, backgroundColor: t.bg },
   headerInner: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, maxWidth: 240 },
+  embeddedHeader: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: t.border,
+    backgroundColor: t.surface,
+  },
   headerAvatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: t.surfaceMuted },
   headerTitle: { fontSize: 14, fontWeight: '900' as const, color: t.text, letterSpacing: 0.2 },
   headerSubtitle: { fontSize: 10, color: t.textMuted, fontWeight: '700' as const },

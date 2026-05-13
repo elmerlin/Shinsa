@@ -11,6 +11,8 @@ import { PumpShinsaLogo } from '@/components/pump-shinsa-logo';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/contexts/theme-context';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
+import { useBreakpoint, SIDEBAR_EXPANDED_BREAKPOINT } from '@/hooks/use-breakpoint';
+import { WebSidebar } from '@/components/web/web-sidebar';
 import { fullImageUrl } from '@/lib/images';
 import type { ThemeColors } from '@/constants/theme';
 
@@ -129,26 +131,37 @@ function DrawerContent(props: DrawerContentComponentProps) {
 
 export default function DrawerLayout() {
   const { theme } = useTheme();
+  const { isDesktop, width } = useBreakpoint();
+
+  // Desktop swaps the drawer into a permanent left sidebar — the same
+  // <Drawer> component, just configured to never hide and rendered with
+  // WebSidebar instead of the mobile drawer content. Mobile keeps the
+  // right-side off-canvas drawer it had before.
+  const desktopWidth = width >= SIDEBAR_EXPANDED_BREAKPOINT ? 240 : 64;
 
   return (
     <Drawer
-      drawerContent={(props) => <DrawerContent {...props} />}
+      drawerContent={(props) =>
+        isDesktop ? <WebSidebar {...props} /> : <DrawerContent {...props} />
+      }
       screenOptions={{
         headerShown: false,
-        // 220px fits the longest label ("Weekly Challenges" + optional
-        // SOON badge) with the labels living a touch closer to the icons.
-        // Anything narrower would clip the badge or wrap the longer
-        // entries — re-check after a translation pass.
-        drawerStyle: { backgroundColor: theme.surface, width: 220 },
-        drawerType: 'front',
-        // Hamburger lives top-right now (see top-bar.tsx) so the drawer
-        // slides in from the same side — keeps swipe-to-open intuitive.
-        drawerPosition: 'right',
-        // Swipe-to-open is disabled because users were triggering it
-        // accidentally when scrolling near the right edge. The drawer
-        // still opens via the hamburger button and closes via swipe or
-        // backdrop tap.
+        drawerStyle: isDesktop
+          ? { backgroundColor: theme.surface, width: desktopWidth, borderRightWidth: 0 }
+          : { backgroundColor: theme.surface, width: 220 },
+        // Permanent on desktop = always visible, no overlay. Front on mobile
+        // keeps the existing slide-over behavior.
+        drawerType: isDesktop ? 'permanent' : 'front',
+        // Sidebar lives on the left on desktop (Linear/Notion convention).
+        // On mobile the hamburger lives top-right (see top-bar.tsx) so the
+        // drawer slides in from the same side.
+        drawerPosition: isDesktop ? 'left' : 'right',
+        // Swipe-to-open was disabled on mobile because users triggered it
+        // accidentally when scrolling near the right edge. Doesn't apply
+        // to permanent drawers, but harmless to leave as false.
         swipeEnabled: false,
+        // Hide the default drawer's overlay on mobile; on desktop the
+        // permanent variant doesn't draw one.
         sceneStyle: { backgroundColor: theme.bg },
       }}>
       <Drawer.Screen name="(tabs)" options={{ drawerItemStyle: { display: 'none' } }} />

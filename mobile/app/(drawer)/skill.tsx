@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TopBar } from '@/components/top-bar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useTheme } from '@/contexts/theme-context';
+import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { songsApi } from '@/lib/api';
 import type { ThemeColors } from '@/constants/theme';
@@ -58,6 +59,7 @@ export default function SkillsIndexScreen() {
   const s = useThemedStyles(makeStyles);
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<SortKey>('most');
+  const { isDesktop } = useBreakpoint();
 
   const skillsQuery = useQuery({
     queryKey: SKILLS_META_QUERY_KEY,
@@ -179,14 +181,15 @@ export default function SkillsIndexScreen() {
             <Text style={s.emptyText}>No skills match “{query.trim()}”.</Text>
           </View>
         ) : (
-          <View style={s.list}>
+          <View style={[s.list, isDesktop && s.listDesktop]}>
             {filtered.map((sk) => (
-              <SkillRow
-                key={sk.slug}
-                skill={sk}
-                maxCount={Math.max(1, ...filtered.map((x) => x.chart_count))}
-                onPress={() => router.push({ pathname: '/skill/[slug]', params: { slug: sk.slug } })}
-              />
+              <View key={sk.slug} style={isDesktop ? s.cellDesktop : undefined}>
+                <SkillRow
+                  skill={sk}
+                  maxCount={Math.max(1, ...filtered.map((x) => x.chart_count))}
+                  onPress={() => router.push({ pathname: '/skill/[slug]', params: { slug: sk.slug } })}
+                />
+              </View>
             ))}
           </View>
         )}
@@ -307,6 +310,12 @@ const makeStyles = (t: ThemeColors) => ({
   sortChipTextActive: { color: t.accent },
 
   list: { gap: 6 },
+  listDesktop: {
+    flexDirection: 'row' as const,
+    flexWrap: 'wrap' as const,
+    gap: 10,
+  },
+  cellDesktop: { width: '24%' as const, minWidth: 220 },
   center: { padding: 32, alignItems: 'center' as const },
   errorCard: { backgroundColor: t.dangerBg, borderRadius: 12, padding: 16, borderWidth: 1, borderColor: t.dangerBorder },
   errorText: { color: t.danger, fontSize: 13 },

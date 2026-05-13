@@ -17,6 +17,7 @@ import { DefaultAvatar } from '@/components/default-avatar';
 import { TopBar } from '@/components/top-bar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useTheme } from '@/contexts/theme-context';
+import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { piugameApi } from '@/lib/api';
 import { fullImageUrl } from '@/lib/images';
@@ -34,6 +35,7 @@ export default function ShoesScreen() {
   const { theme } = useTheme();
   const s = useThemedStyles(makeStyles);
   const [focusShoeId, setFocusShoeId] = useState<number | null>(null);
+  const { isDesktop } = useBreakpoint();
 
   const statsQuery = useQuery({
     queryKey: ['shoes-stats', 60],
@@ -91,6 +93,7 @@ export default function ShoesScreen() {
                   rank={i + 1}
                   onPress={() => setFocusShoeId(m.id)}
                   s={s}
+                  extraStyle={isDesktop ? s.shoeTileDesktop : undefined}
                 />
               ))}
             </View>
@@ -125,11 +128,13 @@ function ShoeTile({
   rank,
   onPress,
   s,
+  extraStyle,
 }: {
   shoe: PiugameShoeStatsModel;
   rank: number;
   onPress: () => void;
   s: Styles;
+  extraStyle?: object;
 }) {
   const img = shoe.image_data;
   const rankColor =
@@ -138,7 +143,7 @@ function ShoeTile({
     : rank === 3 ? '#fb923c'
     : 'rgba(255,255,255,0.35)';
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [s.shoeTile, pressed && { opacity: 0.85 }]}>
+    <Pressable onPress={onPress} style={({ pressed }) => [s.shoeTile, extraStyle, pressed && { opacity: 0.85 }]}>
       <View style={s.shoeImgWrap}>
         {img ? (
           <Image source={{ uri: img }} style={s.shoeImg} contentFit="contain" />
@@ -358,6 +363,8 @@ const makeStyles = (t: ThemeColors) => ({
     borderColor: t.border,
     overflow: 'hidden' as const,
   },
+  // Desktop: 4-col grid.
+  shoeTileDesktop: { flexBasis: '23.5%' as const, flexGrow: 0 },
   shoeImgWrap: { position: 'relative' as const, aspectRatio: 16 / 10, backgroundColor: 'rgba(255,255,255,0.03)', padding: 12 },
   shoeImg: { width: '100%' as const, height: '100%' as const, backgroundColor: 'transparent' },
   shoeImgFallback: { alignItems: 'center' as const, justifyContent: 'center' as const },

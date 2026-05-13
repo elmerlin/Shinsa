@@ -17,6 +17,7 @@ import { TopBar } from '@/components/top-bar';
 import { HelpButton, HelpSheet } from '@/components/help-sheet';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/contexts/theme-context';
+import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { piugameApi } from '@/lib/api';
 import { TRAINING_HELP, type HelpKey } from '@/lib/training-help';
@@ -86,6 +87,7 @@ export default function TrainingScreen() {
   const [mode, setMode] = useState<DisplayMode>('single');
   const [helpKey, setHelpKey] = useState<HelpKey | null>(null);
   const openHelp = (key: HelpKey) => setHelpKey(key);
+  const { isDesktop } = useBreakpoint();
 
   const loadQuery = useQuery({
     queryKey: ['training-load', user?.id || 'anon'],
@@ -172,16 +174,33 @@ export default function TrainingScreen() {
           ) : profile ? (
             <>
               <ZoneBadge profile={profile} s={s} onHelp={openHelp} />
-              <StatGrid profile={profile} s={s} onHelp={openHelp} />
+              <StatGrid profile={profile} s={s} onHelp={openHelp} isDesktop={isDesktop} />
               {ewmaSeries.length > 1 ? (
                 <EwmaSparklineCard series={ewmaSeries} s={s} accent={MODE_ACCENT[mode]} onHelp={openHelp} />
               ) : null}
-              {profile.likely_pass ? (
-                <LikelyPassCard profile={profile} s={s} theme={theme} onHelp={openHelp} />
-              ) : null}
-              {profile.grade_predictions ? (
-                <GradePredictionsCard predictions={profile.grade_predictions} s={s} onHelp={openHelp} />
-              ) : null}
+              {isDesktop ? (
+                <View style={s.deskTwoCol}>
+                  {profile.likely_pass ? (
+                    <View style={s.deskTwoColItem}>
+                      <LikelyPassCard profile={profile} s={s} theme={theme} onHelp={openHelp} />
+                    </View>
+                  ) : null}
+                  {profile.grade_predictions ? (
+                    <View style={s.deskTwoColItem}>
+                      <GradePredictionsCard predictions={profile.grade_predictions} s={s} onHelp={openHelp} />
+                    </View>
+                  ) : null}
+                </View>
+              ) : (
+                <>
+                  {profile.likely_pass ? (
+                    <LikelyPassCard profile={profile} s={s} theme={theme} onHelp={openHelp} />
+                  ) : null}
+                  {profile.grade_predictions ? (
+                    <GradePredictionsCard predictions={profile.grade_predictions} s={s} onHelp={openHelp} />
+                  ) : null}
+                </>
+              )}
               {population ? (
                 <PopulationSection population={population} s={s} onHelp={openHelp} />
               ) : null}
@@ -249,20 +268,24 @@ function StatGrid({
   profile,
   s,
   onHelp,
+  isDesktop,
 }: {
   profile: TrainingZone & Partial<TrainingModeProfile>;
   s: Styles;
   onHelp: (key: HelpKey) => void;
+  isDesktop?: boolean;
 }) {
+  // Desktop lays the 4 tiles flush in a single row instead of 2x2.
+  const tileStyle = isDesktop ? s.statTileDesktop : undefined;
   return (
     <View style={s.statGrid}>
-      <StatTile label="BASE SKILL" value={fmtNum(profile.base_skill, 0)} sub="long-term load" s={s} onPress={() => onHelp('base_skill')} />
-      <StatTile label="CURRENT FORM" value={fmtNum(profile.current_form, 0)} sub="last ~7 days" s={s} onPress={() => onHelp('current_form')} />
-      <StatTile label="PLAY DAYS" value={String(profile.play_days || 0)} sub="distinct days" s={s} onPress={() => onHelp('play_days')} />
+      <StatTile label="BASE SKILL" value={fmtNum(profile.base_skill, 0)} sub="long-term load" s={s} extraStyle={tileStyle} onPress={() => onHelp('base_skill')} />
+      <StatTile label="CURRENT FORM" value={fmtNum(profile.current_form, 0)} sub="last ~7 days" s={s} extraStyle={tileStyle} onPress={() => onHelp('current_form')} />
+      <StatTile label="PLAY DAYS" value={String(profile.play_days || 0)} sub="distinct days" s={s} extraStyle={tileStyle} onPress={() => onHelp('play_days')} />
       {typeof profile.avg_play_load === 'number' ? (
-        <StatTile label="AVG LOAD" value={fmtNum(profile.avg_play_load, 0)} sub="per play" s={s} onPress={() => onHelp('avg_play_load')} />
+        <StatTile label="AVG LOAD" value={fmtNum(profile.avg_play_load, 0)} sub="per play" s={s} extraStyle={tileStyle} onPress={() => onHelp('avg_play_load')} />
       ) : (
-        <StatTile label="CHRONIC CLEARS" value={fmtNum(profile.chronic_clear_count, 1)} sub="last 7d" s={s} onPress={() => onHelp('chronic_clears')} />
+        <StatTile label="CHRONIC CLEARS" value={fmtNum(profile.chronic_clear_count, 1)} sub="last 7d" s={s} extraStyle={tileStyle} onPress={() => onHelp('chronic_clears')} />
       )}
     </View>
   );
@@ -274,15 +297,17 @@ function StatTile({
   sub,
   s,
   onPress,
+  extraStyle,
 }: {
   label: string;
   value: string;
   sub?: string;
   s: Styles;
   onPress?: () => void;
+  extraStyle?: object;
 }) {
   return (
-    <Pressable onPress={onPress} disabled={!onPress} style={({ pressed }) => [s.statTile, pressed && onPress && { opacity: 0.85 }]}>
+    <Pressable onPress={onPress} disabled={!onPress} style={({ pressed }) => [s.statTile, extraStyle, pressed && onPress && { opacity: 0.85 }]}>
       <View style={s.statLabelRow}>
         <Text style={s.statLabel}>{label}</Text>
         {onPress ? <Text style={s.statHelpGlyph}>?</Text> : null}
@@ -739,4 +764,9 @@ const makeStyles = (t: ThemeColors) => ({
   popHeadline: { fontSize: 22, fontWeight: '900' as const, color: t.text, fontVariant: ['tabular-nums' as const] },
   popHeadlineSub: { fontSize: 13 },
   popMeta: { fontSize: 10, color: t.textMuted },
+
+  // Desktop overrides — 4-col KPI row + 2-col likely-pass / grade-predictions.
+  statTileDesktop: { flexBasis: '23%' as const, flexGrow: 0 },
+  deskTwoCol: { flexDirection: 'row' as const, alignItems: 'flex-start' as const, gap: 14 },
+  deskTwoColItem: { flex: 1, minWidth: 0 },
 });

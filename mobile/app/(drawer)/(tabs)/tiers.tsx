@@ -21,6 +21,7 @@ import { TierSettingsSheet } from '@/components/tier-settings-sheet';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/contexts/theme-context';
+import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { songsApi } from '@/lib/api';
 import { getGradeDisplayLabel, getGradeTier } from '@/lib/grades';
@@ -97,6 +98,10 @@ export default function TiersScreen() {
   const [mode, setMode] = useState<Mode>('Double');
   const [level, setLevel] = useState<number | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const { isDesktop } = useBreakpoint();
+  // Desktop only: tapping a chart opens a right-rail context panel instead
+  // of navigating to /song/[id]. Mobile keeps the existing drill-down.
+  const [railChart, setRailChart] = useState<TierChart | null>(null);
 
   const metaQuery = useQuery({
     queryKey: ['tiers-meta'],
@@ -195,8 +200,13 @@ export default function TiersScreen() {
   }, [tiersQuery.data, settings.showUnplayed, settings.showEmptyTiers]);
 
   const accentColor = MODE_ACCENT[mode];
-  const onChartPress = (c: TierChart) =>
-    router.push({ pathname: '/song/[id]', params: { id: String(c.chart_id) } });
+  const onChartPress = (c: TierChart) => {
+    if (isDesktop) {
+      setRailChart(c);
+    } else {
+      router.push({ pathname: '/song/[id]', params: { id: String(c.chart_id) } });
+    }
+  };
 
   // Capture-as-PNG state. The ref points at the ViewShot wrapping the
   // tier grid; tapping the capture button rasterizes it via
@@ -307,7 +317,9 @@ export default function TiersScreen() {
         </Pressable>
       </View>
 
+      <View style={isDesktop ? s.deskBody : { flex: 1 }}>
       <ScrollView
+        style={isDesktop ? s.deskScroll : { flex: 1 }}
         contentContainerStyle={[s.scroll, { paddingBottom: insets.bottom + 40 }]}
         showsVerticalScrollIndicator={false}>
         {(metaQuery.isLoading || tiersQuery.isLoading) && (
@@ -367,6 +379,17 @@ export default function TiersScreen() {
           ) : null}
         </ViewShot>
       </ScrollView>
+      {isDesktop && railChart ? (
+        <TierChartRail
+          chart={railChart}
+          onClose={() => setRailChart(null)}
+          onOpen={() =>
+            router.push({ pathname: '/song/[id]', params: { id: String(railChart.chart_id) } })
+          }
+          s={s}
+        />
+      ) : null}
+      </View>
 
       <TierSettingsSheet
         visible={settingsOpen}
@@ -374,6 +397,76 @@ export default function TiersScreen() {
         onChange={updateSettings}
         onClose={() => setSettingsOpen(false)}
       />
+    </View>
+  );
+}
+
+/** Right-rail context panel for a tapped chart on desktop. */
+function TierChartRail({
+  chart,
+  onClose,
+  onOpen,
+  s,
+}: {
+  chart: TierChart;
+  onClose: () => void;
+  onOpen: () => void;
+  s: Styles;
+}) {
+  const { theme } = useTheme();
+  const jacket = chart.jacket_url ? fullImageUrl(chart.jacket_url) : undefined;
+  const passed = chart.is_pass && (chart.best_score || 0) > 0;
+  const gradeLabel = passed ? getGradeDisplayLabel(chart.best_grade, chart.best_score) : '';
+
+  // Esc closes the rail. Web only — keydown isn't a thing on native.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return (
+    <View style={s.rail}>
+      <View style={s.railHeader}>
+        <Text style={s.railEyebrow}>CHART</Text>
+        <Pressable
+          onPress={onClose}
+          hitSlop={8}
+          style={({ pressed }) => [s.railClose, pressed && { opacity: 0.6 }]}
+          accessibilityLabel="Close chart panel">
+          <IconSymbol name="xmark" size={16} color={theme.textMuted} />
+        </Pressable>
+      </View>
+      {jacket ? (
+        <Image source={{ uri: jacket }} style={s.railJacket} contentFit="cover" />
+      ) : (
+        <View style={[s.railJacket, { backgroundColor: theme.surfaceMuted }]} />
+      )}
+      <Text style={s.railTitle} numberOfLines={2}>{chart.title}</Text>
+      <Text style={s.railMeta}>
+        {chart.mode} · Lv {chart.level}
+      </Text>
+
+      <View style={s.railSection}>
+        <Text style={s.railSectionLabel}>Your best</Text>
+        {passed ? (
+          <View style={s.railBestRow}>
+            <Text style={s.railBestScore}>{Number(chart.best_score || 0).toLocaleString()}</Text>
+            {gradeLabel ? <Text style={s.railBestGrade}>{gradeLabel}</Text> : null}
+          </View>
+        ) : (
+          <Text style={s.railEmpty}>No clear yet — keep grinding.</Text>
+        )}
+      </View>
+
+      <Pressable
+        onPress={onOpen}
+        style={({ pressed }) => [s.railPrimary, pressed && { opacity: 0.85 }]}>
+        <Text style={s.railPrimaryText}>Open full chart →</Text>
+      </Pressable>
     </View>
   );
 }
@@ -697,4 +790,70 @@ const makeStyles = (t: ThemeColors) => ({
     textShadowColor: 'rgba(0, 0, 0, 0.85)',
     textShadowOffset: { width: 0, height: 2 },
   },
+
+  // Desktop: grid scrolls in the left column, optional right rail for the
+  // selected chart pinned at 360 px.
+  deskBody: { flex: 1, flexDirection: 'row' as const },
+  deskScroll: { flex: 1 },
+  rail: {
+    width: 360,
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderLeftColor: t.border,
+    backgroundColor: t.surface,
+    padding: 18,
+    gap: 12,
+  },
+  railHeader: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+  },
+  railEyebrow: {
+    fontSize: 10,
+    fontWeight: '800' as const,
+    letterSpacing: 1.8,
+    color: t.accent,
+    textTransform: 'uppercase' as const,
+  },
+  railClose: {
+    width: 26,
+    height: 26,
+    borderRadius: 6,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  railJacket: { width: '100%' as const, aspectRatio: 1, borderRadius: 10 },
+  railTitle: { fontSize: 16, fontWeight: '800' as const, color: t.text },
+  railMeta: { fontSize: 12, color: t.textMuted, letterSpacing: 0.4 },
+  railSection: {
+    gap: 6,
+    paddingTop: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: t.border,
+  },
+  railSectionLabel: {
+    fontSize: 10,
+    fontWeight: '800' as const,
+    letterSpacing: 1.6,
+    color: t.textDim,
+    textTransform: 'uppercase' as const,
+  },
+  railBestRow: { flexDirection: 'row' as const, alignItems: 'baseline' as const, gap: 8 },
+  railBestScore: {
+    fontSize: 22,
+    fontWeight: '900' as const,
+    color: t.text,
+    fontVariant: ['tabular-nums' as const],
+  },
+  railBestGrade: { fontSize: 14, fontWeight: '800' as const, color: t.accent, letterSpacing: 0.5 },
+  railEmpty: { fontSize: 12, color: t.textMuted },
+  railPrimary: {
+    marginTop: 4,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: t.accent,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  railPrimaryText: { color: t.textOnAccent, fontSize: 13, fontWeight: '800' as const, letterSpacing: 0.5 },
 });

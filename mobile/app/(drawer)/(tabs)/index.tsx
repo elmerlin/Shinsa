@@ -13,6 +13,7 @@ import { WeeklyChallengesSummary } from '@/components/dashboard/weekly-challenge
 import { TopBar } from '@/components/top-bar';
 import { QuickNavButton } from '@/components/quick-nav-button';
 import { useTheme } from '@/contexts/theme-context';
+import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { dashboardApi, socialApi } from '@/lib/api';
 import { fullImageUrl } from '@/lib/images';
@@ -178,6 +179,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const { theme } = useTheme();
   const s = useThemedStyles(makeStyles);
+  const { isDesktop } = useBreakpoint();
 
   const dashQuery = useQuery({
     queryKey: ['dashboard'],
@@ -197,6 +199,116 @@ export default function HomeScreen() {
 
   const isRefetching = dashQuery.isRefetching || activityQuery.isRefetching;
 
+  const quickNav = (
+    <View style={s.quickNav}>
+      <QuickNavButton label="Live" href="/live" icon="video.fill"
+        gradientFrom="#22d3ee" gradientTo="#1d4ed8"
+        borderColor="rgba(165,243,252,0.45)" shadowColor="#1d4ed8" />
+      <QuickNavButton label="Songs" href="/songs" icon="music.note"
+        gradientFrom="#34d399" gradientTo="#0f766e"
+        borderColor="rgba(167,243,208,0.45)" shadowColor="#0f766e" />
+      <QuickNavButton label="Lists" href="/lists" icon="list.bullet.rectangle"
+        gradientFrom="#a78bfa" gradientTo="#6d28d9"
+        borderColor="rgba(196,181,253,0.45)" shadowColor="#6d28d9" />
+      <QuickNavButton label="Training" href="/training" icon="chart.line.uptrend.xyaxis"
+        gradientFrom="#fbbf24" gradientTo="#c2410c"
+        borderColor="rgba(252,211,77,0.45)" shadowColor="#c2410c" />
+    </View>
+  );
+
+  const activitySection = activityQuery.data && activityQuery.data.length > 0 ? (
+    <View style={s.section}>
+      <Text style={s.eyebrowTitle}>RECENT ACTIVITY</Text>
+      <View style={s.sectionBody}>
+        {activityQuery.data.slice(0, 10).map((a, i) => <ActivityRow key={i} a={a} s={s} />)}
+      </View>
+    </View>
+  ) : null;
+
+  /** Two-column activity for desktop — splits the 10-row list down the middle. */
+  const desktopActivity = activityQuery.data && activityQuery.data.length > 0 ? (() => {
+    const items = activityQuery.data.slice(0, 10);
+    const half = Math.ceil(items.length / 2);
+    const left = items.slice(0, half);
+    const right = items.slice(half);
+    return (
+      <View style={s.section}>
+        <Text style={s.eyebrowTitle}>RECENT ACTIVITY</Text>
+        <View style={s.deskActivityRow}>
+          <View style={[s.sectionBody, { flex: 1 }]}>
+            {left.map((a, i) => <ActivityRow key={i} a={a} s={s} />)}
+          </View>
+          <View style={[s.sectionBody, { flex: 1 }]}>
+            {right.map((a, i) => <ActivityRow key={`r-${i}`} a={a} s={s} />)}
+          </View>
+        </View>
+      </View>
+    );
+  })() : null;
+
+  const tournamentsSection = dashQuery.data && dashQuery.data.tournaments.length > 0 ? (
+    <Section s={s} title="Tournaments" count={dashQuery.data.tournaments.length}>
+      {dashQuery.data.tournaments.slice(0, 10).map((t) => (
+        <TournamentRow
+          key={t.id}
+          t={t}
+          s={s}
+          onPress={() => router.push({ pathname: '/tournament/[id]', params: { id: t.id } })}
+        />
+      ))}
+    </Section>
+  ) : null;
+
+  const loadingAndError = (
+    <>
+      {dashQuery.isLoading && (
+        <View style={s.center}>
+          <ActivityIndicator color={theme.spinner} />
+        </View>
+      )}
+      {dashQuery.isError && (
+        <View style={s.errorBox}>
+          <Text style={s.errorText}>
+            {dashQuery.error instanceof Error ? dashQuery.error.message : 'Failed to load dashboard'}
+          </Text>
+        </View>
+      )}
+    </>
+  );
+
+  if (isDesktop) {
+    return (
+      <View style={s.container}>
+        <ScrollView
+          contentContainerStyle={s.deskScroll}
+          refreshControl={
+            <RefreshControl refreshing={isRefetching} onRefresh={refetchAll} tintColor={theme.spinner} />
+          }>
+          <View style={s.deskTopBar}>
+            <Text style={s.deskHeading}>Home</Text>
+            <TopBar />
+          </View>
+
+          <View style={s.deskGrid}>
+            <View style={s.deskMain}>
+              {quickNav}
+              {loadingAndError}
+              <NoticeBoard />
+              {desktopActivity}
+              <DailyHighlights />
+              <SongOfWeekStrip />
+              {tournamentsSection}
+            </View>
+            <View style={s.deskRail}>
+              <LiveNowStrip />
+              <WeeklyChallengesSummary />
+            </View>
+          </View>
+        </ScrollView>
+      </View>
+    );
+  }
+
   return (
     <View style={s.container}>
       <ScrollView
@@ -204,61 +316,20 @@ export default function HomeScreen() {
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetchAll} tintColor={theme.spinner} />}>
         <TopBar />
 
-        <View style={s.quickNav}>
-          <QuickNavButton label="Live" href="/live" icon="video.fill"
-            gradientFrom="#22d3ee" gradientTo="#1d4ed8"
-            borderColor="rgba(165,243,252,0.45)" shadowColor="#1d4ed8" />
-          <QuickNavButton label="Songs" href="/songs" icon="music.note"
-            gradientFrom="#34d399" gradientTo="#0f766e"
-            borderColor="rgba(167,243,208,0.45)" shadowColor="#0f766e" />
-          <QuickNavButton label="Lists" href="/lists" icon="list.bullet.rectangle"
-            gradientFrom="#a78bfa" gradientTo="#6d28d9"
-            borderColor="rgba(196,181,253,0.45)" shadowColor="#6d28d9" />
-          <QuickNavButton label="Training" href="/training" icon="chart.line.uptrend.xyaxis"
-            gradientFrom="#fbbf24" gradientTo="#c2410c"
-            borderColor="rgba(252,211,77,0.45)" shadowColor="#c2410c" />
-        </View>
+        {quickNav}
 
-        {dashQuery.isLoading && (
-          <View style={s.center}>
-            <ActivityIndicator color={theme.spinner} />
-          </View>
-        )}
-
-        {dashQuery.isError && (
-          <View style={s.errorBox}>
-            <Text style={s.errorText}>{dashQuery.error instanceof Error ? dashQuery.error.message : 'Failed to load dashboard'}</Text>
-          </View>
-        )}
+        {loadingAndError}
 
         <NoticeBoard />
         <LiveNowStrip />
 
-        {activityQuery.data && activityQuery.data.length > 0 && (
-          <View style={s.section}>
-            <Text style={s.eyebrowTitle}>RECENT ACTIVITY</Text>
-            <View style={s.sectionBody}>
-              {activityQuery.data.slice(0, 10).map((a, i) => <ActivityRow key={i} a={a} s={s} />)}
-            </View>
-          </View>
-        )}
+        {activitySection}
 
         <DailyHighlights />
         <SongOfWeekStrip />
         <WeeklyChallengesSummary />
 
-        {dashQuery.data && dashQuery.data.tournaments.length > 0 && (
-          <Section s={s} title="Tournaments" count={dashQuery.data.tournaments.length}>
-            {dashQuery.data.tournaments.slice(0, 10).map((t) => (
-              <TournamentRow
-                key={t.id}
-                t={t}
-                s={s}
-                onPress={() => router.push({ pathname: '/tournament/[id]', params: { id: t.id } })}
-              />
-            ))}
-          </Section>
-        )}
+        {tournamentsSection}
       </ScrollView>
     </View>
   );
@@ -348,4 +419,21 @@ const makeStyles = (t: ThemeColors) => ({
   activityAvatarPlaceholder: { width: 22, height: 22 },
   activityMessage: { flex: 1, fontSize: 12, color: t.textMuted },
   activityTime: { fontSize: 10, color: t.textDim },
+
+  // Desktop ("deskX") — 2-col dashboard.
+  deskScroll: { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 60 },
+  deskTopBar: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+    paddingBottom: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: t.border,
+    marginBottom: 18,
+  },
+  deskHeading: { fontSize: 22, fontWeight: '800' as const, color: t.text, letterSpacing: 0.5 },
+  deskGrid: { flexDirection: 'row' as const, gap: 18, alignItems: 'flex-start' as const },
+  deskMain: { flex: 2, gap: 18, minWidth: 0 },
+  deskRail: { flex: 1, maxWidth: 360, gap: 18 },
+  deskActivityRow: { flexDirection: 'row' as const, gap: 12 },
 });

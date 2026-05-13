@@ -32,6 +32,7 @@ import { ScoreCardSheet, type ScoreCardData } from '@/components/score-card-shee
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/contexts/theme-context';
+import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { authApi, liveApi, messagesApi, piugameApi, socialApi, songsApi, weeklyChallengesApi } from '@/lib/api';
 import { getMessagesInboxQueryKey } from '@/lib/messagesQueries';
@@ -243,6 +244,64 @@ function parsePostImages(raw: unknown): string[] {
   }
 }
 
+/**
+ * Compact inline preview of a selected score. Rendered as the right rail
+ * of the Best/Recent tabs on desktop so the user always sees what they
+ * tapped without needing to read the full sheet. Tap-through still opens
+ * ScoreCardSheet for the full set of actions (share, replay, comments).
+ */
+function ScoreSummaryPanel({
+  data,
+  s,
+  onReplay,
+}: {
+  data: ScoreCardData | null;
+  s: Styles;
+  onReplay: (url: string, title: string) => void;
+}) {
+  if (!data) {
+    return (
+      <View style={s.scorePanelEmpty}>
+        <Text style={s.emptyText}>Tap a score to see its details.</Text>
+      </View>
+    );
+  }
+  const jacket = data.jacket_url || data.background_url;
+  const jacketUrl = typeof jacket === 'string' ? fullImageUrl(jacket) : undefined;
+  const mode = String(data.mode || '');
+  const level = parseInt(String(data.level ?? ''), 10) || 0;
+  const score = parseInt(String(data.new_score ?? data.score ?? 0), 10) || 0;
+  const grade = getGradeDisplayLabel(data.new_grade ?? data.grade, score);
+  const gradeColor = TIER_COLORS[getGradeTier(data.new_grade ?? data.grade, score)];
+  const replayUrl = typeof data.replay_embed_url === 'string' ? data.replay_embed_url : '';
+  return (
+    <View style={s.scorePanel}>
+      {jacketUrl ? (
+        <Image source={{ uri: jacketUrl }} style={s.scorePanelJacket} contentFit="cover" />
+      ) : (
+        <View style={[s.scorePanelJacket, s.scorePanelJacketFallback]} />
+      )}
+      <Text style={s.scorePanelTitle} numberOfLines={2}>
+        {String(data.song_title || 'Score')}
+      </Text>
+      <Text style={s.scorePanelMeta}>
+        {mode}{level ? ` · Lv ${level}` : ''}
+      </Text>
+      <View style={s.scorePanelScoreRow}>
+        <Text style={s.scorePanelScoreNum}>{score.toLocaleString()}</Text>
+        {grade ? <Text style={[s.scorePanelGrade, { color: gradeColor }]}>{grade}</Text> : null}
+      </View>
+      {replayUrl ? (
+        <Pressable
+          onPress={() => onReplay(replayUrl, String(data.song_title || ''))}
+          style={({ pressed }) => [s.scorePanelReplay, pressed && { opacity: 0.85 }]}>
+          <Text style={s.scorePanelReplayText}>Play replay →</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
 function PostRow({ post, s, onPress }: { post: ProfilePost; s: Styles; onPress: () => void }) {
   const { content, summary } = parseLiveSessionMarker(post.content);
   // Strip any other structured share markers ([[SHINSA_*_V1:...]]) so we
@@ -352,6 +411,7 @@ export function ProfileBody({ lookup }: { lookup: string }) {
   const { theme } = useTheme();
   const s = useThemedStyles(makeStyles);
   const queryClient = useQueryClient();
+  const { isDesktop } = useBreakpoint();
 
   // Lookup can be a user_id or `@username`. Strip leading @ and treat as
   // username when it looks like one, else as id.
@@ -1256,6 +1316,24 @@ export function ProfileBody({ lookup }: { lookup: string }) {
                         : 'Pick a mode to see your scores'}
                     </Text>
                   </View>
+                ) : isDesktop ? (
+                  <View style={s.desk2col}>
+                    <View style={[s.listCard, s.desk2colMain]}>
+                      {bestVisible.map((entry) => (
+                        <ScoreRow
+                          key={String(entry.id)}
+                          score={entry}
+                          s={s}
+                          jacketMap={jacketMap}
+                          onReplay={onReplay}
+                          onPress={() => setScoreTarget(buildScoreData(entry))}
+                        />
+                      ))}
+                    </View>
+                    <View style={s.desk2colRail}>
+                      <ScoreSummaryPanel data={scoreTarget} s={s} onReplay={onReplay} />
+                    </View>
+                  </View>
                 ) : (
                   <View style={s.listCard}>
                     {bestVisible.map((entry) => (
@@ -1283,6 +1361,17 @@ export function ProfileBody({ lookup }: { lookup: string }) {
               <Text style={s.errorText}>{recentQuery.error instanceof Error ? recentQuery.error.message : 'Failed to load'}</Text>
             ) : allRecent.length === 0 ? (
               <View style={s.emptyCard}><Text style={s.emptyText}>No recent plays</Text></View>
+            ) : isDesktop ? (
+              <View style={s.desk2col}>
+                <View style={[s.listCard, s.desk2colMain]}>
+                  {allRecent.slice(0, 50).map((play) => (
+                    <ScoreRow key={String(play.id)} score={play} s={s} jacketMap={jacketMap} onReplay={onReplay} onPress={() => setScoreTarget(buildScoreData(play))} />
+                  ))}
+                </View>
+                <View style={s.desk2colRail}>
+                  <ScoreSummaryPanel data={scoreTarget} s={s} onReplay={onReplay} />
+                </View>
+              </View>
             ) : (
               <View style={s.listCard}>
                 {allRecent.slice(0, 50).map((play) => (
@@ -1302,14 +1391,15 @@ export function ProfileBody({ lookup }: { lookup: string }) {
             ) : (postsQuery.data?.length ?? 0) === 0 ? (
               <View style={s.emptyCard}><Text style={s.emptyText}>No posts yet</Text></View>
             ) : (
-              <View style={s.postsList}>
+              <View style={[s.postsList, isDesktop && s.postsListDesktop]}>
                 {(postsQuery.data ?? []).map((post) => (
-                  <PostRow
-                    key={String(post.id)}
-                    post={post}
-                    s={s}
-                    onPress={() => router.push({ pathname: '/post/[id]', params: { id: String(post.id) } })}
-                  />
+                  <View key={String(post.id)} style={isDesktop ? s.postsCellDesktop : undefined}>
+                    <PostRow
+                      post={post}
+                      s={s}
+                      onPress={() => router.push({ pathname: '/post/[id]', params: { id: String(post.id) } })}
+                    />
+                  </View>
                 ))}
               </View>
             )}
@@ -3037,6 +3127,70 @@ const makeStyles = (t: ThemeColors) => ({
   showMoreText: { fontSize: 12, fontWeight: '800' as const, color: t.accent, letterSpacing: 0.5 },
 
   postsList: { gap: 8 },
+  // Desktop: 2-col masonry-style grid for the Posts tab.
+  postsListDesktop: {
+    flexDirection: 'row' as const,
+    flexWrap: 'wrap' as const,
+    gap: 12,
+  },
+  postsCellDesktop: {
+    width: '48.5%' as const,
+    minWidth: 280,
+  },
+
+  // Desktop: 2-col list + selected-score panel for Best/Recent tabs.
+  desk2col: { flexDirection: 'row' as const, gap: 16, alignItems: 'flex-start' as const },
+  desk2colMain: { flex: 1, minWidth: 0 },
+  desk2colRail: { width: 320 },
+  scorePanel: {
+    backgroundColor: t.card,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: t.border,
+    padding: 14,
+    gap: 8,
+  },
+  scorePanelEmpty: {
+    backgroundColor: t.surfaceMuted,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: t.border,
+    borderStyle: 'dashed' as const,
+    padding: 24,
+    alignItems: 'center' as const,
+  },
+  scorePanelJacket: { width: '100%' as const, aspectRatio: 1, borderRadius: 8 },
+  scorePanelJacketFallback: { backgroundColor: t.surfaceMuted },
+  scorePanelTitle: { fontSize: 15, fontWeight: '800' as const, color: t.text, marginTop: 4 },
+  scorePanelMeta: { fontSize: 11, color: t.textDim, letterSpacing: 0.4 },
+  scorePanelScoreRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'baseline' as const,
+    gap: 10,
+    paddingTop: 6,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: t.border,
+  },
+  scorePanelScoreNum: {
+    fontSize: 22,
+    fontWeight: '900' as const,
+    color: t.text,
+    fontVariant: ['tabular-nums' as const],
+  },
+  scorePanelGrade: { fontSize: 14, fontWeight: '900' as const, letterSpacing: 0.5 },
+  scorePanelReplay: {
+    marginTop: 4,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: t.accentTint,
+    alignItems: 'center' as const,
+  },
+  scorePanelReplayText: {
+    fontSize: 12,
+    fontWeight: '800' as const,
+    color: t.accent,
+    letterSpacing: 0.4,
+  },
   postRow: {
     backgroundColor: t.card,
     borderRadius: 12,

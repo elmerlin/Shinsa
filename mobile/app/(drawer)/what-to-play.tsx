@@ -22,6 +22,7 @@ import { TopBar } from '@/components/top-bar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/contexts/theme-context';
+import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { songsApi } from '@/lib/api';
 import { fullImageUrl } from '@/lib/images';
@@ -256,6 +257,7 @@ function RecommendationCard({
   onTrack,
   index,
   animTrigger,
+  cardWidth,
 }: {
   rec: GoalRecommendation;
   goal: Goal;
@@ -263,6 +265,7 @@ function RecommendationCard({
   onTrack: () => void;
   index: number;
   animTrigger: number;
+  cardWidth?: number;
 }) {
   const s = useThemedStyles(makeCardStyles);
   const { theme } = useTheme();
@@ -304,7 +307,11 @@ function RecommendationCard({
       }}>
       <Pressable
         onPress={onPress}
-        style={({ pressed }) => [s.card, pressed && { transform: [{ scale: 0.98 }] }]}>
+        style={({ pressed }) => [
+          s.card,
+          cardWidth ? { width: cardWidth } : null,
+          pressed && { transform: [{ scale: 0.98 }] },
+        ]}>
         {/* Jacket */}
         <View style={s.jacketWrap}>
           {jacketSrc ? (
@@ -951,6 +958,12 @@ export default function WhatToPlayScreen() {
   const { theme } = useTheme();
   const s = useThemedStyles(makeStyles);
   const queryClient = useQueryClient();
+  const { isDesktop, width: winW } = useBreakpoint();
+  // Desktop: 3-col grid. Subtract sidebar (max 240) + container padding (~48).
+  // Clamp to a sane minimum so very narrow desktop windows still render.
+  const desktopCardWidth = isDesktop
+    ? Math.max(220, Math.floor((Math.min(winW - 288, 1200) - 24) / 3))
+    : undefined;
 
   const [goal, setGoal] = useState<Goal>('title');
   const [mode, setMode] = useState<ModeChoice>('double');
@@ -1125,6 +1138,7 @@ export default function WhatToPlayScreen() {
                 animTrigger={animTrigger}
                 onPress={() => setDetailRec(rec)}
                 onTrack={() => setTrackRec(rec)}
+                cardWidth={desktopCardWidth}
               />
             ))}
           </View>

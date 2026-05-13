@@ -18,8 +18,9 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Image } from 'expo-image';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
+import { ConversationView } from '@/app/conversation/[id]';
 import {
   ActivityIndicator,
   Modal,
@@ -38,6 +39,7 @@ import { StoryViewer } from '@/components/messages/story-viewer';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/contexts/theme-context';
+import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { messagesApi } from '@/lib/api';
 import { fullImageUrl } from '@/lib/images';
@@ -100,10 +102,16 @@ export default function MessagesScreen() {
   const { theme } = useTheme();
   const s = useThemedStyles(makeStyles);
   const queryClient = useQueryClient();
+  const { isDesktop } = useBreakpoint();
   // Long-press target → opens the pin/mute action sheet.
   const [actionTarget, setActionTarget] = useState<ConversationSummary | null>(null);
   // Story viewer target — user_id whose story stack to show.
   const [storyUserId, setStoryUserId] = useState<string | null>(null);
+  // Desktop: track the selected conversation via URL so back/forward + reload
+  // survive. Clicking a row sets ?selected=; the center pane embeds the
+  // thread. On mobile we still navigate to /conversation/[id].
+  const params = useLocalSearchParams<{ selected?: string }>();
+  const selectedId = typeof params.selected === 'string' ? params.selected : '';
 
   const inboxKey = getMessagesInboxQueryKey(user?.id);
   const query = useQuery({
@@ -152,7 +160,12 @@ export default function MessagesScreen() {
         c.id === id ? { ...c, unread_count: 0 } : c,
       ),
     } : prev);
-    router.push({ pathname: '/conversation/[id]', params: { id } });
+    if (isDesktop) {
+      // Stay on /messages and embed the thread in the center pane.
+      router.setParams({ selected: id });
+    } else {
+      router.push({ pathname: '/conversation/[id]', params: { id } });
+    }
   };
 
   if (!user) {
@@ -164,6 +177,123 @@ export default function MessagesScreen() {
         <View style={s.centered}>
           <Text style={s.emptyTitle}>Sign in to see your messages</Text>
         </View>
+      </View>
+    );
+  }
+
+  // Desktop renders the inbox as a 320 px left rail + an empty placeholder
+  // for the conversation thread. Clicking a row navigates to the standalone
+  // conversation route (which gets its own desktop layout in a follow-up).
+  const inbox = (
+    query.isLoading ? (
+      <View style={s.center}><ActivityIndicator color={theme.spinner} /></View>
+    ) : query.isError ? (
+      <View style={s.errorCard}>
+        <Text style={s.errorText}>
+          {query.error instanceof Error ? query.error.message : 'Failed to load conversations'}
+        </Text>
+      </View>
+    ) : conversations.length === 0 ? (
+      <View style={s.emptyCard}>
+        <Text style={s.emptyEmoji}>💬</Text>
+        <Text style={s.emptyTitle}>No conversations yet</Text>
+        <Text style={s.emptyBody}>
+          Open a player&apos;s profile and tap Message to start a DM, or join a squad chat
+          from the web for now.
+        </Text>
+      </View>
+    ) : (
+      <View style={{ gap: 4 }}>
+        {conversations.map((c) => (
+          <ConversationRow
+            key={c.id}
+            conversation={c}
+            viewerId={user.id}
+            active={isDesktop && c.id === selectedId}
+            onPressIn={() => prefetchConversationForIntent({ queryClient, conversationId: c.id })}
+            onPress={() => openConversation(c.id)}
+            onLongPress={() => setActionTarget(c)}
+          />
+        ))}
+      </View>
+    )
+  );
+
+  if (isDesktop) {
+    return (
+      <View style={s.container}>
+        <View style={s.deskRoot}>
+          <View style={s.deskInbox}>
+            <View style={s.deskInboxHead}>
+              <Text style={s.deskInboxTitle}>Inbox</Text>
+              {totalUnread > 0 ? (
+                <View style={s.totalBadge}>
+                  <Text style={s.totalBadgeText}>{totalUnread > 99 ? '99+' : totalUnread}</Text>
+                </View>
+              ) : null}
+            </View>
+            <ScrollView contentContainerStyle={s.deskInboxScroll}>{inbox}</ScrollView>
+          </View>
+          <View style={s.deskPane}>
+            <View style={s.deskTopBar}>
+              <TopBar />
+            </View>
+            {selectedId ? (
+              <ConversationView
+                conversationId={selectedId}
+                embedded
+                onClose={() => router.setParams({ selected: '' })}
+              />
+            ) : (
+              <View style={s.deskEmpty}>
+                <Text style={s.deskEmptyEmoji}>💬</Text>
+                <Text style={s.deskEmptyTitle}>Pick a conversation</Text>
+                <Text style={s.deskEmptyHint}>
+                  Tap a conversation in the inbox to open the thread inline. The composer pins
+                  to the bottom of the center column.
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+
+        <StoryViewer userId={storyUserId} onClose={() => setStoryUserId(null)} />
+
+        <Modal
+          visible={!!actionTarget}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setActionTarget(null)}>
+          <Pressable style={s.actionBackdrop} onPress={() => setActionTarget(null)}>
+            <Pressable
+              style={[s.actionSheet, { paddingBottom: insets.bottom + 12 }]}
+              onPress={(e) => e.stopPropagation()}>
+              <View style={s.actionHandle} />
+              {actionTarget ? (
+                <>
+                  <Text style={s.actionHeader} numberOfLines={1}>{actionTarget.title}</Text>
+                  <Pressable
+                    onPress={() => {
+                      if (actionTarget) pinMutation.mutate({ id: actionTarget.id, pinned: !actionTarget.is_pinned });
+                      setActionTarget(null);
+                    }}
+                    style={({ pressed }) => [s.actionItem, pressed && { opacity: 0.7 }]}>
+                    <Text style={s.actionItemEmoji}>{actionTarget.is_pinned ? '📍' : '📌'}</Text>
+                    <Text style={s.actionItemLabel}>
+                      {actionTarget.is_pinned ? 'Unpin conversation' : 'Pin to top'}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => setActionTarget(null)}
+                    style={({ pressed }) => [s.actionItem, pressed && { opacity: 0.7 }]}>
+                    <Text style={s.actionItemEmoji}>✕</Text>
+                    <Text style={[s.actionItemLabel, { color: theme.textMuted }]}>Cancel</Text>
+                  </Pressable>
+                </>
+              ) : null}
+            </Pressable>
+          </Pressable>
+        </Modal>
       </View>
     );
   }
@@ -192,37 +322,7 @@ export default function MessagesScreen() {
         {/* Stories strip — sits above the conversation list. */}
         <StoriesStrip onPickStory={setStoryUserId} />
 
-        {query.isLoading ? (
-          <View style={s.center}><ActivityIndicator color={theme.spinner} /></View>
-        ) : query.isError ? (
-          <View style={s.errorCard}>
-            <Text style={s.errorText}>
-              {query.error instanceof Error ? query.error.message : 'Failed to load conversations'}
-            </Text>
-          </View>
-        ) : conversations.length === 0 ? (
-          <View style={s.emptyCard}>
-            <Text style={s.emptyEmoji}>💬</Text>
-            <Text style={s.emptyTitle}>No conversations yet</Text>
-            <Text style={s.emptyBody}>
-              Open a player&apos;s profile and tap Message to start a DM, or join a squad chat
-              from the web for now.
-            </Text>
-          </View>
-        ) : (
-          <View style={{ gap: 4 }}>
-            {conversations.map((c) => (
-              <ConversationRow
-                key={c.id}
-                conversation={c}
-                viewerId={user.id}
-                onPressIn={() => prefetchConversationForIntent({ queryClient, conversationId: c.id })}
-                onPress={() => openConversation(c.id)}
-                onLongPress={() => setActionTarget(c)}
-              />
-            ))}
-          </View>
-        )}
+        {inbox}
       </ScrollView>
 
       <StoryViewer userId={storyUserId} onClose={() => setStoryUserId(null)} />
@@ -273,12 +373,15 @@ function ConversationRow({
   onPress,
   onPressIn,
   onLongPress,
+  active = false,
 }: {
   conversation: ConversationSummary;
   viewerId: string;
   onPress: () => void;
   onPressIn: () => void;
   onLongPress: () => void;
+  /** Highlight the row as the currently-embedded thread (desktop). */
+  active?: boolean;
 }) {
   const s = useThemedStyles(makeRowStyles);
   const { theme } = useTheme();
@@ -298,7 +401,7 @@ function ConversationRow({
       onPressIn={onPressIn}
       onLongPress={onLongPress}
       delayLongPress={280}
-      style={({ pressed }) => [s.row, isUnread && s.rowUnread, pressed && { opacity: 0.85 }]}>
+      style={({ pressed }) => [s.row, isUnread && s.rowUnread, active && s.rowActive, pressed && { opacity: 0.85 }]}>
       <View style={s.avatarWrap}>
         {avatarUrl ? (
           <Image source={{ uri: avatarUrl }} style={s.avatar} contentFit="cover" />
@@ -407,6 +510,48 @@ const makeStyles = (t: ThemeColors) => ({
   },
   actionItemEmoji: { fontSize: 18, width: 24 },
   actionItemLabel: { fontSize: 15, fontWeight: '700' as const, color: t.text },
+
+  // Desktop ("deskX") layout — inbox left rail + center pane.
+  deskRoot: { flex: 1, flexDirection: 'row' as const },
+  deskInbox: {
+    width: 320,
+    borderRightWidth: StyleSheet.hairlineWidth,
+    borderRightColor: t.border,
+    backgroundColor: t.surface,
+  },
+  deskInboxHead: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: t.border,
+  },
+  deskInboxTitle: { fontSize: 16, fontWeight: '800' as const, color: t.text, letterSpacing: 0.4 },
+  deskInboxScroll: { padding: 8, gap: 4 },
+  deskPane: { flex: 1, backgroundColor: t.bg },
+  deskTopBar: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'flex-end' as const,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: t.border,
+  },
+  deskEmpty: {
+    flex: 1,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    padding: 40,
+    gap: 8,
+  },
+  deskEmptyEmoji: { fontSize: 40, marginBottom: 4 },
+  deskEmptyTitle: { fontSize: 18, fontWeight: '800' as const, color: t.text },
+  deskEmptyHint: { fontSize: 13, color: t.textMuted, textAlign: 'center' as const, maxWidth: 360 },
 });
 
 const makeRowStyles = (t: ThemeColors) => ({
@@ -420,6 +565,8 @@ const makeRowStyles = (t: ThemeColors) => ({
     backgroundColor: 'transparent',
   },
   rowUnread: { backgroundColor: t.accentTint },
+  // Embedded mode: highlight the row whose thread is open in the center pane.
+  rowActive: { backgroundColor: t.surfaceMuted, borderWidth: 1, borderColor: t.accent },
   avatarWrap: { width: 48, height: 48, position: 'relative' as const },
   avatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: t.surfaceMuted },
   squadBadge: {

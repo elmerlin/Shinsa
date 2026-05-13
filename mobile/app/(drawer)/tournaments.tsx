@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/contexts/theme-context';
+import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { tournamentsApi } from '@/lib/api';
 import type { ThemeColors } from '@/constants/theme';
@@ -45,6 +46,7 @@ export default function TournamentsScreen() {
   const router = useRouter();
   const { theme } = useTheme();
   const s = useThemedStyles(makeStyles);
+  const { isDesktop } = useBreakpoint();
   const { data, isLoading, isError, error, refetch, isRefetching } = useQuery({
     queryKey: ['tournaments'],
     queryFn: () => tournamentsApi.list(),
@@ -62,6 +64,27 @@ export default function TournamentsScreen() {
         <View style={s.center}>
           <Text style={s.errorText}>{error instanceof Error ? error.message : 'Failed to load tournaments'}</Text>
         </View>
+      ) : isDesktop ? (
+        // Desktop: 3-col card grid. FlatList's numColumns is fine on web but
+        // ScrollView + flex-wrap gives us responsive grid sizing without the
+        // virtualisation overhead — tournament lists are small (~tens).
+        <ScrollView
+          contentContainerStyle={s.deskGrid}
+          refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={theme.spinner} />}>
+          {(data ?? []).length === 0 ? (
+            <Text style={s.empty}>No active tournaments</Text>
+          ) : (
+            (data ?? []).map((item) => (
+              <View key={item.id} style={s.deskCell}>
+                <TournamentRow
+                  s={s}
+                  t={item}
+                  onPress={() => router.push({ pathname: '/tournament/[id]', params: { id: item.id } })}
+                />
+              </View>
+            ))
+          )}
+        </ScrollView>
       ) : (
         <FlatList
           data={data ?? []}
@@ -119,4 +142,22 @@ const makeStyles = (t: ThemeColors) => ({
   center: { flex: 1, alignItems: 'center' as const, justifyContent: 'center' as const, padding: 32 },
   empty: { textAlign: 'center' as const, padding: 32, color: t.textDim },
   errorText: { color: t.danger, textAlign: 'center' as const },
+
+  // Desktop: 3-col card grid.
+  deskGrid: {
+    flexDirection: 'row' as const,
+    flexWrap: 'wrap' as const,
+    gap: 12,
+    padding: 20,
+    paddingBottom: 60,
+  },
+  deskCell: {
+    width: '32%' as const,
+    minWidth: 280,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: t.border,
+    backgroundColor: t.card,
+    overflow: 'hidden' as const,
+  },
 });

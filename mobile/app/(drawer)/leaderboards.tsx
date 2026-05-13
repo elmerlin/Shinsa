@@ -19,6 +19,7 @@ import { TopBar } from '@/components/top-bar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/contexts/theme-context';
+import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { liveApi, piugameApi } from '@/lib/api';
 import { fullImageUrl } from '@/lib/images';
@@ -78,6 +79,7 @@ export default function LeaderboardsScreen() {
   const { user } = useAuth();
   const { theme } = useTheme();
   const s = useThemedStyles(makeStyles);
+  const { isDesktop } = useBreakpoint();
 
   // Query-string hints from deep-link surfaces (e.g. song page → Over 20 chart)
   const hints = useLocalSearchParams() as unknown as QueryHints;
@@ -105,7 +107,7 @@ export default function LeaderboardsScreen() {
   }
 
   return (
-    <View style={s.container}>
+    <View style={[s.container, isDesktop && s.containerDesktop]}>
       <View style={[s.topBar, { paddingTop: insets.top + 8 }]}>
         <TopBar />
       </View>
@@ -162,6 +164,7 @@ function PumbilityTab() {
   const { user } = useAuth();
   const { theme } = useTheme();
   const s = useThemedStyles(makeStyles);
+  const { isDesktop } = useBreakpoint();
   const [metric, setMetric] = useState<PumbilityMetric>('overall');
   const [page, setPage] = useState(1);
 
@@ -174,56 +177,49 @@ function PumbilityTab() {
   const totalPages = Math.max(1, query.data?.total_pages || 1);
   const currentUser = query.data?.current_user;
 
-  return (
-    <ScrollView
-      contentContainerStyle={[s.tabBody, { paddingBottom: insets.bottom + 24 }]}
-      refreshControl={
-        <RefreshControl
-          refreshing={query.isRefetching}
-          onRefresh={() => query.refetch()}
-          tintColor={theme.spinner}
-        />
-      }>
-      <View style={s.metricRow}>
-        <Pressable
-          onPress={() => { setMetric('overall'); setPage(1); }}
-          style={({ pressed }) => [
-            s.metricChip,
-            metric === 'overall' && s.metricChipActive,
-            pressed && metric !== 'overall' && { opacity: 0.7 },
-          ]}>
-          <Text style={[s.metricChipText, metric === 'overall' && s.metricChipTextActive]}>Overall</Text>
-        </Pressable>
-        <Pressable
-          onPress={() => { setMetric('singles'); setPage(1); }}
-          style={({ pressed }) => [
-            s.metricChip,
-            metric === 'singles' && s.metricChipActive,
-            pressed && metric !== 'singles' && { opacity: 0.7 },
-          ]}>
-          <Text style={[s.metricChipText, metric === 'singles' && s.metricChipTextActive]}>Singles</Text>
-        </Pressable>
-      </View>
+  const metricRow = (
+    <View style={s.metricRow}>
+      <Pressable
+        onPress={() => { setMetric('overall'); setPage(1); }}
+        style={({ pressed }) => [
+          s.metricChip,
+          metric === 'overall' && s.metricChipActive,
+          pressed && metric !== 'overall' && { opacity: 0.7 },
+        ]}>
+        <Text style={[s.metricChipText, metric === 'overall' && s.metricChipTextActive]}>Overall</Text>
+      </Pressable>
+      <Pressable
+        onPress={() => { setMetric('singles'); setPage(1); }}
+        style={({ pressed }) => [
+          s.metricChip,
+          metric === 'singles' && s.metricChipActive,
+          pressed && metric !== 'singles' && { opacity: 0.7 },
+        ]}>
+        <Text style={[s.metricChipText, metric === 'singles' && s.metricChipTextActive]}>Singles</Text>
+      </Pressable>
+    </View>
+  );
 
-      {/* My-rank pinned card */}
-      {currentUser ? (
-        <View style={s.myRankCard}>
-          <Text style={s.myRankLabel}>YOUR RANK</Text>
-          <View style={s.myRankRow}>
-            <Text style={s.myRankNum}>#{currentUser.sort_rank}</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={s.myRankName} numberOfLines={1}>{currentUser.username || user?.username}</Text>
-              <Text style={s.myRankMeta}>
-                {metric === 'singles' ? 'S. Pumbility' : 'Pumbility'} {formatNumber(metric === 'singles' ? currentUser.singles_pumbility : currentUser.overall_pumbility)}
-              </Text>
-            </View>
-            {currentUser.global_rank_delta ? (
-              <RankDelta delta={currentUser.global_rank_delta} />
-            ) : null}
-          </View>
+  const myRankCard = currentUser ? (
+    <View style={s.myRankCard}>
+      <Text style={s.myRankLabel}>YOUR RANK</Text>
+      <View style={s.myRankRow}>
+        <Text style={s.myRankNum}>#{currentUser.sort_rank}</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={s.myRankName} numberOfLines={1}>{currentUser.username || user?.username}</Text>
+          <Text style={s.myRankMeta}>
+            {metric === 'singles' ? 'S. Pumbility' : 'Pumbility'} {formatNumber(metric === 'singles' ? currentUser.singles_pumbility : currentUser.overall_pumbility)}
+          </Text>
         </View>
-      ) : null}
+        {currentUser.global_rank_delta ? (
+          <RankDelta delta={currentUser.global_rank_delta} />
+        ) : null}
+      </View>
+    </View>
+  ) : null;
 
+  const tableBody = (
+    <>
       {query.isLoading ? (
         <View style={s.center}><ActivityIndicator color={theme.spinner} /></View>
       ) : query.isError ? (
@@ -238,7 +234,6 @@ function PumbilityTab() {
         </View>
       )}
 
-      {/* Pagination */}
       {totalPages > 1 ? (
         <View style={s.paginationRow}>
           <Pressable
@@ -258,6 +253,41 @@ function PumbilityTab() {
           </Pressable>
         </View>
       ) : null}
+    </>
+  );
+
+  if (isDesktop) {
+    return (
+      <View style={s.deskTabBody}>
+        <ScrollView
+          style={s.deskTable}
+          contentContainerStyle={s.tabBody}
+          refreshControl={<RefreshControl refreshing={query.isRefetching} onRefresh={() => query.refetch()} tintColor={theme.spinner} />}>
+          {metricRow}
+          {tableBody}
+        </ScrollView>
+        <View style={s.deskRail}>
+          {myRankCard ?? (
+            <Text style={s.emptyText}>Sign in to see your rank.</Text>
+          )}
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <ScrollView
+      contentContainerStyle={[s.tabBody, { paddingBottom: insets.bottom + 24 }]}
+      refreshControl={
+        <RefreshControl
+          refreshing={query.isRefetching}
+          onRefresh={() => query.refetch()}
+          tintColor={theme.spinner}
+        />
+      }>
+      {metricRow}
+      {myRankCard}
+      {tableBody}
     </ScrollView>
   );
 }
@@ -621,6 +651,7 @@ function HopTab() {
   const { user } = useAuth();
   const { theme } = useTheme();
   const s = useThemedStyles(makeStyles);
+  const { isDesktop } = useBreakpoint();
 
   const query = useQuery({
     queryKey: ['leaderboards-hop'],
@@ -629,16 +660,12 @@ function HopTab() {
 
   const rows = query.data?.rows ?? [];
 
-  return (
-    <ScrollView
-      contentContainerStyle={[s.tabBody, { paddingBottom: insets.bottom + 24 }]}
-      refreshControl={
-        <RefreshControl
-          refreshing={query.isRefetching}
-          onRefresh={() => query.refetch()}
-          tintColor={theme.spinner}
-        />
-      }>
+  // The HoP endpoint doesn't ship a separate viewer record — derive it from
+  // the visible rows so the rail card matches what's in the table.
+  const viewerRow = user?.id ? rows.find((r) => r.user_id === user.id) : undefined;
+
+  const body = (
+    <>
       <Text style={s.subtitleText}>
         Best Hour of Power attempts — total rating earned in a 60-minute window.
       </Text>
@@ -656,6 +683,53 @@ function HopTab() {
           ))}
         </View>
       )}
+    </>
+  );
+
+  if (isDesktop) {
+    return (
+      <View style={s.deskTabBody}>
+        <ScrollView
+          style={s.deskTable}
+          contentContainerStyle={s.tabBody}
+          refreshControl={<RefreshControl refreshing={query.isRefetching} onRefresh={() => query.refetch()} tintColor={theme.spinner} />}>
+          {body}
+        </ScrollView>
+        <View style={s.deskRail}>
+          {viewerRow ? (
+            <View style={s.myRankCard}>
+              <Text style={s.myRankLabel}>YOUR RUN</Text>
+              <View style={s.myRankRow}>
+                <Text style={s.myRankNum}>#{viewerRow.rank}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.myRankName} numberOfLines={1}>{viewerRow.username}</Text>
+                  <Text style={s.myRankMeta}>
+                    {formatNumber(viewerRow.best_total_rating_points)} RP
+                  </Text>
+                </View>
+              </View>
+            </View>
+          ) : user ? (
+            <Text style={s.emptyText}>Complete an HoP run to appear here.</Text>
+          ) : (
+            <Text style={s.emptyText}>Sign in to track your best run.</Text>
+          )}
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <ScrollView
+      contentContainerStyle={[s.tabBody, { paddingBottom: insets.bottom + 24 }]}
+      refreshControl={
+        <RefreshControl
+          refreshing={query.isRefetching}
+          onRefresh={() => query.refetch()}
+          tintColor={theme.spinner}
+        />
+      }>
+      {body}
     </ScrollView>
   );
 }
@@ -818,6 +892,10 @@ function ErrorBox({ message }: { message: string }) {
 // ---------------------------------------------------------------------------
 const makeStyles = (t: ThemeColors) => ({
   container: { flex: 1, backgroundColor: t.bg },
+  // Desktop: cap reading width and center. Full master-table + your-rank rail
+  // is a follow-up; this gives the screen a sensible feel above 960 px while
+  // the deeper layout lands.
+  containerDesktop: { maxWidth: 960, alignSelf: 'center' as const, width: '100%' as const },
   topBar: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
@@ -849,6 +927,16 @@ const makeStyles = (t: ThemeColors) => ({
   tabChipTextActive: { color: t.accent },
 
   tabBody: { paddingHorizontal: 12, gap: 10 },
+  // Desktop: tab body becomes 2-col with persistent your-rank rail.
+  deskTabBody: { flex: 1, flexDirection: 'row' as const },
+  deskTable: { flex: 1 },
+  deskRail: {
+    width: 320,
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderLeftColor: t.border,
+    backgroundColor: t.surface,
+    padding: 12,
+  },
 
   metricRow: {
     flexDirection: 'row' as const,
