@@ -16,7 +16,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { HamburgerButton } from '@/components/hamburger-button';
+import { TopBar } from '@/components/top-bar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme, type ThemePreference } from '@/contexts/theme-context';
@@ -565,8 +565,7 @@ export default function AccountScreen() {
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={[s.scroll, { paddingTop: insets.top + 12 }]} keyboardShouldPersistTaps="handled">
           <View style={s.topBar}>
-            <HamburgerButton />
-            <Text style={s.heading}>My Account</Text>
+            <TopBar />
           </View>
 
           <PiugameLinkSection s={s} userId={user.id} />

@@ -16,7 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { DefaultAvatar } from '@/components/default-avatar';
 import { GradeChip } from '@/components/grade-chip';
-import { HamburgerButton } from '@/components/hamburger-button';
+import { TopBar } from '@/components/top-bar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { ChartScoresSheet } from '@/components/wc-chart-scores-sheet';
 import { useAuth } from '@/contexts/auth-context';
@@ -201,16 +201,17 @@ export default function WeeklyChallengesScreen() {
   return (
     <View style={s.container}>
       <View style={[s.topBar, { paddingTop: insets.top + 8 }]}>
-        <HamburgerButton />
-        <Text style={s.heading}>Weekly</Text>
-        <View style={s.topBarSpacer} />
-        <Pressable
-          onPress={() => setPickerOpen(true)}
-          hitSlop={6}
-          style={({ pressed }) => [s.weekPickerBtn, pressed && { opacity: 0.7 }]}>
-          <Text style={s.weekPickerText}>{week?.week_key ?? 'Loading…'}</Text>
-          <IconSymbol name="chevron.right" size={14} color={theme.textMuted} />
-        </Pressable>
+        <TopBar
+          rightExtra={
+            <Pressable
+              onPress={() => setPickerOpen(true)}
+              hitSlop={6}
+              style={({ pressed }) => [s.weekPickerBtn, pressed && { opacity: 0.7 }]}>
+              <Text style={s.weekPickerText}>{week?.week_key ?? 'Loading…'}</Text>
+              <IconSymbol name="chevron.right" size={14} color={theme.textMuted} />
+            </Pressable>
+          }
+        />
       </View>
 
       <ScrollView

@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DefaultAvatar } from '@/components/default-avatar';
-import { HamburgerButton } from '@/components/hamburger-button';
+import { TopBar } from '@/components/top-bar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useTheme } from '@/contexts/theme-context';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
@@ -46,8 +46,7 @@ export default function ShoesScreen() {
   return (
     <View style={s.container}>
       <View style={[s.topBar, { paddingTop: insets.top + 8 }]}>
-        <HamburgerButton />
-        <Text style={s.heading}>Shoes</Text>
+        <TopBar />
       </View>
 
       <ScrollView

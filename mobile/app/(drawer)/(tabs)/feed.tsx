@@ -10,7 +10,7 @@ import { CommentsSheet } from '@/components/comments-sheet';
 import { DefaultAvatar } from '@/components/default-avatar';
 import { SystemAvatar } from '@/components/system-avatar';
 import { GradeChip } from '@/components/grade-chip';
-import { HamburgerButton } from '@/components/hamburger-button';
+import { TopBar } from '@/components/top-bar';
 import { LiveSessionCard } from '@/components/live-session-card';
 import { PlateBadge } from '@/components/plate-badge';
 import { ReplayModal } from '@/components/replay-modal';
@@ -777,14 +777,16 @@ export default function FeedScreen() {
   return (
     <View style={s.container}>
       <View style={[s.header, { paddingTop: insets.top + 12 }]}>
-        <HamburgerButton />
-        <Text style={s.heading}>Feed</Text>
-        <Pressable
-          onPress={() => router.push('/posts')}
-          hitSlop={12}
-          style={({ pressed }) => [s.composeBtn, pressed && { opacity: 0.6 }]}>
-          <IconSymbol name="plus" size={22} color={theme.accent} />
-        </Pressable>
+        <TopBar
+          rightExtra={
+            <Pressable
+              onPress={() => router.push('/posts')}
+              hitSlop={12}
+              style={({ pressed }) => [s.composeBtn, pressed && { opacity: 0.6 }]}>
+              <IconSymbol name="plus" size={22} color={theme.accent} />
+            </Pressable>
+          }
+        />
       </View>
 
       {isLoading ? (

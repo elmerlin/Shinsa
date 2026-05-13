@@ -5,7 +5,7 @@ import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, Vi
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChartBadge } from '@/components/chart-badge';
 import { ChartJacket } from '@/components/chart-jacket';
-import { HamburgerButton } from '@/components/hamburger-button';
+import { TopBar } from '@/components/top-bar';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/contexts/theme-context';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
@@ -96,8 +96,7 @@ export default function SongsScreen() {
   return (
     <View style={s.container}>
       <View style={[s.header, { paddingTop: insets.top + 12 }]}>
-        <HamburgerButton />
-        <Text style={s.heading}>Songs</Text>
+        <TopBar />
       </View>
       <View style={s.searchRow}>
         <TextInput

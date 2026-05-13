@@ -14,7 +14,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CreateLiveSessionSheet } from '@/components/create-live-session-sheet';
 import { DefaultAvatar } from '@/components/default-avatar';
-import { HamburgerButton } from '@/components/hamburger-button';
+import { TopBar } from '@/components/top-bar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/contexts/theme-context';
@@ -70,18 +70,17 @@ export default function LiveScreen() {
   return (
     <View style={s.container}>
       <View style={[s.topBar, { paddingTop: insets.top + 8 }]}>
-        <HamburgerButton />
-        <Text style={s.heading}>Live</Text>
-        <View style={s.topBarSpacer} />
-        {user ? (
-          <Pressable
-            onPress={() => setCreateOpen(true)}
-            hitSlop={6}
-            style={({ pressed }) => [s.startBtn, pressed && { opacity: 0.85 }]}>
-            <View style={s.startBtnPulse} />
-            <Text style={s.startBtnText}>GO LIVE</Text>
-          </Pressable>
-        ) : null}
+        <TopBar
+          rightExtra={user ? (
+            <Pressable
+              onPress={() => setCreateOpen(true)}
+              hitSlop={6}
+              style={({ pressed }) => [s.startBtn, pressed && { opacity: 0.85 }]}>
+              <View style={s.startBtnPulse} />
+              <Text style={s.startBtnText}>GO LIVE</Text>
+            </Pressable>
+          ) : null}
+        />
       </View>
 
       <ScrollView

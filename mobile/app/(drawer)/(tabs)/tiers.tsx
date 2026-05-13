@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ViewShot, { captureRef as captureViewRef } from 'react-native-view-shot';
-import { HamburgerButton } from '@/components/hamburger-button';
+import { TopBar } from '@/components/top-bar';
 import { TierGradeOverlay } from '@/components/tier-grade-overlay';
 import { TierSettingsSheet } from '@/components/tier-settings-sheet';
 import { IconSymbol } from '@/components/ui/icon-symbol';
@@ -248,24 +248,26 @@ export default function TiersScreen() {
   return (
     <View style={s.container}>
       <View style={[s.topBar, { paddingTop: insets.top + 8 }]}>
-        <HamburgerButton />
-        <Text style={s.heading}>Tiers</Text>
-        <Pressable
-          onPress={handleCapture}
-          disabled={captureBusy || tiersForRender.length === 0}
-          hitSlop={8}
-          style={({ pressed }) => [
-            s.iconBtn,
-            pressed && { opacity: 0.6 },
-            (captureBusy || tiersForRender.length === 0) && { opacity: 0.4 },
-          ]}
-          accessibilityLabel="Share tier image">
-          {captureBusy ? (
-            <ActivityIndicator size="small" color={theme.textMuted} />
-          ) : (
-            <IconSymbol name="square.and.arrow.up" size={22} color={theme.textMuted} />
-          )}
-        </Pressable>
+        <TopBar
+          rightExtra={
+            <Pressable
+              onPress={handleCapture}
+              disabled={captureBusy || tiersForRender.length === 0}
+              hitSlop={8}
+              style={({ pressed }) => [
+                s.iconBtn,
+                pressed && { opacity: 0.6 },
+                (captureBusy || tiersForRender.length === 0) && { opacity: 0.4 },
+              ]}
+              accessibilityLabel="Share tier image">
+              {captureBusy ? (
+                <ActivityIndicator size="small" color={theme.textMuted} />
+              ) : (
+                <IconSymbol name="square.and.arrow.up" size={22} color={theme.textMuted} />
+              )}
+            </Pressable>
+          }
+        />
       </View>
 
       <View style={s.pickerCard}>

@@ -32,7 +32,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DefaultAvatar } from '@/components/default-avatar';
-import { HamburgerButton } from '@/components/hamburger-button';
+import { TopBar } from '@/components/top-bar';
 import { StoriesStrip } from '@/components/messages/stories-strip';
 import { StoryViewer } from '@/components/messages/story-viewer';
 import { IconSymbol } from '@/components/ui/icon-symbol';
@@ -159,9 +159,7 @@ export default function MessagesScreen() {
     return (
       <View style={s.container}>
         <View style={[s.topBar, { paddingTop: insets.top + 8 }]}>
-          <HamburgerButton />
-          <Text style={s.heading}>Messages</Text>
-          <View style={{ flex: 1 }} />
+          <TopBar />
         </View>
         <View style={s.centered}>
           <Text style={s.emptyTitle}>Sign in to see your messages</Text>
@@ -173,14 +171,13 @@ export default function MessagesScreen() {
   return (
     <View style={s.container}>
       <View style={[s.topBar, { paddingTop: insets.top + 8 }]}>
-        <HamburgerButton />
-        <Text style={s.heading}>Messages</Text>
-        {totalUnread > 0 ? (
-          <View style={s.totalBadge}>
-            <Text style={s.totalBadgeText}>{totalUnread > 99 ? '99+' : totalUnread}</Text>
-          </View>
-        ) : null}
-        <View style={{ flex: 1 }} />
+        <TopBar
+          rightExtra={totalUnread > 0 ? (
+            <View style={s.totalBadge}>
+              <Text style={s.totalBadgeText}>{totalUnread > 99 ? '99+' : totalUnread}</Text>
+            </View>
+          ) : null}
+        />
       </View>
 
       <ScrollView

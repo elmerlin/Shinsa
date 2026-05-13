@@ -16,7 +16,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { HamburgerButton } from '@/components/hamburger-button';
+import { TopBar } from '@/components/top-bar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/contexts/theme-context';
@@ -161,8 +161,7 @@ export default function PostsScreen() {
       style={s.container}>
       <ScrollView contentContainerStyle={[s.scroll, { paddingTop: insets.top + 12 }]} keyboardShouldPersistTaps="handled">
         <View style={s.topBar}>
-          <HamburgerButton />
-          <Text style={s.heading}>Posts</Text>
+          <TopBar />
         </View>
 
         <View style={s.composer}>

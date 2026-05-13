@@ -18,7 +18,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DefaultAvatar } from '@/components/default-avatar';
-import { HamburgerButton } from '@/components/hamburger-button';
+import { TopBar } from '@/components/top-bar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useTheme } from '@/contexts/theme-context';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
@@ -214,16 +214,17 @@ export default function ListsScreen() {
   return (
     <View style={s.container}>
       <View style={[s.topBar, { paddingTop: insets.top + 8 }]}>
-        <HamburgerButton />
-        <Text style={s.heading}>Lists</Text>
-        <View style={s.topBarSpacer} />
-        <Pressable
-          onPress={openCreate}
-          hitSlop={6}
-          style={({ pressed }) => [s.headerCreate, pressed && { opacity: 0.7 }]}
-          accessibilityLabel="New list">
-          <IconSymbol name="plus" size={20} color={theme.bg} />
-        </Pressable>
+        <TopBar
+          rightExtra={
+            <Pressable
+              onPress={openCreate}
+              hitSlop={6}
+              style={({ pressed }) => [s.headerCreate, pressed && { opacity: 0.7 }]}
+              accessibilityLabel="New list">
+              <IconSymbol name="plus" size={20} color={theme.bg} />
+            </Pressable>
+          }
+        />
       </View>
 
       <ScrollView

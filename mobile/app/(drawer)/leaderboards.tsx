@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DefaultAvatar } from '@/components/default-avatar';
-import { HamburgerButton } from '@/components/hamburger-button';
+import { TopBar } from '@/components/top-bar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/contexts/theme-context';
@@ -95,9 +95,7 @@ export default function LeaderboardsScreen() {
     return (
       <View style={s.container}>
         <View style={[s.topBar, { paddingTop: insets.top + 8 }]}>
-          <HamburgerButton />
-          <Text style={s.heading}>Leaderboards</Text>
-          <View style={{ flex: 1 }} />
+          <TopBar />
         </View>
         <View style={s.centered}>
           <Text style={s.emptyTitle}>Sign in to see leaderboards</Text>
@@ -109,9 +107,7 @@ export default function LeaderboardsScreen() {
   return (
     <View style={s.container}>
       <View style={[s.topBar, { paddingTop: insets.top + 8 }]}>
-        <HamburgerButton />
-        <Text style={s.heading}>Leaderboards</Text>
-        <View style={{ flex: 1 }} />
+        <TopBar />
       </View>
 
       {/* Tab strip — wrapped in a fixed-height View because RN Web's flex

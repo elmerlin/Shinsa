@@ -10,8 +10,7 @@ import { LiveNowStrip } from '@/components/dashboard/live-now-strip';
 import { NoticeBoard } from '@/components/dashboard/notice-board';
 import { SongOfWeekStrip } from '@/components/dashboard/song-of-week-strip';
 import { WeeklyChallengesSummary } from '@/components/dashboard/weekly-challenges-summary';
-import { HamburgerButton } from '@/components/hamburger-button';
-import { PumpShinsaLogo } from '@/components/pump-shinsa-logo';
+import { TopBar } from '@/components/top-bar';
 import { QuickNavButton } from '@/components/quick-nav-button';
 import { useTheme } from '@/contexts/theme-context';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
@@ -203,13 +202,7 @@ export default function HomeScreen() {
       <ScrollView
         contentContainerStyle={[s.scroll, { paddingTop: insets.top + 16 }]}
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetchAll} tintColor={theme.spinner} />}>
-        <View style={s.brandRow}>
-          <HamburgerButton />
-          <View style={s.brandCenter}>
-            <PumpShinsaLogo variant="horizontal" size={40} />
-          </View>
-          <View style={s.brandSpacer} />
-        </View>
+        <TopBar />
 
         <View style={s.quickNav}>
           <QuickNavButton label="Live" href="/live" icon="video.fill"
@@ -274,9 +267,6 @@ export default function HomeScreen() {
 const makeStyles = (t: ThemeColors) => ({
   container: { flex: 1, backgroundColor: t.bg },
   scroll: { paddingHorizontal: 16, paddingBottom: 80, gap: 24 },
-  brandRow: { flexDirection: 'row' as const, alignItems: 'center' as const, marginBottom: 0, paddingHorizontal: 4 },
-  brandCenter: { flex: 1, alignItems: 'center' as const },
-  brandSpacer: { width: 32 },
   quickNav: { flexDirection: 'row' as const, gap: 8, paddingTop: 4 },
   center: { padding: 32, alignItems: 'center' as const },
   errorBox: {

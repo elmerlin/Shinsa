@@ -84,7 +84,49 @@ export function createAuthApi(client: ApiClient) {
         body: { endpoint },
       });
     },
+
+    // --- Notifications (the bell icon in the top-right) ---
+
+    /** Pull the viewer's notification list + unread/invitation counts.
+     *  Server caps the list at 50 most-recent, excludes DMs (those count
+     *  toward the messages icon instead). */
+    getNotifications() {
+      return client.request<{
+        notifications: NotificationItem[];
+        invitation_count: number;
+        unread_count: number;
+      }>(`/api/auth/notifications`);
+    },
+    markNotificationRead(id: string | number) {
+      return client.request<{ success: boolean }>(`/api/auth/notifications/${encodeURIComponent(String(id))}/read`, {
+        method: 'PUT',
+      });
+    },
+    markAllNotificationsRead() {
+      return client.request<{ success: boolean }>(`/api/auth/notifications/read-all`, {
+        method: 'PUT',
+      });
+    },
+    dismissNotification(id: string | number) {
+      return client.request<{ success: boolean }>(`/api/auth/notifications/${encodeURIComponent(String(id))}`, {
+        method: 'DELETE',
+      });
+    },
   };
+}
+
+/** Mirror of the `user_notifications` row shape returned by
+ *  `GET /api/auth/notifications`. `read` is stored as 0/1 in SQLite, so
+ *  consumers should coerce truthiness rather than strict-compare. */
+export interface NotificationItem {
+  id: number;
+  user_id: string;
+  type: string;
+  title: string;
+  message?: string | null;
+  link?: string | null;
+  read: number | boolean;
+  created_at: string;
 }
 
 /** Minimal subset of the browser's `PushSubscriptionJSON` we forward to

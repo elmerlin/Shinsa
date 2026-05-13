@@ -1,6 +1,6 @@
 import { Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { HamburgerButton } from '@/components/hamburger-button';
+import { TopBar } from '@/components/top-bar';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import type { ThemeColors } from '@/constants/theme';
 
@@ -19,8 +19,7 @@ export function ComingSoon({ title, body = 'Coming soon.' }: Props) {
   return (
     <View style={s.container}>
       <View style={[s.header, { paddingTop: insets.top + 8 }]}>
-        <HamburgerButton />
-        <Text style={s.heading}>{title}</Text>
+        <TopBar />
       </View>
       <View style={s.empty}>
         <Text style={s.emptyTitle}>{title}</Text>

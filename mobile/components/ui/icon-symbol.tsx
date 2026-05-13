@@ -55,6 +55,8 @@ const MAPPING = {
   'info.circle': 'info-outline',
   'questionmark.circle': 'help-outline',
   'square.and.arrow.up': 'ios-share',
+  // Used by the new top-right icon row (messages + bell + hamburger).
+  'message.fill': 'chat',
 } as IconMapping;
 
 export function IconSymbol({

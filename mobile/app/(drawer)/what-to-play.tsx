@@ -18,7 +18,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { HamburgerButton } from '@/components/hamburger-button';
+import { TopBar } from '@/components/top-bar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/contexts/theme-context';
@@ -1016,9 +1016,7 @@ export default function WhatToPlayScreen() {
     return (
       <View style={s.container}>
         <View style={[s.topBar, { paddingTop: insets.top + 8 }]}>
-          <HamburgerButton />
-          <Text style={s.heading}>What to Play</Text>
-          <View style={{ flex: 1 }} />
+          <TopBar />
         </View>
         <View style={s.centered}>
           <Text style={s.emptyTitle}>Sign in to see recommendations</Text>
@@ -1030,18 +1028,19 @@ export default function WhatToPlayScreen() {
   return (
     <View style={s.container}>
       <View style={[s.topBar, { paddingTop: insets.top + 8 }]}>
-        <HamburgerButton />
-        <Text style={s.heading}>What to Play</Text>
-        <View style={{ flex: 1 }} />
-        <Pressable
-          onPress={handleRefresh}
-          disabled={refreshSpinning || recsQuery.isFetching}
-          hitSlop={6}
-          style={({ pressed }) => [s.refreshBtn, pressed && { opacity: 0.7 }]}>
-          <Animated.View style={{ transform: [{ rotate: refreshTransform }] }}>
-            <IconSymbol name="arrow.up" size={16} color={theme.text} />
-          </Animated.View>
-        </Pressable>
+        <TopBar
+          rightExtra={
+            <Pressable
+              onPress={handleRefresh}
+              disabled={refreshSpinning || recsQuery.isFetching}
+              hitSlop={6}
+              style={({ pressed }) => [s.refreshBtn, pressed && { opacity: 0.7 }]}>
+              <Animated.View style={{ transform: [{ rotate: refreshTransform }] }}>
+                <IconSymbol name="arrow.up" size={16} color={theme.text} />
+              </Animated.View>
+            </Pressable>
+          }
+        />
       </View>
 
       <ScrollView

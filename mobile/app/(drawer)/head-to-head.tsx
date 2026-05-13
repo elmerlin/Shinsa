@@ -19,7 +19,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Defs, Line, LinearGradient as SvgGradient, Path, Stop, Text as SvgText } from 'react-native-svg';
 import { DefaultAvatar } from '@/components/default-avatar';
-import { HamburgerButton } from '@/components/hamburger-button';
+import { TopBar } from '@/components/top-bar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/contexts/theme-context';
@@ -576,9 +576,7 @@ export default function HeadToHeadScreen() {
     return (
       <View style={s.container}>
         <View style={[s.topBar, { paddingTop: insets.top + 8 }]}>
-          <HamburgerButton />
-          <Text style={s.heading}>Rival</Text>
-          <View style={{ flex: 1 }} />
+          <TopBar />
         </View>
         <View style={s.centered}>
           <Text style={s.emptyTitle}>Sign in to scout your rivals</Text>
@@ -592,18 +590,17 @@ export default function HeadToHeadScreen() {
   return (
     <View style={s.container}>
       <View style={[s.topBar, { paddingTop: insets.top + 8 }]}>
-        <HamburgerButton />
-        <Text style={s.heading}>Rival</Text>
-        <View style={{ flex: 1 }} />
-        {opponent ? (
-          <Pressable
-            onPress={() => setPickerOpen(true)}
-            hitSlop={6}
-            style={({ pressed }) => [s.swapBtn, pressed && { opacity: 0.7 }]}>
-            <IconSymbol name="arrow.up.arrow.down" size={16} color={theme.text} />
-            <Text style={s.swapBtnText}>Swap</Text>
-          </Pressable>
-        ) : null}
+        <TopBar
+          rightExtra={opponent ? (
+            <Pressable
+              onPress={() => setPickerOpen(true)}
+              hitSlop={6}
+              style={({ pressed }) => [s.swapBtn, pressed && { opacity: 0.7 }]}>
+              <IconSymbol name="arrow.up.arrow.down" size={16} color={theme.text} />
+              <Text style={s.swapBtnText}>Swap</Text>
+            </Pressable>
+          ) : null}
+        />
       </View>
 
       <ScrollView

@@ -135,12 +135,15 @@ export default function DrawerLayout() {
       drawerContent={(props) => <DrawerContent {...props} />}
       screenOptions={{
         headerShown: false,
-        // 260 fits the longest label ("Weekly Challenges" + optional SOON
-        // badge) with a comfortable margin while leaving more of the page
-        // visible behind the drawer. Don't shrink further without re-checking
-        // the longest label after a translation pass.
-        drawerStyle: { backgroundColor: theme.surface, width: 260 },
+        // 220px fits the longest label ("Weekly Challenges" + optional
+        // SOON badge) with the labels living a touch closer to the icons.
+        // Anything narrower would clip the badge or wrap the longer
+        // entries — re-check after a translation pass.
+        drawerStyle: { backgroundColor: theme.surface, width: 220 },
         drawerType: 'front',
+        // Hamburger lives top-right now (see top-bar.tsx) so the drawer
+        // slides in from the same side — keeps swipe-to-open intuitive.
+        drawerPosition: 'right',
         sceneStyle: { backgroundColor: theme.bg },
       }}>
       <Drawer.Screen name="(tabs)" options={{ drawerItemStyle: { display: 'none' } }} />
