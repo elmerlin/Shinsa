@@ -452,18 +452,24 @@ function UpscoreCard({ item, onPump, onComments, onShare, onJacket, onScore, onR
                   <IconSymbol name="play.rectangle.fill" size={14} color="#7dd3fc" />
                 </Pressable>
               ) : null}
+              {/* Score column — stacked vertically so the long numbers
+                  (1,000,000 SSS+) don't overflow the card on a phone-
+                  sized layout. New score on top (most prominent), prev
+                  score muted below, delta as a green chip at the
+                  bottom. */}
               <Pressable
                 onPress={() => onScore({ ...u, username: item.username, avatar: item.avatar as string | undefined })}
                 hitSlop={4}
                 style={({ pressed }) => [s.scoresCol, pressed && { opacity: 0.7 }]}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                  <Text style={s.scoreNumOld}>{fmtNum(u.old_score)}</Text>
-                  <GradeChip grade={u.old_grade} score={u.old_score ?? 0} size="xs" />
-                  <Text style={s.arrow}>→</Text>
-                  <Text style={s.scoreNum}>{fmtNum(u.new_score)}</Text>
+                <View style={s.scoreLineNew}>
+                  <Text style={s.scoreNum} numberOfLines={1}>{fmtNum(u.new_score)}</Text>
                   <GradeChip grade={u.new_grade} score={u.new_score ?? 0} size="xs" />
                 </View>
-                <Text style={s.delta}>+{fmtNum(delta)}</Text>
+                <View style={s.scoreLineOld}>
+                  <Text style={s.scoreNumOld} numberOfLines={1}>prev {fmtNum(u.old_score)}</Text>
+                  <GradeChip grade={u.old_grade} score={u.old_score ?? 0} size="xs" />
+                </View>
+                {delta > 0 ? <Text style={s.delta}>+{fmtNum(delta)}</Text> : null}
               </Pressable>
             </View>
           );
@@ -972,14 +978,17 @@ const makeStyles = (t: ThemeColors) => ({
   upscoreRow: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    gap: 8,
+    gap: 6,
     paddingVertical: 6,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: t.border,
   },
   entryJacket: { width: 40, height: 40, borderRadius: 6, backgroundColor: t.surfaceMuted },
   jacketFallback: {},
-  entryMain: { flex: 1, minWidth: 0, gap: 4 },
+  // `flexShrink: 1` so the title column gives way to the score column
+  // when the score side hits its content width; `minWidth: 0` is the
+  // RN/web flex-overflow escape hatch.
+  entryMain: { flex: 1, minWidth: 0, flexShrink: 1, gap: 4 },
   songTitle: { fontSize: 13, fontWeight: '700' as const, color: t.text },
   metaChipsRow: { flexDirection: 'row' as const, gap: 4, alignItems: 'center' as const, flexWrap: 'wrap' as const },
   modeChip: {
@@ -1024,7 +1033,18 @@ const makeStyles = (t: ThemeColors) => ({
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
   },
-  scoresCol: { alignItems: 'flex-end' as const, gap: 2, minWidth: 110 },
+  // The score column is fixed-width on the right; the song title column
+  // shrinks to fit. maxWidth caps how much horizontal real estate the
+  // score block can claim so it never blows past the card's right edge.
+  scoresCol: {
+    alignItems: 'flex-end' as const,
+    gap: 2,
+    width: 130,
+    maxWidth: 130,
+    flexShrink: 0,
+  },
+  scoreLineNew: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4 },
+  scoreLineOld: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, opacity: 0.7 },
   scoreNum: { fontSize: 13, fontWeight: '800' as const, color: t.text, fontVariant: ['tabular-nums' as const] },
   scoreNumOld: { fontSize: 10, color: t.textMuted, fontVariant: ['tabular-nums' as const] },
   arrow: { fontSize: 10, color: t.textDim },
