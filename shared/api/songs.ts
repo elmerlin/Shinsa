@@ -213,7 +213,110 @@ export function createSongsApi(client: ApiClient) {
         { method: 'PUT', body: payload },
       );
     },
+
+    /** Catalog of all known PIU Center skills + per-skill chart counts +
+     *  coverage totals (S7+ / D10+). Used as the index for the Skills page. */
+    skillsMeta() {
+      return client.request<SkillsMetaResponse>(`/api/songs/skills/meta`);
+    },
+
+    /** Charts tagged with a single skill, with the user's best score per chart
+     *  (when `user_id` is set or auth header is present). Server groups +
+     *  filters by mode/level + sort. */
+    skillCharts(skillSlug: string, params: SkillChartsParams = {}) {
+      const search = new URLSearchParams();
+      if (params.mode) search.set('mode', params.mode);
+      if (params.min_level != null && String(params.min_level) !== '') search.set('min_level', String(params.min_level));
+      if (params.max_level != null && String(params.max_level) !== '') search.set('max_level', String(params.max_level));
+      if (params.sort) search.set('sort', params.sort);
+      if (params.user_id) search.set('user_id', params.user_id);
+      const qs = search.toString();
+      return client.request<SkillChartsResponse>(`/api/songs/skill/${encodeURIComponent(skillSlug)}${qs ? `?${qs}` : ''}`);
+    },
+
+    /** Lightweight info-only payload for a skill (description + chart_count).
+     *  Cheaper than `skillCharts` when you only need the header. */
+    skillInfo(skillSlug: string) {
+      return client.request<SkillInfoResponse>(`/api/songs/skill/${encodeURIComponent(skillSlug)}/info`);
+    },
   };
+}
+
+// --- Skills (catalog + per-skill detail) ---
+
+export interface SkillCatalogEntry {
+  slug: string;
+  name: string;
+  /** Number of eligible charts (S7+ / D10+) tagged with this skill. */
+  chart_count: number;
+}
+
+export interface SkillsMetaResponse {
+  skills: SkillCatalogEntry[];
+  totals: {
+    total_charts: number;
+    charts_with_skills: number;
+    charts_missing_skills: number;
+  };
+}
+
+export interface SkillDescriptionSegment {
+  type: 'text' | 'image';
+  text?: string;
+  url?: string;
+  alt?: string;
+}
+
+export interface SkillDetail {
+  slug: string;
+  name: string;
+  description_text?: string;
+  description_segments?: SkillDescriptionSegment[];
+  pattern_images?: string[];
+  source_url?: string;
+}
+
+export interface SkillInfoResponse {
+  skill: SkillDetail;
+  chart_count: number;
+}
+
+export type SkillChartsSort = 'level_asc' | 'level_desc' | 'score_asc' | 'score_desc';
+
+export interface SkillChartsParams {
+  mode?: 'single' | 'double' | 'both';
+  min_level?: number | string;
+  max_level?: number | string;
+  sort?: SkillChartsSort;
+  user_id?: string;
+}
+
+export interface SkillChart {
+  chart_id: number;
+  title: string;
+  artist: string;
+  mode: string;
+  level: number;
+  jacket_url?: string;
+  bpm?: string;
+  song_key?: string;
+  flags?: string;
+  best_score?: number | null;
+  best_grade?: string;
+  is_pass?: boolean;
+  is_stage_break?: boolean;
+  date_played?: string;
+}
+
+export interface SkillChartsResponse {
+  skill: SkillDetail;
+  total_charts: number;
+  mode_filter: string[];
+  min_level: number | null;
+  max_level: number | null;
+  sort: SkillChartsSort;
+  user_id: string;
+  charts: SkillChart[];
 }
 
 // --- Head to Head ---

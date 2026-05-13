@@ -52,6 +52,7 @@ function AuthGate() {
       <Stack.Screen name="tournament/[id]" options={{ title: 'Tournament', headerBackTitle: 'Tournaments' }} />
       <Stack.Screen name="post/[id]" options={{ title: 'Post', headerBackTitle: 'Back' }} />
       <Stack.Screen name="profile/[id]" options={{ title: 'Profile', headerBackTitle: 'Back' }} />
+      <Stack.Screen name="skill/[slug]" options={{ title: 'Skill', headerBackTitle: 'Skills' }} />
       <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
     </Stack>
   );
