@@ -132,6 +132,12 @@ function IconBtn({ icon, onPress, badge = 0, badgeTone = 'red', color, accessibi
 
 const styles = StyleSheet.create({
   row: {
+    // width: '100%' so the icon cluster hugs the right edge regardless of
+    // whether the parent wrapper is a column (the common case) or a row
+    // with `flexDirection: 'row'` left over from the old hamburger header
+    // — without it, the bar shrinks to its content and `space-between`
+    // collapses, leaving a fat gap on the right.
+    width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
