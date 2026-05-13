@@ -33,6 +33,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DefaultAvatar } from '@/components/default-avatar';
 import { HamburgerButton } from '@/components/hamburger-button';
+import { StoriesStrip } from '@/components/messages/stories-strip';
+import { StoryViewer } from '@/components/messages/story-viewer';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/contexts/theme-context';
@@ -100,6 +102,8 @@ export default function MessagesScreen() {
   const queryClient = useQueryClient();
   // Long-press target → opens the pin/mute action sheet.
   const [actionTarget, setActionTarget] = useState<ConversationSummary | null>(null);
+  // Story viewer target — user_id whose story stack to show.
+  const [storyUserId, setStoryUserId] = useState<string | null>(null);
 
   const inboxKey = getMessagesInboxQueryKey(user?.id);
   const query = useQuery({
@@ -188,6 +192,9 @@ export default function MessagesScreen() {
             tintColor={theme.spinner}
           />
         }>
+        {/* Stories strip — sits above the conversation list. */}
+        <StoriesStrip onPickStory={setStoryUserId} />
+
         {query.isLoading ? (
           <View style={s.center}><ActivityIndicator color={theme.spinner} /></View>
         ) : query.isError ? (
@@ -220,6 +227,8 @@ export default function MessagesScreen() {
           </View>
         )}
       </ScrollView>
+
+      <StoryViewer userId={storyUserId} onClose={() => setStoryUserId(null)} />
 
       {/* Long-press action sheet — pin/unpin */}
       <Modal

@@ -465,7 +465,101 @@ export function createMessagesApi(client: ApiClient) {
         { method: 'POST' },
       );
     },
+
+    // --- Squad management -------------------------------------------------
+
+    /** Full squad metadata: members, viewer's role, notifications, etc. */
+    squad(conversationId: string) {
+      return client.request<SquadDetailResponse>(
+        `/api/messages/conversations/${encodeURIComponent(conversationId)}/squad`,
+      );
+    },
+
+    /** Update squad name / avatar / theme (creator only). */
+    updateSquad(conversationId: string, payload: SquadUpdatePayload) {
+      return client.request<SquadDetailResponse>(
+        `/api/messages/conversations/${encodeURIComponent(conversationId)}/squad`,
+        { method: 'PUT', body: payload },
+      );
+    },
+
+    /** Invite a user to the squad. Requires can_manage_members. */
+    addSquadMember(conversationId: string, userId: string) {
+      return client.request<SquadMemberMutationResponse>(
+        `/api/messages/conversations/${encodeURIComponent(conversationId)}/squad/members`,
+        { method: 'POST', body: { user_id: userId } },
+      );
+    },
+
+    /** Remove a member or leave the squad (passing your own user_id). */
+    removeSquadMember(conversationId: string, userId: string) {
+      return client.request<SquadMemberMutationResponse>(
+        `/api/messages/conversations/${encodeURIComponent(conversationId)}/squad/members/${encodeURIComponent(userId)}`,
+        { method: 'DELETE' },
+      );
+    },
+
+    /** Promote/demote — accepts 'creator' | 'moderator' | 'member'.
+     *  Creator role can only be reassigned (not removed). */
+    setSquadMemberRole(conversationId: string, userId: string, role: string) {
+      return client.request<SquadMemberMutationResponse>(
+        `/api/messages/conversations/${encodeURIComponent(conversationId)}/squad/members/${encodeURIComponent(userId)}/role`,
+        { method: 'PUT', body: { role } },
+      );
+    },
+
+    /** Per-conversation notification toggle. */
+    setSquadNotifications(
+      conversationId: string,
+      payload: { enabled?: boolean; mentions?: boolean },
+    ) {
+      return client.request<{ enabled: boolean; mentions: boolean }>(
+        `/api/messages/conversations/${encodeURIComponent(conversationId)}/squad/notifications`,
+        { method: 'PUT', body: payload },
+      );
+    },
   };
+}
+
+// --- Squad shapes ---
+
+export interface SquadMember {
+  user_id: string;
+  username: string;
+  avatar?: string;
+  nationality?: string;
+  /** 'creator' | 'moderator' | 'member' */
+  role: string;
+  joined_at?: string;
+  last_active?: string | null;
+  is_online?: boolean;
+}
+
+export interface SquadDetailResponse {
+  conversation_id: string;
+  title: string;
+  avatar?: string;
+  theme?: string;
+  member_count: number;
+  /** Role of the current viewer in this squad. */
+  viewer_role: string;
+  notifications: { enabled: boolean; mentions: boolean };
+  permissions: {
+    can_manage_members: boolean;
+    can_manage_roles: boolean;
+    can_edit_identity: boolean;
+  };
+  members: SquadMember[];
+}
+
+export interface SquadUpdatePayload {
+  title?: string;
+  avatar?: string;
+  theme?: string;
+}
+
+export interface SquadMemberMutationResponse {
+  squad: SquadDetailResponse;
 }
 
 export interface TypingEntry {

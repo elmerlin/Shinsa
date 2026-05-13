@@ -39,10 +39,12 @@ import { DefaultAvatar } from '@/components/default-avatar';
 import { MessageActionSheet, type MessageActionTarget } from '@/components/messages/message-action-sheet';
 import { MessageEmbed } from '@/components/messages/message-embed';
 import { ReactionBar } from '@/components/messages/message-reactions';
+import { SquadManagementSheet } from '@/components/messages/squad-management-sheet';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/contexts/theme-context';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
+import { useTypingIndicator } from '@/hooks/use-typing-indicator';
 import { messagesApi } from '@/lib/api';
 import { fullImageUrl } from '@/lib/images';
 import {
@@ -140,6 +142,11 @@ export default function ConversationScreen() {
   const isNearBottomRef = useRef(true);
   // Long-press target (drives the bottom action sheet).
   const [actionTarget, setActionTarget] = useState<MessageActionTarget | null>(null);
+  // Squad-management sheet (squads only).
+  const [squadOpen, setSquadOpen] = useState(false);
+  // Typing indicator: poll partner's typing flag + throttle emits when the
+  // viewer types into the composer.
+  const { typingUsers, emitTyping } = useTypingIndicator(conversationId, user?.id, !!user?.id);
 
   const threadKey = getConversationQueryKey(conversationId);
   const query = useQuery({
@@ -318,13 +325,20 @@ export default function ConversationScreen() {
           // partner avatar + a subtitle (member count / skill title).
           headerTitle: () => (
             <Pressable
-              disabled={!conversation?.partner?.user_id}
+              disabled={!conversation?.partner?.user_id && conversation?.kind !== 'squad'}
               onPress={() => {
+                if (conversation?.kind === 'squad') {
+                  setSquadOpen(true);
+                  return;
+                }
                 if (conversation?.partner?.user_id) {
                   router.push({ pathname: '/profile/[id]', params: { id: conversation.partner.user_id } });
                 }
               }}
-              style={({ pressed }) => [s.headerInner, pressed && conversation?.partner?.user_id && { opacity: 0.7 }]}>
+              style={({ pressed }) => [
+                s.headerInner,
+                pressed && (conversation?.partner?.user_id || conversation?.kind === 'squad') && { opacity: 0.7 },
+              ]}>
               {headerAvatar ? (
                 <Image source={{ uri: headerAvatar }} style={s.headerAvatar} contentFit="cover" />
               ) : (
@@ -336,6 +350,17 @@ export default function ConversationScreen() {
               </View>
             </Pressable>
           ),
+          // Right-side info button to open the squad management sheet.
+          headerRight: conversation?.kind === 'squad'
+            ? () => (
+                <Pressable
+                  onPress={() => setSquadOpen(true)}
+                  hitSlop={8}
+                  style={({ pressed }) => [{ paddingHorizontal: 8 }, pressed && { opacity: 0.7 }]}>
+                  <IconSymbol name="info.circle" size={22} color={theme.text} />
+                </Pressable>
+              )
+            : undefined,
           headerBackTitle: 'Messages',
         }}
       />
@@ -387,12 +412,32 @@ export default function ConversationScreen() {
           </ScrollView>
         )}
 
+        {/* Typing indicator — sits just above the composer */}
+        {typingUsers.length > 0 ? (
+          <View style={s.typingRow}>
+            <View style={s.typingDots}>
+              <Text style={s.typingDot}>●</Text>
+              <Text style={s.typingDot}>●</Text>
+              <Text style={s.typingDot}>●</Text>
+            </View>
+            <Text style={s.typingText} numberOfLines={1}>
+              {typingUsers.length === 1
+                ? `${typingUsers[0].username} is typing…`
+                : `${typingUsers.length} people are typing…`}
+            </Text>
+          </View>
+        ) : null}
+
         {/* Composer */}
         <View style={[s.composer, { paddingBottom: insets.bottom + 8 }]}>
           <TextInput
             style={s.input}
             value={draft}
-            onChangeText={setDraft}
+            onChangeText={(value) => {
+              setDraft(value);
+              // Throttled inside the hook — safe to call on every keystroke.
+              if (value.length > 0) emitTyping();
+            }}
             placeholder="Message…"
             placeholderTextColor={theme.textDim}
             multiline
@@ -430,6 +475,16 @@ export default function ConversationScreen() {
         onReact={(messageId, key) => reactMutation.mutate({ messageId, key })}
         onUnsend={(messageId) => unsendMutation.mutate(messageId)}
       />
+
+      {conversation?.kind === 'squad' ? (
+        <SquadManagementSheet
+          conversationId={conversationId}
+          visible={squadOpen}
+          onClose={() => setSquadOpen(false)}
+          viewerId={user?.id || ''}
+          onLeft={() => router.back()}
+        />
+      ) : null}
     </View>
   );
 }
@@ -572,6 +627,19 @@ const makeStyles = (t: ThemeColors) => ({
   },
   sendError: { paddingHorizontal: 12, paddingTop: 4, backgroundColor: t.dangerBg },
   sendErrorText: { color: t.danger, fontSize: 11 },
+
+  // Typing indicator row above the composer
+  typingRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 4,
+    backgroundColor: t.surface,
+  },
+  typingDots: { flexDirection: 'row' as const, gap: 2 },
+  typingDot: { fontSize: 8, color: t.accent, opacity: 0.7 },
+  typingText: { fontSize: 11, color: t.textMuted, fontStyle: 'italic' as const },
 });
 
 const makeBubbleStyles = (t: ThemeColors) => ({
