@@ -98,7 +98,7 @@ export function DailyHighlights() {
           subtitle={replayDate ? `From ${replayDate}` : undefined}
           s={s}>
           <Rail>
-            {topReplays.slice(0, 5).map((play, i) => (
+            {topReplays.slice(0, 6).map((play, i) => (
               <HighlightCard
                 key={`replay-${play.id ?? i}`}
                 rank={i + 1}
@@ -128,7 +128,7 @@ export function DailyHighlights() {
           accent="#34d399"
           s={s}>
           <Rail>
-            {topUpscores.slice(0, 5).map((u, i) => {
+            {topUpscores.slice(0, 6).map((u, i) => {
               const newScore = Number(u.new_score ?? u.score) || 0;
               const oldScore = Number(u.old_score) || 0;
               const delta = newScore - oldScore;
@@ -164,7 +164,7 @@ export function DailyHighlights() {
           accent="#7dd3fc"
           s={s}>
           <Rail>
-            {topClears.slice(0, 5).map((c, i) => (
+            {topClears.slice(0, 6).map((c, i) => (
               <HighlightCard
                 key={`clear-${c.clear_id ?? i}-${i}`}
                 rank={i + 1}
