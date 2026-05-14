@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
+import { useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/contexts/theme-context';
@@ -41,22 +42,66 @@ function TournamentRow({ t, onPress, s }: { t: Tournament; onPress: () => void; 
   );
 }
 
+type StatusFilter = 'all' | 'upcoming' | 'live' | 'completed';
+
+/** Phase string → coarse bucket so the chip filter doesn't need to enumerate
+ *  every server phase. Anything we don't recognize ends up in 'live' so
+ *  rounds in progress don't get filtered out by surprise. */
+function bucketForPhase(phase: string | undefined | null): StatusFilter {
+  const p = String(phase || '').toUpperCase();
+  if (p === 'COMPLETED' || p === 'FINALIZED' || p === 'ARCHIVED') return 'completed';
+  if (p === 'PENDING' || p === 'SEEDING' || p === 'UPCOMING' || p === 'DRAFT') return 'upcoming';
+  return 'live';
+}
+
 export default function TournamentsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { theme } = useTheme();
   const s = useThemedStyles(makeStyles);
   const { isDesktop } = useBreakpoint();
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const { data, isLoading, isError, error, refetch, isRefetching } = useQuery({
     queryKey: ['tournaments'],
     queryFn: () => tournamentsApi.list(),
   });
+
+  const filtered = useMemo(() => {
+    const arr = data ?? [];
+    if (statusFilter === 'all') return arr;
+    return arr.filter((t) => bucketForPhase(t.phase) === statusFilter);
+  }, [data, statusFilter]);
 
   return (
     <View style={s.container}>
       <View style={[s.header, { paddingTop: insets.top + 12 }]}>
         <Text style={s.heading}>Tournaments</Text>
       </View>
+
+      {isDesktop ? (
+        <View style={s.deskFilterRow}>
+          {([
+            { value: 'all', label: 'All' },
+            { value: 'upcoming', label: 'Upcoming' },
+            { value: 'live', label: 'Live' },
+            { value: 'completed', label: 'Completed' },
+          ] as { value: StatusFilter; label: string }[]).map((f) => {
+            const active = statusFilter === f.value;
+            return (
+              <Pressable
+                key={f.value}
+                onPress={() => setStatusFilter(f.value)}
+                style={({ pressed }) => [
+                  s.deskFilterChip,
+                  active && s.deskFilterChipActive,
+                  pressed && !active && { opacity: 0.7 },
+                ]}>
+                <Text style={[s.deskFilterText, active && s.deskFilterTextActive]}>{f.label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : null}
 
       {isLoading ? (
         <View style={s.center}><ActivityIndicator color={theme.spinner} /></View>
@@ -65,16 +110,16 @@ export default function TournamentsScreen() {
           <Text style={s.errorText}>{error instanceof Error ? error.message : 'Failed to load tournaments'}</Text>
         </View>
       ) : isDesktop ? (
-        // Desktop: 3-col card grid. FlatList's numColumns is fine on web but
-        // ScrollView + flex-wrap gives us responsive grid sizing without the
-        // virtualisation overhead — tournament lists are small (~tens).
+        // Desktop: 3-col card grid filtered by status chip above.
         <ScrollView
           contentContainerStyle={s.deskGrid}
           refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={theme.spinner} />}>
-          {(data ?? []).length === 0 ? (
-            <Text style={s.empty}>No active tournaments</Text>
+          {filtered.length === 0 ? (
+            <Text style={s.empty}>
+              {statusFilter === 'all' ? 'No active tournaments' : `No ${statusFilter} tournaments right now.`}
+            </Text>
           ) : (
-            (data ?? []).map((item) => (
+            filtered.map((item) => (
               <View key={item.id} style={s.deskCell}>
                 <TournamentRow
                   s={s}
@@ -142,6 +187,28 @@ const makeStyles = (t: ThemeColors) => ({
   center: { flex: 1, alignItems: 'center' as const, justifyContent: 'center' as const, padding: 32 },
   empty: { textAlign: 'center' as const, padding: 32, color: t.textDim },
   errorText: { color: t.danger, textAlign: 'center' as const },
+
+  // Desktop: status filter chip row above the grid.
+  deskFilterRow: {
+    flexDirection: 'row' as const,
+    gap: 6,
+    paddingHorizontal: 20,
+    paddingBottom: 12,
+  },
+  deskFilterChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: t.border,
+    backgroundColor: t.surfaceMuted,
+  },
+  deskFilterChipActive: {
+    backgroundColor: t.accentTint,
+    borderColor: t.accent,
+  },
+  deskFilterText: { fontSize: 11, fontWeight: '800' as const, color: t.textMuted, letterSpacing: 0.5 },
+  deskFilterTextActive: { color: t.accent },
 
   // Desktop: 3-col card grid.
   deskGrid: {

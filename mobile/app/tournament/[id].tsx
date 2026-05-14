@@ -1,8 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { Stack, useLocalSearchParams } from 'expo-router';
-import { useMemo } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useTheme } from '@/contexts/theme-context';
+import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { tournamentsApi } from '@/lib/api';
 import type { ThemeColors } from '@/constants/theme';
@@ -17,14 +19,26 @@ function formatDate(input?: string): string {
 
 type Styles = ReturnType<typeof useThemedStyles<ReturnType<typeof makeStyles>>>;
 
-function MatchRow({ m, players, s }: { m: Match; players: Map<string, Player>; s: Styles }) {
+function MatchRow({
+  m,
+  players,
+  s,
+  active,
+  onPress,
+}: {
+  m: Match;
+  players: Map<string, Player>;
+  s: Styles;
+  active?: boolean;
+  onPress?: () => void;
+}) {
   const p1 = m.player1_id ? players.get(m.player1_id) : undefined;
   const p2 = m.player2_id ? players.get(m.player2_id) : undefined;
   const isBye = !!m.is_bye;
   const winnerId = m.winner_id;
 
-  return (
-    <View style={s.matchRow}>
+  const content = (
+    <>
       <View style={s.matchHeader}>
         {typeof m.round_number === 'number' && m.round_number > 0 ? (
           <Text style={s.matchRound}>R{m.round_number}</Text>
@@ -45,8 +59,26 @@ function MatchRow({ m, players, s }: { m: Match; players: Map<string, Player>; s
           {p2?.name ?? (isBye ? '' : '—')}
         </Text>
       </View>
-    </View>
+    </>
   );
+
+  if (onPress) {
+    return (
+      <Pressable
+        onPress={onPress}
+        onHoverIn={() => undefined}
+        onHoverOut={() => undefined}
+        style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [
+          s.matchRow,
+          hovered && !active && s.matchRowHover,
+          active && s.matchRowActive,
+          pressed && { opacity: 0.85 },
+        ]}>
+        {content}
+      </Pressable>
+    );
+  }
+  return <View style={s.matchRow}>{content}</View>;
 }
 
 function PlayerRow({ p, rank, s }: { p: Player; rank: number; s: Styles }) {
@@ -83,6 +115,9 @@ export default function TournamentDetailScreen() {
   const tournamentId = id ?? '';
   const { theme } = useTheme();
   const s = useThemedStyles(makeStyles);
+  const { isDesktop } = useBreakpoint();
+  // Desktop only: tapping a match pins it in the right rail.
+  const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
 
   const tournamentQuery = useQuery({
     queryKey: ['tournament', tournamentId],
@@ -132,10 +167,26 @@ export default function TournamentDetailScreen() {
     [discussion]
   );
 
+  const selectedMatch = useMemo(
+    () => matches.find((m) => m.id === selectedMatchId) ?? null,
+    [matches, selectedMatchId],
+  );
+
+  // Esc clears the pinned match. Web only.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && selectedMatchId) setSelectedMatchId(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selectedMatchId]);
+
   return (
     <View style={s.container}>
       <Stack.Screen options={{ title: t?.name || 'Tournament' }} />
-      <ScrollView contentContainerStyle={s.scroll}>
+      <View style={isDesktop ? s.deskRow : { flex: 1 }}>
+      <ScrollView style={isDesktop ? { flex: 1 } : undefined} contentContainerStyle={s.scroll}>
         {tournamentQuery.isLoading && (
           <View style={s.center}><ActivityIndicator color={theme.spinner} /></View>
         )}
@@ -189,7 +240,16 @@ export default function TournamentDetailScreen() {
                 <Text style={s.empty}>No matches yet</Text>
               ) : (
                 <View style={s.list}>
-                  {matches.map((m) => <MatchRow key={m.id} m={m} players={playersById} s={s} />)}
+                  {matches.map((m) => (
+                    <MatchRow
+                      key={m.id}
+                      m={m}
+                      players={playersById}
+                      s={s}
+                      active={isDesktop && m.id === selectedMatchId}
+                      onPress={isDesktop ? () => setSelectedMatchId(m.id) : undefined}
+                    />
+                  ))}
                 </View>
               )}
             </View>
@@ -212,6 +272,70 @@ export default function TournamentDetailScreen() {
           </>
         )}
       </ScrollView>
+
+      {isDesktop ? (
+        <View style={s.deskRail}>
+          {selectedMatch ? (
+            <ScrollView contentContainerStyle={s.deskRailContent}>
+              <View style={s.deskRailHead}>
+                <Text style={s.deskRailEyebrow}>MATCH</Text>
+                <Pressable
+                  onPress={() => setSelectedMatchId(null)}
+                  hitSlop={8}
+                  style={({ pressed }) => [s.deskRailClose, pressed && { opacity: 0.6 }]}
+                  accessibilityLabel="Close match panel">
+                  <IconSymbol name="xmark" size={14} color={theme.textMuted} />
+                </Pressable>
+              </View>
+              {(() => {
+                const p1 = selectedMatch.player1_id ? playersById.get(selectedMatch.player1_id) : undefined;
+                const p2 = selectedMatch.player2_id ? playersById.get(selectedMatch.player2_id) : undefined;
+                const winnerId = selectedMatch.winner_id;
+                return (
+                  <>
+                    <View style={s.deskMatchHead}>
+                      <Text style={s.deskMatchPlayer} numberOfLines={1}>{p1?.name ?? '—'}</Text>
+                      <Text style={s.deskMatchVs}>{selectedMatch.is_bye ? 'BYE' : 'vs'}</Text>
+                      <Text style={s.deskMatchPlayer} numberOfLines={1}>
+                        {p2?.name ?? (selectedMatch.is_bye ? '' : '—')}
+                      </Text>
+                    </View>
+                    {winnerId ? (
+                      <Text style={s.deskMatchWinner}>
+                        Winner: {winnerId === p1?.id ? p1?.name : p2?.name}
+                      </Text>
+                    ) : null}
+                    <View style={s.deskMatchMetaRow}>
+                      {typeof selectedMatch.round_number === 'number' && selectedMatch.round_number > 0 ? (
+                        <Text style={s.deskMatchMetaChip}>Round {selectedMatch.round_number}</Text>
+                      ) : null}
+                      {selectedMatch.status ? <Text style={s.deskMatchMetaChip}>{selectedMatch.status}</Text> : null}
+                      {typeof selectedMatch.difficulty_min === 'number' && typeof selectedMatch.difficulty_max === 'number' ? (
+                        <Text style={s.deskMatchMetaChip}>
+                          Lv {selectedMatch.difficulty_min === selectedMatch.difficulty_max
+                            ? selectedMatch.difficulty_min
+                            : `${selectedMatch.difficulty_min}-${selectedMatch.difficulty_max}`}
+                        </Text>
+                      ) : null}
+                    </View>
+                    {/* Plays + shoutouts would land here. Server doesn't ship
+                        them in `matches` today — see follow-up to wire
+                        tournamentsApi.matchPlays(id) when the endpoint exists. */}
+                  </>
+                );
+              })()}
+            </ScrollView>
+          ) : (
+            <View style={s.deskRailEmpty}>
+              <Text style={s.deskRailEmptyTitle}>Pick a match</Text>
+              <Text style={s.deskRailEmptyHint}>
+                Tap any match in the bracket to see the players, scores, and shoutouts.
+              </Text>
+            </View>
+          )}
+        </View>
+      ) : null}
+      </View>
     </View>
   );
 }
@@ -268,4 +392,57 @@ const makeStyles = (t: ThemeColors) => ({
   empty: { padding: 16, textAlign: 'center' as const, color: t.textDim },
   errorBox: { backgroundColor: t.dangerBg, borderColor: t.dangerBorder, borderWidth: 1, padding: 12, borderRadius: 8 },
   errorText: { color: t.danger, fontSize: 14 },
+
+  // Desktop: bracket-style center column + right rail for selected match.
+  deskRow: { flex: 1, flexDirection: 'row' as const, alignItems: 'stretch' as const },
+  matchRowHover: { backgroundColor: t.surfaceMuted },
+  matchRowActive: { backgroundColor: t.accentTint },
+  deskRail: {
+    width: 340,
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderLeftColor: t.border,
+    backgroundColor: t.surface,
+  },
+  deskRailContent: { padding: 16, gap: 10, paddingBottom: 40 },
+  deskRailHead: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+  },
+  deskRailEyebrow: {
+    fontSize: 10,
+    fontWeight: '800' as const,
+    letterSpacing: 1.8,
+    color: t.accent,
+    textTransform: 'uppercase' as const,
+  },
+  deskRailClose: {
+    width: 26,
+    height: 26,
+    borderRadius: 6,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  deskMatchHead: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 8,
+    paddingTop: 4,
+  },
+  deskMatchPlayer: { flex: 1, fontSize: 15, fontWeight: '800' as const, color: t.text },
+  deskMatchVs: { fontSize: 10, fontWeight: '900' as const, color: t.textDim, letterSpacing: 1 },
+  deskMatchWinner: { fontSize: 12, fontWeight: '700' as const, color: t.accent },
+  deskMatchMetaRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 6, paddingTop: 8 },
+  deskMatchMetaChip: {
+    fontSize: 11,
+    fontWeight: '700' as const,
+    color: t.textMuted,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    backgroundColor: t.surfaceMuted,
+  },
+  deskRailEmpty: { flex: 1, alignItems: 'center' as const, justifyContent: 'center' as const, padding: 24, gap: 6 },
+  deskRailEmptyTitle: { fontSize: 14, fontWeight: '800' as const, color: t.text },
+  deskRailEmptyHint: { fontSize: 12, color: t.textMuted, textAlign: 'center' as const, maxWidth: 280 },
 });
