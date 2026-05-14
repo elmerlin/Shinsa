@@ -1,7 +1,7 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AchievementBadgePost } from '@/components/achievement-badge-post';
@@ -26,7 +26,8 @@ import { YouTubeEmbed } from '@/components/youtube-embed';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/contexts/theme-context';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
-import { socialApi, songsApi } from '@/lib/api';
+import { socialApi, songsApi, weeklyChallengesApi } from '@/lib/api';
+import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { parseAchievementBadgePost } from '@/lib/achievementBadgePost';
 import { findChartIdInLibrary } from '@/lib/chartLookup';
 import { fullImageUrl } from '@/lib/images';
@@ -720,6 +721,8 @@ function WeeklyChallengeCard({ item, onPump, onComments, onShare, onJacket, onSc
   );
 }
 
+type FeedFilter = 'all' | 'posts' | 'upscores' | 'wc' | 'clears';
+
 export default function FeedScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -727,6 +730,8 @@ export default function FeedScreen() {
   const { user } = useAuth();
   const s = useThemedStyles(makeStyles);
   const onPump = usePumpFeedItem();
+  const { isDesktop } = useBreakpoint();
+  const [feedFilter, setFeedFilter] = useState<FeedFilter>('all');
   const [commentTarget, setCommentTarget] = useState<{ type: FeedItem['type']; id: string | number } | null>(null);
   const onComments = (item: FeedItem) => setCommentTarget({ type: item.type, id: item.id });
   const [scoreTarget, setScoreTarget] = useState<ScoreCardData | null>(null);
@@ -779,7 +784,31 @@ export default function FeedScreen() {
     getNextPageParam: (lastPage, pages) => (lastPage.length === 0 ? undefined : pages.length + 1),
   });
 
-  const items = data?.pages.flat() ?? [];
+  const allItems = data?.pages.flat() ?? [];
+  const items = useMemo(() => {
+    if (feedFilter === 'all') return allItems;
+    return allItems.filter((it) => {
+      if (feedFilter === 'posts') return it.type === 'post';
+      if (feedFilter === 'upscores') return it.type === 'upscore';
+      if (feedFilter === 'clears') return it.type === 'clear';
+      if (feedFilter === 'wc') return it.type === 'weekly_challenge';
+      return true;
+    });
+  }, [allItems, feedFilter]);
+
+  // Right-rail data: this-week WC top 3. Cheap and shared with the WC
+  // route's cache so no extra round-trip when the user navigates there.
+  const wcQuery = useQuery({
+    queryKey: ['wc-week', 'current', 'main', 'both', 'all', user?.id ?? 'anon'],
+    queryFn: () => weeklyChallengesApi.week('current', {
+      chart_mode: 'both',
+      leaderboard_mode: 'both',
+      skill_family: 'all',
+      division: 'main',
+    }),
+    enabled: isDesktop,
+    staleTime: 5 * 60_000,
+  });
 
   return (
     <View style={s.container}>
@@ -796,14 +825,81 @@ export default function FeedScreen() {
         />
       </View>
 
+      <View style={isDesktop ? s.deskRow : { flex: 1 }}>
+      {isDesktop ? (
+        <View style={s.deskFilterRail}>
+          <Text style={s.deskRailLabel}>FEED</Text>
+          {([
+            { value: 'all', label: 'All activity' },
+            { value: 'posts', label: 'Posts' },
+            { value: 'upscores', label: 'Upscores' },
+            { value: 'clears', label: 'New clears' },
+            { value: 'wc', label: 'Weekly challenge' },
+          ] as { value: FeedFilter; label: string }[]).map((f) => {
+            const active = feedFilter === f.value;
+            return (
+              <Pressable
+                key={f.value}
+                onPress={() => setFeedFilter(f.value)}
+                onHoverIn={() => undefined}
+                onHoverOut={() => undefined}
+                style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [
+                  s.deskFilterRow,
+                  hovered && !active && { backgroundColor: theme.surfaceMuted },
+                  active && s.deskFilterRowActive,
+                  pressed && { opacity: 0.85 },
+                ]}>
+                <Text style={[s.deskFilterText, active && s.deskFilterTextActive]}>{f.label}</Text>
+              </Pressable>
+            );
+          })}
+
+          <Text style={[s.deskRailLabel, { marginTop: 16 }]}>SHORTCUTS</Text>
+          <Pressable
+            onPress={() => router.push('/posts')}
+            onHoverIn={() => undefined}
+            onHoverOut={() => undefined}
+            style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [
+              s.deskFilterRow,
+              hovered && { backgroundColor: theme.surfaceMuted },
+              pressed && { opacity: 0.85 },
+            ]}>
+            <Text style={s.deskFilterText}>New post →</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => router.push('/live')}
+            onHoverIn={() => undefined}
+            onHoverOut={() => undefined}
+            style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [
+              s.deskFilterRow,
+              hovered && { backgroundColor: theme.surfaceMuted },
+              pressed && { opacity: 0.85 },
+            ]}>
+            <Text style={s.deskFilterText}>Live now →</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => router.push('/weekly-challenges')}
+            onHoverIn={() => undefined}
+            onHoverOut={() => undefined}
+            style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [
+              s.deskFilterRow,
+              hovered && { backgroundColor: theme.surfaceMuted },
+              pressed && { opacity: 0.85 },
+            ]}>
+            <Text style={s.deskFilterText}>Weekly challenges →</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
       {isLoading ? (
-        <View style={s.center}><ActivityIndicator color={theme.spinner} /></View>
+        <View style={[s.center, isDesktop && { flex: 1 }]}><ActivityIndicator color={theme.spinner} /></View>
       ) : isError ? (
-        <View style={s.center}>
+        <View style={[s.center, isDesktop && { flex: 1 }]}>
           <Text style={s.errorText}>{error instanceof Error ? error.message : 'Failed to load feed'}</Text>
         </View>
       ) : (
         <FlatList
+          style={isDesktop ? s.deskFeed : undefined}
           data={items}
           keyExtractor={(item, i) => `${item.type}:${item.id}:${i}`}
           renderItem={({ item }) => {
@@ -846,6 +942,46 @@ export default function FeedScreen() {
           refreshControl={<RefreshControl refreshing={isRefetching && !isFetchingNextPage} onRefresh={refetch} tintColor={theme.spinner} />}
         />
       )}
+
+      {isDesktop ? (
+        <View style={s.deskRightRail}>
+          {wcQuery.data?.week ? (
+            <View style={s.deskRailCard}>
+              <Text style={s.deskRailLabel}>WC THIS WEEK</Text>
+              <Text style={s.deskRailHeadline}>
+                {wcQuery.data.week.week_key}
+              </Text>
+              <Text style={s.deskRailMeta}>
+                {wcQuery.data.leaderboard?.length ?? 0} player
+                {(wcQuery.data.leaderboard?.length ?? 0) === 1 ? '' : 's'}
+              </Text>
+              <View style={s.deskRailDivider} />
+              {(wcQuery.data.leaderboard ?? []).slice(0, 3).map((row, i) => (
+                <Pressable
+                  key={`${row.rank}-${row.user_id}`}
+                  onPress={() => router.push({ pathname: '/profile/[id]', params: { id: row.user_id } })}
+                  style={({ pressed }) => [s.deskRailRow, pressed && { opacity: 0.7 }]}>
+                  <Text style={s.deskRailRank}>
+                    {i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉'}
+                  </Text>
+                  <Text style={s.deskRailName} numberOfLines={1}>
+                    {row.username}
+                  </Text>
+                  <Text style={s.deskRailScore}>{Number(row.points || 0).toLocaleString()}</Text>
+                </Pressable>
+              ))}
+              <Pressable
+                onPress={() => router.push('/weekly-challenges')}
+                style={({ pressed }) => [s.deskRailLink, pressed && { opacity: 0.7 }]}>
+                <Text style={s.deskRailLinkText}>Full leaderboard →</Text>
+              </Pressable>
+            </View>
+          ) : null}
+          {/* who-to-follow + trending songs are TODO — both need new
+              endpoints. Surface them as follow-ups when shipping. */}
+        </View>
+      ) : null}
+      </View>
 
       <CommentsSheet
         visible={!!commentTarget}
@@ -1137,4 +1273,73 @@ const makeStyles = (t: ThemeColors) => ({
   },
   loadMoreText: { fontSize: 13, fontWeight: '800' as const, color: t.accent, letterSpacing: 0.5 },
   endText: { textAlign: 'center' as const, padding: 24, fontSize: 12, color: t.textDim },
+
+  // Desktop 3-col Feed layout.
+  deskRow: { flex: 1, flexDirection: 'row' as const, alignItems: 'stretch' as const },
+  deskFilterRail: {
+    width: 240,
+    borderRightWidth: StyleSheet.hairlineWidth,
+    borderRightColor: t.border,
+    backgroundColor: t.surface,
+    paddingHorizontal: 8,
+    paddingTop: 14,
+  },
+  deskRailLabel: {
+    fontSize: 9,
+    fontWeight: '900' as const,
+    letterSpacing: 1.6,
+    color: t.textDim,
+    textTransform: 'uppercase' as const,
+    paddingHorizontal: 8,
+    paddingBottom: 6,
+  },
+  deskFilterRow: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginVertical: 1,
+  },
+  deskFilterRowActive: { backgroundColor: t.accentTint },
+  deskFilterText: { fontSize: 13, fontWeight: '700' as const, color: t.text },
+  deskFilterTextActive: { color: t.accent, fontWeight: '800' as const },
+  deskFeed: { flex: 1, maxWidth: 640, alignSelf: 'center' as const, width: '100%' as const },
+  deskRightRail: {
+    width: 320,
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderLeftColor: t.border,
+    backgroundColor: t.surface,
+    padding: 14,
+    gap: 14,
+  },
+  deskRailCard: {
+    backgroundColor: t.bg,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: t.border,
+    padding: 12,
+    gap: 4,
+  },
+  deskRailHeadline: { fontSize: 16, fontWeight: '900' as const, color: t.text, letterSpacing: 0.3 },
+  deskRailMeta: { fontSize: 11, color: t.textMuted, letterSpacing: 0.4 },
+  deskRailDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: t.border,
+    marginVertical: 8,
+  },
+  deskRailRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 8,
+    paddingVertical: 4,
+  },
+  deskRailRank: { fontSize: 14, width: 22 },
+  deskRailName: { flex: 1, fontSize: 12, fontWeight: '700' as const, color: t.text },
+  deskRailScore: {
+    fontSize: 12,
+    fontWeight: '700' as const,
+    color: t.textMuted,
+    fontVariant: ['tabular-nums' as const],
+  },
+  deskRailLink: { paddingTop: 8 },
+  deskRailLinkText: { fontSize: 12, fontWeight: '800' as const, color: t.accent },
 });
