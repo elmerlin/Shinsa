@@ -160,9 +160,94 @@ top priority screens for keyboard nav are **Songs, Feed, Messages, Tiers**.
    cursor-paginated inbox), call it out as a follow-up issue.
 7. Run `npx tsc --noEmit` from `mobile/` before pushing.
 
+## Patterns shipped in the second pass
+
+The Tiers / Songs detail / Profile / Lists detail / Weekly Challenges /
+Training / What to Play / Feed / Tournaments work added a handful of
+patterns that other future-desktop routes should copy.
+
+### Master + detail + right rail (3-col)
+
+Routes that have a *directory*, a *primary list*, and a *context panel*
+land on a 3-col layout. Examples: **Lists detail** (240 px directory of
+all lists / center list contents / 360 px chart-detail rail),
+**Profile** (280 px identity / center tab body / 320 px Optimise rail).
+
+```
+┌───────────┬───────────────────────┬───────────┐
+│ directory │ primary list / scroll │ rail      │
+│ ~240 px   │                       │ ~320 px   │
+└───────────┴───────────────────────┴───────────┘
+```
+
+The center column is the existing mobile scroll, untouched apart from
+a `style={isDesktop ? { flex: 1 } : undefined}` on the ScrollView.
+Both rails are siblings inside a `flexDirection: 'row'` wrapper.
+
+### Hover preview + pinned tap
+
+For grid-of-cells screens (Tiers, eventually Tournaments brackets), the
+right rail accepts both *hover* and *tap* drivers. Hover sets a
+`hoverChart` state; tap sets a `pinned` state. The render uses
+`displayChart = pinned ?? hover` so cursor movement gives a free
+preview, and tap commits a pin you can dismiss with Esc.
+
+`ChartCell` exposes an optional `onHover(hovered: boolean)` prop that's
+only wired on desktop. Native ignores it.
+
+### Inline toolbar replaces a settings sheet
+
+When the mobile UI gates frequently-used controls behind a modal /
+bottom-sheet of settings (Tiers density, show-unplayed, share), surface
+those controls inline as a top toolbar on desktop. The settings sheet
+stays on mobile — different ergonomics, same data layer.
+
+### Centered modals instead of bottom sheets
+
+`ChartScoresSheet` (Weekly Challenges) demonstrates the pattern: the
+same `Modal` component switches between a bottom sheet and a centered
+modal capped at 720 px, with the inner layout flipping from stacked to
+2-col (jacket left, scrollable content right) on desktop. Animation
+`slide` on mobile, `fade` on desktop.
+
+### Horizontal scroll affordances
+
+Awards rail in Weekly Challenges adds explicit chevron buttons + edge
+fades + scroll-snap on desktop only. Touch surfaces don't need them;
+mouse users do. Track scrollX/contentWidth/viewportWidth manually so
+the chevrons disappear at the ends.
+
+### URL-state for selected children
+
+Songs uses `?chart=…`, Lists uses native `router.push`, Tiers uses
+local state (no deep-link needed). When the child detail is a
+first-class concept users link to, prefer `?param=…`; when it's purely
+ephemeral (hover preview, transient pin), local state is fine.
+
+### Persistent help / explainer rail
+
+Training shows the pattern: the existing tap-to-explain `HelpSheet`
+becomes a persistent right rail on desktop. The mobile sheet still
+exists and stays gated on `!isDesktop` so both surfaces share the same
+`TRAINING_HELP[key]` content map.
+
 ## What's out of scope
 
 - New features. This pass is purely layout/responsive.
 - Backend changes. If a desktop layout needs a new endpoint, file a
   follow-up issue rather than ship it inline.
 - iOS / Android — they're already great today.
+
+## Deploy
+
+Mobile web build → `dist/`:
+
+```
+cd mobile/
+EXPO_PUBLIC_API_URL='' npx expo export --platform web
+rsync -a --delete dist/ root@159.65.91.103:/var/www/new-shinsa-web/
+```
+
+`EXPO_PUBLIC_API_URL=''` keeps API calls relative — the nginx
+in front of `/var/www/new-shinsa-web/` proxies `/api/*` to the
+backend, so a hardcoded URL would break that path.
