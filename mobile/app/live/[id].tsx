@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -140,7 +140,19 @@ export default function LiveSessionScreen() {
   const { theme } = useTheme();
   const s = useThemedStyles(makeStyles);
   const queryClient = useQueryClient();
-  const { isDesktop } = useBreakpoint();
+  const { isDesktop, isDesktopPortrait, isWideDesktop } = useBreakpoint();
+  // Portrait sub-pane (only relevant on a vertical-monitor desktop layout).
+  // Chat is the default because viewers on a portrait monitor are usually
+  // there to watch + talk; the play log is one tap away.
+  const [portraitPane, setPortraitPane] = useState<'chat' | 'plays' | 'stats'>('chat');
+  // Theater mode hides the right rail and gives the stream + plays the
+  // full width — useful when the host pops out the chat to a 2nd window.
+  const [theaterMode, setTheaterMode] = useState(false);
+  // Scroll ref for the chat list so new messages always pin to the bottom
+  // (web "auto-scroll on new message" behaviour). Skipped when the user
+  // has manually scrolled up to read history.
+  const chatScrollRef = useRef<ScrollView | null>(null);
+  const [chatStickToBottom, setChatStickToBottom] = useState(true);
   // Tick state for the duration counter; only used to force a re-render every
   // 30s so "12m live" stays accurate without a network round-trip.
   const [, setTick] = useState(0);
@@ -163,6 +175,31 @@ export default function LiveSessionScreen() {
     const intervalId = setInterval(() => setTick((n) => n + 1), 30_000);
     return () => clearInterval(intervalId);
   }, []);
+
+  // Keyboard shortcuts — desktop web only. C toggles chat/plays in
+  // portrait mode, T toggles theater mode, Esc closes the score-card
+  // modal (handled inline below). Skipped if the user is typing in the
+  // composer (the composer's TextInput stops propagation on its own
+  // via React's synthetic event bubbling).
+  useEffect(() => {
+    if (!isDesktop || Platform.OS !== 'web' || typeof window === 'undefined') return;
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const tag = (target?.tagName || '').toUpperCase();
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) return;
+      if (e.key === 't' || e.key === 'T') {
+        e.preventDefault();
+        setTheaterMode((v) => !v);
+      } else if (e.key === 'c' || e.key === 'C') {
+        if (isDesktopPortrait) {
+          e.preventDefault();
+          setPortraitPane((p) => (p === 'chat' ? 'plays' : 'chat'));
+        }
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isDesktop, isDesktopPortrait]);
 
   const data = query.data;
   const session = data?.session;
@@ -192,6 +229,15 @@ export default function LiveSessionScreen() {
     rows.sort((a, b) => (b.id || 0) - (a.id || 0));
     return rows;
   }, [plays, playModeFilter, playPassOnly]);
+
+  // Chat auto-scroll: every time a new message arrives, jump the chat
+  // scroller to the bottom — but only when the user is already pinned
+  // there. If they've scrolled up to read history we leave them alone.
+  const lastMessageId = messages.length > 0 ? messages[messages.length - 1]?.id : undefined;
+  useLayoutEffect(() => {
+    if (!chatStickToBottom) return;
+    chatScrollRef.current?.scrollToEnd?.({ animated: true });
+  }, [lastMessageId, chatStickToBottom]);
 
   const selectedPlayData = useMemo<ScoreCardData | null>(() => {
     if (!selectedPlay) return null;
@@ -312,9 +358,175 @@ export default function LiveSessionScreen() {
           ) : undefined,
         }}
       />
-      {isDesktop ? (
-        <View style={s.deskBody}>
-          {/* Left 8/12 — stream embed, hero, plays log. */}
+      {isDesktopPortrait ? (
+        /* ──────────────────────────────────────────────────────────
+           PORTRAIT DESKTOP — vertical-monitor layout. Stream pinned
+           at the top, tabbed body in the middle (Chat / Plays /
+           Stats), composer pinned at the bottom. Built for rotated
+           1080×1920 streaming monitors where horizontal master-detail
+           cramps both panes.
+           ────────────────────────────────────────────────────────── */
+        <View style={s.portraitBody}>
+          <View style={s.portraitStream}>
+            <HeroCard session={session} lastPlay={lastPlay} isLive={isLive} duration={duration} s={s} compact />
+            {hasYouTubeEmbed ? (
+              <View style={s.streamEmbedWrap}>
+                <YouTubeEmbed url={`https://www.youtube.com/watch?v=${youtubeVideoId}`} />
+              </View>
+            ) : hasNonYouTubeStream ? (
+              <Pressable
+                onPress={handleStreamOpen}
+                style={({ pressed }) => [s.streamCta, pressed && { opacity: 0.85 }]}>
+                <IconSymbol name="tv.fill" size={18} color="#fff" />
+                <Text style={s.streamCtaText} numberOfLines={1}>Watch the stream</Text>
+                <IconSymbol name="link" size={14} color="rgba(255,255,255,0.7)" />
+              </Pressable>
+            ) : null}
+          </View>
+
+          {/* Tab strip — visible label + unread-style count. Sticky
+              under the stream so the user always knows which pane
+              they're looking at. */}
+          <View style={s.portraitTabs}>
+            {(
+              [
+                { id: 'chat',  label: 'Chat',  count: messages.filter((m) => !m.is_system).length },
+                { id: 'plays', label: 'Plays', count: plays.length },
+                { id: 'stats', label: 'Stats', count: summary?.songCount ?? 0 },
+              ] as const
+            ).map((tab) => {
+              const active = portraitPane === tab.id;
+              return (
+                <Pressable
+                  key={tab.id}
+                  onPress={() => setPortraitPane(tab.id)}
+                  style={({ pressed }) => [
+                    s.portraitTabBtn,
+                    active && s.portraitTabBtnActive,
+                    pressed && { opacity: 0.85 },
+                  ]}
+                  accessibilityLabel={`Show ${tab.label}`}>
+                  <Text style={[s.portraitTabText, active && s.portraitTabTextActive]}>
+                    {tab.label}
+                  </Text>
+                  {tab.count > 0 ? (
+                    <Text style={[s.portraitTabCount, active && s.portraitTabCountActive]}>
+                      {tab.count}
+                    </Text>
+                  ) : null}
+                </Pressable>
+              );
+            })}
+          </View>
+
+          {/* Active pane */}
+          {portraitPane === 'chat' ? (
+            <View style={s.portraitChat}>
+              <ScrollView
+                ref={(r) => { chatScrollRef.current = r; }}
+                style={{ flex: 1 }}
+                contentContainerStyle={s.deskRailContent}
+                showsVerticalScrollIndicator
+                onScroll={(e) => {
+                  const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+                  const distance = contentSize.height - contentOffset.y - layoutMeasurement.height;
+                  setChatStickToBottom(distance < 40);
+                }}
+                scrollEventThrottle={120}>
+                <CohostsCard
+                  host={session.host}
+                  hostUserId={session.host_user_id}
+                  cohosts={activeCohosts}
+                  canManage={isHost && isLive}
+                  onManage={() => setCohostManagerOpen(true)}
+                  s={s}
+                />
+                {messages.length > 0 ? (
+                  <View style={s.chatList}>
+                    {messages.slice(0, 120).map((m) => (
+                      <ChatRow key={m.id} message={m} hostUserId={session.host_user_id} s={s} />
+                    ))}
+                  </View>
+                ) : (
+                  <Text style={s.playsEmpty}>No chat yet — be the first.</Text>
+                )}
+              </ScrollView>
+              {!chatStickToBottom ? (
+                <Pressable
+                  onPress={() => {
+                    chatScrollRef.current?.scrollToEnd?.({ animated: true });
+                    setChatStickToBottom(true);
+                  }}
+                  style={({ pressed }) => [s.chatJumpBtn, pressed && { opacity: 0.85 }]}>
+                  <IconSymbol name="arrow.up" size={12} color="#0a0f1c" />
+                  <Text style={s.chatJumpBtnText}>Jump to latest</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
+
+          {portraitPane === 'plays' ? (
+            <ScrollView
+              style={{ flex: 1 }}
+              contentContainerStyle={s.deskRailContent}
+              refreshControl={<RefreshControl refreshing={query.isRefetching} onRefresh={() => query.refetch()} tintColor={theme.spinner} />}>
+              {plays.length > 0 ? (
+                <View style={s.section}>
+                  <View style={s.sectionHeader}>
+                    <Text style={s.sectionTitle}>RECENT PLAYS</Text>
+                    <Text style={s.sectionCount}>{visiblePlays.length} / {plays.length}</Text>
+                  </View>
+                  <PlaysFilterBar
+                    mode={playModeFilter}
+                    onModeChange={setPlayModeFilter}
+                    passOnly={playPassOnly}
+                    onTogglePass={() => setPlayPassOnly((v) => !v)}
+                    s={s}
+                  />
+                  <View style={s.playList}>
+                    {visiblePlays.slice(0, 48).map((play) => (
+                      <PlayRow key={play.id} play={play} onPress={() => setSelectedPlay(play)} s={s} />
+                    ))}
+                    {visiblePlays.length === 0 ? (
+                      <Text style={s.playsEmpty}>No plays match these filters yet.</Text>
+                    ) : null}
+                  </View>
+                </View>
+              ) : (
+                <Text style={s.playsEmpty}>No plays yet.</Text>
+              )}
+            </ScrollView>
+          ) : null}
+
+          {portraitPane === 'stats' ? (
+            <ScrollView
+              style={{ flex: 1 }}
+              contentContainerStyle={s.deskRailContent}>
+              {summary ? <SummaryStats summary={summary} s={s} /> : (
+                <Text style={s.playsEmpty}>Stats appear once the host has logged a play.</Text>
+              )}
+              {!isLive && summary?.postText ? (
+                <View style={s.recapCard}>
+                  <Text style={s.recapEyebrow}>RECAP</Text>
+                  <Text style={s.recapText}>{summary.postText}</Text>
+                </View>
+              ) : null}
+            </ScrollView>
+          ) : null}
+
+          {user && isLive ? (
+            <ChatComposer
+              sessionId={String(id)}
+              onSent={() => query.refetch()}
+              s={s}
+              bottomInset={insets.bottom}
+            />
+          ) : null}
+        </View>
+      ) : isDesktop ? (
+        <View style={[s.deskBody, theaterMode && s.deskBodyTheater]}>
+          {/* Left 8/12 — stream embed, hero, plays log. Theater mode
+              expands this to fill the entire viewport width. */}
           <ScrollView
             style={s.deskMain}
             contentContainerStyle={s.deskMainContent}
@@ -370,45 +582,83 @@ export default function LiveSessionScreen() {
           </ScrollView>
 
           {/* Right 4/12 — cohosts at top, chat thread scrollable in the
-              middle, composer pinned at the bottom. */}
-          <View style={s.deskRail}>
-            <ScrollView
-              style={{ flex: 1 }}
-              contentContainerStyle={s.deskRailContent}
-              showsVerticalScrollIndicator={false}>
-              <CohostsCard
-                host={session.host}
-                hostUserId={session.host_user_id}
-                cohosts={activeCohosts}
-                canManage={isHost && isLive}
-                onManage={() => setCohostManagerOpen(true)}
-                s={s}
-              />
-              {messages.length > 0 ? (
-                <View style={s.section}>
-                  <View style={s.sectionHeader}>
-                    <Text style={s.sectionTitle}>CHAT</Text>
-                    <Text style={s.sectionCount}>{messages.filter((m) => !m.is_system).length}</Text>
-                  </View>
+              middle, composer pinned at the bottom. Hidden in theater
+              mode (press T to toggle). */}
+          {!theaterMode ? (
+            <View style={[s.deskRail, !isWideDesktop && s.deskRailNarrow]}>
+              <View style={s.deskRailHeader}>
+                <Text style={s.sectionTitle}>CHAT</Text>
+                <View style={s.deskRailHeaderActions}>
+                  <Text style={s.sectionCount}>{messages.filter((m) => !m.is_system).length}</Text>
+                  <Pressable
+                    onPress={() => setTheaterMode(true)}
+                    hitSlop={6}
+                    style={({ pressed }) => [s.theaterBtn, pressed && { opacity: 0.7 }]}
+                    accessibilityLabel="Theater mode">
+                    <Text style={s.theaterBtnText}>⤢</Text>
+                  </Pressable>
+                </View>
+              </View>
+              <ScrollView
+                ref={(r) => { chatScrollRef.current = r; }}
+                style={{ flex: 1 }}
+                contentContainerStyle={s.deskRailContent}
+                showsVerticalScrollIndicator={false}
+                onScroll={(e) => {
+                  const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+                  const distance = contentSize.height - contentOffset.y - layoutMeasurement.height;
+                  setChatStickToBottom(distance < 40);
+                }}
+                scrollEventThrottle={120}>
+                <CohostsCard
+                  host={session.host}
+                  hostUserId={session.host_user_id}
+                  cohosts={activeCohosts}
+                  canManage={isHost && isLive}
+                  onManage={() => setCohostManagerOpen(true)}
+                  s={s}
+                />
+                {messages.length > 0 ? (
                   <View style={s.chatList}>
-                    {messages.slice(0, 60).map((m) => (
+                    {messages.slice(0, 120).map((m) => (
                       <ChatRow key={m.id} message={m} hostUserId={session.host_user_id} s={s} />
                     ))}
                   </View>
-                </View>
-              ) : (
-                <Text style={s.playsEmpty}>No chat yet — be the first.</Text>
-              )}
-            </ScrollView>
-            {user && isLive ? (
-              <ChatComposer
-                sessionId={String(id)}
-                onSent={() => query.refetch()}
-                s={s}
-                bottomInset={insets.bottom}
-              />
-            ) : null}
-          </View>
+                ) : (
+                  <Text style={s.playsEmpty}>No chat yet — be the first.</Text>
+                )}
+              </ScrollView>
+              {!chatStickToBottom ? (
+                <Pressable
+                  onPress={() => {
+                    chatScrollRef.current?.scrollToEnd?.({ animated: true });
+                    setChatStickToBottom(true);
+                  }}
+                  style={({ pressed }) => [s.chatJumpBtn, pressed && { opacity: 0.85 }]}>
+                  <IconSymbol name="arrow.up" size={12} color="#0a0f1c" />
+                  <Text style={s.chatJumpBtnText}>Jump to latest</Text>
+                </Pressable>
+              ) : null}
+              {user && isLive ? (
+                <ChatComposer
+                  sessionId={String(id)}
+                  onSent={() => query.refetch()}
+                  s={s}
+                  bottomInset={insets.bottom}
+                />
+              ) : null}
+            </View>
+          ) : (
+            /* Theater mode: rail hidden, show a floating "show chat"
+               affordance so the user can come back without hunting
+               for the keyboard shortcut. */
+            <Pressable
+              onPress={() => setTheaterMode(false)}
+              style={({ pressed }) => [s.theaterShowChatBtn, pressed && { opacity: 0.85 }]}
+              accessibilityLabel="Show chat">
+              <Text style={s.theaterShowChatText}>💬 Show chat · T</Text>
+            </Pressable>
+          )}
         </View>
       ) : (
         <>
@@ -813,17 +1063,22 @@ function HeroCard({
   isLive,
   duration,
   s,
+  compact = false,
 }: {
   session: LiveSessionFull;
   lastPlay: LiveSessionPlay | null | undefined;
   isLive: boolean;
   duration: number | null;
   s: Styles;
+  /** Portrait layout asks for a flatter hero — drops the last-play
+   *  card and shortens the aspect ratio so the YouTube embed below
+   *  has more room. */
+  compact?: boolean;
 }) {
   const hostAvatar = typeof session.host?.avatar === 'string' ? fullImageUrl(session.host.avatar) : undefined;
   const jacket = lastPlay?.background_url || '';
   return (
-    <View style={s.hero}>
+    <View style={[s.hero, compact && s.heroCompact]}>
       <View style={s.heroBgWrap}>
         {jacket ? (
           <Image source={{ uri: jacket }} style={s.heroBg} contentFit="cover" />
@@ -887,7 +1142,7 @@ function HeroCard({
           ) : null}
         </View>
 
-        {lastPlay ? (
+        {lastPlay && !compact ? (
           <View style={s.heroPlayCard}>
             <Text style={s.heroPlayLabel}>{isLive ? 'NOW PLAYING' : 'LAST PLAY'}</Text>
             <Text style={s.heroPlaySong} numberOfLines={1}>{lastPlay.song_title}</Text>
@@ -1003,6 +1258,7 @@ const makeStyles = (t: ThemeColors) => ({
   // Desktop: 8/12 stream + plays on the left, 4/12 chat rail on the right
   // with the composer pinned at the bottom (Twitch-style).
   deskBody: { flex: 1, flexDirection: 'row' as const },
+  deskBodyTheater: { },
   deskMain: { flex: 2, minWidth: 0 },
   deskMainContent: { paddingHorizontal: 16, paddingBottom: 48, gap: 14 },
   deskRail: {
@@ -1011,7 +1267,100 @@ const makeStyles = (t: ThemeColors) => ({
     borderLeftColor: t.border,
     backgroundColor: t.surface,
   },
+  // Narrower rail on 960–1199 px desktops so the main column doesn't
+  // get cramped — gives the stream embed enough room to breathe.
+  deskRailNarrow: { width: 300 },
+  deskRailHeader: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: t.border,
+    backgroundColor: t.surface,
+  },
+  deskRailHeaderActions: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10 },
   deskRailContent: { padding: 12, gap: 12, paddingBottom: 12 },
+  // Theater toggle in the rail header — square button that flips the
+  // page into a chat-hidden, stream-wide mode. Press T to do the same.
+  theaterBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: t.surfaceMuted,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: t.border,
+  },
+  theaterBtnText: { fontSize: 13, color: t.textMuted, fontWeight: '900' as const, lineHeight: 14 },
+  theaterShowChatBtn: {
+    position: 'absolute' as const,
+    bottom: 24, right: 24,
+    paddingHorizontal: 14, paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: t.accent,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  theaterShowChatText: { fontSize: 12, fontWeight: '900' as const, color: '#050505', letterSpacing: 0.4 },
+  chatJumpBtn: {
+    position: 'absolute' as const,
+    bottom: 76, alignSelf: 'center' as const,
+    paddingHorizontal: 12, paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: t.accent,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+  },
+  chatJumpBtnText: { fontSize: 11, fontWeight: '900' as const, color: '#050505', letterSpacing: 0.3 },
+
+  // Portrait desktop — rotated monitors. Vertical stack with a sticky
+  // stream at the top, tabbed body in the middle, composer pinned to
+  // the bottom of the viewport.
+  portraitBody: { flex: 1, flexDirection: 'column' as const, backgroundColor: t.bg },
+  portraitStream: {
+    backgroundColor: '#000',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: t.border,
+  },
+  portraitTabs: {
+    flexDirection: 'row' as const,
+    backgroundColor: t.surface,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: t.border,
+  },
+  portraitTabBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    gap: 6,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  portraitTabBtnActive: { borderBottomColor: t.accent, backgroundColor: t.surfaceMuted },
+  portraitTabText: { fontSize: 13, fontWeight: '800' as const, color: t.textMuted, letterSpacing: 0.4 },
+  portraitTabTextActive: { color: t.text },
+  portraitTabCount: {
+    fontSize: 10, fontWeight: '900' as const, color: t.textDim,
+    backgroundColor: t.surfaceMuted, borderRadius: 999,
+    paddingHorizontal: 6, paddingVertical: 1,
+    fontVariant: ['tabular-nums' as const],
+  },
+  portraitTabCountActive: { backgroundColor: t.accentTint, color: t.accent },
+  portraitChat: { flex: 1, position: 'relative' as const },
 
 
   empty: { padding: 32, alignItems: 'center' as const, gap: 10 },
@@ -1020,6 +1369,9 @@ const makeStyles = (t: ThemeColors) => ({
   backLinkText: { color: t.text, fontWeight: '700' as const },
 
   // Hero
+  // Flatter ratio in portrait mode so the YouTube embed underneath has
+  // proportionally more space.
+  heroCompact: { aspectRatio: 16 / 7 },
   hero: {
     aspectRatio: 16 / 11,
     backgroundColor: '#000',
