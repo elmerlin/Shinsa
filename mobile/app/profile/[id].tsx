@@ -539,6 +539,16 @@ export function ProfileBody({ lookup }: { lookup: string }) {
     staleTime: 30_000,
   });
 
+  // Desktop only: training-load summary for the right-rail "Optimise" card.
+  // Cheap to fetch (server caches the EWMA roll-up) and only enabled when
+  // the desktop layout will actually consume it.
+  const trainingLoadQuery = useQuery({
+    queryKey: ['training-load', profileId],
+    queryFn: () => piugameApi.trainingLoad(profileId),
+    enabled: !!profileId && isDesktop,
+    staleTime: 5 * 60_000,
+  });
+
   // Optional pet — shows as a small overlay on the avatar; tap opens PetModal.
   const petQuery = useQuery({
     queryKey: ['public-pet', profileId],
@@ -955,7 +965,140 @@ export function ProfileBody({ lookup }: { lookup: string }) {
   return (
     <View style={s.container}>
       <Stack.Screen options={{ title: profile.username ? `@${profile.username}` : 'Profile' }} />
+      <View style={isDesktop ? s.deskRow : { flex: 1 }}>
+      {isDesktop ? (
+        <View style={s.deskIdentityRail}>
+          <View style={s.deskIdentityHead}>
+            {avatarUrl ? (
+              <Image source={{ uri: avatarUrl }} style={s.deskIdentityAvatar} contentFit="cover" />
+            ) : (
+              <View style={[s.deskIdentityAvatar, s.avatarFallback]}>
+                <Text style={s.avatarLetter}>{(profile.username || '?').charAt(0).toUpperCase()}</Text>
+              </View>
+            )}
+            <Text style={s.deskIdentityUser} numberOfLines={1}>@{profile.username || 'anonymous'}</Text>
+            {profile.skill_title ? (
+              <Text style={s.deskIdentitySkill} numberOfLines={1}>{profile.skill_title}</Text>
+            ) : null}
+            {liveActiveQuery.data?.active_session ? (
+              <Pressable
+                onPress={() => router.push({
+                  pathname: '/live/[id]',
+                  params: { id: String(liveActiveQuery.data?.active_session?.id || '') },
+                })}
+                style={({ pressed }) => [s.deskLivePill, pressed && { opacity: 0.8 }]}>
+                <View style={s.livePillDot} />
+                <Text style={s.livePillText}>LIVE NOW</Text>
+              </Pressable>
+            ) : null}
+          </View>
+
+          {/* Pumbility tile */}
+          {(() => {
+            const pumb = typeof analytics?.pumbility === 'number'
+              ? analytics.pumbility
+              : typeof profile.pumbility === 'number'
+                ? profile.pumbility
+                : null;
+            return (
+              <View style={s.deskPumTile}>
+                <Text style={s.deskPumLabel}>PUMBILITY</Text>
+                <Text style={s.deskPumValue}>{pumb != null ? formatNumber(pumb) : '—'}</Text>
+                {(bestClearSingle > 0 || bestClearDouble > 0) ? (
+                  <View style={s.deskPumChips}>
+                    {bestClearSingle > 0 ? <Text style={s.deskPumChip}>S{bestClearSingle}</Text> : null}
+                    {bestClearDouble > 0 ? <Text style={s.deskPumChip}>D{bestClearDouble}</Text> : null}
+                  </View>
+                ) : null}
+              </View>
+            );
+          })()}
+
+          {/* Action row */}
+          {!isSelf && currentUser ? (
+            <View style={s.deskActionStack}>
+              <Pressable
+                onPress={() => followMutation.mutate(!isFollowing)}
+                disabled={followMutation.isPending}
+                style={({ pressed }) => [
+                  s.deskFollowBtn,
+                  isFollowing && s.deskFollowBtnActive,
+                  pressed && { opacity: 0.7 },
+                ]}>
+                <Text style={[s.deskFollowText, isFollowing && s.deskFollowTextActive]}>
+                  {followMutation.isPending ? '…' : isFollowing ? 'Following' : 'Follow'}
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={() => openDirectMessageMutation.mutate()}
+                disabled={openDirectMessageMutation.isPending}
+                style={({ pressed }) => [s.deskMessageBtn, pressed && { opacity: 0.7 }]}>
+                <IconSymbol name="bubble.left.and.bubble.right.fill" size={12} color={theme.text} />
+                <Text style={s.deskMessageText}>Message</Text>
+              </Pressable>
+            </View>
+          ) : isSelf ? (
+            <Pressable
+              onPress={() => router.push('/profile/edit')}
+              style={({ pressed }) => [s.deskMessageBtn, pressed && { opacity: 0.7 }]}>
+              <Text style={s.deskMessageText}>Edit profile</Text>
+            </Pressable>
+          ) : null}
+
+          {/* Quick stats */}
+          <View style={s.deskStatsGrid}>
+            <Pressable hitSlop={4} onPress={() => setTab('posts')} style={s.deskStatCell}>
+              <Text style={s.deskStatNum}>{formatNumber(counts?.posts_count)}</Text>
+              <Text style={s.deskStatLabel}>posts</Text>
+            </Pressable>
+            <Pressable hitSlop={4} onPress={() => setTab('followers')} style={s.deskStatCell}>
+              <Text style={s.deskStatNum}>{formatNumber(counts?.followers_count)}</Text>
+              <Text style={s.deskStatLabel}>followers</Text>
+            </Pressable>
+            <Pressable hitSlop={4} onPress={() => setTab('followers')} style={s.deskStatCell}>
+              <Text style={s.deskStatNum}>{formatNumber(counts?.following_count)}</Text>
+              <Text style={s.deskStatLabel}>following</Text>
+            </Pressable>
+            {counts?.total_pumps !== undefined ? (
+              <View style={s.deskStatCell}>
+                <Text style={s.deskStatNum}>{formatNumber(counts.total_pumps)}</Text>
+                <Text style={s.deskStatLabel}>pumps</Text>
+              </View>
+            ) : null}
+          </View>
+
+          {/* Badge rail */}
+          {(achievements.length > 0 || groupBadges.length > 0) ? (
+            <View>
+              <Text style={s.deskRailLabel}>BADGES</Text>
+              <View style={s.deskBadgeWrap}>
+                {achievements.slice(0, 12).map((ach) => {
+                  const img = typeof ach.image === 'string' && ach.image ? fullImageUrl(ach.image) : '';
+                  return (
+                    <Pressable
+                      key={`ach-${String(ach.tier_id ?? ach.series_key ?? ach.name)}`}
+                      onPress={() => setSelectedAchievement(ach)}
+                      style={({ pressed }) => [s.deskBadgeBox, pressed && { opacity: 0.7 }]}>
+                      {img ? (
+                        <Image source={{ uri: img }} style={s.deskBadgeImg} contentFit="contain" />
+                      ) : (
+                        <Text style={s.deskBadgeFallback}>🏅</Text>
+                      )}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+
       <ScrollView contentContainerStyle={s.scroll}>
+        {/* Mobile: full header with identity, action, stats, badges in the
+            scroll. Desktop: those live in the left identity rail (see the
+            top of this return), so the center column only renders the tabs
+            + tab body. */}
+        {!isDesktop && (
         <View style={s.header}>
           {/* ─── Identity row: avatar + name + meta + pumbility cell ─── */}
           <View style={s.identityRow}>
@@ -1194,6 +1337,7 @@ export function ProfileBody({ lookup }: { lookup: string }) {
             </ScrollView>
           ) : null}
         </View>
+        )}
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.tabsRow}>
           {TABS.map((t) => (
@@ -1532,6 +1676,80 @@ export function ProfileBody({ lookup }: { lookup: string }) {
           />
         )}
       </ScrollView>
+
+      {isDesktop ? (
+        <ScrollView style={s.deskOptimiseRail} contentContainerStyle={s.deskOptimiseScroll}>
+          {/* Training load */}
+          {trainingLoadQuery.data ? (
+            <View style={s.deskOptCard}>
+              <Text style={s.deskRailLabel}>TRAINING LOAD</Text>
+              <Text style={s.deskOptHeadline}>
+                {trainingLoadQuery.data.single?.training_status
+                  || trainingLoadQuery.data.double?.training_status
+                  || 'Calibrating'}
+              </Text>
+              {typeof trainingLoadQuery.data.single?.training_ratio === 'number' ? (
+                <Text style={s.deskOptMeta}>
+                  Singles form / base · {Math.round(trainingLoadQuery.data.single.training_ratio)}%
+                </Text>
+              ) : null}
+              {typeof trainingLoadQuery.data.double?.training_ratio === 'number' ? (
+                <Text style={s.deskOptMeta}>
+                  Doubles form / base · {Math.round(trainingLoadQuery.data.double.training_ratio)}%
+                </Text>
+              ) : null}
+              <Pressable
+                onPress={() => router.push('/training')}
+                style={({ pressed }) => [s.deskOptLink, pressed && { opacity: 0.7 }]}>
+                <Text style={s.deskOptLinkText}>Open training →</Text>
+              </Pressable>
+            </View>
+          ) : null}
+
+          {/* Top picks teaser */}
+          {isSelf ? (
+            <View style={s.deskOptCard}>
+              <Text style={s.deskRailLabel}>TOP PICKS</Text>
+              <Text style={s.deskOptMeta}>
+                Charts your training load says you can pass right now.
+              </Text>
+              <Pressable
+                onPress={() => router.push('/what-to-play')}
+                style={({ pressed }) => [s.deskOptPrimary, pressed && { opacity: 0.85 }]}>
+                <Text style={s.deskOptPrimaryText}>What to Play →</Text>
+              </Pressable>
+            </View>
+          ) : null}
+
+          {/* Recent achievements */}
+          {achievements.length > 0 ? (
+            <View style={s.deskOptCard}>
+              <Text style={s.deskRailLabel}>RECENT ACHIEVEMENTS</Text>
+              <View style={s.deskOptAchieveList}>
+                {achievements.slice(0, 4).map((ach) => {
+                  const img = typeof ach.image === 'string' && ach.image ? fullImageUrl(ach.image) : '';
+                  return (
+                    <Pressable
+                      key={`opt-ach-${String(ach.tier_id ?? ach.series_key ?? ach.name)}`}
+                      onPress={() => setSelectedAchievement(ach)}
+                      style={({ pressed }) => [s.deskOptAchieveRow, pressed && { opacity: 0.7 }]}>
+                      {img ? (
+                        <Image source={{ uri: img }} style={s.deskOptAchieveImg} contentFit="contain" />
+                      ) : (
+                        <Text style={{ fontSize: 18 }}>🏅</Text>
+                      )}
+                      <Text style={s.deskOptAchieveName} numberOfLines={1}>
+                        {String(ach.name || 'Achievement')}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          ) : null}
+        </ScrollView>
+      ) : null}
+      </View>
 
       <ScoreCardSheet
         visible={!!scoreTarget}
@@ -3878,4 +4096,174 @@ const makeStyles = (t: ThemeColors) => ({
   levelChartTotal: { width: '100%' as const, justifyContent: 'flex-end' as const, minHeight: 2 },
   levelChartCleared: { width: '100%' as const },
   levelChartLabel: { fontSize: 8, color: t.textMuted, fontVariant: ['tabular-nums' as const], fontWeight: '700' as const },
+
+  // Desktop 3-col Profile shell — identity rail + center scroll + optimise rail.
+  deskRow: { flex: 1, flexDirection: 'row' as const, alignItems: 'stretch' as const },
+
+  // Left identity rail (280 px).
+  deskIdentityRail: {
+    width: 280,
+    borderRightWidth: StyleSheet.hairlineWidth,
+    borderRightColor: t.border,
+    backgroundColor: t.surface,
+    padding: 16,
+    gap: 14,
+  },
+  deskIdentityHead: { alignItems: 'center' as const, gap: 6 },
+  deskIdentityAvatar: { width: 96, height: 96, borderRadius: 48, backgroundColor: t.surfaceMuted },
+  deskIdentityUser: { fontSize: 17, fontWeight: '900' as const, color: t.text, letterSpacing: 0.3 },
+  deskIdentitySkill: { fontSize: 12, color: t.textMuted, textAlign: 'center' as const },
+  deskLivePill: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    backgroundColor: 'rgba(239, 68, 68, 0.18)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(239, 68, 68, 0.5)',
+    marginTop: 4,
+  },
+
+  deskPumTile: {
+    backgroundColor: t.bg,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: t.border,
+    padding: 12,
+    gap: 4,
+    alignItems: 'center' as const,
+  },
+  deskPumLabel: {
+    fontSize: 9,
+    fontWeight: '900' as const,
+    letterSpacing: 1.4,
+    color: t.textDim,
+    textTransform: 'uppercase' as const,
+  },
+  deskPumValue: {
+    fontSize: 28,
+    fontWeight: '900' as const,
+    color: t.text,
+    letterSpacing: -0.5,
+    fontVariant: ['tabular-nums' as const],
+  },
+  deskPumChips: { flexDirection: 'row' as const, gap: 6, marginTop: 2 },
+  deskPumChip: {
+    fontSize: 10,
+    fontWeight: '900' as const,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    backgroundColor: t.accentTint,
+    color: t.accent,
+    letterSpacing: 0.4,
+  },
+
+  deskActionStack: { gap: 6 },
+  deskFollowBtn: {
+    paddingVertical: 9,
+    borderRadius: 8,
+    backgroundColor: t.accent,
+    alignItems: 'center' as const,
+  },
+  deskFollowBtnActive: { backgroundColor: t.surfaceMuted },
+  deskFollowText: { fontSize: 12, fontWeight: '900' as const, color: t.textOnAccent, letterSpacing: 0.4 },
+  deskFollowTextActive: { color: t.text },
+  deskMessageBtn: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    gap: 6,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: t.surfaceMuted,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: t.border,
+  },
+  deskMessageText: { fontSize: 11, fontWeight: '700' as const, color: t.text, letterSpacing: 0.4 },
+
+  deskStatsGrid: {
+    flexDirection: 'row' as const,
+    flexWrap: 'wrap' as const,
+    gap: 6,
+  },
+  deskStatCell: {
+    flexBasis: '47%' as const,
+    flexGrow: 1,
+    backgroundColor: t.bg,
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    alignItems: 'flex-start' as const,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: t.border,
+  },
+  deskStatNum: {
+    fontSize: 16,
+    fontWeight: '900' as const,
+    color: t.text,
+    fontVariant: ['tabular-nums' as const],
+  },
+  deskStatLabel: { fontSize: 10, color: t.textDim, letterSpacing: 0.4 },
+
+  deskRailLabel: {
+    fontSize: 9,
+    fontWeight: '900' as const,
+    letterSpacing: 1.6,
+    color: t.textDim,
+    textTransform: 'uppercase' as const,
+    paddingBottom: 6,
+  },
+  deskBadgeWrap: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 6 },
+  deskBadgeBox: {
+    width: 36,
+    height: 36,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    backgroundColor: t.bg,
+    borderRadius: 6,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: t.border,
+  },
+  deskBadgeImg: { width: 30, height: 30 },
+  deskBadgeFallback: { fontSize: 18 },
+
+  // Right optimise rail (320 px).
+  deskOptimiseRail: {
+    width: 320,
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderLeftColor: t.border,
+    backgroundColor: t.surface,
+  },
+  deskOptimiseScroll: { padding: 16, gap: 14, paddingBottom: 60 },
+  deskOptCard: {
+    backgroundColor: t.bg,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: t.border,
+    padding: 12,
+    gap: 4,
+  },
+  deskOptHeadline: { fontSize: 16, fontWeight: '900' as const, color: t.accent, letterSpacing: 0.4 },
+  deskOptMeta: { fontSize: 12, color: t.textMuted, lineHeight: 16 },
+  deskOptLink: { marginTop: 6 },
+  deskOptLinkText: { fontSize: 12, fontWeight: '800' as const, color: t.accent, letterSpacing: 0.4 },
+  deskOptPrimary: {
+    marginTop: 6,
+    paddingVertical: 9,
+    borderRadius: 8,
+    backgroundColor: t.accent,
+    alignItems: 'center' as const,
+  },
+  deskOptPrimaryText: { fontSize: 12, fontWeight: '900' as const, color: t.textOnAccent, letterSpacing: 0.4 },
+  deskOptAchieveList: { gap: 6, paddingTop: 4 },
+  deskOptAchieveRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 8,
+  },
+  deskOptAchieveImg: { width: 28, height: 28 },
+  deskOptAchieveName: { flex: 1, fontSize: 12, fontWeight: '700' as const, color: t.text },
 });
