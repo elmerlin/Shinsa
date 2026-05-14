@@ -1239,6 +1239,22 @@ function initializeDb() {
       last_error TEXT DEFAULT ''
     );
 
+    -- Personal access tokens for cross-app API integrations (e.g. liketu
+    -- pulling step counts). We store only sha256(token), so a DB leak can't
+    -- be used to authenticate. Plaintext is shown to the user exactly once
+    -- at generation time.
+    CREATE TABLE IF NOT EXISTS user_api_tokens (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name TEXT NOT NULL DEFAULT '',
+      token_hash TEXT NOT NULL UNIQUE,
+      scopes TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT DEFAULT (datetime('now')),
+      last_used_at TEXT DEFAULT NULL,
+      revoked_at TEXT DEFAULT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_user_api_tokens_user ON user_api_tokens(user_id, revoked_at);
+
     CREATE TABLE IF NOT EXISTS user_pumbility_scores (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,

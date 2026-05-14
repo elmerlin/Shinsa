@@ -521,6 +521,14 @@ export const startYoutubeConnection = (nextPath) => request('/youtube/connect/st
 });
 export const getYoutubeBroadcasts = () => request('/youtube/broadcasts');
 export const deleteYoutubeConnection = () => request('/youtube/connection', { method: 'DELETE' });
+
+// External API tokens (personal access tokens for cross-app integrations)
+export const listApiTokens = () => request('/external/tokens');
+export const createApiToken = (payload) => request('/external/tokens', {
+  method: 'POST',
+  body: JSON.stringify(payload || {}),
+});
+export const revokeApiToken = (id) => request(`/external/tokens/${id}/revoke`, { method: 'POST' });
 export const getPumbilityRanking = () => request('/piugame/pumbility-ranking');
 export const syncPumbilityRanking = () => longRequest('/piugame/sync/pumbility-ranking', { method: 'POST' });
 export const getAdminOverRankingScheduler = () => request('/piugame/admin/over-ranking/scheduler');

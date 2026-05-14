@@ -7,6 +7,7 @@ import {
   syncPumbility, syncBestScores, syncRecentlyPlayed, saveWorldMaxLocation,
   getProfileShoes, searchProfileShoeCatalog, createProfileShoe, updateProfileShoePhoto, retireProfileShoe, deleteProfileShoe,
   getYoutubeConnectionStatus, startYoutubeConnection, deleteYoutubeConnection,
+  listApiTokens, createApiToken, revokeApiToken,
 } from '../utils/api';
 import AvatarPicker, { getAvatarUrl } from '../components/AvatarPicker';
 import {
@@ -85,6 +86,18 @@ export default function MyAccountPage() {
     catalogId: null,
   });
   const [shoePhotoFiles, setShoePhotoFiles] = useState({});
+
+  // API access (personal access tokens) tab state
+  const [apiTokens, setApiTokens] = useState([]);
+  const [apiLoading, setApiLoading] = useState(false);
+  const [apiBusy, setApiBusy] = useState('');
+  const [apiMessage, setApiMessage] = useState('');
+  const [apiNewName, setApiNewName] = useState('');
+  // The plaintext token is only returned once at create time; stash it here
+  // so we can show it in a "copy now, this is your only chance" card.
+  const [apiJustCreated, setApiJustCreated] = useState(null);
+  const [apiRevokeConfirmId, setApiRevokeConfirmId] = useState(null);
+  const [apiCopied, setApiCopied] = useState(false);
   const [shoeRetireConfirmId, setShoeRetireConfirmId] = useState(null);
   const [shoeDeleteConfirmId, setShoeDeleteConfirmId] = useState(null);
   const [shoeCatalogQuery, setShoeCatalogQuery] = useState('');
@@ -163,7 +176,7 @@ export default function MyAccountPage() {
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const requestedTab = String(params.get('tab') || '').trim();
-    if (requestedTab && ['profile', 'health', 'password', 'piugame', 'youtube', 'shoes'].includes(requestedTab)) {
+    if (requestedTab && ['profile', 'health', 'password', 'piugame', 'youtube', 'shoes', 'api'].includes(requestedTab)) {
       setTab(requestedTab);
     }
 
@@ -196,6 +209,65 @@ export default function MyAccountPage() {
 
     return () => { cancelled = true; };
   }, [tab, user?.id]);
+
+  useEffect(() => {
+    if (!user || tab !== 'api') return;
+    let cancelled = false;
+    setApiLoading(true);
+    listApiTokens()
+      .then((data) => { if (!cancelled) setApiTokens(data?.tokens || []); })
+      .catch(() => { if (!cancelled) setApiTokens([]); })
+      .finally(() => { if (!cancelled) setApiLoading(false); });
+    return () => { cancelled = true; };
+  }, [tab, user?.id]);
+
+  const handleCreateApiToken = async (e) => {
+    e.preventDefault();
+    setApiBusy('create');
+    setApiMessage('');
+    setApiCopied(false);
+    try {
+      const payload = await createApiToken({
+        name: apiNewName.trim() || 'Untitled token',
+        scopes: ['steps:read'],
+      });
+      setApiJustCreated(payload);
+      setApiNewName('');
+      const data = await listApiTokens();
+      setApiTokens(data?.tokens || []);
+    } catch (err) {
+      setApiMessage(err.message || 'Failed to create token');
+    } finally {
+      setApiBusy('');
+    }
+  };
+
+  const handleRevokeApiToken = async (id) => {
+    setApiBusy(`revoke-${id}`);
+    setApiMessage('');
+    try {
+      await revokeApiToken(id);
+      setApiRevokeConfirmId(null);
+      const data = await listApiTokens();
+      setApiTokens(data?.tokens || []);
+      // If the just-created card is showing this token, hide it.
+      if (apiJustCreated?.id === id) setApiJustCreated(null);
+    } catch (err) {
+      setApiMessage(err.message || 'Failed to revoke token');
+    } finally {
+      setApiBusy('');
+    }
+  };
+
+  const handleCopyApiToken = async (token) => {
+    try {
+      await navigator.clipboard.writeText(token);
+      setApiCopied(true);
+      setTimeout(() => setApiCopied(false), 2500);
+    } catch {
+      setApiMessage('Failed to copy — select the token text and copy manually.');
+    }
+  };
 
   useEffect(() => {
     if (!user || tab !== 'shoes') return undefined;
@@ -607,10 +679,11 @@ export default function MyAccountPage() {
           { key: 'piugame', label: 'PIUGame Link' },
           { key: 'youtube', label: 'YouTube' },
           { key: 'shoes', label: 'Shoes' },
+          { key: 'api', label: 'API Access' },
         ].map(t => (
           <button
             key={t.key}
-            onClick={() => { setTab(t.key); setMessage(''); setPiuMessage(''); setYoutubeMessage(''); setShoeMessage(''); }}
+            onClick={() => { setTab(t.key); setMessage(''); setPiuMessage(''); setYoutubeMessage(''); setShoeMessage(''); setApiMessage(''); setApiJustCreated(null); setApiCopied(false); }}
             className={`px-4 py-2 rounded-lg text-sm font-display font-bold transition-colors ${
               tab === t.key ? 'bg-piu-accent text-white' : 'bg-piu-card text-gray-400 hover:text-white'
             }`}
@@ -992,6 +1065,156 @@ export default function MyAccountPage() {
                   </button>
                 </div>
               </div>
+            )}
+          </div>
+        </div>
+      ) : tab === 'api' ? (
+        <div className="space-y-4">
+          <div className="card space-y-4">
+            <div className="space-y-1">
+              <h3 className="font-display font-bold text-sm text-piu-accent">API ACCESS</h3>
+              <p className="text-xs text-gray-400">
+                Personal access tokens let other apps you own pull your data from pumpshinsa.com.
+                Today this exposes daily step counts (every judgement that isn&rsquo;t a miss) at{' '}
+                <code className="text-piu-accent">GET /api/external/steps?from=YYYY-MM-DD&amp;to=YYYY-MM-DD</code>.
+                Send the token as <code className="text-piu-accent">Authorization: Bearer &lt;token&gt;</code>.
+              </p>
+            </div>
+
+            {apiMessage && (
+              <div className={`px-4 py-2 rounded-lg text-sm ${
+                apiMessage.toLowerCase().includes('fail') || apiMessage.toLowerCase().includes('error')
+                  ? 'bg-red-500/10 text-red-400 border border-red-500/30'
+                  : 'bg-piu-green/10 text-piu-green border border-piu-green/30'
+              }`}>
+                {apiMessage}
+              </div>
+            )}
+
+            {apiJustCreated && (
+              <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 space-y-2">
+                <p className="text-xs font-display font-bold uppercase tracking-wide text-amber-200">
+                  Copy your token now &mdash; this is your only chance
+                </p>
+                <p className="text-[11px] text-amber-100/80">
+                  We store only a hash. If you lose it, revoke and create a new one.
+                </p>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 break-all rounded-lg border border-amber-500/30 bg-piu-dark px-3 py-2 text-xs text-amber-100">
+                    {apiJustCreated.token}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={() => handleCopyApiToken(apiJustCreated.token)}
+                    className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-display font-bold text-amber-100 hover:bg-amber-500/20"
+                  >
+                    {apiCopied ? 'Copied!' : 'Copy'}
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setApiJustCreated(null); setApiCopied(false); }}
+                  className="text-[11px] text-amber-200/70 hover:text-amber-200 underline-offset-2 hover:underline"
+                >
+                  I&rsquo;ve saved it &mdash; hide
+                </button>
+              </div>
+            )}
+
+            <form onSubmit={handleCreateApiToken} className="space-y-2">
+              <label className="block text-xs text-gray-400">Token name</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  className="input-field flex-1"
+                  placeholder="e.g. Liketu health tracker"
+                  value={apiNewName}
+                  onChange={(e) => setApiNewName(e.target.value)}
+                  maxLength={80}
+                  disabled={apiBusy === 'create'}
+                />
+                <button
+                  type="submit"
+                  className="btn-primary"
+                  disabled={apiBusy === 'create'}
+                >
+                  {apiBusy === 'create' ? 'Creating...' : 'Create token'}
+                </button>
+              </div>
+              <p className="text-[11px] text-gray-500">
+                Scope: <code>steps:read</code>. More scopes will appear here as the API grows.
+              </p>
+            </form>
+          </div>
+
+          <div className="card space-y-3">
+            <h3 className="font-display font-bold text-sm text-piu-accent">YOUR TOKENS</h3>
+            {apiLoading ? (
+              <p className="text-sm text-gray-400">Loading tokens...</p>
+            ) : apiTokens.length === 0 ? (
+              <p className="text-sm text-gray-500">No tokens yet. Create one above to get started.</p>
+            ) : (
+              <ul className="space-y-2">
+                {apiTokens.map((t) => {
+                  const revoked = !!t.revoked_at;
+                  return (
+                    <li
+                      key={t.id}
+                      className={`rounded-xl border px-4 py-3 ${
+                        revoked
+                          ? 'border-piu-border/30 bg-piu-dark/40 opacity-60'
+                          : 'border-piu-border/40 bg-piu-dark/40'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-display font-bold">
+                            {t.name || 'Untitled token'}
+                            {revoked ? <span className="ml-2 text-[10px] uppercase tracking-wide text-gray-500">revoked</span> : null}
+                          </p>
+                          <p className="mt-0.5 text-[11px] text-gray-500">
+                            Scopes: {(t.scopes || []).join(', ') || '—'}
+                          </p>
+                          <p className="text-[11px] text-gray-500">
+                            Created {t.created_at ? new Date(`${t.created_at}Z`).toLocaleString() : '—'}
+                            {' · '}
+                            Last used {t.last_used_at ? new Date(`${t.last_used_at}Z`).toLocaleString() : 'never'}
+                          </p>
+                        </div>
+                        {!revoked ? (
+                          apiRevokeConfirmId === t.id ? (
+                            <div className="flex flex-col gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleRevokeApiToken(t.id)}
+                                disabled={apiBusy === `revoke-${t.id}`}
+                                className="rounded-lg border border-red-500/60 bg-red-500/20 px-3 py-1.5 text-[11px] font-display font-bold text-red-200 hover:bg-red-500/30 disabled:opacity-60"
+                              >
+                                {apiBusy === `revoke-${t.id}` ? 'Revoking...' : 'Confirm revoke'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setApiRevokeConfirmId(null)}
+                                className="rounded-lg border border-piu-border px-3 py-1 text-[10px] font-display font-bold text-gray-400 hover:text-gray-200"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setApiRevokeConfirmId(t.id)}
+                              className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-1.5 text-[11px] font-display font-bold text-red-300 hover:bg-red-500/20"
+                            >
+                              Revoke
+                            </button>
+                          )
+                        ) : null}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
             )}
           </div>
         </div>

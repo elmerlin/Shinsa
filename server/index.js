@@ -33,6 +33,7 @@ const petRoutes = require('./routes/pets');
 const petWorldRoutes = require('./routes/petWorld');
 const petBomberRoutes = require('./routes/petBomber');
 const piumonRoutes = require('./routes/piumon');
+const externalRoutes = require('./routes/external');
 const petBomberWs = require('./lib/petBomber/ws');
 const petWorldWs = require('./lib/petWorld/ws');
 
@@ -101,6 +102,7 @@ app.use('/api/pets', petRoutes);
 app.use('/api/pet-world', petWorldRoutes);
 app.use('/api/pet-bomber', petBomberRoutes);
 app.use('/api/piumon', piumonRoutes);
+app.use('/api/external', externalRoutes);
 
 if (typeof piugameRoutes.startOverRankingNightlyScheduler === 'function') {
   try {
