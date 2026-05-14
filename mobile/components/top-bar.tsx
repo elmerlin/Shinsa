@@ -166,14 +166,18 @@ const styles = StyleSheet.create({
     // No logo or hamburger on desktop — just the utility cluster aligned
     // right. The sidebar handles brand + nav, so this bar shrinks to a
     // toolbar row hugging the top-right corner of the route content.
-    // IMPORTANT: width:auto here so the row sizes to its content.
-    // Without this, the inherited width:'100%' from `row` makes TopBar
-    // take the full parent width — and when the parent is a header with
-    // `space-between` (Home, Songs), TopBar's full width overlaps or
-    // clips the heading and pushes the bell off the right edge.
+    // `width: auto` so the row sizes to its content (otherwise the
+    // inherited width:'100%' from `row` overlaps the page heading on
+    // Home/Songs/Account/Feed and pushes the bell off the right edge).
+    // `marginLeft: 'auto'` so the bar pushes itself to the end of any
+    // flex-row parent regardless of whether the parent set a
+    // justifyContent — that means every screen's TopBar lands in the
+    // exact same top-right spot without each page needing its own
+    // header style tweak.
     justifyContent: 'flex-end',
     paddingHorizontal: 0,
     width: 'auto',
+    marginLeft: 'auto',
   },
   brand: { paddingVertical: 2, paddingRight: 8 },
   rightCluster: { flexDirection: 'row', alignItems: 'center', gap: 4 },
