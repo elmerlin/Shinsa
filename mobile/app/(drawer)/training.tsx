@@ -872,11 +872,14 @@ const makeStyles = (t: ThemeColors) => ({
   // the page chrome.
   deskRow: { flex: 1, flexDirection: 'row' as const, alignItems: 'stretch' as const },
   deskNavRail: {
-    width: 140,
+    // Restored from the over-aggressive 140 → mode labels (Overall /
+    // Singles / Doubles) read comfortably here without clipping the
+    // active-state pill.
+    width: 180,
     borderRightWidth: StyleSheet.hairlineWidth,
     borderRightColor: t.border,
     backgroundColor: t.surface,
-    padding: 10,
+    padding: 12,
     gap: 4,
   },
   deskNavLabel: {
@@ -901,7 +904,10 @@ const makeStyles = (t: ThemeColors) => ({
   deskNavStripe: { width: 3, height: 18, borderRadius: 2 },
   deskNavText: { fontSize: 13, fontWeight: '800' as const, letterSpacing: 0.5 },
   deskHelpRail: {
-    width: 220,
+    // Narrowed further — the main column needs room for the 6-tile
+    // grade-predictions row + likely-pass / how-you-stack-up split
+    // without clipping the rightmost level tile.
+    width: 200,
     borderLeftWidth: StyleSheet.hairlineWidth,
     borderLeftColor: t.border,
     backgroundColor: t.surface,
