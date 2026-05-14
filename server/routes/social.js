@@ -2933,8 +2933,8 @@ router.get('/daily-highlights', (req, res) => {
 
   const db = getDb();
   const replayHighlights = selectTopReplayHighlightsWithFallback(db, new Date(), {
-    limit: 5,
-    candidateLimit: 20,
+    limit: 6,
+    candidateLimit: 24,
     maxLookbackDays: 7,
   });
   const topReplays = replayHighlights.items;
@@ -2970,7 +2970,7 @@ router.get('/daily-highlights', (req, res) => {
   }
   const dedupedUpscores = dedupeByUserChart(flatUpscores);
   dedupedUpscores.sort((a, b) => (b.pumbility_gain || b.score_delta) - (a.pumbility_gain || a.score_delta));
-  let topUpscores = pickTopNDiverse(dedupedUpscores, 5, (u) => u.user_id);
+  let topUpscores = pickTopNDiverse(dedupedUpscores, 6, (u) => u.user_id);
   let topUpscoresIsFallback = false;
 
   if (topUpscores.length === 0) {
@@ -3005,7 +3005,7 @@ router.get('/daily-highlights', (req, res) => {
     }
     const dedupedFallbackUpscores = dedupeByUserChart(fallbackFlatUpscores);
     dedupedFallbackUpscores.sort((a, b) => (b.pumbility_gain || b.score_delta) - (a.pumbility_gain || a.score_delta));
-    topUpscores = pickTopNDiverse(dedupedFallbackUpscores, 5, (u) => u.user_id);
+    topUpscores = pickTopNDiverse(dedupedFallbackUpscores, 6, (u) => u.user_id);
     if (topUpscores.length > 0) topUpscoresIsFallback = true;
   }
 
@@ -3062,7 +3062,7 @@ router.get('/daily-highlights', (req, res) => {
     if (lvlDiff !== 0) return lvlDiff;
     return toInt(b.score) - toInt(a.score);
   });
-  let topClears = pickTopNDiverse(dedupedClears, 5, (c) => c.user_id);
+  let topClears = pickTopNDiverse(dedupedClears, 6, (c) => c.user_id);
   let topClearsIsFallback = false;
 
   if (topClears.length === 0) {
@@ -3119,7 +3119,7 @@ router.get('/daily-highlights', (req, res) => {
       if (lvlDiff !== 0) return lvlDiff;
       return toInt(b.score) - toInt(a.score);
     });
-    topClears = pickTopNDiverse(dedupedFallbackClears, 5, (c) => c.user_id);
+    topClears = pickTopNDiverse(dedupedFallbackClears, 6, (c) => c.user_id);
     if (topClears.length > 0) topClearsIsFallback = true;
   }
 
