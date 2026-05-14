@@ -57,6 +57,8 @@ const MAPPING = {
   'square.and.arrow.up': 'ios-share',
   // Used by the new top-right icon row (messages + bell + hamburger).
   'message.fill': 'chat',
+  // Pet hub sidebar entry — closest MaterialIcon is "pets" (paw print).
+  'pawprint.fill': 'pets',
   // Sidebar nav icons (web desktop only). Names must be valid SF Symbols so
   // the iOS variant of IconSymbol (icon-symbol.ios.tsx) still type-checks —
   // the sidebar itself never renders on iOS, but the union is shared.

@@ -44,6 +44,7 @@ const SECONDARY_NAV: NavItem[] = [
   { label: 'World Max', path: '/world-max', stub: true },
   { label: 'Shoes', path: '/shoes' },
   { label: 'Messages', path: '/messages' },
+  { label: 'Pet', path: '/pet' },
 ];
 
 const ACCOUNT_NAV: NavItem[] = [
@@ -178,6 +179,7 @@ export default function DrawerLayout() {
       <Drawer.Screen name="head-to-head" options={{ drawerItemStyle: { display: 'none' } }} />
       <Drawer.Screen name="shoes" options={{ drawerItemStyle: { display: 'none' } }} />
       <Drawer.Screen name="messages" options={{ drawerItemStyle: { display: 'none' } }} />
+      <Drawer.Screen name="pet" options={{ drawerItemStyle: { display: 'none' } }} />
       <Drawer.Screen name="account" options={{ drawerItemStyle: { display: 'none' } }} />
       <Drawer.Screen name="changelog" options={{ drawerItemStyle: { display: 'none' } }} />
     </Drawer>

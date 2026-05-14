@@ -70,6 +70,7 @@ const SECTIONS: NavSection[] = [
       { label: 'Shoes', path: '/shoes', icon: 'figure.run' },
       { label: 'Messages', path: '/messages', icon: 'message.fill', prefix: true },
       { label: 'Posts', path: '/posts', icon: 'square.and.pencil', prefix: true },
+      { label: 'Pet', path: '/pet', icon: 'pawprint.fill', prefix: true },
     ],
   },
   {
