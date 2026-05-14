@@ -35,6 +35,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import SpritePet from '@/components/sprite-pet';
 import { TopBar } from '@/components/top-bar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAuth } from '@/contexts/auth-context';
@@ -252,7 +253,6 @@ function AdoptScreen({ s, topBar }: { s: Styles; topBar: React.ReactNode }) {
 
 function PetHero({ pet, s }: { pet: Pet; s: Styles }) {
   const gradient = petCharacterGradient(pet.character);
-  const emoji = petCharacterEmoji(pet.character);
   const name = pet.nickname || petCharacterName(pet.character);
   const identityTitle = String(pet.identity_title || '').trim();
   const xpProgress = Math.max(0, Math.min(1, Number(pet.level_progress) || 0));
@@ -265,8 +265,25 @@ function PetHero({ pet, s }: { pet: Pet; s: Styles }) {
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={s.hero}>
-      <View style={s.heroEmojiWrap}>
-        <Text style={s.heroEmoji}>{emoji}</Text>
+      <View style={s.heroPetWrap}>
+        {/* Animated pixel-art pet on web; emoji fallback on native.
+            See `mobile/components/sprite-pet.tsx` for the platform
+            split — `.web.jsx` ships the full 2-D box-shadow renderer
+            with idle/blink/tail-wag frames. */}
+        <SpritePet
+          character={pet.character}
+          weightState={pet.weight_state}
+          mood={pet.mood}
+          equippedHat={pet.equipped_hat}
+          equippedBelt={pet.equipped_belt}
+          equippedShoes={pet.equipped_shoes}
+          equippedTop={pet.equipped_top}
+          hatColor={pet.hat_color}
+          beltColor={pet.belt_color}
+          shoesColor={pet.shoes_color}
+          topColor={pet.top_color}
+          size={120}
+        />
         <View style={s.heroMoodBubble}>
           <Text style={s.heroMoodEmoji}>{moodEmoji(pet.mood)}</Text>
         </View>
@@ -1151,14 +1168,13 @@ const makeStyles = (t: ThemeColors) => ({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.08)',
   },
-  heroEmojiWrap: {
-    width: 88, height: 88,
-    borderRadius: 44,
-    backgroundColor: 'rgba(0,0,0,0.32)',
+  heroPetWrap: {
+    // Box for the SpritePet (or emoji fallback). Lets the mood bubble
+    // overlay stay anchored bottom-right of the actual pet sprite.
+    width: 120, height: 120,
     alignItems: 'center' as const, justifyContent: 'center' as const,
     position: 'relative' as const,
   },
-  heroEmoji: { fontSize: 56 },
   heroMoodBubble: {
     position: 'absolute' as const, bottom: -4, right: -4,
     width: 28, height: 28, borderRadius: 14,
