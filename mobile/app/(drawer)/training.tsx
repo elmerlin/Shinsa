@@ -849,11 +849,11 @@ const makeStyles = (t: ThemeColors) => ({
   // the page chrome.
   deskRow: { flex: 1, flexDirection: 'row' as const, alignItems: 'stretch' as const },
   deskNavRail: {
-    width: 160,
+    width: 140,
     borderRightWidth: StyleSheet.hairlineWidth,
     borderRightColor: t.border,
     backgroundColor: t.surface,
-    padding: 12,
+    padding: 10,
     gap: 4,
   },
   deskNavLabel: {
@@ -878,12 +878,12 @@ const makeStyles = (t: ThemeColors) => ({
   deskNavStripe: { width: 3, height: 18, borderRadius: 2 },
   deskNavText: { fontSize: 13, fontWeight: '800' as const, letterSpacing: 0.5 },
   deskHelpRail: {
-    width: 260,
+    width: 220,
     borderLeftWidth: StyleSheet.hairlineWidth,
     borderLeftColor: t.border,
     backgroundColor: t.surface,
   },
-  deskHelpScroll: { padding: 14, gap: 8, paddingBottom: 60 },
+  deskHelpScroll: { padding: 12, gap: 8, paddingBottom: 60 },
   deskHelpEyebrow: {
     fontSize: 10,
     fontWeight: '900' as const,
