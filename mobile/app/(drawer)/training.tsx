@@ -658,7 +658,10 @@ const makeStyles = (t: ThemeColors) => ({
   },
   heading: { fontSize: 22, fontWeight: '800' as const, color: t.text, letterSpacing: 1 },
 
-  scroll: { paddingHorizontal: 12, gap: 14 },
+  // Middle column gets a touch more breathing room on desktop so the
+  // 4-up KPI tiles + 2-up likely-pass / grade-predictions cards don't
+  // butt up against the rails on the left/right.
+  scroll: { paddingHorizontal: 16, gap: 14 },
   center: { padding: 32, alignItems: 'center' as const },
   emptyText: { color: t.textMuted, fontSize: 14 },
   errorBox: {
@@ -837,9 +840,16 @@ const makeStyles = (t: ThemeColors) => ({
   deskTwoColItem: { flex: 1, minWidth: 0 },
 
   // Desktop 3-col layout: nav rail (left), metrics (center), help rail (right).
+  // The two side rails were eating the middle column — the metrics stack
+  // (stat grid + sparkline + likely-pass/grade-predictions + population)
+  // is content-heavy and needs more horizontal room. Trim:
+  //   - nav rail 200 → 160 (Singles / Doubles / Overall labels are short)
+  //   - help rail 320 → 260 (explainer copy reads fine narrower)
+  // Net: middle column gains ~100 px on a 1440 desktop without changing
+  // the page chrome.
   deskRow: { flex: 1, flexDirection: 'row' as const, alignItems: 'stretch' as const },
   deskNavRail: {
-    width: 200,
+    width: 160,
     borderRightWidth: StyleSheet.hairlineWidth,
     borderRightColor: t.border,
     backgroundColor: t.surface,
@@ -868,12 +878,12 @@ const makeStyles = (t: ThemeColors) => ({
   deskNavStripe: { width: 3, height: 18, borderRadius: 2 },
   deskNavText: { fontSize: 13, fontWeight: '800' as const, letterSpacing: 0.5 },
   deskHelpRail: {
-    width: 320,
+    width: 260,
     borderLeftWidth: StyleSheet.hairlineWidth,
     borderLeftColor: t.border,
     backgroundColor: t.surface,
   },
-  deskHelpScroll: { padding: 16, gap: 8, paddingBottom: 60 },
+  deskHelpScroll: { padding: 14, gap: 8, paddingBottom: 60 },
   deskHelpEyebrow: {
     fontSize: 10,
     fontWeight: '900' as const,
