@@ -895,10 +895,10 @@ const makeStyles = (t: ThemeColors) => ({
   deskNavStripe: { width: 3, height: 18, borderRadius: 2 },
   deskNavText: { fontSize: 13, fontWeight: '800' as const, letterSpacing: 0.5 },
   deskHelpRail: {
-    // Tightened further — middle column needs the room for the now-full-
-    // width grade-predictions tiles and KPI row. Explainer copy still
-    // reads fine at this width.
-    width: 180,
+    // Tight column — explainer copy still reads at this width (paragraphs
+    // wrap a bit more, but the labels stay one line). Middle column keeps
+    // the freed-up pixels for the KPI row and grade-predictions tiles.
+    width: 160,
     borderLeftWidth: StyleSheet.hairlineWidth,
     borderLeftColor: t.border,
     backgroundColor: t.surface,
