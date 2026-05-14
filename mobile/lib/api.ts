@@ -2,6 +2,7 @@ import {
   ApiClient,
   createAuthApi,
   createDashboardApi,
+  createExternalApi,
   createLiveApi,
   createMessagesApi,
   createNoticesApi,
@@ -34,5 +35,6 @@ export const petsApi = createPetsApi(apiClient);
 export const piugameApi = createPiugameApi(apiClient);
 export const weeklyChallengesApi = createWeeklyChallengesApi(apiClient);
 export const youtubeApi = createYoutubeApi(apiClient);
+export const externalApi = createExternalApi(apiClient);
 
 export const apiBaseUrl = baseUrl.replace(/\/$/, '');

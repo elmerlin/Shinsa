@@ -23,8 +23,9 @@ import { useTheme, type ThemePreference } from '@/contexts/theme-context';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { useWebPush } from '@/hooks/use-web-push';
-import { piugameApi, youtubeApi } from '@/lib/api';
+import { externalApi, piugameApi, youtubeApi } from '@/lib/api';
 import type { ThemeColors } from '@/constants/theme';
+import type { ApiTokenRow } from '@shared/api';
 
 const PREFERENCE_OPTIONS: { value: ThemePreference; label: string }[] = [
   { value: 'system', label: 'Auto' },
@@ -509,6 +510,205 @@ function YoutubeLinkSection({ s }: { s: Styles }) {
   );
 }
 
+/**
+ * Personal access tokens for cross-app integrations. Users generate a token
+ * here, paste it into another app they own (e.g. liketu's health tracker),
+ * and that app calls `/api/external/*` with it. Plaintext token is only
+ * returned at creation time — we display it in a copy-once card.
+ */
+function ApiTokensSection({ s }: { s: Styles }) {
+  const queryClient = useQueryClient();
+  const tokensQuery = useQuery({
+    queryKey: ['external-tokens'],
+    queryFn: () => externalApi.listTokens(),
+  });
+  const [name, setName] = useState('');
+  const [justCreatedToken, setJustCreatedToken] = useState<string | null>(null);
+  const [confirmRevokeId, setConfirmRevokeId] = useState<number | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [feedback, setFeedback] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null);
+
+  const createMutation = useMutation({
+    mutationFn: (payload: { name: string; scopes: string[] }) => externalApi.createToken(payload),
+    onSuccess: (data) => {
+      setJustCreatedToken(data.token);
+      setName('');
+      setFeedback(null);
+      setCopied(false);
+      queryClient.invalidateQueries({ queryKey: ['external-tokens'] });
+    },
+    onError: (err) => {
+      setFeedback({ tone: 'err', text: err instanceof Error ? err.message : 'Failed to create token' });
+    },
+  });
+
+  const revokeMutation = useMutation({
+    mutationFn: (id: number) => externalApi.revokeToken(id),
+    onSuccess: () => {
+      setConfirmRevokeId(null);
+      queryClient.invalidateQueries({ queryKey: ['external-tokens'] });
+    },
+    onError: (err) => {
+      setFeedback({ tone: 'err', text: err instanceof Error ? err.message : 'Failed to revoke token' });
+    },
+  });
+
+  const handleCopy = async () => {
+    if (!justCreatedToken) return;
+    // expo-clipboard isn't installed yet; on web (new.pumpshinsa.com) this
+    // works via navigator.clipboard. On native we fall through to a hint
+    // telling the user to long-press the value instead.
+    if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) {
+      try {
+        await navigator.clipboard.writeText(justCreatedToken);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2500);
+      } catch {
+        setFeedback({ tone: 'err', text: 'Copy blocked — select the token and copy it manually.' });
+      }
+    } else {
+      setFeedback({ tone: 'err', text: 'Long-press the token to copy it.' });
+    }
+  };
+
+  const tokens: ApiTokenRow[] = tokensQuery.data?.tokens || [];
+
+  return (
+    <View style={s.section}>
+      <Text style={s.eyebrow}>API ACCESS</Text>
+      <View style={s.card}>
+        <Text style={s.cardTitle}>Personal access tokens</Text>
+        <Text style={s.cardHint}>
+          Let another app you own pull your data from pumpshinsa. Today this exposes daily step counts
+          (every judgement that isn&rsquo;t a miss) at{'\n'}
+          GET /api/external/steps?from=YYYY-MM-DD&amp;to=YYYY-MM-DD{'\n'}
+          Send the token as Authorization: Bearer &lt;token&gt;.
+        </Text>
+
+        {feedback ? (
+          <Text style={[s.feedback, feedback.tone === 'ok' ? s.feedbackOk : s.feedbackErr]}>
+            {feedback.text}
+          </Text>
+        ) : null}
+
+        {justCreatedToken ? (
+          <View style={s.tokenJustCreated}>
+            <Text style={s.tokenJustCreatedEyebrow}>
+              COPY YOUR TOKEN NOW — THIS IS YOUR ONLY CHANCE
+            </Text>
+            <Text style={s.tokenJustCreatedHint}>
+              We store only a hash. Lose it and you&rsquo;ll have to create a new one.
+            </Text>
+            <Text selectable style={s.tokenJustCreatedValue}>
+              {justCreatedToken}
+            </Text>
+            <View style={s.tokenJustCreatedActions}>
+              <Pressable
+                onPress={handleCopy}
+                style={({ pressed }) => [s.copyBtn, pressed && { opacity: 0.7 }]}>
+                <Text style={s.copyBtnText}>{copied ? 'Copied!' : 'Copy'}</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => { setJustCreatedToken(null); setCopied(false); }}
+                style={({ pressed }) => [s.copyBtnSecondary, pressed && { opacity: 0.7 }]}>
+                <Text style={s.copyBtnSecondaryText}>I&rsquo;ve saved it</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
+
+        <View style={{ gap: 8 }}>
+          <Text style={s.rowLabel}>Token name</Text>
+          <TextInput
+            value={name}
+            onChangeText={setName}
+            placeholder="e.g. Liketu health tracker"
+            placeholderTextColor={'#8a8a8a'}
+            maxLength={80}
+            editable={!createMutation.isPending}
+            style={s.input}
+          />
+          <Pressable
+            disabled={createMutation.isPending}
+            onPress={() => createMutation.mutate({
+              name: name.trim() || 'Untitled token',
+              scopes: ['steps:read'],
+            })}
+            style={({ pressed }) => [
+              s.primaryBtn,
+              createMutation.isPending && { opacity: 0.6 },
+              pressed && { opacity: 0.85 },
+            ]}>
+            {createMutation.isPending ? (
+              <ActivityIndicator color="#000" />
+            ) : (
+              <Text style={s.primaryBtnText}>Create token</Text>
+            )}
+          </Pressable>
+        </View>
+      </View>
+
+      <View style={s.card}>
+        <Text style={s.cardTitle}>Your tokens</Text>
+        {tokensQuery.isLoading ? (
+          <Text style={s.cardHint}>Loading…</Text>
+        ) : tokens.length === 0 ? (
+          <Text style={s.cardHint}>No tokens yet. Create one above to get started.</Text>
+        ) : (
+          <View style={{ gap: 8 }}>
+            {tokens.map((t) => {
+              const revoked = !!t.revoked_at;
+              const isConfirming = confirmRevokeId === t.id;
+              const isBusy = revokeMutation.isPending && revokeMutation.variables === t.id;
+              return (
+                <View
+                  key={t.id}
+                  style={[s.tokenRow, revoked && { opacity: 0.55 }]}>
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={s.tokenRowName}>
+                      {t.name || 'Untitled token'}
+                      {revoked ? <Text style={s.tokenRevokedTag}>  REVOKED</Text> : null}
+                    </Text>
+                    <Text style={s.tokenRowMeta}>
+                      Scopes: {(t.scopes || []).join(', ') || '—'}
+                    </Text>
+                    <Text style={s.tokenRowMeta}>
+                      Created {formatDate(t.created_at)} · Last used {formatDate(t.last_used_at)}
+                    </Text>
+                  </View>
+                  {!revoked ? (
+                    isConfirming ? (
+                      <View style={{ gap: 4 }}>
+                        <Pressable
+                          disabled={isBusy}
+                          onPress={() => revokeMutation.mutate(t.id)}
+                          style={({ pressed }) => [s.dangerBtn, pressed && { opacity: 0.7 }]}>
+                          <Text style={s.dangerBtnText}>{isBusy ? '…' : 'Confirm'}</Text>
+                        </Pressable>
+                        <Pressable
+                          onPress={() => setConfirmRevokeId(null)}
+                          style={({ pressed }) => [s.cancelBtn, pressed && { opacity: 0.7 }]}>
+                          <Text style={s.cancelBtnText}>Cancel</Text>
+                        </Pressable>
+                      </View>
+                    ) : (
+                      <Pressable
+                        onPress={() => setConfirmRevokeId(t.id)}
+                        style={({ pressed }) => [s.dangerBtnOutline, pressed && { opacity: 0.7 }]}>
+                        <Text style={s.dangerBtnOutlineText}>Revoke</Text>
+                      </Pressable>
+                    )
+                  ) : null}
+                </View>
+              );
+            })}
+          </View>
+        )}
+      </View>
+    </View>
+  );
+}
+
 function PushNotificationsSection({ s }: { s: Styles }) {
   const { status, enable, disable } = useWebPush();
 
@@ -580,7 +780,7 @@ function AppearanceSection({ s }: { s: Styles }) {
 }
 
 /** The desktop Account screen — Linear/Stripe-style settings shell. */
-type AccountSectionKey = 'appearance' | 'integrations' | 'notifications' | 'signout';
+type AccountSectionKey = 'appearance' | 'integrations' | 'api' | 'notifications' | 'signout';
 
 interface AccountNavItem {
   key: AccountSectionKey;
@@ -591,6 +791,7 @@ interface AccountNavItem {
 const ACCOUNT_NAV: AccountNavItem[] = [
   { key: 'appearance', label: 'Appearance', hint: 'Theme' },
   { key: 'integrations', label: 'Integrations', hint: 'PIUGame, YouTube' },
+  { key: 'api', label: 'API Access', hint: 'Personal tokens' },
   { key: 'notifications', label: 'Notifications', hint: 'Web push' },
   { key: 'signout', label: 'Sign out', hint: '' },
 ];
@@ -611,6 +812,8 @@ function AccountDesktop({ s, userId }: { s: Styles; userId: string }) {
             <YoutubeLinkSection s={s} />
           </View>
         );
+      case 'api':
+        return <ApiTokensSection s={s} />;
       case 'notifications':
         return <PushNotificationsSection s={s} />;
       case 'signout':
@@ -694,6 +897,7 @@ export default function AccountScreen() {
 
           <PiugameLinkSection s={s} userId={user.id} />
           <YoutubeLinkSection s={s} />
+          <ApiTokensSection s={s} />
           <AppearanceSection s={s} />
           <PushNotificationsSection s={s} />
 
@@ -879,6 +1083,96 @@ const makeStyles = (t: ThemeColors) => ({
     color: t.text,
     letterSpacing: 0.5,
   },
+  // API tokens — "copy once" card + token rows. Amber accents to flag that
+  // the plaintext value is sensitive and won't reappear.
+  tokenJustCreated: {
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(245, 158, 11, 0.55)',
+    backgroundColor: 'rgba(245, 158, 11, 0.10)',
+    padding: 12,
+    gap: 8,
+  },
+  tokenJustCreatedEyebrow: {
+    fontSize: 10,
+    fontWeight: '900' as const,
+    letterSpacing: 1.4,
+    color: '#fbbf24',
+  },
+  tokenJustCreatedHint: { fontSize: 11, color: t.text, lineHeight: 16 },
+  tokenJustCreatedValue: {
+    fontSize: 13,
+    fontFamily: Platform.OS === 'web' ? 'ui-monospace, SFMono-Regular, Menlo, monospace' : undefined,
+    color: t.text,
+    backgroundColor: t.bg,
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: t.border,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  tokenJustCreatedActions: { flexDirection: 'row' as const, gap: 8 },
+  copyBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#fbbf24',
+  },
+  copyBtnText: { fontSize: 12, fontWeight: '900' as const, color: '#000', letterSpacing: 0.4 },
+  copyBtnSecondary: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: t.border,
+    backgroundColor: t.surfaceMuted,
+  },
+  copyBtnSecondaryText: { fontSize: 12, fontWeight: '700' as const, color: t.text },
+
+  tokenRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'flex-start' as const,
+    gap: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    backgroundColor: t.surfaceMuted,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: t.border,
+  },
+  tokenRowName: { fontSize: 13, fontWeight: '800' as const, color: t.text },
+  tokenRevokedTag: { fontSize: 10, fontWeight: '900' as const, color: t.textDim, letterSpacing: 1 },
+  tokenRowMeta: { fontSize: 11, color: t.textMuted },
+  dangerBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(239, 68, 68, 0.6)',
+    alignItems: 'center' as const,
+  },
+  dangerBtnText: { fontSize: 12, fontWeight: '900' as const, color: '#fca5a5' },
+  dangerBtnOutline: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(239, 68, 68, 0.4)',
+    backgroundColor: 'rgba(239, 68, 68, 0.08)',
+    alignItems: 'center' as const,
+  },
+  dangerBtnOutlineText: { fontSize: 12, fontWeight: '800' as const, color: '#fca5a5' },
+  cancelBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: t.border,
+    alignItems: 'center' as const,
+  },
+  cancelBtnText: { fontSize: 11, fontWeight: '700' as const, color: t.textMuted },
+
   deskBody: { flex: 1, flexDirection: 'row' as const, gap: 24, paddingTop: 18 },
   deskNav: { width: 220, gap: 2 },
   deskNavRow: {

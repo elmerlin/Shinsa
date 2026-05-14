@@ -11,4 +11,5 @@ export * from './pets';
 export * from './piugame';
 export * from './weekly-challenges';
 export * from './youtube';
+export * from './external';
 export * from './types';
