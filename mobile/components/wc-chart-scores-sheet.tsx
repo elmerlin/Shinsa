@@ -20,6 +20,7 @@ import { ReplayModal } from '@/components/replay-modal';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/contexts/theme-context';
+import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { weeklyChallengesApi } from '@/lib/api';
 import { fullImageUrl } from '@/lib/images';
@@ -79,6 +80,7 @@ export function ChartScoresSheet({ chartId, onClose }: Props) {
   const s = useThemedStyles(makeStyles);
   const [replayTarget, setReplayTarget] = useState<{ url: string; title: string } | null>(null);
   const visible = chartId != null;
+  const { isDesktop } = useBreakpoint();
 
   const query = useQuery({
     queryKey: ['wc-chart-scores', chartId],
@@ -97,89 +99,111 @@ export function ChartScoresSheet({ chartId, onClose }: Props) {
 
   return (
     <>
-      <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-        <View style={s.backdrop}>
+      <Modal visible={visible} animationType={isDesktop ? 'fade' : 'slide'} transparent onRequestClose={onClose}>
+        <View style={[s.backdrop, isDesktop && s.backdropDesktop]}>
           <Pressable style={s.backdropFill} onPress={onClose} />
-          <View style={[s.sheet, { paddingBottom: insets.bottom + 12 }]}>
-            <View style={s.handle} />
+          <View
+            style={[
+              s.sheet,
+              { paddingBottom: isDesktop ? 0 : insets.bottom + 12 },
+              isDesktop && s.sheetDesktop,
+            ]}>
+            {!isDesktop ? <View style={s.handle} /> : null}
 
-            {chart ? (
-              <View style={s.heroWrap}>
-                {jacket ? (
-                  <Image source={{ uri: jacket }} style={s.hero} contentFit="cover" cachePolicy="memory-disk" />
-                ) : (
-                  <View style={[s.hero, s.heroFallback]} />
-                )}
-                <LinearGradient
-                  colors={modeHeroGradient(chart.mode)}
-                  locations={[0, 0.4, 1]}
-                  style={StyleSheet.absoluteFill}
-                  pointerEvents="none"
-                />
-                <Pressable
-                  onPress={onClose}
-                  hitSlop={10}
-                  style={({ pressed }) => [s.heroClose, pressed && { opacity: 0.6 }]}>
-                  <IconSymbol name="xmark" size={16} color="#fff" />
-                </Pressable>
-                <LinearGradient
-                  colors={modeBadgeColors(chart.mode)}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={s.heroModeBadge}>
-                  <Text style={s.heroModeBadgeText}>{modeShort(chart.mode)}{chart.level}</Text>
-                </LinearGradient>
-                <View style={s.heroText}>
-                  <Text style={s.heroTitle} numberOfLines={2}>{chart.song_title}</Text>
-                  {chart.artist ? <Text style={s.heroArtist} numberOfLines={1}>{chart.artist}</Text> : null}
-                </View>
-              </View>
-            ) : (
-              <View style={s.heroPlaceholder}>
-                <Text style={s.heroPlaceholderText}>Chart leaderboard</Text>
-                <Pressable onPress={onClose} hitSlop={10} style={({ pressed }) => [s.heroPlaceholderClose, pressed && { opacity: 0.6 }]}>
-                  <IconSymbol name="xmark" size={16} color={theme.textMuted} />
-                </Pressable>
-              </View>
-            )}
-
-            {data ? (
-              <View style={s.statsBar}>
-                <Text style={s.statsBarText}>
-                  <Text style={s.statsBarNum}>{data.scores.length}</Text> player{data.scores.length === 1 ? '' : 's'}
-                </Text>
-                <Text style={s.statsBarDot}>·</Text>
-                <Text style={s.statsBarText}>
-                  <Text style={s.statsBarNum}>{data.total_attempts}</Text> attempt{data.total_attempts === 1 ? '' : 's'}
-                </Text>
-              </View>
-            ) : null}
-
-            {query.isLoading ? (
-              <View style={s.center}><ActivityIndicator color={theme.spinner} /></View>
-            ) : query.isError ? (
-              <Text style={s.errorText}>
-                {query.error instanceof Error ? query.error.message : 'Failed to load scores'}
-              </Text>
-            ) : data ? (
-              <ScrollView style={s.list} contentContainerStyle={s.listContent}>
-                {data.scores.length === 0 ? (
-                  <Text style={s.emptyText}>No plays yet — be the first.</Text>
-                ) : (
-                  data.scores.map((score) => (
-                    <ScoreRow
-                      key={`${score.rank}-${score.user_id}`}
-                      score={score}
-                      isMe={user?.id === score.user_id}
-                      onProfile={() => goProfile(score.username)}
-                      onReplay={(url, title) => setReplayTarget({ url, title })}
-                      chartTitle={chart?.song_title || ''}
-                      s={s}
+            <View style={isDesktop ? s.deskBody : undefined}>
+              <View style={isDesktop ? s.deskHeroCol : undefined}>
+                {chart ? (
+                  <View style={[s.heroWrap, isDesktop && s.heroWrapDesktop]}>
+                    {jacket ? (
+                      <Image source={{ uri: jacket }} style={s.hero} contentFit="cover" cachePolicy="memory-disk" />
+                    ) : (
+                      <View style={[s.hero, s.heroFallback]} />
+                    )}
+                    <LinearGradient
+                      colors={modeHeroGradient(chart.mode)}
+                      locations={[0, 0.4, 1]}
+                      style={StyleSheet.absoluteFill}
+                      pointerEvents="none"
                     />
-                  ))
+                    <Pressable
+                      onPress={onClose}
+                      hitSlop={10}
+                      style={({ pressed }) => [s.heroClose, pressed && { opacity: 0.6 }]}>
+                      <IconSymbol name="xmark" size={16} color="#fff" />
+                    </Pressable>
+                    <LinearGradient
+                      colors={modeBadgeColors(chart.mode)}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={s.heroModeBadge}>
+                      <Text style={s.heroModeBadgeText}>{modeShort(chart.mode)}{chart.level}</Text>
+                    </LinearGradient>
+                    <View style={s.heroText}>
+                      <Text style={s.heroTitle} numberOfLines={2}>{chart.song_title}</Text>
+                      {chart.artist ? <Text style={s.heroArtist} numberOfLines={1}>{chart.artist}</Text> : null}
+                    </View>
+                  </View>
+                ) : (
+                  <View style={s.heroPlaceholder}>
+                    <Text style={s.heroPlaceholderText}>Chart leaderboard</Text>
+                    <Pressable onPress={onClose} hitSlop={10} style={({ pressed }) => [s.heroPlaceholderClose, pressed && { opacity: 0.6 }]}>
+                      <IconSymbol name="xmark" size={16} color={theme.textMuted} />
+                    </Pressable>
+                  </View>
                 )}
-              </ScrollView>
-            ) : null}
+                {isDesktop && data ? (
+                  <View style={[s.statsBar, s.statsBarDesktop]}>
+                    <Text style={s.statsBarText}>
+                      <Text style={s.statsBarNum}>{data.scores.length}</Text> player{data.scores.length === 1 ? '' : 's'}
+                    </Text>
+                    <Text style={s.statsBarDot}>·</Text>
+                    <Text style={s.statsBarText}>
+                      <Text style={s.statsBarNum}>{data.total_attempts}</Text> attempt{data.total_attempts === 1 ? '' : 's'}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+
+              <View style={isDesktop ? s.deskBodyCol : undefined}>
+                {!isDesktop && data ? (
+                  <View style={s.statsBar}>
+                    <Text style={s.statsBarText}>
+                      <Text style={s.statsBarNum}>{data.scores.length}</Text> player{data.scores.length === 1 ? '' : 's'}
+                    </Text>
+                    <Text style={s.statsBarDot}>·</Text>
+                    <Text style={s.statsBarText}>
+                      <Text style={s.statsBarNum}>{data.total_attempts}</Text> attempt{data.total_attempts === 1 ? '' : 's'}
+                    </Text>
+                  </View>
+                ) : null}
+
+                {query.isLoading ? (
+                  <View style={s.center}><ActivityIndicator color={theme.spinner} /></View>
+                ) : query.isError ? (
+                  <Text style={s.errorText}>
+                    {query.error instanceof Error ? query.error.message : 'Failed to load scores'}
+                  </Text>
+                ) : data ? (
+                  <ScrollView style={s.list} contentContainerStyle={s.listContent}>
+                    {data.scores.length === 0 ? (
+                      <Text style={s.emptyText}>No plays yet — be the first.</Text>
+                    ) : (
+                      data.scores.map((score) => (
+                        <ScoreRow
+                          key={`${score.rank}-${score.user_id}`}
+                          score={score}
+                          isMe={user?.id === score.user_id}
+                          onProfile={() => goProfile(score.username)}
+                          onReplay={(url, title) => setReplayTarget({ url, title })}
+                          chartTitle={chart?.song_title || ''}
+                          s={s}
+                        />
+                      ))
+                    )}
+                  </ScrollView>
+                ) : null}
+              </View>
+            </View>
           </View>
         </View>
       </Modal>
@@ -408,4 +432,28 @@ const makeStyles = (t: ThemeColors) => ({
     justifyContent: 'center' as const,
     marginTop: 2,
   },
+
+  // Desktop: centered modal instead of bottom sheet. Jacket left,
+  // scrollable leaderboard right (capped at ~720 px wide so the table
+  // doesn't span the entire viewport).
+  backdropDesktop: { justifyContent: 'center' as const, alignItems: 'center' as const },
+  sheetDesktop: {
+    width: 720,
+    maxWidth: '92%' as const,
+    maxHeight: '85%' as const,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
+    overflow: 'hidden' as const,
+  },
+  deskBody: { flexDirection: 'row' as const, flex: 1, minHeight: 480 },
+  deskHeroCol: {
+    width: 280,
+    borderRightWidth: StyleSheet.hairlineWidth,
+    borderRightColor: t.border,
+  },
+  deskBodyCol: { flex: 1, minWidth: 0 },
+  heroWrapDesktop: { aspectRatio: 1 },
+  statsBarDesktop: { borderTopWidth: 0 },
 });

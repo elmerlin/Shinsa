@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -305,7 +305,7 @@ export default function WeeklyChallengesScreen() {
             ) : null}
 
             {awardsByCategory.length > 0 ? (
-              <AwardsStrip categories={awardsByCategory} onProfile={goProfile} s={s} />
+              <AwardsStrip categories={awardsByCategory} onProfile={goProfile} s={s} isDesktop={isDesktop} />
             ) : null}
 
             {/* Leaderboard renders inline on mobile and in a right rail on
@@ -503,19 +503,75 @@ function AwardsStrip({
   categories,
   onProfile,
   s,
+  isDesktop,
 }: {
   categories: { key: string; label: string; entries: WeeklyChallengeAward[] }[];
   onProfile: (username?: string) => void;
   s: Styles;
+  isDesktop?: boolean;
 }) {
+  const scrollRef = useRef<ScrollView | null>(null);
+  // Track scroll offset + content width so the chevrons can disappear when
+  // there's nothing left to scroll in that direction. Web only — native
+  // already shows the iOS/Android scroll bounce.
+  const [scrollX, setScrollX] = useState(0);
+  const [contentW, setContentW] = useState(0);
+  const [viewportW, setViewportW] = useState(0);
+  const canScrollLeft = scrollX > 4;
+  const canScrollRight = scrollX + viewportW < contentW - 4;
+  const scrollBy = (delta: number) => {
+    if (!scrollRef.current) return;
+    scrollRef.current.scrollTo({ x: Math.max(0, scrollX + delta), animated: true });
+  };
   return (
     <View style={s.section}>
       <Text style={s.sectionTitle}>AWARDS</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.awardsRow}>
-        {categories.map((c) => (
-          <PodiumCard key={c.key} label={c.label} entries={c.entries} onProfile={onProfile} s={s} />
-        ))}
-      </ScrollView>
+      <View
+        style={s.awardsTrack}
+        onLayout={(e) => setViewportW(e.nativeEvent.layout.width)}>
+        <ScrollView
+          ref={scrollRef}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={s.awardsRow}
+          onScroll={(e) => setScrollX(e.nativeEvent.contentOffset.x)}
+          onContentSizeChange={(w) => setContentW(w)}
+          scrollEventThrottle={64}
+          // Scroll-snap so the next card lines up cleanly with the
+          // viewport edge after a chevron tap. Web only — RN Web passes
+          // this through to the underlying div; native ignores it.
+          {...(isDesktop ? { snapToInterval: 280, decelerationRate: 'fast' as const } : {})}>
+          {categories.map((c) => (
+            <PodiumCard key={c.key} label={c.label} entries={c.entries} onProfile={onProfile} s={s} />
+          ))}
+        </ScrollView>
+        {/* Edge fades + chevrons — only on desktop, since touch surfaces
+            already advertise scrollability natively. */}
+        {isDesktop && canScrollLeft ? (
+          <>
+            <View style={[s.awardsFade, s.awardsFadeLeft]} pointerEvents="none" />
+            <Pressable
+              onPress={() => scrollBy(-300)}
+              hitSlop={6}
+              style={({ pressed }) => [s.awardsArrow, s.awardsArrowLeft, pressed && { opacity: 0.7 }]}
+              accessibilityLabel="Scroll awards left">
+              <IconSymbol name="chevron.left" size={16} color="#fff" />
+            </Pressable>
+          </>
+        ) : null}
+        {isDesktop && canScrollRight ? (
+          <>
+            <View style={[s.awardsFade, s.awardsFadeRight]} pointerEvents="none" />
+            <Pressable
+              onPress={() => scrollBy(300)}
+              hitSlop={6}
+              style={({ pressed }) => [s.awardsArrow, s.awardsArrowRight, pressed && { opacity: 0.7 }]}
+              accessibilityLabel="Scroll awards right">
+              <IconSymbol name="chevron.right" size={16} color="#fff" />
+            </Pressable>
+          </>
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -1009,6 +1065,30 @@ const makeStyles = (t: ThemeColors) => ({
 
   // Awards strip
   awardsRow: { gap: 8, paddingHorizontal: 2 },
+  awardsTrack: { position: 'relative' as const },
+  awardsFade: {
+    position: 'absolute' as const,
+    top: 0,
+    bottom: 0,
+    width: 32,
+    backgroundColor: t.bg,
+    opacity: 0.85,
+  },
+  awardsFadeLeft: { left: 0 },
+  awardsFadeRight: { right: 0 },
+  awardsArrow: {
+    position: 'absolute' as const,
+    top: '50%' as const,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    transform: [{ translateY: -14 }] as const,
+  },
+  awardsArrowLeft: { left: 4 },
+  awardsArrowRight: { right: 4 },
   podiumCard: {
     width: 230,
     backgroundColor: t.card,
