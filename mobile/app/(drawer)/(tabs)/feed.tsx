@@ -723,6 +723,25 @@ function WeeklyChallengeCard({ item, onPump, onComments, onShare, onJacket, onSc
 
 type FeedFilter = 'all' | 'posts' | 'upscores' | 'wc' | 'clears';
 
+/**
+ * Wraps the feed FlatList in a column-direction host on desktop so the
+ * list can stretch vertically (cross-axis stretch from the parent row,
+ * then capped to 640 px wide via maxWidth on the FlatList itself). On
+ * mobile we just render children inline — no extra View, no perf cost.
+ */
+function FeedListHost({
+  isDesktop,
+  hostStyle,
+  children,
+}: {
+  isDesktop: boolean;
+  hostStyle: import('react-native').StyleProp<import('react-native').ViewStyle>;
+  children: React.ReactNode;
+}) {
+  if (!isDesktop) return <>{children}</>;
+  return <View style={hostStyle}>{children}</View>;
+}
+
 export default function FeedScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -898,6 +917,14 @@ export default function FeedScreen() {
           <Text style={s.errorText}>{error instanceof Error ? error.message : 'Failed to load feed'}</Text>
         </View>
       ) : (
+        // Desktop wraps the FlatList in a column-direction host so we can
+        // stretch it vertically (alignSelf:'center' on a row-flex child
+        // would override stretch and collapse the scroll height — that's
+        // what was breaking both the top offset and the scrollability).
+        // Inside the host, alignItems:'center' is horizontal, so the
+        // 640-px-capped FlatList sits centered and grows to full row
+        // height. Mobile renders the FlatList directly.
+        <FeedListHost isDesktop={isDesktop} hostStyle={s.deskFeedHost}>
         <FlatList
           style={isDesktop ? s.deskFeed : undefined}
           data={items}
@@ -941,6 +968,7 @@ export default function FeedScreen() {
           }}
           refreshControl={<RefreshControl refreshing={isRefetching && !isFetchingNextPage} onRefresh={refetch} tintColor={theme.spinner} />}
         />
+        </FeedListHost>
       )}
 
       {isDesktop ? (
@@ -1302,7 +1330,19 @@ const makeStyles = (t: ThemeColors) => ({
   deskFilterRowActive: { backgroundColor: t.accentTint },
   deskFilterText: { fontSize: 13, fontWeight: '700' as const, color: t.text },
   deskFilterTextActive: { color: t.accent, fontWeight: '800' as const },
-  deskFeed: { flex: 1, maxWidth: 640, alignSelf: 'center' as const, width: '100%' as const },
+  // Host wraps the desktop FlatList in column direction so the list can
+  // stretch vertically (taking the full row height = scrollable). Centers
+  // the FlatList horizontally via alignItems (which is horizontal in a
+  // column container).
+  deskFeedHost: {
+    flex: 1,
+    minWidth: 0,
+    alignItems: 'center' as const,
+  },
+  // The FlatList itself: full width up to 640 px, flex:1 vertically so it
+  // takes all available height inside the host. No alignSelf — that was
+  // the bug (cross-axis center in a row collapses the height).
+  deskFeed: { flex: 1, width: '100%' as const, maxWidth: 640 },
   deskRightRail: {
     width: 320,
     borderLeftWidth: StyleSheet.hairlineWidth,
