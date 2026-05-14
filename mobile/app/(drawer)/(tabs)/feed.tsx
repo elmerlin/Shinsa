@@ -1,7 +1,7 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AchievementBadgePost } from '@/components/achievement-badge-post';
@@ -751,6 +751,11 @@ export default function FeedScreen() {
   const onPump = usePumpFeedItem();
   const { isDesktop } = useBreakpoint();
   const [feedFilter, setFeedFilter] = useState<FeedFilter>('all');
+  // Ref to the FlatList so we can snap back to the top when the user
+  // switches client-side filters. Without this you stay scrolled at
+  // your previous offset, which on a shorter filtered list lands you
+  // past the end (looks like an empty pane that won't scroll).
+  const feedListRef = useRef<FlatList<FeedItem>>(null);
   const [commentTarget, setCommentTarget] = useState<{ type: FeedItem['type']; id: string | number } | null>(null);
   const onComments = (item: FeedItem) => setCommentTarget({ type: item.type, id: item.id });
   const [scoreTarget, setScoreTarget] = useState<ScoreCardData | null>(null);
@@ -814,6 +819,13 @@ export default function FeedScreen() {
       return true;
     });
   }, [allItems, feedFilter]);
+
+  // Snap back to the top whenever the filter changes. animated:false so
+  // the user perceives it as "this is a different list" rather than
+  // "the page jumped under me".
+  useEffect(() => {
+    feedListRef.current?.scrollToOffset({ offset: 0, animated: false });
+  }, [feedFilter]);
 
   // Right-rail data: this-week WC top 3. Cheap and shared with the WC
   // route's cache so no extra round-trip when the user navigates there.
@@ -926,6 +938,7 @@ export default function FeedScreen() {
         // height. Mobile renders the FlatList directly.
         <FeedListHost isDesktop={isDesktop} hostStyle={s.deskFeedHost}>
         <FlatList
+          ref={feedListRef}
           style={isDesktop ? s.deskFeed : undefined}
           data={items}
           keyExtractor={(item, i) => `${item.type}:${item.id}:${i}`}
