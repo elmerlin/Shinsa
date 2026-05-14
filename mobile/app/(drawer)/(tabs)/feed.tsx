@@ -844,6 +844,11 @@ export default function FeedScreen() {
   return (
     <View style={s.container}>
       <View style={[s.header, { paddingTop: insets.top + 12 }]}>
+        {/* Desktop heading on the left so the row uses its
+            `space-between` to push the TopBar utility cluster to the
+            right edge. Without a sibling here, TopBar's `width: auto`
+            on desktop made it stick flush-left after the sidebar. */}
+        {isDesktop ? <Text style={s.deskHeading}>Feed</Text> : null}
         <TopBar
           rightExtra={
             <Pressable
@@ -1119,7 +1124,11 @@ function buildFeedSharePayload(item: FeedItem | null): EmbedSendPayload {
 
 const makeStyles = (t: ThemeColors) => ({
   container: { flex: 1, backgroundColor: t.bg },
-  header: { paddingHorizontal: 16, paddingBottom: 12, flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12 },
+  // `justifyContent: 'space-between'` so on desktop the heading sits
+  // left and the TopBar utility cluster pushes flush to the right edge.
+  // On mobile TopBar fills the row to 100% width so this is a no-op.
+  header: { paddingHorizontal: 16, paddingBottom: 12, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, gap: 12 },
+  deskHeading: { fontSize: 22, fontWeight: '800' as const, color: t.text, letterSpacing: 0.5 },
   heading: { flex: 1, fontSize: 28, fontWeight: '800' as const, color: t.text, letterSpacing: 2 },
   composeBtn: { padding: 4 },
   listContent: { padding: 16, paddingBottom: 80 },
