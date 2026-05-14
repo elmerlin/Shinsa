@@ -1,27 +1,26 @@
 /**
- * SpritePet — animated CSS box-shadow pixel art renderer ported from
- * `client/src/components/SpritePet.jsx`. The full pixel-art component
- * lives in `sprite-pet.web.jsx` and is the file Metro picks for web
- * platforms (the `.web.jsx` extension wins over this `.tsx` only on
- * `Platform.OS === 'web'`).
+ * SpritePet — animated CSS box-shadow pixel art renderer.
  *
- * Why two files?
- * - On web (RN-Web): we render raw `<div>` + `box-shadow` strings to
- *   get crisp pixel art with frame-based pose animation. This is the
- *   2,000-line port of the web SpritePet.
- * - On native (iOS/Android): there's no DOM, no `<div>`, no
- *   `box-shadow` text-rendering hack. Until we port the renderer to
- *   `react-native-svg` or a Skia canvas, native falls back to an
- *   emoji on a tinted gradient circle so the screens still look
- *   intentional.
+ * On web (RN-Web): renders the full 2,049-line pixel-art component
+ * ported from `client/src/components/SpritePet.jsx`, with frame-based
+ * pose / blink / tail-wag animations and full cosmetic + mood +
+ * reaction support. See `./sprite-pet.web.jsx`.
  *
- * This file is the type-system anchor and the native fallback.
- * Both variants must export a default function with the same prop
- * shape so `<SpritePet character="dojocat" mood="happy" />` works
- * unconditionally.
+ * On native (iOS/Android): there's no `<div>` and no `box-shadow`
+ * text-rendering hack — fall back to a character emoji on a tinted
+ * gradient circle. We'll port the renderer to react-native-svg or
+ * Skia in a follow-up.
+ *
+ * Implementation note: we pick the variant at runtime via
+ * `Platform.OS === 'web'` + require(). That's intentional — Metro's
+ * platform-extension resolution (`.web.jsx` vs `.tsx`) wasn't reliably
+ * preferring the web variant for this module (both files bundled,
+ * but the .tsx default kept winning the import). Explicit Platform
+ * check sidesteps Metro's resolver ordering entirely.
  */
 import { LinearGradient } from 'expo-linear-gradient';
-import { StyleSheet, Text, View } from 'react-native';
+import type { ComponentType } from 'react';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 import { petCharacterEmoji, petCharacterGradient } from '@/lib/pets';
 
 export interface SpritePetProps {
@@ -38,26 +37,18 @@ export interface SpritePetProps {
   beltColor?: string;
   shoesColor?: string;
   topColor?: string;
-  /** True while the eat-food animation should play. */
   isEating?: boolean;
-  /** True while the trick-perform animation should play. */
   isTricking?: boolean;
-  /** Trigger a one-shot reaction (`'praise' | 'cuddle' | 'tease' | 'tap' | 'happy'`...). */
   reaction?: string;
-  /** Override the face: `'pout' | 'excited' | 'love' | …`. Empty = mood-derived. */
   expression?: string;
-  /** Food id from PET_FOODS (`'pump-chow'`, `'beat-bites'`, …). Drives the eat animation sprite. */
   foodId?: string;
-  /** Action being performed (free-text label). Used for occasional pose overrides. */
   actionState?: string;
-  /** Pixel-perfect rendered size in CSS px. */
   size?: number;
   className?: string;
   onClick?: () => void;
 }
 
-/** Native fallback. The web file overrides with the real pixel art. */
-export default function SpritePet({ character = 'dojocat', size = 140 }: SpritePetProps) {
+function NativeFallback({ character = 'dojocat', size = 140 }: SpritePetProps) {
   const gradient = petCharacterGradient(character);
   return (
     <View
@@ -78,6 +69,25 @@ export default function SpritePet({ character = 'dojocat', size = 140 }: SpriteP
   );
 }
 
+// Pick the implementation at module load time so React's reconciler
+// sees a stable component identity.
+const SpritePet: ComponentType<SpritePetProps> = (() => {
+  if (Platform.OS === 'web') {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
+      const mod = require('./sprite-pet.web.jsx');
+      return (mod?.default ?? NativeFallback) as ComponentType<SpritePetProps>;
+    } catch {
+      // If the web bundle is missing somehow, don't crash — drop back
+      // to the emoji rather than throwing in render.
+      return NativeFallback;
+    }
+  }
+  return NativeFallback;
+})();
+
+export default SpritePet;
+
 const styles = StyleSheet.create({
   fallback: {
     overflow: 'hidden',
@@ -85,7 +95,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   emoji: {
-    // Centered via parent flex.
     textAlign: 'center',
   },
 });
