@@ -222,29 +222,12 @@ export default function TrainingScreen() {
               {ewmaSeries.length > 1 ? (
                 <EwmaSparklineCard series={ewmaSeries} s={s} accent={MODE_ACCENT[mode]} onHelp={handleHelp} />
               ) : null}
-              {isDesktop ? (
-                <View style={s.deskTwoCol}>
-                  {profile.likely_pass ? (
-                    <View style={s.deskTwoColItem}>
-                      <LikelyPassCard profile={profile} s={s} theme={theme} onHelp={handleHelp} />
-                    </View>
-                  ) : null}
-                  {profile.grade_predictions ? (
-                    <View style={s.deskTwoColItem}>
-                      <GradePredictionsCard predictions={profile.grade_predictions} s={s} onHelp={handleHelp} />
-                    </View>
-                  ) : null}
-                </View>
-              ) : (
-                <>
-                  {profile.likely_pass ? (
-                    <LikelyPassCard profile={profile} s={s} theme={theme} onHelp={handleHelp} />
-                  ) : null}
-                  {profile.grade_predictions ? (
-                    <GradePredictionsCard predictions={profile.grade_predictions} s={s} onHelp={handleHelp} />
-                  ) : null}
-                </>
-              )}
+              {profile.likely_pass ? (
+                <LikelyPassCard profile={profile} s={s} theme={theme} onHelp={handleHelp} />
+              ) : null}
+              {profile.grade_predictions ? (
+                <GradePredictionsCard predictions={profile.grade_predictions} s={s} onHelp={handleHelp} />
+              ) : null}
               {population ? (
                 <PopulationSection population={population} s={s} onHelp={handleHelp} />
               ) : null}
@@ -587,14 +570,18 @@ function GradePredictionsCard({
         <Text style={s.sectionTitle}>GRADE PREDICTIONS</Text>
         <HelpButton onPress={() => onHelp('grade_predictions')} />
       </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.predRow}>
+      {/* Wrap onto multiple rows instead of horizontal-scrolling so
+          higher-level predictions don't disappear off the right edge
+          when the column is narrow. Each tile is fixed-width so the
+          row packs cleanly. */}
+      <View style={s.predRow}>
         {entries.map((e) => (
           <View key={e.level} style={s.predTile}>
             <Text style={s.predLevel}>{e.level}</Text>
             <GradeChip grade={e.grade} score={0} size="sm" />
           </View>
         ))}
-      </ScrollView>
+      </View>
     </View>
   );
 }
@@ -825,8 +812,14 @@ const makeStyles = (t: ThemeColors) => ({
   clearTitle: { flex: 1, fontSize: 12, color: t.text, fontWeight: '700' as const },
   clearScore: { fontSize: 11, color: t.textMuted, fontVariant: ['tabular-nums' as const] },
 
-  // Grade predictions row
-  predRow: { gap: 6, paddingHorizontal: 2 },
+  // Grade predictions row — flex-wraps so high-level tiles always show
+  // (no horizontal scroll, nothing clipped off the right).
+  predRow: {
+    flexDirection: 'row' as const,
+    flexWrap: 'wrap' as const,
+    gap: 6,
+    paddingHorizontal: 2,
+  },
   predTile: {
     width: 56,
     paddingVertical: 8,
@@ -857,25 +850,23 @@ const makeStyles = (t: ThemeColors) => ({
   popHeadlineSub: { fontSize: 13 },
   popMeta: { fontSize: 10, color: t.textMuted },
 
-  // Desktop overrides — 4-col KPI row + 2-col likely-pass / grade-predictions.
-  statTileDesktop: { flexBasis: '23%' as const, flexGrow: 0 },
-  deskTwoCol: { flexDirection: 'row' as const, alignItems: 'flex-start' as const, gap: 14 },
-  deskTwoColItem: { flex: 1, minWidth: 0 },
+  // Desktop overrides — 4-col KPI row, tiles grow to fill width so the row
+  // doesn't leave dead space on the right. Likely-pass / grade-predictions
+  // stack vertically on desktop too: when they were side-by-side the short
+  // grade-predictions card left a tall empty gutter next to the taller
+  // likely-pass card.
+  statTileDesktop: { flex: 1, minWidth: 120 },
 
   // Desktop 3-col layout: nav rail (left), metrics (center), help rail (right).
-  // The two side rails were eating the middle column — the metrics stack
-  // (stat grid + sparkline + likely-pass/grade-predictions + population)
-  // is content-heavy and needs more horizontal room. Trim:
-  //   - nav rail 200 → 160 (Singles / Doubles / Overall labels are short)
-  //   - help rail 320 → 260 (explainer copy reads fine narrower)
-  // Net: middle column gains ~100 px on a 1440 desktop without changing
-  // the page chrome.
+  // Both side rails are kept tight to their content so the middle column
+  // gets every pixel it can — the metrics stack (KPI row, sparkline,
+  // likely-pass, grade-predictions, how-you-stack-up) is content-heavy.
   deskRow: { flex: 1, flexDirection: 'row' as const, alignItems: 'stretch' as const },
   deskNavRail: {
-    // Restored from the over-aggressive 140 → mode labels (Overall /
-    // Singles / Doubles) read comfortably here without clipping the
-    // active-state pill.
-    width: 180,
+    // Tight to text width — mode labels (Overall / Singles / Doubles)
+    // are short, and the middle column needs every pixel for the KPI
+    // row and grade-predictions tiles.
+    width: 144,
     borderRightWidth: StyleSheet.hairlineWidth,
     borderRightColor: t.border,
     backgroundColor: t.surface,
@@ -904,10 +895,10 @@ const makeStyles = (t: ThemeColors) => ({
   deskNavStripe: { width: 3, height: 18, borderRadius: 2 },
   deskNavText: { fontSize: 13, fontWeight: '800' as const, letterSpacing: 0.5 },
   deskHelpRail: {
-    // Narrowed further — the main column needs room for the 6-tile
-    // grade-predictions row + likely-pass / how-you-stack-up split
-    // without clipping the rightmost level tile.
-    width: 200,
+    // Tightened further — middle column needs the room for the now-full-
+    // width grade-predictions tiles and KPI row. Explainer copy still
+    // reads fine at this width.
+    width: 180,
     borderLeftWidth: StyleSheet.hairlineWidth,
     borderLeftColor: t.border,
     backgroundColor: t.surface,
