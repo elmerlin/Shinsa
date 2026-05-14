@@ -102,6 +102,16 @@ export default function TiersScreen() {
   // Desktop only: tapping a chart opens a right-rail context panel instead
   // of navigating to /song/[id]. Mobile keeps the existing drill-down.
   const [railChart, setRailChart] = useState<TierChart | null>(null);
+  // Desktop only: hovering a cell previews the chart in the rail without
+  // committing. Tap pins it (becomes `railChart`); leaving the cell while
+  // unpinned clears the preview.
+  const [hoverChart, setHoverChart] = useState<TierChart | null>(null);
+  // Desktop density picker — 8 / 10 / 12 cols. Stored locally so it doesn't
+  // overwrite the mobile songsPerRow preference, which is calibrated for
+  // narrow viewports (4 / 5 / 6).
+  const [deskDensity, setDeskDensity] = useState<8 | 10 | 12>(10);
+  // The chart whose detail panel is currently showing. Pinned wins over hover.
+  const displayChart = railChart ?? hoverChart;
 
   const metaQuery = useQuery({
     queryKey: ['tiers-meta'],
@@ -280,42 +290,62 @@ export default function TiersScreen() {
         />
       </View>
 
-      <View style={s.pickerCard}>
-        <Pressable
-          onPress={goPrevLevel}
-          disabled={!canGoPrev}
-          hitSlop={6}
-          style={({ pressed }) => [s.iconBtn, pressed && { opacity: 0.6 }, !canGoPrev && { opacity: 0.25 }]}
-          accessibilityLabel="Previous level">
-          <IconSymbol name="chevron.left" size={24} color={theme.textMuted} />
-        </Pressable>
+      {isDesktop ? (
+        <DesktopToolbar
+          mode={mode}
+          setMode={setMode}
+          availableModes={availableModes}
+          level={level}
+          levels={levels}
+          setLevel={setLevel}
+          density={deskDensity}
+          setDensity={setDeskDensity}
+          showUnplayed={settings.showUnplayed}
+          onToggleShowUnplayed={() => updateSettings({ showUnplayed: !settings.showUnplayed })}
+          onShare={handleCapture}
+          captureBusy={captureBusy}
+          canShare={tiersForRender.length > 0}
+          accent={accentColor}
+          s={s}
+        />
+      ) : (
+        <View style={s.pickerCard}>
+          <Pressable
+            onPress={goPrevLevel}
+            disabled={!canGoPrev}
+            hitSlop={6}
+            style={({ pressed }) => [s.iconBtn, pressed && { opacity: 0.6 }, !canGoPrev && { opacity: 0.25 }]}
+            accessibilityLabel="Previous level">
+            <IconSymbol name="chevron.left" size={24} color={theme.textMuted} />
+          </Pressable>
 
-        <Pressable
-          onPress={handleModeCycle}
-          hitSlop={6}
-          style={({ pressed }) => [s.modePill, { backgroundColor: `${accentColor}1f` }, pressed && { opacity: 0.7 }]}>
-          <View style={[s.modeStripe, { backgroundColor: accentColor }]} />
-          <Text style={[s.modeLabel, { color: accentColor }]}>{MODE_LABEL[mode]}</Text>
-          <Text style={s.levelNumber}>{level ?? '—'}</Text>
-        </Pressable>
+          <Pressable
+            onPress={handleModeCycle}
+            hitSlop={6}
+            style={({ pressed }) => [s.modePill, { backgroundColor: `${accentColor}1f` }, pressed && { opacity: 0.7 }]}>
+            <View style={[s.modeStripe, { backgroundColor: accentColor }]} />
+            <Text style={[s.modeLabel, { color: accentColor }]}>{MODE_LABEL[mode]}</Text>
+            <Text style={s.levelNumber}>{level ?? '—'}</Text>
+          </Pressable>
 
-        <Pressable
-          onPress={goNextLevel}
-          disabled={!canGoNext}
-          hitSlop={6}
-          style={({ pressed }) => [s.iconBtn, pressed && { opacity: 0.6 }, !canGoNext && { opacity: 0.25 }]}
-          accessibilityLabel="Next level">
-          <IconSymbol name="chevron.right" size={24} color={theme.textMuted} />
-        </Pressable>
+          <Pressable
+            onPress={goNextLevel}
+            disabled={!canGoNext}
+            hitSlop={6}
+            style={({ pressed }) => [s.iconBtn, pressed && { opacity: 0.6 }, !canGoNext && { opacity: 0.25 }]}
+            accessibilityLabel="Next level">
+            <IconSymbol name="chevron.right" size={24} color={theme.textMuted} />
+          </Pressable>
 
-        <Pressable
-          onPress={() => setSettingsOpen(true)}
-          hitSlop={6}
-          style={({ pressed }) => [s.iconBtn, pressed && { opacity: 0.6 }]}
-          accessibilityLabel="Tier settings">
-          <IconSymbol name="slider.horizontal.3" size={22} color={theme.textMuted} />
-        </Pressable>
-      </View>
+          <Pressable
+            onPress={() => setSettingsOpen(true)}
+            hitSlop={6}
+            style={({ pressed }) => [s.iconBtn, pressed && { opacity: 0.6 }]}
+            accessibilityLabel="Tier settings">
+            <IconSymbol name="slider.horizontal.3" size={22} color={theme.textMuted} />
+          </Pressable>
+        </View>
+      )}
 
       <View style={isDesktop ? s.deskBody : { flex: 1 }}>
       <ScrollView
@@ -364,12 +394,13 @@ export default function TiersScreen() {
             <TierSection
               key={tier.name}
               tier={tier}
-              songsPerRow={settings.songsPerRow}
+              songsPerRow={isDesktop ? deskDensity : settings.songsPerRow}
               jacketOpacity={settings.jacketOpacity}
               overlaySize={settings.overlaySize}
               displayMode={settings.displayMode}
               s={s}
               onChartPress={onChartPress}
+              onHoverChart={isDesktop ? setHoverChart : undefined}
             />
           ))}
           {captureMode && tiersForRender.length > 0 ? (
@@ -379,12 +410,15 @@ export default function TiersScreen() {
           ) : null}
         </ViewShot>
       </ScrollView>
-      {isDesktop && railChart ? (
-        <TierChartRail
-          chart={railChart}
-          onClose={() => setRailChart(null)}
-          onOpen={() =>
-            router.push({ pathname: '/song/[id]', params: { id: String(railChart.chart_id) } })
+      {isDesktop ? (
+        <TierChartRailV2
+          chart={displayChart}
+          pinned={!!railChart}
+          mode={mode}
+          accent={accentColor}
+          onClose={() => { setRailChart(null); setHoverChart(null); }}
+          onOpenFull={() =>
+            displayChart && router.push({ pathname: '/song/[id]', params: { id: String(displayChart.chart_id) } })
           }
           s={s}
         />
@@ -479,6 +513,7 @@ function TierSection({
   displayMode,
   s,
   onChartPress,
+  onHoverChart,
 }: {
   tier: TierGroup;
   songsPerRow: number;
@@ -487,6 +522,8 @@ function TierSection({
   displayMode: 'grade' | 'score';
   s: Styles;
   onChartPress: (c: TierChart) => void;
+  /** Desktop only — fires when the cursor enters/leaves a cell. Null on leave. */
+  onHoverChart?: (c: TierChart | null) => void;
 }) {
   const style = TIER_STYLES[tier.name] || TIER_FALLBACK;
   const [bodyWidth, setBodyWidth] = useState(0);
@@ -523,6 +560,7 @@ function TierSection({
                 displayMode={displayMode}
                 s={s}
                 onPress={() => onChartPress(chart)}
+                onHover={onHoverChart ? (hovered) => onHoverChart(hovered ? chart : null) : undefined}
               />
             ))}
           </View>
@@ -597,6 +635,7 @@ function ChartCell({
   displayMode,
   s,
   onPress,
+  onHover,
 }: {
   chart: TierChart;
   width: number;
@@ -606,6 +645,8 @@ function ChartCell({
   displayMode: 'grade' | 'score';
   s: Styles;
   onPress: () => void;
+  /** Desktop only. Fires with `true` on cursor enter, `false` on leave. */
+  onHover?: (hovered: boolean) => void;
 }) {
   if (width <= 0) return null;
   const jacket = chart.jacket_url ? fullImageUrl(chart.jacket_url) : undefined;
@@ -623,6 +664,8 @@ function ChartCell({
   return (
     <Pressable
       onPress={onPress}
+      onHoverIn={onHover ? () => onHover(true) : undefined}
+      onHoverOut={onHover ? () => onHover(false) : undefined}
       style={({ pressed }) => [s.cell, { width, height }, pressed && { opacity: 0.75 }]}>
       {jacket ? (
         <Image
@@ -655,6 +698,320 @@ function ChartCell({
         />
       ) : null}
     </Pressable>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Desktop-only components: top toolbar + rich chart rail.                    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Inline toolbar for the desktop Tiers screen. Replaces the tight mobile
+ * pickerCard with explicit controls — mode pills, level chevrons, density
+ * picker, show-unplayed toggle, and share — so users don't have to dig into
+ * the settings sheet for the high-frequency knobs.
+ */
+function DesktopToolbar({
+  mode,
+  setMode,
+  availableModes,
+  level,
+  levels,
+  setLevel,
+  density,
+  setDensity,
+  showUnplayed,
+  onToggleShowUnplayed,
+  onShare,
+  captureBusy,
+  canShare,
+  accent,
+  s,
+}: {
+  mode: Mode;
+  setMode: (m: Mode) => void;
+  availableModes: Mode[];
+  level: number | null;
+  levels: number[];
+  setLevel: (n: number) => void;
+  density: 8 | 10 | 12;
+  setDensity: (d: 8 | 10 | 12) => void;
+  showUnplayed: boolean;
+  onToggleShowUnplayed: () => void;
+  onShare: () => void;
+  captureBusy: boolean;
+  canShare: boolean;
+  accent: string;
+  s: Styles;
+}) {
+  const { theme } = useTheme();
+  const idx = level != null ? levels.indexOf(level) : -1;
+  const canGoPrev = idx > 0;
+  const canGoNext = idx >= 0 && idx < levels.length - 1;
+  return (
+    <View style={s.deskToolbar}>
+      {/* Mode pills */}
+      <View style={s.deskModeRow}>
+        {availableModes.map((m) => {
+          const active = m === mode;
+          const c = MODE_ACCENT[m];
+          return (
+            <Pressable
+              key={m}
+              onPress={() => setMode(m)}
+              onHoverIn={() => undefined}
+              onHoverOut={() => undefined}
+              style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [
+                s.deskModePill,
+                active && { backgroundColor: `${c}1f`, borderColor: c },
+                hovered && !active && { backgroundColor: theme.surfaceMuted },
+                pressed && { opacity: 0.85 },
+              ]}>
+              <Text style={[s.deskModePillText, { color: active ? c : theme.textMuted }]}>
+                {MODE_LABEL[m]}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {/* Level chevrons + display */}
+      <View style={s.deskLevelGroup}>
+        <Pressable
+          onPress={() => canGoPrev && setLevel(levels[idx - 1])}
+          disabled={!canGoPrev}
+          hitSlop={6}
+          style={({ pressed }) => [s.deskIconBtn, pressed && { opacity: 0.6 }, !canGoPrev && { opacity: 0.25 }]}
+          accessibilityLabel="Easier level">
+          <IconSymbol name="chevron.left" size={20} color={theme.textMuted} />
+        </Pressable>
+        <Text style={[s.deskLevelNum, { color: accent }]}>{level ?? '—'}</Text>
+        <Pressable
+          onPress={() => canGoNext && setLevel(levels[idx + 1])}
+          disabled={!canGoNext}
+          hitSlop={6}
+          style={({ pressed }) => [s.deskIconBtn, pressed && { opacity: 0.6 }, !canGoNext && { opacity: 0.25 }]}
+          accessibilityLabel="Harder level">
+          <IconSymbol name="chevron.right" size={20} color={theme.textMuted} />
+        </Pressable>
+      </View>
+
+      <View style={s.deskToolbarSpacer} />
+
+      {/* Density picker */}
+      <View style={s.deskDensityRow}>
+        <Text style={s.deskToolbarLabel}>Density</Text>
+        {([8, 10, 12] as const).map((d) => {
+          const active = d === density;
+          return (
+            <Pressable
+              key={d}
+              onPress={() => setDensity(d)}
+              style={({ pressed }) => [
+                s.deskDensityBtn,
+                active && s.deskDensityBtnActive,
+                pressed && { opacity: 0.85 },
+              ]}>
+              <Text style={[s.deskDensityBtnText, active && s.deskDensityBtnTextActive]}>{d}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {/* Show unplayed toggle */}
+      <Pressable
+        onPress={onToggleShowUnplayed}
+        style={({ pressed }) => [
+          s.deskCheckRow,
+          showUnplayed && s.deskCheckRowOn,
+          pressed && { opacity: 0.85 },
+        ]}>
+        <View style={[s.deskCheckBox, showUnplayed && { backgroundColor: theme.accent, borderColor: theme.accent }]}>
+          {showUnplayed ? <IconSymbol name="checkmark" size={11} color={theme.bg} /> : null}
+        </View>
+        <Text style={s.deskCheckLabel}>Show unplayed</Text>
+      </Pressable>
+
+      {/* Share */}
+      <Pressable
+        onPress={onShare}
+        disabled={captureBusy || !canShare}
+        hitSlop={6}
+        style={({ pressed }) => [
+          s.deskShareBtn,
+          pressed && { opacity: 0.7 },
+          (captureBusy || !canShare) && { opacity: 0.4 },
+        ]}
+        accessibilityLabel="Share tier image">
+        {captureBusy ? (
+          <ActivityIndicator size="small" color={theme.textMuted} />
+        ) : (
+          <>
+            <IconSymbol name="square.and.arrow.up" size={14} color={theme.text} />
+            <Text style={s.deskShareBtnText}>Share</Text>
+          </>
+        )}
+      </Pressable>
+    </View>
+  );
+}
+
+/**
+ * Right-rail context panel for the desktop Tiers screen. Replaces the
+ * compact V1 with: bigger jacket, your best, mini friend leaderboard
+ * (via `songsApi.chartDetail`), replay link, and an "open full chart"
+ * primary. Driven by hover OR pinned tap; pinned beats hover.
+ */
+function TierChartRailV2({
+  chart,
+  pinned,
+  mode,
+  accent,
+  onClose,
+  onOpenFull,
+  s,
+}: {
+  chart: TierChart | null;
+  pinned: boolean;
+  mode: Mode;
+  accent: string;
+  onClose: () => void;
+  onOpenFull: () => void;
+  s: Styles;
+}) {
+  const { theme } = useTheme();
+  const { user } = useAuth();
+  const router = useRouter();
+
+  // Esc clears the pinned chart. Web only.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && pinned) onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [pinned, onClose]);
+
+  // Only fetch friend records / replay when a chart is actually selected.
+  // The query is cheap (~50 ms server-side) and shared with `/song/[id]`,
+  // so it warms the song-detail route too.
+  const detail = useQuery({
+    queryKey: ['chart', chart?.chart_id ?? 0, user?.id ?? null],
+    queryFn: () => chart
+      ? songsApi.chartDetail(chart.chart_id, user?.id
+          ? { user_id: user.id, follow_from_user_id: user.id }
+          : {})
+      : Promise.resolve(null),
+    enabled: !!chart?.chart_id,
+    staleTime: 30_000,
+  });
+
+  if (!chart) {
+    return (
+      <View style={s.railV2Empty}>
+        <Text style={s.railV2EmptyTitle}>Hover or tap a chart</Text>
+        <Text style={s.railV2EmptyHint}>
+          The right panel previews any chart your cursor lands on. Tap to pin it.
+        </Text>
+      </View>
+    );
+  }
+
+  const jacket = chart.jacket_url ? fullImageUrl(chart.jacket_url) : undefined;
+  const passed = chart.is_pass && (chart.best_score || 0) > 0;
+  const gradeLabel = passed ? getGradeDisplayLabel(chart.best_grade, chart.best_score) : '';
+  const userBest = detail.data?.user_summary?.best;
+  const friends = detail.data?.friend_records ?? [];
+  const replayUrl = detail.data?.user_youtube_url
+    || detail.data?.user_summary?.highest_replay?.url
+    || '';
+
+  return (
+    <View style={s.railV2}>
+      <View style={s.railHeader}>
+        <View style={s.railHeaderText}>
+          <Text style={s.railEyebrow}>{pinned ? 'CHART · PINNED' : 'CHART · PREVIEW'}</Text>
+          <Text style={s.railV2Mode}>{mode} · Lv {chart.level}</Text>
+        </View>
+        {pinned ? (
+          <Pressable
+            onPress={onClose}
+            hitSlop={8}
+            style={({ pressed }) => [s.railClose, pressed && { opacity: 0.6 }]}
+            accessibilityLabel="Close chart panel">
+            <IconSymbol name="xmark" size={16} color={theme.textMuted} />
+          </Pressable>
+        ) : null}
+      </View>
+
+      {jacket ? (
+        <Image source={{ uri: jacket }} style={s.railV2Jacket} contentFit="cover" />
+      ) : (
+        <View style={[s.railV2Jacket, { backgroundColor: theme.surfaceMuted }]} />
+      )}
+      <Text style={s.railTitle} numberOfLines={2}>{chart.title}</Text>
+
+      <View style={s.railSection}>
+        <Text style={s.railSectionLabel}>Your best</Text>
+        {passed || userBest ? (
+          <View style={s.railBestRow}>
+            <Text style={s.railBestScore}>
+              {Number(userBest?.score ?? chart.best_score ?? 0).toLocaleString()}
+            </Text>
+            {gradeLabel ? <Text style={[s.railBestGrade, { color: accent }]}>{gradeLabel}</Text> : null}
+          </View>
+        ) : (
+          <Text style={s.railEmpty}>No clear yet — keep grinding.</Text>
+        )}
+      </View>
+
+      <View style={s.railSection}>
+        <Text style={s.railSectionLabel}>Friends on this chart</Text>
+        {detail.isLoading ? (
+          <ActivityIndicator size="small" color={theme.spinner} />
+        ) : friends.length === 0 ? (
+          <Text style={s.railEmpty}>None yet — invite some.</Text>
+        ) : (
+          <View style={s.railFriendList}>
+            {friends.slice(0, 6).map((fr, i) => {
+              const avatarUrl = fr.user.avatar ? fullImageUrl(fr.user.avatar) : undefined;
+              return (
+                <Pressable
+                  key={fr.user.id}
+                  onPress={() => router.push({ pathname: '/profile/[id]', params: { id: fr.user.id } })}
+                  style={({ pressed }) => [s.railFriendRow, pressed && { opacity: 0.7 }]}>
+                  <Text style={s.railFriendRank}>{i + 1}</Text>
+                  {avatarUrl ? (
+                    <Image source={{ uri: avatarUrl }} style={s.railFriendAvatar} contentFit="cover" />
+                  ) : (
+                    <View style={[s.railFriendAvatar, { backgroundColor: theme.surfaceMuted }]} />
+                  )}
+                  <Text style={s.railFriendName} numberOfLines={1}>{fr.user.username}</Text>
+                  <Text style={s.railFriendScore}>
+                    {Number(fr.best?.score || 0).toLocaleString()}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
+      </View>
+
+      {replayUrl ? (
+        <Pressable
+          onPress={onOpenFull}
+          style={({ pressed }) => [s.railSecondary, pressed && { opacity: 0.85 }]}>
+          <IconSymbol name="play.rectangle.fill" size={14} color={theme.accent} />
+          <Text style={[s.railSecondaryText, { color: theme.accent }]}>Watch replay</Text>
+        </Pressable>
+      ) : null}
+      <Pressable
+        onPress={onOpenFull}
+        style={({ pressed }) => [s.railPrimary, pressed && { opacity: 0.85 }]}>
+        <Text style={s.railPrimaryText}>Open full chart →</Text>
+      </Pressable>
+    </View>
   );
 }
 
@@ -856,4 +1213,180 @@ const makeStyles = (t: ThemeColors) => ({
     justifyContent: 'center' as const,
   },
   railPrimaryText: { color: t.textOnAccent, fontSize: 13, fontWeight: '800' as const, letterSpacing: 0.5 },
+
+  // Desktop toolbar — inline replacement for the mobile pickerCard.
+  deskToolbar: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: t.border,
+    backgroundColor: t.surface,
+    flexWrap: 'wrap' as const,
+  },
+  deskToolbarSpacer: { flex: 1 },
+  deskToolbarLabel: {
+    fontSize: 10,
+    fontWeight: '800' as const,
+    letterSpacing: 1.4,
+    color: t.textDim,
+    textTransform: 'uppercase' as const,
+  },
+  deskModeRow: { flexDirection: 'row' as const, gap: 4 },
+  deskModePill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  deskModePillText: { fontSize: 11, fontWeight: '800' as const, letterSpacing: 1.4 },
+  deskLevelGroup: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 4,
+    paddingHorizontal: 8,
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderLeftColor: t.border,
+  },
+  deskIconBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  deskLevelNum: {
+    fontSize: 18,
+    fontWeight: '900' as const,
+    minWidth: 28,
+    textAlign: 'center' as const,
+    fontVariant: ['tabular-nums' as const],
+  },
+  deskDensityRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6 },
+  deskDensityBtn: {
+    width: 30,
+    height: 26,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: t.border,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    backgroundColor: t.surfaceMuted,
+  },
+  deskDensityBtnActive: { backgroundColor: t.accentTint, borderColor: t.accent },
+  deskDensityBtnText: {
+    fontSize: 11,
+    fontWeight: '800' as const,
+    color: t.textMuted,
+    fontVariant: ['tabular-nums' as const],
+  },
+  deskDensityBtnTextActive: { color: t.accent },
+  deskCheckRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  deskCheckRowOn: {},
+  deskCheckBox: {
+    width: 14,
+    height: 14,
+    borderRadius: 3,
+    borderWidth: 1,
+    borderColor: t.borderStrong,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  deskCheckLabel: { fontSize: 12, fontWeight: '700' as const, color: t.text },
+  deskShareBtn: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: t.border,
+    backgroundColor: t.surfaceMuted,
+  },
+  deskShareBtnText: { fontSize: 12, fontWeight: '700' as const, color: t.text },
+
+  // Desktop rail V2.
+  railV2: {
+    width: 380,
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderLeftColor: t.border,
+    backgroundColor: t.surface,
+    padding: 16,
+    gap: 12,
+  },
+  railV2Empty: {
+    width: 380,
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderLeftColor: t.border,
+    backgroundColor: t.surface,
+    padding: 24,
+    gap: 8,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  railV2EmptyTitle: {
+    fontSize: 14,
+    fontWeight: '800' as const,
+    color: t.text,
+    textAlign: 'center' as const,
+  },
+  railV2EmptyHint: {
+    fontSize: 12,
+    color: t.textMuted,
+    textAlign: 'center' as const,
+    maxWidth: 280,
+  },
+  railHeaderText: { flex: 1, gap: 2 },
+  railV2Mode: {
+    fontSize: 11,
+    fontWeight: '700' as const,
+    color: t.textMuted,
+    letterSpacing: 0.4,
+  },
+  railV2Jacket: { width: '100%' as const, aspectRatio: 1, borderRadius: 10 },
+  railFriendList: { gap: 4 },
+  railFriendRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 8,
+    paddingVertical: 4,
+  },
+  railFriendRank: {
+    fontSize: 11,
+    fontWeight: '800' as const,
+    color: t.textDim,
+    minWidth: 16,
+    fontVariant: ['tabular-nums' as const],
+  },
+  railFriendAvatar: { width: 22, height: 22, borderRadius: 11 },
+  railFriendName: { flex: 1, fontSize: 12, fontWeight: '700' as const, color: t.text },
+  railFriendScore: {
+    fontSize: 11,
+    fontWeight: '700' as const,
+    color: t.textMuted,
+    fontVariant: ['tabular-nums' as const],
+  },
+  railSecondary: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    gap: 6,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: t.accent,
+    backgroundColor: t.accentTint,
+  },
+  railSecondaryText: { fontSize: 12, fontWeight: '800' as const, letterSpacing: 0.4 },
 });
