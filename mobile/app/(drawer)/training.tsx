@@ -114,6 +114,18 @@ export default function TrainingScreen() {
     popQuery.refetch();
   };
 
+  // Desktop: clicking a metric pins its help content in the right rail
+  // instead of opening the HelpSheet modal. Defaults to the zone help
+  // when nothing is pinned so the rail never goes empty.
+  const handleHelp = (key: HelpKey) => {
+    if (isDesktop) {
+      setHelpKey(key);
+    } else {
+      openHelp(key);
+    }
+  };
+  const railHelpKey: HelpKey = (helpKey ?? 'zone');
+
   return (
     <View style={s.container}>
       <View style={[s.topBar, { paddingTop: insets.top + 8 }]}>
@@ -125,7 +137,37 @@ export default function TrainingScreen() {
           <Text style={s.emptyText}>Sign in to see your training profile.</Text>
         </View>
       ) : (
+        <View style={isDesktop ? s.deskRow : { flex: 1 }}>
+        {isDesktop ? (
+          <View style={s.deskNavRail}>
+            <Text style={s.deskNavLabel}>MODE</Text>
+            {(['overall', 'single', 'double'] as DisplayMode[]).map((m) => {
+              const active = m === mode;
+              const accent = MODE_ACCENT[m];
+              return (
+                <Pressable
+                  key={m}
+                  onPress={() => setMode(m)}
+                  onHoverIn={() => undefined}
+                  onHoverOut={() => undefined}
+                  style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [
+                    s.deskNavRow,
+                    hovered && !active && { backgroundColor: theme.surfaceMuted },
+                    active && { backgroundColor: `${accent}1f`, borderColor: accent },
+                    pressed && { opacity: 0.85 },
+                  ]}>
+                  <View style={[s.deskNavStripe, { backgroundColor: active ? accent : 'transparent' }]} />
+                  <Text style={[s.deskNavText, { color: active ? accent : theme.text }]}>
+                    {MODE_LABEL[m]}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : null}
+
         <ScrollView
+          style={isDesktop ? { flex: 1 } : undefined}
           contentContainerStyle={[s.scroll, { paddingBottom: insets.bottom + 60 }]}
           refreshControl={
             <RefreshControl
@@ -142,6 +184,7 @@ export default function TrainingScreen() {
             </View>
           ) : null}
 
+          {!isDesktop ? (
           <View style={s.modePill}>
             {(['overall', 'single', 'double'] as DisplayMode[]).map((m) => {
               const active = m === mode;
@@ -162,6 +205,7 @@ export default function TrainingScreen() {
               );
             })}
           </View>
+          ) : null}
 
           {loadQuery.isLoading ? (
             <View style={s.center}><ActivityIndicator color={theme.spinner} /></View>
@@ -173,36 +217,36 @@ export default function TrainingScreen() {
             </View>
           ) : profile ? (
             <>
-              <ZoneBadge profile={profile} s={s} onHelp={openHelp} />
-              <StatGrid profile={profile} s={s} onHelp={openHelp} isDesktop={isDesktop} />
+              <ZoneBadge profile={profile} s={s} onHelp={handleHelp} />
+              <StatGrid profile={profile} s={s} onHelp={handleHelp} isDesktop={isDesktop} />
               {ewmaSeries.length > 1 ? (
-                <EwmaSparklineCard series={ewmaSeries} s={s} accent={MODE_ACCENT[mode]} onHelp={openHelp} />
+                <EwmaSparklineCard series={ewmaSeries} s={s} accent={MODE_ACCENT[mode]} onHelp={handleHelp} />
               ) : null}
               {isDesktop ? (
                 <View style={s.deskTwoCol}>
                   {profile.likely_pass ? (
                     <View style={s.deskTwoColItem}>
-                      <LikelyPassCard profile={profile} s={s} theme={theme} onHelp={openHelp} />
+                      <LikelyPassCard profile={profile} s={s} theme={theme} onHelp={handleHelp} />
                     </View>
                   ) : null}
                   {profile.grade_predictions ? (
                     <View style={s.deskTwoColItem}>
-                      <GradePredictionsCard predictions={profile.grade_predictions} s={s} onHelp={openHelp} />
+                      <GradePredictionsCard predictions={profile.grade_predictions} s={s} onHelp={handleHelp} />
                     </View>
                   ) : null}
                 </View>
               ) : (
                 <>
                   {profile.likely_pass ? (
-                    <LikelyPassCard profile={profile} s={s} theme={theme} onHelp={openHelp} />
+                    <LikelyPassCard profile={profile} s={s} theme={theme} onHelp={handleHelp} />
                   ) : null}
                   {profile.grade_predictions ? (
-                    <GradePredictionsCard predictions={profile.grade_predictions} s={s} onHelp={openHelp} />
+                    <GradePredictionsCard predictions={profile.grade_predictions} s={s} onHelp={handleHelp} />
                   ) : null}
                 </>
               )}
               {population ? (
-                <PopulationSection population={population} s={s} onHelp={openHelp} />
+                <PopulationSection population={population} s={s} onHelp={handleHelp} />
               ) : null}
             </>
           ) : null}
@@ -211,10 +255,32 @@ export default function TrainingScreen() {
             <Text style={s.footerSync}>Synced {fmtSyncedAt(data.last_synced_at)}</Text>
           ) : null}
         </ScrollView>
+
+        {isDesktop ? (
+          <ScrollView style={s.deskHelpRail} contentContainerStyle={s.deskHelpScroll}>
+            <Text style={s.deskHelpEyebrow}>EXPLAINER</Text>
+            <Text style={s.deskHelpTitle}>{TRAINING_HELP[railHelpKey].title}</Text>
+            {TRAINING_HELP[railHelpKey].subtitle ? (
+              <Text style={s.deskHelpSubtitle}>{TRAINING_HELP[railHelpKey].subtitle}</Text>
+            ) : null}
+            {TRAINING_HELP[railHelpKey].sections.map((sec, i) => (
+              <View key={`${railHelpKey}-${i}`} style={s.deskHelpSection}>
+                <Text style={s.deskHelpSectionLabel}>{sec.label}</Text>
+                <Text style={s.deskHelpSectionBody}>{sec.body}</Text>
+              </View>
+            ))}
+            {!helpKey ? (
+              <Text style={s.deskHelpHint}>Tap any metric to swap this in.</Text>
+            ) : null}
+          </ScrollView>
+        ) : null}
+        </View>
       )}
 
+      {/* Mobile keeps the bottom-sheet explainer. Desktop has its own
+          persistent rail instead and never opens this. */}
       <HelpSheet
-        visible={helpKey !== null}
+        visible={!isDesktop && helpKey !== null}
         content={helpKey ? TRAINING_HELP[helpKey] : null}
         onClose={() => setHelpKey(null)}
       />
@@ -769,4 +835,67 @@ const makeStyles = (t: ThemeColors) => ({
   statTileDesktop: { flexBasis: '23%' as const, flexGrow: 0 },
   deskTwoCol: { flexDirection: 'row' as const, alignItems: 'flex-start' as const, gap: 14 },
   deskTwoColItem: { flex: 1, minWidth: 0 },
+
+  // Desktop 3-col layout: nav rail (left), metrics (center), help rail (right).
+  deskRow: { flex: 1, flexDirection: 'row' as const, alignItems: 'stretch' as const },
+  deskNavRail: {
+    width: 200,
+    borderRightWidth: StyleSheet.hairlineWidth,
+    borderRightColor: t.border,
+    backgroundColor: t.surface,
+    padding: 12,
+    gap: 4,
+  },
+  deskNavLabel: {
+    fontSize: 9,
+    fontWeight: '900' as const,
+    letterSpacing: 1.6,
+    color: t.textDim,
+    textTransform: 'uppercase' as const,
+    paddingHorizontal: 8,
+    paddingBottom: 6,
+  },
+  deskNavRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    paddingVertical: 9,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'transparent',
+    gap: 8,
+  },
+  deskNavStripe: { width: 3, height: 18, borderRadius: 2 },
+  deskNavText: { fontSize: 13, fontWeight: '800' as const, letterSpacing: 0.5 },
+  deskHelpRail: {
+    width: 320,
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderLeftColor: t.border,
+    backgroundColor: t.surface,
+  },
+  deskHelpScroll: { padding: 16, gap: 8, paddingBottom: 60 },
+  deskHelpEyebrow: {
+    fontSize: 10,
+    fontWeight: '900' as const,
+    letterSpacing: 1.6,
+    color: t.accent,
+    textTransform: 'uppercase' as const,
+  },
+  deskHelpTitle: {
+    fontSize: 18,
+    fontWeight: '900' as const,
+    color: t.text,
+    letterSpacing: 0.5,
+  },
+  deskHelpSubtitle: { fontSize: 13, color: t.textMuted, lineHeight: 18 },
+  deskHelpSection: { gap: 4, paddingTop: 8 },
+  deskHelpSectionLabel: {
+    fontSize: 11,
+    fontWeight: '900' as const,
+    letterSpacing: 1.2,
+    color: t.textDim,
+    textTransform: 'uppercase' as const,
+  },
+  deskHelpSectionBody: { fontSize: 13, color: t.text, lineHeight: 18 },
+  deskHelpHint: { fontSize: 11, color: t.textDim, paddingTop: 12, fontStyle: 'italic' as const },
 });
