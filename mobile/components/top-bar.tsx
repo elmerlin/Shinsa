@@ -18,8 +18,10 @@
  */
 import { useNavigation, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { DrawerNavigationProp } from '@react-navigation/drawer';
+import { NotificationTray } from '@/components/notification-tray';
 import { PumpShinsaLogo } from '@/components/pump-shinsa-logo';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { authApi, messagesApi } from '@/lib/api';
@@ -40,6 +42,9 @@ export function TopBar({ rightExtra }: Props) {
   const { user } = useAuth();
   const { theme } = useTheme();
   const { isDesktop } = useBreakpoint();
+  // Bell-tap opens an in-app dropdown instead of navigating away to a
+  // dedicated route — matches the web NotificationBell behaviour.
+  const [trayOpen, setTrayOpen] = useState(false);
 
   // Same 15-second refetch cadence the web NotificationContext uses, so
   // badges feel live without spinning up a SSE channel for the PWA.
@@ -90,7 +95,7 @@ export function TopBar({ rightExtra }: Props) {
         />
         <IconBtn
           icon="bell.fill"
-          onPress={() => router.push('/account')}
+          onPress={() => setTrayOpen(true)}
           badge={notifBadge}
           badgeTone="red"
           color={theme.text}
@@ -105,6 +110,14 @@ export function TopBar({ rightExtra }: Props) {
           />
         ) : null}
       </View>
+
+      {/* In-app notification tray — opens from the bell icon. Lives
+          here so every screen that mounts a TopBar gets it for free. */}
+      <NotificationTray
+        visible={trayOpen}
+        onClose={() => setTrayOpen(false)}
+        userId={user?.id ?? null}
+      />
     </View>
   );
 }
@@ -153,8 +166,14 @@ const styles = StyleSheet.create({
     // No logo or hamburger on desktop — just the utility cluster aligned
     // right. The sidebar handles brand + nav, so this bar shrinks to a
     // toolbar row hugging the top-right corner of the route content.
+    // IMPORTANT: width:auto here so the row sizes to its content.
+    // Without this, the inherited width:'100%' from `row` makes TopBar
+    // take the full parent width — and when the parent is a header with
+    // `space-between` (Home, Songs), TopBar's full width overlaps or
+    // clips the heading and pushes the bell off the right edge.
     justifyContent: 'flex-end',
     paddingHorizontal: 0,
+    width: 'auto',
   },
   brand: { paddingVertical: 2, paddingRight: 8 },
   rightCluster: { flexDirection: 'row', alignItems: 'center', gap: 4 },
