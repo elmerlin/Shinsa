@@ -491,6 +491,11 @@ function LikelyPassCard({
 
   // Pull a couple of best clears from the target level for context.
   const sampleClears = (lp.target?.clears || []).slice(0, 2);
+  // Server hands back a few short strings explaining WHY this level was
+  // picked (e.g. "3 recent clears at Lv.21" / "2 high-score near-passes
+  // at Lv.22"). Web shows these as bullets — match that here so the
+  // card actually justifies its prediction.
+  const reasons = (lp.reasons || []).slice(0, 3);
 
   return (
     <View style={s.section}>
@@ -527,6 +532,17 @@ function LikelyPassCard({
             <Text style={s.predictMetaText}>
               <Text style={s.predictMetaNum}>{lp.target.clear_count}</Text> clear{lp.target.clear_count === 1 ? '' : 's'} of <Text style={s.predictMetaNum}>{lp.target.attempt_count}</Text> attempt{lp.target.attempt_count === 1 ? '' : 's'} at L{lp.target.level}
             </Text>
+          </View>
+        ) : null}
+
+        {reasons.length > 0 ? (
+          <View style={s.predictReasons}>
+            {reasons.map((reason, i) => (
+              <View key={i} style={s.predictReasonRow}>
+                <Text style={s.predictReasonDot}>•</Text>
+                <Text style={s.predictReasonText}>{reason}</Text>
+              </View>
+            ))}
           </View>
         ) : null}
 
@@ -795,6 +811,13 @@ const makeStyles = (t: ThemeColors) => ({
   },
   predictMetaText: { fontSize: 12, color: t.textMuted },
   predictMetaNum: { fontWeight: '800' as const, color: t.text, fontVariant: ['tabular-nums' as const] },
+  // "Why this level?" bullet list — server hands us strings like
+  // "3 recent clears at Lv.21" or "2 high-score near-passes at Lv.22"
+  // explaining why the prediction landed where it did.
+  predictReasons: { gap: 4, paddingTop: 4 },
+  predictReasonRow: { flexDirection: 'row' as const, alignItems: 'flex-start' as const, gap: 6 },
+  predictReasonDot: { fontSize: 13, color: t.accent, lineHeight: 17, marginTop: -1 },
+  predictReasonText: { flex: 1, fontSize: 12, color: t.text, lineHeight: 17 },
 
   clearsList: { gap: 6 },
   clearRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8 },
