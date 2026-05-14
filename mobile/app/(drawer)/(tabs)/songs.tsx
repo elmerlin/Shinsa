@@ -12,7 +12,9 @@ import { useTheme } from '@/contexts/theme-context';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { songsApi } from '@/lib/api';
+import { getGradeDisplayLabel } from '@/lib/grades';
 import { fullImageUrl } from '@/lib/images';
+import { IconSymbol } from '@/components/ui/icon-symbol';
 import type { ThemeColors } from '@/constants/theme';
 import type { Chart, SongLibraryItem } from '@shared/api';
 
@@ -190,6 +192,148 @@ function SongDetailPane({
   );
 }
 
+/**
+ * Right-pane chart sheet for the desktop master-detail layout. Tapping a
+ * chart in `SongDetailPane` selects it via `?chart=…`; this component
+ * replaces the chart grid with the chart's detail (jacket, your best,
+ * friend leaderboard, replay link). Back arrow returns to the song's
+ * chart grid; "Open full chart" still routes to /song/[id] for the
+ * deeper-zoom experience (history, progression, save-to-list, etc.).
+ */
+function SongChartDetailPane({
+  chartId,
+  song,
+  s,
+  onBack,
+  onOpenFull,
+}: {
+  chartId: number;
+  song: SongLibraryItem | null;
+  s: Styles;
+  onBack: () => void;
+  onOpenFull: () => void;
+}) {
+  const { theme } = useTheme();
+  const { user } = useAuth();
+  const router = useRouter();
+
+  const detail = useQuery({
+    queryKey: ['chart', chartId, user?.id ?? null],
+    queryFn: () => songsApi.chartDetail(chartId, user?.id
+      ? { user_id: user.id, follow_from_user_id: user.id }
+      : {}),
+    enabled: Number.isFinite(chartId) && chartId > 0,
+    staleTime: 30_000,
+  });
+
+  const chart = detail.data?.chart;
+  const userBest = detail.data?.user_summary?.best;
+  const friendRecords = detail.data?.friend_records ?? [];
+  const replayUrl = detail.data?.user_youtube_url
+    || detail.data?.user_summary?.highest_replay?.url
+    || '';
+
+  const jacket = chart?.jacket_url
+    ? fullImageUrl(chart.jacket_url)
+    : song
+      ? fullImageUrl(song.jacket_url)
+      : undefined;
+
+  const title = chart?.title || song?.title || 'Chart';
+  const mode = chart?.mode || '';
+  const level = chart?.level ?? 0;
+  const grade = userBest ? getGradeDisplayLabel(userBest.grade, userBest.score) : '';
+
+  return (
+    <ScrollView style={s.deskDetailScroll} contentContainerStyle={s.deskDetailContent}>
+      <View style={s.chartHead}>
+        <Pressable
+          onPress={onBack}
+          hitSlop={6}
+          style={({ pressed }) => [s.chartBackBtn, pressed && { opacity: 0.7 }]}
+          accessibilityLabel="Back to song">
+          <IconSymbol name="chevron.left" size={16} color={theme.text} />
+          <Text style={s.chartBackText}>Back</Text>
+        </Pressable>
+        <Text style={s.deskEyebrow}>CHART</Text>
+      </View>
+
+      <View style={s.deskHeroRow}>
+        {jacket ? (
+          <Image source={{ uri: jacket }} style={s.deskHeroJacket} contentFit="cover" />
+        ) : (
+          <View style={[s.deskHeroJacket, { backgroundColor: theme.surfaceMuted }]} />
+        )}
+        <View style={s.deskHeroText}>
+          <Text style={s.deskHeroTitle} numberOfLines={2}>{title}</Text>
+          {chart?.artist ? (
+            <Text style={s.deskHeroArtist} numberOfLines={1}>{chart.artist}</Text>
+          ) : null}
+          <View style={s.chartBadgeRow}>
+            <ChartBadge mode={mode} level={level} size="md" />
+            {chart?.bpm ? <Text style={s.deskHeroMeta}>{chart.bpm} BPM</Text> : null}
+          </View>
+        </View>
+      </View>
+
+      <View style={s.deskSection}>
+        <Text style={s.deskSectionLabel}>Your best</Text>
+        {detail.isLoading ? (
+          <ActivityIndicator color={theme.spinner} />
+        ) : userBest ? (
+          <View style={s.scoreBlock}>
+            <Text style={s.scoreNum}>{Number(userBest.score || 0).toLocaleString()}</Text>
+            {grade ? <Text style={s.scoreGrade}>{grade}</Text> : null}
+            {userBest.is_stage_break ? (
+              <Text style={[s.scoreGrade, { color: theme.danger }]}>STAGE BREAK</Text>
+            ) : null}
+          </View>
+        ) : (
+          <Text style={s.deskSectionHint}>No clear yet — keep grinding.</Text>
+        )}
+      </View>
+
+      <View style={s.deskSection}>
+        <Text style={s.deskSectionLabel}>Friends on this chart</Text>
+        {detail.isLoading ? (
+          <ActivityIndicator color={theme.spinner} size="small" />
+        ) : friendRecords.length === 0 ? (
+          <Text style={s.deskSectionHint}>None yet — follow some players.</Text>
+        ) : (
+          <View style={s.friendList}>
+            {friendRecords.slice(0, 8).map((fr, i) => {
+              const avatarUrl = fr.user.avatar ? fullImageUrl(fr.user.avatar) : undefined;
+              return (
+                <Pressable
+                  key={fr.user.id}
+                  onPress={() => router.push({ pathname: '/profile/[id]', params: { id: fr.user.id } })}
+                  style={({ pressed }) => [s.friendRow, pressed && { opacity: 0.7 }]}>
+                  <Text style={s.friendRank}>{i + 1}</Text>
+                  {avatarUrl ? (
+                    <Image source={{ uri: avatarUrl }} style={s.friendAvatar} contentFit="cover" />
+                  ) : (
+                    <View style={[s.friendAvatar, { backgroundColor: theme.surfaceMuted }]} />
+                  )}
+                  <Text style={s.friendName} numberOfLines={1}>{fr.user.username}</Text>
+                  <Text style={s.friendScore}>{Number(fr.best?.score || 0).toLocaleString()}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
+      </View>
+
+      <Pressable
+        onPress={onOpenFull}
+        style={({ pressed }) => [s.chartPrimary, pressed && { opacity: 0.85 }]}>
+        <Text style={s.chartPrimaryText}>
+          {replayUrl ? 'Watch replay · full chart →' : 'Open full chart →'}
+        </Text>
+      </Pressable>
+    </ScrollView>
+  );
+}
+
 /** Desktop variant — master–detail with keyboard nav. */
 function SongsDesktop({
   songs,
@@ -210,9 +354,10 @@ function SongsDesktop({
 }) {
   const router = useRouter();
   const { theme } = useTheme();
-  const params = useLocalSearchParams<{ q?: string; selected?: string }>();
+  const params = useLocalSearchParams<{ q?: string; selected?: string; chart?: string }>();
   const initialQ = typeof params.q === 'string' ? params.q : '';
   const initialSelected = typeof params.selected === 'string' ? params.selected : '';
+  const initialChart = typeof params.chart === 'string' ? params.chart : '';
 
   const [search, setSearch] = useState(initialQ);
   const debouncedSearch = useDebounced(search, 250);
@@ -248,6 +393,23 @@ function SongsDesktop({
     [filtered, selectedKey],
   );
 
+  // Selected chart for the right rail. Synced to `?chart=…` so reload +
+  // back/forward survive. Cleared when the user picks a different song.
+  const [selectedChartId, setSelectedChartId] = useState<number>(
+    initialChart ? Number(initialChart) || 0 : 0,
+  );
+  useEffect(() => {
+    // Clear the chart selection if the currently-selected chart doesn't
+    // belong to the currently-selected song — happens when the user clicks
+    // a different song in the master list.
+    if (!selectedChartId || !selectedSong) return;
+    const stillBelongs = (selectedSong.charts || []).some((c) => c.chart_id === selectedChartId);
+    if (!stillBelongs) setSelectedChartId(0);
+  }, [selectedChartId, selectedSong]);
+  useEffect(() => {
+    router.setParams({ chart: selectedChartId ? String(selectedChartId) : '' });
+  }, [selectedChartId, router]);
+
   // Keyboard nav: /, J/K, Enter. Web only — these don't fire on native.
   useEffect(() => {
     if (Platform.OS !== 'web') return;
@@ -280,15 +442,20 @@ function SongsDesktop({
         const firstChart = song?.charts?.[0];
         if (firstChart) {
           e.preventDefault();
-          router.push({ pathname: '/song/[id]', params: { id: String(firstChart.chart_id) } });
+          // Stay on /songs?chart=… — the right rail handles it.
+          setSelectedChartId(firstChart.chart_id);
         }
       } else if (e.key === 'Escape') {
-        searchRef.current?.blur();
+        if (selectedChartId) {
+          setSelectedChartId(0);
+        } else {
+          searchRef.current?.blur();
+        }
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [filtered, selectedKey, router]);
+  }, [filtered, selectedKey, selectedChartId, router]);
 
   return (
     <View style={s.deskRoot}>
@@ -349,13 +516,23 @@ function SongsDesktop({
         </View>
 
         <View style={s.deskDetail}>
-          <SongDetailPane
-            song={selectedSong}
-            s={s}
-            onChartPress={(chart) =>
-              router.push({ pathname: '/song/[id]', params: { id: String(chart.chart_id) } })
-            }
-          />
+          {selectedChartId ? (
+            <SongChartDetailPane
+              chartId={selectedChartId}
+              song={selectedSong}
+              s={s}
+              onBack={() => setSelectedChartId(0)}
+              onOpenFull={() =>
+                router.push({ pathname: '/song/[id]', params: { id: String(selectedChartId) } })
+              }
+            />
+          ) : (
+            <SongDetailPane
+              song={selectedSong}
+              s={s}
+              onChartPress={(chart) => setSelectedChartId(chart.chart_id)}
+            />
+          )}
         </View>
       </View>
     </View>
@@ -598,4 +775,83 @@ const makeStyles = (t: ThemeColors) => ({
   },
   deskEmptyTitle: { fontSize: 16, fontWeight: '800' as const, color: t.text },
   deskEmptyHint: { fontSize: 13, color: t.textMuted, textAlign: 'center' as const, maxWidth: 320 },
+
+  // Chart detail pane (replaces the chart grid in the right column when a
+  // chart is selected via ?chart=…).
+  chartHead: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+    paddingBottom: 4,
+  },
+  chartBackBtn: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: t.surfaceMuted,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: t.border,
+  },
+  chartBackText: { fontSize: 12, fontWeight: '700' as const, color: t.text },
+  deskEyebrow: {
+    fontSize: 10,
+    fontWeight: '800' as const,
+    letterSpacing: 1.8,
+    color: t.accent,
+    textTransform: 'uppercase' as const,
+  },
+  chartBadgeRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, marginTop: 6 },
+  scoreBlock: {
+    flexDirection: 'row' as const,
+    alignItems: 'baseline' as const,
+    gap: 10,
+    paddingTop: 6,
+  },
+  scoreNum: {
+    fontSize: 28,
+    fontWeight: '900' as const,
+    color: t.text,
+    fontVariant: ['tabular-nums' as const],
+  },
+  scoreGrade: { fontSize: 16, fontWeight: '800' as const, color: t.accent, letterSpacing: 0.5 },
+  friendList: { gap: 4, paddingTop: 4 },
+  friendRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  friendRank: {
+    fontSize: 11,
+    fontWeight: '800' as const,
+    color: t.textDim,
+    minWidth: 16,
+    fontVariant: ['tabular-nums' as const],
+  },
+  friendAvatar: { width: 26, height: 26, borderRadius: 13 },
+  friendName: { flex: 1, fontSize: 13, fontWeight: '700' as const, color: t.text },
+  friendScore: {
+    fontSize: 12,
+    fontWeight: '700' as const,
+    color: t.textMuted,
+    fontVariant: ['tabular-nums' as const],
+  },
+  chartPrimary: {
+    marginTop: 4,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: t.accent,
+    alignItems: 'center' as const,
+  },
+  chartPrimaryText: {
+    fontSize: 13,
+    fontWeight: '800' as const,
+    color: t.textOnAccent,
+    letterSpacing: 0.5,
+  },
 });
