@@ -35,6 +35,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { CosmeticPreview, HabitatScene, PropMini } from '@/components/pet-visuals';
 import SpritePet from '@/components/sprite-pet';
 import { TopBar } from '@/components/top-bar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
@@ -57,12 +58,13 @@ import {
 import type { ThemeColors } from '@/constants/theme';
 import type { Pet, PetActivity, PetCharacterId, PetTrick } from '@shared/api';
 
-type TabKey = 'tricks' | 'missions' | 'toys' | 'habitat' | 'shop' | 'customize' | 'leaderboard';
+type TabKey = 'tricks' | 'missions' | 'toys' | 'outfits' | 'habitat' | 'shop' | 'customize' | 'leaderboard';
 
 const TABS: { key: TabKey; label: string; emoji: string }[] = [
   { key: 'tricks',      label: 'Tricks',      emoji: '🎭' },
   { key: 'missions',    label: 'Missions',    emoji: '🎯' },
   { key: 'toys',        label: 'Toys',        emoji: '🧸' },
+  { key: 'outfits',     label: 'Outfits',     emoji: '👕' },
   { key: 'habitat',     label: 'Habitat',     emoji: '🏯' },
   { key: 'shop',        label: 'Shop',        emoji: '🛍️' },
   { key: 'customize',   label: 'Customize',   emoji: '🎨' },
@@ -136,15 +138,38 @@ export default function PetScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={[s.scroll, { paddingBottom: insets.bottom + 80 }]}
+        contentContainerStyle={[
+          s.scroll,
+          isDesktop && s.scrollDesktop,
+          { paddingBottom: insets.bottom + 80 },
+        ]}
         showsVerticalScrollIndicator={false}>
-        <PetHero pet={pet} s={s} />
-        <CurrenciesRow pet={pet} s={s} />
-        <VitalsCard pet={pet} s={s} />
-        <CurrentRequestCard pet={pet} s={s} />
-        <RecommendedActionsCard pet={pet} s={s} />
-        <CareActionsCard pet={pet} s={s} />
-        <ActivitiesCard pet={pet} s={s} />
+        {/* Desktop: 2-col grid (main + helper rail with the live
+            HabitatScene). The main column hosts hero + actions; the
+            rail anchors the actual habitat preview so the pet is
+            always visible while you scroll the action stack. */}
+        <View style={isDesktop ? s.deskGrid : undefined}>
+          <View style={isDesktop ? s.deskMain : undefined}>
+            <PetHero pet={pet} s={s} compact={isDesktop} />
+            <CurrenciesRow pet={pet} s={s} />
+            <VitalsCard pet={pet} s={s} />
+            <CurrentRequestCard pet={pet} s={s} />
+            <RecommendedActionsCard pet={pet} s={s} />
+            <CareActionsCard pet={pet} s={s} />
+            <ActivitiesCard pet={pet} s={s} />
+          </View>
+          {isDesktop ? (
+            <View style={s.deskRail}>
+              <View style={s.card}>
+                <Text style={s.cardEyebrow}>HABITAT</Text>
+                <HabitatScene pet={pet} height={300} />
+                <Text style={s.deskRailHint}>
+                  Tap Habitat below to swap backgrounds, props, floors, and walls.
+                </Text>
+              </View>
+            </View>
+          ) : null}
+        </View>
 
         <View style={s.tabStrip}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.tabRow}>
@@ -171,11 +196,130 @@ export default function PetScreen() {
         {tab === 'tricks'      ? <TricksTab pet={pet} s={s} /> : null}
         {tab === 'missions'    ? <MissionsTab pet={pet} s={s} /> : null}
         {tab === 'toys'        ? <ToysTab pet={pet} s={s} /> : null}
+        {tab === 'outfits'     ? <OutfitsTab pet={pet} s={s} /> : null}
         {tab === 'habitat'     ? <HabitatTab pet={pet} s={s} /> : null}
-        {tab === 'shop'        ? <ShopTab s={s} /> : null}
+        {tab === 'shop'        ? <ShopTab pet={pet} s={s} /> : null}
         {tab === 'customize'   ? <CustomizeTab pet={pet} s={s} onOpenLeaderboard={() => setTab('leaderboard')} /> : null}
         {tab === 'leaderboard' ? <LeaderboardTab s={s} onOpenUser={(id) => router.push({ pathname: '/profile/[id]', params: { id } })} /> : null}
       </ScrollView>
+    </View>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════════
+ * OUTFITS TAB — owned clothing + equip + per-slot color picker
+ * ══════════════════════════════════════════════════════════════════ */
+
+const COLOR_PALETTE = [
+  '#ffc400', '#fb7185', '#f43f5e', '#a78bfa', '#7dd3fc',
+  '#34d399', '#fbbf24', '#fb923c', '#cbd5e1', '#1f2937',
+];
+
+const SLOTS: { kind: 'hat' | 'top' | 'belt' | 'shoes'; label: string; equipped: keyof Pet; color: keyof Pet }[] = [
+  { kind: 'hat',   label: 'Hat',   equipped: 'equipped_hat',   color: 'hat_color' },
+  { kind: 'top',   label: 'Top',   equipped: 'equipped_top',   color: 'top_color' },
+  { kind: 'belt',  label: 'Belt',  equipped: 'equipped_belt',  color: 'belt_color' },
+  { kind: 'shoes', label: 'Shoes', equipped: 'equipped_shoes', color: 'shoes_color' },
+];
+
+function OutfitsTab({ pet, s }: { pet: Pet; s: Styles }) {
+  const queryClient = useQueryClient();
+  const shopQuery = useQuery({ queryKey: ['pet-shop'], queryFn: () => petsApi.shop() });
+  const equip = useMutation({
+    mutationFn: (id: string) => petsApi.equip(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['pet-me'] }),
+    onError: (e: unknown) => Alert.alert('Hmm', e instanceof Error ? e.message : 'Equip failed'),
+  });
+  const setColor = useMutation({
+    mutationFn: ({ slot, color }: { slot: 'hat' | 'belt' | 'shoes' | 'top'; color: string }) =>
+      petsApi.setColor(slot, color),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['pet-me'] }),
+    onError: (e: unknown) => Alert.alert('Hmm', e instanceof Error ? e.message : 'Color change failed'),
+  });
+
+  if (shopQuery.isLoading) return <View style={s.empty}><ActivityIndicator /></View>;
+  const clothing = shopQuery.data?.clothing;
+  if (!clothing) return <EmptyTab s={s} text="Outfits unavailable right now." />;
+
+  return (
+    <View style={s.tabBody}>
+      {SLOTS.map((slot) => {
+        const items = (clothing[slot.kind === 'hat' ? 'hats' : slot.kind === 'top' ? 'tops' : slot.kind === 'belt' ? 'belts' : 'shoes'] ?? []) as Array<Record<string, unknown>>;
+        const owned = items.filter((it) => it.owned);
+        const currentId = String(pet[slot.equipped] ?? '');
+        const currentColor = String(pet[slot.color] ?? '');
+        return (
+          <View key={slot.kind} style={s.outfitSection}>
+            <View style={s.outfitHeader}>
+              <Text style={s.cardEyebrow}>{slot.label.toUpperCase()}</Text>
+              {currentId ? (
+                <Pressable
+                  onPress={() => equip.mutate(currentId)}
+                  style={({ pressed }) => [s.outfitUnequip, pressed && { opacity: 0.7 }]}>
+                  <Text style={s.outfitUnequipText}>Tap equipped item to unequip</Text>
+                </Pressable>
+              ) : null}
+            </View>
+            {owned.length === 0 ? (
+              <Text style={s.outfitEmpty}>None owned. Find {slot.label.toLowerCase()} in Shop → Clothing.</Text>
+            ) : (
+              <View style={s.outfitGrid}>
+                {owned.map((it) => {
+                  const id = String(it.id);
+                  const isEquipped = currentId === id;
+                  return (
+                    <Pressable
+                      key={id}
+                      onPress={() => equip.mutate(id)}
+                      disabled={equip.isPending}
+                      style={({ pressed }) => [
+                        s.outfitCard,
+                        isEquipped && s.outfitCardActive,
+                        pressed && { opacity: 0.85 },
+                      ]}>
+                      <CosmeticPreview
+                        kind={slot.kind}
+                        id={id}
+                        color={isEquipped ? currentColor : ''}
+                        character={pet.character}
+                        weightState={pet.weight_state}
+                        size={64}
+                      />
+                      <Text style={s.outfitName} numberOfLines={1}>{String(it.name)}</Text>
+                      {isEquipped ? <Text style={s.outfitBadge}>EQUIPPED</Text> : null}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
+            {currentId ? (
+              <View style={s.colorRow}>
+                <Text style={s.colorLabel}>Color</Text>
+                {COLOR_PALETTE.map((c) => {
+                  const active = currentColor === c;
+                  return (
+                    <Pressable
+                      key={c}
+                      onPress={() => setColor.mutate({ slot: slot.kind, color: c })}
+                      disabled={setColor.isPending}
+                      style={({ pressed }) => [
+                        s.colorSwatch,
+                        { backgroundColor: c },
+                        active && s.colorSwatchActive,
+                        pressed && { opacity: 0.7 },
+                      ]} />
+                  );
+                })}
+                <Pressable
+                  onPress={() => setColor.mutate({ slot: slot.kind, color: '' })}
+                  style={({ pressed }) => [s.colorReset, pressed && { opacity: 0.7 }]}>
+                  <Text style={s.colorResetText}>Reset</Text>
+                </Pressable>
+              </View>
+            ) : null}
+          </View>
+        );
+      })}
     </View>
   );
 }
@@ -251,13 +395,14 @@ function AdoptScreen({ s, topBar }: { s: Styles; topBar: React.ReactNode }) {
  * HERO
  * ══════════════════════════════════════════════════════════════════ */
 
-function PetHero({ pet, s }: { pet: Pet; s: Styles }) {
+function PetHero({ pet, s, compact = false }: { pet: Pet; s: Styles; compact?: boolean }) {
   const gradient = petCharacterGradient(pet.character);
   const name = pet.nickname || petCharacterName(pet.character);
   const identityTitle = String(pet.identity_title || '').trim();
   const xpProgress = Math.max(0, Math.min(1, Number(pet.level_progress) || 0));
   const xpNow = Number(pet.current_level_xp) || 0;
   const xpNext = Number(pet.next_level_xp) || 0;
+  const petSize = compact ? 80 : 120;
 
   return (
     <LinearGradient
@@ -265,7 +410,7 @@ function PetHero({ pet, s }: { pet: Pet; s: Styles }) {
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={s.hero}>
-      <View style={s.heroPetWrap}>
+      <View style={[s.heroPetWrap, { width: petSize, height: petSize }]}>
         {/* Animated pixel-art pet on web; emoji fallback on native.
             See `mobile/components/sprite-pet.tsx` for the platform
             split — `.web.jsx` ships the full 2-D box-shadow renderer
@@ -282,7 +427,7 @@ function PetHero({ pet, s }: { pet: Pet; s: Styles }) {
           beltColor={pet.belt_color}
           shoesColor={pet.shoes_color}
           topColor={pet.top_color}
-          size={120}
+          size={petSize}
         />
         <View style={s.heroMoodBubble}>
           <Text style={s.heroMoodEmoji}>{moodEmoji(pet.mood)}</Text>
@@ -662,7 +807,7 @@ function ToysTab({ pet, s }: { pet: Pet; s: Styles }) {
             onPress={() => use.mutate(t.id)}
             disabled={use.isPending}
             style={({ pressed }) => [s.toyCard, pressed && { opacity: 0.85 }]}>
-            <Text style={s.toyEmoji}>{t.emoji || '🧸'}</Text>
+            <Text style={s.toyEmoji}>{toyGlyph(t.id)}</Text>
             <Text style={s.toyName} numberOfLines={1}>{t.name}</Text>
             {t.preference && t.preference !== 'neutral' ? (
               <Text style={[s.toyPref, t.preference === 'favorite' && { color: '#FDE047' }, t.preference === 'disliked' && { color: '#FB7185' }]}>
@@ -688,14 +833,18 @@ function HabitatTab({ pet, s }: { pet: Pet; s: Styles }) {
     onError: (err: unknown) => Alert.alert('Hmm', err instanceof Error ? err.message : 'Could not equip'),
   });
   const groups = pet.habitat_items ?? {};
-  const sections: { label: string; items: typeof groups.backgrounds }[] = [
-    { label: 'Backgrounds', items: groups.backgrounds ?? [] },
-    { label: 'Props',       items: groups.props ?? [] },
-    { label: 'Floor',       items: groups.floor ?? [] },
-    { label: 'Wall',        items: groups.wall ?? [] },
+  const sections: { label: string; kind: 'background' | 'prop' | 'floor' | 'wall'; items: typeof groups.backgrounds }[] = [
+    { label: 'Backgrounds', kind: 'background', items: groups.backgrounds ?? [] },
+    { label: 'Props',       kind: 'prop',       items: groups.props ?? [] },
+    { label: 'Floor',       kind: 'floor',      items: groups.floor ?? [] },
+    { label: 'Wall',        kind: 'wall',       items: groups.wall ?? [] },
   ];
   return (
     <View style={s.tabBody}>
+      {/* Live preview at the top so the user sees changes apply
+          immediately as they tap items. */}
+      <HabitatScene pet={pet} height={260} />
+
       {sections.map((sec) => {
         const owned = (sec.items ?? []).filter((it) => it.owned);
         if (owned.length === 0) return null;
@@ -713,7 +862,9 @@ function HabitatTab({ pet, s }: { pet: Pet; s: Styles }) {
                     it.active && s.habitatItemActive,
                     pressed && { opacity: 0.85 },
                   ]}>
-                  <Text style={s.habitatEmoji}>{it.emoji || '🏯'}</Text>
+                  <View style={s.habitatThumb}>
+                    {sec.kind === 'prop' ? <PropMini id={it.id} scale={3} /> : <Text style={s.habitatThumbGlyph}>{habitatThumbGlyph(sec.kind, it.id)}</Text>}
+                  </View>
                   <Text style={s.habitatName} numberOfLines={2}>{it.name}</Text>
                   {it.active ? <Text style={s.habitatBadge}>EQUIPPED</Text> : null}
                 </Pressable>
@@ -729,13 +880,23 @@ function HabitatTab({ pet, s }: { pet: Pet; s: Styles }) {
   );
 }
 
+/** Tiny representative glyph for habitat sections that don't have a
+ *  pixel-art prop renderer yet (backgrounds / floors / walls). Keeps
+ *  the grid readable while the real preview lives in HabitatScene. */
+function habitatThumbGlyph(kind: 'background' | 'prop' | 'floor' | 'wall', id: string): string {
+  if (kind === 'background') return '🌌';
+  if (kind === 'floor') return id.includes('led') ? '🟦' : id.includes('tatami') ? '🟫' : id.includes('petals') ? '🌸' : '✨';
+  if (kind === 'wall') return id.includes('neon') ? '💫' : id.includes('photo') ? '🖼️' : id.includes('banner') ? '🚩' : '📜';
+  return '·';
+}
+
 /* ════════════════════════════════════════════════════════════════════
  * SHOP TAB
  * ══════════════════════════════════════════════════════════════════ */
 
 type ShopCategory = 'food' | 'clothing' | 'toys' | 'habitat';
 
-function ShopTab({ s }: { s: Styles }) {
+function ShopTab({ pet, s }: { pet: Pet; s: Styles }) {
   const queryClient = useQueryClient();
   const [cat, setCat] = useState<ShopCategory>('food');
   const shopQuery = useQuery({ queryKey: ['pet-shop'], queryFn: () => petsApi.shop() });
@@ -824,7 +985,7 @@ function ShopTab({ s }: { s: Styles }) {
       ) : null}
 
       {cat === 'clothing' ? (
-        <ClothingShop data={data} buyItem={(id) => buyItem.mutate(id)} pending={buyItem.isPending} s={s} />
+        <ClothingShop pet={pet} data={data} buyItem={(id) => buyItem.mutate(id)} pending={buyItem.isPending} s={s} />
       ) : null}
 
       {cat === 'toys' ? (
@@ -840,7 +1001,9 @@ function ShopTab({ s }: { s: Styles }) {
                 data.combo_balance < t.cost && !t.owned && { opacity: 0.4 },
                 pressed && { opacity: 0.8 },
               ]}>
-              <Text style={s.shopEmoji}>{t.emoji || '🧸'}</Text>
+              <View style={s.shopThumb}>
+                <Text style={s.shopThumbGlyph}>{toyGlyph(t.id)}</Text>
+              </View>
               <Text style={s.shopName} numberOfLines={1}>{t.name}</Text>
               {t.desc ? <Text style={s.shopDesc} numberOfLines={2}>{t.desc}</Text> : null}
               <View style={s.shopCostRow}>
@@ -872,7 +1035,9 @@ function ShopTab({ s }: { s: Styles }) {
                         it.locked && { opacity: 0.4 },
                         pressed && { opacity: 0.8 },
                       ]}>
-                      <Text style={s.shopEmoji}>{it.emoji || '🏯'}</Text>
+                      <View style={s.shopThumb}>
+                        {kind === 'props' ? <PropMini id={it.id} scale={3} /> : <Text style={s.shopThumbGlyph}>{habitatThumbGlyph(kind === 'backgrounds' ? 'background' : kind === 'floor' ? 'floor' : 'wall', it.id)}</Text>}
+                      </View>
                       <Text style={s.shopName} numberOfLines={1}>{it.name}</Text>
                       {it.desc ? <Text style={s.shopDesc} numberOfLines={2}>{it.desc}</Text> : null}
                       <View style={s.shopCostRow}>
@@ -891,22 +1056,38 @@ function ShopTab({ s }: { s: Styles }) {
   );
 }
 
+/** Distinct compact glyph per toy id. The web client doesn't have
+ *  pixel-art toy thumbnails outside the SpritePet so we use a small
+ *  themed character rather than the previous generic 🧸. */
+function toyGlyph(id: string): string {
+  if (/ball|orb/i.test(id)) return '🪀';
+  if (/laser|pointer/i.test(id)) return '🔦';
+  if (/feather/i.test(id)) return '🪶';
+  if (/mouse|catnip/i.test(id)) return '🐭';
+  if (/drum|stick/i.test(id)) return '🥁';
+  if (/whistle/i.test(id)) return '🎶';
+  if (/treat|cookie/i.test(id)) return '🍪';
+  return '🧶';
+}
+
 function ClothingShop({
+  pet,
   data,
   buyItem,
   pending,
   s,
 }: {
+  pet: Pet;
   data: { combo_balance: number; clothing: { hats: any[]; tops?: any[]; belts: any[]; shoes: any[] } };
   buyItem: (id: string) => void;
   pending: boolean;
   s: Styles;
 }) {
-  const sections: { label: string; items: any[] }[] = [
-    { label: 'Hats',  items: data.clothing.hats ?? [] },
-    { label: 'Tops',  items: data.clothing.tops ?? [] },
-    { label: 'Belts', items: data.clothing.belts ?? [] },
-    { label: 'Shoes', items: data.clothing.shoes ?? [] },
+  const sections: { label: string; kind: 'hat' | 'top' | 'belt' | 'shoes'; items: any[] }[] = [
+    { label: 'Hats',  kind: 'hat',   items: data.clothing.hats ?? [] },
+    { label: 'Tops',  kind: 'top',   items: data.clothing.tops ?? [] },
+    { label: 'Belts', kind: 'belt',  items: data.clothing.belts ?? [] },
+    { label: 'Shoes', kind: 'shoes', items: data.clothing.shoes ?? [] },
   ];
   return (
     <View>
@@ -914,7 +1095,7 @@ function ClothingShop({
         <View key={sec.label} style={s.habitatSection}>
           <Text style={s.cardEyebrow}>{sec.label.toUpperCase()}</Text>
           <View style={s.shopGrid}>
-            {sec.items.map((it: { id: string; name: string; cost: number; emoji?: string; desc?: string; owned?: boolean }) => (
+            {sec.items.map((it: { id: string; name: string; cost: number; desc?: string; owned?: boolean }) => (
               <Pressable
                 key={it.id}
                 onPress={() => buyItem(it.id)}
@@ -924,7 +1105,15 @@ function ClothingShop({
                   it.owned && { opacity: 0.55 },
                   pressed && { opacity: 0.8 },
                 ]}>
-                <Text style={s.shopEmoji}>{it.emoji || '🎩'}</Text>
+                <View style={s.shopThumbLg}>
+                  <CosmeticPreview
+                    kind={sec.kind}
+                    id={it.id}
+                    character={pet.character}
+                    weightState={pet.weight_state}
+                    size={64}
+                  />
+                </View>
                 <Text style={s.shopName} numberOfLines={1}>{it.name}</Text>
                 {it.desc ? <Text style={s.shopDesc} numberOfLines={2}>{it.desc}</Text> : null}
                 <View style={s.shopCostRow}>
@@ -1119,6 +1308,19 @@ const makeStyles = (t: ThemeColors) => ({
   },
   deskHeading: { fontSize: 22, fontWeight: '800' as const, color: t.text, letterSpacing: 0.5 },
   scroll: { paddingHorizontal: 16, gap: 14 },
+  // Desktop: cap the scroll container width so the layout doesn't
+  // stretch edge-to-edge on wide monitors. The hub feels tighter when
+  // the main column maxes out around 720px and the helper rail takes
+  // a fixed 360px. Anything wider than 1100 just adds margin.
+  scrollDesktop: { maxWidth: 1180, alignSelf: 'center' as const, width: '100%' as const, paddingHorizontal: 24 },
+  deskGrid: {
+    flexDirection: 'row' as const,
+    gap: 18,
+    alignItems: 'flex-start' as const,
+  },
+  deskMain: { flex: 1, minWidth: 0, gap: 14 },
+  deskRail: { width: 360, gap: 14 },
+  deskRailHint: { fontSize: 11, color: t.textDim, marginTop: 6, lineHeight: 16 },
 
   // Empty state
   empty: { flex: 1, alignItems: 'center' as const, justifyContent: 'center' as const, padding: 32, gap: 8 },
@@ -1343,12 +1545,49 @@ const makeStyles = (t: ThemeColors) => ({
   habitatItem: {
     width: '31%' as const,
     backgroundColor: t.card, borderWidth: StyleSheet.hairlineWidth, borderColor: t.border,
-    borderRadius: 12, padding: 10, gap: 4, alignItems: 'center' as const,
+    borderRadius: 12, padding: 10, gap: 6, alignItems: 'center' as const,
   },
   habitatItemActive: { borderColor: t.accent, backgroundColor: t.accentTint },
-  habitatEmoji: { fontSize: 28 },
+  habitatThumb: {
+    width: 56, height: 56,
+    backgroundColor: 'rgba(0,0,0,0.32)',
+    alignItems: 'center' as const, justifyContent: 'center' as const,
+    borderRadius: 6,
+  },
+  habitatThumbGlyph: { fontSize: 24 },
   habitatName: { fontSize: 10, fontWeight: '700' as const, color: t.text, textAlign: 'center' as const },
   habitatBadge: { fontSize: 8, fontWeight: '900' as const, color: t.accent, letterSpacing: 0.6 },
+
+  // Outfits
+  outfitSection: { gap: 8, marginTop: 8 },
+  outfitHeader: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, alignItems: 'center' as const },
+  outfitUnequip: {},
+  outfitUnequipText: { fontSize: 10, color: t.textDim, fontStyle: 'italic' as const },
+  outfitEmpty: { fontSize: 11, color: t.textDim, fontStyle: 'italic' as const },
+  outfitGrid: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8 },
+  outfitCard: {
+    width: '31%' as const,
+    backgroundColor: t.card, borderWidth: StyleSheet.hairlineWidth, borderColor: t.border,
+    borderRadius: 12, padding: 10, alignItems: 'center' as const, gap: 4,
+  },
+  outfitCardActive: { borderColor: t.accent, backgroundColor: t.accentTint },
+  outfitName: { fontSize: 11, fontWeight: '700' as const, color: t.text, textAlign: 'center' as const },
+  outfitBadge: { fontSize: 8, fontWeight: '900' as const, color: t.accent, letterSpacing: 0.6 },
+  colorRow: {
+    flexDirection: 'row' as const, alignItems: 'center' as const, flexWrap: 'wrap' as const,
+    gap: 6, paddingTop: 6,
+  },
+  colorLabel: { fontSize: 10, fontWeight: '900' as const, color: t.textDim, letterSpacing: 0.8, marginRight: 4 },
+  colorSwatch: {
+    width: 22, height: 22, borderRadius: 11,
+    borderWidth: 2, borderColor: 'rgba(255,255,255,0.12)',
+  },
+  colorSwatchActive: { borderColor: t.accent, transform: [{ scale: 1.1 }] },
+  colorReset: {
+    paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999,
+    borderWidth: 1, borderColor: t.border,
+  },
+  colorResetText: { fontSize: 10, color: t.textMuted, fontWeight: '700' as const },
 
   // Shop
   shopHeader: { gap: 10 },
@@ -1375,6 +1614,17 @@ const makeStyles = (t: ThemeColors) => ({
     borderRadius: 12, padding: 12, gap: 4, alignItems: 'center' as const,
   },
   shopEmoji: { fontSize: 32 },
+  shopThumb: {
+    width: 64, height: 64,
+    backgroundColor: 'rgba(0,0,0,0.32)',
+    borderRadius: 8,
+    alignItems: 'center' as const, justifyContent: 'center' as const,
+  },
+  shopThumbGlyph: { fontSize: 28 },
+  shopThumbLg: {
+    width: 80, height: 80,
+    alignItems: 'center' as const, justifyContent: 'center' as const,
+  },
   shopName: { fontSize: 12, fontWeight: '900' as const, color: t.text, textAlign: 'center' as const },
   shopDesc: { fontSize: 10, color: t.textMuted, textAlign: 'center' as const, lineHeight: 13 },
   shopMeta: { paddingTop: 2 },
