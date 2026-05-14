@@ -1056,7 +1056,9 @@ export default function WhatToPlayScreen() {
         />
       </View>
 
+      <View style={isDesktop ? s.deskRow : { flex: 1 }}>
       <ScrollView
+        style={isDesktop ? { flex: 1 } : undefined}
         contentContainerStyle={[s.scroll, { paddingBottom: insets.bottom + 24 }]}
         showsVerticalScrollIndicator={false}>
         <Text style={s.subtitle}>Charts picked for your goal. Refresh for new picks.</Text>
@@ -1105,18 +1107,19 @@ export default function WhatToPlayScreen() {
           ) : null}
         </View>
 
-        {/* Status / summary */}
+        {/* Status / summary — on desktop, the summary lives in the right
+            rail so the center column is mostly the pick grid. */}
         {status === 'needs_import' || status === 'all_completed' ? (
           <StatusCard
             status={status}
             goal={goal}
             onSwitchGoal={status === 'all_completed' ? () => handleGoalChange(goal === 'title' ? 'pumbility' : 'title') : undefined}
           />
-        ) : (
+        ) : !isDesktop ? (
           goal === 'title'
             ? <TitleSummary summary={data?.summary as TitleGoalSummary | null} />
             : <PumbilitySummary summary={data?.summary as PumbilityGoalSummary | null} />
-        )}
+        ) : null}
 
         {/* Loading */}
         {recsQuery.isLoading ? (
@@ -1155,6 +1158,21 @@ export default function WhatToPlayScreen() {
           </View>
         ) : null}
       </ScrollView>
+
+      {isDesktop ? (
+        <View style={s.deskGoalRail}>
+          {status === 'needs_import' || status === 'all_completed' ? (
+            <Text style={s.deskGoalRailEmpty}>
+              {status === 'all_completed' ? 'All picks cleared — swap the goal for a fresh set.' : 'Sync your scores to get personalized picks.'}
+            </Text>
+          ) : goal === 'title' ? (
+            <TitleSummary summary={data?.summary as TitleGoalSummary | null} />
+          ) : (
+            <PumbilitySummary summary={data?.summary as PumbilityGoalSummary | null} />
+          )}
+        </View>
+      ) : null}
+      </View>
 
       <DetailModal
         rec={detailRec}
@@ -1258,6 +1276,22 @@ const makeStyles = (t: ThemeColors) => ({
     backgroundColor: t.accent,
   },
   refreshCtaText: { color: t.bg, fontSize: 13, fontWeight: '900' as const },
+
+  // Desktop: center column + sticky right rail with the goal summary.
+  deskRow: { flex: 1, flexDirection: 'row' as const, alignItems: 'stretch' as const },
+  deskGoalRail: {
+    width: 320,
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderLeftColor: t.border,
+    backgroundColor: t.surface,
+    padding: 16,
+    gap: 12,
+  },
+  deskGoalRailEmpty: {
+    fontSize: 13,
+    color: t.textMuted,
+    lineHeight: 18,
+  },
 });
 
 const makeSummaryStyles = (t: ThemeColors) => ({
