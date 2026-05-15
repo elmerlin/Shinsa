@@ -843,7 +843,7 @@ function ChartCard({
   s: Styles;
 }) {
   const jacket = chart.jacket_url_snapshot ? fullImageUrl(chart.jacket_url_snapshot) : undefined;
-  const top1 = chart.top3?.[0];
+  const top3 = (chart.top3 || []).slice(0, 3);
   const [badgeFrom] = modeBadgeColors(chart.mode);
   const badgeColors: readonly [string, string, string] =
     badgeFrom === '#ff7a7a' ? ['#ff7a7a', '#d93d62', '#7a1730']
@@ -858,6 +858,8 @@ function ChartCard({
         ) : (
           <View style={[s.chartHeroImg, s.chartHeroFallback]} />
         )}
+        {/* Mode-tinted top-to-bottom scrim so the song title (top) and the
+            top-3 overlay (bottom) both stay readable over a busy jacket. */}
         <LinearGradient
           colors={modeGradient(chart.mode)}
           locations={[0, 0.45, 1]}
@@ -871,22 +873,54 @@ function ChartCard({
           style={s.chartModeBadge}>
           <Text style={s.chartModeBadgeText}>{modeShort(chart.mode)}{chart.level}</Text>
         </LinearGradient>
-        <View style={s.chartHeroText}>
+
+        {/* Title pinned to the top so the bottom is free for the top-3
+            list. The mode badge sits to its right via flex layout. */}
+        <View style={s.chartHeroTopText}>
           <Text style={s.chartHeroTitle} numberOfLines={1}>{chart.song_title_snapshot}</Text>
         </View>
+
+        {/* Top-3 overlay: rank emoji + small avatar + username + score on
+            each row. Was a separate footer block; pulled onto the jacket
+            so the card can show the actual leaderboard at a glance. */}
+        {top3.length > 0 ? (
+          <View style={s.chartTopList}>
+            {top3.map((entry, i) => {
+              const av = typeof entry.avatar === 'string' && entry.avatar
+                ? fullImageUrl(entry.avatar)
+                : undefined;
+              const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉';
+              return (
+                <View key={`${entry.user_id}-${entry.rank}`} style={s.chartTopRow}>
+                  <Text style={s.chartTopMedal}>{medal}</Text>
+                  {av ? (
+                    <Image source={{ uri: av }} style={s.chartTopAvatar} contentFit="cover" />
+                  ) : (
+                    <View style={[s.chartTopAvatar, s.chartTopAvatarFallback]}>
+                      <Text style={s.chartTopAvatarLetter}>
+                        {(entry.username || '?').charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                  )}
+                  <Text style={s.chartTopName} numberOfLines={1}>{entry.username}</Text>
+                  <Text style={[s.chartTopScore, { color: gradeColor(entry.grade) }]} numberOfLines={1}>
+                    {fmtNum(entry.score)}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        ) : (
+          <View style={s.chartTopList}>
+            <Text style={s.chartTopEmpty}>No plays yet</Text>
+          </View>
+        )}
       </View>
 
       <View style={s.chartFooter}>
         <Text style={s.chartFooterStat} numberOfLines={1}>
           <Text style={s.chartFooterNum}>{chart.clearCount || 0}</Text>/<Text style={s.chartFooterNum}>{chart.participantCount || 0}</Text> cleared
         </Text>
-        {top1 ? (
-          <Text style={[s.chartFooterTop, { color: gradeColor(top1.grade) }]} numberOfLines={1}>
-            {fmtNum(top1.score)} · @{top1.username}
-          </Text>
-        ) : (
-          <Text style={s.chartFooterEmpty}>no plays</Text>
-        )}
       </View>
 
       {viewerBest ? (
@@ -1230,7 +1264,10 @@ const makeStyles = (t: ThemeColors) => ({
     borderColor: 'rgba(255,255,255,0.06)',
     overflow: 'hidden' as const,
   },
-  chartHero: { aspectRatio: 16 / 10, backgroundColor: '#000', overflow: 'hidden' as const },
+  // Taller jacket so the top-3 overlay (3 rows w/ avatars) fits without
+  // overrunning the song-title strip up top. 4:5 lands well at the
+  // 2-up grid widths we use on phones and the desktop tile width too.
+  chartHero: { aspectRatio: 4 / 5, backgroundColor: '#000', overflow: 'hidden' as const },
   chartHeroImg: { width: '100%' as const, height: '100%' as const },
   chartHeroFallback: { backgroundColor: '#1f2937' },
   chartModeBadge: {
@@ -1244,7 +1281,16 @@ const makeStyles = (t: ThemeColors) => ({
     borderColor: 'rgba(255,255,255,0.45)',
   },
   chartModeBadgeText: { fontSize: 10, fontWeight: '900' as const, color: '#fff', letterSpacing: -0.3 },
-  chartHeroText: { position: 'absolute' as const, left: 0, right: 0, bottom: 0, paddingHorizontal: 8, paddingBottom: 6 },
+  // Title pinned to the TOP of the jacket (was bottom). Keeps clear of
+  // the mode badge with right-padding so they don't fight at narrow widths.
+  chartHeroTopText: {
+    position: 'absolute' as const,
+    left: 0,
+    right: 40, // keep clear of the mode badge top-right
+    top: 0,
+    paddingHorizontal: 8,
+    paddingTop: 6,
+  },
   chartHeroTitle: {
     fontSize: 12,
     fontWeight: '900' as const,
@@ -1254,12 +1300,66 @@ const makeStyles = (t: ThemeColors) => ({
     textShadowRadius: 4,
   },
 
-  // Compact card footer — single line of stats + single line of top score
+  // Top-3 overlay block at the bottom of the jacket — was a footer line
+  // showing only top 1 with no avatar. Replaces both: 3 rows here means
+  // the chart card communicates the actual race at a glance.
+  chartTopList: {
+    position: 'absolute' as const,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 6,
+    paddingTop: 6,
+    paddingBottom: 6,
+    gap: 3,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+  },
+  chartTopRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 5,
+  },
+  chartTopMedal: { fontSize: 11, width: 14, textAlign: 'center' as const },
+  chartTopAvatar: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.25)',
+  },
+  chartTopAvatarFallback: { alignItems: 'center' as const, justifyContent: 'center' as const },
+  chartTopAvatarLetter: { fontSize: 9, fontWeight: '900' as const, color: '#fff' },
+  chartTopName: {
+    flex: 1,
+    fontSize: 10,
+    fontWeight: '700' as const,
+    color: 'rgba(255,255,255,0.92)',
+    textShadowColor: 'rgba(0,0,0,0.85)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  chartTopScore: {
+    fontSize: 10,
+    fontWeight: '900' as const,
+    fontVariant: ['tabular-nums' as const],
+    textShadowColor: 'rgba(0,0,0,0.85)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  chartTopEmpty: {
+    fontSize: 10,
+    color: 'rgba(255,255,255,0.5)',
+    fontStyle: 'italic' as const,
+    textAlign: 'center' as const,
+    paddingVertical: 4,
+  },
+
+  // Footer simplifies down to just the participation/clear stat now that
+  // top-1 has moved into the jacket overlay above.
   chartFooter: { paddingHorizontal: 8, paddingTop: 6, paddingBottom: 6, gap: 2 },
   chartFooterStat: { fontSize: 10, color: 'rgba(255,255,255,0.4)', fontWeight: '700' as const },
   chartFooterNum: { color: 'rgba(255,255,255,0.85)', fontWeight: '900' as const, fontVariant: ['tabular-nums' as const] },
-  chartFooterTop: { fontSize: 11, fontWeight: '800' as const, fontVariant: ['tabular-nums' as const] },
-  chartFooterEmpty: { fontSize: 10, color: 'rgba(255,255,255,0.3)', fontStyle: 'italic' as const },
 
   // Viewer best strip — single tight line
   viewerBestStrip: {
