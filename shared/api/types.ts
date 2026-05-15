@@ -295,16 +295,39 @@ export interface DiscussionMessage {
   parent_id?: string | null;
   username?: string;
   avatar?: string;
-  body?: string;
+  skill_title?: string;
+  /** Server returns `message` for the body text. */
+  message?: string;
+  thread_emoji?: string;
+  is_participant?: boolean;
+  pump_count?: number;
+  user_pumped?: boolean;
+  reply_count?: number;
+  /** Hydrated only on top-level posts (server inlines first 50 replies). */
+  replies?: DiscussionMessage[];
   created_at?: string;
-  pumps?: number;
-  pumped_by_viewer?: boolean;
   [key: string]: unknown;
 }
 
 export interface DiscussionResponse {
   threads: DiscussionMessage[];
   viewer_count?: number;
+}
+
+/** A tournament phase — a single segment of a multi-format event (e.g.
+ *  "Round Robin" → "Single Elim Top 8" → "Final"). The desktop renders
+ *  one tab per phase with format-specific bracket / pairings views. */
+export interface TournamentPhase {
+  id: string;
+  tournament_id: string;
+  phase_order: number;
+  format: string;
+  name?: string;
+  config?: string | Record<string, unknown>;
+  advancement?: string | Record<string, unknown>;
+  placement_snapshots?: string | Record<string, unknown>;
+  status: 'PENDING' | 'ACTIVE' | 'COMPLETED' | string;
+  created_at?: string;
 }
 
 // --- Social ---
