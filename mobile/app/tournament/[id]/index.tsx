@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TopBar } from '@/components/top-bar';
 import {
@@ -186,17 +186,9 @@ export default function TournamentDetailScreen() {
           flow={phases.length > 0 ? <TournamentPhaseTimeline phases={phases} /> : undefined}
           action={
             <Pressable
-              onPress={() => {
-                // Desktop pumpshinsa.com hosts the rich Poster page;
-                // open it in a new tab from mobile-web (or via Linking
-                // on native).
-                const url = `https://pumpshinsa.com/tournament/${tournamentId}/poster`;
-                if (Platform.OS === 'web' && typeof window !== 'undefined') {
-                  window.open(url, '_blank', 'noopener,noreferrer');
-                } else {
-                  Linking.openURL(url).catch(() => undefined);
-                }
-              }}
+              // Native poster lives at /tournament/:id/poster — same URL
+              // shape as the desktop site so shared links work both ways.
+              onPress={() => router.push(`/tournament/${tournamentId}/poster` as never)}
               style={({ pressed }) => [s.posterBtn, pressed && { opacity: 0.7 }]}>
               <Text style={s.posterBtnIcon}>🖼️</Text>
               <Text style={s.posterBtnText}>Poster</Text>
