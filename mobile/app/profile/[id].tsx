@@ -1038,11 +1038,33 @@ export function ProfileBody({ lookup }: { lookup: string }) {
               </Pressable>
             </View>
           ) : isSelf ? (
-            <Pressable
-              onPress={() => router.push('/profile/edit')}
-              style={({ pressed }) => [s.deskMessageBtn, pressed && { opacity: 0.7 }]}>
-              <Text style={s.deskMessageText}>Edit profile</Text>
-            </Pressable>
+            <View style={s.deskActionStack}>
+              <Pressable
+                onPress={() => router.push('/profile/edit')}
+                style={({ pressed }) => [s.deskMessageBtn, pressed && { opacity: 0.7 }]}>
+                <Text style={s.deskMessageText}>Edit profile</Text>
+              </Pressable>
+              {/* Mirror the mobile-width "Sync recent" button so the desktop
+                  layout doesn't lose the ability to pull fresh PIUGame plays
+                  without leaving the profile. */}
+              <Pressable
+                onPress={() => {
+                  Alert.alert(
+                    'Sync recent plays?',
+                    'Pulls your most recent plays from PIUGame. This usually takes a few seconds.',
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      { text: 'Sync', onPress: () => syncRecentMutation.mutate() },
+                    ],
+                  );
+                }}
+                disabled={syncRecentMutation.isPending}
+                style={({ pressed }) => [s.deskMessageBtn, pressed && { opacity: 0.7 }]}>
+                {syncRecentMutation.isPending
+                  ? <ActivityIndicator size="small" color={theme.text} />
+                  : <Text style={s.deskMessageText}>Sync recent</Text>}
+              </Pressable>
+            </View>
           ) : null}
 
           {/* Quick stats */}
@@ -1085,6 +1107,22 @@ export function ProfileBody({ lookup }: { lookup: string }) {
                         <Text style={s.deskBadgeFallback}>🏅</Text>
                       )}
                     </Pressable>
+                  );
+                })}
+                {/* Group-assigned badges (e.g. Pump Dojo). The mobile-width
+                    layout already renders these alongside achievements; the
+                    desktop rail was only iterating achievements, so dojo
+                    members lost their group badge on wide screens. */}
+                {groupBadges.map((b, i) => {
+                  const img = typeof b.image === 'string' ? fullImageUrl(b.image as string) : '';
+                  return (
+                    <View key={`grp-${String(b.id ?? i)}`} style={s.deskBadgeBox}>
+                      {img ? (
+                        <Image source={{ uri: img }} style={s.deskBadgeImg} contentFit="contain" />
+                      ) : (
+                        <Text style={s.deskBadgeFallback}>{String((b.name as string) || '·').slice(0, 2)}</Text>
+                      )}
+                    </View>
                   );
                 })}
               </View>
