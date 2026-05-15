@@ -526,6 +526,7 @@ function ApiTokensSection({ s }: { s: Styles }) {
   const [justCreatedToken, setJustCreatedToken] = useState<string | null>(null);
   const [confirmRevokeId, setConfirmRevokeId] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
+  const [copiedSnippet, setCopiedSnippet] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null);
 
   const createMutation = useMutation({
@@ -568,6 +569,20 @@ function ApiTokensSection({ s }: { s: Styles }) {
       }
     } else {
       setFeedback({ tone: 'err', text: 'Long-press the token to copy it.' });
+    }
+  };
+
+  const handleCopySnippet = async (key: string, text: string) => {
+    if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) {
+      try {
+        await navigator.clipboard.writeText(text);
+        setCopiedSnippet(key);
+        setTimeout(() => setCopiedSnippet((curr) => (curr === key ? null : curr)), 2500);
+      } catch {
+        setFeedback({ tone: 'err', text: 'Copy blocked — select the snippet and copy it manually.' });
+      }
+    } else {
+      setFeedback({ tone: 'err', text: 'Long-press the snippet to copy it.' });
     }
   };
 
@@ -647,6 +662,101 @@ function ApiTokensSection({ s }: { s: Styles }) {
           </Pressable>
         </View>
       </View>
+
+      {(() => {
+        const tokenForSnippet = justCreatedToken || 'pump_pat_PASTE_YOUR_TOKEN_HERE';
+        const isPlaceholder = !justCreatedToken;
+        const curlSnippet = `curl -H "Authorization: Bearer ${tokenForSnippet}" \\
+  "https://pumpshinsa.com/api/external/steps?from=2026-05-01&to=2026-05-15"`;
+        const nodeSnippet = `const r = await fetch(
+  \`https://pumpshinsa.com/api/external/steps?from=\${from}&to=\${to}\`,
+  { headers: { Authorization: \`Bearer \${process.env.PUMPSHINSA_TOKEN}\` } }
+);
+const { days } = await r.json();
+const total = days.reduce((s, d) => s + d.steps, 0);`;
+        const agentSnippet = `You are integrating the Pumpshinsa Steps API into a website.
+
+ENDPOINT
+GET https://pumpshinsa.com/api/external/steps?from=YYYY-MM-DD&to=YYYY-MM-DD
+
+AUTH
+Header: Authorization: Bearer <token>
+Token: ${tokenForSnippet}
+Required scope: steps:read
+Treat the token like a password — never ship it in browser code.
+
+PARAMS
+- from (required, YYYY-MM-DD)
+- to   (required, YYYY-MM-DD, must be >= from)
+
+RESPONSE 200
+{
+  "user_id": <int>,
+  "from": "YYYY-MM-DD",
+  "to":   "YYYY-MM-DD",
+  "days": [{ "date": "YYYY-MM-DD", "steps": <int>, "plays": <int> }]
+}
+"steps" = perfect+great+good+bad judgments per play (misses excluded).
+"days" only contains dates that had plays — fill gaps with 0 if you need a continuous range.
+
+ERRORS
+400 — bad date format or from > to
+401 — missing/invalid/revoked token
+403 — token missing scope steps:read
+
+INTEGRATION RULES
+- Call from a server, not the browser. Read the token from an env var (PUMPSHINSA_TOKEN).
+- CORS is open, so a browser call will succeed — but inlining the token exposes it to anyone viewing source. Proxy it.
+- No documented rate limit. Cache results for a few minutes if polling.
+
+EXAMPLE (Node)
+const r = await fetch(
+  \`https://pumpshinsa.com/api/external/steps?from=\${from}&to=\${to}\`,
+  { headers: { Authorization: \`Bearer \${process.env.PUMPSHINSA_TOKEN}\` } }
+);
+const { days } = await r.json();`;
+        const snippets: { key: string; label: string; hint: string; text: string }[] = [
+          { key: 'agent', label: 'Agent prompt', hint: 'Paste into Claude Code, Cursor, etc. The agent will know what to build.', text: agentSnippet },
+          { key: 'curl', label: 'curl', hint: 'Quick smoke test from the terminal.', text: curlSnippet },
+          { key: 'node', label: 'Node / fetch', hint: 'Server-side. Set PUMPSHINSA_TOKEN in your env.', text: nodeSnippet },
+        ];
+        return (
+          <View style={s.card}>
+            <Text style={s.cardTitle}>Integration</Text>
+            <Text style={s.cardHint}>
+              {isPlaceholder
+                ? 'Drop these into the app or agent that will be reading your steps. Replace pump_pat_PASTE_YOUR_TOKEN_HERE with the token from a fresh create.'
+                : 'Drop these into the app or agent that will be reading your steps. Your just-created token is already inlined below.'}
+            </Text>
+            {snippets.map((sn) => (
+              <View key={sn.key} style={{ gap: 6 }}>
+                <View style={s.snippetHeader}>
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={s.snippetLabel}>{sn.label}</Text>
+                    <Text style={s.snippetHint}>{sn.hint}</Text>
+                  </View>
+                  <Pressable
+                    onPress={() => handleCopySnippet(sn.key, sn.text)}
+                    style={({ pressed }) => [s.snippetCopyBtn, pressed && { opacity: 0.7 }]}>
+                    <Text style={s.snippetCopyBtnText}>
+                      {copiedSnippet === sn.key ? 'Copied!' : 'Copy'}
+                    </Text>
+                  </Pressable>
+                </View>
+                <ScrollView
+                  horizontal={Platform.OS !== 'web'}
+                  style={s.snippetBlockScroll}
+                  contentContainerStyle={{ flexGrow: 1 }}
+                  showsHorizontalScrollIndicator={false}>
+                  <Text selectable style={s.snippetBlock}>
+                    {sn.text}
+                  </Text>
+                </ScrollView>
+              </View>
+            ))}
+          </View>
+        );
+      })()}
 
       <View style={s.card}>
         <Text style={s.cardTitle}>Your tokens</Text>
@@ -1128,6 +1238,38 @@ const makeStyles = (t: ThemeColors) => ({
     backgroundColor: t.surfaceMuted,
   },
   copyBtnSecondaryText: { fontSize: 12, fontWeight: '700' as const, color: t.text },
+
+  snippetHeader: {
+    flexDirection: 'row' as const,
+    alignItems: 'flex-start' as const,
+    gap: 12,
+  },
+  snippetLabel: { fontSize: 13, fontWeight: '800' as const, color: t.text },
+  snippetHint: { fontSize: 11, color: t.textMuted, lineHeight: 16 },
+  snippetCopyBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: t.border,
+    backgroundColor: t.surfaceMuted,
+  },
+  snippetCopyBtnText: { fontSize: 11, fontWeight: '800' as const, color: t.text, letterSpacing: 0.4 },
+  snippetBlockScroll: {
+    maxHeight: 220,
+    backgroundColor: t.bg,
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: t.border,
+  },
+  snippetBlock: {
+    fontSize: 11,
+    lineHeight: 16,
+    color: t.text,
+    fontFamily: Platform.OS === 'web' ? 'ui-monospace, SFMono-Regular, Menlo, monospace' : undefined,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
 
   tokenRow: {
     flexDirection: 'row' as const,
