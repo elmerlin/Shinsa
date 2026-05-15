@@ -368,20 +368,28 @@ export default function LiveSessionScreen() {
            ────────────────────────────────────────────────────────── */
         <View style={s.portraitBody}>
           <View style={s.portraitStream}>
-            <HeroCard session={session} lastPlay={lastPlay} isLive={isLive} duration={duration} s={s} compact />
             {hasYouTubeEmbed ? (
-              <View style={s.streamEmbedWrap}>
-                <YouTubeEmbed url={`https://www.youtube.com/watch?v=${youtubeVideoId}`} />
-              </View>
-            ) : hasNonYouTubeStream ? (
-              <Pressable
-                onPress={handleStreamOpen}
-                style={({ pressed }) => [s.streamCta, pressed && { opacity: 0.85 }]}>
-                <IconSymbol name="tv.fill" size={18} color="#fff" />
-                <Text style={s.streamCtaText} numberOfLines={1}>Watch the stream</Text>
-                <IconSymbol name="link" size={14} color="rgba(255,255,255,0.7)" />
-              </Pressable>
-            ) : null}
+              <>
+                <View style={s.streamEmbedWrap}>
+                  <YouTubeEmbed url={`https://www.youtube.com/watch?v=${youtubeVideoId}`} />
+                </View>
+                <VideoSessionMeta session={session} isLive={isLive} duration={duration} s={s} />
+                {lastPlay ? <NowPlayingCard lastPlay={lastPlay} isLive={isLive} s={s} /> : null}
+              </>
+            ) : (
+              <>
+                <HeroCard session={session} lastPlay={lastPlay} isLive={isLive} duration={duration} s={s} compact />
+                {hasNonYouTubeStream ? (
+                  <Pressable
+                    onPress={handleStreamOpen}
+                    style={({ pressed }) => [s.streamCta, pressed && { opacity: 0.85 }]}>
+                    <IconSymbol name="tv.fill" size={18} color="#fff" />
+                    <Text style={s.streamCtaText} numberOfLines={1}>Watch the stream</Text>
+                    <IconSymbol name="link" size={14} color="rgba(255,255,255,0.7)" />
+                  </Pressable>
+                ) : null}
+              </>
+            )}
           </View>
 
           {/* Tab strip — visible label + unread-style count. Sticky
@@ -531,21 +539,28 @@ export default function LiveSessionScreen() {
             style={s.deskMain}
             contentContainerStyle={s.deskMainContent}
             refreshControl={<RefreshControl refreshing={query.isRefetching} onRefresh={() => query.refetch()} tintColor={theme.spinner} />}>
-            <HeroCard session={session} lastPlay={lastPlay} isLive={isLive} duration={duration} s={s} />
-
             {hasYouTubeEmbed ? (
-              <View style={s.streamEmbedWrap}>
-                <YouTubeEmbed url={`https://www.youtube.com/watch?v=${youtubeVideoId}`} />
-              </View>
-            ) : hasNonYouTubeStream ? (
-              <Pressable
-                onPress={handleStreamOpen}
-                style={({ pressed }) => [s.streamCta, pressed && { opacity: 0.85 }]}>
-                <IconSymbol name="tv.fill" size={18} color="#fff" />
-                <Text style={s.streamCtaText} numberOfLines={1}>Watch the stream</Text>
-                <IconSymbol name="link" size={14} color="rgba(255,255,255,0.7)" />
-              </Pressable>
-            ) : null}
+              <>
+                <View style={s.streamEmbedWrap}>
+                  <YouTubeEmbed url={`https://www.youtube.com/watch?v=${youtubeVideoId}`} />
+                </View>
+                <VideoSessionMeta session={session} isLive={isLive} duration={duration} s={s} />
+                {lastPlay ? <NowPlayingCard lastPlay={lastPlay} isLive={isLive} s={s} /> : null}
+              </>
+            ) : (
+              <>
+                <HeroCard session={session} lastPlay={lastPlay} isLive={isLive} duration={duration} s={s} />
+                {hasNonYouTubeStream ? (
+                  <Pressable
+                    onPress={handleStreamOpen}
+                    style={({ pressed }) => [s.streamCta, pressed && { opacity: 0.85 }]}>
+                    <IconSymbol name="tv.fill" size={18} color="#fff" />
+                    <Text style={s.streamCtaText} numberOfLines={1}>Watch the stream</Text>
+                    <IconSymbol name="link" size={14} color="rgba(255,255,255,0.7)" />
+                  </Pressable>
+                ) : null}
+              </>
+            )}
 
             {summary ? <SummaryStats summary={summary} s={s} /> : null}
 
@@ -666,23 +681,30 @@ export default function LiveSessionScreen() {
             contentContainerStyle={s.scroll}
             refreshControl={<RefreshControl refreshing={query.isRefetching} onRefresh={() => query.refetch()} tintColor={theme.spinner} />}>
 
-            <HeroCard session={session} lastPlay={lastPlay} isLive={isLive} duration={duration} s={s} />
-
             {hasYouTubeEmbed ? (
-              <View style={s.streamEmbedWrap}>
-                <YouTubeEmbed url={`https://www.youtube.com/watch?v=${youtubeVideoId}`} />
-              </View>
-            ) : hasNonYouTubeStream ? (
-              <Pressable
-                onPress={handleStreamOpen}
-                style={({ pressed }) => [s.streamCta, pressed && { opacity: 0.85 }]}>
-                <IconSymbol name="tv.fill" size={18} color="#fff" />
-                <Text style={s.streamCtaText} numberOfLines={1}>
-                  Watch the stream
-                </Text>
-                <IconSymbol name="link" size={14} color="rgba(255,255,255,0.7)" />
-              </Pressable>
-            ) : null}
+              <>
+                <View style={s.streamEmbedWrap}>
+                  <YouTubeEmbed url={`https://www.youtube.com/watch?v=${youtubeVideoId}`} />
+                </View>
+                <VideoSessionMeta session={session} isLive={isLive} duration={duration} s={s} />
+                {lastPlay ? <NowPlayingCard lastPlay={lastPlay} isLive={isLive} s={s} /> : null}
+              </>
+            ) : (
+              <>
+                <HeroCard session={session} lastPlay={lastPlay} isLive={isLive} duration={duration} s={s} />
+                {hasNonYouTubeStream ? (
+                  <Pressable
+                    onPress={handleStreamOpen}
+                    style={({ pressed }) => [s.streamCta, pressed && { opacity: 0.85 }]}>
+                    <IconSymbol name="tv.fill" size={18} color="#fff" />
+                    <Text style={s.streamCtaText} numberOfLines={1}>
+                      Watch the stream
+                    </Text>
+                    <IconSymbol name="link" size={14} color="rgba(255,255,255,0.7)" />
+                  </Pressable>
+                ) : null}
+              </>
+            )}
 
             <CohostsCard
               host={session.host}
@@ -1056,6 +1078,109 @@ function ChatRow({
 }
 
 type Styles = ReturnType<typeof useThemedStyles<ReturnType<typeof makeStyles>>>;
+
+/**
+ * Slim metadata strip rendered alongside the YouTube embed. When the
+ * stream itself dominates the visible area, the session header doesn't
+ * need a full-bleed background — just host, LIVE pill, viewer count.
+ */
+function VideoSessionMeta({
+  session,
+  isLive,
+  duration,
+  s,
+}: {
+  session: LiveSessionFull;
+  isLive: boolean;
+  duration: number | null;
+  s: Styles;
+}) {
+  const hostAvatar = typeof session.host?.avatar === 'string' ? fullImageUrl(session.host.avatar) : undefined;
+  return (
+    <View style={s.metaCard}>
+      <View style={s.metaHostBlock}>
+        {hostAvatar ? (
+          <Image source={{ uri: hostAvatar }} style={s.metaHostAvatar} contentFit="cover" />
+        ) : (
+          <DefaultAvatar size={36} />
+        )}
+        <View style={{ flex: 1, gap: 1, minWidth: 0 }}>
+          <Text style={s.metaHostName} numberOfLines={1}>@{session.host?.username || 'anonymous'}</Text>
+          {session.host?.skill_title ? (
+            <Text style={s.metaHostSkill} numberOfLines={1}>{session.host.skill_title}</Text>
+          ) : null}
+        </View>
+      </View>
+      <View style={s.metaPillRow}>
+        {isLive ? (
+          <View style={s.metaLivePill}>
+            <View style={s.metaLivePulse} />
+            <Text style={s.metaLivePillText}>LIVE</Text>
+          </View>
+        ) : (
+          <View style={s.metaEndedPill}>
+            <Text style={s.metaEndedPillText}>ENDED</Text>
+          </View>
+        )}
+        {isLive && typeof session.viewer_count === 'number' ? (
+          <View style={s.metaViewerPill}>
+            <IconSymbol name="eye.fill" size={11} color="#fff" />
+            <Text style={s.metaViewerText}>{session.viewer_count}</Text>
+          </View>
+        ) : null}
+        {duration != null ? (
+          <View style={s.metaDurationPill}>
+            <Text style={s.metaDurationText}>{durationLabel(duration)}</Text>
+          </View>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+/**
+ * Compact "now playing" card — small jacket thumbnail on the left,
+ * song info on the right. Pairs with VideoSessionMeta so the song
+ * stays visible without competing with the dominant video embed.
+ */
+function NowPlayingCard({
+  lastPlay,
+  isLive,
+  s,
+}: {
+  lastPlay: LiveSessionPlay;
+  isLive: boolean;
+  s: Styles;
+}) {
+  const jacket = lastPlay.background_url || '';
+  return (
+    <View style={s.npCard}>
+      {jacket ? (
+        <Image source={{ uri: jacket }} style={s.npThumb} contentFit="cover" />
+      ) : (
+        <View style={[s.npThumb, s.npThumbFallback]} />
+      )}
+      <View style={s.npBody}>
+        <Text style={s.npLabel}>{isLive ? 'NOW PLAYING' : 'LAST PLAY'}</Text>
+        <Text style={s.npTitle} numberOfLines={1}>{lastPlay.song_title}</Text>
+        <View style={s.npMetaRow}>
+          <View style={[s.npModeBadge, { backgroundColor: modeAccent(lastPlay.mode) }]}>
+            <Text style={s.npModeBadgeText}>{modeShort(lastPlay.mode)}{lastPlay.level}</Text>
+          </View>
+          {lastPlay.score > 0 ? (
+            <>
+              <Text style={s.npScore}>{fmtNum(lastPlay.score)}</Text>
+              <GradeChip grade={lastPlay.grade} score={lastPlay.score} size="sm" />
+              {lastPlay.plate ? <PlateBadge plate={lastPlay.plate} size="sm" /> : null}
+            </>
+          ) : (
+            <Text style={s.npBreak}>STAGE BREAK</Text>
+          )}
+        </View>
+      </View>
+    </View>
+  );
+}
 
 function HeroCard({
   session,
@@ -1436,6 +1561,56 @@ const makeStyles = (t: ThemeColors) => ({
   heroPlayModeBadgeText: { fontSize: 11, fontWeight: '900' as const, color: '#0a0f1c' },
   heroPlayScore: { fontSize: 13, fontWeight: '900' as const, color: '#fff', fontVariant: ['tabular-nums' as const] },
   heroPlayBreak: { fontSize: 11, fontWeight: '900' as const, color: t.danger, letterSpacing: 1.2 },
+
+  // Video-mode session meta — slim card with host on the left and
+  // status pills on the right. Used in place of HeroCard when the
+  // YouTube embed is rendered first and already dominates the screen.
+  metaCard: {
+    marginHorizontal: 12,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 12,
+    padding: 10,
+    borderRadius: 12,
+    backgroundColor: t.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: t.border,
+  },
+  metaHostBlock: { flex: 1, flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, minWidth: 0 },
+  metaHostAvatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: t.surfaceMuted },
+  metaHostName: { fontSize: 13, fontWeight: '800' as const, color: t.text },
+  metaHostSkill: { fontSize: 11, color: t.textMuted },
+  metaPillRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, flexWrap: 'wrap' as const, justifyContent: 'flex-end' as const },
+  metaLivePill: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 5, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 999, backgroundColor: '#dc2626' },
+  metaLivePulse: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#fff' },
+  metaLivePillText: { fontSize: 11, fontWeight: '900' as const, color: '#fff', letterSpacing: 1.2 },
+  metaEndedPill: { paddingHorizontal: 9, paddingVertical: 4, borderRadius: 999, backgroundColor: t.surfaceMuted },
+  metaEndedPillText: { fontSize: 11, fontWeight: '900' as const, color: t.textDim, letterSpacing: 1.2 },
+  metaViewerPill: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 999, backgroundColor: t.surfaceMuted },
+  metaViewerText: { fontSize: 11, fontWeight: '900' as const, color: t.text, fontVariant: ['tabular-nums' as const] },
+  metaDurationPill: { paddingHorizontal: 9, paddingVertical: 4, borderRadius: 999, backgroundColor: t.surfaceMuted },
+  metaDurationText: { fontSize: 11, fontWeight: '800' as const, color: t.text },
+
+  // Compact "now playing" card paired with the video embed.
+  npCard: {
+    marginHorizontal: 12,
+    flexDirection: 'row' as const,
+    borderRadius: 12,
+    overflow: 'hidden' as const,
+    backgroundColor: t.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: t.border,
+  },
+  npThumb: { width: 80, height: 80, backgroundColor: t.surfaceMuted },
+  npThumbFallback: { backgroundColor: t.surfaceMuted },
+  npBody: { flex: 1, padding: 10, gap: 4, justifyContent: 'center' as const },
+  npLabel: { fontSize: 9, fontWeight: '900' as const, color: t.textDim, letterSpacing: 1.4 },
+  npTitle: { fontSize: 14, fontWeight: '900' as const, color: t.text },
+  npMetaRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, flexWrap: 'wrap' as const },
+  npModeBadge: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 },
+  npModeBadgeText: { fontSize: 11, fontWeight: '900' as const, color: '#0a0f1c' },
+  npScore: { fontSize: 13, fontWeight: '900' as const, color: t.text, fontVariant: ['tabular-nums' as const] },
+  npBreak: { fontSize: 11, fontWeight: '900' as const, color: t.danger, letterSpacing: 1.2 },
 
   // Stream
   streamEmbedWrap: {
