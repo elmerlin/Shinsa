@@ -253,12 +253,48 @@ export default function TournamentPosterScreen() {
       ]}>
         {/* ═══ HERO ═══ */}
         <View style={s.heroWrap}>
+          {/* Layer 1: poster_bg image at 22% opacity, behind everything.
+              Same opacity as desktop so a busy uploaded bg never
+              competes with the text. */}
           {posterBg ? (
             <Image source={{ uri: posterBg }} style={s.heroBg} contentFit="cover" />
           ) : null}
-          {/* Always render a dark scrim — keeps text readable whether or not
-              a custom poster background is set. */}
-          <View style={s.heroScrim} />
+          {/* Layer 2: gradient scrim. When poster_bg is set, a vertical
+              fade from 40% → 98% dark keeps the bg image readable but
+              fades into the page below. When no bg, a 3-stop radial mesh
+              (red top-left / gold bottom-right / blue center) gives the
+              hero a colored "stage" feel — same palette as desktop. */}
+          <View
+            style={
+              Platform.OS === 'web'
+                ? ({
+                    ...StyleSheet.absoluteFillObject,
+                    background: posterBg
+                      ? 'linear-gradient(to bottom, rgba(10,10,26,0.40) 0%, rgba(10,10,26,0.75) 60%, rgba(10,10,26,0.98) 100%)'
+                      : 'radial-gradient(ellipse at 30% 20%, rgba(255,51,102,0.14), transparent 50%), radial-gradient(ellipse at 70% 80%, rgba(255,199,92,0.08), transparent 40%), radial-gradient(ellipse at 50% 50%, rgba(68,136,255,0.06), transparent 60%), rgba(10,10,26,0.92)',
+                  } as never)
+                : s.heroScrim
+            }
+          />
+          {/* Layer 3 (no-bg only, web-only): faint 60px grid masked to the
+              center via radial gradient. Adds a "schematic" texture so
+              the hero doesn't read as a flat color when no bg is set. */}
+          {!posterBg && Platform.OS === 'web' ? (
+            <View
+              pointerEvents="none"
+              style={{
+                ...StyleSheet.absoluteFillObject,
+                backgroundImage:
+                  'linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px)',
+                backgroundSize: '60px 60px',
+                WebkitMaskImage: 'radial-gradient(ellipse at center, black 30%, transparent 70%)',
+                maskImage: 'radial-gradient(ellipse at center, black 30%, transparent 70%)',
+              } as never}
+            />
+          ) : null}
+          {/* Layer 4: 1px accent line across the top edge — the desktop's
+              signature "stage edge" detail. */}
+          <View style={s.heroTopAccent} />
           <View style={s.heroBody}>
             {avatarUrl ? (
               <Image source={{ uri: avatarUrl }} style={s.heroAvatar} contentFit="cover" />
@@ -486,9 +522,22 @@ const makeStyles = (t: ThemeColors) => ({
     borderBottomColor: t.border,
   },
   heroBg: { ...StyleSheet.absoluteFillObject, opacity: 0.22 },
+  // Native (iOS/Android) fallback for Layer 2 — no CSS gradients here, so
+  // a flat dark scrim is the best we can do without an extra dep.
   heroScrim: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(10, 10, 26, 0.65)',
+    backgroundColor: 'rgba(10, 10, 26, 0.78)',
+  },
+  // 1px accent line across the top edge — the desktop's signature "stage
+  // edge" detail. Approximated with a thin colored View since
+  // gradient-via-linear is overkill at 1px.
+  heroTopAccent: {
+    position: 'absolute' as const,
+    left: 32,
+    right: 32,
+    top: 0,
+    height: 1,
+    backgroundColor: 'rgba(255, 51, 102, 0.4)',
   },
   heroBody: {
     paddingHorizontal: 16,
@@ -496,13 +545,26 @@ const makeStyles = (t: ThemeColors) => ({
     alignItems: 'center' as const,
     gap: 12,
   },
-  heroAvatar: { width: 96, height: 96, borderRadius: 22, backgroundColor: t.surfaceMuted },
+  // Bigger + ringed + shadowed to match the desktop hero's signature
+  // "trophy-stage" feel. Shadow is web-only via boxShadow (RN's iOS-only
+  // shadow props don't render on web in the same way).
+  heroAvatar: {
+    width: 116,
+    height: 116,
+    borderRadius: 24,
+    backgroundColor: t.surfaceMuted,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.18)',
+    ...(Platform.OS === 'web'
+      ? ({ boxShadow: '0 16px 40px rgba(0,0,0,0.5)' } as never)
+      : {}),
+  },
   heroAvatarFallback: {
     backgroundColor: t.accentTint,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
   },
-  heroAvatarLetter: { fontSize: 38, fontWeight: '900' as const, color: t.accent },
+  heroAvatarLetter: { fontSize: 44, fontWeight: '900' as const, color: t.accent },
   heroPills: {
     flexDirection: 'row' as const,
     flexWrap: 'wrap' as const,
