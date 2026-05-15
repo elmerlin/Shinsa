@@ -577,14 +577,19 @@ export default function LiveSessionScreen() {
                   onTogglePass={() => setPlayPassOnly((v) => !v)}
                   s={s}
                 />
-                <View style={s.playList}>
-                  {visiblePlays.slice(0, 24).map((play) => (
-                    <PlayRow key={play.id} play={play} onPress={() => setSelectedPlay(play)} s={s} />
-                  ))}
-                  {visiblePlays.length === 0 ? (
-                    <Text style={s.playsEmpty}>No plays match these filters yet.</Text>
-                  ) : null}
-                </View>
+                {visiblePlays.length > 0 ? (
+                  <View style={s.playGrid}>
+                    {visiblePlays.slice(0, 24).map((play) => (
+                      <View
+                        key={play.id}
+                        style={isWideDesktop ? s.playGridCell3 : s.playGridCell2}>
+                        <PlayRow play={play} onPress={() => setSelectedPlay(play)} s={s} />
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <Text style={s.playsEmpty}>No plays match these filters yet.</Text>
+                )}
               </View>
             ) : null}
 
@@ -1657,6 +1662,12 @@ const makeStyles = (t: ThemeColors) => ({
 
   // Plays
   playList: { gap: 6 },
+  // Desktop-only grid for the recent-plays section. flexBasis sets the
+  // column count; flexGrow lets the last row fill empty space; minWidth
+  // protects readability when the chat rail eats the main column.
+  playGrid: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8 },
+  playGridCell2: { flexBasis: '48%' as const, flexGrow: 1, minWidth: 240 },
+  playGridCell3: { flexBasis: '31%' as const, flexGrow: 1, minWidth: 240 },
   playRow: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
