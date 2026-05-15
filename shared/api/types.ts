@@ -232,6 +232,61 @@ export interface ChartDetailResponse {
   friend_records?: ChartFriendRecord[];
 }
 
+/** Player scouting card — the tournament Poster / Profile uses this to
+ *  display attribute bars, competitive levels, specialties, and a
+ *  signature blurb summarizing the player's style. Server endpoint:
+ *  `GET /api/songs/analytics/scouting-card/:userId`. */
+export interface ScoutingCard {
+  user: {
+    id: string;
+    username: string;
+    avatar: string;
+    nationality: string;
+    skillTitle: string;
+  };
+  benchmark?: {
+    key?: string;
+    label?: string;
+    source?: string;
+    doublesPartial?: boolean;
+    cohortSize?: number;
+  } | null;
+  ratings?: {
+    overall?: { score100?: number };
+    singles?: { score100?: number };
+    doubles?: { score100?: number };
+  } | null;
+  /** Default attribute view (defaultMode from `scoring`). 0-100 each. */
+  attributes?: {
+    overall?: { speed?: number; stamina?: number; mobility?: number; tech?: number };
+    singles?: { speed?: number; stamina?: number; mobility?: number; tech?: number };
+    doubles?: { speed?: number; stamina?: number; mobility?: number; tech?: number };
+  } | null;
+  scoring?: {
+    defaultMode?: 'overall' | 'singles' | 'doubles';
+    modes?: Record<string, { attributes?: Record<string, number>; ratings?: { overall?: { score100?: number }; singles?: { score100?: number }; doubles?: { score100?: number } } }>;
+  } | null;
+  cadence?: {
+    label?: string;
+    activeDaysPerWeek?: number;
+    [key: string]: unknown;
+  } | null;
+  competitive?: {
+    singleLevel?: number | null;
+    doubleLevel?: number | null;
+    dominantMode?: string;
+    dominantLabel?: string;
+  } | null;
+  specialties?: { label: string; [key: string]: unknown }[];
+  signature?: { homeLabel?: string; summaryLabel?: string };
+  coverage: {
+    hasPiuData: boolean;
+    hasBenchmark?: boolean;
+    doublesBenchmarkPartial?: boolean;
+    attributeMode?: string;
+  };
+}
+
 /** A song from /api/songs/library — bundles all charts for one song. */
 export interface SongLibraryItem {
   song_group_key: string;

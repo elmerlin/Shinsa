@@ -1,5 +1,5 @@
 import type { ApiClient } from './client';
-import type { ChartDetailResponse, Song, SongLibraryResponse } from './types';
+import type { ChartDetailResponse, ScoutingCard, Song, SongLibraryResponse } from './types';
 
 export interface SongsListParams {
   q?: string;
@@ -49,6 +49,12 @@ export function createSongsApi(client: ApiClient) {
     },
     songAnalytics(userId: string) {
       return client.request<SongAnalyticsResponse>(`/api/songs/analytics/user/${encodeURIComponent(userId)}`);
+    },
+    /** Player scouting card — attribute bars, competitive levels,
+     *  specialties, signature blurb. Used by the tournament Poster
+     *  roster and the Profile overview. */
+    scoutingCard(userId: string) {
+      return client.request<ScoutingCard>(`/api/songs/analytics/scouting-card/${encodeURIComponent(userId)}`);
     },
     skillBreakdown(userId: string, params: { mode?: string; min_level?: number } = {}) {
       const search = new URLSearchParams();

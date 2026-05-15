@@ -1,7 +1,7 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQueries, useQuery } from '@tanstack/react-query';
 import { Image } from 'expo-image';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Platform,
@@ -12,11 +12,13 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { MiniScoutCard, ScoutCardSheet, type ScoutPlayerInfo } from '@/components/scout-card';
 import { TopBar } from '@/components/top-bar';
 import { FormatDiagram, getFormatColor } from '@/components/tournament/poster-diagrams';
 import { useTheme } from '@/contexts/theme-context';
+import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
-import { tournamentsApi } from '@/lib/api';
+import { songsApi, tournamentsApi } from '@/lib/api';
 import { fullImageUrl } from '@/lib/images';
 import {
   FORMAT_DESCRIPTIONS,
@@ -26,7 +28,7 @@ import {
   parseConfig,
 } from '@/lib/tournament-format';
 import type { ThemeColors } from '@/constants/theme';
-import type { Player, Tournament, TournamentPhase } from '@shared/api';
+import type { Player, ScoutingCard, Tournament, TournamentPhase } from '@shared/api';
 
 /** Derive a list of "rule" pills from a phase config — mirrors getPhaseRules
  *  in client/src/pages/TournamentPoster.jsx. Skips host-only knobs (best_of
@@ -147,6 +149,9 @@ export default function TournamentPosterScreen() {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const s = useThemedStyles(makeStyles);
+  const { isDesktop, isWideDesktop } = useBreakpoint();
+  const [scoutTarget, setScoutTarget] = useState<ScoutPlayerInfo | null>(null);
+  const [scoutTargetData, setScoutTargetData] = useState<ScoutingCard | null>(null);
 
   const tournamentQuery = useQuery({
     queryKey: ['tournament', tournamentId],
@@ -168,6 +173,29 @@ export default function TournamentPosterScreen() {
   const tournament = tournamentQuery.data;
   const players: Player[] = playersQuery.data ?? [];
   const phases: TournamentPhase[] = phasesQuery.data ?? [];
+
+  // Lazy-fetch scout cards for every player with a user_id (max 24 to
+  // keep the request count sane on big rosters). Each card is cached so
+  // navigating between tournament + profile reuses the same payload.
+  const scoutTargets = useMemo(() => {
+    return players.filter((p) => typeof p.user_id === 'string' && p.user_id).slice(0, 24);
+  }, [players]);
+  const scoutQueries = useQueries({
+    queries: scoutTargets.map((p) => ({
+      queryKey: ['scouting-card', p.user_id as string],
+      queryFn: () => songsApi.scoutingCard(p.user_id as string),
+      staleTime: 5 * 60_000,
+      retry: false,
+    })),
+  });
+  const scoutByPlayerId = useMemo(() => {
+    const map: Record<string, ScoutingCard | null> = {};
+    scoutTargets.forEach((p, i) => {
+      const result = scoutQueries[i];
+      if (result?.data) map[p.id] = result.data as ScoutingCard;
+    });
+    return map;
+  }, [scoutTargets, scoutQueries]);
 
   const displayPhases = useMemo(() => {
     if (!tournament) return [];
@@ -216,7 +244,13 @@ export default function TournamentPosterScreen() {
     <View style={s.container}>
       <Stack.Screen options={{ title: `${title} · Poster` }} />
       <View style={[s.topBar, { paddingTop: insets.top + 8 }]}><TopBar /></View>
-      <ScrollView contentContainerStyle={[s.scroll, { paddingBottom: insets.bottom + 60 }]}>
+      <ScrollView contentContainerStyle={[
+        s.scroll,
+        // Cap the content width on desktop so the poster reads like a
+        // page, not a stretched panel. Centered + generous side padding.
+        isDesktop && s.scrollDesktop,
+        { paddingBottom: insets.bottom + 60 },
+      ]}>
         {/* ═══ HERO ═══ */}
         <View style={s.heroWrap}>
           {posterBg ? (
@@ -294,13 +328,22 @@ export default function TournamentPosterScreen() {
         </View>
 
         {/* ═══ PHASE SECTIONS ═══ */}
-        <View style={s.phasesWrap}>
+        {/* On wide desktops we lay phase cards out in a 2-up grid; on phones
+            they stack vertically. Each card is rich enough that 2-up is a
+            sweet spot — 3-up makes the diagrams cramped. */}
+        <View style={[s.phasesWrap, isWideDesktop && s.phasesWrapGrid]}>
           {displayPhases.map((phase, i) => {
             const c = getFormatColor(phase.format);
             const rules = getPhaseRules(phase);
             const advLabel = getAdvancementLabel(phase);
             return (
-              <View key={`phase-${i}`} style={[s.phaseCard, { borderColor: c.accent, backgroundColor: c.tint }]}>
+              <View
+                key={`phase-${i}`}
+                style={[
+                  s.phaseCard,
+                  isWideDesktop && s.phaseCardGridCell,
+                  { borderColor: c.accent, backgroundColor: c.tint },
+                ]}>
                 <View style={s.phaseHead}>
                   <View style={[s.phaseIconWrap, { borderColor: c.accent, backgroundColor: theme.bg }]}>
                     <Text style={s.phaseIcon}>{FORMAT_ICONS[phase.format] || '🏆'}</Text>
@@ -346,39 +389,33 @@ export default function TournamentPosterScreen() {
           })}
         </View>
 
-        {/* ═══ ROSTER ═══ */}
+        {/* ═══ ROSTER ═══ Scout cards mirror the desktop poster: each
+            player gets attribute bars, S/D levels, and a tap-through to
+            the full report (ScoutCardSheet). Players without piu data
+            still render a card with the player block, just no bars. */}
         {players.length > 0 ? (
           <View style={s.rosterBlock}>
             <Text style={s.rosterEyebrow}>{title.toUpperCase()}</Text>
-            <Text style={s.rosterTitle}>Roster</Text>
+            <Text style={s.rosterTitle}>Scouting Report</Text>
             <Text style={s.rosterMeta}>
-              {players.length} competitor{players.length === 1 ? '' : 's'} · Tap a player for their profile
+              {players.length} competitor{players.length === 1 ? '' : 's'} · Tap for the full report
             </Text>
-            <View style={s.rosterGrid}>
+            <View style={[s.rosterGrid, isDesktop && s.rosterGridDesktop]}>
               {players.map((p) => {
-                const av = typeof p.avatar === 'string' && p.avatar ? fullImageUrl(p.avatar) : undefined;
-                const initial = String(p.name || '?').charAt(0).toUpperCase();
+                const scout = scoutByPlayerId[p.id] || null;
                 return (
-                  <Pressable
+                  <View
                     key={p.id}
-                    onPress={() => {
-                      if (p.user_id) {
-                        router.push({ pathname: '/profile/[id]', params: { id: String(p.user_id) } });
-                      }
-                    }}
-                    style={({ pressed }) => [s.rosterCell, pressed && { opacity: 0.85 }]}>
-                    {av ? (
-                      <Image source={{ uri: av }} style={s.rosterAvatar} contentFit="cover" />
-                    ) : (
-                      <View style={[s.rosterAvatar, s.rosterAvatarFallback]}>
-                        <Text style={s.rosterAvatarLetter}>{initial}</Text>
-                      </View>
-                    )}
-                    <Text style={s.rosterName} numberOfLines={1}>{p.name}</Text>
-                    {p.skill_title ? (
-                      <Text style={s.rosterSkill} numberOfLines={1}>{p.skill_title}</Text>
-                    ) : null}
-                  </Pressable>
+                    style={[s.rosterCell, isDesktop && s.rosterCellDesktop]}>
+                    <MiniScoutCard
+                      player={p as unknown as ScoutPlayerInfo}
+                      scout={scout}
+                      onPress={() => {
+                        setScoutTarget(p as unknown as ScoutPlayerInfo);
+                        setScoutTargetData(scout);
+                      }}
+                    />
+                  </View>
                 );
               })}
             </View>
@@ -415,6 +452,13 @@ export default function TournamentPosterScreen() {
           ) : null}
         </View>
       </ScrollView>
+
+      <ScoutCardSheet
+        visible={!!scoutTarget}
+        player={scoutTarget}
+        scout={scoutTargetData}
+        onClose={() => { setScoutTarget(null); setScoutTargetData(null); }}
+      />
     </View>
   );
 }
@@ -428,6 +472,9 @@ const makeStyles = (t: ThemeColors) => ({
     paddingBottom: 8,
   },
   scroll: { gap: 16, paddingBottom: 60 },
+  // Desktop: cap the scrollable column at a page width so the hero/phases/
+  // roster stay reading-width rather than stretching across a wide monitor.
+  scrollDesktop: { maxWidth: 1080, alignSelf: 'center' as const, width: '100%' as const, paddingHorizontal: 12 },
   center: { flex: 1, alignItems: 'center' as const, justifyContent: 'center' as const, padding: 24 },
   bodyText: { color: t.textMuted, fontSize: 13 },
 
@@ -519,11 +566,23 @@ const makeStyles = (t: ThemeColors) => ({
 
   // Phases
   phasesWrap: { paddingHorizontal: 14, gap: 20, paddingTop: 4 },
+  // Desktop: two phase cards per row so the page reads as a poster, not
+  // a long column. Stacks vertically below WIDE_DESKTOP_BREAKPOINT.
+  phasesWrapGrid: {
+    flexDirection: 'row' as const,
+    flexWrap: 'wrap' as const,
+    gap: 16,
+  },
   phaseCard: {
     borderRadius: 16,
     borderWidth: 1,
     padding: 18,
     gap: 14,
+  },
+  phaseCardGridCell: {
+    flexBasis: '48%' as const,
+    flexGrow: 1,
+    minWidth: 320,
   },
   phaseHead: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12 },
   phaseIconWrap: {
@@ -573,28 +632,13 @@ const makeStyles = (t: ThemeColors) => ({
   rosterEyebrow: { fontSize: 9, letterSpacing: 3, color: t.textDim, fontWeight: '900' as const, textAlign: 'center' as const },
   rosterTitle: { fontSize: 22, fontWeight: '900' as const, color: t.text, textAlign: 'center' as const },
   rosterMeta: { fontSize: 11, color: t.textDim, textAlign: 'center' as const, paddingBottom: 12 },
+  // Roster grid wraps MiniScoutCard cells. flexBasis controls density:
+  //   - mobile: ~2-up (47%)
+  //   - desktop: ~4-up (23%) to make the most of the wider canvas.
   rosterGrid: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8, justifyContent: 'flex-start' as const },
-  rosterCell: {
-    flexBasis: '31%' as const,
-    flexGrow: 1,
-    padding: 10,
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.08)',
-    backgroundColor: 'rgba(255,255,255,0.02)',
-    alignItems: 'center' as const,
-    gap: 6,
-    minWidth: 96,
-  },
-  rosterAvatar: { width: 44, height: 44, borderRadius: 10, backgroundColor: t.surfaceMuted },
-  rosterAvatarFallback: {
-    backgroundColor: t.accentTint,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-  },
-  rosterAvatarLetter: { fontSize: 18, fontWeight: '900' as const, color: t.accent },
-  rosterName: { fontSize: 12, fontWeight: '900' as const, color: t.text, textAlign: 'center' as const },
-  rosterSkill: { fontSize: 10, color: t.textDim, textAlign: 'center' as const },
+  rosterGridDesktop: { gap: 12 },
+  rosterCell: { flexBasis: '47%' as const, flexGrow: 1, minWidth: 150 },
+  rosterCellDesktop: { flexBasis: '23%' as const, minWidth: 200 },
 
   // Footer
   footer: {

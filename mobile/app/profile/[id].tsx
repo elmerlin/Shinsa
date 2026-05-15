@@ -28,6 +28,7 @@ import { CompetitiveLevelInfoModal } from '@/components/competitive-level-info-m
 import { GradeDistributionChart } from '@/components/grade-distribution-chart';
 import { LevelLeaderboardSheet } from '@/components/level-leaderboard-sheet';
 import { ReplayModal } from '@/components/replay-modal';
+import { MiniScoutCard, ScoutCardSheet, type ScoutPlayerInfo } from '@/components/scout-card';
 import { ScoreCardSheet, type ScoreCardData } from '@/components/score-card-sheet';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAuth } from '@/contexts/auth-context';
@@ -2177,6 +2178,50 @@ function AchievementModal({ achievement, onClose, s }: { achievement: UserAchiev
   );
 }
 
+/**
+ * Self-contained scout-card section for the profile overview. Fetches the
+ * scout payload, renders a MiniScoutCard preview, and opens the
+ * ScoutCardSheet for the full report. Hidden entirely when the user has
+ * no PIUGame data yet — no point teasing an empty report.
+ */
+function ProfileScoutCardSection({ userId, s }: { userId: string; s: Styles }) {
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const scoutQuery = useQuery({
+    queryKey: ['scouting-card', userId],
+    queryFn: () => songsApi.scoutingCard(userId),
+    enabled: !!userId,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+  const scout = scoutQuery.data;
+  if (!scout || !scout.coverage?.hasPiuData) return null;
+  const playerInfo: ScoutPlayerInfo = {
+    id: scout.user.id,
+    user_id: scout.user.id,
+    name: scout.user.username,
+    avatar: scout.user.avatar,
+    nationality: scout.user.nationality,
+    skill_title: scout.user.skillTitle,
+  };
+  return (
+    <View style={s.scoutSection}>
+      <View style={s.scoutHeaderRow}>
+        <Text style={s.scoutEyebrow}>SCOUTING REPORT</Text>
+        <Pressable onPress={() => setSheetOpen(true)} hitSlop={6}>
+          <Text style={s.scoutFullLink}>View full report →</Text>
+        </Pressable>
+      </View>
+      <MiniScoutCard player={playerInfo} scout={scout} onPress={() => setSheetOpen(true)} />
+      <ScoutCardSheet
+        visible={sheetOpen}
+        player={playerInfo}
+        scout={scout}
+        onClose={() => setSheetOpen(false)}
+      />
+    </View>
+  );
+}
+
 function OverviewTab({
   recent,
   topScores,
@@ -2291,6 +2336,13 @@ function OverviewTab({
           ) : null}
         </View>
       ) : null}
+
+      {/* Scout card — attribute bars + specialties + tap-through to the
+          full report. Sits between recent activity and the competitive
+          level cards so the page reads as: what they're doing now →
+          how they play → how they compare. Hidden if the player hasn't
+          synced PIU data. */}
+      <ProfileScoutCardSection userId={ownerUserId} s={s} />
 
       {/* Competitive level cards (S25, D24). Shown above the line chart so the
           headline number leads. The line chart's own footer carries the
@@ -4103,6 +4155,19 @@ const makeStyles = (t: ThemeColors) => ({
   skillExampleSub: { fontSize: 11, color: t.textMuted },
 
   // Competitive level cards
+  // Scout-card section (rendered above the competitive level cards).
+  // Eyebrow + "View full report →" link, with the MiniScoutCard preview
+  // below. Hidden when the user has no PIU data.
+  scoutSection: { gap: 6 },
+  scoutHeaderRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+    paddingHorizontal: 4,
+  },
+  scoutEyebrow: { fontSize: 10, letterSpacing: 1.6, color: t.textDim, fontWeight: '900' as const },
+  scoutFullLink: { fontSize: 11, color: t.accent, fontWeight: '900' as const, letterSpacing: 0.4 },
+
   compLevelRow: { flexDirection: 'row' as const, gap: 8 },
   compLevelCard: {
     flex: 1,
