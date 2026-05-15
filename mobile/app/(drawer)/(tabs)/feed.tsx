@@ -1123,11 +1123,24 @@ function buildFeedSharePayload(item: FeedItem | null): EmbedSendPayload {
 }
 
 const makeStyles = (t: ThemeColors) => ({
-  container: { flex: 1, backgroundColor: t.bg },
+  container: { flex: 1, backgroundColor: t.bg, alignItems: 'stretch' as const },
   // `justifyContent: 'space-between'` so on desktop the heading sits
   // left and the TopBar utility cluster pushes flush to the right edge.
   // On mobile TopBar fills the row to 100% width so this is a no-op.
-  header: { paddingHorizontal: 16, paddingBottom: 12, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, gap: 12 },
+  // Cap the topbar at the same max-width as the feed row below so the
+  // "Feed" heading + utility cluster line up with the column edges instead
+  // of sliding to the viewport edges on ultra-wide screens.
+  header: {
+    width: '100%' as const,
+    maxWidth: 1100,
+    alignSelf: 'center' as const,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+    gap: 12,
+  },
   deskHeading: { fontSize: 22, fontWeight: '800' as const, color: t.text, letterSpacing: 0.5 },
   heading: { flex: 1, fontSize: 28, fontWeight: '800' as const, color: t.text, letterSpacing: 2 },
   composeBtn: { padding: 4 },
@@ -1324,10 +1337,23 @@ const makeStyles = (t: ThemeColors) => ({
   loadMoreText: { fontSize: 13, fontWeight: '800' as const, color: t.accent, letterSpacing: 0.5 },
   endText: { textAlign: 'center' as const, padding: 24, fontSize: 12, color: t.textDim },
 
-  // Desktop 3-col Feed layout.
-  deskRow: { flex: 1, flexDirection: 'row' as const, alignItems: 'stretch' as const },
+  // Desktop 3-col Feed layout. The whole row is capped at a sensible
+  // max-width and centered, so on ultra-wide displays the unused space
+  // collects as outer page margins (reads as intentional whitespace)
+  // rather than orphaned gaps inside the row.
+  deskRow: {
+    width: '100%' as const,
+    maxWidth: 1100,
+    alignSelf: 'center' as const,
+    flex: 1,
+    flexDirection: 'row' as const,
+    alignItems: 'stretch' as const,
+  },
   deskFilterRail: {
-    width: 240,
+    // Labels here ("All activity" / "Weekly challenge") are short — 240
+    // left a lot of dead margin to the right of the text. 200 keeps the
+    // longest label one line and gives the middle column more room.
+    width: 200,
     borderRightWidth: StyleSheet.hairlineWidth,
     borderRightColor: t.border,
     backgroundColor: t.surface,
@@ -1353,20 +1379,20 @@ const makeStyles = (t: ThemeColors) => ({
   deskFilterText: { fontSize: 13, fontWeight: '700' as const, color: t.text },
   deskFilterTextActive: { color: t.accent, fontWeight: '800' as const },
   // Host wraps the desktop FlatList in column direction so the list can
-  // stretch vertically (taking the full row height = scrollable). Centers
-  // the FlatList horizontally via alignItems (which is horizontal in a
-  // column container).
+  // stretch vertically (taking the full row height = scrollable). The
+  // outer `deskRow` already caps the whole layout, so the feed itself
+  // stretches edge-to-edge inside the middle column rather than
+  // pillarboxing on top of an already-narrow column.
   deskFeedHost: {
     flex: 1,
     minWidth: 0,
-    alignItems: 'center' as const,
+    alignItems: 'stretch' as const,
   },
-  // The FlatList itself: full width up to 640 px, flex:1 vertically so it
-  // takes all available height inside the host. No alignSelf — that was
-  // the bug (cross-axis center in a row collapses the height).
-  deskFeed: { flex: 1, width: '100%' as const, maxWidth: 640 },
+  // Fill the middle column. flex:1 vertically so it takes all available
+  // height; width 100% horizontally so it stretches to the host width.
+  deskFeed: { flex: 1, width: '100%' as const },
   deskRightRail: {
-    width: 320,
+    width: 280,
     borderLeftWidth: StyleSheet.hairlineWidth,
     borderLeftColor: t.border,
     backgroundColor: t.surface,
