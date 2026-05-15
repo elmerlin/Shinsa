@@ -31,7 +31,12 @@ export function AvatarStack({ items, total, size = 'sm', emptyLabel = 'No player
   const totalCount = Math.max(visible.length, Number(total) || 0);
   const extra = Math.max(0, totalCount - visible.length);
 
+  // Empty state: render nothing at all rather than a placeholder line.
+  // The label clutters cards for tournaments whose participant_count
+  // hasn't been hydrated yet, and the card has other meta (date, status)
+  // that still communicates context.
   if (visible.length === 0 && !totalCount) {
+    if (!emptyLabel) return null;
     return <Text style={s.empty}>{emptyLabel}</Text>;
   }
 

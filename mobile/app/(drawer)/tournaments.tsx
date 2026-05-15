@@ -83,7 +83,7 @@ function TournamentCard({ t, onPress, s }: { t: Tournament; onPress: () => void;
 
       {/* Row 2: participant stack + phase count + arrow */}
       <View style={s.cardBottomRow}>
-        <AvatarStack items={participants} total={participantCount} size="sm" />
+        <AvatarStack items={participants} total={participantCount} size="sm" emptyLabel="" />
         <View style={s.cardBottomRight}>
           {phaseCount > 1 ? (
             <Text style={s.phaseCountChip}>{phaseCount} stages</Text>

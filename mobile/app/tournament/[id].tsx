@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TopBar } from '@/components/top-bar';
 import {
@@ -184,6 +184,24 @@ export default function TournamentDetailScreen() {
           live={live}
           stats={stats}
           flow={phases.length > 0 ? <TournamentPhaseTimeline phases={phases} /> : undefined}
+          action={
+            <Pressable
+              onPress={() => {
+                // Desktop pumpshinsa.com hosts the rich Poster page;
+                // open it in a new tab from mobile-web (or via Linking
+                // on native).
+                const url = `https://pumpshinsa.com/tournament/${tournamentId}/poster`;
+                if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                  window.open(url, '_blank', 'noopener,noreferrer');
+                } else {
+                  Linking.openURL(url).catch(() => undefined);
+                }
+              }}
+              style={({ pressed }) => [s.posterBtn, pressed && { opacity: 0.7 }]}>
+              <Text style={s.posterBtnIcon}>🖼️</Text>
+              <Text style={s.posterBtnText}>Poster</Text>
+            </Pressable>
+          }
         />
 
         {tabs.length > 0 ? (
@@ -286,4 +304,18 @@ const makeStyles = (t: ThemeColors) => ({
   scroll: { padding: 14, gap: 14 },
   center: { flex: 1, alignItems: 'center' as const, justifyContent: 'center' as const, padding: 24 },
   bodyText: { color: t.textMuted, fontSize: 13 },
+
+  posterBtn: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: t.accent,
+    backgroundColor: t.accentTint,
+  },
+  posterBtnIcon: { fontSize: 11 },
+  posterBtnText: { fontSize: 11, fontWeight: '900' as const, color: t.accent, letterSpacing: 0.5 },
 });

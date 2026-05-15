@@ -76,11 +76,14 @@ function enrichTournamentSummaries(db, tournaments = []) {
     WHERE tournament_id IN (${placeholders})
     ORDER BY tournament_id ASC, phase_order ASC
   `).all(...ids);
+  // Include all players (active or not) so completed tournaments still
+  // surface their participant count + preview avatars on list cards.
+  // The detail endpoint (`/api/players/tournament/:id`) doesn't filter
+  // by is_active either, so consistency was off.
   const playerRows = db.prepare(`
     SELECT tournament_id, id, name, avatar, nationality, pumbility, seed_rank, created_at
     FROM players
     WHERE tournament_id IN (${placeholders})
-      AND COALESCE(is_active, 1) != 0
     ORDER BY tournament_id ASC,
              pumbility DESC,
              CASE WHEN seed_rank > 0 THEN seed_rank ELSE 2147483647 END ASC,

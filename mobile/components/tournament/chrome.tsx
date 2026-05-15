@@ -25,12 +25,16 @@ export function TournamentHero({
   live,
   stats,
   flow,
+  action,
 }: {
   tournament: Tournament;
   statusLabel?: string;
   live?: boolean;
   stats?: string[];
   flow?: React.ReactNode;
+  /** Optional action button (e.g. "View poster") rendered under the
+   *  status pill on the right side of the hero. */
+  action?: React.ReactNode;
 }) {
   const s = useThemedStyles(makeStyles);
   const avatarUrl = typeof tournament?.avatar === 'string' && tournament.avatar
@@ -82,6 +86,7 @@ export function TournamentHero({
               {statusLabel || tournamentStatusLabel(tournament?.phase)}
             </Text>
           </View>
+          {action}
         </View>
       </View>
 
