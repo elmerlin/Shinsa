@@ -21,6 +21,8 @@ import {
   PoolsView,
   RoundRobinView,
 } from '@/components/tournament/format-views';
+import { MatchDetailSheet } from '@/components/tournament/match-detail-sheet';
+import { PlayerHistorySheet } from '@/components/tournament/player-history-sheet';
 import { TournamentRoster } from '@/components/tournament/roster';
 import { useTheme } from '@/contexts/theme-context';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
@@ -37,6 +39,10 @@ export default function TournamentDetailScreen() {
   const { theme } = useTheme();
   const s = useThemedStyles(makeStyles);
   const [activeTab, setActiveTab] = useState<string>('');
+  // Sheets — opened by taps on matches and players from anywhere on the
+  // detail screen (format views, final standings, roster).
+  const [matchTarget, setMatchTarget] = useState<Match | null>(null);
+  const [playerTarget, setPlayerTarget] = useState<Player | null>(null);
 
   const tournamentQuery = useQuery({
     queryKey: ['tournament', tournamentId],
@@ -161,6 +167,13 @@ export default function TournamentDetailScreen() {
     ? matches.filter((m) => (m as unknown as { phase_id?: string }).phase_id === currentPhase.id)
     : [];
 
+  // Tournament-wide count of gauntlet matches — used to label the last
+  // rung as "Final" in MatchDetailSheet / PlayerHistorySheet.
+  const totalGauntletMatches = useMemo(
+    () => matches.filter((m) => m.match_type === 'gauntlet').length,
+    [matches],
+  );
+
   return (
     <View style={s.container}>
       <Stack.Screen options={{ title: tournament.name || 'Tournament' }} />
@@ -181,20 +194,17 @@ export default function TournamentDetailScreen() {
         {activeTab === 'players' && (
           <TournamentRoster
             players={players}
-            onPlayerPress={(p) => {
-              if (p.user_id) {
-                router.push({ pathname: '/profile/[id]', params: { id: String(p.user_id) } });
-              }
-            }}
+            onPlayerPress={(p) => setPlayerTarget(p)}
           />
         )}
 
         {activeTab === 'final' && allPhasesComplete && (
           <FinalStandingsView
-            tournament={tournament as unknown as { id: string; placement_snapshots?: unknown }}
+            tournament={tournament}
             phases={phases}
             players={players}
             matches={matches}
+            onPlayerPress={(p) => setPlayerTarget(p)}
           />
         )}
 
@@ -206,19 +216,19 @@ export default function TournamentDetailScreen() {
           <View style={{ gap: 12 }}>
             <TournamentPhaseRuleCard phase={currentPhase} />
             {currentPhase.format === 'round_robin' && (
-              <RoundRobinView phase={currentPhase} matches={phaseMatches} players={players} />
+              <RoundRobinView phase={currentPhase} matches={phaseMatches} players={players} onMatchPress={setMatchTarget} />
             )}
             {currentPhase.format === 'pools' && (
-              <PoolsView phase={currentPhase} matches={phaseMatches} players={players} />
+              <PoolsView phase={currentPhase} matches={phaseMatches} players={players} onMatchPress={setMatchTarget} />
             )}
             {currentPhase.format === 'single_elim' && (
-              <BracketView phase={currentPhase} matches={phaseMatches} players={players} />
+              <BracketView phase={currentPhase} matches={phaseMatches} players={players} onMatchPress={setMatchTarget} />
             )}
             {currentPhase.format === 'double_elim' && (
-              <DoubleElimBracketView phase={currentPhase} matches={phaseMatches} players={players} />
+              <DoubleElimBracketView phase={currentPhase} matches={phaseMatches} players={players} onMatchPress={setMatchTarget} />
             )}
             {currentPhase.format === 'gauntlet' && (
-              <GauntletView phase={currentPhase} matches={phaseMatches} players={players} />
+              <GauntletView phase={currentPhase} matches={phaseMatches} players={players} onMatchPress={setMatchTarget} />
             )}
             {(currentPhase.format === 'hour_of_power' || currentPhase.format === 'b15') && (
               <TournamentEmptyPanel
@@ -234,17 +244,33 @@ export default function TournamentDetailScreen() {
             standings view so old data still renders something sensible. */}
         {phases.length === 0 && activeTab !== 'players' && activeTab !== 'final' && activeTab !== 'discussion' ? (
           <View style={{ gap: 12 }}>
-            <TournamentRoster players={players} />
+            <TournamentRoster players={players} onPlayerPress={(p) => setPlayerTarget(p)} />
             {matches.length > 0 ? (
               <RoundRobinView
                 phase={{ id: 'legacy', tournament_id: tournamentId, phase_order: 1, format: 'round_robin', status: 'ACTIVE' }}
                 matches={matches}
                 players={players}
+                onMatchPress={setMatchTarget}
               />
             ) : null}
           </View>
         ) : null}
       </ScrollView>
+
+      <MatchDetailSheet
+        visible={!!matchTarget}
+        match={matchTarget}
+        players={players}
+        totalGauntletMatches={totalGauntletMatches}
+        onClose={() => setMatchTarget(null)}
+      />
+      <PlayerHistorySheet
+        visible={!!playerTarget}
+        player={playerTarget}
+        players={players}
+        matches={matches}
+        onClose={() => setPlayerTarget(null)}
+      />
     </View>
   );
 }

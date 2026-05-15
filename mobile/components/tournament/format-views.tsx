@@ -1,8 +1,11 @@
+import { Image } from 'expo-image';
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
+import { fullImageUrl } from '@/lib/images';
+import { getTournamentPlacings, type Placing } from '@/lib/tournament-placings';
 import type { ThemeColors } from '@/constants/theme';
-import type { Match, Player, TournamentPhase } from '@shared/api';
+import type { Match, Player, Tournament, TournamentPhase } from '@shared/api';
 import { TournamentEmptyPanel } from './chrome';
 
 type Styles = ReturnType<typeof useThemedStyles<ReturnType<typeof makeStyles>>>;
@@ -44,17 +47,20 @@ function isBye(match: Match): boolean {
 
 /**
  * Reusable match row used by Round Robin / Pools / Gauntlet. Each row shows
- * both players, their scores, and highlights the winner.
+ * both players, their scores, and highlights the winner. Tappable when an
+ * `onPress` is provided — opens MatchDetailSheet upstream.
  */
 function MatchRow({
   match,
   playerMap,
   showRound,
+  onPress,
   s,
 }: {
   match: Match;
   playerMap: Record<string, PlayerLite>;
   showRound?: boolean;
+  onPress?: (match: Match) => void;
   s: Styles;
 }) {
   const p1 = match.player1_id ? playerMap[match.player1_id] : undefined;
@@ -63,6 +69,7 @@ function MatchRow({
   const completed = isCompleted(match);
   const bye = isBye(match);
   const winnerId = match.winner_id;
+  const songCount = match.played_songs?.length || 0;
 
   const diffParts: string[] = [];
   if (typeof match.difficulty_min === 'number') {
@@ -73,8 +80,13 @@ function MatchRow({
     );
   }
 
+  const isTappable = !bye && completed && !!onPress;
+
   return (
-    <View style={[s.matchRow, bye && s.matchRowBye]}>
+    <Pressable
+      onPress={() => isTappable && onPress?.(match)}
+      disabled={!isTappable}
+      style={({ pressed }) => [s.matchRow, bye && s.matchRowBye, pressed && isTappable && { opacity: 0.85 }]}>
       <View style={s.matchHead}>
         {showRound && match.round_number ? (
           <Text style={s.matchHeadText}>R{match.round_number}</Text>
@@ -86,6 +98,9 @@ function MatchRow({
         {bye ? <Text style={[s.matchStatus, s.matchStatusBye]}>BYE</Text> : null}
         {!bye && !completed && match.status ? (
           <Text style={s.matchStatus}>{String(match.status)}</Text>
+        ) : null}
+        {completed && songCount > 0 ? (
+          <Text style={s.matchSongs}>{songCount} song{songCount === 1 ? '' : 's'} ›</Text>
         ) : null}
       </View>
       <View style={[s.playerRow, completed && winnerId === match.player1_id && s.playerRowWinner]}>
@@ -110,7 +125,7 @@ function MatchRow({
           <Text style={[s.scoreText, winnerId === match.player2_id && s.scoreTextWinner]}>{scores.p2}</Text>
         ) : null}
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -120,10 +135,12 @@ export function RoundRobinView({
   phase: _phase,
   matches,
   players,
+  onMatchPress,
 }: {
   phase: TournamentPhase;
   matches: Match[];
   players: Player[];
+  onMatchPress?: (match: Match) => void;
 }) {
   const s = useThemedStyles(makeStyles);
   const playerMap = useMemo(() => buildPlayerMap(players), [players]);
@@ -175,7 +192,7 @@ export function RoundRobinView({
       </ScrollView>
       <View style={s.matchesList}>
         {roundMatches.map((m) => (
-          <MatchRow key={m.id} match={m} playerMap={playerMap} s={s} />
+          <MatchRow key={m.id} match={m} playerMap={playerMap} onPress={onMatchPress} s={s} />
         ))}
       </View>
     </View>
@@ -220,10 +237,12 @@ function poolStandings(poolMatches: Match[], playerIds: string[], playerMap: Rec
 export function PoolsView({
   matches,
   players,
+  onMatchPress,
 }: {
   phase: TournamentPhase;
   matches: Match[];
   players: Player[];
+  onMatchPress?: (match: Match) => void;
 }) {
   const s = useThemedStyles(makeStyles);
   const playerMap = useMemo(() => buildPlayerMap(players), [players]);
@@ -278,7 +297,7 @@ export function PoolsView({
             </View>
             <View style={s.poolMatchList}>
               {pool.matches.map((m) => (
-                <MatchRow key={m.id} match={m} playerMap={playerMap} s={s} />
+                <MatchRow key={m.id} match={m} playerMap={playerMap} onPress={onMatchPress} s={s} />
               ))}
             </View>
           </View>
@@ -311,10 +330,12 @@ function roundLabel(round: number, totalRounds: number): string {
 export function BracketView({
   matches,
   players,
+  onMatchPress,
 }: {
   phase: TournamentPhase;
   matches: Match[];
   players: Player[];
+  onMatchPress?: (match: Match) => void;
 }) {
   const s = useThemedStyles(makeStyles);
   const playerMap = useMemo(() => buildPlayerMap(players), [players]);
@@ -369,7 +390,14 @@ export function BracketView({
             </View>
             <View style={s.bracketColumnList}>
               {roundMatches.map((m) => (
-                <BracketMatchCard key={m.id} match={m} playerMap={playerMap} isFinal={isFinal && roundMatches.length === 1} s={s} />
+                <BracketMatchCard
+                  key={m.id}
+                  match={m}
+                  playerMap={playerMap}
+                  isFinal={isFinal && roundMatches.length === 1}
+                  onPress={onMatchPress}
+                  s={s}
+                />
               ))}
             </View>
           </View>
@@ -383,11 +411,13 @@ function BracketMatchCard({
   match,
   playerMap,
   isFinal,
+  onPress,
   s,
 }: {
   match: Match;
   playerMap: Record<string, PlayerLite>;
   isFinal?: boolean;
+  onPress?: (match: Match) => void;
   s: Styles;
 }) {
   const p1 = match.player1_id ? playerMap[match.player1_id] : undefined;
@@ -395,9 +425,13 @@ function BracketMatchCard({
   const completed = isCompleted(match);
   const bye = isBye(match);
   const scores = matchScores(match);
+  const isTappable = !bye && completed && !!onPress;
 
   return (
-    <View style={[s.bracketMatch, isFinal && s.bracketMatchFinal, bye && s.bracketMatchBye]}>
+    <Pressable
+      onPress={() => isTappable && onPress?.(match)}
+      disabled={!isTappable}
+      style={({ pressed }) => [s.bracketMatch, isFinal && s.bracketMatchFinal, bye && s.bracketMatchBye, pressed && isTappable && { opacity: 0.85 }]}>
       <View style={[s.bracketSlot, completed && match.winner_id === match.player1_id && s.bracketSlotWinner]}>
         <Text style={s.bracketSeed}>{p1?.seed_rank || ''}</Text>
         <Text
@@ -421,7 +455,7 @@ function BracketMatchCard({
           <Text style={[s.bracketScore, match.winner_id === match.player2_id && s.bracketScoreWinner]}>{scores.p2}</Text>
         ) : null}
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -430,10 +464,12 @@ function BracketMatchCard({
 export function DoubleElimBracketView({
   matches,
   players,
+  onMatchPress,
 }: {
   phase: TournamentPhase;
   matches: Match[];
   players: Player[];
+  onMatchPress?: (match: Match) => void;
 }) {
   const s = useThemedStyles(makeStyles);
   const winners = matches.filter((m) => getBracket(m).toLowerCase() === 'winners');
@@ -448,24 +484,25 @@ export function DoubleElimBracketView({
       />
     );
   }
+  const placeholderPhase = undefined as unknown as TournamentPhase;
   return (
     <View style={s.section}>
       {winners.length > 0 ? (
         <View style={s.deBracketBlock}>
           <Text style={s.deBracketLabel}>WINNERS BRACKET</Text>
-          <BracketView matches={winners} players={players} phase={undefined as unknown as TournamentPhase} />
+          <BracketView matches={winners} players={players} phase={placeholderPhase} onMatchPress={onMatchPress} />
         </View>
       ) : null}
       {losers.length > 0 ? (
         <View style={s.deBracketBlock}>
           <Text style={s.deBracketLabel}>LOSERS BRACKET</Text>
-          <BracketView matches={losers} players={players} phase={undefined as unknown as TournamentPhase} />
+          <BracketView matches={losers} players={players} phase={placeholderPhase} onMatchPress={onMatchPress} />
         </View>
       ) : null}
       {grand.length > 0 ? (
         <View style={s.deBracketBlock}>
           <Text style={[s.deBracketLabel, { color: '#facc15' }]}>GRAND FINALS</Text>
-          <BracketView matches={grand} players={players} phase={undefined as unknown as TournamentPhase} />
+          <BracketView matches={grand} players={players} phase={placeholderPhase} onMatchPress={onMatchPress} />
         </View>
       ) : null}
     </View>
@@ -477,17 +514,19 @@ export function DoubleElimBracketView({
 export function GauntletView({
   matches,
   players,
+  onMatchPress,
 }: {
   phase?: TournamentPhase;
   matches: Match[];
   players: Player[];
+  onMatchPress?: (match: Match) => void;
 }) {
   const s = useThemedStyles(makeStyles);
   const playerMap = useMemo(() => buildPlayerMap(players), [players]);
   const rungs = useMemo(() => {
-    return matches
-      .filter((m) => (m as unknown as { match_type?: string }).match_type === 'gauntlet' || true)
-      .sort((a, b) => (Number(a.round_number) || 0) - (Number(b.round_number) || 0));
+    return [...matches]
+      .filter((m) => m.match_type === 'gauntlet')
+      .sort((a, b) => (Number(a.gauntlet_order) || 0) - (Number(b.gauntlet_order) || 0));
   }, [matches]);
   if (rungs.length === 0) {
     return (
@@ -500,59 +539,191 @@ export function GauntletView({
   }
   return (
     <View style={s.matchesList}>
-      {rungs.map((m) => (
-        <MatchRow key={m.id} match={m} playerMap={playerMap} showRound s={s} />
-      ))}
+      {rungs.map((m, i) => {
+        const isFinal = i === rungs.length - 1;
+        return (
+          <View key={m.id} style={isFinal ? s.gauntletFinalWrap : undefined}>
+            {isFinal ? <Text style={s.gauntletFinalLabel}>🏆 FINAL</Text> : null}
+            <MatchRow match={m} playerMap={playerMap} showRound onPress={onMatchPress} s={s} />
+          </View>
+        );
+      })}
     </View>
   );
 }
 
 // ─── Final Standings ──────────────────────────────────────────────────────
 
+/**
+ * Final standings using the same placings algorithm as desktop. RR is
+ * shown as seeding, the gauntlet decides the actual final order. Both
+ * panels are rendered so the viewer can see how RR feeds the gauntlet.
+ * Each row is tappable — the orchestrator opens PlayerHistorySheet.
+ */
 export function FinalStandingsView({
-  tournament: _tournament,
+  tournament,
+  phases,
   players,
+  matches,
+  onPlayerPress,
 }: {
-  tournament: { id: string; placement_snapshots?: unknown };
+  tournament: Tournament;
   phases: TournamentPhase[];
   players: Player[];
   matches: Match[];
+  onPlayerPress?: (player: Player) => void;
 }) {
   const s = useThemedStyles(makeStyles);
-  // Best-effort: rank by wins desc / losses asc / pumbility desc. The
-  // server's placement_snapshots blob is the source of truth on desktop;
-  // we read it when present, fall back to win-loss ordering otherwise.
-  const ranked = useMemo(() => {
-    const arr = [...players] as PlayerLite[];
-    arr.sort((a, b) => {
-      const aw = a.wins || 0;
-      const bw = b.wins || 0;
-      if (bw !== aw) return bw - aw;
-      const al = a.losses || 0;
-      const bl = b.losses || 0;
-      if (al !== bl) return al - bl;
-      return (b.pumbility || 0) - (a.pumbility || 0);
-    });
-    return arr;
+  const placings = useMemo(
+    () => getTournamentPlacings({ tournament, phases, players, matches }),
+    [tournament, phases, players, matches],
+  );
+  const playerMap = useMemo(() => {
+    const m: Record<string, Player> = {};
+    for (const p of players) m[p.id] = p;
+    return m;
   }, [players]);
 
-  if (ranked.length === 0) {
+  if (placings.final.length === 0 && placings.roundRobin.length === 0 && placings.gauntlet.length === 0) {
     return <TournamentEmptyPanel icon="🏆" title="No final standings yet" />;
   }
 
+  const podiumEntries = placings.final.slice(0, 3);
+  const handlePlayerPress = (placing: Placing) => {
+    if (!onPlayerPress) return;
+    const player = playerMap[placing.player_id];
+    if (player) onPlayerPress(player);
+  };
+
   return (
     <View style={s.section}>
-      <Text style={s.standingsTitle}>FINAL STANDINGS</Text>
+      {podiumEntries.length > 0 ? (
+        <View style={s.podiumRow}>
+          {[1, 0, 2].map((slotIndex) => {
+            const entry = podiumEntries[slotIndex];
+            if (!entry) return <View key={`p-${slotIndex}`} style={{ flex: 1 }} />;
+            const medal = entry.rank === 1 ? '🥇' : entry.rank === 2 ? '🥈' : '🥉';
+            const isChampion = entry.rank === 1;
+            const avatar = entry.avatar ? fullImageUrl(entry.avatar) : undefined;
+            return (
+              <Pressable
+                key={entry.player_id}
+                onPress={() => handlePlayerPress(entry)}
+                disabled={!onPlayerPress}
+                style={({ pressed }) => [
+                  s.podiumCard,
+                  isChampion && s.podiumCardChampion,
+                  pressed && onPlayerPress && { opacity: 0.85 },
+                ]}>
+                <Text style={s.podiumMedal}>{medal}</Text>
+                {avatar ? (
+                  <Image source={{ uri: avatar }} style={[s.podiumAvatar, isChampion && s.podiumAvatarChampion]} contentFit="cover" />
+                ) : (
+                  <View style={[s.podiumAvatar, isChampion && s.podiumAvatarChampion, s.podiumAvatarFallback]}>
+                    <Text style={s.podiumAvatarLetter}>{(entry.name || '?').charAt(0).toUpperCase()}</Text>
+                  </View>
+                )}
+                <Text style={s.podiumName} numberOfLines={1}>{entry.name}</Text>
+                {entry.skill_title ? (
+                  <Text style={s.podiumSkill} numberOfLines={1}>{entry.skill_title}</Text>
+                ) : null}
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : null}
+
+      {placings.gauntlet.length > 0 ? (
+        <StandingsPanel
+          title="GAUNTLET — FINAL ORDER"
+          rightLabel="RESULT"
+          placings={placings.gauntlet}
+          variant="gauntlet"
+          onPlayerPress={onPlayerPress ? handlePlayerPress : undefined}
+          s={s}
+        />
+      ) : null}
+
+      {placings.roundRobin.length > 0 ? (
+        <StandingsPanel
+          title="ROUND ROBIN — SEEDING"
+          rightLabel="RECORD"
+          placings={placings.roundRobin}
+          variant="roundRobin"
+          onPlayerPress={onPlayerPress ? handlePlayerPress : undefined}
+          s={s}
+        />
+      ) : null}
+
+      {placings.final.length > 0 && placings.gauntlet.length === 0 && placings.roundRobin.length === 0 ? (
+        <StandingsPanel
+          title="FINAL STANDINGS"
+          rightLabel="RECORD"
+          placings={placings.final}
+          variant="roundRobin"
+          onPlayerPress={onPlayerPress ? handlePlayerPress : undefined}
+          s={s}
+        />
+      ) : null}
+    </View>
+  );
+}
+
+function StandingsPanel({
+  title,
+  rightLabel,
+  placings,
+  variant,
+  onPlayerPress,
+  s,
+}: {
+  title: string;
+  rightLabel: string;
+  placings: Placing[];
+  variant: 'roundRobin' | 'gauntlet';
+  onPlayerPress?: (placing: Placing) => void;
+  s: Styles;
+}) {
+  return (
+    <View style={s.standingsBlock}>
+      <Text style={s.standingsBlockTitle}>{title}</Text>
       <View style={s.standingsCard}>
-        {ranked.map((p, i) => {
-          const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : null;
+        <View style={s.standingsHeaderRow}>
+          <Text style={[s.standingsHeaderCell, { width: 32 }]}>#</Text>
+          <Text style={[s.standingsHeaderCell, { flex: 1 }]}>PLAYER</Text>
+          <Text style={[s.standingsHeaderCell, { textAlign: 'right' as const, minWidth: 64 }]}>
+            {rightLabel}
+          </Text>
+        </View>
+        {placings.map((p) => {
+          const medal = p.rank === 1 ? '🥇' : p.rank === 2 ? '🥈' : p.rank === 3 ? '🥉' : null;
+          const avatar = p.avatar ? fullImageUrl(p.avatar) : undefined;
+          const right = variant === 'roundRobin'
+            ? `${p.wins}W · ${p.losses}L`
+            : p.rank === 1 ? 'Champion' : p.rank === 2 ? 'Runner-up' : p.rank === 3 ? 'Third place' : `Placed ${p.rank}`;
           return (
-            <View key={p.id} style={[s.standingsRow, i < 3 && s.standingsRowPodium]}>
-              <Text style={s.standingsRank}>{medal || `${i + 1}`}</Text>
-              <Text style={s.standingsName} numberOfLines={1}>{p.name}</Text>
-              <Text style={s.standingsWins}>{p.wins || 0}W</Text>
-              <Text style={s.standingsLosses}>{p.losses || 0}L</Text>
-            </View>
+            <Pressable
+              key={p.player_id}
+              onPress={() => onPlayerPress?.(p)}
+              disabled={!onPlayerPress}
+              style={({ pressed }) => [
+                s.standingsRow,
+                p.rank <= 3 && s.standingsRowPodium,
+                pressed && onPlayerPress && { opacity: 0.85 },
+              ]}>
+              <Text style={[s.standingsRank, { width: 32 }]}>{medal || p.rank}</Text>
+              <View style={[s.standingsPlayerCell]}>
+                {avatar ? (
+                  <Image source={{ uri: avatar }} style={s.standingsAvatar} contentFit="cover" />
+                ) : (
+                  <View style={[s.standingsAvatar, s.standingsAvatarFallback]}>
+                    <Text style={s.standingsAvatarLetter}>{(p.name || '?').charAt(0).toUpperCase()}</Text>
+                  </View>
+                )}
+                <Text style={s.standingsName} numberOfLines={1}>{p.name}</Text>
+              </View>
+              <Text style={[s.standingsRight, { minWidth: 64 }]} numberOfLines={1}>{right}</Text>
+            </Pressable>
           );
         })}
       </View>
@@ -683,27 +854,106 @@ const makeStyles = (t: ThemeColors) => ({
   deBracketBlock: { gap: 6 },
   deBracketLabel: { fontSize: 10, fontWeight: '900' as const, letterSpacing: 1.4, color: t.textMuted },
 
-  // Final standings
-  standingsTitle: { fontSize: 11, fontWeight: '900' as const, letterSpacing: 1.4, color: t.textMuted },
+  // Match row "songs ›" hint that the match is tappable
+  matchSongs: { fontSize: 9, fontWeight: '900' as const, color: t.accent, letterSpacing: 0.6 },
+
+  // Gauntlet final emphasis
+  gauntletFinalWrap: {
+    padding: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(250, 204, 21, 0.45)',
+    backgroundColor: 'rgba(250, 204, 21, 0.06)',
+    gap: 4,
+  },
+  gauntletFinalLabel: {
+    fontSize: 10,
+    fontWeight: '900' as const,
+    color: '#facc15',
+    letterSpacing: 1.4,
+    paddingHorizontal: 6,
+    paddingTop: 4,
+  },
+
+  // Final standings podium row (gold/silver/bronze cards across the top)
+  podiumRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'flex-end' as const,
+    gap: 8,
+  },
+  podiumCard: {
+    flex: 1,
+    padding: 10,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: t.border,
+    backgroundColor: t.card,
+    alignItems: 'center' as const,
+    gap: 4,
+  },
+  podiumCardChampion: {
+    borderColor: 'rgba(250, 204, 21, 0.55)',
+    backgroundColor: 'rgba(250, 204, 21, 0.08)',
+    paddingTop: 16,
+    paddingBottom: 14,
+  },
+  podiumMedal: { fontSize: 26 },
+  podiumAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: t.surfaceMuted,
+  },
+  podiumAvatarChampion: { width: 52, height: 52, borderRadius: 26 },
+  podiumAvatarFallback: {
+    backgroundColor: t.accentTint,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  podiumAvatarLetter: { fontSize: 16, fontWeight: '900' as const, color: t.accent },
+  podiumName: { fontSize: 12, fontWeight: '900' as const, color: t.text, textAlign: 'center' as const },
+  podiumSkill: { fontSize: 10, color: t.textDim, textAlign: 'center' as const },
+
+  // Standings panel (gauntlet final / round-robin seeding)
+  standingsBlock: { gap: 8 },
+  standingsBlockTitle: { fontSize: 11, fontWeight: '900' as const, letterSpacing: 1.4, color: t.textMuted },
   standingsCard: {
     borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: t.border,
     backgroundColor: t.card,
-    padding: 6,
-    gap: 2,
+    overflow: 'hidden' as const,
   },
+  standingsHeaderRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: t.border,
+    backgroundColor: t.surfaceMuted,
+  },
+  standingsHeaderCell: { fontSize: 9, letterSpacing: 1.4, color: t.textDim, fontWeight: '900' as const },
   standingsRow: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     gap: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: t.border,
   },
-  standingsRowPodium: { backgroundColor: 'rgba(250, 204, 21, 0.06)' },
-  standingsRank: { fontSize: 14, width: 28, textAlign: 'center' as const, fontWeight: '900' as const, color: t.text },
+  standingsRowPodium: { backgroundColor: 'rgba(250, 204, 21, 0.05)' },
+  standingsRank: { fontSize: 14, textAlign: 'center' as const, fontWeight: '900' as const, color: t.text, fontVariant: ['tabular-nums' as const] },
+  standingsPlayerCell: { flex: 1, flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, minWidth: 0 },
+  standingsAvatar: { width: 28, height: 28, borderRadius: 14, backgroundColor: t.surfaceMuted },
+  standingsAvatarFallback: {
+    backgroundColor: t.accentTint,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  standingsAvatarLetter: { fontSize: 11, fontWeight: '900' as const, color: t.accent },
   standingsName: { flex: 1, fontSize: 13, fontWeight: '800' as const, color: t.text },
-  standingsWins: { fontSize: 11, color: '#34d399', fontWeight: '900' as const, fontVariant: ['tabular-nums' as const] },
-  standingsLosses: { fontSize: 11, color: t.danger, fontWeight: '900' as const, fontVariant: ['tabular-nums' as const] },
+  standingsRight: { fontSize: 11, fontWeight: '800' as const, color: t.textMuted, fontVariant: ['tabular-nums' as const] },
 });

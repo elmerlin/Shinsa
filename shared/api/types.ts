@@ -250,10 +250,55 @@ export interface SongLibraryResponse {
   songs: SongLibraryItem[];
 }
 
+/** One song played inside a multi-song tournament match. Either a flat
+ *  shape or a `{ song: {...}, p1_score, p2_score }` nested shape — desktop
+ *  helpers handle both, so we mirror that. */
+export interface PlayedSong {
+  title?: string;
+  artist?: string;
+  mode?: string;
+  level?: number | string;
+  jacket_url?: string;
+  background_url?: string;
+  song_jacket_url?: string;
+  song?: {
+    title?: string;
+    artist?: string;
+    mode?: string;
+    level?: number | string;
+    jacket_url?: string;
+    background_url?: string;
+    song_jacket_url?: string;
+  };
+  p1_score?: number | string;
+  p2_score?: number | string;
+  /** 'p1' | 'p2' | 'tie' | a player id. */
+  song_winner_id?: string | null;
+}
+
+export interface MatchScores {
+  /** Round-robin / pools: per-match game wins. */
+  player1_wins?: number;
+  player2_wins?: number;
+  /** Multi-song matches: cumulative sum of song scores. */
+  p1_total?: number;
+  p2_total?: number;
+  /** Round-robin co-op variant: both players "win" the match. */
+  shared_win?: boolean | number;
+  [key: string]: unknown;
+}
+
 export interface Match {
   id: string;
   tournament_id: string;
+  phase_id?: string;
   round_number?: number;
+  match_type?: string;
+  bracket?: string;
+  bracket_round?: number;
+  bracket_position?: number;
+  gauntlet_order?: number;
+  pool_id?: number;
   player1_id?: string | null;
   player2_id?: string | null;
   winner_id?: string | null;
@@ -262,6 +307,9 @@ export interface Match {
   is_bye?: boolean | number;
   status?: string;
   drawn_songs?: Song[];
+  played_songs?: PlayedSong[];
+  scores?: MatchScores;
+  created_at?: string;
   [key: string]: unknown;
 }
 
