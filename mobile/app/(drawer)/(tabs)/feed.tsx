@@ -2,7 +2,7 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteD
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AchievementBadgePost } from '@/components/achievement-badge-post';
 import { ChartJacket } from '@/components/chart-jacket';
@@ -11,6 +11,7 @@ import { DefaultAvatar } from '@/components/default-avatar';
 import { SystemAvatar } from '@/components/system-avatar';
 import { GradeChip } from '@/components/grade-chip';
 import { TopBar } from '@/components/top-bar';
+import { ExploreTilesPanel } from '@/components/feed/explore-tiles-panel';
 import { LiveSessionCard } from '@/components/live-session-card';
 import { PlateBadge } from '@/components/plate-badge';
 import { ReplayModal } from '@/components/replay-modal';
@@ -990,7 +991,7 @@ export default function FeedScreen() {
       )}
 
       {isDesktop ? (
-        <View style={s.deskRightRail}>
+        <ScrollView style={s.deskRightRail} contentContainerStyle={s.deskRightRailScroll}>
           {wcQuery.data?.week ? (
             <View style={s.deskRailCard}>
               <Text style={s.deskRailLabel}>WC THIS WEEK</Text>
@@ -1023,9 +1024,17 @@ export default function FeedScreen() {
               </Pressable>
             </View>
           ) : null}
-          {/* who-to-follow + trending songs are TODO — both need new
-              endpoints. Surface them as follow-ups when shipping. */}
-        </View>
+
+          {/* Explore tiles — mirrors pumpshinsa.com's Explore mode but lives
+              in the rail so the main feed stays visible. Tapping a tile
+              opens the same score-card sheet as the feed. */}
+          <ExploreTilesPanel
+            s={s}
+            theme={theme}
+            onScore={onScore}
+            onReplay={onReplay}
+          />
+        </ScrollView>
       ) : null}
       </View>
 
@@ -1127,13 +1136,7 @@ const makeStyles = (t: ThemeColors) => ({
   // `justifyContent: 'space-between'` so on desktop the heading sits
   // left and the TopBar utility cluster pushes flush to the right edge.
   // On mobile TopBar fills the row to 100% width so this is a no-op.
-  // Cap the topbar at the same max-width as the feed row below so the
-  // "Feed" heading + utility cluster line up with the column edges instead
-  // of sliding to the viewport edges on ultra-wide screens.
   header: {
-    width: '100%' as const,
-    maxWidth: 1100,
-    alignSelf: 'center' as const,
     paddingHorizontal: 16,
     paddingBottom: 12,
     flexDirection: 'row' as const,
@@ -1337,14 +1340,11 @@ const makeStyles = (t: ThemeColors) => ({
   loadMoreText: { fontSize: 13, fontWeight: '800' as const, color: t.accent, letterSpacing: 0.5 },
   endText: { textAlign: 'center' as const, padding: 24, fontSize: 12, color: t.textDim },
 
-  // Desktop 3-col Feed layout. The whole row is capped at a sensible
-  // max-width and centered, so on ultra-wide displays the unused space
-  // collects as outer page margins (reads as intentional whitespace)
-  // rather than orphaned gaps inside the row.
+  // Desktop 3-col Feed layout. Flush-left against the drawer; the right
+  // rail flex-grows to fill the remaining viewport so there's no orphan
+  // gap on ultra-wide screens. Main feed stays at a fixed comfortable
+  // width — wider would make the cards look stretched.
   deskRow: {
-    width: '100%' as const,
-    maxWidth: 1100,
-    alignSelf: 'center' as const,
     flex: 1,
     flexDirection: 'row' as const,
     alignItems: 'stretch' as const,
@@ -1378,27 +1378,26 @@ const makeStyles = (t: ThemeColors) => ({
   deskFilterRowActive: { backgroundColor: t.accentTint },
   deskFilterText: { fontSize: 13, fontWeight: '700' as const, color: t.text },
   deskFilterTextActive: { color: t.accent, fontWeight: '800' as const },
-  // Host wraps the desktop FlatList in column direction so the list can
-  // stretch vertically (taking the full row height = scrollable). The
-  // outer `deskRow` already caps the whole layout, so the feed itself
-  // stretches edge-to-edge inside the middle column rather than
-  // pillarboxing on top of an already-narrow column.
+  // Fixed-width feed column flush against the filter rail (no centering).
+  // The remaining viewport collects on the right and is filled by the
+  // explore-tiles rail rather than left as orphan whitespace.
   deskFeedHost: {
-    flex: 1,
+    width: 640,
     minWidth: 0,
     alignItems: 'stretch' as const,
   },
-  // Fill the middle column. flex:1 vertically so it takes all available
-  // height; width 100% horizontally so it stretches to the host width.
   deskFeed: { flex: 1, width: '100%' as const },
+  // Right rail flex-grows to fill the rest of the viewport. Holds the WC
+  // card up top and the Explore tiles below — both inside a ScrollView so
+  // the rail can scroll independently of the main feed.
   deskRightRail: {
-    width: 280,
+    flex: 1,
+    minWidth: 280,
     borderLeftWidth: StyleSheet.hairlineWidth,
     borderLeftColor: t.border,
     backgroundColor: t.surface,
-    padding: 14,
-    gap: 14,
   },
+  deskRightRailScroll: { padding: 14, gap: 14, paddingBottom: 60 },
   deskRailCard: {
     backgroundColor: t.bg,
     borderRadius: 12,

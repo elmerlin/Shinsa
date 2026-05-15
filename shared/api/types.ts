@@ -719,6 +719,46 @@ export interface SongOfWeekItem {
   [key: string]: unknown;
 }
 
+/** One play row in the desktop's "Explore" tessellated grid (also rendered
+ *  in the mobile feed's right rail). Highlight tiers ("hero" / "feature" /
+ *  "standard") are computed server-side from level + score + grade + plate
+ *  + replay-availability so the most impressive plays bubble up. */
+export interface ExplorePlay {
+  play_id: number;
+  user_id?: string;
+  username?: string;
+  avatar?: string;
+  nationality?: string;
+  song_title?: string;
+  mode?: string;
+  level?: number;
+  score?: number;
+  grade?: string;
+  plate?: string;
+  perfect?: number;
+  great?: number;
+  good?: number;
+  bad?: number;
+  miss?: number;
+  max_combo?: number;
+  background_url?: string;
+  jacket_url?: string;
+  replay_video_id?: string;
+  replay_embed_url?: string;
+  replay_start_seconds?: number;
+  replay_end_seconds?: number;
+  played_at_utc?: string;
+  over_top100_rank?: number;
+  highlight_tier?: 'hero' | 'feature' | 'standard';
+  comment_count?: number;
+}
+
+export interface ExploreFeedResponse {
+  items: ExplorePlay[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
 // --- Activity feed (used by Dashboard's Recent Activity strip) ---
 
 export type ActivityType =

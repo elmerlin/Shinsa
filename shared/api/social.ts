@@ -3,12 +3,20 @@ import type {
   ActivityItem,
   Comment,
   DailyHighlights,
+  ExploreFeedResponse,
   FeedItem,
   Post,
   PumpResponse,
   SongOfWeekItem,
   WeeklyChallengesHome,
 } from './types';
+
+export type ExploreFeedScope = 'following' | 'global' | 'me';
+
+export interface ExploreFeedParams {
+  scope?: ExploreFeedScope;
+  cursor?: string | null;
+}
 
 export interface FeedParams {
   page?: number;
@@ -24,6 +32,12 @@ export function createSocialApi(client: ApiClient) {
     },
     recentActivity() {
       return client.request<ActivityItem[]>('/api/social/recent-activity');
+    },
+    exploreFeed(params: ExploreFeedParams = {}) {
+      const search = new URLSearchParams();
+      search.set('scope', params.scope || 'following');
+      if (params.cursor) search.set('cursor', params.cursor);
+      return client.request<ExploreFeedResponse>(`/api/social/feed/explore?${search.toString()}`);
     },
     dailyHighlights() {
       return client.request<DailyHighlights>('/api/social/daily-highlights');
