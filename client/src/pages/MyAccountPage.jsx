@@ -1168,7 +1168,11 @@ export default function MyAccountPage() {
   { headers: { Authorization: \`Bearer \${process.env.PUMPSHINSA_TOKEN}\` } }
 );
 const { days } = await r.json();
-const total = days.reduce((s, d) => s + d.steps, 0);`;
+// Day totals.
+const total = days.reduce((s, d) => s + d.steps, 0);
+// Hour-of-day buckets across the range (UTC, see hour_basis).
+const byHour = Array.from({ length: 24 }, () => 0);
+for (const d of days) for (const h of d.hours || []) byHour[h.hour] += h.steps;`;
             const agentSnippet = `You are integrating the Pumpshinsa Steps API into a website.
 
 ENDPOINT
@@ -1189,10 +1193,31 @@ RESPONSE 200
   "user_id": <int>,
   "from": "YYYY-MM-DD",
   "to":   "YYYY-MM-DD",
-  "days": [{ "date": "YYYY-MM-DD", "steps": <int>, "plays": <int> }]
+  "hour_basis": "utc",
+  "days": [
+    {
+      "date": "YYYY-MM-DD",
+      "steps": <int>,
+      "plays": <int>,
+      "hours": [
+        { "hour": 0..23, "steps": <int>, "plays": <int> }
+      ]
+    }
+  ]
 }
-"steps" = perfect+great+good+bad judgments per play (misses excluded).
-"days" only contains dates that had plays — fill gaps with 0 if you need a continuous range.
+
+DAY TOTALS
+- "steps" = perfect+great+good+bad judgments per play (misses excluded).
+- "days" only contains dates that had plays — fill gaps with 0 if you need a continuous range.
+
+HOURLY BREAKDOWN
+- "hours" is sparse: hours with no plays are omitted (treat missing entries as 0).
+- "hour" is an integer 0..23 in the timezone given by top-level "hour_basis"
+  (currently always "utc"). Convert to local on the consumer if you display
+  it next to local timestamps.
+- Sum of hours[].steps may be < days[].steps because some older plays predate
+  the played_at_utc column and have no hour bucket. Treat day totals as the
+  source of truth for a date; treat hourly buckets as best-effort distribution.
 
 ERRORS
 400 — bad date format or from > to
@@ -1204,12 +1229,14 @@ INTEGRATION RULES
 - CORS is open, so a browser call will succeed — but inlining the token exposes it to anyone viewing source. Proxy it.
 - No documented rate limit. Cache results for a few minutes if polling.
 
-EXAMPLE (Node)
+EXAMPLE (Node) — sum into 24 UTC buckets
 const r = await fetch(
   \`https://pumpshinsa.com/api/external/steps?from=\${from}&to=\${to}\`,
   { headers: { Authorization: \`Bearer \${process.env.PUMPSHINSA_TOKEN}\` } }
 );
-const { days } = await r.json();`;
+const { days } = await r.json();
+const byHour = Array.from({ length: 24 }, () => 0);
+for (const d of days) for (const h of d.hours || []) byHour[h.hour] += h.steps;`;
             const snippets = [
               { key: 'agent', label: 'Agent prompt', hint: 'Paste into Claude Code, Cursor, etc. The agent will know what to build.', text: agentSnippet },
               { key: 'curl', label: 'curl', hint: 'Quick smoke test from the terminal.', text: curlSnippet },

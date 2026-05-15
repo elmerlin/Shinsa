@@ -83,6 +83,11 @@ function requireScope(scope) {
 // Returns daily step totals where one "step" = perfect+great+good+bad
 // (everything but misses). Date is the local `date_played` PIUGame surfaces,
 // so totals line up with what the user sees on the recently-played list.
+//
+// Each day also includes a sparse `hours` array bucketing plays by the UTC
+// hour they were logged at (`played_at_utc`). Hours with no plays are
+// omitted; sum of `hours[].steps` may be < `days[].steps` because some
+// older plays predate the `played_at_utc` column and have no timestamp.
 router.get('/steps', requireApiToken, requireScope('steps:read'), (req, res) => {
   const from = String(req.query.from || '').trim();
   const to = String(req.query.to || '').trim();
@@ -94,7 +99,7 @@ router.get('/steps', requireApiToken, requireScope('steps:read'), (req, res) => 
     return res.status(400).json({ error: 'from must be <= to' });
   }
   const db = getDb();
-  const rows = db.prepare(`
+  const dayRows = db.prepare(`
     SELECT date_played AS date,
            COALESCE(SUM(COALESCE(perfect,0) + COALESCE(great,0) + COALESCE(good,0) + COALESCE(bad,0)), 0) AS steps,
            COUNT(*) AS plays
@@ -104,11 +109,38 @@ router.get('/steps', requireApiToken, requireScope('steps:read'), (req, res) => 
      GROUP BY date_played
      ORDER BY date_played ASC
   `).all(req.user.id, from, to);
+  const hourRows = db.prepare(`
+    SELECT date_played AS date,
+           CAST(strftime('%H', played_at_utc) AS INTEGER) AS hour,
+           COALESCE(SUM(COALESCE(perfect,0) + COALESCE(great,0) + COALESCE(good,0) + COALESCE(bad,0)), 0) AS steps,
+           COUNT(*) AS plays
+      FROM user_recently_played
+     WHERE user_id = ?
+       AND date_played BETWEEN ? AND ?
+       AND played_at_utc != ''
+     GROUP BY date_played, hour
+     ORDER BY date_played ASC, hour ASC
+  `).all(req.user.id, from, to);
+  const hoursByDate = new Map();
+  for (const r of hourRows) {
+    if (!hoursByDate.has(r.date)) hoursByDate.set(r.date, []);
+    hoursByDate.get(r.date).push({
+      hour: Number(r.hour) || 0,
+      steps: Number(r.steps) || 0,
+      plays: Number(r.plays) || 0,
+    });
+  }
   res.json({
     user_id: req.user.id,
     from,
     to,
-    days: rows.map((r) => ({ date: r.date, steps: Number(r.steps) || 0, plays: Number(r.plays) || 0 })),
+    hour_basis: 'utc',
+    days: dayRows.map((r) => ({
+      date: r.date,
+      steps: Number(r.steps) || 0,
+      plays: Number(r.plays) || 0,
+      hours: hoursByDate.get(r.date) || [],
+    })),
   });
 });
 
