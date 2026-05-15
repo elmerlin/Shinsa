@@ -1147,7 +1147,10 @@ const makeStyles = (t: ThemeColors) => ({
   deskHeading: { fontSize: 22, fontWeight: '800' as const, color: t.text, letterSpacing: 0.5 },
   heading: { flex: 1, fontSize: 28, fontWeight: '800' as const, color: t.text, letterSpacing: 2 },
   composeBtn: { padding: 4 },
-  listContent: { padding: 16, paddingBottom: 80 },
+  // Match the right rail's paddingTop (14) so the first feed card aligns
+  // vertically with the top of the WC card next to it. Side padding stays
+  // at 16 — that controls the gap between the cards and the column edges.
+  listContent: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 80 },
   separator: { height: 12 },
   center: { flex: 1, alignItems: 'center' as const, justifyContent: 'center' as const, padding: 32 },
   empty: { textAlign: 'center' as const, padding: 32, color: t.textDim },
