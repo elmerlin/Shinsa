@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Image } from 'expo-image';
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { GradeChip } from '@/components/grade-chip';
 import { PlateBadge } from '@/components/plate-badge';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
@@ -54,16 +54,24 @@ export function ExploreTilesPanel({ s: parentStyles, theme, onScore, onReplay: _
     staleTime: 60_000,
   });
 
-  // Server already tags hero / feature / standard tiers. Sort by tier so
-  // the strongest plays bubble up; cap to 30 for the rail (more than that
-  // and the rail scroll feels endless without being useful).
-  const tiles: ExplorePlay[] = useMemo(() => {
+  // Mirror the desktop's `layoutItems`: keep server order so the densest
+  // grid packing is honored (heroes interleaved through the feed), then
+  // alternate feature variants between wide (2x1) and tall (1x2) so the
+  // grid breaks up rhythmically instead of stacking same-shape tiles.
+  const laidOut: { play: ExplorePlay; variant: 'hero' | 'wide' | 'tall' | 'standard' }[] = useMemo(() => {
     const items = exploreQuery.data?.items ?? [];
     if (items.length === 0) return [];
-    const order = { hero: 0, feature: 1, standard: 2 } as Record<string, number>;
-    return [...items]
-      .sort((a, b) => (order[a.highlight_tier || 'standard'] ?? 9) - (order[b.highlight_tier || 'standard'] ?? 9))
-      .slice(0, 30);
+    let featureCounter = 0;
+    return items.slice(0, 30).map((play) => {
+      const tier = play.highlight_tier || 'standard';
+      if (tier === 'hero') return { play, variant: 'hero' as const };
+      if (tier === 'feature') {
+        const v: 'wide' | 'tall' = featureCounter % 2 === 0 ? 'wide' : 'tall';
+        featureCounter++;
+        return { play, variant: v };
+      }
+      return { play, variant: 'standard' as const };
+    });
   }, [exploreQuery.data]);
 
   const handlePress = (play: ExplorePlay) => {
@@ -119,18 +127,24 @@ export function ExploreTilesPanel({ s: parentStyles, theme, onScore, onReplay: _
         </View>
       ) : exploreQuery.isError ? (
         <Text style={s.empty}>Couldn’t load Explore.</Text>
-      ) : tiles.length === 0 ? (
+      ) : laidOut.length === 0 ? (
         <Text style={s.empty}>
           {scope === 'following'
             ? 'Follow players to fill this with their plays.'
             : 'No recent plays in this scope.'}
         </Text>
       ) : (
-        <View style={s.grid}>
-          {tiles.map((play) => (
+        // Web gets a real CSS grid (display:grid) so hero=2×2, feature=2×1
+        // or 1×2, and standard=1×1 tessellate with `grid-auto-flow: dense`
+        // — same packing as pumpshinsa.com. Native falls back to a plain
+        // wrap (no spans) since RN has no grid primitive; that path is
+        // only exercised by the iOS/Android shells, not new.pumpshinsa.com.
+        <View style={Platform.OS === 'web' ? (s.gridWeb as never) : s.grid}>
+          {laidOut.map(({ play, variant }) => (
             <ExploreTile
               key={`tile-${play.play_id}`}
               play={play}
+              variant={variant}
               theme={theme}
               s={s}
               onPress={() => handlePress(play)}
@@ -142,29 +156,50 @@ export function ExploreTilesPanel({ s: parentStyles, theme, onScore, onReplay: _
   );
 }
 
+type TileVariant = 'hero' | 'wide' | 'tall' | 'standard';
+
 function ExploreTile({
   play,
+  variant,
   theme,
   s,
   onPress,
 }: {
   play: ExplorePlay;
+  variant: TileVariant;
   theme: ThemeColors;
   s: ReturnType<typeof useThemedStyles<ReturnType<typeof makeStyles>>>;
   onPress: () => void;
 }) {
   const jacket = play.jacket_url ? fullImageUrl(play.jacket_url) : undefined;
   const avatar = play.avatar ? fullImageUrl(String(play.avatar)) : undefined;
-  const tier = play.highlight_tier || 'standard';
-  const isHero = tier === 'hero';
+  const isHero = variant === 'hero';
   const modeColors = modeBadgeColors(play.mode);
+
+  // CSS-grid spans: applied as inline style on web only. Native fallback
+  // (no grid) just renders every tile as a square in a flex wrap.
+  const gridSpan: Record<string, string> = {};
+  if (Platform.OS === 'web') {
+    if (variant === 'hero') {
+      gridSpan.gridColumn = 'span 2';
+      gridSpan.gridRow = 'span 2';
+    } else if (variant === 'wide') {
+      gridSpan.gridColumn = 'span 2';
+    } else if (variant === 'tall') {
+      gridSpan.gridRow = 'span 2';
+    }
+  }
 
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [
         s.tile,
-        isHero && s.tileHero,
+        // On native we still need the square aspect ratio fallback since
+        // there's no grid sizing. On web the cell height comes from the
+        // grid's auto-rows, so we leave the tile to fill its cell.
+        Platform.OS !== 'web' && s.tileSquare,
+        gridSpan as never,
         pressed && { opacity: 0.85 },
       ]}>
       {jacket ? (
@@ -252,28 +287,38 @@ const makeStyles = (t: ThemeColors) => ({
   scopeBtnText: { fontSize: 10, fontWeight: '800' as const, color: t.textMuted, letterSpacing: 0.4 },
   scopeBtnTextActive: { color: t.accent },
 
-  // 3-up grid via flexBasis 31% — leaves enough slack for the 8px gap so
-  // we never overflow into a 4th column. Hero tiles span the full row.
+  // Native fallback: flex-wrap, no spans. Web replaces this with `gridWeb`
+  // below for true tessellation.
   grid: {
     flexDirection: 'row' as const,
     flexWrap: 'wrap' as const,
     gap: 8,
   },
+  // Web: 3-column CSS grid with `dense` packing so feature/hero spans
+  // backfill into earlier rows when there's room — same look as
+  // pumpshinsa.com's Explore. `gridAutoRows` sets every cell's height,
+  // so spans are predictable. Cast through `never` because RN's style
+  // types don't model grid; RN-Web forwards them to the underlying div.
+  gridWeb: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(3, 1fr)',
+    gridAutoRows: '140px',
+    gridAutoFlow: 'dense',
+    gap: 8,
+  } as never,
   tile: {
-    flexBasis: '31%' as const,
-    flexGrow: 1,
-    aspectRatio: 1,
     borderRadius: 10,
     overflow: 'hidden' as const,
     backgroundColor: t.bg,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.08)',
-    minWidth: 130,
+    minWidth: 0,
+    width: '100%' as const,
+    height: '100%' as const,
+    position: 'relative' as const,
   },
-  tileHero: {
-    flexBasis: '100%' as const,
-    aspectRatio: 16 / 9,
-  },
+  // Native-only sizing: the grid path on web sizes via grid-auto-rows.
+  tileSquare: { aspectRatio: 1, flexBasis: '31%' as const, flexGrow: 1, minWidth: 130 },
   tileJacket: {
     width: '100%' as const,
     height: '100%' as const,
