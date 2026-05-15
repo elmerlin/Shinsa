@@ -31,6 +31,34 @@ export function createSocialApi(client: ApiClient) {
     songOfWeekFeed(scope: 'global' | 'following' | 'me' = 'global') {
       return client.request<SongOfWeekItem[]>(`/api/social/song-of-week?scope=${encodeURIComponent(scope)}`);
     },
+    songOfWeekDetail(id: number | string) {
+      return client.request<SongOfWeekItem>(`/api/social/song-of-week/${encodeURIComponent(String(id))}`);
+    },
+    /** The signed-in user's pick for the current week, or `null` if none. */
+    songOfWeekMe() {
+      return client.request<SongOfWeekItem | null>('/api/social/song-of-week/me');
+    },
+    /** Upsert the signed-in user's current-week pick. */
+    setSongOfWeekMe(payload: { chart_id: number; caption?: string }) {
+      return client.request<SongOfWeekItem>('/api/social/song-of-week/me', {
+        method: 'PUT',
+        body: payload,
+      });
+    },
+    songOfWeekComments(id: number | string) {
+      return client.request<Comment[]>(`/api/social/song-of-week/${encodeURIComponent(String(id))}/comments`);
+    },
+    addSongOfWeekComment(id: number | string, content: string, parentId?: number | string | null) {
+      return client.request<Comment>(`/api/social/song-of-week/${encodeURIComponent(String(id))}/comments`, {
+        method: 'POST',
+        body: { content, parent_id: parentId ?? null },
+      });
+    },
+    deleteSongOfWeekComment(commentId: number | string) {
+      return client.request<{ success: true }>(`/api/social/song-of-week/comments/${encodeURIComponent(String(commentId))}`, {
+        method: 'DELETE',
+      });
+    },
     post(id: string) {
       return client.request<Post>(`/api/social/posts/${id}`);
     },

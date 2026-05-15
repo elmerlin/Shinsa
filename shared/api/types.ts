@@ -675,6 +675,26 @@ export interface WeeklyChallengeChartScoresResponse {
 
 // --- Song of the Week ---
 
+/** Optional play attached to a Song of the Week pick — server pulls the
+ *  most recent matching row from `user_recently_played` so the detail page
+ *  can show the owner's score / grade / replay info inline. */
+export interface SongOfWeekLinkedPlay {
+  id: number;
+  song_title?: string;
+  mode?: string;
+  level?: number;
+  score?: number;
+  grade?: string;
+  plate?: string;
+  date_played?: string;
+  played_at_utc?: string;
+  background_url?: string;
+  replay_embed_url?: string;
+  replay_video_id?: string;
+  replay_start_seconds?: number;
+  replay_end_seconds?: number;
+}
+
 export interface SongOfWeekItem {
   id: number;
   user_id?: string;
@@ -687,6 +707,10 @@ export interface SongOfWeekItem {
   jacket_url_snapshot?: string;
   caption?: string;
   linked_play_id?: number | null;
+  /** Hydrated by `hydrateSongOfWeekPick`. Null when no matching recent play. */
+  linked_play?: SongOfWeekLinkedPlay | null;
+  /** True for the viewer who owns the pick (exposes the composer / edit). */
+  is_owner?: boolean;
   created_at?: string;
   username?: string;
   avatar?: string;
