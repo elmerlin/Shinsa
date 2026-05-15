@@ -1264,10 +1264,10 @@ const makeStyles = (t: ThemeColors) => ({
     borderColor: 'rgba(255,255,255,0.06)',
     overflow: 'hidden' as const,
   },
-  // Taller jacket so the top-3 overlay (3 rows w/ avatars) fits without
-  // overrunning the song-title strip up top. 4:5 lands well at the
-  // 2-up grid widths we use on phones and the desktop tile width too.
-  chartHero: { aspectRatio: 4 / 5, backgroundColor: '#000', overflow: 'hidden' as const },
+  // Source jacket art is roughly landscape — 16:10 keeps it natural and
+  // matches the desktop ChartCard. The top-3 overlay below sits on the
+  // bottom half via a translucent scrim so the art still reads through.
+  chartHero: { aspectRatio: 16 / 10, backgroundColor: '#000', overflow: 'hidden' as const },
   chartHeroImg: { width: '100%' as const, height: '100%' as const },
   chartHeroFallback: { backgroundColor: '#1f2937' },
   chartModeBadge: {
@@ -1300,42 +1300,43 @@ const makeStyles = (t: ThemeColors) => ({
     textShadowRadius: 4,
   },
 
-  // Top-3 overlay block at the bottom of the jacket — was a footer line
-  // showing only top 1 with no avatar. Replaces both: 3 rows here means
-  // the chart card communicates the actual race at a glance.
+  // Top-3 overlay block at the bottom of the jacket. With the jacket back
+  // at 16:10 there's less vertical room, so each row is tighter — small
+  // avatars, single-line names, compact padding — and the scrim is a bit
+  // darker so the rows read clearly over busy jacket art.
   chartTopList: {
     position: 'absolute' as const,
     left: 0,
     right: 0,
     bottom: 0,
     paddingHorizontal: 6,
-    paddingTop: 6,
-    paddingBottom: 6,
-    gap: 3,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingTop: 4,
+    paddingBottom: 4,
+    gap: 1,
+    backgroundColor: 'rgba(0,0,0,0.62)',
   },
   chartTopRow: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    gap: 5,
+    gap: 4,
   },
-  chartTopMedal: { fontSize: 11, width: 14, textAlign: 'center' as const },
+  chartTopMedal: { fontSize: 10, width: 12, textAlign: 'center' as const },
   chartTopAvatar: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
     backgroundColor: 'rgba(255,255,255,0.10)',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.25)',
   },
   chartTopAvatarFallback: { alignItems: 'center' as const, justifyContent: 'center' as const },
-  chartTopAvatarLetter: { fontSize: 9, fontWeight: '900' as const, color: '#fff' },
+  chartTopAvatarLetter: { fontSize: 8, fontWeight: '900' as const, color: '#fff' },
   chartTopName: {
     flex: 1,
     fontSize: 10,
     fontWeight: '700' as const,
     color: 'rgba(255,255,255,0.92)',
-    textShadowColor: 'rgba(0,0,0,0.85)',
+    textShadowColor: 'rgba(0,0,0,0.9)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
   },
@@ -1343,7 +1344,7 @@ const makeStyles = (t: ThemeColors) => ({
     fontSize: 10,
     fontWeight: '900' as const,
     fontVariant: ['tabular-nums' as const],
-    textShadowColor: 'rgba(0,0,0,0.85)',
+    textShadowColor: 'rgba(0,0,0,0.9)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
   },
@@ -1352,7 +1353,7 @@ const makeStyles = (t: ThemeColors) => ({
     color: 'rgba(255,255,255,0.5)',
     fontStyle: 'italic' as const,
     textAlign: 'center' as const,
-    paddingVertical: 4,
+    paddingVertical: 2,
   },
 
   // Footer simplifies down to just the participation/clear stat now that
