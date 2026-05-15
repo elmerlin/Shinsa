@@ -98,6 +98,7 @@ export default function MyAccountPage() {
   const [apiJustCreated, setApiJustCreated] = useState(null);
   const [apiRevokeConfirmId, setApiRevokeConfirmId] = useState(null);
   const [apiCopied, setApiCopied] = useState(false);
+  const [apiSnippetCopied, setApiSnippetCopied] = useState('');
   const [shoeRetireConfirmId, setShoeRetireConfirmId] = useState(null);
   const [shoeDeleteConfirmId, setShoeDeleteConfirmId] = useState(null);
   const [shoeCatalogQuery, setShoeCatalogQuery] = useState('');
@@ -266,6 +267,16 @@ export default function MyAccountPage() {
       setTimeout(() => setApiCopied(false), 2500);
     } catch {
       setApiMessage('Failed to copy — select the token text and copy manually.');
+    }
+  };
+
+  const handleCopySnippet = async (key, text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setApiSnippetCopied(key);
+      setTimeout(() => setApiSnippetCopied((curr) => (curr === key ? '' : curr)), 2500);
+    } catch {
+      setApiMessage('Failed to copy — select the text and copy manually.');
     }
   };
 
@@ -1146,6 +1157,98 @@ export default function MyAccountPage() {
               </p>
             </form>
           </div>
+
+          {(() => {
+            const tokenForSnippet = apiJustCreated?.token || 'pump_pat_PASTE_YOUR_TOKEN_HERE';
+            const isPlaceholder = !apiJustCreated?.token;
+            const curlSnippet = `curl -H "Authorization: Bearer ${tokenForSnippet}" \\
+  "https://pumpshinsa.com/api/external/steps?from=2026-05-01&to=2026-05-15"`;
+            const nodeSnippet = `const r = await fetch(
+  \`https://pumpshinsa.com/api/external/steps?from=\${from}&to=\${to}\`,
+  { headers: { Authorization: \`Bearer \${process.env.PUMPSHINSA_TOKEN}\` } }
+);
+const { days } = await r.json();
+const total = days.reduce((s, d) => s + d.steps, 0);`;
+            const agentSnippet = `You are integrating the Pumpshinsa Steps API into a website.
+
+ENDPOINT
+GET https://pumpshinsa.com/api/external/steps?from=YYYY-MM-DD&to=YYYY-MM-DD
+
+AUTH
+Header: Authorization: Bearer <token>
+Token: ${tokenForSnippet}
+Required scope: steps:read
+Treat the token like a password — never ship it in browser code.
+
+PARAMS
+- from (required, YYYY-MM-DD)
+- to   (required, YYYY-MM-DD, must be >= from)
+
+RESPONSE 200
+{
+  "user_id": <int>,
+  "from": "YYYY-MM-DD",
+  "to":   "YYYY-MM-DD",
+  "days": [{ "date": "YYYY-MM-DD", "steps": <int>, "plays": <int> }]
+}
+"steps" = perfect+great+good+bad judgments per play (misses excluded).
+"days" only contains dates that had plays — fill gaps with 0 if you need a continuous range.
+
+ERRORS
+400 — bad date format or from > to
+401 — missing/invalid/revoked token
+403 — token missing scope steps:read
+
+INTEGRATION RULES
+- Call from a server, not the browser. Read the token from an env var (PUMPSHINSA_TOKEN).
+- CORS is open, so a browser call will succeed — but inlining the token exposes it to anyone viewing source. Proxy it.
+- No documented rate limit. Cache results for a few minutes if polling.
+
+EXAMPLE (Node)
+const r = await fetch(
+  \`https://pumpshinsa.com/api/external/steps?from=\${from}&to=\${to}\`,
+  { headers: { Authorization: \`Bearer \${process.env.PUMPSHINSA_TOKEN}\` } }
+);
+const { days } = await r.json();`;
+            const snippets = [
+              { key: 'agent', label: 'Agent prompt', hint: 'Paste into Claude Code, Cursor, etc. The agent will know what to build.', text: agentSnippet },
+              { key: 'curl', label: 'curl', hint: 'Quick smoke test from the terminal.', text: curlSnippet },
+              { key: 'node', label: 'Node / fetch', hint: 'Server-side. Set PUMPSHINSA_TOKEN in your env.', text: nodeSnippet },
+            ];
+            return (
+              <div className="card space-y-4">
+                <div className="space-y-1">
+                  <h3 className="font-display font-bold text-sm text-piu-accent">INTEGRATION</h3>
+                  <p className="text-xs text-gray-400">
+                    Drop these into the app or agent that will be reading your steps.{' '}
+                    {isPlaceholder
+                      ? <>Replace <code className="text-piu-accent">pump_pat_PASTE_YOUR_TOKEN_HERE</code> with the token from a fresh create.</>
+                      : <>Your just-created token is already inlined below.</>}
+                  </p>
+                </div>
+                {snippets.map((s) => (
+                  <div key={s.key} className="space-y-1">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-xs font-display font-bold text-gray-200">{s.label}</p>
+                        <p className="text-[11px] text-gray-500">{s.hint}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleCopySnippet(s.key, s.text)}
+                        className="shrink-0 rounded-lg border border-piu-border bg-piu-dark px-3 py-1.5 text-[11px] font-display font-bold text-gray-200 hover:bg-piu-border/40"
+                      >
+                        {apiSnippetCopied === s.key ? 'Copied!' : 'Copy'}
+                      </button>
+                    </div>
+                    <pre className="max-h-64 overflow-auto rounded-lg border border-piu-border/40 bg-piu-dark px-3 py-2 text-[11px] leading-relaxed text-gray-200 whitespace-pre-wrap break-words">
+{s.text}
+                    </pre>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
 
           <div className="card space-y-3">
             <h3 className="font-display font-bold text-sm text-piu-accent">YOUR TOKENS</h3>
