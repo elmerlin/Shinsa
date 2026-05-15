@@ -5,6 +5,8 @@ import { useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AvatarStack, type AvatarStackItem } from '@/components/avatar-stack';
+import { TournamentSetupSheet } from '@/components/tournament/setup-sheet';
+import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/contexts/theme-context';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
@@ -103,6 +105,9 @@ export default function TournamentsScreen() {
   const { theme } = useTheme();
   const s = useThemedStyles(makeStyles);
   const { isDesktop } = useBreakpoint();
+  const { user } = useAuth();
+  const isAdmin = !!user?.is_admin;
+  const [setupOpen, setSetupOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const { data, isLoading, isError, error, refetch, isRefetching } = useQuery({
     queryKey: ['tournaments'],
@@ -119,6 +124,16 @@ export default function TournamentsScreen() {
     <View style={s.container}>
       <View style={[s.header, { paddingTop: insets.top + 12 }]}>
         <Text style={s.heading}>Tournaments</Text>
+        {/* Admins get a "+ New" button in the header to launch the
+            setup sheet. Hidden for everyone else — non-admins still see
+            the same tournaments, just no builder entry point. */}
+        {isAdmin ? (
+          <Pressable
+            onPress={() => setSetupOpen(true)}
+            style={({ pressed }) => [s.newBtn, pressed && { opacity: 0.85 }]}>
+            <Text style={s.newBtnText}>+ New</Text>
+          </Pressable>
+        ) : null}
       </View>
 
       <View style={s.filterRow}>
@@ -183,14 +198,39 @@ export default function TournamentsScreen() {
           refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={theme.spinner} />}
         />
       )}
+
+      <TournamentSetupSheet
+        visible={setupOpen}
+        onClose={() => setSetupOpen(false)}
+        onSaved={(t) => {
+          setSetupOpen(false);
+          // Jump straight into the new tournament so the user can add
+          // players + run phases without a second navigation.
+          router.push({ pathname: '/tournament/[id]', params: { id: t.id } });
+        }}
+      />
     </View>
   );
 }
 
 const makeStyles = (t: ThemeColors) => ({
   container: { flex: 1, backgroundColor: t.bg },
-  header: { paddingHorizontal: 20, paddingBottom: 12 },
+  header: {
+    paddingHorizontal: 20,
+    paddingBottom: 12,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+    gap: 12,
+  },
   heading: { fontSize: 28, fontWeight: '800' as const, color: t.text, letterSpacing: 2 },
+  newBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: t.accent,
+  },
+  newBtnText: { fontSize: 12, fontWeight: '900' as const, color: t.textOnAccent, letterSpacing: 0.5 },
 
   // Status filter chips above the list / grid.
   filterRow: {

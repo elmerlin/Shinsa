@@ -22,8 +22,11 @@ import {
   RoundRobinView,
 } from '@/components/tournament/format-views';
 import { MatchDetailSheet } from '@/components/tournament/match-detail-sheet';
+import { PlayerAddSheet } from '@/components/tournament/player-add-sheet';
 import { PlayerHistorySheet } from '@/components/tournament/player-history-sheet';
 import { TournamentRoster } from '@/components/tournament/roster';
+import { TournamentSetupSheet } from '@/components/tournament/setup-sheet';
+import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/contexts/theme-context';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { tournamentsApi } from '@/lib/api';
@@ -38,11 +41,15 @@ export default function TournamentDetailScreen() {
   const router = useRouter();
   const { theme } = useTheme();
   const s = useThemedStyles(makeStyles);
+  const { user } = useAuth();
+  const isAdmin = !!user?.is_admin;
   const [activeTab, setActiveTab] = useState<string>('');
   // Sheets — opened by taps on matches and players from anywhere on the
   // detail screen (format views, final standings, roster).
   const [matchTarget, setMatchTarget] = useState<Match | null>(null);
   const [playerTarget, setPlayerTarget] = useState<Player | null>(null);
+  const [setupOpen, setSetupOpen] = useState(false);
+  const [rosterOpen, setRosterOpen] = useState(false);
 
   const tournamentQuery = useQuery({
     queryKey: ['tournament', tournamentId],
@@ -185,14 +192,23 @@ export default function TournamentDetailScreen() {
           stats={stats}
           flow={phases.length > 0 ? <TournamentPhaseTimeline phases={phases} /> : undefined}
           action={
-            <Pressable
-              // Native poster lives at /tournament/:id/poster — same URL
-              // shape as the desktop site so shared links work both ways.
-              onPress={() => router.push(`/tournament/${tournamentId}/poster` as never)}
-              style={({ pressed }) => [s.posterBtn, pressed && { opacity: 0.7 }]}>
-              <Text style={s.posterBtnIcon}>🖼️</Text>
-              <Text style={s.posterBtnText}>Poster</Text>
-            </Pressable>
+            <View style={s.actionStack}>
+              <Pressable
+                // Native poster lives at /tournament/:id/poster — same URL
+                // shape as the desktop site so shared links work both ways.
+                onPress={() => router.push(`/tournament/${tournamentId}/poster` as never)}
+                style={({ pressed }) => [s.posterBtn, pressed && { opacity: 0.7 }]}>
+                <Text style={s.posterBtnIcon}>🖼️</Text>
+                <Text style={s.posterBtnText}>Poster</Text>
+              </Pressable>
+              {isAdmin ? (
+                <Pressable
+                  onPress={() => setSetupOpen(true)}
+                  style={({ pressed }) => [s.editBtn, pressed && { opacity: 0.7 }]}>
+                  <Text style={s.editBtnText}>✎ Edit</Text>
+                </Pressable>
+              ) : null}
+            </View>
           }
         />
 
@@ -202,10 +218,21 @@ export default function TournamentDetailScreen() {
 
         {/* Tab content */}
         {activeTab === 'players' && (
-          <TournamentRoster
-            players={players}
-            onPlayerPress={(p) => setPlayerTarget(p)}
-          />
+          <View style={{ gap: 10 }}>
+            {/* Admin-only roster management. Opens the PlayerAddSheet
+                which combines search + add + remove flows. */}
+            {isAdmin ? (
+              <Pressable
+                onPress={() => setRosterOpen(true)}
+                style={({ pressed }) => [s.manageRosterBtn, pressed && { opacity: 0.85 }]}>
+                <Text style={s.manageRosterBtnText}>+ Manage roster ({players.length})</Text>
+              </Pressable>
+            ) : null}
+            <TournamentRoster
+              players={players}
+              onPlayerPress={(p) => setPlayerTarget(p)}
+            />
+          </View>
         )}
 
         {activeTab === 'final' && allPhasesComplete && (
@@ -281,6 +308,20 @@ export default function TournamentDetailScreen() {
         matches={matches}
         onClose={() => setPlayerTarget(null)}
       />
+
+      {/* Admin sheets — render unconditionally (visibility gated by
+          state) so first open is instant once an admin taps the button. */}
+      <TournamentSetupSheet
+        visible={setupOpen}
+        tournamentId={tournamentId}
+        onClose={() => setSetupOpen(false)}
+      />
+      <PlayerAddSheet
+        visible={rosterOpen}
+        tournamentId={tournamentId}
+        existingPlayers={players}
+        onClose={() => setRosterOpen(false)}
+      />
     </View>
   );
 }
@@ -297,6 +338,7 @@ const makeStyles = (t: ThemeColors) => ({
   center: { flex: 1, alignItems: 'center' as const, justifyContent: 'center' as const, padding: 24 },
   bodyText: { color: t.textMuted, fontSize: 13 },
 
+  actionStack: { alignItems: 'flex-end' as const, gap: 4 },
   posterBtn: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
@@ -310,4 +352,28 @@ const makeStyles = (t: ThemeColors) => ({
   },
   posterBtnIcon: { fontSize: 11 },
   posterBtnText: { fontSize: 11, fontWeight: '900' as const, color: t.accent, letterSpacing: 0.5 },
+
+  // Admin "Edit" button — sits below the Poster button in the action
+  // stack. Styled quieter so it doesn't outshine the poster CTA.
+  editBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: t.border,
+    backgroundColor: t.surfaceMuted,
+  },
+  editBtnText: { fontSize: 11, fontWeight: '800' as const, color: t.textMuted, letterSpacing: 0.5 },
+
+  // Players-tab admin entry point: roster manage modal.
+  manageRosterBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: t.accent,
+    backgroundColor: t.accentTint,
+    alignItems: 'center' as const,
+  },
+  manageRosterBtnText: { fontSize: 13, fontWeight: '900' as const, color: t.accent, letterSpacing: 0.5 },
 });

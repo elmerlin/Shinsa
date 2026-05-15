@@ -23,6 +23,78 @@ export function createTournamentsApi(client: ApiClient) {
     phases(id: string) {
       return client.request<TournamentPhase[]>(`/api/phases/tournament/${id}`);
     },
+    /** Create a new tournament. Server requires auth + admin. Returns the
+     *  freshly inserted row (with id), so the caller can navigate into
+     *  /tournament/:id immediately. */
+    create(payload: {
+      name: string;
+      location?: string;
+      date?: string;
+      avatar?: string;
+      gif_avatar?: string;
+      total_rounds?: number;
+      config?: Record<string, unknown>;
+    }) {
+      return client.request<Tournament>('/api/tournaments', {
+        method: 'POST',
+        body: payload,
+      });
+    },
+    /** Partial update — server uses COALESCE so only included fields change. */
+    update(id: string, payload: Record<string, unknown>) {
+      return client.request<Tournament>(`/api/tournaments/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        body: payload,
+      });
+    },
+    /** Archive/un-archive — keeps the row + history, just toggles flag. */
+    archive(id: string, archived = true) {
+      return client.request<Tournament>(`/api/tournaments/${encodeURIComponent(id)}/archive`, {
+        method: 'PUT',
+        body: { archived: archived ? 1 : 0 },
+      });
+    },
+    delete(id: string) {
+      return client.request<void>(`/api/tournaments/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      });
+    },
+
+    // ── Players ──
+    /** Add a registered Shinsa user to a tournament. The server pulls
+     *  player meta (avatar, skill_title, pumbility) from the user row. */
+    addPlayer(payload: { tournament_id: string; user_id: string }) {
+      return client.request<Player>('/api/players', { method: 'POST', body: payload });
+    },
+    removePlayer(playerId: string) {
+      return client.request<void>(`/api/players/${encodeURIComponent(playerId)}`, {
+        method: 'DELETE',
+      });
+    },
+
+    // ── Phases ──
+    createPhase(payload: {
+      tournament_id: string;
+      phase_order: number;
+      format: string;
+      name?: string;
+      config?: Record<string, unknown>;
+      advancement?: Record<string, unknown>;
+    }) {
+      return client.request<TournamentPhase>('/api/phases', { method: 'POST', body: payload });
+    },
+    updatePhase(id: string, payload: Record<string, unknown>) {
+      return client.request<TournamentPhase>(`/api/phases/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        body: payload,
+      });
+    },
+    deletePhase(id: string) {
+      return client.request<void>(`/api/phases/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      });
+    },
+
     discussion(id: string) {
       return client.request<DiscussionResponse>(`/api/tournaments/${id}/discussion`);
     },
