@@ -1,13 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Image } from 'expo-image';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   FlatList,
   Modal,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Switch,
@@ -429,6 +430,28 @@ export function ProfileBody({ lookup }: { lookup: string }) {
   const profile = profileQuery.data as User | undefined;
   const profileId = profile?.id ?? '';
   const isSelf = !!currentUser?.id && currentUser.id === profileId;
+
+  // Pull-to-refresh: re-fetch every active query whose key references this
+  // profile, plus the top-level profile lookup itself. We use refetchQueries
+  // (not invalidate) so stale data stays on screen during the network round
+  // trip — feels snappier than a flash to skeleton. type='active' skips
+  // queries for tabs the user isn't currently viewing.
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const onRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      await Promise.all([
+        queryClient.refetchQueries({ queryKey: ['profile'], type: 'active' }),
+        queryClient.refetchQueries({
+          predicate: (q) =>
+            Array.isArray(q.queryKey) && !!profileId && q.queryKey.includes(profileId),
+          type: 'active',
+        }),
+      ]);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [queryClient, profileId]);
 
   const countsQuery = useQuery({
     queryKey: ['social-counts', profileId],
@@ -1132,7 +1155,11 @@ export function ProfileBody({ lookup }: { lookup: string }) {
         </View>
       ) : null}
 
-      <ScrollView contentContainerStyle={s.scroll}>
+      <ScrollView
+        contentContainerStyle={s.scroll}
+        refreshControl={
+          <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={theme.spinner} />
+        }>
         {/* Mobile: full header with identity, action, stats, badges in the
             scroll. Desktop: those live in the left identity rail (see the
             top of this return), so the center column only renders the tabs
