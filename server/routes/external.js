@@ -144,6 +144,110 @@ router.get('/steps', requireApiToken, requireScope('steps:read'), (req, res) => 
   });
 });
 
+// ---- Per-play (kcal per song) -----------------------------------------------
+// MET formula mirrors server/lib/liveSessionSummary.js. PIU sessions are
+// roughly 11.8 MET (vigorous dance); a song is ~2 minutes.
+const PIU_SESSION_MET = 11.8;
+const PIU_SONG_LENGTH_MINUTES = 2;
+const DEFAULT_WEIGHT_KG = 70;
+
+// GET /api/external/plays?from=YYYY-MM-DD&to=YYYY-MM-DD&limit=100
+// Returns per-play rows in the date range, newest first. Each row carries
+// the song, score, judgments, and kcal — preferring the OCR-captured value
+// from PIUGame when present and falling back to a MET-based estimate
+// scaled by the user's profile weight (or 70 kg default) when the row's
+// kcal column is empty.
+//
+// Date semantics match /steps: `date_played` is a free-form string PIUGame
+// surfaces (often "YYYY-MM-DD HH:MM:SS (GMT±N)"), so the BETWEEN check uses
+// lexicographic prefix matching on the YYYY-MM-DD inputs.
+router.get('/plays', requireApiToken, requireScope('steps:read'), (req, res) => {
+  const from = String(req.query.from || '').trim();
+  const to = String(req.query.to || '').trim();
+  const dateRe = /^\d{4}-\d{2}-\d{2}$/;
+  if (!dateRe.test(from) || !dateRe.test(to)) {
+    return res.status(400).json({ error: 'from and to must be YYYY-MM-DD dates' });
+  }
+  if (from > to) {
+    return res.status(400).json({ error: 'from must be <= to' });
+  }
+  const limitRaw = parseInt(String(req.query.limit || '100'), 10);
+  const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(500, limitRaw)) : 100;
+
+  const db = getDb();
+  const userRow = db.prepare('SELECT weight_kg FROM users WHERE id = ?').get(req.user.id);
+  const profileWeight = Number(userRow?.weight_kg);
+  const weightKgUsed = Number.isFinite(profileWeight) && profileWeight > 0 ? profileWeight : DEFAULT_WEIGHT_KG;
+  const kcalPerSongEstimate = (PIU_SESSION_MET * 3.5 * weightKgUsed / 200) * PIU_SONG_LENGTH_MINUTES;
+  const weightSource = Number.isFinite(profileWeight) && profileWeight > 0 ? 'profile' : 'default';
+
+  const rows = db.prepare(`
+    SELECT id AS play_id,
+           date_played,
+           played_at_utc,
+           song_title,
+           mode,
+           level,
+           score,
+           grade,
+           plate,
+           COALESCE(perfect,0) + COALESCE(great,0) + COALESCE(good,0) + COALESCE(bad,0) AS steps,
+           COALESCE(kcal, 0) AS kcal_logged,
+           COALESCE(perfect, 0) AS perfect,
+           COALESCE(great, 0) AS great,
+           COALESCE(good, 0) AS good,
+           COALESCE(bad, 0) AS bad,
+           COALESCE(miss, 0) AS miss,
+           COALESCE(max_combo, 0) AS max_combo,
+           COALESCE(replay_embed_url, '') AS replay_embed_url,
+           COALESCE(replay_video_id, '') AS replay_video_id
+      FROM user_recently_played
+     WHERE user_id = ?
+       AND date_played BETWEEN ? AND ?
+     ORDER BY COALESCE(played_at_utc, date_played) DESC, id DESC
+     LIMIT ?
+  `).all(req.user.id, from, to, limit);
+
+  res.json({
+    user_id: req.user.id,
+    from,
+    to,
+    limit,
+    count: rows.length,
+    kcal_weight_kg: weightKgUsed,
+    kcal_weight_source: weightSource,
+    kcal_per_song_estimate: Math.round(kcalPerSongEstimate * 100) / 100,
+    plays: rows.map((r) => {
+      const logged = Number(r.kcal_logged) || 0;
+      const kcal = logged > 0 ? logged : kcalPerSongEstimate;
+      return {
+        play_id: Number(r.play_id) || 0,
+        played_at_utc: r.played_at_utc || '',
+        date_played: r.date_played || '',
+        song_title: r.song_title || '',
+        mode: r.mode || '',
+        level: Number(r.level) || 0,
+        score: Number(r.score) || 0,
+        grade: r.grade || '',
+        plate: r.plate || '',
+        steps: Number(r.steps) || 0,
+        kcal: Math.round(kcal * 100) / 100,
+        kcal_source: logged > 0 ? 'logged' : 'estimated',
+        judgments: {
+          perfect: Number(r.perfect) || 0,
+          great: Number(r.great) || 0,
+          good: Number(r.good) || 0,
+          bad: Number(r.bad) || 0,
+          miss: Number(r.miss) || 0,
+        },
+        max_combo: Number(r.max_combo) || 0,
+        replay_embed_url: r.replay_embed_url || '',
+        replay_video_id: r.replay_video_id || '',
+      };
+    }),
+  });
+});
+
 // ---- Token management (JWT-authenticated) -----------------------------------
 // These are called from the account-settings UI on pumpshinsa, not from
 // external apps. They use the normal session JWT.

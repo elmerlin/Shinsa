@@ -1161,28 +1161,50 @@ export default function MyAccountPage() {
           {(() => {
             const tokenForSnippet = apiJustCreated?.token || 'pump_pat_PASTE_YOUR_TOKEN_HERE';
             const isPlaceholder = !apiJustCreated?.token;
-            const curlSnippet = `curl -H "Authorization: Bearer ${tokenForSnippet}" \\
-  "https://pumpshinsa.com/api/external/steps?from=2026-05-01&to=2026-05-15"`;
-            const nodeSnippet = `const r = await fetch(
+            const curlSnippet = `# Day totals + hourly step buckets
+curl -H "Authorization: Bearer ${tokenForSnippet}" \\
+  "https://pumpshinsa.com/api/external/steps?from=2026-05-01&to=2026-05-15"
+
+# Per-song detail (steps, kcal, score, grade, replay url) — newest first
+curl -H "Authorization: Bearer ${tokenForSnippet}" \\
+  "https://pumpshinsa.com/api/external/plays?from=2026-05-01&to=2026-05-15&limit=100"`;
+            const nodeSnippet = `const auth = { Authorization: \`Bearer \${process.env.PUMPSHINSA_TOKEN}\` };
+
+// /steps — day totals + hourly buckets (UTC).
+const stepsRes = await fetch(
   \`https://pumpshinsa.com/api/external/steps?from=\${from}&to=\${to}\`,
-  { headers: { Authorization: \`Bearer \${process.env.PUMPSHINSA_TOKEN}\` } }
+  { headers: auth }
 );
-const { days } = await r.json();
-// Day totals.
-const total = days.reduce((s, d) => s + d.steps, 0);
-// Hour-of-day buckets across the range (UTC, see hour_basis).
+const { days } = await stepsRes.json();
+const totalSteps = days.reduce((s, d) => s + d.steps, 0);
 const byHour = Array.from({ length: 24 }, () => 0);
-for (const d of days) for (const h of d.hours || []) byHour[h.hour] += h.steps;`;
+for (const d of days) for (const h of d.hours || []) byHour[h.hour] += h.steps;
+
+// /plays — per-song detail (newest first). Each row has kcal so you can
+// chart calories burned per song. kcal_source tells you whether the value
+// came from PIUGame's OCR ("logged") or a MET-based fallback ("estimated").
+const playsRes = await fetch(
+  \`https://pumpshinsa.com/api/external/plays?from=\${from}&to=\${to}&limit=100\`,
+  { headers: auth }
+);
+const { plays } = await playsRes.json();
+const totalKcal = plays.reduce((s, p) => s + p.kcal, 0);
+const kcalBySong = plays.reduce((acc, p) => {
+  acc[p.song_title] = (acc[p.song_title] || 0) + p.kcal;
+  return acc;
+}, {});`;
             const agentSnippet = `You are integrating the Pumpshinsa Steps API into a website.
 
-ENDPOINT
-GET https://pumpshinsa.com/api/external/steps?from=YYYY-MM-DD&to=YYYY-MM-DD
-
-AUTH
+AUTH (both endpoints)
 Header: Authorization: Bearer <token>
 Token: ${tokenForSnippet}
 Required scope: steps:read
 Treat the token like a password — never ship it in browser code.
+
+═══════════════════════════════════════════════════════════════════════
+ENDPOINT 1 — /steps : day totals + hourly buckets (chart-friendly)
+═══════════════════════════════════════════════════════════════════════
+GET https://pumpshinsa.com/api/external/steps?from=YYYY-MM-DD&to=YYYY-MM-DD
 
 PARAMS
 - from (required, YYYY-MM-DD)
@@ -1219,8 +1241,65 @@ HOURLY BREAKDOWN
   the played_at_utc column and have no hour bucket. Treat day totals as the
   source of truth for a date; treat hourly buckets as best-effort distribution.
 
+═══════════════════════════════════════════════════════════════════════
+ENDPOINT 2 — /plays : per-song detail (kcal per song, replay URLs, etc.)
+═══════════════════════════════════════════════════════════════════════
+GET https://pumpshinsa.com/api/external/plays?from=YYYY-MM-DD&to=YYYY-MM-DD&limit=100
+
+PARAMS
+- from (required, YYYY-MM-DD)
+- to   (required, YYYY-MM-DD, must be >= from)
+- limit (optional, default 100, max 500)
+
+RESPONSE 200
+{
+  "user_id": <string>,
+  "from": "YYYY-MM-DD",
+  "to":   "YYYY-MM-DD",
+  "limit": <int>,
+  "count": <int>,                       // number of plays returned
+  "kcal_weight_kg": <number>,           // weight used for estimate fallback
+  "kcal_weight_source": "profile" | "default",
+  "kcal_per_song_estimate": <number>,   // MET-derived kcal/song at that weight
+  "plays": [
+    {
+      "play_id": <int>,
+      "played_at_utc": "YYYY-MM-DD HH:MM:SS",  // may be empty for older plays
+      "date_played": <string>,                 // free-form local label PIUGame surfaces
+      "song_title": <string>,
+      "mode": "Single" | "Double" | "CoOp",
+      "level": <int>,
+      "score": <int>,
+      "grade": <string>,                       // "SSS+" / "A" / "F" etc.
+      "plate": <string>,                       // "PG" / "MG" / "FG" etc.
+      "steps": <int>,                          // perfect+great+good+bad
+      "kcal": <number>,                        // best estimate (see kcal_source)
+      "kcal_source": "logged" | "estimated",   // logged = OCR from PIUGame
+      "judgments": { "perfect": ..., "great": ..., "good": ..., "bad": ..., "miss": ... },
+      "max_combo": <int>,
+      "replay_embed_url": <string>,            // YouTube embed with ?start=&end= when available
+      "replay_video_id": <string>
+    }
+  ]
+}
+
+KCAL SEMANTICS
+- When PIUGame's UI captured a kcal value (OCR'd from the score screen),
+  "kcal_source" is "logged" and "kcal" is that value as-is.
+- When the row has no logged kcal, the server returns a per-song estimate
+  computed as (11.8 MET × 3.5 × weight_kg / 200) × 2 min. "kcal_source"
+  is "estimated" and the same constant value appears on every estimated
+  row (since song length is fixed). weight_kg comes from the user's
+  profile (kcal_weight_source: "profile") or defaults to 70 kg
+  ("default").
+- Sum plays[].kcal for a total. Group by song_title for "kcal per song".
+
+ROW ORDER
+- Newest first (ORDER BY played_at_utc DESC, id DESC). limit caps the
+  page; paginate by tightening the date range if you need older rows.
+
 ERRORS
-400 — bad date format or from > to
+400 — bad date format, from > to
 401 — missing/invalid/revoked token
 403 — token missing scope steps:read
 
@@ -1229,14 +1308,27 @@ INTEGRATION RULES
 - CORS is open, so a browser call will succeed — but inlining the token exposes it to anyone viewing source. Proxy it.
 - No documented rate limit. Cache results for a few minutes if polling.
 
-EXAMPLE (Node) — sum into 24 UTC buckets
-const r = await fetch(
+EXAMPLE (Node) — chart steps-by-hour and kcal-by-song
+const auth = { Authorization: \`Bearer \${process.env.PUMPSHINSA_TOKEN}\` };
+
+const stepsRes = await fetch(
   \`https://pumpshinsa.com/api/external/steps?from=\${from}&to=\${to}\`,
-  { headers: { Authorization: \`Bearer \${process.env.PUMPSHINSA_TOKEN}\` } }
+  { headers: auth }
 );
-const { days } = await r.json();
+const { days } = await stepsRes.json();
 const byHour = Array.from({ length: 24 }, () => 0);
-for (const d of days) for (const h of d.hours || []) byHour[h.hour] += h.steps;`;
+for (const d of days) for (const h of d.hours || []) byHour[h.hour] += h.steps;
+
+const playsRes = await fetch(
+  \`https://pumpshinsa.com/api/external/plays?from=\${from}&to=\${to}&limit=100\`,
+  { headers: auth }
+);
+const { plays } = await playsRes.json();
+const totalKcal = plays.reduce((s, p) => s + p.kcal, 0);
+const kcalBySong = plays.reduce((acc, p) => {
+  acc[p.song_title] = (acc[p.song_title] || 0) + p.kcal;
+  return acc;
+}, {});`;
             const snippets = [
               { key: 'agent', label: 'Agent prompt', hint: 'Paste into Claude Code, Cursor, etc. The agent will know what to build.', text: agentSnippet },
               { key: 'curl', label: 'curl', hint: 'Quick smoke test from the terminal.', text: curlSnippet },
