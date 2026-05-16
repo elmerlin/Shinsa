@@ -39,13 +39,21 @@ function normalizeMode(mode) {
   return String(mode || '').trim();
 }
 
+// piugame.com's intermediate cert isn't in the prod machine's trust
+// store. Since we're only fetching public jacket binaries (no secrets
+// in either direction), bypass verification with a permissive agent.
+const insecureAgent = new https.Agent({ rejectUnauthorized: false });
+
 function downloadToBuffer(url) {
   return new Promise((resolve, reject) => {
-    const request = https.get(url, { timeout: 15000 }, (res) => {
+    const request = https.get(url, { timeout: 15000, agent: insecureAgent }, (res) => {
       // Follow one redirect — piugame occasionally 30x's.
       if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
         res.resume();
-        downloadToBuffer(res.headers.location).then(resolve).catch(reject);
+        const next = res.headers.location.startsWith('http')
+          ? res.headers.location
+          : new URL(res.headers.location, url).href;
+        downloadToBuffer(next).then(resolve).catch(reject);
         return;
       }
       if (res.statusCode !== 200) {
