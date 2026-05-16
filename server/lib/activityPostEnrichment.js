@@ -309,11 +309,20 @@ function applyChartMetadata(db, entry) {
       : (songTitle ? `/songs?q=${encodeURIComponent(songTitle)}` : '/songs')
   );
 
+  // Prefer the songs-table jacket (Shinsa-hosted, e.g. /jackets/pump/123.jpg)
+  // over whatever existingJacketUrl might already be on the row. Existing
+  // values are often the piugame.com CDN URL which loads slowly /
+  // inconsistently from some networks — keeping it would defeat the
+  // whole point of the songs-table lookup.
+  const metadataJacketUrl = String(metadata?.jacket_url || '').trim();
+  const resolvedJacketUrl = metadataJacketUrl
+    || existingJacketUrl
+    || String(entry.background_url || '').trim();
   return {
     ...entry,
     chart_id: chartId || 0,
     chart_path: chartPath,
-    jacket_url: existingJacketUrl || String(metadata?.jacket_url || '').trim() || String(entry.background_url || '').trim(),
+    jacket_url: resolvedJacketUrl,
   };
 }
 
