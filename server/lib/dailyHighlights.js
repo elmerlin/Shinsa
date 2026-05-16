@@ -1,3 +1,5 @@
+const { applyChartMetadata } = require('./activityPostEnrichment');
+
 const replaySourcePlayStmtCache = new WeakMap();
 
 function getCachedStmt(cache, db, sql) {
@@ -132,7 +134,14 @@ function resolveReplayHighlightRow(db, row) {
 }
 
 function resolveDailyHighlightReplayRows(db, rows = []) {
-  return (Array.isArray(rows) ? rows : []).map((row) => resolveReplayHighlightRow(db, row));
+  return (Array.isArray(rows) ? rows : []).map((row) => {
+    const resolved = resolveReplayHighlightRow(db, row);
+    // applyChartMetadata fills in jacket_url + chart_id by looking up the
+    // (song_title, mode, level) tuple in the songs table. Without it the
+    // mobile highlight tile falls back to the piugame.com background_url
+    // which loads slowly / inconsistently from some networks.
+    return applyChartMetadata(db, resolved);
+  });
 }
 
 module.exports = {
