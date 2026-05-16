@@ -42,3 +42,7 @@ app-example
 # generated native folders
 /ios
 /android
+
+# Bundled jacket pack — synced from prod via scripts/sync-jackets.sh.
+/assets/jackets
+/lib/jacket-manifest.ts

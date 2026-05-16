@@ -20,6 +20,7 @@ import { useTheme } from '@/contexts/theme-context';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { piugameApi } from '@/lib/api';
+import { resolveJacketSource } from '@/lib/jacket';
 import { TRAINING_HELP, type HelpKey } from '@/lib/training-help';
 import type { ThemeColors } from '@/constants/theme';
 import type {
@@ -531,10 +532,13 @@ function LikelyPassCard({
 
         {sampleClears.length > 0 ? (
           <View style={s.clearsList}>
-            {sampleClears.map((clr, i) => (
+            {sampleClears.map((clr, i) => {
+              // Prefer the APK-bundled jacket; falls back to network URL.
+              const clrSource = resolveJacketSource((clr as { jacket_url?: string }).jacket_url || clr.background_url);
+              return (
               <View key={`${clr.song_title}-${i}`} style={s.clearRow}>
-                {clr.background_url ? (
-                  <Image source={{ uri: clr.background_url }} style={s.clearJacket} contentFit="cover" cachePolicy="memory-disk" />
+                {clrSource ? (
+                  <Image source={clrSource as never} style={s.clearJacket} contentFit="cover" cachePolicy="memory-disk" />
                 ) : (
                   <View style={[s.clearJacket, { backgroundColor: theme.surfaceMuted }]} />
                 )}
@@ -542,7 +546,8 @@ function LikelyPassCard({
                 <Text style={s.clearScore}>{fmtNum(clr.score)}</Text>
                 <GradeChip grade={clr.grade} score={clr.score} size="sm" />
               </View>
-            ))}
+              );
+            })}
           </View>
         ) : null}
       </View>

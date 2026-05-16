@@ -12,6 +12,7 @@ type IconName = Parameters<typeof IconSymbol>[0]['name'];
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { socialApi } from '@/lib/api';
 import { fullImageUrl } from '@/lib/images';
+import { resolveJacketSource } from '@/lib/jacket';
 import { getCountryFlag } from '@/lib/profileMeta';
 import type { ClearHighlight, ReplayHighlight, UpscoreHighlight } from '@shared/api';
 import type { ThemeColors } from '@/constants/theme';
@@ -279,7 +280,11 @@ function HighlightCard({
   onPress?: () => void;
   s: Styles;
 }) {
-  const jacketUrl = jacket ? fullImageUrl(jacket) : undefined;
+  // Prefer the APK-bundled jacket over a network fetch. resolveJacketSource
+  // returns the bundled require() id when we have it, falls back to a URL
+  // otherwise. fullImageUrl is only used below for the avatar (no bundled
+  // copy of avatars — they're per-user).
+  const jacketSource = resolveJacketSource(jacket);
   const avatarUrl = typeof avatar === 'string' && avatar ? fullImageUrl(avatar) : undefined;
   const flag = getCountryFlag(nationality);
   const rankColors = RANK_GRADIENTS[rank] || RANK_GRADIENTS[5];
@@ -292,8 +297,8 @@ function HighlightCard({
       onPress={onPress}
       disabled={!onPress}
       style={({ pressed }) => [s.card, pressed && onPress ? { opacity: 0.85 } : null]}>
-      {jacketUrl ? (
-        <Image source={{ uri: jacketUrl }} style={StyleSheet.absoluteFill} contentFit="cover" />
+      {jacketSource ? (
+        <Image source={jacketSource as never} style={StyleSheet.absoluteFill} contentFit="cover" />
       ) : (
         <View style={[StyleSheet.absoluteFill, s.bgFallback]} />
       )}

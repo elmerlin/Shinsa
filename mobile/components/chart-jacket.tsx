@@ -1,6 +1,7 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Platform, StyleSheet, Text, View } from 'react-native';
+import { resolveJacketSource } from '@/lib/jacket';
 
 type ChartMode = 'Single' | 'Double' | 'CoOp' | 'UCS' | string;
 export type ChartJacketSize = 'xs' | 'sm' | 'md' | 'wide';
@@ -77,12 +78,16 @@ export function ChartJacket({
   const dim = SIZES[size];
   const colors = MODE_GRADIENTS[mode || ''] ?? MODE_GRADIENTS.CoOp;
   const label = getBadgeLabel(mode, level);
+  // Prefer the APK-bundled jacket so first paint doesn't wait on a
+  // network round trip. Falls back to a {uri} when the jacket isn't in
+  // the local pack (e.g. piugame.com URL or a song we haven't catalogued).
+  const source = resolveJacketSource(jacketUrl);
 
   return (
     <View style={{ width: dim.w, height: dim.h }}>
       <View style={[styles.frame, { width: dim.w, height: dim.h, borderRadius: dim.radius }]}>
-        {jacketUrl ? (
-          <Image source={{ uri: jacketUrl }} style={styles.image} contentFit="cover" transition={150} />
+        {source ? (
+          <Image source={source as never} style={styles.image} contentFit="cover" transition={150} />
         ) : (
           <View style={[styles.fallback, { borderRadius: dim.radius }]}>
             <Text style={[styles.fallbackText, { fontSize: dim.fontSize + 2 }]}>{fallback || '?'}</Text>
