@@ -44,7 +44,7 @@ interface Props {
   onReplay: (url: string, title: string) => void;
 }
 
-export function ExploreTilesPanel({ s: parentStyles, theme, onScore, onReplay: _onReplay }: Props) {
+export function ExploreTilesPanel({ s: parentStyles, theme, onScore, onReplay }: Props) {
   const s = useThemedStyles(makeStyles);
   const [scope, setScope] = useState<ExploreFeedScope>('following');
 
@@ -74,6 +74,14 @@ export function ExploreTilesPanel({ s: parentStyles, theme, onScore, onReplay: _
     });
   }, [exploreQuery.data]);
 
+  const buildReplayTitle = (play: ExplorePlay): string => {
+    const song = String(play.song_title || 'Song').trim();
+    const mode = String(play.mode || '').trim();
+    const level = play.level ? ` ${play.level}` : '';
+    const modePart = mode ? ` · ${mode}${level}` : '';
+    return `${song}${modePart}`;
+  };
+
   const handlePress = (play: ExplorePlay) => {
     onScore({
       song_title: play.song_title,
@@ -95,7 +103,14 @@ export function ExploreTilesPanel({ s: parentStyles, theme, onScore, onReplay: _
       username: play.username,
       avatar: play.avatar,
       played_at_utc: play.played_at_utc,
+      replay_embed_url: play.replay_embed_url,
     });
+  };
+
+  const handleReplay = (play: ExplorePlay) => {
+    const url = String(play.replay_embed_url || '').trim();
+    if (!url) return;
+    onReplay(url, buildReplayTitle(play));
   };
 
   return (
@@ -148,6 +163,7 @@ export function ExploreTilesPanel({ s: parentStyles, theme, onScore, onReplay: _
               theme={theme}
               s={s}
               onPress={() => handlePress(play)}
+              onReplay={() => handleReplay(play)}
             />
           ))}
         </View>
@@ -164,17 +180,20 @@ function ExploreTile({
   theme,
   s,
   onPress,
+  onReplay,
 }: {
   play: ExplorePlay;
   variant: TileVariant;
   theme: ThemeColors;
   s: ReturnType<typeof useThemedStyles<ReturnType<typeof makeStyles>>>;
   onPress: () => void;
+  onReplay: () => void;
 }) {
   const jacket = play.jacket_url ? fullImageUrl(play.jacket_url) : undefined;
   const avatar = play.avatar ? fullImageUrl(String(play.avatar)) : undefined;
   const isHero = variant === 'hero';
   const modeColors = modeBadgeColors(play.mode);
+  const hasReplay = !!(play.replay_embed_url || play.replay_video_id);
 
   // CSS-grid spans: applied as inline style on web only. Native fallback
   // (no grid) just renders every tile as a square in a flex wrap.
@@ -221,13 +240,27 @@ function ExploreTile({
         </Text>
       </View>
 
-      {/* Comment count, top-right. Quiet so it doesn't compete with the
-          mode chip; appears only when the play has discussion. */}
-      {typeof play.comment_count === 'number' && play.comment_count > 0 ? (
-        <View style={s.commentBadge}>
-          <Text style={s.commentBadgeText}>💬 {play.comment_count}</Text>
-        </View>
-      ) : null}
+      {/* Top-right stack: replay beacon (when the play has a clip) sits
+          above the comment count, matching the desktop tile's hierarchy
+          — a replay is a stronger call-to-action than a comment count.
+          onPress stopPropagation isn't needed: RN's nested Pressables
+          don't bubble like the DOM. */}
+      <View style={s.topRightStack}>
+        {hasReplay ? (
+          <Pressable
+            onPress={onReplay}
+            hitSlop={6}
+            style={({ pressed }) => [s.replayBeacon, pressed && { opacity: 0.7 }]}
+            accessibilityLabel="Open replay clip">
+            <Text style={s.replayBeaconText}>▶ REPLAY</Text>
+          </Pressable>
+        ) : null}
+        {typeof play.comment_count === 'number' && play.comment_count > 0 ? (
+          <View style={s.commentBadge}>
+            <Text style={s.commentBadgeText}>💬 {play.comment_count}</Text>
+          </View>
+        ) : null}
+      </View>
 
       {/* Bottom info block: avatar + username, song title, score + grade.
           Hero tier renders all three lines comfortably; standard/feature
@@ -350,10 +383,16 @@ const makeStyles = (t: ThemeColors) => ({
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
   },
-  commentBadge: {
+  // Wrapper for the top-right badge stack: replay beacon on top, comment
+  // count under it. alignItems flex-end so both chips hug the right edge.
+  topRightStack: {
     position: 'absolute' as const,
     top: 6,
     right: 6,
+    alignItems: 'flex-end' as const,
+    gap: 4,
+  },
+  commentBadge: {
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 5,
@@ -362,6 +401,29 @@ const makeStyles = (t: ThemeColors) => ({
     backgroundColor: 'rgba(0,0,0,0.55)',
   },
   commentBadgeText: { fontSize: 9, fontWeight: '800' as const, color: 'rgba(255,255,255,0.85)' },
+  // Sky-tinted pill mirroring the desktop's pulsing "Replay" beacon. No
+  // animation on RN to keep the bundle small; the tint + chevron already
+  // read as an active control.
+  replayBeacon: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 5,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(125, 211, 252, 0.5)',
+    backgroundColor: 'rgba(2, 132, 199, 0.55)',
+  },
+  replayBeaconText: {
+    fontSize: 9,
+    fontWeight: '900' as const,
+    color: '#ecfeff',
+    letterSpacing: 0.6,
+    textShadowColor: 'rgba(0,0,0,0.7)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
 
   // Bottom-of-tile content stack: user row → song → score row.
   tileContent: {
