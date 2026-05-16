@@ -36,6 +36,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/contexts/theme-context';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
+import { useWebPullToRefresh } from '@/hooks/use-web-pull-to-refresh';
 import { authApi, liveApi, messagesApi, piugameApi, socialApi, songsApi, weeklyChallengesApi } from '@/lib/api';
 import { getMessagesInboxQueryKey } from '@/lib/messagesQueries';
 import { getGradeDisplayLabel, getGradeTier, TIER_COLORS } from '@/lib/grades';
@@ -452,6 +453,9 @@ export function ProfileBody({ lookup }: { lookup: string }) {
       setIsRefreshing(false);
     }
   }, [queryClient, profileId]);
+  // RN-Web's RefreshControl doesn't bind a touch gesture, so wire a JS
+  // pull listener that calls the same handler.
+  const webScrollRef = useWebPullToRefresh(onRefresh);
 
   const countsQuery = useQuery({
     queryKey: ['social-counts', profileId],
@@ -1155,7 +1159,13 @@ export function ProfileBody({ lookup }: { lookup: string }) {
         </View>
       ) : null}
 
+      {isRefreshing ? (
+        <View style={s.refreshSpinnerBar} pointerEvents="none">
+          <ActivityIndicator size="small" color={theme.spinner} />
+        </View>
+      ) : null}
       <ScrollView
+        ref={webScrollRef as never}
         contentContainerStyle={s.scroll}
         refreshControl={
           <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={theme.spinner} />
@@ -3211,6 +3221,17 @@ function ShoesTab({ data, isLoading, error, isSelf, onWear, wearingShoeId, onAct
 const makeStyles = (t: ThemeColors) => ({
   container: { flex: 1, backgroundColor: t.bg },
   scroll: { padding: 14, paddingBottom: 80, gap: 12 },
+  // Web pull-to-refresh feedback — RN's RefreshControl spinner is
+  // decorative on web, so this floats over the scroller while refetch is
+  // in flight.
+  refreshSpinnerBar: {
+    position: 'absolute' as const,
+    top: 6,
+    left: 0,
+    right: 0,
+    alignItems: 'center' as const,
+    zIndex: 10,
+  },
   center: { flex: 1, padding: 32, alignItems: 'center' as const, justifyContent: 'center' as const },
   errorText: { color: t.danger, fontSize: 14 },
 

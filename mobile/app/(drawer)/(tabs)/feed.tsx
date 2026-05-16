@@ -29,6 +29,7 @@ import { useTheme } from '@/contexts/theme-context';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { socialApi, songsApi, weeklyChallengesApi } from '@/lib/api';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
+import { useWebPullToRefresh } from '@/hooks/use-web-pull-to-refresh';
 import { parseAchievementBadgePost } from '@/lib/achievementBadgePost';
 import { findChartIdInLibrary } from '@/lib/chartLookup';
 import { fullImageUrl } from '@/lib/images';
@@ -828,6 +829,10 @@ export default function FeedScreen() {
     feedListRef.current?.scrollToOffset({ offset: 0, animated: false });
   }, [feedFilter]);
 
+  // Web pull-to-refresh — RefreshControl below is the native path. Shares
+  // the FlatList ref so we don't need a wrapper view.
+  useWebPullToRefresh(refetch, { externalRef: feedListRef as never });
+
   // Right-rail data: this-week WC top 3. Cheap and shared with the WC
   // route's cache so no extra round-trip when the user navigates there.
   const wcQuery = useQuery({
@@ -928,6 +933,14 @@ export default function FeedScreen() {
         </View>
       ) : null}
 
+      {/* Web-only: pull-to-refresh spinner. RefreshControl below is the
+          native path; on web it's decorative, so this is the indicator
+          users actually see when their pull triggers a refetch. */}
+      {isRefetching && !isFetchingNextPage && !isLoading ? (
+        <View style={s.refreshSpinnerBar} pointerEvents="none">
+          <ActivityIndicator size="small" color={theme.spinner} />
+        </View>
+      ) : null}
       {isLoading ? (
         <View style={[s.center, isDesktop && { flex: 1 }]}><ActivityIndicator color={theme.spinner} /></View>
       ) : isError ? (
@@ -1134,6 +1147,17 @@ function buildFeedSharePayload(item: FeedItem | null): EmbedSendPayload {
 
 const makeStyles = (t: ThemeColors) => ({
   container: { flex: 1, backgroundColor: t.bg, alignItems: 'stretch' as const },
+  // Visible feedback for the web pull-to-refresh hook — RN's RefreshControl
+  // spinner is decorative on web, so this floats above the feed while a
+  // refetch is in flight.
+  refreshSpinnerBar: {
+    position: 'absolute' as const,
+    top: 6,
+    left: 0,
+    right: 0,
+    alignItems: 'center' as const,
+    zIndex: 10,
+  },
   // `justifyContent: 'space-between'` so on desktop the heading sits
   // left and the TopBar utility cluster pushes flush to the right edge.
   // On mobile TopBar fills the row to 100% width so this is a no-op.

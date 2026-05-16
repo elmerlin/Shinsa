@@ -15,6 +15,7 @@ import { QuickNavButton } from '@/components/quick-nav-button';
 import { useTheme } from '@/contexts/theme-context';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
+import { useWebPullToRefresh } from '@/hooks/use-web-pull-to-refresh';
 import { dashboardApi, socialApi } from '@/lib/api';
 import { fullImageUrl } from '@/lib/images';
 import type { ThemeColors } from '@/constants/theme';
@@ -199,6 +200,10 @@ export default function HomeScreen() {
 
   const isRefetching = dashQuery.isRefetching || activityQuery.isRefetching;
 
+  // Web build needs a JS-driven pull gesture — see hook for why. Native
+  // keeps using the standard RefreshControl spinner below.
+  const webScrollRef = useWebPullToRefresh(refetchAll);
+
   const quickNav = (
     <View style={s.quickNav}>
       <QuickNavButton label="Live" href="/live" icon="video.fill"
@@ -279,7 +284,13 @@ export default function HomeScreen() {
   if (isDesktop) {
     return (
       <View style={s.container}>
+        {isRefetching ? (
+          <View style={s.refreshSpinnerBar} pointerEvents="none">
+            <ActivityIndicator size="small" color={theme.spinner} />
+          </View>
+        ) : null}
         <ScrollView
+          ref={webScrollRef as never}
           contentContainerStyle={s.deskScroll}
           refreshControl={
             <RefreshControl refreshing={isRefetching} onRefresh={refetchAll} tintColor={theme.spinner} />
@@ -311,7 +322,13 @@ export default function HomeScreen() {
 
   return (
     <View style={s.container}>
+      {isRefetching ? (
+        <View style={[s.refreshSpinnerBar, { top: insets.top + 4 }]} pointerEvents="none">
+          <ActivityIndicator size="small" color={theme.spinner} />
+        </View>
+      ) : null}
       <ScrollView
+        ref={webScrollRef as never}
         contentContainerStyle={[s.scroll, { paddingTop: insets.top + 16 }]}
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetchAll} tintColor={theme.spinner} />}>
         <TopBar />
@@ -338,6 +355,17 @@ export default function HomeScreen() {
 const makeStyles = (t: ThemeColors) => ({
   container: { flex: 1, backgroundColor: t.bg },
   scroll: { paddingHorizontal: 16, paddingBottom: 80, gap: 24 },
+  // Floating top-of-screen spinner shown while React Query is refetching —
+  // RN's RefreshControl spinner only renders on native, so this is what
+  // web users actually see when their pull-to-refresh gesture lands.
+  refreshSpinnerBar: {
+    position: 'absolute' as const,
+    top: 6,
+    left: 0,
+    right: 0,
+    alignItems: 'center' as const,
+    zIndex: 10,
+  },
   quickNav: { flexDirection: 'row' as const, gap: 8, paddingTop: 4 },
   center: { padding: 32, alignItems: 'center' as const },
   errorBox: {
