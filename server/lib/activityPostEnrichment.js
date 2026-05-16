@@ -1,4 +1,5 @@
 const { getUserTitleProgress } = require('./titleProgress');
+const { normalizeMode } = require('./chartKeys');
 
 const recentPlayJudgmentsBeforeStmtCache = new WeakMap();
 const recentPlayJudgmentsAnyStmtCache = new WeakMap();
@@ -157,10 +158,12 @@ function getSessionReplayLinkStmt(db) {
 }
 
 function getSongChartByExactStmt(db) {
+  // TRIM(title) on both sides handles songs that landed in the catalog
+  // with trailing whitespace (e.g. "Black Swan " from a quirky scrape).
   return getCachedStmt(songChartByExactStmtCache, db, `
     SELECT id AS chart_id, jacket_url
     FROM songs
-    WHERE title = ?
+    WHERE TRIM(title) = ?
       AND mode = ?
       AND level = ?
     ORDER BY id ASC
@@ -270,7 +273,10 @@ function buildTitleVariants(rawTitle) {
 
 function findSongChartMetadata(db, { songTitle, mode, level, jacketUrl = '' }) {
   const normalizedTitle = String(songTitle || '').trim();
-  const normalizedMode = String(mode || '').trim();
+  // Songs catalog stores `CoOp` but upstream sources sometimes hand us
+  // `Co-op` / `co op` / `coop`. normalizeMode() canonicalises both ways
+  // so the lookup matches even when the input mode style differs.
+  const normalizedMode = normalizeMode(mode) || String(mode || '').trim();
   const numericLevel = toInt(level);
   if (!normalizedMode || numericLevel <= 0) return null;
 
