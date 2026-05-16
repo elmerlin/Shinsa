@@ -27,6 +27,11 @@ export function YouTubeEmbed({ url, autoplay = false }: Props) {
           mediaPlaybackRequiresUserAction={false}
           javaScriptEnabled
           domStorageEnabled
+          // Default Android WebView UA includes "wv" which YouTube treats
+          // as an embedded shell and sometimes refuses ("Video unavailable
+          // / error 153"). Pin a standard Chrome UA so the player loads
+          // identically to a browser tab.
+          userAgent="Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Mobile Safari/537.36"
         />
       </View>
     </View>

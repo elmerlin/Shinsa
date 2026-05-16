@@ -81,7 +81,12 @@ export function buildYouTubeEmbedSrc(value: unknown, options: { autoplay?: boole
   params.set('rel', '0');
 
   const query = params.toString();
-  return `https://www.youtube-nocookie.com/embed/${parsed.videoId}${query ? `?${query}` : ''}`;
+  // youtube.com/embed has wider compatibility than youtube-nocookie.com —
+  // a chunk of uploads (especially live/replay clips) refuse to embed on
+  // nocookie and surface the "Video unavailable / error 153" UI in the
+  // mobile WebView. youtube.com still strips most tracking when embedded
+  // and is what the desktop iframe uses anyway.
+  return `https://www.youtube.com/embed/${parsed.videoId}${query ? `?${query}` : ''}`;
 }
 
 export function buildYouTubeThumbnailUrl(value: unknown): string {

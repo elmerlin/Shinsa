@@ -102,7 +102,7 @@ export function DailyHighlights() {
               <HighlightCard
                 key={`replay-${play.id ?? i}`}
                 rank={i + 1}
-                jacket={play.background_url}
+                jacket={play.jacket_url || play.background_url}
                 mode={play.mode}
                 level={play.level}
                 username={play.username}
@@ -136,7 +136,7 @@ export function DailyHighlights() {
                 <HighlightCard
                   key={`upscore-${u.upscore_id ?? i}-${i}`}
                   rank={i + 1}
-                  jacket={u.background_url || u.jacket_url}
+                  jacket={u.jacket_url || u.background_url}
                   mode={u.mode}
                   level={u.level}
                   username={u.username}
@@ -168,7 +168,7 @@ export function DailyHighlights() {
               <HighlightCard
                 key={`clear-${c.clear_id ?? i}-${i}`}
                 rank={i + 1}
-                jacket={c.background_url || c.jacket_url}
+                jacket={c.jacket_url || c.background_url}
                 mode={c.mode}
                 level={c.level}
                 username={c.username}

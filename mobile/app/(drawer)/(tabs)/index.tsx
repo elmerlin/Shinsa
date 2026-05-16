@@ -143,11 +143,55 @@ function TournamentRow({ t, onPress, s }: { t: Tournament; onPress: () => void; 
   );
 }
 
+/**
+ * Map server-issued web URL (`/post/123`, `/upscore/221`, …) to a mobile
+ * router target. Routes that don't exist on mobile (upscore/clear single
+ * pages) return null so the caller can fall back to the user's profile.
+ */
+function mapActivityLink(link: string | undefined): { pathname: string; params: Record<string, string> } | null {
+  if (!link) return null;
+  const segments = link.replace(/^\//, '').split('/');
+  const [head, id] = segments;
+  if (!id) return null;
+  switch (head) {
+    case 'post':
+      return { pathname: '/post/[id]', params: { id } };
+    case 'profile':
+      return { pathname: '/profile/[id]', params: { id } };
+    case 'song':
+      return { pathname: '/song/[id]', params: { id } };
+    case 'tournament':
+      return { pathname: '/tournament/[id]', params: { id } };
+    case 'live':
+      return { pathname: '/live/[id]', params: { id } };
+    default:
+      return null;
+  }
+}
+
 function ActivityRow({ a, s }: { a: ActivityItem; s: Styles }) {
+  const router = useRouter();
   const icon = ACTIVITY_ICONS[a.type] || '•';
   const avatar = typeof a.avatar === 'string' ? fullImageUrl(a.avatar) : undefined;
+  const target = mapActivityLink(a.link);
+  // upscore/clear don't have a single-item mobile screen yet — drop the
+  // user on their profile so the activity is at least reachable.
+  const fallbackUsername = a.username && a.username !== '__shinsa__' ? a.username : null;
+  const hasNavTarget = !!target || !!fallbackUsername;
+
+  const handlePress = () => {
+    if (target) {
+      router.push(target as never);
+    } else if (fallbackUsername) {
+      router.push({ pathname: '/profile/[id]', params: { id: `@${fallbackUsername}` } });
+    }
+  };
+
   return (
-    <View style={s.activityRow}>
+    <Pressable
+      onPress={hasNavTarget ? handlePress : undefined}
+      disabled={!hasNavTarget}
+      style={({ pressed }) => [s.activityRow, pressed && hasNavTarget && { opacity: 0.7 }]}>
       <Text style={s.activityIcon}>{icon}</Text>
       {avatar ? (
         <Image source={{ uri: avatar }} style={s.activityAvatar} contentFit="cover" />
@@ -158,7 +202,7 @@ function ActivityRow({ a, s }: { a: ActivityItem; s: Styles }) {
       )}
       <Text style={s.activityMessage} numberOfLines={1}>{a.message}</Text>
       <Text style={s.activityTime}>{timeAgo(a.created_at)}</Text>
-    </View>
+    </Pressable>
   );
 }
 

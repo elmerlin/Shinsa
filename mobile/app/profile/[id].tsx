@@ -34,6 +34,7 @@ import { ScoreCardSheet, type ScoreCardData } from '@/components/score-card-shee
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/contexts/theme-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { useWebPullToRefresh } from '@/hooks/use-web-pull-to-refresh';
@@ -415,6 +416,12 @@ export function ProfileBody({ lookup }: { lookup: string }) {
   const s = useThemedStyles(makeStyles);
   const queryClient = useQueryClient();
   const { isDesktop } = useBreakpoint();
+  // Profile sits at root in the Stack, so React Navigation renders a
+  // header above the content. On Android with edgeToEdgeEnabled the
+  // header *should* compensate for the status bar inset but in practice
+  // doesn't on every device — pad the scroll's top so content never sits
+  // under the system tray either way.
+  const insets = useSafeAreaInsets();
 
   // Lookup can be a user_id or `@username`. Strip leading @ and treat as
   // username when it looks like one, else as id.
@@ -1167,7 +1174,7 @@ export function ProfileBody({ lookup }: { lookup: string }) {
       ) : null}
       <ScrollView
         ref={setWebScrollRef as never}
-        contentContainerStyle={s.scroll}
+        contentContainerStyle={[s.scroll, { paddingTop: insets.top + 14 }]}
         refreshControl={
           <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={theme.spinner} />
         }>
