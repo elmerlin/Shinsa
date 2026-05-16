@@ -120,7 +120,7 @@ async function main() {
         WHEN LOWER(urp.mode) IN ('single','singles','s') THEN 'Single'
         WHEN LOWER(urp.mode) IN ('double','doubles','d') THEN 'Double'
         ELSE urp.mode
-      END AS mode,
+      END AS norm_mode,
       urp.level AS level,
       urp.background_url AS background_url,
       COUNT(*) AS play_count
@@ -139,7 +139,7 @@ async function main() {
       AND urp.song_title != ''
       AND urp.mode != ''
       AND urp.level > 0
-    GROUP BY TRIM(urp.song_title), mode, urp.level, urp.background_url
+    GROUP BY TRIM(urp.song_title), norm_mode, urp.level, urp.background_url
     ORDER BY play_count DESC
   `).all();
 
@@ -177,17 +177,17 @@ async function main() {
         stats.skippedNoJacket++;
         continue;
       }
-      const existing = dupCheckStmt.get(row.title, row.mode, row.level);
+      const existing = dupCheckStmt.get(row.title, row.norm_mode, row.level);
       if (existing) {
         stats.skippedExisting++;
         continue;
       }
       if (APPLY) {
         try {
-          insertStmt.run(row.title, localPath, row.mode, row.level);
+          insertStmt.run(row.title, localPath, row.norm_mode, row.level);
           stats.inserted++;
         } catch (err) {
-          stats.imageFailures.push({ row: `${row.title} ${row.mode} ${row.level}`, error: err.message });
+          stats.imageFailures.push({ row: `${row.title} ${row.norm_mode} ${row.level}`, error: err.message });
         }
       } else {
         stats.inserted++; // planned insert
