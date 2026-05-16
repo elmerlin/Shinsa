@@ -1,4 +1,5 @@
 import { Image } from 'expo-image';
+import { useState } from 'react';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { ChartJacket } from '@/components/chart-jacket';
 import { GradeChip } from '@/components/grade-chip';
@@ -12,6 +13,8 @@ interface Props {
   share: SessionShare;
 }
 
+const COLLAPSED_ROW_COUNT = 5;
+
 function fmtNum(value: number | undefined | null): string {
   const n = Number(value);
   return Number.isFinite(n) ? n.toLocaleString() : '—';
@@ -23,11 +26,14 @@ function joinSchedule(parts: Array<string | undefined>): string {
 
 /**
  * Compact card for SHINSA_SHARE_V1 posts. Renders the cover stats (songs,
- * clears, average score / RP) plus up to four jackets from the shared run.
- * Mirrors the web's SessionShareCard but trimmed to fit a feed post on phone.
+ * clears, average score / RP) plus all the jackets from the shared run
+ * (collapsed to the top 5 by default with an expand toggle). Per-row
+ * YouTube replay embeds open via the browser/system handler — mirrors the
+ * desktop pumpshinsa.com card so feed-embedded shares aren't truncated.
  */
 export function SessionShareCard({ share }: Props) {
   const s = useThemedStyles(makeStyles);
+  const [expanded, setExpanded] = useState(false);
   const isHop = share.shareType === 'hour_of_power';
   const eyebrow = isHop ? 'HOUR OF POWER' : 'SESSION SHARE';
   const title = String(share.sessionTitle || (isHop ? 'Hour of Power' : 'Session share')).trim();
@@ -36,7 +42,11 @@ export function SessionShareCard({ share }: Props) {
     share.sessionTimeRange,
     share.sessionDurationLabel,
   ]);
-  const rows: SessionShareRow[] = Array.isArray(share.rows) ? share.rows.slice(0, 4) : [];
+  const allRows: SessionShareRow[] = Array.isArray(share.rows) ? share.rows : [];
+  const hasMore = allRows.length > COLLAPSED_ROW_COUNT;
+  const rows: SessionShareRow[] = expanded || !hasMore
+    ? allRows
+    : allRows.slice(0, COLLAPSED_ROW_COUNT);
   const filterBits = [
     share.filterMode && share.filterMode !== 'Both' ? share.filterMode : '',
     share.minGradeLabel ? `≥ ${share.minGradeLabel}` : '',
@@ -50,6 +60,13 @@ export function SessionShareCard({ share }: Props) {
     if (!url) return;
     const supported = await Linking.canOpenURL(url);
     if (supported) Linking.openURL(url);
+  };
+
+  const handleReplayOpen = async (url: string) => {
+    const trimmed = String(url || '').trim();
+    if (!trimmed) return;
+    const supported = await Linking.canOpenURL(trimmed);
+    if (supported) Linking.openURL(trimmed);
   };
 
   return (
@@ -90,6 +107,7 @@ export function SessionShareCard({ share }: Props) {
         <View style={s.songsRow}>
           {rows.map((row, i) => {
             const jacketUrl = row.jacket_url ? fullImageUrl(row.jacket_url) : undefined;
+            const replayUrl = String(row.replay_embed_url || '').trim();
             return (
               <View key={i} style={s.songCell}>
                 <ChartJacket
@@ -107,10 +125,30 @@ export function SessionShareCard({ share }: Props) {
                     {row.grade ? <GradeChip grade={row.grade} score={row.score ?? 0} size="xs" /> : null}
                   </View>
                 </View>
+                {replayUrl ? (
+                  <Pressable
+                    onPress={() => handleReplayOpen(replayUrl)}
+                    hitSlop={8}
+                    style={({ pressed }) => [s.replayBtn, pressed && { opacity: 0.7 }]}
+                    accessibilityLabel="Open replay clip">
+                    <IconSymbol name="play.rectangle.fill" size={12} color="#7dd3fc" />
+                  </Pressable>
+                ) : null}
               </View>
             );
           })}
         </View>
+      ) : null}
+
+      {hasMore ? (
+        <Pressable
+          onPress={() => setExpanded((prev) => !prev)}
+          style={({ pressed }) => [s.expandBtn, pressed && { opacity: 0.7 }]}
+          accessibilityLabel={expanded ? 'Show top 5 songs' : `Show all ${allRows.length} songs`}>
+          <Text style={s.expandBtnText}>
+            {expanded ? `Show top ${COLLAPSED_ROW_COUNT}` : `Show all ${allRows.length}`}
+          </Text>
+        </Pressable>
       ) : null}
     </View>
   );
@@ -181,4 +219,31 @@ const makeStyles = (t: ThemeColors) => ({
   songTitle: { fontSize: 12, fontWeight: '700' as const, color: t.text },
   songMetaRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6 },
   songScore: { fontSize: 11, fontWeight: '800' as const, color: t.textMuted, fontVariant: ['tabular-nums' as const] },
+
+  // Replay clip launcher — small sky-tinted square aligned with web's
+  // per-row YouTube badge. Opens the row's replay_embed_url externally.
+  replayBtn: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    backgroundColor: 'rgba(125, 211, 252, 0.14)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(125, 211, 252, 0.4)',
+  },
+
+  // "Show all N / Show top 5" toggle. Appears under the song list when
+  // the share carries more rows than fit in the collapsed view.
+  expandBtn: {
+    alignSelf: 'center' as const,
+    marginTop: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: t.border,
+    backgroundColor: t.surfaceMuted,
+  },
+  expandBtnText: { fontSize: 11, fontWeight: '800' as const, color: t.textMuted, letterSpacing: 0.4 },
 });

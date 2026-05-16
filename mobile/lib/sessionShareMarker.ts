@@ -16,6 +16,10 @@ export interface SessionShareRow {
   rating_points?: number;
   jacket_url?: string;
   played_at_utc?: string;
+  replay_embed_url?: string;
+  replay_video_id?: string;
+  replay_start_seconds?: number;
+  replay_end_seconds?: number;
 }
 
 export interface SessionShare {
