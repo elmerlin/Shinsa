@@ -26,6 +26,7 @@ import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { songsApi } from '@/lib/api';
 import { getGradeDisplayLabel, getGradeTier } from '@/lib/grades';
 import { fullImageUrl } from '@/lib/images';
+import { resolveJacketSource } from '@/lib/jacket';
 import { useTierSettings } from '@/lib/tier-settings';
 import type { ThemeColors } from '@/constants/theme';
 import type { TierChart, TierGroup } from '@shared/api';
@@ -448,7 +449,9 @@ function TierChartRail({
   s: Styles;
 }) {
   const { theme } = useTheme();
-  const jacket = chart.jacket_url ? fullImageUrl(chart.jacket_url) : undefined;
+  // resolveJacketSource picks the APK-bundled jacket when available so
+  // the rail paints instantly; falls back to the network URL otherwise.
+  const jacketSource = resolveJacketSource(chart.jacket_url);
   const passed = chart.is_pass && (chart.best_score || 0) > 0;
   const gradeLabel = passed ? getGradeDisplayLabel(chart.best_grade, chart.best_score) : '';
 
@@ -474,8 +477,8 @@ function TierChartRail({
           <IconSymbol name="xmark" size={16} color={theme.textMuted} />
         </Pressable>
       </View>
-      {jacket ? (
-        <Image source={{ uri: jacket }} style={s.railJacket} contentFit="cover" />
+      {jacketSource ? (
+        <Image source={jacketSource as never} style={s.railJacket} contentFit="cover" />
       ) : (
         <View style={[s.railJacket, { backgroundColor: theme.surfaceMuted }]} />
       )}
@@ -649,7 +652,10 @@ function ChartCell({
   onHover?: (hovered: boolean) => void;
 }) {
   if (width <= 0) return null;
-  const jacket = chart.jacket_url ? fullImageUrl(chart.jacket_url) : undefined;
+  // Bundled jacket from the APK when available — the tier grid renders
+  // hundreds of cells so any per-cell network round trip stalls first
+  // paint hard.
+  const jacketSource = resolveJacketSource(chart.jacket_url);
   const passed = chart.is_pass && (chart.best_score || 0) > 0;
 
   // Unplayed charts dim further so they read as "not done yet" without
@@ -667,13 +673,13 @@ function ChartCell({
       onHoverIn={onHover ? () => onHover(true) : undefined}
       onHoverOut={onHover ? () => onHover(false) : undefined}
       style={({ pressed }) => [s.cell, { width, height }, pressed && { opacity: 0.75 }]}>
-      {jacket ? (
+      {jacketSource ? (
         <Image
-          source={{ uri: jacket }}
+          source={jacketSource as never}
           style={{ width: '100%', height: '100%', opacity }}
           contentFit="cover"
           cachePolicy="memory-disk"
-          recyclingKey={jacket}
+          recyclingKey={chart.jacket_url || String(chart.id ?? '')}
           transition={0}
         />
       ) : (
@@ -918,7 +924,7 @@ function TierChartRailV2({
     );
   }
 
-  const jacket = chart.jacket_url ? fullImageUrl(chart.jacket_url) : undefined;
+  const jacketSource = resolveJacketSource(chart.jacket_url);
   const passed = chart.is_pass && (chart.best_score || 0) > 0;
   const gradeLabel = passed ? getGradeDisplayLabel(chart.best_grade, chart.best_score) : '';
   const userBest = detail.data?.user_summary?.best;
@@ -945,8 +951,8 @@ function TierChartRailV2({
         ) : null}
       </View>
 
-      {jacket ? (
-        <Image source={{ uri: jacket }} style={s.railV2Jacket} contentFit="cover" />
+      {jacketSource ? (
+        <Image source={jacketSource as never} style={s.railV2Jacket} contentFit="cover" />
       ) : (
         <View style={[s.railV2Jacket, { backgroundColor: theme.surfaceMuted }]} />
       )}
