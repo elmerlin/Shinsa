@@ -17,9 +17,11 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TopBar } from '@/components/top-bar';
+import { UpdateSheet } from '@/components/update-sheet';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme, type ThemePreference } from '@/contexts/theme-context';
+import { useAutoUpdate } from '@/hooks/use-auto-update';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { useWebPush } from '@/hooks/use-web-push';
@@ -938,6 +940,78 @@ const kcalBySong = plays.reduce((acc, p) => {
   );
 }
 
+/**
+ * "Check for updates" row — manual entry point into the auto-updater.
+ * Shown only on Android (web/iOS hide since they don't have a sideloaded
+ * APK to swap). Owns its own UpdateSheet so the modal lifecycle is local.
+ */
+function AppUpdateSection({ s }: { s: Styles }) {
+  const updater = useAutoUpdate();
+  const [sheetOpen, setSheetOpen] = useState(false);
+  if (!updater.supported) return null;
+  const { stage, lastCheckedAt, error } = updater.state;
+  const latest = updater.state.availability?.latest;
+
+  const statusLine = (() => {
+    if (stage === 'checking') return 'Checking…';
+    if (stage === 'available' && latest) return `Update available — v${latest.version}`;
+    if (stage === 'up-to-date') return 'You’re on the latest version.';
+    if (stage === 'error' && error) return error;
+    if (lastCheckedAt) {
+      const ago = Date.now() - lastCheckedAt;
+      if (ago < 60_000) return 'Checked just now.';
+      const m = Math.round(ago / 60_000);
+      return `Checked ${m}m ago.`;
+    }
+    return 'Tap to check for new builds.';
+  })();
+
+  const handlePrimary = async () => {
+    if (stage === 'available') {
+      setSheetOpen(true);
+      return;
+    }
+    await updater.check();
+  };
+
+  return (
+    <View style={s.section}>
+      <Text style={s.eyebrow}>APP UPDATES</Text>
+      <View style={s.card}>
+        <Text style={s.cardTitle}>Shinsa for Android</Text>
+        <Text style={s.cardHint}>
+          You have v{updater.currentVersion.version} (build {updater.currentVersion.versionCode}).{' '}
+          New builds download and install in-app — Android still asks you to confirm.
+        </Text>
+        <Text style={[s.cardHint, stage === 'error' && { color: '#fca5a5' }]}>
+          {statusLine}
+        </Text>
+        <Pressable
+          onPress={handlePrimary}
+          disabled={stage === 'checking' || stage === 'downloading' || stage === 'installing'}
+          style={({ pressed }) => [
+            s.primaryBtn,
+            (stage === 'checking' || stage === 'downloading' || stage === 'installing') && { opacity: 0.6 },
+            pressed && { opacity: 0.85 },
+          ]}>
+          {stage === 'checking' ? (
+            <ActivityIndicator color="#000" />
+          ) : (
+            <Text style={s.primaryBtnText}>
+              {stage === 'available' ? 'See update' : 'Check for updates'}
+            </Text>
+          )}
+        </Pressable>
+      </View>
+      <UpdateSheet
+        visible={sheetOpen}
+        updater={updater}
+        onClose={() => setSheetOpen(false)}
+      />
+    </View>
+  );
+}
+
 function PushNotificationsSection({ s }: { s: Styles }) {
   const { status, enable, disable } = useWebPush();
 
@@ -1009,7 +1083,7 @@ function AppearanceSection({ s }: { s: Styles }) {
 }
 
 /** The desktop Account screen — Linear/Stripe-style settings shell. */
-type AccountSectionKey = 'appearance' | 'integrations' | 'api' | 'notifications' | 'signout';
+type AccountSectionKey = 'appearance' | 'integrations' | 'api' | 'notifications' | 'updates' | 'signout';
 
 interface AccountNavItem {
   key: AccountSectionKey;
@@ -1022,6 +1096,7 @@ const ACCOUNT_NAV: AccountNavItem[] = [
   { key: 'integrations', label: 'Integrations', hint: 'PIUGame, YouTube' },
   { key: 'api', label: 'API Access', hint: 'Personal tokens' },
   { key: 'notifications', label: 'Notifications', hint: 'Web push' },
+  { key: 'updates', label: 'App updates', hint: 'Check for new builds' },
   { key: 'signout', label: 'Sign out', hint: '' },
 ];
 
@@ -1045,6 +1120,8 @@ function AccountDesktop({ s, userId }: { s: Styles; userId: string }) {
         return <ApiTokensSection s={s} />;
       case 'notifications':
         return <PushNotificationsSection s={s} />;
+      case 'updates':
+        return <AppUpdateSection s={s} />;
       case 'signout':
         return (
           <View style={s.section}>
@@ -1129,6 +1206,7 @@ export default function AccountScreen() {
           <ApiTokensSection s={s} />
           <AppearanceSection s={s} />
           <PushNotificationsSection s={s} />
+          <AppUpdateSection s={s} />
 
           <Pressable onPress={signOut} style={({ pressed }) => [s.logoutBtn, pressed && { opacity: 0.6 }]}>
             <Text style={s.logoutText}>Log out</Text>

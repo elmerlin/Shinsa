@@ -13,9 +13,13 @@ import { WeeklyChallengesSummary } from '@/components/dashboard/weekly-challenge
 import { TopBar } from '@/components/top-bar';
 import { QuickNavButton } from '@/components/quick-nav-button';
 import { useTheme } from '@/contexts/theme-context';
+import { useAutoUpdate } from '@/hooks/use-auto-update';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { useWebPullToRefresh } from '@/hooks/use-web-pull-to-refresh';
+import { UpdateBanner } from '@/components/update-banner';
+import { UpdateSheet } from '@/components/update-sheet';
+import { useState } from 'react';
 import { dashboardApi, socialApi } from '@/lib/api';
 import { fullImageUrl } from '@/lib/images';
 import type { ThemeColors } from '@/constants/theme';
@@ -205,6 +209,13 @@ export default function HomeScreen() {
   // callback ref so we re-bind listeners whenever the ScrollView remounts.
   const setWebScrollRef = useWebPullToRefresh(refetchAll);
 
+  // Auto-update — silent check on launch; banner appears if newer APK
+  // exists. Dismissed flag is session-scoped so the user isn't nagged on
+  // every re-render after they tap X.
+  const updater = useAutoUpdate({ checkOnMount: true });
+  const [updateSheetOpen, setUpdateSheetOpen] = useState(false);
+  const [updateBannerDismissed, setUpdateBannerDismissed] = useState(false);
+
   const quickNav = (
     <View style={s.quickNav}>
       <QuickNavButton label="Live" href="/live" icon="video.fill"
@@ -301,6 +312,14 @@ export default function HomeScreen() {
             <TopBar />
           </View>
 
+          {!updateBannerDismissed ? (
+            <UpdateBanner
+              updater={updater}
+              onPress={() => setUpdateSheetOpen(true)}
+              onDismiss={() => setUpdateBannerDismissed(true)}
+            />
+          ) : null}
+
           <View style={s.deskGrid}>
             <View style={s.deskMain}>
               {quickNav}
@@ -317,6 +336,11 @@ export default function HomeScreen() {
             </View>
           </View>
         </ScrollView>
+        <UpdateSheet
+          visible={updateSheetOpen}
+          updater={updater}
+          onClose={() => setUpdateSheetOpen(false)}
+        />
       </View>
     );
   }
@@ -334,6 +358,14 @@ export default function HomeScreen() {
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetchAll} tintColor={theme.spinner} />}>
         <TopBar />
 
+        {!updateBannerDismissed ? (
+          <UpdateBanner
+            updater={updater}
+            onPress={() => setUpdateSheetOpen(true)}
+            onDismiss={() => setUpdateBannerDismissed(true)}
+          />
+        ) : null}
+
         {quickNav}
 
         {loadingAndError}
@@ -349,6 +381,11 @@ export default function HomeScreen() {
 
         {tournamentsSection}
       </ScrollView>
+      <UpdateSheet
+        visible={updateSheetOpen}
+        updater={updater}
+        onClose={() => setUpdateSheetOpen(false)}
+      />
     </View>
   );
 }
