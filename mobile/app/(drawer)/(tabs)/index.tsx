@@ -201,8 +201,9 @@ export default function HomeScreen() {
   const isRefetching = dashQuery.isRefetching || activityQuery.isRefetching;
 
   // Web build needs a JS-driven pull gesture — see hook for why. Native
-  // keeps using the standard RefreshControl spinner below.
-  const webScrollRef = useWebPullToRefresh(refetchAll);
+  // keeps using the standard RefreshControl spinner below. Returns a
+  // callback ref so we re-bind listeners whenever the ScrollView remounts.
+  const setWebScrollRef = useWebPullToRefresh(refetchAll);
 
   const quickNav = (
     <View style={s.quickNav}>
@@ -290,7 +291,7 @@ export default function HomeScreen() {
           </View>
         ) : null}
         <ScrollView
-          ref={webScrollRef as never}
+          ref={setWebScrollRef as never}
           contentContainerStyle={s.deskScroll}
           refreshControl={
             <RefreshControl refreshing={isRefetching} onRefresh={refetchAll} tintColor={theme.spinner} />
@@ -328,7 +329,7 @@ export default function HomeScreen() {
         </View>
       ) : null}
       <ScrollView
-        ref={webScrollRef as never}
+        ref={setWebScrollRef as never}
         contentContainerStyle={[s.scroll, { paddingTop: insets.top + 16 }]}
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetchAll} tintColor={theme.spinner} />}>
         <TopBar />

@@ -454,8 +454,9 @@ export function ProfileBody({ lookup }: { lookup: string }) {
     }
   }, [queryClient, profileId]);
   // RN-Web's RefreshControl doesn't bind a touch gesture, so wire a JS
-  // pull listener that calls the same handler.
-  const webScrollRef = useWebPullToRefresh(onRefresh);
+  // pull listener that calls the same handler. Callback ref re-binds on
+  // every ScrollView mount — handles route transitions reliably.
+  const setWebScrollRef = useWebPullToRefresh(onRefresh);
 
   const countsQuery = useQuery({
     queryKey: ['social-counts', profileId],
@@ -1165,7 +1166,7 @@ export function ProfileBody({ lookup }: { lookup: string }) {
         </View>
       ) : null}
       <ScrollView
-        ref={webScrollRef as never}
+        ref={setWebScrollRef as never}
         contentContainerStyle={s.scroll}
         refreshControl={
           <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={theme.spinner} />

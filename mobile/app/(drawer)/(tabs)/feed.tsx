@@ -829,9 +829,13 @@ export default function FeedScreen() {
     feedListRef.current?.scrollToOffset({ offset: 0, animated: false });
   }, [feedFilter]);
 
-  // Web pull-to-refresh — RefreshControl below is the native path. Shares
-  // the FlatList ref so we don't need a wrapper view.
-  useWebPullToRefresh(refetch, { externalRef: feedListRef as never });
+  // Web pull-to-refresh — RefreshControl below is the native path. Hook
+  // returns a callback ref that forwards into feedListRef (still needed
+  // for scrollToOffset on filter change) while also attaching the touch
+  // listeners — and crucially re-binds whenever the FlatList remounts,
+  // which a one-shot useEffect would miss (FlatList only mounts after
+  // isLoading resolves).
+  const setFeedListRef = useWebPullToRefresh(refetch, { externalRef: feedListRef as never });
 
   // Right-rail data: this-week WC top 3. Cheap and shared with the WC
   // route's cache so no extra round-trip when the user navigates there.
@@ -957,7 +961,7 @@ export default function FeedScreen() {
         // height. Mobile renders the FlatList directly.
         <FeedListHost isDesktop={isDesktop} hostStyle={s.deskFeedHost}>
         <FlatList
-          ref={feedListRef}
+          ref={setFeedListRef as never}
           style={isDesktop ? s.deskFeed : undefined}
           data={items}
           keyExtractor={(item, i) => `${item.type}:${item.id}:${i}`}
