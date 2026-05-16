@@ -1,11 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
 import { Image } from 'expo-image';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AchievementBadgePost } from '@/components/achievement-badge-post';
 import { DefaultAvatar } from '@/components/default-avatar';
 import { SystemAvatar } from '@/components/system-avatar';
 import { LiveSessionCard } from '@/components/live-session-card';
+import { ReplayModal } from '@/components/replay-modal';
 import { SessionPlanCard } from '@/components/session-plan-card';
 import { SessionShareCard } from '@/components/session-share-card';
 import { SessionSummaryCard } from '@/components/session-summary-card';
@@ -87,6 +89,11 @@ export default function PostDetailScreen() {
   const { theme } = useTheme();
   const s = useThemedStyles(makeStyles);
   const { isDesktop } = useBreakpoint();
+  // Per-row replay button in the SessionShareCard funnels into this — keeps
+  // the YouTube player inside the post screen instead of bouncing to a new
+  // window via Linking.openURL.
+  const [replayTarget, setReplayTarget] = useState<{ url: string; title: string } | null>(null);
+  const onReplay = (url: string, title: string) => setReplayTarget({ url, title });
   const goProfile = (username: string) =>
     router.push({ pathname: '/profile/[id]', params: { id: `@${username}` } });
 
@@ -149,7 +156,7 @@ export default function PostDetailScreen() {
       {liveSummary ? <LiveSessionCard summary={liveSummary} /> : null}
       {wcSummary ? <WcSummaryCard summary={wcSummary} /> : null}
       {wcPersonal ? <WcPersonalCard summary={wcPersonal} /> : null}
-      {sessionShare ? <SessionShareCard share={sessionShare} /> : null}
+      {sessionShare ? <SessionShareCard share={sessionShare} onReplay={onReplay} /> : null}
       {sessionSummary ? <SessionSummaryCard summary={sessionSummary} /> : null}
       {sessionPlan ? <SessionPlanCard plan={sessionPlan} /> : null}
 
@@ -217,6 +224,12 @@ export default function PostDetailScreen() {
             <ScrollView contentContainerStyle={s.deskRailContent}>{commentsEl}</ScrollView>
           </View>
         </View>
+        <ReplayModal
+          visible={!!replayTarget}
+          url={replayTarget?.url}
+          title={replayTarget?.title}
+          onClose={() => setReplayTarget(null)}
+        />
       </View>
     );
   }
@@ -244,6 +257,12 @@ export default function PostDetailScreen() {
           </>
         )}
       </ScrollView>
+      <ReplayModal
+        visible={!!replayTarget}
+        url={replayTarget?.url}
+        title={replayTarget?.title}
+        onClose={() => setReplayTarget(null)}
+      />
     </View>
   );
 }

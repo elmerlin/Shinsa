@@ -11,6 +11,13 @@ import type { ThemeColors } from '@/constants/theme';
 
 interface Props {
   share: SessionShare;
+  /**
+   * Per-row replay click handler. Prefer this — it lets the caller open the
+   * clip in the shared ReplayModal so the player stays in-app. When omitted
+   * the card falls back to Linking.openURL (e.g. native shells that don't
+   * mount a modal at the right scope).
+   */
+  onReplay?: (url: string, title: string) => void;
 }
 
 const COLLAPSED_ROW_COUNT = 5;
@@ -31,7 +38,7 @@ function joinSchedule(parts: Array<string | undefined>): string {
  * YouTube replay embeds open via the browser/system handler — mirrors the
  * desktop pumpshinsa.com card so feed-embedded shares aren't truncated.
  */
-export function SessionShareCard({ share }: Props) {
+export function SessionShareCard({ share, onReplay }: Props) {
   const s = useThemedStyles(makeStyles);
   const [expanded, setExpanded] = useState(false);
   const isHop = share.shareType === 'hour_of_power';
@@ -62,9 +69,21 @@ export function SessionShareCard({ share }: Props) {
     if (supported) Linking.openURL(url);
   };
 
-  const handleReplayOpen = async (url: string) => {
-    const trimmed = String(url || '').trim();
+  const buildReplayTitle = (row: SessionShareRow): string => {
+    const song = String(row.song_title || 'Replay clip').trim();
+    const mode = String(row.mode || '').trim();
+    const level = row.level ? ` ${row.level}` : '';
+    const modePart = mode ? ` · ${mode}${level}` : '';
+    return `${song}${modePart}`;
+  };
+
+  const handleReplayOpen = async (row: SessionShareRow) => {
+    const trimmed = String(row.replay_embed_url || '').trim();
     if (!trimmed) return;
+    if (onReplay) {
+      onReplay(trimmed, buildReplayTitle(row));
+      return;
+    }
     const supported = await Linking.canOpenURL(trimmed);
     if (supported) Linking.openURL(trimmed);
   };
@@ -127,7 +146,7 @@ export function SessionShareCard({ share }: Props) {
                 </View>
                 {replayUrl ? (
                   <Pressable
-                    onPress={() => handleReplayOpen(replayUrl)}
+                    onPress={() => handleReplayOpen(row)}
                     hitSlop={8}
                     style={({ pressed }) => [s.replayBtn, pressed && { opacity: 0.7 }]}
                     accessibilityLabel="Open replay clip">

@@ -307,7 +307,7 @@ function ActionFooter({
   );
 }
 
-function PostCard({ item, onPress, onPump, onComments, onShare, s }: { item: FeedItem; onPress: () => void; onPump: (i: FeedItem) => void; onComments: (i: FeedItem) => void; onShare: (i: FeedItem) => void; s: Styles }) {
+function PostCard({ item, onPress, onPump, onComments, onShare, onReplay, s }: { item: FeedItem; onPress: () => void; onPump: (i: FeedItem) => void; onComments: (i: FeedItem) => void; onShare: (i: FeedItem) => void; onReplay: (url: string, title: string) => void; s: Styles }) {
   const avatar = typeof item.avatar === 'string' ? fullImageUrl(item.avatar) : undefined;
   const images = parseImages(item.images);
   const firstImage = images[0] ? fullImageUrl(images[0]) : undefined;
@@ -356,7 +356,7 @@ function PostCard({ item, onPress, onPump, onComments, onShare, s }: { item: Fee
       {summary ? <LiveSessionCard summary={summary} /> : null}
       {wcSummary ? <WcSummaryCard summary={wcSummary} /> : null}
       {wcPersonal ? <WcPersonalCard summary={wcPersonal} /> : null}
-      {sessionShare ? <SessionShareCard share={sessionShare} /> : null}
+      {sessionShare ? <SessionShareCard share={sessionShare} onReplay={onReplay} /> : null}
       {sessionSummary ? <SessionSummaryCard summary={sessionSummary} /> : null}
       {sessionPlan ? <SessionPlanCard plan={sessionPlan} /> : null}
       {badgePost ? (
@@ -957,6 +957,7 @@ export default function FeedScreen() {
                   onPump={onPump}
                   onComments={onComments}
                   onShare={onShare}
+                  onReplay={onReplay}
                   onPress={() => router.push({ pathname: '/post/[id]', params: { id: String(item.id) } })}
                 />
               );
