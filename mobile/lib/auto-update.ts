@@ -1,5 +1,11 @@
 import * as Application from 'expo-application';
-import * as FileSystem from 'expo-file-system';
+// expo-file-system 19 moved cacheDirectory / createDownloadResumable /
+// deleteAsync / getContentUriAsync to the /legacy entrypoint — the
+// top-level export now throws a deprecation Error which was breaking
+// the update flow with "Method createDownloadResumable ... is
+// deprecated". Migrating to the new File/Directory API is a bigger
+// rewrite; the legacy import keeps the existing call sites working.
+import * as FileSystem from 'expo-file-system/legacy';
 import * as IntentLauncher from 'expo-intent-launcher';
 import { Platform } from 'react-native';
 
