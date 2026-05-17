@@ -1219,7 +1219,7 @@ function CustomizeTab({ pet, s, onOpenLeaderboard: _onOpenLeaderboard }: { pet: 
       </View>
 
       {/* Rename modal */}
-      <Modal visible={renameOpen} transparent animationType="fade" onRequestClose={() => setRenameOpen(false)}>
+      <Modal visible={renameOpen} transparent animationType="none" onRequestClose={() => setRenameOpen(false)}>
         <Pressable style={s.modalBackdrop} onPress={() => setRenameOpen(false)}>
           <Pressable onPress={(e) => e.stopPropagation?.()} style={s.modalCard}>
             <Text style={s.modalTitle}>Rename your pet</Text>

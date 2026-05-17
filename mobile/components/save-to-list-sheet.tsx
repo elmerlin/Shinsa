@@ -97,7 +97,7 @@ export function SaveToListSheet({ visible, onClose, item }: Props) {
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
+    <Modal visible={visible} animationType="none" transparent onRequestClose={handleClose}>
       <View style={s.backdrop}>
         <Pressable style={s.backdropFill} onPress={handleClose} />
         <KeyboardAvoidingView

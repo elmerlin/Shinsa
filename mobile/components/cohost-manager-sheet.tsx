@@ -116,7 +116,7 @@ export function CohostManagerSheet({
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
+    <Modal visible={visible} animationType="none" transparent onRequestClose={handleClose}>
       <View style={s.backdrop}>
         <Pressable style={s.backdropFill} onPress={handleClose} />
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={s.sheetWrap}>

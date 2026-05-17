@@ -266,7 +266,7 @@ export function TournamentSetupSheet({ visible, tournamentId, onClose, onSaved }
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+    <Modal visible={visible} animationType="none" transparent onRequestClose={onClose}>
       <View style={s.backdrop}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -412,7 +412,7 @@ export function TournamentSetupSheet({ visible, tournamentId, onClose, onSaved }
       </View>
 
       {/* Format picker — slides up on top of the setup sheet. */}
-      <Modal visible={showFormatPicker} animationType="fade" transparent onRequestClose={() => setShowFormatPicker(false)}>
+      <Modal visible={showFormatPicker} animationType="none" transparent onRequestClose={() => setShowFormatPicker(false)}>
         <Pressable style={s.pickerBackdrop} onPress={() => setShowFormatPicker(false)}>
           <Pressable style={s.pickerCard} onPress={() => undefined}>
             <Text style={s.pickerTitle}>Add a phase</Text>

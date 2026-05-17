@@ -84,7 +84,7 @@ export function PlayerAddSheet({ visible, tournamentId, existingPlayers, onClose
   });
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+    <Modal visible={visible} animationType="none" transparent onRequestClose={onClose}>
       <View style={s.backdrop}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}

@@ -96,7 +96,7 @@ export function StoryViewer({ userId, onClose }: Props) {
   const ownerAvatar = ownerUser?.avatar ? fullImageUrl(ownerUser.avatar) : undefined;
 
   return (
-    <Modal visible={open} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal visible={open} transparent animationType="none" onRequestClose={onClose}>
       <View style={s.backdrop}>
         {/* Progress dots — one per story */}
         <View style={[s.progressRow, { paddingTop: insets.top + 8 }]}>

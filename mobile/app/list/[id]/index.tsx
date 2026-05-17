@@ -391,7 +391,7 @@ export default function ListDetailScreen() {
 
       <Modal
         visible={!!targetSheet}
-        animationType="fade"
+        animationType="none"
         transparent
         onRequestClose={() => setTargetSheet(null)}>
         <Pressable style={s.sheetBackdrop} onPress={() => setTargetSheet(null)}>
@@ -419,7 +419,7 @@ export default function ListDetailScreen() {
         </Pressable>
       </Modal>
 
-      <Modal visible={!!dialog} animationType="fade" transparent onRequestClose={closeDialog}>
+      <Modal visible={!!dialog} animationType="none" transparent onRequestClose={closeDialog}>
         <Pressable style={s.sheetBackdrop} onPress={closeDialog}>
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}

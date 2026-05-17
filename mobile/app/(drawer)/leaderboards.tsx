@@ -573,7 +573,7 @@ function Over20Top100Modal({ chart, onClose }: { chart: Over20Chart | null; onCl
   const jacket = fullImageUrl(chart.jacket_url);
 
   return (
-    <Modal visible={!!chart} animationType="slide" transparent onRequestClose={onClose}>
+    <Modal visible={!!chart} animationType="none" transparent onRequestClose={onClose}>
       <View style={s.backdrop}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         <View style={[s.sheet, { paddingBottom: insets.bottom + 8 }]}>

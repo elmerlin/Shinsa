@@ -100,7 +100,7 @@ export function PlayerHistorySheet({ visible, player, players, matches, onClose 
   const initial = String(player.name || '?').charAt(0).toUpperCase();
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+    <Modal visible={visible} animationType="none" transparent onRequestClose={onClose}>
       <Pressable style={s.backdrop} onPress={onClose}>
         <Pressable style={[s.sheet, { paddingBottom: insets.bottom + 12 }]} onPress={() => undefined}>
           <View style={s.handle} />

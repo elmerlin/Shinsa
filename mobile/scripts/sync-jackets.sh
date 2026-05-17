@@ -30,6 +30,14 @@ COUNT=$(find "$DEST_DIR" -maxdepth 1 -name '*.jpg' -o -name '*.png' | wc -l | tr
 SIZE=$(du -sh "$DEST_DIR" | awk '{print $1}')
 echo "→ synced $COUNT jackets ($SIZE total)"
 
+# Source jackets are 700×393 (~80 KB each). Tier-grid cells render at
+# ~60×37 px on mobile — full-res ones decode to 1.1 MB bitmaps each,
+# putting ~220 MB on the heap when the tier grid is full and tanking
+# scroll perf. Shrink to 256-max so the on-disk pack is ~15 MB and
+# decoded bitmaps are ~140 KB.
+echo "→ shrinking bundle to thumbnail size"
+"$SCRIPT_DIR/shrink-jackets.sh" 256
+
 echo "→ regenerating $MANIFEST"
 MOBILE_DIR="$MOBILE_DIR" node - <<'NODE'
 const fs = require('fs');

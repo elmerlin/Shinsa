@@ -109,7 +109,7 @@ export function NotificationTray({ visible, onClose, userId }: Props) {
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
       <Pressable style={s.backdrop} onPress={onClose} accessibilityLabel="Close notifications">
         {/* Stop the inner card from bubbling up its press to the
             backdrop. The wrapper here intentionally swallows touch. */}

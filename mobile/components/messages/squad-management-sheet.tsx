@@ -260,7 +260,7 @@ export function SquadManagementSheet({ conversationId, visible, onClose, viewerI
   const squadTitle = squad?.conversation?.title || '';
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
       <View style={s.backdrop}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         <View style={[s.sheet, { paddingBottom: insets.bottom + 12 }]}>

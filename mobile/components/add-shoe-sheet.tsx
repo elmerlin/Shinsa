@@ -173,7 +173,7 @@ export function AddShoeSheet({ visible, hasCurrentShoe, onClose, onAdded }: Prop
   const results = catalogQuery.data?.results ?? [];
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+    <Modal visible={visible} animationType="none" transparent onRequestClose={onClose}>
       <View style={s.backdrop}>
         <Pressable style={s.backdropFill} onPress={onClose} />
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={s.sheetWrap}>

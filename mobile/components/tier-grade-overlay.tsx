@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Svg, { Defs, LinearGradient, Stop, Text as SvgText } from 'react-native-svg';
 import { getGradeDisplayLabel, getGradeTier, type GradeTier } from '@/lib/grades';
@@ -62,15 +63,27 @@ interface Props {
 /**
  * Chunky italic 3D grade letter overlaid on song jackets in the tier grid.
  *
- * Mirrors the reference Pump-Stat app: each letter is rendered as its own
- * SVG element with its own complete black outline, and the rightmost letter
- * is drawn FIRST so the leftmost ends up on top — creating the visible
- * layered-stack look where each S clearly occludes the next.
+ * Each letter is rendered as its own SVG element with its own complete
+ * black outline, and the rightmost letter is drawn FIRST so the leftmost
+ * ends up on top — that produces the layered-stack look where each S
+ * clearly occludes the next.
  *
  * The "+" glyph (when present) is also a separate stacked element pinned
  * to the upper-right corner, sharing the tier's metallic gradient.
+ *
+ * Memoized: the grid renders hundreds of these and each one is heavy.
+ * The cell itself wraps this in a View with `shouldRasterizeIOS` /
+ * `renderToHardwareTextureAndroid` so the rasterized pixels get GPU-cached
+ * and scrolling just blits the texture instead of re-painting the SVG.
  */
-export function TierGradeOverlay({ grade, score = 0, width, height, isBroken = false, overlaySize = 94 }: Props) {
+export const TierGradeOverlay = memo(function TierGradeOverlay({
+  grade,
+  score = 0,
+  width,
+  height,
+  isBroken = false,
+  overlaySize = 94,
+}: Props) {
   const label = getGradeDisplayLabel(grade, score);
   if (!label) return null;
   const tier = getGradeTier(grade, score);
@@ -219,7 +232,7 @@ export function TierGradeOverlay({ grade, score = 0, width, height, isBroken = f
       </Svg>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   wrap: {

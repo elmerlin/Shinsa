@@ -44,7 +44,7 @@ export function UpdateSheet({ visible, updater, onClose }: Props) {
   const busy = stage === 'downloading' || stage === 'installing';
 
   return (
-    <Modal visible={visible} animationType="fade" transparent onRequestClose={mandatory ? () => undefined : onClose}>
+    <Modal visible={visible} animationType="none" transparent onRequestClose={mandatory ? () => undefined : onClose}>
       <View style={s.backdrop}>
         {/* Backdrop dismisses unless mandatory — accidental tap during
             a long download shouldn't cancel; just hide the sheet. */}

@@ -59,7 +59,7 @@ export function MessageActionSheet({ target, onClose, onReact, onUnsend }: Props
   const showCopy = target.body && Platform.OS === 'web';
 
   return (
-    <Modal visible={!!target} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal visible={!!target} transparent animationType="none" onRequestClose={onClose}>
       <Pressable style={s.backdrop} onPress={onClose}>
         <Pressable
           style={[s.sheet, { paddingBottom: insets.bottom + 12 }]}

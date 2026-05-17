@@ -1,7 +1,7 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AchievementBadgePost } from '@/components/achievement-badge-post';
@@ -45,7 +45,7 @@ import type { EmbedSendPayload, FeedItem, LinkShareEmbed, PumpResponse } from '@
 
 const FEED_QUERY_KEY = ['social-feed'] as const;
 
-function timeAgo(input?: string): string {
+export function timeAgo(input?: string): string {
   if (!input) return '';
   const d = new Date(input);
   if (Number.isNaN(d.getTime())) return input;
@@ -61,7 +61,7 @@ function timeAgo(input?: string): string {
   return d.toLocaleDateString();
 }
 
-function fmtNum(n: number | undefined | null): string {
+export function fmtNum(n: number | undefined | null): string {
   if (typeof n !== 'number' || !Number.isFinite(n)) return '—';
   return n.toLocaleString();
 }
@@ -77,7 +77,7 @@ function parseImages(raw: unknown): string[] {
   }
 }
 
-function parseList<T>(raw: unknown): T[] {
+export function parseList<T>(raw: unknown): T[] {
   if (Array.isArray(raw)) return raw as T[];
   if (typeof raw === 'string') {
     try {
@@ -145,13 +145,13 @@ interface WeeklyChallengePlay {
   play_id?: number;
 }
 
-type Styles = ReturnType<typeof useThemedStyles<ReturnType<typeof makeStyles>>>;
+export type Styles = ReturnType<typeof useThemedStyles<ReturnType<typeof makeStyles>>>;
 
 /**
  * Toggles pump on a feed item with optimistic update against the
  * useInfiniteQuery cache. Server is source of truth on success.
  */
-function usePumpFeedItem() {
+export function usePumpFeedItem() {
   const queryClient = useQueryClient();
 
   const optimisticToggle = (item: FeedItem) => {
@@ -380,7 +380,7 @@ function PostCard({ item, onPress, onPump, onComments, onShare, onReplay, s }: {
   );
 }
 
-function UpscoreCard({ item, onPump, onComments, onShare, onJacket, onScore, onReplay, s }: {
+export function UpscoreCard({ item, onPump, onComments, onShare, onJacket, onScore, onReplay, s }: {
   item: FeedItem;
   onPump: (i: FeedItem) => void;
   onComments: (i: FeedItem) => void;
@@ -496,7 +496,7 @@ function UpscoreCard({ item, onPump, onComments, onShare, onJacket, onScore, onR
   );
 }
 
-function ClearCard({ item, onPump, onComments, onShare, onJacket, onScore, s }: {
+export function ClearCard({ item, onPump, onComments, onShare, onJacket, onScore, s }: {
   item: FeedItem;
   onPump: (i: FeedItem) => void;
   onComments: (i: FeedItem) => void;
@@ -744,6 +744,222 @@ function FeedListHost({
   return <View style={hostStyle}>{children}</View>;
 }
 
+/**
+ * Per-post wrapper so the navigation handler can be useCallback-stable per
+ * post id. Without this, the parent's `() => router.push(...)` would create
+ * a new closure each render, defeating any memo on PostCard.
+ */
+function PostCardWrap({
+  item,
+  s,
+  router,
+  onPump,
+  onComments,
+  onShare,
+  onReplay,
+}: {
+  item: FeedItem;
+  s: Styles;
+  router: ReturnType<typeof useRouter>;
+  onPump: (i: FeedItem) => void;
+  onComments: (i: FeedItem) => void;
+  onShare: (i: FeedItem) => void;
+  onReplay: (url: string, title: string) => void;
+}) {
+  const onPress = useCallback(() => {
+    router.push({ pathname: '/post/[id]', params: { id: String(item.id) } });
+  }, [router, item.id]);
+  return (
+    <PostCard
+      item={item}
+      s={s}
+      onPump={onPump}
+      onComments={onComments}
+      onShare={onShare}
+      onReplay={onReplay}
+      onPress={onPress}
+    />
+  );
+}
+
+/**
+ * Feed FlatList extracted as its own component so renderItem / keyExtractor
+ * / header / footer / separator can be useCallback-stable. The parent
+ * FeedScreen re-renders on most state changes (sheets opening, query data
+ * landing, etc.) — without stable callbacks the FlatList window resets and
+ * the card cells (PostCard/UpscoreCard/...) re-render even though their
+ * inputs didn't change.
+ */
+function FeedFlatList({
+  listRef,
+  isDesktop,
+  items,
+  s,
+  theme,
+  router,
+  onPump,
+  onComments,
+  onShare,
+  onJacket,
+  onScore,
+  onReplay,
+  isFetchingNextPage,
+  hasNextPage,
+  fetchNextPage,
+  isRefetching,
+  refetch,
+}: {
+  listRef: (instance: FlatList<FeedItem> | null) => void;
+  isDesktop: boolean;
+  items: FeedItem[];
+  s: Styles;
+  theme: ThemeColors;
+  router: ReturnType<typeof useRouter>;
+  onPump: (i: FeedItem) => void;
+  onComments: (i: FeedItem) => void;
+  onShare: (i: FeedItem) => void;
+  onJacket: (chartId: number, songTitle: string, mode: string, level: number) => void;
+  onScore: (data: ScoreCardData) => void;
+  onReplay: (url: string, title: string) => void;
+  isFetchingNextPage: boolean;
+  hasNextPage: boolean;
+  fetchNextPage: () => void;
+  isRefetching: boolean;
+  refetch: () => unknown;
+}) {
+  const renderItem = useCallback(
+    ({ item }: { item: FeedItem }) => {
+      if (item.type === 'post') {
+        return (
+          <PostCardWrap
+            item={item}
+            s={s}
+            router={router}
+            onPump={onPump}
+            onComments={onComments}
+            onShare={onShare}
+            onReplay={onReplay}
+          />
+        );
+      }
+      if (item.type === 'upscore') {
+        return (
+          <UpscoreCard
+            item={item}
+            s={s}
+            onPump={onPump}
+            onComments={onComments}
+            onShare={onShare}
+            onJacket={onJacket}
+            onScore={onScore}
+            onReplay={onReplay}
+          />
+        );
+      }
+      if (item.type === 'clear') {
+        return (
+          <ClearCard
+            item={item}
+            s={s}
+            onPump={onPump}
+            onComments={onComments}
+            onShare={onShare}
+            onJacket={onJacket}
+            onScore={onScore}
+          />
+        );
+      }
+      if (item.type === 'weekly_challenge') {
+        return (
+          <WeeklyChallengeCard
+            item={item}
+            s={s}
+            onPump={onPump}
+            onComments={onComments}
+            onShare={onShare}
+            onJacket={onJacket}
+            onScore={onScore}
+            onReplay={onReplay}
+          />
+        );
+      }
+      return null;
+    },
+    [s, router, onPump, onComments, onShare, onJacket, onScore, onReplay],
+  );
+
+  const keyExtractor = useCallback(
+    (item: FeedItem, i: number) => `${item.type}:${item.id}:${i}`,
+    [],
+  );
+
+  const Separator = useCallback(() => <View style={s.separator} />, [s]);
+
+  const Empty = useCallback(
+    () => <Text style={s.empty}>Your feed is empty. Follow people to see their activity here.</Text>,
+    [s],
+  );
+
+  const Footer = useCallback(() => {
+    if (items.length === 0) return null;
+    if (isFetchingNextPage) {
+      return (
+        <View style={s.loadMore}>
+          <ActivityIndicator color={theme.spinner} />
+        </View>
+      );
+    }
+    if (hasNextPage) {
+      return (
+        <Pressable
+          onPress={fetchNextPage}
+          style={({ pressed }) => [s.loadMore, pressed && { opacity: 0.6 }]}>
+          <Text style={s.loadMoreText}>Load more</Text>
+        </Pressable>
+      );
+    }
+    return <Text style={s.endText}>You&apos;re all caught up.</Text>;
+  }, [items.length, isFetchingNextPage, hasNextPage, fetchNextPage, s, theme.spinner]);
+
+  const onRefresh = useCallback(() => {
+    // Wrap so RefreshControl's `() => void | Promise<void>` signature is
+    // satisfied — the underlying refetch returns a typed QueryObserverResult.
+    refetch();
+  }, [refetch]);
+  const refreshControl = useMemo(
+    () => (
+      <RefreshControl
+        refreshing={isRefetching && !isFetchingNextPage}
+        onRefresh={onRefresh}
+        tintColor={theme.spinner}
+      />
+    ),
+    [isRefetching, isFetchingNextPage, onRefresh, theme.spinner],
+  );
+
+  return (
+    <FlatList
+      ref={listRef as never}
+      style={isDesktop ? s.deskFeed : undefined}
+      data={items}
+      keyExtractor={keyExtractor}
+      renderItem={renderItem}
+      contentContainerStyle={s.listContent}
+      ItemSeparatorComponent={Separator}
+      ListEmptyComponent={Empty}
+      ListFooterComponent={Footer}
+      refreshControl={refreshControl}
+      // Cards are heterogeneous and tall; keep the active window tight so
+      // off-screen cards (with their own queries / images) stay unmounted.
+      windowSize={5}
+      maxToRenderPerBatch={4}
+      initialNumToRender={6}
+      updateCellsBatchingPeriod={50}
+      removeClippedSubviews
+    />
+  );
+}
+
 export default function FeedScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -759,14 +975,20 @@ export default function FeedScreen() {
   // past the end (looks like an empty pane that won't scroll).
   const feedListRef = useRef<FlatList<FeedItem>>(null);
   const [commentTarget, setCommentTarget] = useState<{ type: FeedItem['type']; id: string | number } | null>(null);
-  const onComments = (item: FeedItem) => setCommentTarget({ type: item.type, id: item.id });
+  // useCallback so the heavy card components below (PostCard, UpscoreCard,
+  // ClearCard, WeeklyChallengeCard) don't get a new prop identity on every
+  // FeedScreen render. Without this, React.memo on those cards is a no-op
+  // and scrolling through a long feed re-renders the whole tree per frame.
+  const onComments = useCallback((item: FeedItem) => {
+    setCommentTarget({ type: item.type, id: item.id });
+  }, []);
   const [scoreTarget, setScoreTarget] = useState<ScoreCardData | null>(null);
   const [replayTarget, setReplayTarget] = useState<{ url: string; title: string } | null>(null);
   // Send-to-DM target — captures the feed item the user tapped the
   // paperplane on so the DM picker sheet can build a link_share payload
   // that points back at the original post / upscore / clear.
   const [shareTarget, setShareTarget] = useState<FeedItem | null>(null);
-  const onShare = (item: FeedItem) => setShareTarget(item);
+  const onShare = useCallback((item: FeedItem) => setShareTarget(item), []);
 
   // Fetch the songs library lazily (cached) so jacket-clicks for entries
   // missing `chart_id` can still resolve to a chart via title+mode+level.
@@ -776,7 +998,7 @@ export default function FeedScreen() {
     staleTime: 5 * 60_000,
   });
 
-  const onJacket = (chartId: number, songTitle: string, mode: string, level: number) => {
+  const onJacket = useCallback((chartId: number, songTitle: string, mode: string, level: number) => {
     if (chartId) {
       router.push({ pathname: '/song/[id]', params: { id: String(chartId) } });
       return;
@@ -789,9 +1011,9 @@ export default function FeedScreen() {
     // Last resort: pre-fill the songs library search with the canonical title.
     const q = toCanonicalSongTitle(songTitle) || songTitle;
     router.push({ pathname: '/songs', params: { q } });
-  };
-  const onScore = (data: ScoreCardData) => setScoreTarget(data);
-  const onReplay = (url: string, title: string) => setReplayTarget({ url, title });
+  }, [router, libraryQuery.data]);
+  const onScore = useCallback((data: ScoreCardData) => setScoreTarget(data), []);
+  const onReplay = useCallback((url: string, title: string) => setReplayTarget({ url, title }), []);
 
   const {
     data,
@@ -960,50 +1182,24 @@ export default function FeedScreen() {
         // 640-px-capped FlatList sits centered and grows to full row
         // height. Mobile renders the FlatList directly.
         <FeedListHost isDesktop={isDesktop} hostStyle={s.deskFeedHost}>
-        <FlatList
-          ref={setFeedListRef as never}
-          style={isDesktop ? s.deskFeed : undefined}
-          data={items}
-          keyExtractor={(item, i) => `${item.type}:${item.id}:${i}`}
-          renderItem={({ item }) => {
-            if (item.type === 'post') {
-              return (
-                <PostCard
-                  item={item}
-                  s={s}
-                  onPump={onPump}
-                  onComments={onComments}
-                  onShare={onShare}
-                  onReplay={onReplay}
-                  onPress={() => router.push({ pathname: '/post/[id]', params: { id: String(item.id) } })}
-                />
-              );
-            }
-            if (item.type === 'upscore') return <UpscoreCard item={item} s={s} onPump={onPump} onComments={onComments} onShare={onShare} onJacket={onJacket} onScore={onScore} onReplay={onReplay} />;
-            if (item.type === 'clear') return <ClearCard item={item} s={s} onPump={onPump} onComments={onComments} onShare={onShare} onJacket={onJacket} onScore={onScore} />;
-            if (item.type === 'weekly_challenge') return <WeeklyChallengeCard item={item} s={s} onPump={onPump} onComments={onComments} onShare={onShare} onJacket={onJacket} onScore={onScore} onReplay={onReplay} />;
-            return null;
-          }}
-          contentContainerStyle={s.listContent}
-          ItemSeparatorComponent={() => <View style={s.separator} />}
-          ListEmptyComponent={() => <Text style={s.empty}>Your feed is empty. Follow people to see their activity here.</Text>}
-          ListFooterComponent={() => {
-            if (items.length === 0) return null;
-            if (isFetchingNextPage) {
-              return <View style={s.loadMore}><ActivityIndicator color={theme.spinner} /></View>;
-            }
-            if (hasNextPage) {
-              return (
-                <Pressable
-                  onPress={() => fetchNextPage()}
-                  style={({ pressed }) => [s.loadMore, pressed && { opacity: 0.6 }]}>
-                  <Text style={s.loadMoreText}>Load more</Text>
-                </Pressable>
-              );
-            }
-            return <Text style={s.endText}>You're all caught up.</Text>;
-          }}
-          refreshControl={<RefreshControl refreshing={isRefetching && !isFetchingNextPage} onRefresh={refetch} tintColor={theme.spinner} />}
+        <FeedFlatList
+          listRef={setFeedListRef}
+          isDesktop={isDesktop}
+          items={items}
+          s={s}
+          theme={theme}
+          router={router}
+          onPump={onPump}
+          onComments={onComments}
+          onShare={onShare}
+          onJacket={onJacket}
+          onScore={onScore}
+          onReplay={onReplay}
+          isFetchingNextPage={isFetchingNextPage}
+          hasNextPage={hasNextPage}
+          fetchNextPage={fetchNextPage}
+          isRefetching={isRefetching}
+          refetch={refetch}
         />
         </FeedListHost>
       )}
@@ -1095,7 +1291,7 @@ export default function FeedScreen() {
 // Feed-item → DM payload helpers
 // ---------------------------------------------------------------------------
 
-function buildFeedShareTitle(item: FeedItem | null): string {
+export function buildFeedShareTitle(item: FeedItem | null): string {
   if (!item) return 'Share to chat';
   if (item.type === 'post') return `Share post by @${String(item.username || 'unknown')}`;
   if (item.type === 'upscore') return `Share upscore on ${String(item.song_title || '')}`.trim();
@@ -1104,7 +1300,7 @@ function buildFeedShareTitle(item: FeedItem | null): string {
   return 'Share to chat';
 }
 
-function buildFeedShareSubtitle(item: FeedItem | null): string {
+export function buildFeedShareSubtitle(item: FeedItem | null): string {
   if (!item) return '';
   const score = parseInt(String((item as Record<string, unknown>).score ?? (item as Record<string, unknown>).new_score ?? 0), 10) || 0;
   const grade = String((item as Record<string, unknown>).grade ?? (item as Record<string, unknown>).new_grade ?? '').trim();
@@ -1113,7 +1309,7 @@ function buildFeedShareSubtitle(item: FeedItem | null): string {
   return '';
 }
 
-function buildFeedSharePayload(item: FeedItem | null): EmbedSendPayload {
+export function buildFeedSharePayload(item: FeedItem | null): EmbedSendPayload {
   if (!item) return {};
   // Map feed item type → server route path the recipient can deep-link into.
   const path = (() => {
@@ -1149,7 +1345,7 @@ function buildFeedSharePayload(item: FeedItem | null): EmbedSendPayload {
   return { link_share };
 }
 
-const makeStyles = (t: ThemeColors) => ({
+export const makeStyles = (t: ThemeColors) => ({
   container: { flex: 1, backgroundColor: t.bg, alignItems: 'stretch' as const },
   // Visible feedback for the web pull-to-refresh hook — RN's RefreshControl
   // spinner is decorative on web, so this floats above the feed while a

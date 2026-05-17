@@ -152,7 +152,7 @@ export function ScoutCardSheet({ visible, player, scout, onClose }: SheetProps) 
   const hasData = !!scout?.coverage?.hasPiuData;
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+    <Modal visible={visible} animationType="none" transparent onRequestClose={onClose}>
       <Pressable style={s.sheetBackdrop} onPress={onClose}>
         <Pressable style={[s.sheet, { paddingBottom: insets.bottom + 12 }]} onPress={() => undefined}>
           <View style={s.sheetHandle} />

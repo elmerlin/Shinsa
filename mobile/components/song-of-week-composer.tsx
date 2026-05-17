@@ -174,7 +174,7 @@ export function SongOfWeekComposer({ visible, existingPick, onClose, onSaved }: 
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+    <Modal visible={visible} animationType="none" transparent onRequestClose={onClose}>
       <View style={s.backdrop}>
         <View style={s.sheet}>
           <View style={s.header}>

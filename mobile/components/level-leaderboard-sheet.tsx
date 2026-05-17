@@ -92,7 +92,7 @@ export function LevelLeaderboardSheet({
   const total = query.data?.total_users ?? 0;
 
   return (
-    <Modal visible animationType="slide" transparent onRequestClose={onClose}>
+    <Modal visible animationType="none" transparent onRequestClose={onClose}>
       <View style={s.backdrop}>
         <Pressable style={s.backdropFill} onPress={onClose} />
         <View style={[s.sheet, { paddingBottom: insets.bottom + 12 }]}>

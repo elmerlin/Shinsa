@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -211,13 +211,21 @@ export default function TiersScreen() {
   }, [tiersQuery.data, settings.showUnplayed, settings.showEmptyTiers]);
 
   const accentColor = MODE_ACCENT[mode];
-  const onChartPress = (c: TierChart) => {
+  // useCallback so the memoized TierSection / ChartCell tree doesn't get
+  // invalidated on every render of TiersScreen — without this, the whole
+  // grid would re-mount on any state change.
+  const onChartPress = useCallback((c: TierChart) => {
     if (isDesktop) {
       setRailChart(c);
     } else {
       router.push({ pathname: '/song/[id]', params: { id: String(c.chart_id) } });
     }
-  };
+  }, [isDesktop, router]);
+  // Desktop-only hover handler — kept null on mobile so TierSection skips
+  // the onHover wiring entirely.
+  const onHoverChart = useCallback((c: TierChart | null) => {
+    setHoverChart(c);
+  }, []);
 
   // Capture-as-PNG state. The ref points at the ViewShot wrapping the
   // tier grid; tapping the capture button rasterizes it via
@@ -352,7 +360,15 @@ export default function TiersScreen() {
       <ScrollView
         style={isDesktop ? s.deskScroll : { flex: 1 }}
         contentContainerStyle={[s.scroll, { paddingBottom: insets.bottom + 40 }]}
-        showsVerticalScrollIndicator={false}>
+        showsVerticalScrollIndicator={false}
+        // Android offscreen pruning. Safe no-op on iOS. The cells inside
+        // a tier section are flex children with no absolute positioning,
+        // so they clip cleanly when scrolled out of the viewport.
+        removeClippedSubviews
+        // Throttle scroll events to ~60fps. We don't actually listen to
+        // them, but RN still ships native→JS events on each frame unless
+        // explicitly throttled — setting this caps the bridge traffic.
+        scrollEventThrottle={16}>
         {(metaQuery.isLoading || tiersQuery.isLoading) && (
           <View style={s.center}>
             <ActivityIndicator color={theme.spinner} />
@@ -401,7 +417,7 @@ export default function TiersScreen() {
               displayMode={settings.displayMode}
               s={s}
               onChartPress={onChartPress}
-              onHoverChart={isDesktop ? setHoverChart : undefined}
+              onHoverChart={isDesktop ? onHoverChart : undefined}
             />
           ))}
           {captureMode && tiersForRender.length > 0 ? (
@@ -508,7 +524,7 @@ function TierChartRail({
   );
 }
 
-function TierSection({
+const TierSection = memo(function TierSection({
   tier,
   songsPerRow,
   jacketOpacity,
@@ -524,8 +540,10 @@ function TierSection({
   overlaySize: number;
   displayMode: 'grade' | 'score';
   s: Styles;
+  /** Stable parent callback. Cells pass their chart via the memoized
+   *  ChartCell shim — we no longer wrap with an inline closure here. */
   onChartPress: (c: TierChart) => void;
-  /** Desktop only — fires when the cursor enters/leaves a cell. Null on leave. */
+  /** Desktop only — fires with the chart on enter, null on leave. Stable. */
   onHoverChart?: (c: TierChart | null) => void;
 }) {
   const style = TIER_STYLES[tier.name] || TIER_FALLBACK;
@@ -535,10 +553,10 @@ function TierSection({
     : 0;
   const cellHeight = Math.round(cellWidth * 0.625); // 16:10 aspect, matches web
 
-  const handleLayout = (e: LayoutChangeEvent) => {
+  const handleLayout = useCallback((e: LayoutChangeEvent) => {
     const w = Math.floor(e.nativeEvent.layout.width);
-    if (w !== bodyWidth) setBodyWidth(w);
-  };
+    setBodyWidth((prev) => (w !== prev ? w : prev));
+  }, []);
 
   return (
     <View style={s.tierSection}>
@@ -562,8 +580,8 @@ function TierSection({
                 overlaySize={overlaySize}
                 displayMode={displayMode}
                 s={s}
-                onPress={() => onChartPress(chart)}
-                onHover={onHoverChart ? (hovered) => onHoverChart(hovered ? chart : null) : undefined}
+                onPress={onChartPress}
+                onHover={onHoverChart}
               />
             ))}
           </View>
@@ -571,7 +589,7 @@ function TierSection({
       </View>
     </View>
   );
-}
+});
 
 function formatScoreOverlay(score: number | undefined | null): string {
   const value = parseInt(String(score ?? 0), 10) || 0;
@@ -629,7 +647,21 @@ function ScoreOverlay({
   );
 }
 
-function ChartCell({
+/**
+ * Per-cell jacket renderer for the tier grid.
+ *
+ * Memoized on (chart, width, height, jacketOpacity, overlaySize, displayMode):
+ * the grid mounts hundreds of these at once, so any unmemoized re-render
+ * from a parent state change (hover, settings sheet, etc.) used to walk
+ * the whole tree and re-resolve the jacket source per cell. With memo
+ * + per-prop equality, only cells whose computed inputs actually changed
+ * re-render — typically zero on a scroll tick.
+ *
+ * Note: onPress / onHover are intentionally NOT in the deps. We use a
+ * ref-stable shim (see makePressHandler below) so parents can pass a
+ * single callback that receives the chart, without invalidating memo.
+ */
+const ChartCell = memo(function ChartCell({
   chart,
   width,
   height,
@@ -647,31 +679,41 @@ function ChartCell({
   overlaySize: number;
   displayMode: 'grade' | 'score';
   s: Styles;
-  onPress: () => void;
-  /** Desktop only. Fires with `true` on cursor enter, `false` on leave. */
-  onHover?: (hovered: boolean) => void;
+  onPress: (c: TierChart) => void;
+  /** Desktop only. Fires with the chart on cursor enter, null on leave. */
+  onHover?: (c: TierChart | null) => void;
 }) {
-  if (width <= 0) return null;
+  // Stable per-cell handlers so Pressable doesn't see a new closure every
+  // parent render. Cell identity is fixed by `chart` so a single
+  // useCallback bound to that chart suffices.
+  const handlePress = useCallback(() => onPress(chart), [onPress, chart]);
+  const handleHoverIn = useCallback(() => onHover?.(chart), [onHover, chart]);
+  const handleHoverOut = useCallback(() => onHover?.(null), [onHover, chart]);
+
   // Bundled jacket from the APK when available — the tier grid renders
   // hundreds of cells so any per-cell network round trip stalls first
-  // paint hard.
-  const jacketSource = resolveJacketSource(chart.jacket_url);
-  const passed = chart.is_pass && (chart.best_score || 0) > 0;
+  // paint hard. Memoized so we don't re-walk the manifest each render.
+  const jacketSource = useMemo(
+    () => resolveJacketSource(chart.jacket_url),
+    [chart.jacket_url],
+  );
+  const recyclingKey = chart.jacket_url || String(chart.chart_id);
 
+  if (width <= 0) return null;
+
+  const passed = chart.is_pass && (chart.best_score || 0) > 0;
   // Unplayed charts dim further so they read as "not done yet" without
   // hiding the jacket entirely.
   const unplayedDim = 0.35;
   const opacity = passed ? jacketOpacity / 100 : unplayedDim;
-  // Score-mode label uses the fake "S" tier so it picks up the gold gradient
-  // (matches the web's getGradeColor fallback for non-grade overlays).
   const scoreLabel = passed ? formatScoreOverlay(chart.best_score) : '';
   const gradeLabel = passed ? getGradeDisplayLabel(chart.best_grade, chart.best_score) : '';
 
   return (
     <Pressable
-      onPress={onPress}
-      onHoverIn={onHover ? () => onHover(true) : undefined}
-      onHoverOut={onHover ? () => onHover(false) : undefined}
+      onPress={handlePress}
+      onHoverIn={onHover ? handleHoverIn : undefined}
+      onHoverOut={onHover ? handleHoverOut : undefined}
       style={({ pressed }) => [s.cell, { width, height }, pressed && { opacity: 0.75 }]}>
       {jacketSource ? (
         <Image
@@ -679,7 +721,7 @@ function ChartCell({
           style={{ width: '100%', height: '100%', opacity }}
           contentFit="cover"
           cachePolicy="memory-disk"
-          recyclingKey={chart.jacket_url || String(chart.id ?? '')}
+          recyclingKey={recyclingKey}
           transition={0}
         />
       ) : (
@@ -705,7 +747,7 @@ function ChartCell({
       ) : null}
     </Pressable>
   );
-}
+});
 
 /* -------------------------------------------------------------------------- */
 /* Desktop-only components: top toolbar + rich chart rail.                    */

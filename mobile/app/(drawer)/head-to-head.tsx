@@ -326,7 +326,7 @@ function PlayerPickerSheet({ visible, onClose, onPick, meId }: PickerProps) {
   const loading = (debounced.length >= 2 ? searchQuery.isFetching : followingQuery.isFetching);
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+    <Modal visible={visible} animationType="none" transparent onRequestClose={onClose}>
       <View style={s.backdrop}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         <KeyboardAvoidingView

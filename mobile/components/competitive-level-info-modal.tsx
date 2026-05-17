@@ -46,7 +46,7 @@ export function CompetitiveLevelInfoModal({
   const showMetrics = typeof clearPercentage === 'number' || averageGrade;
 
   return (
-    <Modal visible animationType="fade" transparent onRequestClose={onClose}>
+    <Modal visible animationType="none" transparent onRequestClose={onClose}>
       <View style={s.backdrop}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         <View style={s.card}>

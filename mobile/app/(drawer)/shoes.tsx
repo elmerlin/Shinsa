@@ -210,7 +210,7 @@ function ShoeUsersSheet({
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+    <Modal visible={visible} animationType="none" transparent onRequestClose={onClose}>
       <View style={s.sheetBackdrop}>
         <Pressable style={s.sheetBackdropFill} onPress={onClose} />
         <View style={[s.sheet, { paddingBottom: insets.bottom + 12 }]}>

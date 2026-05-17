@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChartBadge } from '@/components/chart-badge';
@@ -29,19 +29,32 @@ function useDebounced<T>(value: T, delay = 250): T {
 
 type Styles = ReturnType<typeof useThemedStyles<ReturnType<typeof makeStyles>>>;
 
-function SongRow({ song, onChartPress, s }: {
+const MODE_ORDER_MAP: Record<string, number> = { Single: 0, Double: 1, CoOp: 2, UCS: 3 };
+
+/**
+ * Per-row renderer for the Songs FlatList.
+ *
+ * Memoized — the list can hold 1000+ rows on a synced account, and without
+ * memo every scroll-triggered re-render walked the whole tree (including
+ * the per-row chart sort). With React.memo + a stable `onChartPress` from
+ * the parent (useCallback) only rows whose `song` prop actually changes
+ * re-render — typically zero on a scroll tick.
+ */
+const SongRow = memo(function SongRow({ song, onChartPress, s }: {
   song: SongLibraryItem;
   onChartPress: (chart: Chart) => void;
   s: Styles;
 }) {
   const jacket = fullImageUrl(song.jacket_url);
-  const sortedCharts = [...(song.charts || [])].sort((a, b) => {
-    const modeOrder: Record<string, number> = { Single: 0, Double: 1, CoOp: 2, UCS: 3 };
-    const am = modeOrder[a.mode || ''] ?? 9;
-    const bm = modeOrder[b.mode || ''] ?? 9;
-    if (am !== bm) return am - bm;
-    return (a.level ?? 0) - (b.level ?? 0);
-  });
+  // Sort once per song (cheap), memoized so re-renders skip the spread+sort.
+  const sortedCharts = useMemo(() => {
+    return [...(song.charts || [])].sort((a, b) => {
+      const am = MODE_ORDER_MAP[a.mode || ''] ?? 9;
+      const bm = MODE_ORDER_MAP[b.mode || ''] ?? 9;
+      if (am !== bm) return am - bm;
+      return (a.level ?? 0) - (b.level ?? 0);
+    });
+  }, [song.charts]);
 
   return (
     <View style={s.song}>
@@ -54,21 +67,45 @@ function SongRow({ song, onChartPress, s }: {
       </View>
       <View style={s.chartsRow}>
         {sortedCharts.map((chart) => (
-          <Pressable
+          <ChartBadgeButton
             key={chart.chart_id}
-            onPress={() => onChartPress(chart)}
-            hitSlop={6}
-            style={({ pressed }) => [pressed && { opacity: 0.7 }]}>
-            <ChartBadge mode={chart.mode} level={chart.level} size="md" />
-          </Pressable>
+            chart={chart}
+            onChartPress={onChartPress}
+          />
         ))}
       </View>
     </View>
   );
-}
+});
 
-/** Compact list row used by the desktop master pane — denser than SongRow. */
-function SongListRow({
+/** Memoized chart badge button — stable `chart` identity means no
+ *  re-render when sibling rows change. */
+const ChartBadgeButton = memo(function ChartBadgeButton({
+  chart,
+  onChartPress,
+}: {
+  chart: Chart;
+  onChartPress: (chart: Chart) => void;
+}) {
+  const handlePress = useCallback(() => onChartPress(chart), [onChartPress, chart]);
+  return (
+    <Pressable
+      onPress={handlePress}
+      hitSlop={6}
+      style={pressableOpacityStyle}>
+      <ChartBadge mode={chart.mode} level={chart.level} size="md" />
+    </Pressable>
+  );
+});
+
+const pressableOpacityStyle = ({ pressed }: { pressed: boolean }) =>
+  pressed ? { opacity: 0.7 } : null;
+
+/** Compact list row used by the desktop master pane — denser than SongRow.
+ *  Memoized so the dense desktop list doesn't re-render every row on
+ *  selection change — only the previously-active and newly-active rows
+ *  flip styles. */
+const SongListRow = memo(function SongListRow({
   song,
   active,
   onPress,
@@ -110,7 +147,7 @@ function SongListRow({
       <Text style={s.deskListChartCount}>{chartCount}</Text>
     </Pressable>
   );
-}
+});
 
 /** Right pane — selected song's jacket + chart-difficulty grid + open link. */
 function SongDetailPane({
@@ -494,23 +531,12 @@ function SongsDesktop({
               </Text>
             </View>
           ) : (
-            <FlatList
-              data={filtered}
-              keyExtractor={(song) => song.song_group_key}
-              renderItem={({ item }) => (
-                <SongListRow
-                  song={item}
-                  s={s}
-                  active={item.song_group_key === selectedKey}
-                  onPress={() => setSelectedKey(item.song_group_key)}
-                />
-              )}
-              contentContainerStyle={s.deskListContent}
-              ListEmptyComponent={() => (
-                <Text style={s.empty}>
-                  {debouncedSearch ? 'No songs match your search.' : 'No songs found.'}
-                </Text>
-              )}
+            <SongsDesktopList
+              filtered={filtered}
+              selectedKey={selectedKey}
+              setSelectedKey={setSelectedKey}
+              s={s}
+              debouncedSearch={debouncedSearch}
             />
           )}
         </View>
@@ -612,35 +638,166 @@ export default function SongsScreen() {
           <Text style={s.errorText}>{error instanceof Error ? error.message : 'Failed to load songs'}</Text>
         </View>
       ) : (
-        <FlatList
-          data={filtered}
-          keyExtractor={(song) => song.song_group_key}
-          renderItem={({ item }) => (
-            <SongRow
-              song={item}
-              s={s}
-              onChartPress={(chart) =>
-                router.push({ pathname: '/song/[id]', params: { id: String(chart.chart_id) } })
-              }
-            />
-          )}
-          contentContainerStyle={{ paddingBottom: 80 }}
-          ItemSeparatorComponent={() => <View style={s.separator} />}
-          ListEmptyComponent={() => (
-            <Text style={s.empty}>{debouncedSearch ? 'No songs match your search.' : 'No songs found.'}</Text>
-          )}
-          ListHeaderComponent={() =>
-            data ? (
-              <Text style={s.totalLine}>
-                {data.total_songs} songs · {data.total_charts} charts
-              </Text>
-            ) : null
-          }
+        <SongsList
+          filtered={filtered}
+          s={s}
+          router={router}
+          data={data}
+          debouncedSearch={debouncedSearch}
         />
       )}
     </View>
   );
 }
+
+/** Extracted into its own component so renderItem/keyExtractor and the
+ *  per-chart navigation handler can be useCallback-stabilized (the parent
+ *  re-renders on every keystroke via the search box; we don't want that
+ *  to invalidate the FlatList's window or the memoized SongRow). */
+function SongsList({
+  filtered,
+  s,
+  router,
+  data,
+  debouncedSearch,
+}: {
+  filtered: SongLibraryItem[];
+  s: Styles;
+  router: ReturnType<typeof useRouter>;
+  data: { total_songs?: number; total_charts?: number } | undefined;
+  debouncedSearch: string;
+}) {
+  const onChartPress = useCallback(
+    (chart: Chart) => {
+      router.push({ pathname: '/song/[id]', params: { id: String(chart.chart_id) } });
+    },
+    [router],
+  );
+
+  const renderItem = useCallback(
+    ({ item }: { item: SongLibraryItem }) => (
+      <SongRow song={item} s={s} onChartPress={onChartPress} />
+    ),
+    [s, onChartPress],
+  );
+
+  const keyExtractor = useCallback((song: SongLibraryItem) => song.song_group_key, []);
+
+  const Separator = useCallback(() => <View style={s.separator} />, [s]);
+
+  const Empty = useCallback(
+    () => (
+      <Text style={s.empty}>
+        {debouncedSearch ? 'No songs match your search.' : 'No songs found.'}
+      </Text>
+    ),
+    [s, debouncedSearch],
+  );
+
+  const Header = useCallback(
+    () =>
+      data ? (
+        <Text style={s.totalLine}>
+          {data.total_songs} songs · {data.total_charts} charts
+        </Text>
+      ) : null,
+    [s, data],
+  );
+
+  return (
+    <FlatList
+      data={filtered}
+      keyExtractor={keyExtractor}
+      renderItem={renderItem}
+      contentContainerStyle={songsListContentStyle}
+      ItemSeparatorComponent={Separator}
+      ListEmptyComponent={Empty}
+      ListHeaderComponent={Header}
+      // Virtualization tuning. The list can hold 1000+ rows on a synced
+      // account, and rows are ~80 px tall — without these defaults RN
+      // would mount ~21 screens worth and stutter on fast flicks.
+      windowSize={5}
+      maxToRenderPerBatch={8}
+      initialNumToRender={12}
+      updateCellsBatchingPeriod={50}
+      removeClippedSubviews
+    />
+  );
+}
+
+const songsListContentStyle = { paddingBottom: 80 };
+
+/** Desktop master-list virtualized version. Renderer + key extractor are
+ *  useCallback-stable so SongListRow's memo() only re-renders the
+ *  previously-active and newly-active rows on selection change. */
+function SongsDesktopList({
+  filtered,
+  selectedKey,
+  setSelectedKey,
+  s,
+  debouncedSearch,
+}: {
+  filtered: SongLibraryItem[];
+  selectedKey: string;
+  setSelectedKey: (key: string) => void;
+  s: Styles;
+  debouncedSearch: string;
+}) {
+  // Wrap setter so each row gets a stable handler keyed by its own song.
+  // We hand the song key to the closure via a per-row Memo'd shim
+  // (SongListRowMemo) so SongListRow itself stays unconditionally memoized.
+  const renderItem = useCallback(
+    ({ item }: { item: SongLibraryItem }) => (
+      <SongListRowMemoPress
+        song={item}
+        active={item.song_group_key === selectedKey}
+        onSelect={setSelectedKey}
+        s={s}
+      />
+    ),
+    [selectedKey, setSelectedKey, s],
+  );
+  const keyExtractor = useCallback((song: SongLibraryItem) => song.song_group_key, []);
+  const Empty = useCallback(
+    () => (
+      <Text style={s.empty}>
+        {debouncedSearch ? 'No songs match your search.' : 'No songs found.'}
+      </Text>
+    ),
+    [s, debouncedSearch],
+  );
+  return (
+    <FlatList
+      data={filtered}
+      keyExtractor={keyExtractor}
+      renderItem={renderItem}
+      contentContainerStyle={s.deskListContent}
+      ListEmptyComponent={Empty}
+      windowSize={5}
+      maxToRenderPerBatch={10}
+      initialNumToRender={20}
+      removeClippedSubviews
+    />
+  );
+}
+
+/** Per-row wrapper that fixes the onPress identity per song. SongListRow
+ *  is already memoized; this just ensures the press handler doesn't get
+ *  a new arrow every parent render. */
+const SongListRowMemoPress = memo(function SongListRowMemoPress({
+  song,
+  active,
+  onSelect,
+  s,
+}: {
+  song: SongLibraryItem;
+  active: boolean;
+  onSelect: (key: string) => void;
+  s: Styles;
+}) {
+  const handlePress = useCallback(() => onSelect(song.song_group_key), [onSelect, song.song_group_key]);
+  return <SongListRow song={song} active={active} onPress={handlePress} s={s} />;
+});
 
 const makeStyles = (t: ThemeColors) => ({
   container: { flex: 1, backgroundColor: t.bg },

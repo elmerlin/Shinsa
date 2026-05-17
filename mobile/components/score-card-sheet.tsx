@@ -138,7 +138,7 @@ export function ScoreCardSheet({ visible, data, onClose, onReplay }: Props) {
 
   if (!data) {
     return (
-      <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
+      <Modal visible={visible} animationType="none" transparent onRequestClose={onClose}>
         <Pressable style={s.backdrop} onPress={onClose} />
       </Modal>
     );
@@ -242,7 +242,7 @@ export function ScoreCardSheet({ visible, data, onClose, onReplay }: Props) {
   };
 
   return (
-    <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
+    <Modal visible={visible} animationType="none" transparent onRequestClose={onClose}>
       <View style={s.backdrop}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         <ScrollView

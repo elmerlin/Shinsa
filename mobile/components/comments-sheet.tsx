@@ -136,7 +136,7 @@ export function CommentsSheet({ visible, itemType, itemId, onClose }: Props) {
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+    <Modal visible={visible} animationType="none" transparent onRequestClose={onClose}>
       <View style={s.backdrop}>
         <Pressable style={s.backdropFill} onPress={onClose} />
         <KeyboardAvoidingView

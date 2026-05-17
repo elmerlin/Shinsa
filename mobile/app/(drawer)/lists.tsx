@@ -324,7 +324,7 @@ export default function ListsScreen() {
         )}
       </ScrollView>
 
-      <Modal visible={mode.kind !== 'idle'} animationType="fade" transparent onRequestClose={closeDialog}>
+      <Modal visible={mode.kind !== 'idle'} animationType="none" transparent onRequestClose={closeDialog}>
         <Pressable style={s.dialogBackdrop} onPress={closeDialog}>
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}

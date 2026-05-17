@@ -262,7 +262,7 @@ export default function MessagesScreen() {
         <Modal
           visible={!!actionTarget}
           transparent
-          animationType="fade"
+          animationType="none"
           onRequestClose={() => setActionTarget(null)}>
           <Pressable style={s.actionBackdrop} onPress={() => setActionTarget(null)}>
             <Pressable
@@ -331,7 +331,7 @@ export default function MessagesScreen() {
       <Modal
         visible={!!actionTarget}
         transparent
-        animationType="fade"
+        animationType="none"
         onRequestClose={() => setActionTarget(null)}>
         <Pressable style={s.actionBackdrop} onPress={() => setActionTarget(null)}>
           <Pressable

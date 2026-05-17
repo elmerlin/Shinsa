@@ -2053,7 +2053,7 @@ function SkillDetailModal({ skill, onClose, s }: { skill: SkillBreakdownEntry | 
   const best = skill.best_chart;
   const worst = skill.worst_chart;
   return (
-    <Modal visible animationType="fade" transparent onRequestClose={onClose}>
+    <Modal visible animationType="none" transparent onRequestClose={onClose}>
       <View style={s.modalBackdrop}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         <View style={s.modalCard}>
@@ -2126,7 +2126,7 @@ function PetModal({ visible, pet, username, onClose, s }: {
   const energy = Number(pet.energy) || 0;
   const totalSongsFed = Number(pet.total_songs_fed) || 0;
   return (
-    <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
+    <Modal visible={visible} animationType="none" transparent onRequestClose={onClose}>
       <View style={s.modalBackdrop}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         <View style={s.modalCard}>
@@ -2179,7 +2179,7 @@ function AchievementModal({ achievement, onClose, s }: { achievement: UserAchiev
   const threshold = Number(next?.threshold) || 0;
   const progress = threshold > 0 ? Math.min(1, current / threshold) : 1;
   return (
-    <Modal visible animationType="fade" transparent onRequestClose={onClose}>
+    <Modal visible animationType="none" transparent onRequestClose={onClose}>
       <View style={s.modalBackdrop}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         <View style={s.modalCard}>

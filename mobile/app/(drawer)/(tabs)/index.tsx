@@ -145,8 +145,9 @@ function TournamentRow({ t, onPress, s }: { t: Tournament; onPress: () => void; 
 
 /**
  * Map server-issued web URL (`/post/123`, `/upscore/221`, …) to a mobile
- * router target. Routes that don't exist on mobile (upscore/clear single
- * pages) return null so the caller can fall back to the user's profile.
+ * router target. Returns null for activity types that still don't have a
+ * mobile single-item screen (duels), in which case the caller falls back
+ * to the user's profile so the row is at least reachable.
  */
 function mapActivityLink(link: string | undefined): { pathname: string; params: Record<string, string> } | null {
   if (!link) return null;
@@ -164,6 +165,10 @@ function mapActivityLink(link: string | undefined): { pathname: string; params: 
       return { pathname: '/tournament/[id]', params: { id } };
     case 'live':
       return { pathname: '/live/[id]', params: { id } };
+    case 'upscore':
+      return { pathname: '/upscore/[id]', params: { id } };
+    case 'clear':
+      return { pathname: '/clear/[id]', params: { id } };
     default:
       return null;
   }
@@ -174,8 +179,9 @@ function ActivityRow({ a, s }: { a: ActivityItem; s: Styles }) {
   const icon = ACTIVITY_ICONS[a.type] || '•';
   const avatar = typeof a.avatar === 'string' ? fullImageUrl(a.avatar) : undefined;
   const target = mapActivityLink(a.link);
-  // upscore/clear don't have a single-item mobile screen yet — drop the
-  // user on their profile so the activity is at least reachable.
+  // Duels still don't have a single-item mobile screen, so the username
+  // fallback covers those — drop the user on the owner's profile so the
+  // activity is at least reachable.
   const fallbackUsername = a.username && a.username !== '__shinsa__' ? a.username : null;
   const hasNavTarget = !!target || !!fallbackUsername;
 

@@ -96,7 +96,7 @@ export function ScoreCommentsSheet({ playId, visible, onClose, contextLine }: Pr
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
       <View style={s.backdrop}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         <KeyboardAvoidingView

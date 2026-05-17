@@ -105,7 +105,7 @@ export function MatchDetailSheet({ visible, match, players, totalGauntletMatches
 
   if (!match) {
     return (
-      <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <Modal visible={visible} animationType="none" transparent onRequestClose={onClose}>
         <View style={s.backdrop}>
           <View style={[s.sheet, { paddingBottom: insets.bottom + 12 }]}>
             <Text style={s.bodyMuted}>No match selected.</Text>
@@ -124,7 +124,7 @@ export function MatchDetailSheet({ visible, match, players, totalGauntletMatches
   const headline = matchHeadline(match, totalGauntletMatches);
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+    <Modal visible={visible} animationType="none" transparent onRequestClose={onClose}>
       <Pressable style={s.backdrop} onPress={onClose}>
         <Pressable style={[s.sheet, { paddingBottom: insets.bottom + 12 }]} onPress={() => undefined}>
           <View style={s.handle} />

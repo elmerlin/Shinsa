@@ -23,14 +23,14 @@ export function ReplayModal({ visible, url, title, onClose }: Props) {
   const s = useThemedStyles(makeStyles);
   if (!url) {
     return (
-      <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
+      <Modal visible={visible} animationType="none" transparent onRequestClose={onClose}>
         <Pressable style={s.backdrop} onPress={onClose} />
       </Modal>
     );
   }
 
   return (
-    <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
+    <Modal visible={visible} animationType="none" transparent onRequestClose={onClose}>
       <View style={s.backdrop}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         <View style={[s.sheet, { marginTop: insets.top + 12, marginBottom: insets.bottom + 12 }]}>
