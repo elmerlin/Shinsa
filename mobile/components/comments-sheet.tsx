@@ -4,9 +4,8 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
+  Dimensions,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -18,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DefaultAvatar } from '@/components/default-avatar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useTheme } from '@/contexts/theme-context';
+import { useKeyboardHeight } from '@/hooks/use-keyboard-height';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { socialApi } from '@/lib/api';
 import { fullImageUrl } from '@/lib/images';
@@ -100,6 +100,13 @@ export function CommentsSheet({ visible, itemType, itemId, onClose }: Props) {
   const s = useThemedStyles(makeStyles);
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState('');
+  // Manual keyboard offset: KeyboardAvoidingView doesn't reliably push
+  // the composer above the keyboard inside a <Modal> on Android (Samsung
+  // IME with the number suggestion rail is the usual culprit). The hook
+  // returns the full input-area height including any suggestion rail.
+  const kbHeight = useKeyboardHeight();
+  const screenH = Dimensions.get('window').height;
+  const sheetMaxHeight = Math.min(screenH * 0.85, screenH - kbHeight - insets.top - 24);
   const goProfile = (username: string) => {
     onClose();
     router.push({ pathname: '/profile/[id]', params: { id: `@${username}` } });
@@ -139,10 +146,12 @@ export function CommentsSheet({ visible, itemType, itemId, onClose }: Props) {
     <Modal visible={visible} animationType="none" transparent onRequestClose={onClose}>
       <View style={s.backdrop}>
         <Pressable style={s.backdropFill} onPress={onClose} />
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={s.sheetWrap}>
-          <View style={[s.sheet, { paddingBottom: insets.bottom + 8 }]}>
+        <View style={[s.sheetWrap, { paddingBottom: kbHeight }]}>
+          <View
+            style={[
+              s.sheet,
+              { maxHeight: sheetMaxHeight, paddingBottom: kbHeight > 0 ? 8 : insets.bottom + 8 },
+            ]}>
             <View style={s.handle} />
             <View style={s.titleRow}>
               <Text style={s.title}>Comments</Text>
@@ -197,7 +206,7 @@ export function CommentsSheet({ visible, itemType, itemId, onClose }: Props) {
               </Text>
             ) : null}
           </View>
-        </KeyboardAvoidingView>
+        </View>
       </View>
     </Modal>
   );

@@ -590,6 +590,7 @@ function WeeklyChallengeCard({ item, onPump, onComments, onShare, onJacket, onSc
   onReplay: (url: string, title: string) => void;
   s: Styles;
 }) {
+  const router = useRouter();
   const { theme } = useTheme();
   const [showAll, setShowAll] = useState(false);
   const username = String(item.username || 'anonymous');
@@ -598,6 +599,16 @@ function WeeklyChallengeCard({ item, onPump, onComments, onShare, onJacket, onSc
   const totalPts = Number(itemRec.total_rating_points);
   const weekKey = String(itemRec.week_key || '');
   const plays = parseList<WeeklyChallengePlay>(itemRec.plays_json);
+  // Tap the "weekly challenge!" label / week pill to jump to the
+  // weekly-challenges screen, deep-linked to this post's week when
+  // available so the leaderboard matches what's in the post.
+  const goWeeklyChallenges = () => {
+    if (weekKey) {
+      router.push({ pathname: '/weekly-challenges', params: { weekKey } });
+    } else {
+      router.push('/weekly-challenges');
+    }
+  };
   const visible = showAll ? plays : plays.slice(0, 5);
   const hasMore = plays.length > 5;
 
@@ -625,13 +636,19 @@ function WeeklyChallengeCard({ item, onPump, onComments, onShare, onJacket, onSc
         time={timeAgo(item.created_at)}
         s={s}
         rightChildren={
-          <>
+          <Pressable
+            onPress={goWeeklyChallenges}
+            hitSlop={6}
+            style={({ pressed }) => [
+              { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
+              pressed && { opacity: 0.7 },
+            ]}>
             <Text style={s.wcVerb}>weekly challenge!</Text>
             {weekKey ? <Text style={s.wcWeekPill}>{weekKey}</Text> : null}
             {Number.isFinite(totalPts) && totalPts > 0 ? (
               <Text style={s.wcTotalPill}>{fmtNum(totalPts)} pts</Text>
             ) : null}
-          </>
+          </Pressable>
         }
       />
 

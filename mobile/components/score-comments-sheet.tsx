@@ -10,9 +10,8 @@ import { Image } from 'expo-image';
 import { useState } from 'react';
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
+  Dimensions,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -25,6 +24,7 @@ import { DefaultAvatar } from '@/components/default-avatar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/contexts/theme-context';
+import { useKeyboardHeight } from '@/hooks/use-keyboard-height';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { socialApi } from '@/lib/api';
 import { fullImageUrl } from '@/lib/images';
@@ -64,6 +64,12 @@ export function ScoreCommentsSheet({ playId, visible, onClose, contextLine }: Pr
   const queryClient = useQueryClient();
   const playIdStr = playId != null ? String(playId) : '';
   const [draft, setDraft] = useState('');
+  // Manual keyboard offset — see comments-sheet.tsx for why we don't use
+  // KeyboardAvoidingView here (unreliable inside Modal on Android, esp.
+  // with Samsung's IME suggestion rail above the number row).
+  const kbHeight = useKeyboardHeight();
+  const screenH = Dimensions.get('window').height;
+  const sheetMaxHeight = Math.min(screenH * 0.88, screenH - kbHeight - insets.top - 24);
 
   const query = useQuery({
     queryKey: PLAY_COMMENTS_QUERY_KEY(playIdStr),
@@ -99,10 +105,12 @@ export function ScoreCommentsSheet({ playId, visible, onClose, contextLine }: Pr
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
       <View style={s.backdrop}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={s.sheetWrap}>
-          <View style={[s.sheet, { paddingBottom: insets.bottom + 8 }]}>
+        <View style={[s.sheetWrap, { paddingBottom: kbHeight }]}>
+          <View
+            style={[
+              s.sheet,
+              { maxHeight: sheetMaxHeight, paddingBottom: kbHeight > 0 ? 8 : insets.bottom + 8 },
+            ]}>
             <View style={s.handle} />
             <View style={s.header}>
               <View style={{ flex: 1, minWidth: 0 }}>
@@ -182,7 +190,7 @@ export function ScoreCommentsSheet({ playId, visible, onClose, contextLine }: Pr
               </View>
             ) : null}
           </View>
-        </KeyboardAvoidingView>
+        </View>
       </View>
     </Modal>
   );

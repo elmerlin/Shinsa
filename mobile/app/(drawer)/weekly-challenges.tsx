@@ -105,11 +105,19 @@ export default function WeeklyChallengesScreen() {
   // Optional `division=coop` query param sent by the dashboard tile so a
   // tap on the Co-op summary lands directly on that division. Validated to
   // the two known values before being applied to local state.
-  const params = useLocalSearchParams<{ division?: string }>();
+  // Optional `weekKey=YYYY-WNN` deep-link sent by WeeklyChallengeCard in
+  // the feed so the screen opens on the same week as the post the user
+  // tapped; falls back to 'current' otherwise.
+  const params = useLocalSearchParams<{ division?: string; weekKey?: string }>();
   const initialDivision: WeeklyChallengeDivision =
     String(params.division || '').trim().toLowerCase() === 'coop' ? 'coop' : 'main';
+  const initialWeekKey = (() => {
+    const raw = String(params.weekKey || '').trim();
+    // Server keys look like 2026-W20; loose match to keep typos out of state.
+    return /^\d{4}-W\d{1,2}$/i.test(raw) ? raw : 'current';
+  })();
 
-  const [weekKey, setWeekKey] = useState<string>('current');
+  const [weekKey, setWeekKey] = useState<string>(initialWeekKey);
   const [pickerOpen, setPickerOpen] = useState(false);
   const { isDesktop } = useBreakpoint();
   const [division, setDivision] = useState<WeeklyChallengeDivision>(initialDivision);
