@@ -1868,6 +1868,10 @@ router.get('/feed/explore', requireAuth, (req, res) => {
 
   const whereClause = conditions.join(' AND ');
 
+  // TRIM(title) + mode normalization mirror what activityPostEnrichment
+  // does — without them, songs catalogued with trailing whitespace (e.g.
+  // 'Black Swan ') or upstream mode='Co-op' (vs catalog's 'CoOp') miss
+  // the JOIN and the tile falls back to the piugame.com background URL.
   const rows = db.prepare(`
     SELECT rp.id, rp.user_id, rp.song_title, rp.mode, rp.level, rp.score, rp.grade,
            rp.plate, rp.perfect, rp.great, rp.good, rp.bad, rp.miss, rp.max_combo,
@@ -1879,7 +1883,15 @@ router.get('/feed/explore', requireAuth, (req, res) => {
            (SELECT COUNT(*) FROM play_comments pc WHERE pc.play_id = rp.id) as comment_count
     FROM user_recently_played rp
     JOIN users u ON rp.user_id = u.id
-    LEFT JOIN songs s ON s.title = rp.song_title AND s.mode = rp.mode AND s.level = rp.level
+    LEFT JOIN songs s
+      ON TRIM(s.title) = TRIM(rp.song_title)
+      AND s.mode = (CASE
+        WHEN LOWER(REPLACE(REPLACE(rp.mode,'-',''),' ','')) IN ('coop','cooperative') THEN 'CoOp'
+        WHEN LOWER(rp.mode) IN ('single','singles','s') THEN 'Single'
+        WHEN LOWER(rp.mode) IN ('double','doubles','d') THEN 'Double'
+        ELSE rp.mode
+      END)
+      AND s.level = rp.level
     WHERE ${whereClause}
     ORDER BY rp.played_at_utc DESC, rp.id DESC
     LIMIT ?

@@ -7,6 +7,7 @@ import { PlateBadge } from '@/components/plate-badge';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { socialApi } from '@/lib/api';
 import { fullImageUrl } from '@/lib/images';
+import { resolveJacketSource } from '@/lib/jacket';
 import type { ScoreCardData } from '@/components/score-card-sheet';
 import type { ThemeColors } from '@/constants/theme';
 import type { ExploreFeedScope, ExplorePlay } from '@shared/api';
@@ -189,7 +190,10 @@ function ExploreTile({
   onPress: () => void;
   onReplay: () => void;
 }) {
-  const jacket = play.jacket_url ? fullImageUrl(play.jacket_url) : undefined;
+  // Prefer the APK-bundled jacket; fall back to background_url so tiles
+  // never render blank when the server's songs-table JOIN missed
+  // (catalog gap, mode mismatch, etc.).
+  const jacketSource = resolveJacketSource(play.jacket_url || play.background_url);
   const avatar = play.avatar ? fullImageUrl(String(play.avatar)) : undefined;
   const isHero = variant === 'hero';
   const modeColors = modeBadgeColors(play.mode);
@@ -221,8 +225,8 @@ function ExploreTile({
         gridSpan as never,
         pressed && { opacity: 0.85 },
       ]}>
-      {jacket ? (
-        <Image source={{ uri: jacket }} style={s.tileJacket} contentFit="cover" />
+      {jacketSource ? (
+        <Image source={jacketSource as never} style={s.tileJacket} contentFit="cover" />
       ) : (
         <View style={[s.tileJacket, { backgroundColor: theme.surfaceMuted }]} />
       )}
