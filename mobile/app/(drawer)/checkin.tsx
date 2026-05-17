@@ -1,8 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Image } from 'expo-image';
 import * as Linking from 'expo-linking';
 import * as Location from 'expo-location';
-import { useCallback, useMemo, useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -13,13 +13,12 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { DefaultAvatar } from '@/components/default-avatar';
+import { MachineCabinet } from '@/components/checkin/machine-cabinet';
 import { useCheckinProximity } from '@/hooks/use-checkin-proximity';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { useTheme } from '@/contexts/theme-context';
 import { checkinsApi } from '@/lib/api';
 import { getCheckinClientSessionId } from '@/lib/checkin-session';
-import { fullImageUrl } from '@/lib/images';
 import type { ThemeColors } from '@/constants/theme';
 import type {
   ActiveCheckin,
@@ -79,6 +78,16 @@ export default function CheckinScreen() {
   const { theme } = useTheme();
   const s = useThemedStyles(makeStyles);
   const queryClient = useQueryClient();
+  const router = useRouter();
+  // QR / deep-link params: a URL like
+  //   shinsa://checkin?venue=london-pump-dojo&machine=1
+  //   https://new.pumpshinsa.com/checkin?venue=...&machine=...
+  // arrives here. We resolve the machine after the venues query lands,
+  // then auto-open the confirm modal. Modal is the same one used for
+  // taps — gives the user a chance to back out if the QR was wrong.
+  const params = useLocalSearchParams<{ venue?: string; machine?: string }>();
+  const qrVenueSlug = String(params.venue || '').trim();
+  const qrMachineHint = String(params.machine || '').trim();
   const [tab, setTab] = useState<Tab>('live');
   // Pending machine ID is set when the user taps a machine but hasn't
   // confirmed the swap. We resolve it back to the full machine object in
@@ -164,6 +173,39 @@ export default function CheckinScreen() {
     () => activeVenue?.machines.find((m) => m.id === pendingMachineId) ?? null,
     [activeVenue?.machines, pendingMachineId],
   );
+
+  // ── QR / deep-link auto-checkin ──────────────────────────────────────
+  // Run once per param set after venues + status load. Match by
+  // position then by name substring (same fallback the desktop uses).
+  // If the user is already checked in to that exact machine, do
+  // nothing; otherwise pre-fill the confirm modal so the user can
+  // approve or cancel.
+  const qrHandledRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!qrVenueSlug || !qrMachineHint) return;
+    if (!venuesQuery.data || !statusQuery.data) return;
+    const key = `${qrVenueSlug}|${qrMachineHint}`;
+    if (qrHandledRef.current === key) return;
+    const venue = venuesQuery.data.find((v) => v.slug === qrVenueSlug);
+    if (!venue) return;
+    const hint = qrMachineHint.toLowerCase();
+    const machine = venue.machines.find((m) => {
+      if (String(m.position ?? '') === qrMachineHint) return true;
+      return m.name.toLowerCase().includes(hint);
+    });
+    if (!machine) return;
+    qrHandledRef.current = key;
+    // Strip the params so a hot-reload / back-nav doesn't re-trigger.
+    router.setParams({ venue: undefined, machine: undefined });
+    // Already on that machine → silently surface the Live tab so the
+    // user lands on their own session. Otherwise pre-open the modal.
+    if (statusQuery.data.checked_in && statusQuery.data.checkin?.machine_id === machine.id) {
+      setTab('live');
+      return;
+    }
+    setTab('live');
+    setPendingMachineId(machine.id);
+  }, [qrVenueSlug, qrMachineHint, venuesQuery.data, statusQuery.data, router]);
 
   return (
     <View style={[s.container, { paddingTop: insets.top }]}>
@@ -348,47 +390,13 @@ function LiveTab({
             <Pressable
               key={m.id}
               onPress={() => onPickMachine(m)}
-              style={({ pressed }) => [
-                s.machineCell,
-                mine && s.machineCellMine,
-                pressed && { opacity: 0.8 },
-              ]}>
-              <View style={s.machineHeaderRow}>
-                <Text style={s.machineName} numberOfLines={1}>{m.name}</Text>
-                {players.length > 0 ? (
-                  <View style={s.playerDot} />
-                ) : null}
-              </View>
-              <View style={s.avatarRow}>
-                {players.slice(0, 4).map((p, i) => (
-                  <PlayerAvatar key={p.user_id + ':' + i} player={p} />
-                ))}
-                {players.length > 4 ? (
-                  <Text style={s.playerOverflow}>+{players.length - 4}</Text>
-                ) : null}
-                {players.length === 0 ? (
-                  <Text style={s.idleLabel}>Idle</Text>
-                ) : null}
-              </View>
-              {mine ? <Text style={s.youHereTag}>YOU&apos;RE HERE</Text> : null}
+              style={({ pressed }) => [s.cabSlot, pressed && { opacity: 0.85 }]}>
+              <MachineCabinet name={m.name} players={players} mine={mine} />
             </Pressable>
           );
         })}
       </View>
     </ScrollView>
-  );
-}
-
-function PlayerAvatar({ player }: { player: ActiveCheckin }) {
-  const s = useThemedStyles(makeStyles);
-  const url = player.avatar ? fullImageUrl(String(player.avatar)) : undefined;
-  if (url) {
-    return <Image source={{ uri: url }} style={s.avatarImg} contentFit="cover" />;
-  }
-  return (
-    <View style={s.avatarImg}>
-      <DefaultAvatar size={26} />
-    </View>
   );
 }
 
@@ -702,47 +710,23 @@ const makeStyles = (t: ThemeColors) => ({
   venueName: { fontSize: 16, fontWeight: '900' as const, color: t.text, letterSpacing: 0.3 },
   venueSub: { fontSize: 12, color: t.textMuted, marginLeft: 16 },
 
+  // On mobile the grid is two columns of cabinets; on the desktop web
+  // layout we'd otherwise let them stretch to half the content area
+  // (700+ px each), so the row caps its overall width and the cabinets
+  // cap their individual width too. They end up around 160 px on phones,
+  // 180 px on the desktop layout — close to a real cabinet's silhouette.
   machineGrid: {
     flexDirection: 'row' as const,
     flexWrap: 'wrap' as const,
-    gap: 8,
+    gap: 10,
+    maxWidth: 420,
+    alignSelf: 'flex-start' as const,
   },
-  machineCell: {
+  cabSlot: {
     flexBasis: '48%' as const,
-    flexGrow: 1,
-    minHeight: 96,
-    padding: 10,
-    borderRadius: 10,
-    backgroundColor: t.card,
-    borderWidth: 1,
-    borderColor: t.border,
-    gap: 8,
-  },
-  machineCellMine: { borderColor: '#6ee7b7', backgroundColor: 'rgba(16, 185, 129, 0.08)' },
-  machineHeaderRow: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    justifyContent: 'space-between' as const,
-    gap: 6,
-  },
-  machineName: { flex: 1, fontSize: 13, fontWeight: '800' as const, color: t.text },
-  playerDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#6ee7b7' },
-  avatarRow: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    gap: 4,
-  },
-  avatarImg: {
-    width: 26, height: 26, borderRadius: 13,
-    backgroundColor: t.surfaceMuted,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: t.border,
-    overflow: 'hidden' as const,
-  },
-  playerOverflow: { fontSize: 10, color: t.textMuted, fontWeight: '700' as const, marginLeft: 2 },
-  idleLabel: { fontSize: 10, color: t.textDim, fontStyle: 'italic' as const },
-  youHereTag: {
-    fontSize: 9, fontWeight: '900' as const, color: '#6ee7b7', letterSpacing: 0.8,
+    flexGrow: 0,
+    maxWidth: 200,
+    minWidth: 130,
   },
 
   // Access tab
