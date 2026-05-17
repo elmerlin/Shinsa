@@ -1,5 +1,6 @@
 export * from './client';
 export * from './auth';
+export * from './checkins';
 export * from './dashboard';
 export * from './notices';
 export * from './songs';

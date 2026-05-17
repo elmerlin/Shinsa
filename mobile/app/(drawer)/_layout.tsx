@@ -32,6 +32,7 @@ const PRIMARY_NAV: NavItem[] = [
 ];
 
 const SECONDARY_NAV: NavItem[] = [
+  { label: 'Check In', path: '/checkin' },
   { label: 'Tournaments', path: '/tournaments' },
   { label: 'Live', path: '/live' },
   { label: 'Weekly Challenges', path: '/weekly-challenges' },
@@ -166,6 +167,7 @@ export default function DrawerLayout() {
         sceneStyle: { backgroundColor: theme.bg },
       }}>
       <Drawer.Screen name="(tabs)" options={{ drawerItemStyle: { display: 'none' } }} />
+      <Drawer.Screen name="checkin" options={{ drawerItemStyle: { display: 'none' } }} />
       <Drawer.Screen name="tournaments" options={{ drawerItemStyle: { display: 'none' } }} />
       <Drawer.Screen name="posts" options={{ drawerItemStyle: { display: 'none' } }} />
       <Drawer.Screen name="live" options={{ drawerItemStyle: { display: 'none' } }} />

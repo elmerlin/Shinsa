@@ -2,7 +2,7 @@
   "expo": {
     "name": "Shinsa",
     "slug": "shinsa",
-    "version": "1.0.4",
+    "version": "1.0.5",
     "orientation": "portrait",
     "icon": "./assets/brand/app-icon.png",
     "scheme": "shinsa",
@@ -14,9 +14,11 @@
     },
     "android": {
       "package": "com.shinsa.app",
-      "versionCode": 5,
+      "versionCode": 6,
       "permissions": [
-        "REQUEST_INSTALL_PACKAGES"
+        "REQUEST_INSTALL_PACKAGES",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
       ],
       "adaptiveIcon": {
         "backgroundColor": "#050505",
@@ -44,7 +46,13 @@
         }
       ],
       "expo-secure-store",
-      "./plugins/with-install-apk-queries"
+      "./plugins/with-install-apk-queries",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Shinsa uses your location to confirm you're at the dojo so check-ins stay accurate and auto-close when you leave."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

@@ -1,6 +1,7 @@
 import {
   ApiClient,
   createAuthApi,
+  createCheckinsApi,
   createDashboardApi,
   createExternalApi,
   createLiveApi,
@@ -24,6 +25,7 @@ export const apiClient = new ApiClient({
 });
 
 export const authApi = createAuthApi(apiClient);
+export const checkinsApi = createCheckinsApi(apiClient);
 export const dashboardApi = createDashboardApi(apiClient);
 export const songsApi = createSongsApi(apiClient);
 export const tournamentsApi = createTournamentsApi(apiClient);
