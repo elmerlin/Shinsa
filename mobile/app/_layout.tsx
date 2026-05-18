@@ -3,7 +3,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, Platform, View } from 'react-native';
 import 'react-native-reanimated';
 
 import { AuthProvider, useAuth } from '@/contexts/auth-context';
@@ -29,6 +29,36 @@ function AuthGate() {
       router.replace('/');
     }
   }, [user, loading, segments, router]);
+
+  // Bridge: when the push-sw.js notificationclick handler can't open a
+  // fresh window (i.e. a Shinsa tab is already focused — typical for the
+  // installed PWA), it postMessage's us the destination URL and we
+  // router.push it here. Without this, tapping a notification just
+  // focuses the existing tab and leaves you on whatever page you were
+  // already viewing.
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    if (typeof navigator === 'undefined' || !navigator.serviceWorker) return;
+    const onMessage = (event: MessageEvent) => {
+      const data = event.data;
+      if (!data || data.type !== 'SHINSA_NAVIGATE' || typeof data.url !== 'string') return;
+      const target = data.url.trim();
+      if (!target) return;
+      // The URL the server sends is app-relative ("/post/123"). Strip a
+      // leading origin if it slipped in so router.push gets the right
+      // shape — Expo Router on web wants a path, not a full URL.
+      let path = target;
+      try {
+        if (/^https?:/i.test(target)) {
+          const u = new URL(target);
+          path = u.pathname + u.search + u.hash;
+        }
+      } catch { /* fall through with raw target */ }
+      router.push(path as never);
+    };
+    navigator.serviceWorker.addEventListener('message', onMessage);
+    return () => navigator.serviceWorker.removeEventListener('message', onMessage);
+  }, [router]);
 
   if (loading) {
     return (

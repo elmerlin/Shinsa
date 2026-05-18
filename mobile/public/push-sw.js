@@ -12,7 +12,7 @@
 // Bump APP_VERSION when changing this file so the install/activate flow
 // evicts the old cache. Service workers are notorious for sticking around
 // — see the Expo PWA guide caveat about over-aggressive caching.
-self.__APP_VERSION__ = '2026-05-13-mobile-web-pwa-v1';
+self.__APP_VERSION__ = '2026-05-18-notification-nav-v2';
 const STATIC_CACHE = `shinsa-mobile-static-${self.__APP_VERSION__}`;
 
 const PRECACHE_URLS = [
@@ -110,17 +110,37 @@ self.addEventListener('notificationclick', (event) => {
   const targetUrl = new URL(rawUrl, self.location.origin).toString();
 
   event.waitUntil((async () => {
-    // If a Shinsa tab is already open, focus it (and route to the target
-    // URL via postMessage so React Router can handle it without a reload).
+    // Three cases, in priority order:
+    //   1. A Shinsa tab is open at the exact targetUrl → just focus.
+    //   2. A Shinsa tab is open somewhere else → focus it AND post a
+    //      NAVIGATE message; the in-page listener calls router.push(url)
+    //      so we don't open a duplicate tab. The previous version of
+    //      this handler only matched exact URLs and fell through to
+    //      openWindow, which on PWAs just re-focuses the existing
+    //      window without navigating — the bug the user reported as
+    //      "tapping a notification doesn't go to the post".
+    //   3. No tab open → openWindow.
     const clientsList = await clients.matchAll({ type: 'window', includeUncontrolled: true });
-    for (const client of clientsList) {
-      if ('focus' in client) {
-        if (client.url === targetUrl) {
-          await client.focus();
-          return;
-        }
-      }
+    const sameOriginClients = clientsList.filter((c) => {
+      try { return new URL(c.url).origin === self.location.origin; }
+      catch { return false; }
+    });
+
+    const exact = sameOriginClients.find((c) => c.url === targetUrl);
+    if (exact && 'focus' in exact) {
+      await exact.focus();
+      return;
     }
+
+    const fallbackClient = sameOriginClients.find((c) => 'focus' in c);
+    if (fallbackClient) {
+      try {
+        fallbackClient.postMessage({ type: 'SHINSA_NAVIGATE', url: rawUrl });
+      } catch (_) { /* not fatal */ }
+      await fallbackClient.focus();
+      return;
+    }
+
     await clients.openWindow(targetUrl);
   })());
 });
