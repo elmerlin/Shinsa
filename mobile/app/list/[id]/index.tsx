@@ -422,7 +422,7 @@ export default function ListDetailScreen() {
       <Modal visible={!!dialog} animationType="none" transparent onRequestClose={closeDialog}>
         <Pressable style={s.sheetBackdrop} onPress={closeDialog}>
           <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            behavior="padding"
             style={s.dialogWrap}>
             <Pressable style={s.dialog} onPress={(e) => e.stopPropagation()}>
               <Text style={s.sheetTitle}>{dialog?.kind === 'clone' ? 'Clone list' : 'Rename list'}</Text>

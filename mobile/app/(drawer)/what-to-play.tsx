@@ -775,7 +775,7 @@ function TrackSheet({
       <View style={s.backdrop}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior="padding"
           style={s.sheetWrap}>
           <View style={[s.sheet, { paddingBottom: insets.bottom + 8 }]}>
             <View style={s.handle} />

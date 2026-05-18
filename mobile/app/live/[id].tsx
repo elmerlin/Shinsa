@@ -964,7 +964,7 @@ function ChatComposer({
   };
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView behavior="padding">
       <View style={[s.composer, { paddingBottom: bottomInset + 8 }]}>
         <TextInput
           style={s.composerInput}

@@ -34,7 +34,7 @@ export default function LoginScreen() {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      behavior="padding">
       <View style={styles.inner}>
         <View style={styles.brand}>
           <PumpShinsaLogo variant="horizontal" size={56} />

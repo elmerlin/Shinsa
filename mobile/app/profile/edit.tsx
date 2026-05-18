@@ -262,7 +262,7 @@ export default function EditProfileScreen() {
           ),
         }}
       />
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+      <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
         <ScrollView
           contentContainerStyle={[s.scroll, { paddingBottom: insets.bottom + 32 }]}
           keyboardShouldPersistTaps="handled">

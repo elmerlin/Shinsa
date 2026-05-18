@@ -327,7 +327,7 @@ export default function ListsScreen() {
       <Modal visible={mode.kind !== 'idle'} animationType="none" transparent onRequestClose={closeDialog}>
         <Pressable style={s.dialogBackdrop} onPress={closeDialog}>
           <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            behavior="padding"
             style={s.dialogWrap}>
             <Pressable style={s.dialog} onPress={(e) => e.stopPropagation()}>
               <Text style={s.dialogTitle}>{dialogTitle}</Text>

@@ -176,7 +176,7 @@ export default function SongOfWeekDetailScreen() {
       <View style={[s.topBar, { paddingTop: insets.top + 8 }]}><TopBar /></View>
 
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior="padding"
         style={{ flex: 1 }}
         keyboardVerticalOffset={insets.top + 16}>
         <ScrollView contentContainerStyle={[s.scroll, { paddingBottom: insets.bottom + 80 }]}>

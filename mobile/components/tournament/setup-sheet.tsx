@@ -269,7 +269,7 @@ export function TournamentSetupSheet({ visible, tournamentId, onClose, onSaved }
     <Modal visible={visible} animationType="none" transparent onRequestClose={onClose}>
       <View style={s.backdrop}>
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior="padding"
           style={[s.sheet, { paddingBottom: insets.bottom + 12 }]}>
           <View style={s.handle} />
           <View style={s.header}>

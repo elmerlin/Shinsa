@@ -336,10 +336,14 @@ export function ConversationView({
   // Scroll to bottom when:
   //  - the screen first loads, or
   //  - new messages arrive AND the user is reading near the bottom
+  // The actual scrollToEnd also fires from ScrollView.onContentSizeChange
+  // (below) which is the only reliable signal that the message list has
+  // actually been laid out — the effect alone races image / bubble layout
+  // and lands a few pixels short on first open, leaving the latest
+  // message tucked under the composer.
   useEffect(() => {
     if (!messages.length) return;
     if (!isNearBottomRef.current) return;
-    // Defer so the layout pass settles first.
     requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: false }));
   }, [messages.length]);
 
@@ -436,7 +440,11 @@ export function ConversationView({
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        // 'padding' on both platforms — Android's previous `undefined`
+        // meant the composer slid under the soft keyboard. With the
+        // Activity manifest's adjustResize the padding pattern works
+        // outside Modals (sheets still use the manual hook).
+        behavior="padding"
         keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}>
         {query.isLoading ? (
           <View style={s.center}><ActivityIndicator color={theme.spinner} /></View>
@@ -454,6 +462,16 @@ export function ConversationView({
               const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;
               const distanceFromBottom = contentSize.height - (contentOffset.y + layoutMeasurement.height);
               isNearBottomRef.current = distanceFromBottom < 60;
+            }}
+            // Re-pin to the bottom whenever content height changes — fires
+            // when messages first lay out, when reactions wrap to a new
+            // line, when images inside bubbles load, etc. Without this,
+            // the initial scrollToEnd in the effect above races layout and
+            // the latest message ends up partially under the composer.
+            onContentSizeChange={() => {
+              if (isNearBottomRef.current) {
+                scrollRef.current?.scrollToEnd({ animated: false });
+              }
             }}
             scrollEventThrottle={120}>
             {messages.length === 0 ? (
@@ -687,7 +705,10 @@ const makeStyles = (t: ThemeColors) => ({
   errorCard: { backgroundColor: t.dangerBg, borderRadius: 12, padding: 16, borderWidth: 1, borderColor: t.dangerBorder, margin: 12 },
   errorText: { color: t.danger, fontSize: 13 },
 
-  thread: { paddingHorizontal: 8, paddingBottom: 12, gap: 1 },
+  // Generous bottom padding so the most-recent bubble has breathing
+  // room from the composer's top edge — the previous 12 px made the
+  // latest message look like it was being squeezed by the input row.
+  thread: { paddingHorizontal: 8, paddingBottom: 28, gap: 1 },
   emptyThread: { padding: 40, alignItems: 'center' as const, gap: 8 },
   emptyEmoji: { fontSize: 28 },
   emptyTitle: { fontSize: 14, fontWeight: '900' as const, color: t.text },

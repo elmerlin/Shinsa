@@ -101,7 +101,7 @@ export function SaveToListSheet({ visible, onClose, item }: Props) {
       <View style={s.backdrop}>
         <Pressable style={s.backdropFill} onPress={handleClose} />
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior="padding"
           style={s.sheetWrap}>
           <View style={[s.sheet, { paddingBottom: insets.bottom + 12 }]}>
             <View style={s.handle} />
