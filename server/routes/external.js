@@ -474,58 +474,73 @@ router.get('/plays', requireApiToken, requireScope('steps:read'), (req, res) => 
     `).all(req.user.id, from, to, limit);
   }
 
+  // Build the per-play array first so we can roll a `total_*` summary
+  // into the top-level response — saves callers from re-summing the
+  // array client-side just to show a header total.
+  const plays = rows.map((r) => {
+    const logged = Number(r.kcal_logged) || 0;
+    const duration = Number(r.duration_seconds);
+    let kcal;
+    let kcalSource;
+    if (logged > 0) {
+      kcal = logged;
+      kcalSource = 'logged';
+    } else if (Number.isFinite(duration) && duration > 0) {
+      kcal = kcalPerMinute * (duration / 60);
+      kcalSource = 'estimated_duration';
+    } else {
+      kcal = kcalPerSongBaseline;
+      kcalSource = 'estimated_baseline';
+    }
+    return {
+      play_id: Number(r.play_id) || 0,
+      played_at_utc: r.played_at_utc || '',
+      date_played: r.date_played || '',
+      song_title: r.song_title || '',
+      mode: r.mode || '',
+      level: Number(r.level) || 0,
+      score: Number(r.score) || 0,
+      grade: r.grade || '',
+      plate: r.plate || '',
+      steps: Number(r.steps) || 0,
+      duration_seconds: Number.isFinite(duration) && duration > 0 ? duration : null,
+      kcal: Math.round(kcal * 100) / 100,
+      kcal_source: kcalSource,
+      judgments: {
+        perfect: Number(r.perfect) || 0,
+        great: Number(r.great) || 0,
+        good: Number(r.good) || 0,
+        bad: Number(r.bad) || 0,
+        miss: Number(r.miss) || 0,
+      },
+      max_combo: Number(r.max_combo) || 0,
+      replay_embed_url: r.replay_embed_url || '',
+      replay_video_id: r.replay_video_id || '',
+    };
+  });
+
+  const totalKcal = plays.reduce((acc, p) => acc + (Number(p.kcal) || 0), 0);
+  const totalSteps = plays.reduce((acc, p) => acc + (Number(p.steps) || 0), 0);
+  const totalDurationSeconds = plays.reduce(
+    (acc, p) => acc + (Number(p.duration_seconds) || 0),
+    0,
+  );
+
   res.json({
     user_id: req.user.id,
     from,
     to,
     tz: tz || null,
     limit,
-    count: rows.length,
+    count: plays.length,
+    total_kcal: Math.round(totalKcal * 100) / 100,
+    total_steps: totalSteps,
+    total_duration_seconds: totalDurationSeconds,
     kcal_weight_kg: weightKgUsed,
     kcal_weight_source: weightSource,
     kcal_estimate_basis: 'song_duration',
     kcal_per_song_baseline_120s: Math.round(kcalPerSongBaseline * 100) / 100,
-    plays: rows.map((r) => {
-      const logged = Number(r.kcal_logged) || 0;
-      const duration = Number(r.duration_seconds);
-      let kcal;
-      let kcalSource;
-      if (logged > 0) {
-        kcal = logged;
-        kcalSource = 'logged';
-      } else if (Number.isFinite(duration) && duration > 0) {
-        kcal = kcalPerMinute * (duration / 60);
-        kcalSource = 'estimated_duration';
-      } else {
-        kcal = kcalPerSongBaseline;
-        kcalSource = 'estimated_baseline';
-      }
-      return {
-        play_id: Number(r.play_id) || 0,
-        played_at_utc: r.played_at_utc || '',
-        date_played: r.date_played || '',
-        song_title: r.song_title || '',
-        mode: r.mode || '',
-        level: Number(r.level) || 0,
-        score: Number(r.score) || 0,
-        grade: r.grade || '',
-        plate: r.plate || '',
-        steps: Number(r.steps) || 0,
-        duration_seconds: Number.isFinite(duration) && duration > 0 ? duration : null,
-        kcal: Math.round(kcal * 100) / 100,
-        kcal_source: kcalSource,
-        judgments: {
-          perfect: Number(r.perfect) || 0,
-          great: Number(r.great) || 0,
-          good: Number(r.good) || 0,
-          bad: Number(r.bad) || 0,
-          miss: Number(r.miss) || 0,
-        },
-        max_combo: Number(r.max_combo) || 0,
-        replay_embed_url: r.replay_embed_url || '',
-        replay_video_id: r.replay_video_id || '',
-      };
-    }),
+    plays,
   });
 });
 
