@@ -65,6 +65,7 @@ const MAPPING = {
   'calendar': 'calendar-today',
   'flag.fill': 'flag',
   'sparkles': 'auto-awesome',
+  'lock.fill': 'lock',
   'lightbulb.fill': 'lightbulb',
   'list.number': 'leaderboard',
   'figure.run': 'directions-run',

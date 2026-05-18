@@ -1,0 +1,18 @@
+# Dependencies and Expo/local build output
+node_modules/
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native folders are generated during EAS Build for this managed Expo app
+android/
+ios/
+
+# Local environment
+.env
+.env*.local
+
+# Local editor/system files
+.DS_Store
+.vscode/

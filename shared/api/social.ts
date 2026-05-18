@@ -76,6 +76,17 @@ export function createSocialApi(client: ApiClient) {
     post(id: string) {
       return client.request<Post>(`/api/social/posts/${id}`);
     },
+    /** Fetch a single upscore item by id. Used by the mobile /upscore/[id]
+     *  detail route, which is the destination for "Recent activity" taps
+     *  on upscore rows. Response shape matches FeedItem ({ type: 'upscore', ... }). */
+    upscoreById(id: string | number) {
+      return client.request<FeedItem>(`/api/social/upscores/${encodeURIComponent(String(id))}`);
+    },
+    /** Fetch a single new-clear item by id. Used by the mobile /clear/[id]
+     *  detail route. Response shape matches FeedItem ({ type: 'clear', ... }). */
+    clearById(id: string | number) {
+      return client.request<FeedItem>(`/api/social/clears/${encodeURIComponent(String(id))}`);
+    },
     /**
      * Create a post via multipart/form-data. `images` accepts native RN
      * `{ uri, name, type }` payloads (RN extends FormData) OR web `File`/`Blob`.

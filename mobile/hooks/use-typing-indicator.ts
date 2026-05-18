@@ -29,10 +29,10 @@ export function useTypingIndicator(
     queryKey: ['messages', 'conversation', conversationId, 'typing'],
     queryFn: () => messagesApi.typing(conversationId),
     enabled: !!conversationId && enabled,
-    refetchInterval: POLL_INTERVAL_MS,
+    refetchInterval: enabled ? POLL_INTERVAL_MS : false,
     // Don't keep a stale array around for too long — typing flags decay fast.
     staleTime: 1_000,
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: false,
   });
 
   const all = query.data?.typing ?? [];

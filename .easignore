@@ -1,0 +1,50 @@
+# EAS runs from the repository root for this app. Exclude the unrelated
+# web/server/native workspace output while keeping mobile/ and shared/.
+
+# Root-level generated/local output
+node_modules/
+.git
+.git/
+.git/**
+**/.git/**
+dist/
+.next/
+.expo/
+.claude/
+test-results/
+*.db
+*.db-wal
+*.db-shm
+.env
+.env*.local
+.DS_Store
+
+# Non-mobile app workspaces and generated assets
+client/
+server/
+ios/
+Shinsa/
+chart-editor/
+data/
+download/
+piugame_avatar_images/
+docs/
+scripts/
+deploy/
+
+# Mobile dependencies and local build output
+mobile/node_modules/
+mobile/.expo/
+mobile/dist/
+mobile/web-build/
+mobile/expo-env.d.ts
+
+# Native folders are generated during EAS Build for this managed Expo app
+mobile/android/
+mobile/ios/
+
+# Mobile local environment/editor files
+mobile/.env
+mobile/.env*.local
+mobile/.vscode/
+mobile/.DS_Store

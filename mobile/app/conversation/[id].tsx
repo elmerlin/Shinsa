@@ -22,10 +22,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Image } from 'expo-image';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
@@ -34,6 +33,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useIsFocused } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DefaultAvatar } from '@/components/default-avatar';
 import {
@@ -48,6 +48,7 @@ import { SquadManagementSheet } from '@/components/messages/squad-management-she
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/contexts/theme-context';
+import { useKeyboardHeight } from '@/hooks/use-keyboard-height';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { useTypingIndicator } from '@/hooks/use-typing-indicator';
 import { messagesApi } from '@/lib/api';
@@ -158,7 +159,12 @@ export function ConversationView({
   const { theme } = useTheme();
   const s = useThemedStyles(makeStyles);
   const queryClient = useQueryClient();
+  const isFocused = useIsFocused();
+  const threadActive = embedded || isFocused;
   const scrollRef = useRef<ScrollView | null>(null);
+  const keyboardHeight = useKeyboardHeight();
+  const keyboardGap = Platform.OS === 'ios' ? keyboardHeight : 0;
+  const composerBottomPadding = keyboardHeight > 0 ? 8 : insets.bottom + 8;
 
   // Local composer state. liketu persists this to a Zustand store keyed
   // by conversationId so navigating away doesn't lose your typing — we
@@ -167,21 +173,25 @@ export function ConversationView({
   // Tracks scrollTop so we don't auto-scroll the user back to the bottom
   // while they're reading older messages.
   const isNearBottomRef = useRef(true);
+  const didInitialPinRef = useRef(false);
   // Long-press target (drives the bottom action sheet).
   const [actionTarget, setActionTarget] = useState<MessageActionTarget | null>(null);
   // Squad-management sheet (squads only).
   const [squadOpen, setSquadOpen] = useState(false);
   // Typing indicator: poll partner's typing flag + throttle emits when the
   // viewer types into the composer.
-  const { typingUsers, emitTyping } = useTypingIndicator(conversationId, user?.id, !!user?.id);
+  const { typingUsers, emitTyping } = useTypingIndicator(conversationId, user?.id, !!user?.id && threadActive);
 
   const threadKey = getConversationQueryKey(conversationId);
   const query = useQuery({
     queryKey: threadKey,
     queryFn: () => messagesApi.conversation(conversationId, { limit: INITIAL_MESSAGE_LIMIT }),
     enabled: !!conversationId && !!user?.id,
-    refetchInterval: THREAD_REFETCH_INTERVAL_MS,
-    refetchOnWindowFocus: true,
+    staleTime: 10_000,
+    refetchInterval: threadActive ? THREAD_REFETCH_INTERVAL_MS : false,
+    refetchOnReconnect: true,
+    refetchOnMount: false,
+    placeholderData: (previous) => previous,
   });
 
   // Once the thread loads (which marks read server-side), zero the inbox row's
@@ -333,19 +343,35 @@ export function ConversationView({
     [themeKey, theme],
   );
 
-  // Scroll to bottom when:
-  //  - the screen first loads, or
-  //  - new messages arrive AND the user is reading near the bottom
-  // The actual scrollToEnd also fires from ScrollView.onContentSizeChange
-  // (below) which is the only reliable signal that the message list has
-  // actually been laid out — the effect alone races image / bubble layout
-  // and lands a few pixels short on first open, leaving the latest
-  // message tucked under the composer.
+  useEffect(() => {
+    isNearBottomRef.current = true;
+    didInitialPinRef.current = false;
+  }, [conversationId]);
+
+  const pinToBottom = useCallback((animated = false) => {
+    scrollRef.current?.scrollToEnd({ animated });
+    requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: false }));
+    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: false }), 80);
+  }, []);
+
+  // Scroll to bottom when the thread first loads, or when new content lands
+  // while the user is already near the bottom. The scheduled re-pin catches
+  // late layout changes from embeds, reaction wrapping, composer height, and
+  // the soft keyboard.
   useEffect(() => {
     if (!messages.length) return;
-    if (!isNearBottomRef.current) return;
-    requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: false }));
-  }, [messages.length]);
+    if (!didInitialPinRef.current || isNearBottomRef.current) {
+      pinToBottom(false);
+      didInitialPinRef.current = true;
+    }
+  }, [messages.length, pinToBottom]);
+
+  useEffect(() => {
+    if (keyboardHeight > 0 && messages.length > 0) {
+      isNearBottomRef.current = true;
+      pinToBottom(false);
+    }
+  }, [keyboardHeight, messages.length, pinToBottom]);
 
   const handleSend = () => {
     const text = draft.trim();
@@ -438,14 +464,7 @@ export function ConversationView({
         </View>
       )}
 
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        // 'padding' on both platforms — Android's previous `undefined`
-        // meant the composer slid under the soft keyboard. With the
-        // Activity manifest's adjustResize the padding pattern works
-        // outside Modals (sheets still use the manual hook).
-        behavior="padding"
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}>
+      <View style={{ flex: 1 }}>
         {query.isLoading ? (
           <View style={s.center}><ActivityIndicator color={theme.spinner} /></View>
         ) : query.isError ? (
@@ -458,6 +477,11 @@ export function ConversationView({
           <ScrollView
             ref={scrollRef}
             contentContainerStyle={[s.thread, { paddingTop: 8 }]}
+            onLayout={() => {
+              if (!didInitialPinRef.current || isNearBottomRef.current) {
+                pinToBottom(false);
+              }
+            }}
             onScroll={(e) => {
               const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;
               const distanceFromBottom = contentSize.height - (contentOffset.y + layoutMeasurement.height);
@@ -469,10 +493,12 @@ export function ConversationView({
             // the initial scrollToEnd in the effect above races layout and
             // the latest message ends up partially under the composer.
             onContentSizeChange={() => {
-              if (isNearBottomRef.current) {
-                scrollRef.current?.scrollToEnd({ animated: false });
+              if (!didInitialPinRef.current || isNearBottomRef.current) {
+                pinToBottom(false);
+                didInitialPinRef.current = true;
               }
             }}
+            keyboardShouldPersistTaps="handled"
             scrollEventThrottle={120}>
             {messages.length === 0 ? (
               <View style={s.emptyThread}>
@@ -521,7 +547,19 @@ export function ConversationView({
             of height even when empty (RN Web textareas default to multiple
             rows). Fixed-height input keeps the placeholder vertically
             centered with the send button. */}
-        <View style={[s.composer, { paddingBottom: insets.bottom + 8 }]}>
+        {sendMutation.isError ? (
+          <View style={s.sendError}>
+            <Text style={s.sendErrorText}>
+              {sendMutation.error instanceof Error ? sendMutation.error.message : 'Failed to send'}
+            </Text>
+          </View>
+        ) : null}
+
+        <View
+          onLayout={() => {
+            if (isNearBottomRef.current) pinToBottom(false);
+          }}
+          style={[s.composer, { paddingBottom: composerBottomPadding, marginBottom: keyboardGap }]}>
           <TextInput
             style={s.input}
             value={draft}
@@ -552,15 +590,7 @@ export function ConversationView({
             )}
           </Pressable>
         </View>
-
-        {sendMutation.isError ? (
-          <View style={[s.sendError, { paddingBottom: insets.bottom + 8 }]}>
-            <Text style={s.sendErrorText}>
-              {sendMutation.error instanceof Error ? sendMutation.error.message : 'Failed to send'}
-            </Text>
-          </View>
-        ) : null}
-      </KeyboardAvoidingView>
+      </View>
 
       <MessageActionSheet
         target={actionTarget}

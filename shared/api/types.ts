@@ -533,6 +533,7 @@ export interface ReplayHighlight {
   replay_video_id?: string;
   replay_start_seconds?: number;
   replay_end_seconds?: number;
+  jacket_url?: string;
   background_url?: string;
   date_played?: string;
   machine_name?: string;

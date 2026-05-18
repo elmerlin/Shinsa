@@ -487,9 +487,80 @@ export function createMessagesApi(client: ApiClient) {
 
     /** Mark a story as viewed (debounced; safe to call multiple times). */
     markStoryViewed(userId: string, storyId: string) {
-      return client.request<{ ok: true }>(
+      return client.request<{ ok?: true; engagement?: StoryEngagement }>(
         `/api/messages/highlights/${encodeURIComponent(userId)}/story/${encodeURIComponent(storyId)}/view`,
         { method: 'POST' },
+      );
+    },
+
+    /** Lightweight per-story engagement payload for the viewer. */
+    storyEngagement(userId: string, storyId: string) {
+      return client.request<{ engagement: StoryEngagement }>(
+        `/api/messages/highlights/${encodeURIComponent(userId)}/story/${encodeURIComponent(storyId)}/engagement`,
+      );
+    },
+
+    /** Toggle the viewer's "pump" on a story. */
+    toggleStoryPump(userId: string, storyId: string) {
+      return client.request<{ engagement: StoryEngagement }>(
+        `/api/messages/highlights/${encodeURIComponent(userId)}/story/${encodeURIComponent(storyId)}/pump`,
+        { method: 'POST' },
+      );
+    },
+
+    /** Story comments are loaded on intent, not with the story strip. */
+    storyComments(userId: string, storyId: string) {
+      return client.request<{ comments: StoryComment[] }>(
+        `/api/messages/highlights/${encodeURIComponent(userId)}/story/${encodeURIComponent(storyId)}/comments`,
+      );
+    },
+
+    addStoryComment(userId: string, storyId: string, content: string) {
+      return client.request<{ comments: StoryComment[]; engagement?: StoryEngagement }>(
+        `/api/messages/highlights/${encodeURIComponent(userId)}/story/${encodeURIComponent(storyId)}/comments`,
+        { method: 'POST', body: { content } },
+      );
+    },
+
+    /** Owner-only story stats, including recent viewers. */
+    storyStats(userId: string, storyId: string) {
+      return client.request<StoryStatsResponse>(
+        `/api/messages/highlights/${encodeURIComponent(userId)}/story/${encodeURIComponent(storyId)}/stats`,
+      );
+    },
+
+    archiveStory(userId: string, storyId: string) {
+      return client.request<StoryArchiveResponse>(
+        `/api/messages/highlights/${encodeURIComponent(userId)}/story/${encodeURIComponent(storyId)}/archive`,
+        { method: 'POST' },
+      );
+    },
+
+    deleteStory(userId: string, storyId: string) {
+      return client.request<StoryArchiveResponse>(
+        `/api/messages/highlights/${encodeURIComponent(userId)}/story/${encodeURIComponent(storyId)}`,
+        { method: 'DELETE' },
+      );
+    },
+
+    createStoryItem(formData: FormData) {
+      return client.request<{ story: StoryItem }>(
+        '/api/messages/highlights/story',
+        { method: 'POST', body: formData },
+      );
+    },
+
+    createNote(payload: { content: string; link_path?: string; link_url?: string; link_label?: string }) {
+      return client.request<{ note: StoryNote }>(
+        '/api/messages/highlights/note',
+        { method: 'POST', body: payload },
+      );
+    },
+
+    clearNote() {
+      return client.request<{ success?: boolean }>(
+        '/api/messages/highlights/note',
+        { method: 'DELETE' },
       );
     },
 
@@ -631,7 +702,7 @@ export interface StoryHighlightCircle {
   is_self?: boolean;
   /** When true, the viewer hasn't seen the latest story yet. */
   has_unseen?: boolean;
-  note?: { text?: string; created_at?: string } | null;
+  note?: StoryNote | null;
 }
 
 export interface HighlightsResponse {
@@ -639,18 +710,83 @@ export interface HighlightsResponse {
   circles: StoryHighlightCircle[];
 }
 
-export interface StoryItem {
+export interface StoryLink {
+  path?: string;
+  url?: string;
+  label?: string;
+}
+
+export interface StoryUser {
   id: string;
-  user_id: string;
   username: string;
   avatar?: string;
-  /** 'image' | 'video' | 'replay' | 'achievement' | 'note' | …  */
-  story_type: string;
+}
+
+export interface StoryNote {
+  id?: string;
+  user_id?: string;
+  content?: string;
+  text?: string;
+  kind?: string;
+  thread_key?: string;
+  created_at?: string;
+  updated_at?: string;
+  expires_at?: string;
+  is_auto?: boolean;
+  link?: StoryLink | null;
+  user?: StoryUser | null;
+}
+
+export interface StoryComment {
+  id: string;
+  content: string;
+  created_at: string;
+  user?: StoryUser | null;
+}
+
+export interface StoryEngagement {
+  view_count: number;
+  pump_count: number;
+  comment_count: number;
+  user_pumped?: boolean;
+  preview_comments?: StoryComment[];
+}
+
+export interface StoryScorePreview {
+  song_title?: string;
+  songTitle?: string;
+  mode?: string;
+  level?: number | string;
+  score?: number | string;
+  grade?: string;
+  plate?: string;
+  jacket_url?: string;
+  jacketUrl?: string;
+}
+
+export interface StoryItem {
+  id: string;
+  user_id?: string;
+  username?: string;
+  avatar?: string;
+  user?: StoryUser | null;
+  /** Server returns `type`; older callers may still read `story_type`. */
+  type?: string;
+  story_type?: string;
   source_kind?: string;
+  source?: { kind?: string; id?: string } | null;
+  title?: string;
+  subtitle?: string;
   caption?: string;
   media_url?: string;
   fallback_path?: string;
   fallback_url?: string;
+  link?: StoryLink | null;
+  sticker_tokens?: string[];
+  snapshot?: Record<string, unknown> | null;
+  scores?: StoryScorePreview[];
+  total_count?: number | string;
+  engagement?: StoryEngagement;
   created_at: string;
   expires_at?: string;
   is_viewed?: boolean;
@@ -659,6 +795,19 @@ export interface StoryItem {
 export interface StoryResponse {
   user: { id: string; username: string; avatar?: string };
   stories: StoryItem[];
+  is_owner?: boolean;
+  readonly?: boolean;
+}
+
+export interface StoryStatsResponse extends StoryEngagement {
+  story_id?: string;
+  viewers?: Array<{ viewed_at: string; user?: StoryUser | null }>;
+}
+
+export interface StoryArchiveResponse {
+  success?: boolean;
+  stories: StoryItem[];
+  archived?: Array<{ story: StoryItem; archived_at?: string }>;
 }
 
 export type MessagesApi = ReturnType<typeof createMessagesApi>;

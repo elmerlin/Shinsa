@@ -1094,7 +1094,7 @@ export default function FeedScreen() {
     getNextPageParam: (lastPage, pages) => (lastPage.length === 0 ? undefined : pages.length + 1),
   });
 
-  const allItems = data?.pages.flat() ?? [];
+  const allItems = useMemo(() => data?.pages.flat() ?? [], [data?.pages]);
   const items = useMemo(() => {
     if (feedFilter === 'all') return allItems;
     return allItems.filter((it) => {
@@ -1119,7 +1119,10 @@ export default function FeedScreen() {
   // listeners — and crucially re-binds whenever the FlatList remounts,
   // which a one-shot useEffect would miss (FlatList only mounts after
   // isLoading resolves).
-  const setFeedListRef = useWebPullToRefresh(refetch, { externalRef: feedListRef as never });
+  const handleWebRefresh = useCallback(() => {
+    void refetch();
+  }, [refetch]);
+  const setFeedListRef = useWebPullToRefresh(handleWebRefresh, { externalRef: feedListRef as never });
 
   // Right-rail data: this-week WC top 3. Cheap and shared with the WC
   // route's cache so no extra round-trip when the user navigates there.

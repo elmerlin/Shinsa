@@ -26,6 +26,7 @@ import { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Modal,
   Pressable,
   ScrollView,
@@ -33,6 +34,8 @@ import {
   Text,
   TextInput,
   View,
+  type ImageStyle,
+  type StyleProp,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CosmeticPreview, HabitatScene, PropMini } from '@/components/pet-visuals';
@@ -46,7 +49,6 @@ import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { petsApi } from '@/lib/api';
 import {
   clampStat,
-  costChip,
   moodEmoji,
   petCharacterEmoji,
   petCharacterGradient,
@@ -55,21 +57,67 @@ import {
   statTier,
   VITALS,
 } from '@/lib/pets';
+import { PET_UI_ASSETS, type PetUiAssetKey } from '@/lib/pet-ui-assets';
 import type { ThemeColors } from '@/constants/theme';
 import type { Pet, PetActivity, PetCharacterId, PetTrick } from '@shared/api';
 
 type TabKey = 'tricks' | 'missions' | 'toys' | 'outfits' | 'habitat' | 'shop' | 'customize' | 'leaderboard';
 
-const TABS: { key: TabKey; label: string; emoji: string }[] = [
-  { key: 'tricks',      label: 'Tricks',      emoji: '🎭' },
-  { key: 'missions',    label: 'Missions',    emoji: '🎯' },
-  { key: 'toys',        label: 'Toys',        emoji: '🧸' },
-  { key: 'outfits',     label: 'Outfits',     emoji: '👕' },
-  { key: 'habitat',     label: 'Habitat',     emoji: '🏯' },
-  { key: 'shop',        label: 'Shop',        emoji: '🛍️' },
-  { key: 'customize',   label: 'Customize',   emoji: '🎨' },
-  { key: 'leaderboard', label: 'Leaderboard', emoji: '🏆' },
+const TABS: { key: TabKey; label: string; asset: PetUiAssetKey }[] = [
+  { key: 'tricks',      label: 'Tricks',      asset: 'trick' },
+  { key: 'missions',    label: 'Missions',    asset: 'mission' },
+  { key: 'toys',        label: 'Toys',        asset: 'toy' },
+  { key: 'outfits',     label: 'Outfits',     asset: 'outfit' },
+  { key: 'habitat',     label: 'Habitat',     asset: 'habitat' },
+  { key: 'shop',        label: 'Shop',        asset: 'shop' },
+  { key: 'customize',   label: 'Customize',   asset: 'groom' },
+  { key: 'leaderboard', label: 'Leaderboard', asset: 'leaderboard' },
 ];
+
+const VITAL_ASSETS: Record<(typeof VITALS)[number]['key'], PetUiAssetKey> = {
+  hunger: 'food',
+  happiness: 'happy',
+  energy: 'energy',
+  trust: 'trust',
+  momentum: 'momentum',
+};
+
+const CURRENCY_ASSETS = [
+  { key: 'combo_balance', label: 'COMBO', asset: 'trick' as const },
+  { key: 'bond_tokens', label: 'TOKENS', asset: 'trust' as const },
+  { key: 'rare_shards', label: 'SHARDS', asset: 'happy' as const },
+  { key: 'daily_streak', label: 'STREAK', asset: 'momentum' as const },
+];
+
+function PetArt({
+  asset,
+  size = 24,
+  style,
+  dimmed = false,
+}: {
+  asset: PetUiAssetKey;
+  size?: number;
+  style?: StyleProp<ImageStyle>;
+  dimmed?: boolean;
+}) {
+  return (
+    <Image
+      source={PET_UI_ASSETS[asset]}
+      resizeMode="contain"
+      accessibilityIgnoresInvertColors
+      style={[{ width: size, height: size }, dimmed && { opacity: 0.5 }, style]}
+    />
+  );
+}
+
+function CostPill({ cost, s }: { cost: number | undefined | null; s: Styles }) {
+  return (
+    <View style={s.costPill}>
+      <PetArt asset="trick" size={14} />
+      <Text style={s.shopCost}>{(Number(cost) || 0).toLocaleString()}</Text>
+    </View>
+  );
+}
 
 export default function PetScreen() {
   const router = useRouter();
@@ -163,44 +211,47 @@ export default function PetScreen() {
               <View style={s.card}>
                 <Text style={s.cardEyebrow}>HABITAT</Text>
                 <HabitatScene pet={pet} height={300} />
-                <Text style={s.deskRailHint}>
-                  Tap Habitat below to swap backgrounds, props, floors, and walls.
-                </Text>
               </View>
             </View>
           ) : null}
         </View>
 
-        <View style={s.tabStrip}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.tabRow}>
-            {TABS.map((t) => {
-              const active = tab === t.key;
-              return (
-                <Pressable
-                  key={t.key}
-                  onPress={() => setTab(t.key)}
-                  style={({ pressed }) => [
-                    s.tabBtn,
-                    active && s.tabBtnActive,
-                    pressed && { opacity: 0.7 },
-                  ]}>
-                  <Text style={[s.tabText, active && s.tabTextActive]}>
-                    {t.emoji}  {t.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        </View>
+        <View style={isDesktop ? s.deskGrid : s.lowerSection}>
+          <View style={isDesktop ? s.deskMain : undefined}>
+            <View style={s.tabStrip}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.tabRow}>
+                {TABS.map((t) => {
+                  const active = tab === t.key;
+                  return (
+                    <Pressable
+                      key={t.key}
+                      onPress={() => setTab(t.key)}
+                      style={({ pressed }) => [
+                        s.tabBtn,
+                        active && s.tabBtnActive,
+                        pressed && { opacity: 0.7 },
+                      ]}>
+                      <View style={s.tabBtnContent}>
+                        <PetArt asset={t.asset} size={18} dimmed={!active} />
+                        <Text style={[s.tabText, active && s.tabTextActive]}>{t.label}</Text>
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </View>
 
-        {tab === 'tricks'      ? <TricksTab pet={pet} s={s} /> : null}
-        {tab === 'missions'    ? <MissionsTab pet={pet} s={s} /> : null}
-        {tab === 'toys'        ? <ToysTab pet={pet} s={s} /> : null}
-        {tab === 'outfits'     ? <OutfitsTab pet={pet} s={s} /> : null}
-        {tab === 'habitat'     ? <HabitatTab pet={pet} s={s} /> : null}
-        {tab === 'shop'        ? <ShopTab pet={pet} s={s} /> : null}
-        {tab === 'customize'   ? <CustomizeTab pet={pet} s={s} onOpenLeaderboard={() => setTab('leaderboard')} /> : null}
-        {tab === 'leaderboard' ? <LeaderboardTab s={s} onOpenUser={(id) => router.push({ pathname: '/profile/[id]', params: { id } })} /> : null}
+            {tab === 'tricks'      ? <TricksTab pet={pet} s={s} /> : null}
+            {tab === 'missions'    ? <MissionsTab pet={pet} s={s} /> : null}
+            {tab === 'toys'        ? <ToysTab pet={pet} s={s} /> : null}
+            {tab === 'outfits'     ? <OutfitsTab pet={pet} s={s} /> : null}
+            {tab === 'habitat'     ? <HabitatTab pet={pet} s={s} /> : null}
+            {tab === 'shop'        ? <ShopTab pet={pet} s={s} /> : null}
+            {tab === 'customize'   ? <CustomizeTab pet={pet} s={s} onOpenLeaderboard={() => setTab('leaderboard')} /> : null}
+            {tab === 'leaderboard' ? <LeaderboardTab s={s} onOpenUser={(id) => router.push({ pathname: '/profile/[id]', params: { id } })} /> : null}
+          </View>
+          {isDesktop ? <View style={s.deskRailSpacer} /> : null}
+        </View>
       </ScrollView>
     </View>
   );
@@ -244,7 +295,7 @@ function OutfitsTab({ pet, s }: { pet: Pet; s: Styles }) {
   return (
     <View style={s.tabBody}>
       {SLOTS.map((slot) => {
-        const items = (clothing[slot.kind === 'hat' ? 'hats' : slot.kind === 'top' ? 'tops' : slot.kind === 'belt' ? 'belts' : 'shoes'] ?? []) as Array<Record<string, unknown>>;
+        const items = (clothing[slot.kind === 'hat' ? 'hats' : slot.kind === 'top' ? 'tops' : slot.kind === 'belt' ? 'belts' : 'shoes'] ?? []) as Record<string, unknown>[];
         const owned = items.filter((it) => it.owned);
         const currentId = String(pet[slot.equipped] ?? '');
         const currentColor = String(pet[slot.color] ?? '');
@@ -350,7 +401,7 @@ function AdoptScreen({ s, topBar }: { s: Styles; topBar: React.ReactNode }) {
         <Text style={s.adoptTitle}>Pick your training partner</Text>
         <Text style={s.adoptSub}>
           Each character has a different personality, food preferences, and trick set.
-          You can change your mind later — they'll still remember you.
+          You can change your mind later — they will still remember you.
         </Text>
 
         <View style={s.adoptGrid}>
@@ -460,26 +511,19 @@ function PetHero({ pet, s, compact = false }: { pet: Pet; s: Styles; compact?: b
 function CurrenciesRow({ pet, s }: { pet: Pet; s: Styles }) {
   return (
     <View style={s.currencyRow}>
-      <View style={s.currencyTile}>
-        <Text style={s.currencyEmoji}>🎵</Text>
-        <Text style={s.currencyValue}>{(pet.combo_balance ?? 0).toLocaleString()}</Text>
-        <Text style={s.currencyLabel}>COMBO</Text>
-      </View>
-      <View style={s.currencyTile}>
-        <Text style={s.currencyEmoji}>💎</Text>
-        <Text style={s.currencyValue}>{(pet.bond_tokens ?? 0).toLocaleString()}</Text>
-        <Text style={s.currencyLabel}>TOKENS</Text>
-      </View>
-      <View style={s.currencyTile}>
-        <Text style={s.currencyEmoji}>✨</Text>
-        <Text style={s.currencyValue}>{(pet.rare_shards ?? 0).toLocaleString()}</Text>
-        <Text style={s.currencyLabel}>SHARDS</Text>
-      </View>
-      <View style={s.currencyTile}>
-        <Text style={s.currencyEmoji}>🔥</Text>
-        <Text style={s.currencyValue}>{pet.daily_streak ?? 0}d</Text>
-        <Text style={s.currencyLabel}>STREAK</Text>
-      </View>
+      {CURRENCY_ASSETS.map((c) => {
+        const raw = Number((pet as unknown as Record<string, number | undefined>)[c.key]) || 0;
+        const value = c.key === 'daily_streak' ? `${raw}d` : raw.toLocaleString();
+        return (
+          <View key={c.key} style={s.currencyTile}>
+            <View style={s.currencyIcon}>
+              <PetArt asset={c.asset} size={28} />
+            </View>
+            <Text style={s.currencyValue}>{value}</Text>
+            <Text style={s.currencyLabel}>{c.label}</Text>
+          </View>
+        );
+      })}
     </View>
   );
 }
@@ -497,7 +541,9 @@ function VitalsCard({ pet, s }: { pet: Pet; s: Styles }) {
         const tier = statTier(value);
         return (
           <View key={v.key} style={s.vitalRow}>
-            <Text style={s.vitalEmoji}>{v.emoji}</Text>
+            <View style={s.vitalIcon}>
+              <PetArt asset={VITAL_ASSETS[v.key]} size={24} />
+            </View>
             <View style={s.vitalBody}>
               <View style={s.vitalLabelRow}>
                 <Text style={s.vitalLabel}>{v.label}</Text>
@@ -583,7 +629,9 @@ function RecommendedActionsCard({ pet, s }: { pet: Pet; s: Styles }) {
       <Text style={s.cardEyebrow}>DO NEXT</Text>
       {recs.slice(0, 4).map((r, i) => (
         <View key={i} style={s.recRow}>
-          <Text style={s.recEmoji}>{String(r.emoji || '✨')}</Text>
+          <View style={s.recIcon}>
+            <PetArt asset={recommendedActionAsset(r)} size={22} />
+          </View>
           <Text style={s.recText}>{String(r.label || r.text || r.message || '')}</Text>
         </View>
       ))}
@@ -591,16 +639,21 @@ function RecommendedActionsCard({ pet, s }: { pet: Pet; s: Styles }) {
   );
 }
 
+function recommendedActionAsset(action: unknown): PetUiAssetKey {
+  const r = action as Record<string, unknown>;
+  return petAssetFromText(`${String(r.id || '')} ${String(r.label || '')} ${String(r.text || '')} ${String(r.message || '')}`, 'happy');
+}
+
 /* ════════════════════════════════════════════════════════════════════
  * CARE ACTIONS — interact endpoint
  * ══════════════════════════════════════════════════════════════════ */
 
 const CARE_ACTIONS = [
-  { id: 'tap',     label: 'Tap',     emoji: '👋', tone: '#A8A8AE' },
-  { id: 'praise',  label: 'Praise',  emoji: '🌟', tone: '#FDE047' },
-  { id: 'cuddle',  label: 'Cuddle',  emoji: '🤗', tone: '#FB7185' },
-  { id: 'tease',   label: 'Tease',   emoji: '😜', tone: '#A78BFA' },
-  { id: 'perform', label: 'Perform', emoji: '🎭', tone: '#FFC400' },
+  { id: 'tap',     label: 'Tap',     asset: 'trust', tone: '#A8A8AE' },
+  { id: 'praise',  label: 'Praise',  asset: 'happy', tone: '#FDE047' },
+  { id: 'cuddle',  label: 'Cuddle',  asset: 'trust', tone: '#FB7185' },
+  { id: 'tease',   label: 'Tease',   asset: 'toy', tone: '#A78BFA' },
+  { id: 'perform', label: 'Perform', asset: 'trick', tone: '#FFC400' },
 ] as const;
 
 function CareActionsCard({ pet: _pet, s }: { pet: Pet; s: Styles }) {
@@ -627,7 +680,7 @@ function CareActionsCard({ pet: _pet, s }: { pet: Pet; s: Styles }) {
               { borderColor: a.tone, backgroundColor: `${a.tone}18` },
               pressed && { opacity: 0.8 },
             ]}>
-            <Text style={s.careEmoji}>{a.emoji}</Text>
+            <PetArt asset={a.asset} size={28} />
             <Text style={[s.careLabel, { color: a.tone }]}>{a.label}</Text>
           </Pressable>
         ))}
@@ -664,7 +717,9 @@ function ActivitiesCard({ pet, s }: { pet: Pet; s: Styles }) {
               pressed && { opacity: 0.8 },
             ]}>
             <View style={s.activityHead}>
-              <Text style={s.activityEmoji}>{a.emoji || '🎮'}</Text>
+              <View style={s.activityIcon}>
+                <PetArt asset={activityAsset(a)} size={22} />
+              </View>
               <Text style={s.activityLabel}>{a.label}</Text>
             </View>
             {a.description ? <Text style={s.activityDesc} numberOfLines={2}>{a.description}</Text> : null}
@@ -681,7 +736,10 @@ function ActivitiesCard({ pet, s }: { pet: Pet; s: Styles }) {
               ))}
             </View>
             {a.locked && a.lock_reason ? (
-              <Text style={s.activityLock}>🔒 {a.lock_reason}</Text>
+              <View style={s.lockRow}>
+                <IconSymbol name="lock.fill" size={11} color="#777" />
+                <Text style={s.activityLock}>{a.lock_reason}</Text>
+              </View>
             ) : null}
           </Pressable>
         ))}
@@ -712,7 +770,9 @@ function TricksTab({ pet, s }: { pet: Pet; s: Styles }) {
     <View style={s.tabBody}>
       {tricks.map((t) => (
         <View key={t.id} style={[s.trickRow, !t.unlocked && { opacity: 0.55 }]}>
-          <Text style={s.trickEmoji}>{t.emoji || (t.unlocked ? '🎭' : '🔒')}</Text>
+          <View style={s.trickIcon}>
+            <PetArt asset={trickAsset(t)} size={34} dimmed={!t.unlocked} />
+          </View>
           <View style={s.trickBody}>
             <Text style={s.trickName}>{t.name}</Text>
             {t.description ? <Text style={s.trickDesc} numberOfLines={2}>{t.description}</Text> : null}
@@ -751,7 +811,7 @@ function MissionsTab({ pet, s }: { pet: Pet; s: Styles }) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['pet-me'] }),
     onError: (err: unknown) => Alert.alert('Hmm', err instanceof Error ? err.message : 'Claim failed'),
   });
-  const missions = (pet.missions ?? []) as Array<Record<string, unknown>>;
+  const missions = (pet.missions ?? []) as Record<string, unknown>[];
   if (missions.length === 0) return <EmptyTab s={s} text="No missions right now. New ones drop daily." />;
   return (
     <View style={s.tabBody}>
@@ -761,7 +821,9 @@ function MissionsTab({ pet, s }: { pet: Pet; s: Styles }) {
         const ready = !!m.ready_to_claim || !!m.complete;
         return (
           <View key={id} style={[s.missionRow, claimed && { opacity: 0.5 }]}>
-            <Text style={s.missionEmoji}>{String(m.emoji || '🎯')}</Text>
+            <View style={s.missionIcon}>
+              <PetArt asset={missionAsset(m)} size={32} />
+            </View>
             <View style={s.missionBody}>
               <Text style={s.missionName}>{String(m.label || m.title || id)}</Text>
               {m.description ? <Text style={s.missionDesc}>{String(m.description)}</Text> : null}
@@ -807,7 +869,9 @@ function ToysTab({ pet, s }: { pet: Pet; s: Styles }) {
             onPress={() => use.mutate(t.id)}
             disabled={use.isPending}
             style={({ pressed }) => [s.toyCard, pressed && { opacity: 0.85 }]}>
-            <Text style={s.toyEmoji}>{toyGlyph(t.id)}</Text>
+            <View style={s.toyThumb}>
+              <PetArt asset={toyAsset(t.id)} size={44} />
+            </View>
             <Text style={s.toyName} numberOfLines={1}>{t.name}</Text>
             {t.preference && t.preference !== 'neutral' ? (
               <Text style={[s.toyPref, t.preference === 'favorite' && { color: '#FDE047' }, t.preference === 'disliked' && { color: '#FB7185' }]}>
@@ -863,7 +927,7 @@ function HabitatTab({ pet, s }: { pet: Pet; s: Styles }) {
                     pressed && { opacity: 0.85 },
                   ]}>
                   <View style={s.habitatThumb}>
-                    {sec.kind === 'prop' ? <PropMini id={it.id} scale={3} /> : <Text style={s.habitatThumbGlyph}>{habitatThumbGlyph(sec.kind, it.id)}</Text>}
+                    {sec.kind === 'prop' ? <PropMini id={it.id} scale={3} /> : <PetArt asset={habitatAsset(sec.kind, it.id)} size={48} />}
                   </View>
                   <Text style={s.habitatName} numberOfLines={2}>{it.name}</Text>
                   {it.active ? <Text style={s.habitatBadge}>EQUIPPED</Text> : null}
@@ -880,14 +944,48 @@ function HabitatTab({ pet, s }: { pet: Pet; s: Styles }) {
   );
 }
 
-/** Tiny representative glyph for habitat sections that don't have a
- *  pixel-art prop renderer yet (backgrounds / floors / walls). Keeps
- *  the grid readable while the real preview lives in HabitatScene. */
-function habitatThumbGlyph(kind: 'background' | 'prop' | 'floor' | 'wall', id: string): string {
-  if (kind === 'background') return '🌌';
-  if (kind === 'floor') return id.includes('led') ? '🟦' : id.includes('tatami') ? '🟫' : id.includes('petals') ? '🌸' : '✨';
-  if (kind === 'wall') return id.includes('neon') ? '💫' : id.includes('photo') ? '🖼️' : id.includes('banner') ? '🚩' : '📜';
-  return '·';
+function petAssetFromText(text: string, fallback: PetUiAssetKey): PetUiAssetKey {
+  const value = text.toLowerCase();
+  if (/feed|food|snack|treat|hunger|meal|cookie|biscuit|kibble|bowl/.test(value)) return 'food';
+  if (/spar|train|fight|battle|pad/.test(value)) return 'spar';
+  if (/groom|brush|wash/.test(value)) return 'groom';
+  if (/rest|sleep|nap|recover|tired|cushion/.test(value)) return 'rest';
+  if (/explore|walk|map|route|visit/.test(value)) return 'explore';
+  if (/mission|daily|task|claim|check/.test(value)) return 'mission';
+  if (/toy|play|ball|orb|laser|feather|mouse|catnip|drum|whistle/.test(value)) return 'toy';
+  if (/outfit|costume|clothing|hat|jacket|shoe|belt|ranger/.test(value)) return 'outfit';
+  if (/habitat|room|floor|wall|background|prop|dojo|banner|tatami/.test(value)) return 'habitat';
+  if (/shop|buy|store|crate/.test(value)) return 'shop';
+  if (/leader|rank|podium|trophy/.test(value)) return 'leaderboard';
+  if (/trust|bond|cuddle|tap|heart/.test(value)) return 'trust';
+  if (/happy|praise|smile|joy|content/.test(value)) return 'happy';
+  if (/energy|boost|momentum|streak|power/.test(value)) return 'momentum';
+  if (/trick|perform|dance|spell|magic|stage/.test(value)) return 'trick';
+  return fallback;
+}
+
+function activityAsset(activity: PetActivity): PetUiAssetKey {
+  return petAssetFromText(`${activity.id} ${activity.label} ${activity.description || ''}`, 'trick');
+}
+
+function trickAsset(trick: PetTrick): PetUiAssetKey {
+  return petAssetFromText(`${trick.id} ${trick.name} ${trick.description || ''}`, 'trick');
+}
+
+function missionAsset(mission: Record<string, unknown>): PetUiAssetKey {
+  return petAssetFromText(`${String(mission.id || '')} ${String(mission.label || '')} ${String(mission.title || '')} ${String(mission.description || '')}`, 'mission');
+}
+
+function toyAsset(id: string): PetUiAssetKey {
+  return petAssetFromText(id, 'toy');
+}
+
+function foodAsset(_food: { id?: string; name?: string; desc?: string }): PetUiAssetKey {
+  return 'food';
+}
+
+function habitatAsset(kind: 'background' | 'prop' | 'floor' | 'wall', id: string): PetUiAssetKey {
+  return petAssetFromText(`${kind} ${id}`, 'habitat');
 }
 
 /* ════════════════════════════════════════════════════════════════════
@@ -925,18 +1023,18 @@ function ShopTab({ pet, s }: { pet: Pet; s: Styles }) {
   const data = shopQuery.data;
   if (!data) return <EmptyTab s={s} text="Shop unavailable right now." />;
 
-  const SHOP_CATS: { key: ShopCategory; label: string }[] = [
-    { key: 'food',     label: 'Food' },
-    { key: 'clothing', label: 'Clothing' },
-    { key: 'toys',     label: 'Toys' },
-    { key: 'habitat',  label: 'Habitat' },
+  const SHOP_CATS: { key: ShopCategory; label: string; asset: PetUiAssetKey }[] = [
+    { key: 'food',     label: 'Food',     asset: 'food' },
+    { key: 'clothing', label: 'Clothing', asset: 'outfit' },
+    { key: 'toys',     label: 'Toys',     asset: 'toy' },
+    { key: 'habitat',  label: 'Habitat',  asset: 'habitat' },
   ];
 
   return (
     <View style={s.tabBody}>
       <View style={s.shopHeader}>
         <View style={s.shopBalance}>
-          <Text style={s.currencyEmoji}>🎵</Text>
+          <PetArt asset="trick" size={20} />
           <Text style={s.shopBalanceValue}>{data.combo_balance.toLocaleString()}</Text>
           <Text style={s.currencyLabel}>COMBO</Text>
         </View>
@@ -948,7 +1046,10 @@ function ShopTab({ pet, s }: { pet: Pet; s: Styles }) {
                 key={c.key}
                 onPress={() => setCat(c.key)}
                 style={({ pressed }) => [s.shopCatBtn, active && s.shopCatBtnActive, pressed && { opacity: 0.7 }]}>
-                <Text style={[s.shopCatText, active && s.shopCatTextActive]}>{c.label}</Text>
+                <View style={s.shopCatContent}>
+                  <PetArt asset={c.asset} size={18} dimmed={!active} />
+                  <Text style={[s.shopCatText, active && s.shopCatTextActive]}>{c.label}</Text>
+                </View>
               </Pressable>
             );
           })}
@@ -956,31 +1057,49 @@ function ShopTab({ pet, s }: { pet: Pet; s: Styles }) {
       </View>
 
       {cat === 'food' ? (
-        <View style={s.shopGrid}>
-          {data.foods.map((f) => (
-            <Pressable
-              key={f.id}
-              onPress={() => buyFood.mutate(f.id)}
-              disabled={buyFood.isPending || data.combo_balance < f.cost}
-              style={({ pressed }) => [
-                s.shopCard,
-                f.preference === 'favorite' && { borderColor: 'rgba(253,224,71,0.6)' },
-                f.preference === 'disliked' && { borderColor: 'rgba(251,113,133,0.4)', opacity: 0.7 },
-                data.combo_balance < f.cost && { opacity: 0.4 },
-                pressed && { opacity: 0.8 },
-              ]}>
-              <Text style={s.shopEmoji}>{f.emoji}</Text>
-              <Text style={s.shopName} numberOfLines={1}>{f.name}</Text>
-              {f.desc ? <Text style={s.shopDesc} numberOfLines={2}>{f.desc}</Text> : null}
-              <View style={s.shopMeta}>
-                <Text style={s.shopMetaText}>+{f.hunger} hunger · +{f.happiness} happy</Text>
-              </View>
-              <View style={s.shopCostRow}>
-                <Text style={s.shopCost}>{costChip(f.cost)}</Text>
-                {f.preference === 'favorite' ? <Text style={s.shopFav}>★ Loves</Text> : null}
-              </View>
-            </Pressable>
-          ))}
+        <View style={s.foodSection}>
+          <View style={s.foodShelf}>
+            <PetArt asset="food" size={58} />
+            <View style={s.foodShelfText}>
+              <Text style={s.foodShelfTitle}>Food</Text>
+              <Text style={s.foodShelfSub}>Snacks restore hunger and can lift mood.</Text>
+            </View>
+          </View>
+          <View style={s.shopGrid}>
+            {data.foods.map((f) => (
+              <Pressable
+                key={f.id}
+                onPress={() => buyFood.mutate(f.id)}
+                disabled={buyFood.isPending || data.combo_balance < f.cost}
+                style={({ pressed }) => [
+                  s.shopCard,
+                  f.preference === 'favorite' && { borderColor: 'rgba(253,224,71,0.6)' },
+                  f.preference === 'disliked' && { borderColor: 'rgba(251,113,133,0.4)', opacity: 0.7 },
+                  data.combo_balance < f.cost && { opacity: 0.4 },
+                  pressed && { opacity: 0.8 },
+                ]}>
+                <View style={s.shopThumb}>
+                  <PetArt asset={foodAsset(f)} size={52} />
+                </View>
+                <Text style={s.shopName} numberOfLines={1}>{f.name}</Text>
+                {f.desc ? <Text style={s.shopDesc} numberOfLines={2}>{f.desc}</Text> : null}
+                <View style={s.shopMeta}>
+                  <View style={s.foodMetaRow}>
+                    <PetArt asset="food" size={14} />
+                    <Text style={s.shopMetaText}>+{f.hunger} hunger</Text>
+                  </View>
+                  <View style={s.foodMetaRow}>
+                    <PetArt asset="happy" size={14} />
+                    <Text style={s.shopMetaText}>+{f.happiness} happy</Text>
+                  </View>
+                </View>
+                <View style={s.shopCostRow}>
+                  <CostPill cost={f.cost} s={s} />
+                  {f.preference === 'favorite' ? <Text style={s.shopFav}>LOVES</Text> : null}
+                </View>
+              </Pressable>
+            ))}
+          </View>
         </View>
       ) : null}
 
@@ -1002,12 +1121,12 @@ function ShopTab({ pet, s }: { pet: Pet; s: Styles }) {
                 pressed && { opacity: 0.8 },
               ]}>
               <View style={s.shopThumb}>
-                <Text style={s.shopThumbGlyph}>{toyGlyph(t.id)}</Text>
+                <PetArt asset={toyAsset(t.id)} size={52} />
               </View>
               <Text style={s.shopName} numberOfLines={1}>{t.name}</Text>
               {t.desc ? <Text style={s.shopDesc} numberOfLines={2}>{t.desc}</Text> : null}
               <View style={s.shopCostRow}>
-                <Text style={s.shopCost}>{costChip(t.cost)}</Text>
+                <CostPill cost={t.cost} s={s} />
                 {t.owned ? <Text style={s.shopOwned}>OWNED</Text> : null}
               </View>
             </Pressable>
@@ -1036,13 +1155,25 @@ function ShopTab({ pet, s }: { pet: Pet; s: Styles }) {
                         pressed && { opacity: 0.8 },
                       ]}>
                       <View style={s.shopThumb}>
-                        {kind === 'props' ? <PropMini id={it.id} scale={3} /> : <Text style={s.shopThumbGlyph}>{habitatThumbGlyph(kind === 'backgrounds' ? 'background' : kind === 'floor' ? 'floor' : 'wall', it.id)}</Text>}
+                        {kind === 'props' ? (
+                          <PropMini id={it.id} scale={3} />
+                        ) : (
+                          <PetArt
+                            asset={habitatAsset(kind === 'backgrounds' ? 'background' : kind === 'floor' ? 'floor' : 'wall', it.id)}
+                            size={52}
+                          />
+                        )}
                       </View>
                       <Text style={s.shopName} numberOfLines={1}>{it.name}</Text>
                       {it.desc ? <Text style={s.shopDesc} numberOfLines={2}>{it.desc}</Text> : null}
                       <View style={s.shopCostRow}>
-                        <Text style={s.shopCost}>{costChip(it.cost ?? 0)}</Text>
-                        {it.owned ? <Text style={s.shopOwned}>OWNED</Text> : it.locked ? <Text style={s.shopLocked}>🔒 {it.lock_reason}</Text> : null}
+                        <CostPill cost={it.cost ?? 0} s={s} />
+                        {it.owned ? <Text style={s.shopOwned}>OWNED</Text> : it.locked ? (
+                          <View style={s.lockRow}>
+                            <IconSymbol name="lock.fill" size={11} color="#777" />
+                            <Text style={s.shopLocked}>{it.lock_reason}</Text>
+                          </View>
+                        ) : null}
                       </View>
                     </Pressable>
                   ))}
@@ -1054,20 +1185,6 @@ function ShopTab({ pet, s }: { pet: Pet; s: Styles }) {
       ) : null}
     </View>
   );
-}
-
-/** Distinct compact glyph per toy id. The web client doesn't have
- *  pixel-art toy thumbnails outside the SpritePet so we use a small
- *  themed character rather than the previous generic 🧸. */
-function toyGlyph(id: string): string {
-  if (/ball|orb/i.test(id)) return '🪀';
-  if (/laser|pointer/i.test(id)) return '🔦';
-  if (/feather/i.test(id)) return '🪶';
-  if (/mouse|catnip/i.test(id)) return '🐭';
-  if (/drum|stick/i.test(id)) return '🥁';
-  if (/whistle/i.test(id)) return '🎶';
-  if (/treat|cookie/i.test(id)) return '🍪';
-  return '🧶';
 }
 
 function ClothingShop({
@@ -1117,7 +1234,7 @@ function ClothingShop({
                 <Text style={s.shopName} numberOfLines={1}>{it.name}</Text>
                 {it.desc ? <Text style={s.shopDesc} numberOfLines={2}>{it.desc}</Text> : null}
                 <View style={s.shopCostRow}>
-                  <Text style={s.shopCost}>{costChip(it.cost)}</Text>
+                  <CostPill cost={it.cost} s={s} />
                   {it.owned ? <Text style={s.shopOwned}>OWNED</Text> : null}
                 </View>
               </Pressable>
@@ -1171,7 +1288,7 @@ function CustomizeTab({ pet, s, onOpenLeaderboard: _onOpenLeaderboard }: { pet: 
       <View style={s.customRow}>
         <View style={s.customMain}>
           <Text style={s.customLabel}>Show pet as profile avatar</Text>
-          <Text style={s.customHint}>Replaces your avatar with the pet emoji.</Text>
+          <Text style={s.customHint}>Replaces your avatar with your pet.</Text>
         </View>
         <Pressable
           onPress={() => toggleAvatar.mutate()}
@@ -1320,7 +1437,8 @@ const makeStyles = (t: ThemeColors) => ({
   },
   deskMain: { flex: 1, minWidth: 0, gap: 14 },
   deskRail: { width: 360, gap: 14 },
-  deskRailHint: { fontSize: 11, color: t.textDim, marginTop: 6, lineHeight: 16 },
+  deskRailSpacer: { width: 360 },
+  lowerSection: { gap: 14 },
 
   // Empty state
   empty: { flex: 1, alignItems: 'center' as const, justifyContent: 'center' as const, padding: 32, gap: 8 },
@@ -1405,7 +1523,10 @@ const makeStyles = (t: ThemeColors) => ({
     borderWidth: StyleSheet.hairlineWidth, borderColor: t.border,
     borderRadius: 12, paddingVertical: 12,
   },
-  currencyEmoji: { fontSize: 18 },
+  currencyIcon: {
+    width: 34, height: 34,
+    alignItems: 'center' as const, justifyContent: 'center' as const,
+  },
   currencyValue: { fontSize: 14, fontWeight: '900' as const, color: t.text, fontVariant: ['tabular-nums' as const] },
   currencyLabel: { fontSize: 9, fontWeight: '800' as const, color: t.textDim, letterSpacing: 1 },
 
@@ -1421,7 +1542,12 @@ const makeStyles = (t: ThemeColors) => ({
 
   // Vitals
   vitalRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10 },
-  vitalEmoji: { fontSize: 18, width: 22, textAlign: 'center' as const },
+  vitalIcon: {
+    width: 30, height: 30,
+    borderRadius: 8,
+    backgroundColor: 'rgba(0,0,0,0.24)',
+    alignItems: 'center' as const, justifyContent: 'center' as const,
+  },
   vitalBody: { flex: 1, minWidth: 0, gap: 4 },
   vitalLabelRow: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, alignItems: 'baseline' as const },
   vitalLabel: { fontSize: 12, fontWeight: '700' as const, color: t.text },
@@ -1437,7 +1563,12 @@ const makeStyles = (t: ThemeColors) => ({
 
   // Recommended
   recRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10 },
-  recEmoji: { fontSize: 16, width: 22, textAlign: 'center' as const },
+  recIcon: {
+    width: 30, height: 30,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,196,0,0.08)',
+    alignItems: 'center' as const, justifyContent: 'center' as const,
+  },
   recText: { flex: 1, fontSize: 13, color: t.text, fontWeight: '600' as const },
 
   // Care row
@@ -1448,7 +1579,6 @@ const makeStyles = (t: ThemeColors) => ({
     borderRadius: 10, borderWidth: 1,
     alignItems: 'center' as const, gap: 3,
   },
-  careEmoji: { fontSize: 18 },
   careLabel: { fontSize: 11, fontWeight: '800' as const, letterSpacing: 0.4 },
 
   // Activities
@@ -1461,7 +1591,10 @@ const makeStyles = (t: ThemeColors) => ({
     borderRadius: 10, padding: 10, gap: 6,
   },
   activityHead: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6 },
-  activityEmoji: { fontSize: 16 },
+  activityIcon: {
+    width: 28, height: 28,
+    alignItems: 'center' as const, justifyContent: 'center' as const,
+  },
   activityLabel: { fontSize: 13, fontWeight: '900' as const, color: t.text },
   activityDesc: { fontSize: 10, color: t.textMuted, lineHeight: 14 },
   activityChips: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 4 },
@@ -1470,7 +1603,8 @@ const makeStyles = (t: ThemeColors) => ({
     paddingHorizontal: 6, paddingVertical: 2, borderRadius: 999,
     borderWidth: 1, backgroundColor: 'rgba(0,0,0,0.32)',
   },
-  activityLock: { fontSize: 10, color: t.textDim, fontStyle: 'italic' as const },
+  lockRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4 },
+  activityLock: { flex: 1, fontSize: 10, color: t.textDim, fontStyle: 'italic' as const },
 
   // Tab strip
   tabStrip: { marginTop: 4 },
@@ -1482,6 +1616,7 @@ const makeStyles = (t: ThemeColors) => ({
     borderWidth: StyleSheet.hairlineWidth, borderColor: t.border,
   },
   tabBtnActive: { backgroundColor: t.accentTint, borderColor: t.accent },
+  tabBtnContent: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 7 },
   tabText: { fontSize: 12, fontWeight: '700' as const, color: t.textMuted },
   tabTextActive: { color: t.accent, fontWeight: '900' as const },
   tabBody: { gap: 8 },
@@ -1508,7 +1643,12 @@ const makeStyles = (t: ThemeColors) => ({
     backgroundColor: t.card, borderWidth: StyleSheet.hairlineWidth, borderColor: t.border,
     borderRadius: 12, padding: 12,
   },
-  trickEmoji: { fontSize: 22, width: 30, textAlign: 'center' as const },
+  trickIcon: {
+    width: 42, height: 42,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.24)',
+    alignItems: 'center' as const, justifyContent: 'center' as const,
+  },
   trickBody: { flex: 1, minWidth: 0, gap: 3 },
   trickName: { fontSize: 13, fontWeight: '900' as const, color: t.text },
   trickDesc: { fontSize: 11, color: t.textMuted, lineHeight: 14 },
@@ -1521,7 +1661,12 @@ const makeStyles = (t: ThemeColors) => ({
     backgroundColor: t.card, borderWidth: StyleSheet.hairlineWidth, borderColor: t.border,
     borderRadius: 12, padding: 12,
   },
-  missionEmoji: { fontSize: 22, width: 30, textAlign: 'center' as const },
+  missionIcon: {
+    width: 42, height: 42,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.24)',
+    alignItems: 'center' as const, justifyContent: 'center' as const,
+  },
   missionBody: { flex: 1, minWidth: 0, gap: 3 },
   missionName: { fontSize: 13, fontWeight: '900' as const, color: t.text },
   missionDesc: { fontSize: 11, color: t.textMuted, lineHeight: 14 },
@@ -1535,7 +1680,12 @@ const makeStyles = (t: ThemeColors) => ({
     backgroundColor: t.card, borderWidth: StyleSheet.hairlineWidth, borderColor: t.border,
     borderRadius: 12, padding: 10, gap: 4, alignItems: 'center' as const,
   },
-  toyEmoji: { fontSize: 28 },
+  toyThumb: {
+    width: 56, height: 56,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.24)',
+    alignItems: 'center' as const, justifyContent: 'center' as const,
+  },
   toyName: { fontSize: 11, fontWeight: '700' as const, color: t.text, textAlign: 'center' as const },
   toyPref: { fontSize: 9, fontWeight: '900' as const, color: t.textDim, letterSpacing: 0.5, textTransform: 'uppercase' as const },
 
@@ -1554,7 +1704,6 @@ const makeStyles = (t: ThemeColors) => ({
     alignItems: 'center' as const, justifyContent: 'center' as const,
     borderRadius: 6,
   },
-  habitatThumbGlyph: { fontSize: 24 },
   habitatName: { fontSize: 10, fontWeight: '700' as const, color: t.text, textAlign: 'center' as const },
   habitatBadge: { fontSize: 8, fontWeight: '900' as const, color: t.accent, letterSpacing: 0.6 },
 
@@ -1605,31 +1754,56 @@ const makeStyles = (t: ThemeColors) => ({
     backgroundColor: t.surfaceMuted, alignItems: 'center' as const,
   },
   shopCatBtnActive: { backgroundColor: t.accentTint, borderColor: t.accent },
+  shopCatContent: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 5 },
   shopCatText: { fontSize: 11, fontWeight: '700' as const, color: t.textMuted, letterSpacing: 0.4 },
   shopCatTextActive: { color: t.accent, fontWeight: '900' as const },
+  foodSection: { gap: 10 },
+  foodShelf: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 12,
+    backgroundColor: 'rgba(251,146,60,0.08)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(251,146,60,0.28)',
+    borderRadius: 12,
+    padding: 12,
+  },
+  foodShelfText: { flex: 1, minWidth: 0, gap: 2 },
+  foodShelfTitle: { fontSize: 15, fontWeight: '900' as const, color: t.text },
+  foodShelfSub: { fontSize: 11, color: t.textMuted, lineHeight: 15 },
   shopGrid: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8 },
   shopCard: {
     width: '48%' as const,
     backgroundColor: t.card, borderWidth: StyleSheet.hairlineWidth, borderColor: t.border,
     borderRadius: 12, padding: 12, gap: 4, alignItems: 'center' as const,
   },
-  shopEmoji: { fontSize: 32 },
   shopThumb: {
     width: 64, height: 64,
     backgroundColor: 'rgba(0,0,0,0.32)',
     borderRadius: 8,
     alignItems: 'center' as const, justifyContent: 'center' as const,
   },
-  shopThumbGlyph: { fontSize: 28 },
   shopThumbLg: {
     width: 80, height: 80,
     alignItems: 'center' as const, justifyContent: 'center' as const,
   },
   shopName: { fontSize: 12, fontWeight: '900' as const, color: t.text, textAlign: 'center' as const },
   shopDesc: { fontSize: 10, color: t.textMuted, textAlign: 'center' as const, lineHeight: 13 },
-  shopMeta: { paddingTop: 2 },
+  shopMeta: { paddingTop: 2, gap: 2 },
+  foodMetaRow: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 4 },
   shopMetaText: { fontSize: 10, color: t.textDim },
   shopCostRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, paddingTop: 4 },
+  costPill: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 4,
+    backgroundColor: 'rgba(255,196,0,0.1)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,196,0,0.24)',
+    borderRadius: 999,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
   shopCost: { fontSize: 11, fontWeight: '900' as const, color: t.accent, fontVariant: ['tabular-nums' as const] },
   shopFav: { fontSize: 10, fontWeight: '800' as const, color: '#FDE047' },
   shopOwned: { fontSize: 10, fontWeight: '900' as const, color: '#34D399', letterSpacing: 0.5 },

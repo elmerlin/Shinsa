@@ -19,11 +19,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { ConversationView } from '@/app/conversation/[id]';
 import {
   ActivityIndicator,
+  FlatList,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -31,10 +33,11 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useIsFocused } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DefaultAvatar } from '@/components/default-avatar';
 import { TopBar } from '@/components/top-bar';
-import { StoriesStrip } from '@/components/messages/stories-strip';
+import { HIGHLIGHTS_QUERY_KEY, StoriesStrip } from '@/components/messages/stories-strip';
 import { StoryViewer } from '@/components/messages/story-viewer';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAuth } from '@/contexts/auth-context';
@@ -103,23 +106,33 @@ export default function MessagesScreen() {
   const s = useThemedStyles(makeStyles);
   const queryClient = useQueryClient();
   const { isDesktop } = useBreakpoint();
+  const isFocused = useIsFocused();
   // Long-press target → opens the pin/mute action sheet.
   const [actionTarget, setActionTarget] = useState<ConversationSummary | null>(null);
   // Story viewer target — user_id whose story stack to show.
-  const [storyUserId, setStoryUserId] = useState<string | null>(null);
+  const [storyViewer, setStoryViewer] = useState<{ userId: string | null; userIds: string[] }>({
+    userId: null,
+    userIds: [],
+  });
+  const [manualRefreshing, setManualRefreshing] = useState(false);
   // Desktop: track the selected conversation via URL so back/forward + reload
   // survive. Clicking a row sets ?selected=; the center pane embeds the
   // thread. On mobile we still navigate to /conversation/[id].
   const params = useLocalSearchParams<{ selected?: string }>();
   const selectedId = typeof params.selected === 'string' ? params.selected : '';
+  const viewerId = user?.id || '';
 
-  const inboxKey = getMessagesInboxQueryKey(user?.id);
+  const inboxKey = useMemo(() => getMessagesInboxQueryKey(user?.id), [user?.id]);
   const query = useQuery({
     queryKey: inboxKey,
     queryFn: () => messagesApi.conversations(),
     enabled: !!user?.id,
-    refetchInterval: INBOX_REFETCH_INTERVAL_MS,
-    refetchOnWindowFocus: true,
+    staleTime: INBOX_REFETCH_INTERVAL_MS,
+    gcTime: 10 * 60_000,
+    refetchInterval: isFocused ? INBOX_REFETCH_INTERVAL_MS : false,
+    refetchOnReconnect: true,
+    refetchOnMount: false,
+    placeholderData: (previous) => previous,
   });
 
   // Pin/unpin a conversation. Optimistically flip the flag in the inbox
@@ -150,7 +163,33 @@ export default function MessagesScreen() {
   const conversations = query.data?.conversations ?? [];
   const totalUnread = conversations.reduce((sum, c) => sum + (c.unread_count || 0), 0);
 
-  const openConversation = (id: string) => {
+  const openStory = useCallback((userId: string, userIds: string[] = []) => {
+    setStoryViewer({ userId, userIds });
+  }, []);
+
+  const closeStory = useCallback(() => {
+    setStoryViewer((prev) => ({ ...prev, userId: null }));
+  }, []);
+
+  const changeStoryUser = useCallback((userId: string) => {
+    setStoryViewer((prev) => ({ ...prev, userId }));
+  }, []);
+
+  const handleManualRefresh = useCallback(async () => {
+    if (!viewerId || manualRefreshing) return;
+    setManualRefreshing(true);
+    try {
+      await Promise.all([
+        query.refetch(),
+        queryClient.refetchQueries({ queryKey: HIGHLIGHTS_QUERY_KEY, type: 'active' }),
+      ]);
+    } finally {
+      setManualRefreshing(false);
+    }
+  }, [manualRefreshing, query, queryClient, viewerId]);
+
+  const openConversation = useCallback((id: string) => {
+    if (!viewerId) return;
     // Optimistically clear the unread badge so it doesn't blink back to
     // its old value while the thread query is in flight. Server confirms
     // the read state on /conversations/:id (no `before` cursor).
@@ -166,7 +205,22 @@ export default function MessagesScreen() {
     } else {
       router.push({ pathname: '/conversation/[id]', params: { id } });
     }
-  };
+  }, [inboxKey, isDesktop, queryClient, router, viewerId]);
+
+  const renderConversation = useCallback(({ item: c }: { item: ConversationSummary }) => (
+    <ConversationRow
+      conversation={c}
+      viewerId={viewerId}
+      active={isDesktop && c.id === selectedId}
+      onPressIn={() => prefetchConversationForIntent({ queryClient, conversationId: c.id })}
+      onPress={() => openConversation(c.id)}
+      onLongPress={() => setActionTarget(c)}
+    />
+  ), [isDesktop, openConversation, queryClient, selectedId, viewerId]);
+
+  const storyHeader = useMemo(() => (
+    <StoriesStrip enabled={isFocused} onPickStory={openStory} />
+  ), [isFocused, openStory]);
 
   if (!user) {
     return (
@@ -257,7 +311,12 @@ export default function MessagesScreen() {
           </View>
         </View>
 
-        <StoryViewer userId={storyUserId} onClose={() => setStoryUserId(null)} />
+        <StoryViewer
+          userId={storyViewer.userId}
+          userIds={storyViewer.userIds}
+          onChangeUser={changeStoryUser}
+          onClose={closeStory}
+        />
 
         <Modal
           visible={!!actionTarget}
@@ -310,22 +369,54 @@ export default function MessagesScreen() {
         />
       </View>
 
-      <ScrollView
-        contentContainerStyle={[s.scroll, { paddingBottom: insets.bottom + 24 }]}
+      <FlatList<ConversationSummary>
+        data={conversations}
+        keyExtractor={(c) => c.id}
+        renderItem={renderConversation}
+        ListHeaderComponent={storyHeader}
+        ListEmptyComponent={
+          query.isLoading && !query.data ? (
+            <View style={s.center}><ActivityIndicator color={theme.spinner} /></View>
+          ) : query.isError && !query.data ? (
+            <View style={s.errorCard}>
+              <Text style={s.errorText}>
+                {query.error instanceof Error ? query.error.message : 'Failed to load conversations'}
+              </Text>
+            </View>
+          ) : (
+            <View style={s.emptyCard}>
+              <Text style={s.emptyEmoji}>💬</Text>
+              <Text style={s.emptyTitle}>No conversations yet</Text>
+              <Text style={s.emptyBody}>
+                Open a player&apos;s profile and tap Message to start a DM, or join a squad chat
+                from the web for now.
+              </Text>
+            </View>
+          )
+        }
+        contentContainerStyle={[s.scroll, { paddingBottom: insets.bottom + 24 }, conversations.length === 0 && s.scrollGrow]}
         refreshControl={
           <RefreshControl
-            refreshing={query.isRefetching}
-            onRefresh={() => query.refetch()}
+            refreshing={manualRefreshing}
+            onRefresh={() => { void handleManualRefresh(); }}
             tintColor={theme.spinner}
           />
-        }>
-        {/* Stories strip — sits above the conversation list. */}
-        <StoriesStrip onPickStory={setStoryUserId} />
+        }
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        initialNumToRender={12}
+        maxToRenderPerBatch={8}
+        updateCellsBatchingPeriod={40}
+        windowSize={7}
+        removeClippedSubviews={Platform.OS !== 'web'}
+      />
 
-        {inbox}
-      </ScrollView>
-
-      <StoryViewer userId={storyUserId} onClose={() => setStoryUserId(null)} />
+      <StoryViewer
+        userId={storyViewer.userId}
+        userIds={storyViewer.userIds}
+        onChangeUser={changeStoryUser}
+        onClose={closeStory}
+      />
 
       {/* Long-press action sheet — pin/unpin */}
       <Modal
@@ -467,6 +558,7 @@ const makeStyles = (t: ThemeColors) => ({
 
   centered: { padding: 32, alignItems: 'center' as const, justifyContent: 'center' as const, flex: 1 },
   scroll: { paddingHorizontal: 8, gap: 4 },
+  scrollGrow: { flexGrow: 1 },
   center: { padding: 32, alignItems: 'center' as const },
 
   errorCard: { backgroundColor: t.dangerBg, borderRadius: 12, padding: 16, borderWidth: 1, borderColor: t.dangerBorder, marginHorizontal: 4 },

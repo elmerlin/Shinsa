@@ -1816,7 +1816,7 @@
           Download for Android
         </a>
         <a href="https://new.pumpshinsa.com/" class="btn-secondary">Open web app →</a>
-        <div class="pkg-meta"><span class="ok">●</span> Signed APK · v1.0.0 · 88 MB · Android 7.0+</div>
+        <div class="pkg-meta" id="pkg-meta"><span class="ok">●</span> Signed APK · latest build · Android 7.0+</div>
       </div>
     </div>
   </section>
@@ -1844,6 +1844,29 @@
       }
     }, { threshold: 0.10, rootMargin: '0px 0px -8% 0px' });
     document.querySelectorAll('.reveal').forEach((el) => io.observe(el));
+
+    const apkMeta = document.getElementById('pkg-meta');
+    const formatBytes = (bytes) => {
+      const n = Number(bytes);
+      if (!Number.isFinite(n) || n <= 0) return '';
+      const mb = n / 1024 / 1024;
+      return `${mb >= 10 ? Math.round(mb) : mb.toFixed(1)} MB`;
+    };
+
+    fetch('/download/latest.json', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((latest) => {
+        if (!latest || !apkMeta) return;
+        const parts = [
+          'Signed APK',
+          latest.version ? `v${latest.version}` : '',
+          latest.versionCode ? `build ${latest.versionCode}` : '',
+          formatBytes(latest.size),
+          'Android 7.0+',
+        ].filter(Boolean);
+        apkMeta.innerHTML = `<span class="ok">●</span> ${parts.join(' · ')}`;
+      })
+      .catch(() => {});
 
     fetch('/download/shinsa.apk', { method: 'HEAD' })
       .then((r) => {

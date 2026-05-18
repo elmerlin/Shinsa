@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MachineCabinet } from '@/components/checkin/machine-cabinet';
+import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useCheckinProximity } from '@/hooks/use-checkin-proximity';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { useTheme } from '@/contexts/theme-context';
@@ -93,6 +94,13 @@ export default function CheckinScreen() {
   // confirmed the swap. We resolve it back to the full machine object in
   // the modal so we can show the name + warn if it's a switch.
   const [pendingMachineId, setPendingMachineId] = useState<string | null>(null);
+  const goBack = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/');
+    }
+  }, [router]);
 
   const statusQuery = useQuery({
     queryKey: ['checkin-status'],
@@ -210,6 +218,14 @@ export default function CheckinScreen() {
   return (
     <View style={[s.container, { paddingTop: insets.top }]}>
       <View style={s.header}>
+        <Pressable
+          onPress={goBack}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+          style={({ pressed }) => [s.backBtn, pressed && { opacity: 0.65 }]}>
+          <IconSymbol name="chevron.left" size={24} color={theme.text} />
+        </Pressable>
         <Text style={s.title}>Check In</Text>
         {checkedIn ? (
           <Pressable
@@ -647,6 +663,16 @@ const makeStyles = (t: ThemeColors) => ({
     paddingHorizontal: 16,
     paddingVertical: 10,
     gap: 12,
+  },
+  backBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    backgroundColor: t.surfaceMuted,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: t.border,
   },
   title: { flex: 1, fontSize: 22, fontWeight: '900' as const, color: t.text, letterSpacing: 0.3 },
   checkoutBtn: {

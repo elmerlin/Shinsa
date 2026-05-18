@@ -29,9 +29,9 @@ export function getConversationMessagesQueryKey(conversationId: string) {
 
 // --- Constants --------------------------------------------------------------
 
-export const INBOX_REFETCH_INTERVAL_MS = 15_000;
+export const INBOX_REFETCH_INTERVAL_MS = 30_000;
 export const THREAD_REFETCH_INTERVAL_MS = 8_000;
-export const INITIAL_MESSAGE_LIMIT = 50;
+export const INITIAL_MESSAGE_LIMIT = 30;
 
 // --- Prefetch helpers -------------------------------------------------------
 
@@ -50,6 +50,6 @@ export function prefetchConversationForIntent(params: {
   void queryClient.prefetchQuery({
     queryKey: getConversationQueryKey(conversationId),
     queryFn: () => messagesApi.conversation(conversationId, { limit: INITIAL_MESSAGE_LIMIT }),
-    staleTime: 5_000,
+    staleTime: 10_000,
   });
 }

@@ -8,7 +8,6 @@ import { GradeChip } from '@/components/grade-chip';
 import { ReplayModal } from '@/components/replay-modal';
 import { ScoreCardSheet, type ScoreCardData } from '@/components/score-card-sheet';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-type IconName = Parameters<typeof IconSymbol>[0]['name'];
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { socialApi } from '@/lib/api';
 import { fullImageUrl } from '@/lib/images';
@@ -16,6 +15,8 @@ import { resolveJacketSource } from '@/lib/jacket';
 import { getCountryFlag } from '@/lib/profileMeta';
 import type { ClearHighlight, ReplayHighlight, UpscoreHighlight } from '@shared/api';
 import type { ThemeColors } from '@/constants/theme';
+
+type IconName = Parameters<typeof IconSymbol>[0]['name'];
 
 function fmt(n: number | undefined | null): string {
   if (typeof n !== 'number' || !Number.isFinite(n)) return '—';
