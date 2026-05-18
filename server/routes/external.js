@@ -203,7 +203,6 @@ router.get('/steps', requireApiToken, requireScope('steps:read'), (req, res) => 
     const rows = db.prepare(`
       SELECT rp.played_at_utc,
              COALESCE(rp.perfect,0) + COALESCE(rp.great,0) + COALESCE(rp.good,0) + COALESCE(rp.bad,0) AS steps,
-             COALESCE(rp.kcal, 0) AS kcal_logged,
              rp.mode AS rp_mode,
              s.duration_seconds AS duration_seconds
         FROM user_recently_played rp
@@ -237,10 +236,7 @@ router.get('/steps', requireApiToken, requireScope('steps:read'), (req, res) => 
         dayMap.set(z.date, day);
       }
       const steps = Number(r.steps) || 0;
-      const loggedKcal = Number(r.kcal_logged) || 0;
-      const kcal = loggedKcal > 0
-        ? loggedKcal
-        : estimateKcalForDuration(kcalPerMinute, Number(r.duration_seconds));
+      const kcal = estimateKcalForDuration(kcalPerMinute, Number(r.duration_seconds));
       day.steps += steps;
       day.plays += 1;
       day.kcal += kcal;
@@ -283,17 +279,16 @@ router.get('/steps', requireApiToken, requireScope('steps:read'), (req, res) => 
   // string, so a date-only BETWEEN never matched anything. Compare on
   // the first 10 chars and group on the same prefix.
   //
-  // kcal: prefer the row's logged kcal (PIUGame OCR), else
-  // (kcal_per_minute × song_duration_minutes), else the 120-second
-  // baseline when the chart isn't in the songs catalog. All three
-  // branches fold into a single SQL SUM via nested CASE.
+  // kcal: always MET-derived — (kcal_per_minute × song_duration_minutes)
+  // when the chart is in the catalog, else the 120-second baseline. The
+  // OCR'd-from-PIUGame "logged" source was removed (unreliable). Folded
+  // into a single SQL SUM via CASE.
   const dayRows = db.prepare(`
     SELECT substr(rp.date_played, 1, 10) AS date,
            COALESCE(SUM(COALESCE(rp.perfect,0) + COALESCE(rp.great,0) + COALESCE(rp.good,0) + COALESCE(rp.bad,0)), 0) AS steps,
            COUNT(*) AS plays,
            COALESCE(SUM(
              CASE
-               WHEN COALESCE(rp.kcal,0) > 0 THEN rp.kcal
                WHEN s.duration_seconds IS NOT NULL AND s.duration_seconds > 0
                  THEN ? * (s.duration_seconds / 60.0)
                ELSE ?
@@ -321,7 +316,6 @@ router.get('/steps', requireApiToken, requireScope('steps:read'), (req, res) => 
            COUNT(*) AS plays,
            COALESCE(SUM(
              CASE
-               WHEN COALESCE(rp.kcal,0) > 0 THEN rp.kcal
                WHEN s.duration_seconds IS NOT NULL AND s.duration_seconds > 0
                  THEN ? * (s.duration_seconds / 60.0)
                ELSE ?
@@ -418,7 +412,6 @@ router.get('/plays', requireApiToken, requireScope('steps:read'), (req, res) => 
     SELECT rp.id AS play_id, rp.date_played, rp.played_at_utc,
            rp.song_title, rp.mode, rp.level, rp.score, rp.grade, rp.plate,
            COALESCE(rp.perfect,0) + COALESCE(rp.great,0) + COALESCE(rp.good,0) + COALESCE(rp.bad,0) AS steps,
-           COALESCE(rp.kcal, 0) AS kcal_logged,
            COALESCE(rp.perfect, 0) AS perfect, COALESCE(rp.great, 0) AS great,
            COALESCE(rp.good, 0) AS good, COALESCE(rp.bad, 0) AS bad,
            COALESCE(rp.miss, 0) AS miss, COALESCE(rp.max_combo, 0) AS max_combo,
@@ -495,14 +488,10 @@ router.get('/plays', requireApiToken, requireScope('steps:read'), (req, res) => 
   };
 
   const plays = rows.map((r) => {
-    const logged = Number(r.kcal_logged) || 0;
     const duration = Number(r.duration_seconds);
     let kcal;
     let kcalSource;
-    if (logged > 0) {
-      kcal = logged;
-      kcalSource = 'logged';
-    } else if (Number.isFinite(duration) && duration > 0) {
+    if (Number.isFinite(duration) && duration > 0) {
       kcal = kcalPerMinute * (duration / 60);
       kcalSource = 'estimated_duration';
     } else {
@@ -586,7 +575,7 @@ router.get('/plays', requireApiToken, requireScope('steps:read'), (req, res) => 
 // `schemes_v` bumps when any structural shape here changes so consumers
 // can cache the response and re-fetch when the version moves.
 
-const SCHEMES_VERSION = 1;
+const SCHEMES_VERSION = 2;
 
 const SCHEME_MODES = {
   Single:  { short: 'S',  color: '#d93d62', gradient: ['#ff7a7a', '#d93d62', '#7a1730'], label: 'Single' },
@@ -629,14 +618,16 @@ const SCHEME_PLATES = [
 ];
 
 // kcal formula reference so consumers can independently re-compute or
-// explain the number to their users. Matches resolveKcalContext().
+// explain the number to their users. Matches resolveKcalContext(). All
+// values are MET-derived; we no longer surface PIUGame's OCR'd kcal
+// because the upstream OCR is unreliable enough that mixing the two
+// sources produced obviously-wrong jumps in the per-day totals.
 const SCHEME_KCAL_FORMULA = {
   met: 11.8,
   formula: '(MET × 3.5 × weight_kg / 200) × song_duration_minutes',
   fallback_duration_seconds: 120,
   sources: {
-    logged:              'PIUGame OCR captured the cabinet kcal directly (authoritative).',
-    estimated_duration:  'MET × profile_weight_kg × chart_duration_seconds from songs catalog.',
+    estimated_duration:  'MET × profile_weight_kg × chart_duration_seconds from songs catalog (~98% of plays).',
     estimated_baseline:  'MET × profile_weight_kg × 120 s fallback (chart not in catalog).',
   },
 };

@@ -1082,14 +1082,42 @@ export default function MyAccountPage() {
       ) : tab === 'api' ? (
         <div className="space-y-4">
           <div className="card space-y-4">
-            <div className="space-y-1">
+            <div className="space-y-2">
               <h3 className="font-display font-bold text-sm text-piu-accent">API ACCESS</h3>
               <p className="text-xs text-gray-400">
-                Personal access tokens let other apps you own pull your data from pumpshinsa.com.
-                Today this exposes daily step counts (every judgement that isn&rsquo;t a miss) at{' '}
-                <code className="text-piu-accent">GET /api/external/steps?from=YYYY-MM-DD&amp;to=YYYY-MM-DD</code>.
-                Send the token as <code className="text-piu-accent">Authorization: Bearer &lt;token&gt;</code>.
+                Personal access tokens let other apps you own pull your Pump Shinsa data over HTTPS.
+                Auth header on every call: <code className="text-piu-accent">Authorization: Bearer &lt;token&gt;</code>.
+                Required scope: <code className="text-piu-accent">steps:read</code>.
               </p>
+              <div className="rounded-lg border border-piu-border/40 bg-piu-dark/40 p-3 text-xs text-gray-300 space-y-2">
+                <p className="font-display font-bold uppercase tracking-wide text-[10px] text-gray-500">Endpoints</p>
+                <ul className="space-y-1.5">
+                  <li>
+                    <code className="text-piu-accent">GET /api/external/steps</code>
+                    <span className="block text-[11px] text-gray-500">
+                      Day totals + per-hour buckets. Best for a calendar / heatmap. Includes daily kcal + step counts.
+                    </span>
+                  </li>
+                  <li>
+                    <code className="text-piu-accent">GET /api/external/plays</code>
+                    <span className="block text-[11px] text-gray-500">
+                      Per-song detail: score, grade, plate, judgments, steps, kcal, duration, jacket image URL, deep links to the chart and play.
+                      The shape a workout-detail view wants.
+                    </span>
+                  </li>
+                  <li>
+                    <code className="text-piu-accent">GET /api/external/schemes</code>
+                    <span className="block text-[11px] text-gray-500">
+                      Static catalog of visual conventions: grade colors + thresholds, mode chips, plate badges, kcal formula. Cache it; bumps a version when shape changes.
+                    </span>
+                  </li>
+                </ul>
+                <p className="text-[11px] text-gray-500 pt-1">
+                  Common params on <code>/steps</code> + <code>/plays</code>: <code>from=YYYY-MM-DD</code>, <code>to=YYYY-MM-DD</code>, and{' '}
+                  <code className="text-piu-accent">tz=Europe/London</code> (IANA). Without <code>tz</code>, dates fall back to
+                  Asia/Seoul (PIUGame's native timezone) — pass your local one.
+                </p>
+              </div>
             </div>
 
             {apiMessage && (
@@ -1161,174 +1189,238 @@ export default function MyAccountPage() {
           {(() => {
             const tokenForSnippet = apiJustCreated?.token || 'pump_pat_PASTE_YOUR_TOKEN_HERE';
             const isPlaceholder = !apiJustCreated?.token;
-            const curlSnippet = `# Day totals + hourly step buckets
+            const curlSnippet = `# Day totals + hourly buckets (with daily kcal)
 curl -H "Authorization: Bearer ${tokenForSnippet}" \\
-  "https://pumpshinsa.com/api/external/steps?from=2026-05-01&to=2026-05-15"
+  "https://pumpshinsa.com/api/external/steps?from=2026-05-01&to=2026-05-15&tz=Europe/London"
 
-# Per-song detail (steps, kcal, score, grade, replay url) — newest first
+# Per-song detail — score, grade, plate, kcal, jacket URL, replay URL.
+# Newest first. Pass tz so dates are interpreted in your local zone.
 curl -H "Authorization: Bearer ${tokenForSnippet}" \\
-  "https://pumpshinsa.com/api/external/plays?from=2026-05-01&to=2026-05-15&limit=100"`;
+  "https://pumpshinsa.com/api/external/plays?from=2026-05-01&to=2026-05-15&tz=Europe/London&limit=200"
+
+# Visual conventions (grade colors, mode chips, plate badges). Cache it.
+curl -H "Authorization: Bearer ${tokenForSnippet}" \\
+  "https://pumpshinsa.com/api/external/schemes"`;
             const nodeSnippet = `const auth = { Authorization: \`Bearer \${process.env.PUMPSHINSA_TOKEN}\` };
+const tz = 'Europe/London';
+const today = new Date().toLocaleDateString('en-CA', { timeZone: tz }); // YYYY-MM-DD
 
-// /steps — day totals + hourly buckets (UTC).
+// /steps — day totals + hourly buckets (in the requested tz).
 const stepsRes = await fetch(
-  \`https://pumpshinsa.com/api/external/steps?from=\${from}&to=\${to}\`,
+  \`https://pumpshinsa.com/api/external/steps?from=\${today}&to=\${today}&tz=\${tz}\`,
   { headers: auth }
 );
 const { days } = await stepsRes.json();
 const totalSteps = days.reduce((s, d) => s + d.steps, 0);
-const byHour = Array.from({ length: 24 }, () => 0);
-for (const d of days) for (const h of d.hours || []) byHour[h.hour] += h.steps;
+const totalKcal  = days.reduce((s, d) => s + d.kcal,  0);
 
-// /plays — per-song detail (newest first). Each row has kcal so you can
-// chart calories burned per song. kcal_source tells you whether the value
-// came from PIUGame's OCR ("logged") or a MET-based fallback ("estimated").
+// /plays — per-song detail (newest first). Each row carries kcal +
+// jacket_url + chart_url + play_url + og_image_url so a workout-detail
+// view has everything to render without a second round-trip. kcal is
+// always MET-derived: "estimated_duration" (preferred) uses the chart's
+// real duration from the songs catalog; "estimated_baseline" falls
+// back to 120 s when the chart isn't catalogued.
 const playsRes = await fetch(
-  \`https://pumpshinsa.com/api/external/plays?from=\${from}&to=\${to}&limit=100\`,
+  \`https://pumpshinsa.com/api/external/plays?from=\${today}&to=\${today}&tz=\${tz}&limit=500\`,
   { headers: auth }
 );
-const { plays } = await playsRes.json();
-const totalKcal = plays.reduce((s, p) => s + p.kcal, 0);
+const { plays, total_kcal, total_steps, total_duration_seconds } = await playsRes.json();
 const kcalBySong = plays.reduce((acc, p) => {
   acc[p.song_title] = (acc[p.song_title] || 0) + p.kcal;
   return acc;
-}, {});`;
-            const agentSnippet = `You are integrating the Pumpshinsa Steps API into a website.
+}, {});
 
-AUTH (both endpoints)
+// /schemes — one-shot static catalog. Cache it (5 min server-side).
+// Re-fetch when schemes_v bumps.
+const schemes = await (await fetch(
+  'https://pumpshinsa.com/api/external/schemes',
+  { headers: auth }
+)).json();
+const gradeFor = (score) =>
+  schemes.grades.find((g) => score >= g.min_score) ?? schemes.grades.at(-1);
+const chipFor = (mode, level) => {
+  const m = schemes.modes[mode] ?? schemes.modes.Single;
+  return { label: mode === 'CoOp' ? \`C\${level}\` : \`\${m.short}\${level}\`, color: m.color };
+};`;
+            const agentSnippet = `You are integrating the Pump Shinsa external API into a website.
+
+AUTH (all endpoints)
 Header: Authorization: Bearer <token>
 Token: ${tokenForSnippet}
 Required scope: steps:read
 Treat the token like a password — never ship it in browser code.
 
+DATE / TIMEZONE
+- /steps and /plays take from=YYYY-MM-DD&to=YYYY-MM-DD.
+- ALSO pass tz=<IANA> (e.g. tz=Europe/London). Without it, dates fall back
+  to Asia/Seoul (PIUGame's native zone) and a "today" query made from
+  London will miss plays the user did this evening.
+
 ═══════════════════════════════════════════════════════════════════════
 ENDPOINT 1 — /steps : day totals + hourly buckets (chart-friendly)
 ═══════════════════════════════════════════════════════════════════════
-GET https://pumpshinsa.com/api/external/steps?from=YYYY-MM-DD&to=YYYY-MM-DD
-
-PARAMS
-- from (required, YYYY-MM-DD)
-- to   (required, YYYY-MM-DD, must be >= from)
-
-RESPONSE 200
-{
-  "user_id": <int>,
-  "from": "YYYY-MM-DD",
-  "to":   "YYYY-MM-DD",
-  "hour_basis": "utc",
-  "days": [
-    {
-      "date": "YYYY-MM-DD",
-      "steps": <int>,
-      "plays": <int>,
-      "hours": [
-        { "hour": 0..23, "steps": <int>, "plays": <int> }
-      ]
-    }
-  ]
-}
-
-DAY TOTALS
-- "steps" = perfect+great+good+bad judgments per play (misses excluded).
-- "days" only contains dates that had plays — fill gaps with 0 if you need a continuous range.
-
-HOURLY BREAKDOWN
-- "hours" is sparse: hours with no plays are omitted (treat missing entries as 0).
-- "hour" is an integer 0..23 in the timezone given by top-level "hour_basis"
-  (currently always "utc"). Convert to local on the consumer if you display
-  it next to local timestamps.
-- Sum of hours[].steps may be < days[].steps because some older plays predate
-  the played_at_utc column and have no hour bucket. Treat day totals as the
-  source of truth for a date; treat hourly buckets as best-effort distribution.
-
-═══════════════════════════════════════════════════════════════════════
-ENDPOINT 2 — /plays : per-song detail (kcal per song, replay URLs, etc.)
-═══════════════════════════════════════════════════════════════════════
-GET https://pumpshinsa.com/api/external/plays?from=YYYY-MM-DD&to=YYYY-MM-DD&limit=100
-
-PARAMS
-- from (required, YYYY-MM-DD)
-- to   (required, YYYY-MM-DD, must be >= from)
-- limit (optional, default 100, max 500)
+GET https://pumpshinsa.com/api/external/steps?from=YYYY-MM-DD&to=YYYY-MM-DD&tz=Europe/London
 
 RESPONSE 200
 {
   "user_id": <string>,
   "from": "YYYY-MM-DD",
   "to":   "YYYY-MM-DD",
-  "limit": <int>,
-  "count": <int>,                       // number of plays returned
-  "kcal_weight_kg": <number>,           // weight used for estimate fallback
+  "tz": "Europe/London" | null,
+  "hour_basis": "Europe/London" | "utc",   // matches tz; "utc" when none
+  "kcal_weight_kg": <number>,              // user's profile weight (or 70 default)
   "kcal_weight_source": "profile" | "default",
-  "kcal_per_song_estimate": <number>,   // MET-derived kcal/song at that weight
-  "plays": [
+  "kcal_estimate_basis": "song_duration",
+  "kcal_per_song_baseline_120s": <number>, // baseline at user's weight
+  "days": [
     {
-      "play_id": <int>,
-      "played_at_utc": "YYYY-MM-DD HH:MM:SS",  // may be empty for older plays
-      "date_played": <string>,                 // free-form local label PIUGame surfaces
-      "song_title": <string>,
-      "mode": "Single" | "Double" | "CoOp",
-      "level": <int>,
-      "score": <int>,
-      "grade": <string>,                       // "SSS+" / "A" / "F" etc.
-      "plate": <string>,                       // "PG" / "MG" / "FG" etc.
-      "steps": <int>,                          // perfect+great+good+bad
-      "kcal": <number>,                        // best estimate (see kcal_source)
-      "kcal_source": "logged" | "estimated",   // logged = OCR from PIUGame
-      "judgments": { "perfect": ..., "great": ..., "good": ..., "bad": ..., "miss": ... },
-      "max_combo": <int>,
-      "replay_embed_url": <string>,            // YouTube embed with ?start=&end= when available
-      "replay_video_id": <string>
+      "date": "YYYY-MM-DD",
+      "steps": <int>,
+      "plays": <int>,
+      "kcal":  <number>,
+      "hours": [
+        { "hour": 0..23, "steps": <int>, "plays": <int>, "kcal": <number> }
+      ]
     }
   ]
 }
 
-KCAL SEMANTICS
-- When PIUGame's UI captured a kcal value (OCR'd from the score screen),
-  "kcal_source" is "logged" and "kcal" is that value as-is.
-- When the row has no logged kcal, the server returns a per-song estimate
-  computed as (11.8 MET × 3.5 × weight_kg / 200) × 2 min. "kcal_source"
-  is "estimated" and the same constant value appears on every estimated
-  row (since song length is fixed). weight_kg comes from the user's
-  profile (kcal_weight_source: "profile") or defaults to 70 kg
-  ("default").
-- Sum plays[].kcal for a total. Group by song_title for "kcal per song".
+NOTES
+- "steps" = perfect+great+good+bad (misses excluded).
+- "days" omits dates with no plays — fill gaps with 0 if you need a continuous range.
+- "hours" is sparse: missing buckets = 0.
+- Older plays without a played_at_utc are excluded from hourly buckets;
+  sum(hours[].steps) <= days[].steps. Day totals are source of truth.
 
-ROW ORDER
-- Newest first (ORDER BY played_at_utc DESC, id DESC). limit caps the
-  page; paginate by tightening the date range if you need older rows.
+═══════════════════════════════════════════════════════════════════════
+ENDPOINT 2 — /plays : per-song detail (workout-view shape)
+═══════════════════════════════════════════════════════════════════════
+GET https://pumpshinsa.com/api/external/plays?from=YYYY-MM-DD&to=YYYY-MM-DD&tz=Europe/London&limit=100
 
-ERRORS
-400 — bad date format, from > to
+PARAMS
+- from / to / tz — same as /steps.
+- limit (optional, default 100, max 500).
+
+RESPONSE 200
+{
+  "user_id": <string>,
+  "from": "YYYY-MM-DD",
+  "to":   "YYYY-MM-DD",
+  "tz": "Europe/London" | null,
+  "limit": <int>,
+  "count": <int>,
+  "total_kcal": <number>,            // sum(plays[].kcal)
+  "total_steps": <int>,              // sum(plays[].steps)
+  "total_duration_seconds": <int>,   // sum(plays[].duration_seconds || 0)
+  "kcal_weight_kg": <number>,
+  "kcal_weight_source": "profile" | "default",
+  "kcal_estimate_basis": "song_duration",
+  "kcal_per_song_baseline_120s": <number>,
+  "plays": [
+    {
+      "play_id": <int>,
+      "played_at_utc": "YYYY-MM-DD HH:MM:SS",
+      "date_played": <string>,                 // PIUGame's raw KST timestamp
+      "song_title": <string>,
+      "mode": "Single" | "Double" | "CoOp" | "UCS",
+      "level": <int>,
+      "score": <int>,
+      "grade": <string>,                       // "SSS+" / "A" / "F" / "" etc.
+      "plate": <string>,                       // "PG" / "MG" / "FG" / ""  etc.
+      "steps": <int>,                          // perfect+great+good+bad
+      "duration_seconds": <int> | null,        // from songs catalog (~98% coverage)
+      "kcal": <number>,
+      "kcal_source": "estimated_duration" | "estimated_baseline",
+      "judgments": { "perfect", "great", "good", "bad", "miss": <int> },
+      "max_combo": <int>,
+      "chart_id":     <int> | null,
+      "chart_url":    "https://new.pumpshinsa.com/song/<id>" | null,
+      "play_url":     "https://new.pumpshinsa.com/play/<id>" | null,
+      "jacket_url":   "https://pumpshinsa.com/jackets/pump/<...>.jpg" | null,
+      "og_image_url": "https://pumpshinsa.com/og/play/<id>.jpg" | null,
+      "replay_embed_url": <string>,
+      "replay_video_id":  <string>
+    }
+  ]
+}
+
+KCAL MODEL (no PIUGame OCR — that was unreliable and was removed)
+- All kcal is MET-derived: (11.8 MET × 3.5 × weight_kg / 200) × minutes.
+- "estimated_duration" — minutes = chart's real duration from the songs catalog.
+- "estimated_baseline" — chart isn't catalogued; fall back to 120 s.
+- weight_kg comes from the user's profile, default 70.
+- sum(plays[].kcal) === total_kcal === /steps days[].kcal for the same window.
+
+RENDER HINTS (paired with /schemes — endpoint 3)
+- Difficulty chip: \`\${schemes.modes[play.mode].short}\${play.level}\` (Co-op uses C\${level}).
+- Grade badge: descending-scan schemes.grades for first \`score >= min_score\`; use {color, tier}.
+- Plate badge: lookup play.plate in schemes.plates; empty plate = stage-break.
+- jacket_url is absolute — drop straight into <img src>.
+
+ROW ORDER: newest first (played_at_utc DESC, id DESC). Tighten dates to paginate.
+
+═══════════════════════════════════════════════════════════════════════
+ENDPOINT 3 — /schemes : visual conventions catalog (cacheable)
+═══════════════════════════════════════════════════════════════════════
+GET https://pumpshinsa.com/api/external/schemes
+
+NO PARAMS. Server sets Cache-Control: public, max-age=300.
+
+RESPONSE 200
+{
+  "schemes_v": <int>,                        // bumps when shape changes — refetch on change
+  "modes": {
+    "Single": { "short": "S", "color": "#d93d62", "gradient": [...], "label": "Single" },
+    "Double": { "short": "D", "color": "#16b77f", "gradient": [...], "label": "Double" },
+    "CoOp":   { "short": "C", "color": "#2b88de", "gradient": [...], "label": "Co-op"  },
+    "UCS":    { "short": "U", "color": "#7c3aed", "gradient": [...], "label": "User custom step" }
+  },
+  "grades": [                                // descending; linear-scan for first min_score
+    { "key": "SSS+", "min_score": 995000, "tier": "sss", "color": "#7dd3fc", "label": "SSS+" },
+    ... 16 total ...
+    { "key": "F",    "min_score": 0,      "tier": "f",   "color": "#525252", "label": "F"    }
+  ],
+  "plates": [                                // 8 codes (PG..RG) with color + description
+    { "key": "PG", "label": "PERFECT GAME", "color": "#7dd3fc", "description": "No bad / no miss" },
+    ...
+  ],
+  "kcal": {
+    "met": 11.8,
+    "formula": "(MET × 3.5 × weight_kg / 200) × song_duration_minutes",
+    "fallback_duration_seconds": 120,
+    "sources": {
+      "estimated_duration":  "MET × profile_weight_kg × chart_duration_seconds from songs catalog.",
+      "estimated_baseline":  "MET × profile_weight_kg × 120 s fallback."
+    }
+  }
+}
+
+ERRORS (all endpoints)
+400 — bad date format, from > to, unknown tz
 401 — missing/invalid/revoked token
 403 — token missing scope steps:read
 
 INTEGRATION RULES
 - Call from a server, not the browser. Read the token from an env var (PUMPSHINSA_TOKEN).
-- CORS is open, so a browser call will succeed — but inlining the token exposes it to anyone viewing source. Proxy it.
-- No documented rate limit. Cache results for a few minutes if polling.
+- CORS is open, so a browser call works — but inlining the token in JS exposes it; proxy through your backend.
+- No documented rate limit. One poll per user per minute is plenty for sync flows.
 
-EXAMPLE (Node) — chart steps-by-hour and kcal-by-song
+EXAMPLE (Node) — workout-detail data + render helpers
 const auth = { Authorization: \`Bearer \${process.env.PUMPSHINSA_TOKEN}\` };
+const tz = 'Europe/London';
+const today = new Date().toLocaleDateString('en-CA', { timeZone: tz });
 
-const stepsRes = await fetch(
-  \`https://pumpshinsa.com/api/external/steps?from=\${from}&to=\${to}\`,
-  { headers: auth }
-);
-const { days } = await stepsRes.json();
-const byHour = Array.from({ length: 24 }, () => 0);
-for (const d of days) for (const h of d.hours || []) byHour[h.hour] += h.steps;
+const [schemes, { plays, total_kcal, total_steps, total_duration_seconds }] = await Promise.all([
+  fetch('https://pumpshinsa.com/api/external/schemes', { headers: auth }).then(r => r.json()),
+  fetch(\`https://pumpshinsa.com/api/external/plays?from=\${today}&to=\${today}&tz=\${tz}&limit=500\`, { headers: auth }).then(r => r.json()),
+]);
 
-const playsRes = await fetch(
-  \`https://pumpshinsa.com/api/external/plays?from=\${from}&to=\${to}&limit=100\`,
-  { headers: auth }
-);
-const { plays } = await playsRes.json();
-const totalKcal = plays.reduce((s, p) => s + p.kcal, 0);
-const kcalBySong = plays.reduce((acc, p) => {
-  acc[p.song_title] = (acc[p.song_title] || 0) + p.kcal;
-  return acc;
-}, {});`;
+const chipFor  = (mode, level) => {
+  const m = schemes.modes[mode] ?? schemes.modes.Single;
+  return { label: mode === 'CoOp' ? \`C\${level}\` : \`\${m.short}\${level}\`, color: m.color };
+};
+const gradeFor = (score) => schemes.grades.find(g => score >= g.min_score) ?? schemes.grades.at(-1);
+const plateFor = (code)  => schemes.plates.find(p => p.key === code) || null;`;
             const snippets = [
               { key: 'agent', label: 'Agent prompt', hint: 'Paste into Claude Code, Cursor, etc. The agent will know what to build.', text: agentSnippet },
               { key: 'curl', label: 'curl', hint: 'Quick smoke test from the terminal.', text: curlSnippet },
