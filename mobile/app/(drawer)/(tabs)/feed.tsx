@@ -17,6 +17,7 @@ import { PlateBadge } from '@/components/plate-badge';
 import { ReplayModal } from '@/components/replay-modal';
 import { ScoreCardSheet, type ScoreCardData } from '@/components/score-card-sheet';
 import { SessionPlanCard } from '@/components/session-plan-card';
+import { StompPumpIcon } from '@/components/ui/stomp-pump-icon';
 import { SendToMessageSheet } from '@/components/messages/send-to-message-sheet';
 import { SessionShareCard } from '@/components/session-share-card';
 import { SessionSummaryCard } from '@/components/session-summary-card';
@@ -288,7 +289,7 @@ function ActionFooter({
         onPress={() => onPump(item)}
         hitSlop={6}
         style={({ pressed }) => [s.actionItem, pressed && { opacity: 0.6 }]}>
-        <IconSymbol name="arrow.up" size={14} color={pumpColor} />
+        <StompPumpIcon size={18} filled={pumped} color={pumpColor} />
         <Text style={[s.actionCount, { color: pumpColor }]}>{item.pump_count ?? 0}</Text>
       </Pressable>
       <Pressable
