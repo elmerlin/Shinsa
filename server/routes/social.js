@@ -682,7 +682,11 @@ function enrichSessionShareRow(db, userId, createdAt, row) {
     miss: toInt(row.miss) || toInt(lookup?.miss),
     max_combo: Math.max(toInt(row.max_combo), toInt(lookup?.max_combo)),
     over_top100_rank: toInt(row.over_top100_rank) || toInt(lookup?.over_top100_rank),
-    jacket_url: row.jacket_url || lookup?.background_url || '',
+    // Intentionally NOT falling back to lookup.background_url here —
+    // background_url is the piugame.com CDN, and we serve our own
+    // jackets via /jackets/pump/. If row.jacket_url is empty the songs
+    // catalog is missing a row; fix that, don't paper over with piugame.
+    jacket_url: row.jacket_url || '',
     date_played: row.date_played || lookup?.date_played || '',
     replay_embed_url: preferredReplayEmbedUrl,
     replay_video_id: preferredReplayVideoId,
@@ -1927,7 +1931,11 @@ router.get('/feed/explore', requireAuth, (req, res) => {
   }
 
   const result = items.map((row, i) => {
-    const jacketUrl = row.song_jacket_url || row.background_url || '';
+    // Only the songs-table jacket — never the piugame background. An
+    // empty jacket_url means the songs catalog is missing this chart
+    // and should be backfilled (see server/scripts/backfill-songs-
+    // catalog.js); the tile will render a placeholder until then.
+    const jacketUrl = row.song_jacket_url || '';
     return {
       play_id: row.id,
       user_id: row.user_id,

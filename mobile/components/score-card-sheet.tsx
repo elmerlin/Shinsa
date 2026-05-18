@@ -147,7 +147,7 @@ export function ScoreCardSheet({ visible, data, onClose, onReplay }: Props) {
   const songTitle = toCanonicalSongTitle(String(data.song_title || '').trim()) || 'Score';
   const mode = String(data.mode || '').trim();
   const level = parseInt(String(data.level ?? ''), 10) || 0;
-  const jacket = data.jacket_url || data.background_url;
+  const jacket = data.jacket_url;
   const jacketUrl = typeof jacket === 'string' ? fullImageUrl(jacket) : undefined;
   const avatarUrl = typeof data.avatar === 'string' ? fullImageUrl(data.avatar) : undefined;
 
@@ -195,7 +195,7 @@ export function ScoreCardSheet({ visible, data, onClose, onReplay }: Props) {
     isStageBreak: !!data.is_stage_break,
     playerName: data.username,
     playerAvatar: data.avatar,
-    jacketUrl: data.jacket_url || data.background_url,
+    jacketUrl: data.jacket_url,
     perfect: data.perfect,
     great: data.great,
     good: data.good,

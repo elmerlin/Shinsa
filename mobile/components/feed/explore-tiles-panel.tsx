@@ -190,18 +190,12 @@ function ExploreTile({
   onPress: () => void;
   onReplay: () => void;
 }) {
-  // Prefer the APK-bundled jacket; fall back to background_url so tiles
-  // never render blank when the server's songs-table JOIN missed
-  // (catalog gap, mode mismatch, etc.). On web, expo-image doesn't retry
-  // failed loads — if the Shinsa-hosted jacket 503s during a deploy or
-  // upstream burst, the tile stays black forever without this onError
-  // swap to the piugame.com background.
-  const [jacketFailed, setJacketFailed] = useState(false);
-  const primaryUrl = play.jacket_url || play.background_url;
-  const fallbackUrl =
-    play.background_url && play.background_url !== primaryUrl ? play.background_url : null;
-  const activeUrl = jacketFailed && fallbackUrl ? fallbackUrl : primaryUrl;
-  const jacketSource = resolveJacketSource(activeUrl);
+  // Only the Shinsa-hosted jacket — no piugame fallback. If a tile
+  // renders empty it's because the songs catalog is missing that chart
+  // (run server/scripts/backfill-songs-catalog.js to fix), not a
+  // transient network issue. Removed the prior onError swap to bg_url
+  // since we never want a piugame CDN URL in the UI.
+  const jacketSource = resolveJacketSource(play.jacket_url);
   const avatar = play.avatar ? fullImageUrl(String(play.avatar)) : undefined;
   const isHero = variant === 'hero';
   const modeColors = modeBadgeColors(play.mode);
@@ -234,15 +228,7 @@ function ExploreTile({
         pressed && { opacity: 0.85 },
       ]}>
       {jacketSource ? (
-        <Image
-          key={activeUrl}
-          source={jacketSource as never}
-          style={s.tileJacket}
-          contentFit="cover"
-          onError={() => {
-            if (!jacketFailed && fallbackUrl) setJacketFailed(true);
-          }}
-        />
+        <Image source={jacketSource as never} style={s.tileJacket} contentFit="cover" />
       ) : (
         <View style={[s.tileJacket, { backgroundColor: theme.surfaceMuted }]} />
       )}

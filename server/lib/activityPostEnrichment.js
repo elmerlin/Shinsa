@@ -315,15 +315,14 @@ function applyChartMetadata(db, entry) {
       : (songTitle ? `/songs?q=${encodeURIComponent(songTitle)}` : '/songs')
   );
 
-  // Prefer the songs-table jacket (Shinsa-hosted, e.g. /jackets/pump/123.jpg)
-  // over whatever existingJacketUrl might already be on the row. Existing
-  // values are often the piugame.com CDN URL which loads slowly /
-  // inconsistently from some networks — keeping it would defeat the
-  // whole point of the songs-table lookup.
+  // Prefer the songs-table jacket (Shinsa-hosted, e.g. /jackets/pump/123.jpg).
+  // We deliberately do NOT fall back to entry.background_url (the piugame
+  // CDN URL) — every chart we know about has a local jacket, and a
+  // missing entry here means the songs catalog is stale and should be
+  // backfilled rather than papered over with an external image. The UI
+  // renders a "?" placeholder when jacket_url is empty.
   const metadataJacketUrl = String(metadata?.jacket_url || '').trim();
-  const resolvedJacketUrl = metadataJacketUrl
-    || existingJacketUrl
-    || String(entry.background_url || '').trim();
+  const resolvedJacketUrl = metadataJacketUrl || existingJacketUrl;
   return {
     ...entry,
     chart_id: chartId || 0,

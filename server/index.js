@@ -158,6 +158,17 @@ app.use('/api', (req, res) => {
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/piumon-assets', express.static(path.join(__dirname, '..', 'data', 'piumon')));
 
+// Serve newly-backfilled jackets directly from client/public/ so they're
+// available without re-running the Vite build. client/dist/ also has a
+// copy (vite copies public/ at build time), but the songs-catalog
+// backfill writes into public/, and without this passthrough every new
+// chart's jacket 404s through to the SPA index.html fallback for hours
+// (or whenever the next deploy happens) — which Express's static
+// middleware silently responds 200 + HTML for, breaking <img> loads.
+const publicAssets = path.join(__dirname, '..', 'client', 'public');
+app.use('/jackets', express.static(path.join(publicAssets, 'jackets')));
+app.use('/avatars', express.static(path.join(publicAssets, 'avatars')));
+
 if (!KOREAN_LOCALE_ENABLED) {
   const redirectHiddenKoreanLocale = (req, res) => {
     const nextPath = req.path === '/kr' ? '/' : req.path.slice(3);

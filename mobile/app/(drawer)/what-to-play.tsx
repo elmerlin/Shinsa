@@ -295,7 +295,7 @@ function RecommendationCard({
   }, [animTrigger, index, fadeAnim, liftAnim]);
 
   const single = isSingleMode(rec.mode);
-  const jacketSrc = fullImageUrl(rec.jacket_url || rec.background_url);
+  const jacketSrc = fullImageUrl(rec.jacket_url);
   const fb = rec.player_feedback;
   const hasNote = !!fb?.note;
 
@@ -435,7 +435,7 @@ function DetailModal({
   if (!rec) return null;
   const reason = getReasonStyle(rec.reason_type);
   const single = isSingleMode(rec.mode);
-  const jacketSrc = fullImageUrl(rec.jacket_url || rec.background_url);
+  const jacketSrc = fullImageUrl(rec.jacket_url);
   const fb = rec.player_feedback;
   const ph = rec.play_history;
 
@@ -661,7 +661,7 @@ function TrackSheet({
   const lists = listsQuery.data?.lists ?? [];
   const isAlreadyInList = (list: UserList) => list.items.some((i) => i.chartId === rec.chart_id);
   const single = isSingleMode(rec.mode);
-  const jacketSrc = fullImageUrl(rec.jacket_url || rec.background_url);
+  const jacketSrc = fullImageUrl(rec.jacket_url);
   const contextLabel = goal === 'pumbility' ? 'Pumbility push' : 'Title push';
   const hasSavedFeedback = (rec.player_feedback?.passability_rating != null) || !!rec.player_feedback?.note;
 

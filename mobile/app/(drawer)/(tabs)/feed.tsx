@@ -426,8 +426,10 @@ export function UpscoreCard({ item, onPump, onComments, onShare, onJacket, onSco
 
       <View style={s.entriesList}>
         {visible.map((u, i) => {
-          const jacket = u.jacket_url || u.background_url;
-          const jacketUrl = typeof jacket === 'string' ? fullImageUrl(jacket) : undefined;
+          // Only the Shinsa-hosted jacket — server already prefers it via
+          // applyChartMetadata. If it's empty the songs catalog is
+          // missing this chart; ChartJacket falls back to its "?" placeholder.
+          const jacketUrl = typeof u.jacket_url === 'string' ? fullImageUrl(u.jacket_url) : undefined;
           const delta = (u.new_score ?? 0) - (u.old_score ?? 0);
           const chartId = Number(u.chart_id) || 0;
           return (
@@ -514,7 +516,8 @@ export function ClearCard({ item, onPump, onComments, onShare, onJacket, onScore
   const score = Number(itemRec.score);
   const grade = String(itemRec.grade ?? '');
   const plate = itemRec.plate;
-  const jacketRaw = (itemRec.jacket_url as string | undefined) || (itemRec.background_url as string | undefined);
+  // Server enriches jacket_url via songs catalog; no piugame fallback.
+  const jacketRaw = itemRec.jacket_url as string | undefined;
   const jacket = jacketRaw ? fullImageUrl(jacketRaw) : undefined;
   const chartId = Number(itemRec.chart_id) || 0;
 
@@ -654,8 +657,8 @@ function WeeklyChallengeCard({ item, onPump, onComments, onShare, onJacket, onSc
 
       <View style={s.entriesList}>
         {visible.map((play, i) => {
-          const jacket = play.jacket_url || play.background_url;
-          const jacketUrl = typeof jacket === 'string' ? fullImageUrl(jacket) : undefined;
+          // Shinsa-hosted jacket only — see UpscoreCard comment.
+          const jacketUrl = typeof play.jacket_url === 'string' ? fullImageUrl(play.jacket_url) : undefined;
           const chartId = Number(play.chart_id) || 0;
           const rank = Number(play.weekly_challenge_rank) || 0;
           const pts = Number(play.rating_points) || 0;
@@ -688,7 +691,7 @@ function WeeklyChallengeCard({ item, onPump, onComments, onShare, onJacket, onSc
                   score: play.score,
                   grade: play.grade,
                   plate: play.plate,
-                  jacket_url: play.jacket_url || play.background_url,
+                  jacket_url: play.jacket_url,
                   background_url: play.background_url,
                   perfect: play.perfect,
                   great: play.great,

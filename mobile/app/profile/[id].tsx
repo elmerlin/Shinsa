@@ -270,7 +270,7 @@ function ScoreSummaryPanel({
       </View>
     );
   }
-  const jacket = data.jacket_url || data.background_url;
+  const jacket = data.jacket_url;
   const jacketUrl = typeof jacket === 'string' ? fullImageUrl(jacket) : undefined;
   const mode = String(data.mode || '');
   const level = parseInt(String(data.level ?? ''), 10) || 0;
@@ -836,7 +836,7 @@ export function ProfileBody({ lookup }: { lookup: string }) {
     level: entry.level,
     chart_id: entry.chart_id,
     play_id: entry.play_id ?? entry.id,
-    jacket_url: entry.jacket_url || entry.background_url,
+    jacket_url: entry.jacket_url,
     score: Number(entry.score) || 0,
     grade: entry.grade,
     plate: entry.plate,

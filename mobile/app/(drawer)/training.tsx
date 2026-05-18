@@ -534,7 +534,7 @@ function LikelyPassCard({
           <View style={s.clearsList}>
             {sampleClears.map((clr, i) => {
               // Prefer the APK-bundled jacket; falls back to network URL.
-              const clrSource = resolveJacketSource((clr as { jacket_url?: string }).jacket_url || clr.background_url);
+              const clrSource = resolveJacketSource((clr as { jacket_url?: string }).jacket_url);
               return (
               <View key={`${clr.song_title}-${i}`} style={s.clearRow}>
                 {clrSource ? (

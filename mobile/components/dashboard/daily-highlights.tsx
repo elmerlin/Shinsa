@@ -103,7 +103,7 @@ export function DailyHighlights() {
               <HighlightCard
                 key={`replay-${play.id ?? i}`}
                 rank={i + 1}
-                jacket={play.jacket_url || play.background_url}
+                jacket={play.jacket_url}
                 mode={play.mode}
                 level={play.level}
                 username={play.username}
@@ -137,7 +137,7 @@ export function DailyHighlights() {
                 <HighlightCard
                   key={`upscore-${u.upscore_id ?? i}-${i}`}
                   rank={i + 1}
-                  jacket={u.jacket_url || u.background_url}
+                  jacket={u.jacket_url}
                   mode={u.mode}
                   level={u.level}
                   username={u.username}
@@ -169,7 +169,7 @@ export function DailyHighlights() {
               <HighlightCard
                 key={`clear-${c.clear_id ?? i}-${i}`}
                 rank={i + 1}
-                jacket={c.jacket_url || c.background_url}
+                jacket={c.jacket_url}
                 mode={c.mode}
                 level={c.level}
                 username={c.username}
@@ -374,7 +374,7 @@ function buildUpscoreSheetData(u: UpscoreHighlight): ScoreCardData {
     mode: u.mode,
     level: u.level,
     chart_id: u.chart_id,
-    jacket_url: u.jacket_url || u.background_url,
+    jacket_url: u.jacket_url,
     background_url: u.background_url,
     old_score: u.old_score,
     old_grade: u.old_grade,
@@ -403,7 +403,7 @@ function buildClearSheetData(c: ClearHighlight): ScoreCardData {
     mode: c.mode,
     level: c.level,
     chart_id: c.chart_id,
-    jacket_url: c.jacket_url || c.background_url,
+    jacket_url: c.jacket_url,
     background_url: c.background_url,
     score: c.score,
     grade: c.grade,

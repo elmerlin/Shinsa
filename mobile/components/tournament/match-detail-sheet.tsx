@@ -25,7 +25,7 @@ function songLevel(s: PlayedSong): string {
   return v != null ? String(v) : '';
 }
 function songJacket(s: PlayedSong): string | undefined {
-  const url = s.jacket_url || s.background_url || s.song_jacket_url || s.song?.jacket_url || s.song?.background_url || s.song?.song_jacket_url || '';
+  const url = s.jacket_url || s.song_jacket_url || s.song?.jacket_url || s.song?.song_jacket_url || '';
   return url ? fullImageUrl(url) : undefined;
 }
 
