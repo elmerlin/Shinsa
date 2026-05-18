@@ -229,83 +229,95 @@ export function ScoreCardSheet({ visible, data, onClose, onReplay }: Props) {
   const sharePayload: EmbedSendPayload = linkSharePayload ? { link_share: linkSharePayload } : {};
   const challengePayload: EmbedSendPayload = challengeCardPayload ? { challenge_card: challengeCardPayload } : {};
 
-  // Native share — opens the OS share sheet with the chart URL.
-  const handleShareLink = async () => {
-    if (!chartPath) return;
-    const url = `${apiBaseUrl}${chartPath}`;
-    try {
-      await Share.share({
-        message: `${songTitle} · ${grade} · ${displayScore.toLocaleString()}\n${url}`,
-        url, // iOS uses `url` separately from `message`; Android ignores it.
-        title: songTitle,
-      });
-    } catch {
-      // User dismissed — no-op.
-    }
-  };
-
-  // Share the rendered score-card JPEG via the OS share sheet. The image
-  // is produced by the server's existing /og/play/:id.jpg renderer (same
-  // pixel-for-pixel output you'd see when a Discord / Slack / iMessage
-  // unfurl runs), so the visual matches the link unfurl users see when
-  // the URL alone is shared. Falls back to a plain link share when the
-  // server hasn't ingested the play yet (no play_id).
+  // Single Share chip — combines what used to be "Share link" + "Share
+  // image" into one icon that just does the right thing per platform:
   //
-  // Three platform paths:
-  //   - native (APK): download to cache via expo-file-system, then
-  //     Sharing.shareAsync with a content:// URI Android/iOS understand.
-  //   - mobile web with navigator.canShare({files}): fetch JPEG, wrap
-  //     as File, navigator.share — invokes the Web Share API which
-  //     pops the native iOS/Android picker on supporting browsers.
-  //   - other web: open the image URL in a new tab so the user can
-  //     long-press / right-click to save and share manually.
-  const [imageSharing, setImageSharing] = useState(false);
-  const handleShareImage = async () => {
-    if (!playId) {
-      void handleShareLink();
-      return;
-    }
-    setImageSharing(true);
-    const cacheBust = String(data.played_at_utc || data.date_played || playId);
-    const imageUrl = `${apiBaseUrl}/og/play/${encodeURIComponent(String(playId))}.jpg?v=${encodeURIComponent(cacheBust)}`;
+  //   1. Has a play_id and the platform can ship files → attach the
+  //      rendered score-card JPEG (server-rendered, matches the OG
+  //      unfurl pixel-for-pixel) WITH the public URL so the recipient
+  //      gets both the visual AND a tappable link.
+  //   2. No image support / no play_id → URL share via the OS sheet
+  //      (Discord/iMessage/etc. then unfurl using the OG meta tags
+  //      injected at sharePreviews.js).
+  //   3. Web without Web Share API → opens the URL in a new tab as
+  //      a last-resort copy-paste fallback.
+  //
+  // The Url points at new.pumpshinsa.com when we have a play_id so the
+  // recipient lands on a route the share-preview middleware decorates;
+  // otherwise it's the chart deep-link (chartPath).
+  const [sharing, setSharing] = useState(false);
+  const handleShare = async () => {
+    if (!chartPath && !playId) return;
+    setSharing(true);
+    const url = playId
+      ? `https://new.pumpshinsa.com/play/${encodeURIComponent(String(playId))}`
+      : `${apiBaseUrl}${chartPath}`;
     const caption = `${songTitle} · ${grade} · ${displayScore.toLocaleString()}`;
+    const shareTitle = data.username ? `@${data.username} · ${songTitle}` : songTitle;
+    const cacheBust = String(data.played_at_utc || data.date_played || playId || '');
+    const imageUrl = playId
+      ? `${apiBaseUrl}/og/play/${encodeURIComponent(String(playId))}.jpg?v=${encodeURIComponent(cacheBust)}`
+      : '';
     try {
+      // Web path — prefer Web Share API. Try image + URL first, then
+      // image alone, then URL alone, then a plain new-tab fallback.
       if (Platform.OS === 'web') {
         const navAny = (globalThis as { navigator?: Navigator & { canShare?: (d: ShareData) => boolean } }).navigator;
-        if (navAny?.share && navAny.canShare) {
-          const resp = await fetch(imageUrl);
-          if (resp.ok) {
-            const blob = await resp.blob();
-            const file = new File([blob], `shinsa-score-${playId}.jpg`, { type: 'image/jpeg' });
-            if (navAny.canShare({ files: [file] })) {
-              await navAny.share({ files: [file], title: songTitle, text: caption });
-              return;
+        if (navAny?.share && navAny.canShare && imageUrl) {
+          try {
+            const resp = await fetch(imageUrl);
+            if (resp.ok) {
+              const blob = await resp.blob();
+              const file = new File([blob], `shinsa-score-${playId}.jpg`, { type: 'image/jpeg' });
+              if (navAny.canShare({ files: [file], url, text: caption })) {
+                await navAny.share({ files: [file], url, text: caption, title: shareTitle });
+                return;
+              }
+              if (navAny.canShare({ files: [file] })) {
+                await navAny.share({ files: [file], title: shareTitle, text: `${caption}\n${url}` });
+                return;
+              }
             }
-          }
+          } catch { /* fall through to URL-only share */ }
         }
-        // Fallback: open the image so the user can save it manually.
-        await Linking.openURL(imageUrl);
+        if (navAny?.share) {
+          await navAny.share({ url, title: shareTitle, text: caption });
+          return;
+        }
+        await Linking.openURL(url);
         return;
       }
-      // Native — download then hand to the OS share sheet via expo-sharing.
-      const available = await Sharing.isAvailableAsync();
-      if (!available) {
-        // Some Android devices lack the system share intent; fall back
-        // to a Share.share with the URL only.
-        await Share.share({ message: `${caption}\n${imageUrl}`, url: imageUrl, title: songTitle });
-        return;
+
+      // Native path — try the image + URL combo via expo-sharing.
+      if (imageUrl) {
+        const available = await Sharing.isAvailableAsync();
+        if (available) {
+          const dest = `${FileSystem.cacheDirectory || ''}shinsa-score-${playId}.jpg`;
+          const { uri } = await FileSystem.downloadAsync(imageUrl, dest);
+          // expo-sharing on Android can't carry a separate URL field, so
+          // we put the link in the dialogTitle. Many apps surface it as
+          // pre-filled body text. On iOS we use RN's Share with both
+          // `url` (the file) and `message` (caption + link) — receiving
+          // apps like Messages / Mail combine them into one attachment.
+          if (Platform.OS === 'ios') {
+            await Share.share({ url: uri, message: `${caption}\n${url}`, title: shareTitle });
+          } else {
+            await Sharing.shareAsync(uri, {
+              mimeType: 'image/jpeg',
+              dialogTitle: `${shareTitle} — ${url}`,
+              UTI: 'public.jpeg',
+            });
+          }
+          return;
+        }
       }
-      const dest = `${FileSystem.cacheDirectory || ''}shinsa-score-${playId}.jpg`;
-      const { uri } = await FileSystem.downloadAsync(imageUrl, dest);
-      await Sharing.shareAsync(uri, {
-        mimeType: 'image/jpeg',
-        dialogTitle: songTitle,
-        UTI: 'public.jpeg',
-      });
+
+      // Last resort — URL only.
+      await Share.share({ message: `${caption}\n${url}`, url, title: shareTitle });
     } catch {
-      // User dismissed or share failed — no-op (toast layer not in MVP).
+      // User dismissed or transport failed — no-op (no toast layer yet).
     } finally {
-      setImageSharing(false);
+      setSharing(false);
     }
   };
 
@@ -432,18 +444,11 @@ export function ScoreCardSheet({ visible, data, onClose, onReplay }: Props) {
                     onPress={() => setChallengeOpen(true)}
                   />
                 ) : null}
-                {chartPath ? (
-                  <ActionChip
-                    icon="link"
-                    label="Share link"
-                    onPress={handleShareLink}
-                  />
-                ) : null}
-                {playId ? (
+                {(chartPath || playId) ? (
                   <ActionChip
                     icon="square.and.arrow.up"
-                    label={imageSharing ? 'Preparing…' : 'Share image'}
-                    onPress={handleShareImage}
+                    label={sharing ? 'Preparing…' : 'Share'}
+                    onPress={handleShare}
                   />
                 ) : null}
                 <ActionChip

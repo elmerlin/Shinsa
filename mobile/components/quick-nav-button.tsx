@@ -44,8 +44,13 @@ export function QuickNavButton({
             style={styles.highlight}
           />
           <View style={styles.inner}>
-            <IconSymbol name={icon} size={18} color="#FFFFFF" />
-            <Text style={styles.label} numberOfLines={1} ellipsizeMode="clip">
+            <IconSymbol name={icon} size={16} color="#FFFFFF" />
+            {/* `tail` ellipsize so a too-narrow chip degrades to "Train…"
+                instead of silently dropping the last character mid-glyph
+                — the "Training" chip was losing its `g` descender on
+                phones because clip cuts at the container edge, not at
+                the glyph boundary. */}
+            <Text style={styles.label} numberOfLines={1} ellipsizeMode="tail">
               {label}
             </Text>
           </View>
@@ -71,7 +76,10 @@ const styles = StyleSheet.create({
     // Shorter chip — was 52 and felt boxy on phones; 44 reads as a quick-action
     // pill while still tappable.
     minHeight: 44,
-    paddingHorizontal: 6,
+    // Tight horizontal padding so the icon + "Training" (the longest
+    // label) clears the chip edge on ~360 px phones without clipping
+    // the descender on the g.
+    paddingHorizontal: 4,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
@@ -86,7 +94,7 @@ const styles = StyleSheet.create({
   inner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 4,
     // Let the label shrink before the icon so long words like "Training"
     // don't push past the chip edge.
     flexShrink: 1,
@@ -94,13 +102,18 @@ const styles = StyleSheet.create({
   },
   label: {
     color: '#FFFFFF',
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '900',
-    letterSpacing: 0.4,
+    // No letter-spacing — the heavy 900 weight is already wide enough,
+    // and the 0.4 px tracking was pushing "Training" past the chip edge.
+    letterSpacing: 0,
     textShadowColor: 'rgba(0,0,0,0.35)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
     flexShrink: 1,
     minWidth: 0,
+    // Tiny right-side padding so descenders (the g in "Training") never
+    // touch the chip edge even when ellipsize math is tight.
+    paddingRight: 1,
   },
 });
