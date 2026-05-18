@@ -2,7 +2,7 @@
   "expo": {
     "name": "Shinsa",
     "slug": "shinsa",
-    "version": "1.0.9",
+    "version": "1.0.10",
     "orientation": "portrait",
     "icon": "./assets/brand/app-icon.png",
     "scheme": "shinsa",
@@ -10,11 +10,14 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.shinsa.app"
+      "bundleIdentifier": "com.shinsa.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.shinsa.app",
-      "versionCode": 10,
+      "versionCode": 11,
       "permissions": [
         "REQUEST_INSTALL_PACKAGES",
         "ACCESS_COARSE_LOCATION",
@@ -57,6 +60,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "51488a68-ca9b-4c12-8489-924aa7dc84d4"
+      }
+    },
+    "owner": "elmerlin"
   }
 }

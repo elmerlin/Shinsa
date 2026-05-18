@@ -1,8 +1,11 @@
+import * as FileSystem from 'expo-file-system/legacy';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
+import * as Sharing from 'expo-sharing';
 import { useState } from 'react';
 import {
+  Linking,
   Modal,
   Platform,
   Pressable,
@@ -241,6 +244,71 @@ export function ScoreCardSheet({ visible, data, onClose, onReplay }: Props) {
     }
   };
 
+  // Share the rendered score-card JPEG via the OS share sheet. The image
+  // is produced by the server's existing /og/play/:id.jpg renderer (same
+  // pixel-for-pixel output you'd see when a Discord / Slack / iMessage
+  // unfurl runs), so the visual matches the link unfurl users see when
+  // the URL alone is shared. Falls back to a plain link share when the
+  // server hasn't ingested the play yet (no play_id).
+  //
+  // Three platform paths:
+  //   - native (APK): download to cache via expo-file-system, then
+  //     Sharing.shareAsync with a content:// URI Android/iOS understand.
+  //   - mobile web with navigator.canShare({files}): fetch JPEG, wrap
+  //     as File, navigator.share — invokes the Web Share API which
+  //     pops the native iOS/Android picker on supporting browsers.
+  //   - other web: open the image URL in a new tab so the user can
+  //     long-press / right-click to save and share manually.
+  const [imageSharing, setImageSharing] = useState(false);
+  const handleShareImage = async () => {
+    if (!playId) {
+      void handleShareLink();
+      return;
+    }
+    setImageSharing(true);
+    const cacheBust = String(data.played_at_utc || data.date_played || playId);
+    const imageUrl = `${apiBaseUrl}/og/play/${encodeURIComponent(String(playId))}.jpg?v=${encodeURIComponent(cacheBust)}`;
+    const caption = `${songTitle} · ${grade} · ${displayScore.toLocaleString()}`;
+    try {
+      if (Platform.OS === 'web') {
+        const navAny = (globalThis as { navigator?: Navigator & { canShare?: (d: ShareData) => boolean } }).navigator;
+        if (navAny?.share && navAny.canShare) {
+          const resp = await fetch(imageUrl);
+          if (resp.ok) {
+            const blob = await resp.blob();
+            const file = new File([blob], `shinsa-score-${playId}.jpg`, { type: 'image/jpeg' });
+            if (navAny.canShare({ files: [file] })) {
+              await navAny.share({ files: [file], title: songTitle, text: caption });
+              return;
+            }
+          }
+        }
+        // Fallback: open the image so the user can save it manually.
+        await Linking.openURL(imageUrl);
+        return;
+      }
+      // Native — download then hand to the OS share sheet via expo-sharing.
+      const available = await Sharing.isAvailableAsync();
+      if (!available) {
+        // Some Android devices lack the system share intent; fall back
+        // to a Share.share with the URL only.
+        await Share.share({ message: `${caption}\n${imageUrl}`, url: imageUrl, title: songTitle });
+        return;
+      }
+      const dest = `${FileSystem.cacheDirectory || ''}shinsa-score-${playId}.jpg`;
+      const { uri } = await FileSystem.downloadAsync(imageUrl, dest);
+      await Sharing.shareAsync(uri, {
+        mimeType: 'image/jpeg',
+        dialogTitle: songTitle,
+        UTI: 'public.jpeg',
+      });
+    } catch {
+      // User dismissed or share failed — no-op (toast layer not in MVP).
+    } finally {
+      setImageSharing(false);
+    }
+  };
+
   return (
     <Modal visible={visible} animationType="none" transparent onRequestClose={onClose}>
       <View style={s.backdrop}>
@@ -369,6 +437,13 @@ export function ScoreCardSheet({ visible, data, onClose, onReplay }: Props) {
                     icon="link"
                     label="Share link"
                     onPress={handleShareLink}
+                  />
+                ) : null}
+                {playId ? (
+                  <ActionChip
+                    icon="square.and.arrow.up"
+                    label={imageSharing ? 'Preparing…' : 'Share image'}
+                    onPress={handleShareImage}
                   />
                 ) : null}
                 <ActionChip
