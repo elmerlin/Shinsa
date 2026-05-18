@@ -411,8 +411,9 @@ router.get('/plays', requireApiToken, requireScope('steps:read'), (req, res) => 
   const { weightKgUsed, kcalPerMinute, kcalPerSongBaseline, weightSource } = resolveKcalContext(db, req.user.id);
 
   // Shared SELECT projection for both tz/non-tz branches. The songs
-  // JOIN brings in duration_seconds so the per-play kcal estimate uses
-  // each chart's actual length (where catalogued; ~98% are).
+  // JOIN brings in duration_seconds (powers the per-play kcal estimate),
+  // the chart_id (links out to /song/:id), and the catalog jacket_url
+  // (used as the cover image in workout-detail views).
   const playSelect = `
     SELECT rp.id AS play_id, rp.date_played, rp.played_at_utc,
            rp.song_title, rp.mode, rp.level, rp.score, rp.grade, rp.plate,
@@ -423,7 +424,9 @@ router.get('/plays', requireApiToken, requireScope('steps:read'), (req, res) => 
            COALESCE(rp.miss, 0) AS miss, COALESCE(rp.max_combo, 0) AS max_combo,
            COALESCE(rp.replay_embed_url, '') AS replay_embed_url,
            COALESCE(rp.replay_video_id, '') AS replay_video_id,
-           s.duration_seconds AS duration_seconds
+           s.id AS chart_id,
+           s.duration_seconds AS duration_seconds,
+           s.jacket_url AS jacket_url
       FROM user_recently_played rp
       LEFT JOIN songs s
         ON TRIM(s.title) = TRIM(rp.song_title)
@@ -476,7 +479,21 @@ router.get('/plays', requireApiToken, requireScope('steps:read'), (req, res) => 
 
   // Build the per-play array first so we can roll a `total_*` summary
   // into the top-level response — saves callers from re-summing the
-  // array client-side just to show a header total.
+  // array client-side just to show a header total. Also resolve a few
+  // deep-link URLs per play so a workout-detail view has everything it
+  // needs to render (jacket image, link out to the chart, link out to
+  // the play page, social card image for thumbnails) without a second
+  // round-trip to anything else on pumpshinsa.
+  const ORIGIN = 'https://pumpshinsa.com';
+  const NEW_ORIGIN = 'https://new.pumpshinsa.com';
+  const absolutize = (path) => {
+    if (!path) return '';
+    const s = String(path).trim();
+    if (!s) return '';
+    if (/^https?:\/\//i.test(s)) return s;
+    return `${ORIGIN}${s.startsWith('/') ? s : `/${s}`}`;
+  };
+
   const plays = rows.map((r) => {
     const logged = Number(r.kcal_logged) || 0;
     const duration = Number(r.duration_seconds);
@@ -492,8 +509,10 @@ router.get('/plays', requireApiToken, requireScope('steps:read'), (req, res) => 
       kcal = kcalPerSongBaseline;
       kcalSource = 'estimated_baseline';
     }
+    const chartId = Number(r.chart_id) || null;
+    const playId = Number(r.play_id) || 0;
     return {
-      play_id: Number(r.play_id) || 0,
+      play_id: playId,
       played_at_utc: r.played_at_utc || '',
       date_played: r.date_played || '',
       song_title: r.song_title || '',
@@ -516,6 +535,18 @@ router.get('/plays', requireApiToken, requireScope('steps:read'), (req, res) => 
       max_combo: Number(r.max_combo) || 0,
       replay_embed_url: r.replay_embed_url || '',
       replay_video_id: r.replay_video_id || '',
+      // Chart catalogue link-out — null when this play's chart isn't in
+      // the songs table (UCS, brand-new chart not yet ingested, etc.).
+      chart_id: chartId,
+      chart_url: chartId ? `${NEW_ORIGIN}/song/${chartId}` : null,
+      // Direct link to the play's detail page; lands on the
+      // share-preview-decorated route so unfurls work too.
+      play_url: playId ? `${NEW_ORIGIN}/play/${playId}` : null,
+      // Cover-art for the chart, ready to drop into an <img>.
+      jacket_url: absolutize(r.jacket_url) || null,
+      // Pre-rendered 1200×630 score card image — useful as a workout
+      // thumbnail or for sharing onto another social surface.
+      og_image_url: playId ? `${ORIGIN}/og/play/${playId}.jpg` : null,
     };
   });
 
@@ -541,6 +572,88 @@ router.get('/plays', requireApiToken, requireScope('steps:read'), (req, res) => 
     kcal_estimate_basis: 'song_duration',
     kcal_per_song_baseline_120s: Math.round(kcalPerSongBaseline * 100) / 100,
     plays,
+  });
+});
+
+// ---- Visual / scoring schemes ----------------------------------------------
+// Self-contained constants so external apps can render Pump Shinsa data
+// with consistent grade colours, mode chips, plate badges, and score
+// thresholds without scraping the codebase. Mirrors:
+//   mobile/lib/grades.ts     → grades + tier colours
+//   mobile/lib/plates.ts     → plate codes + colours
+//   client/src/utils/grades.js (legacy desktop source of truth)
+//
+// `schemes_v` bumps when any structural shape here changes so consumers
+// can cache the response and re-fetch when the version moves.
+
+const SCHEMES_VERSION = 1;
+
+const SCHEME_MODES = {
+  Single:  { short: 'S',  color: '#d93d62', gradient: ['#ff7a7a', '#d93d62', '#7a1730'], label: 'Single' },
+  Double:  { short: 'D',  color: '#16b77f', gradient: ['#4cf4aa', '#16b77f', '#0b5d48'], label: 'Double' },
+  CoOp:    { short: 'C',  color: '#2b88de', gradient: ['#69c8ff', '#2b88de', '#12457c'], label: 'Co-op' },
+  UCS:     { short: 'U',  color: '#7c3aed', gradient: ['#cdb4ff', '#7c3aed', '#3b0764'], label: 'User custom step' },
+};
+
+// Score thresholds + tier groupings. Identical math to
+// mobile/lib/grades.ts:getScoreRank — descending so consumers can
+// linear-scan and short-circuit on the first min_score match.
+const SCHEME_GRADES = [
+  { key: 'SSS+', min_score: 995000, tier: 'sss', color: '#7dd3fc', label: 'SSS+' },
+  { key: 'SSS',  min_score: 990000, tier: 'sss', color: '#7dd3fc', label: 'SSS'  },
+  { key: 'SS+',  min_score: 985000, tier: 'ss',  color: '#FFC400', label: 'SS+'  },
+  { key: 'SS',   min_score: 980000, tier: 'ss',  color: '#FFC400', label: 'SS'   },
+  { key: 'S+',   min_score: 975000, tier: 's',   color: '#fbbf24', label: 'S+'   },
+  { key: 'S',    min_score: 970000, tier: 's',   color: '#fbbf24', label: 'S'    },
+  { key: 'AAA+', min_score: 960000, tier: 'aaa', color: '#c0c0c0', label: 'AAA+' },
+  { key: 'AAA',  min_score: 950000, tier: 'aaa', color: '#c0c0c0', label: 'AAA'  },
+  { key: 'AA+',  min_score: 925000, tier: 'aa',  color: '#cd7f32', label: 'AA+'  },
+  { key: 'AA',   min_score: 900000, tier: 'aa',  color: '#cd7f32', label: 'AA'   },
+  { key: 'A+',   min_score: 825000, tier: 'a',   color: '#b45309', label: 'A+'   },
+  { key: 'A',    min_score: 750000, tier: 'a',   color: '#b45309', label: 'A'    },
+  { key: 'B',    min_score: 650000, tier: 'b',   color: '#737373', label: 'B'    },
+  { key: 'C',    min_score: 550000, tier: 'c',   color: '#737373', label: 'C'    },
+  { key: 'D',    min_score: 450000, tier: 'd',   color: '#525252', label: 'D'    },
+  { key: 'F',    min_score: 0,      tier: 'f',   color: '#525252', label: 'F'    },
+];
+
+const SCHEME_PLATES = [
+  { key: 'PG', label: 'PERFECT GAME',   color: '#7dd3fc', description: 'No bad / no miss (100% perfect run)' },
+  { key: 'UG', label: 'ULTIMATE GAME',  color: '#c084fc', description: 'No good / no bad / no miss'           },
+  { key: 'EG', label: 'EXTREME GAME',   color: '#f472b6', description: 'No bad / no miss'                     },
+  { key: 'SG', label: 'SUPERB GAME',    color: '#FFE06B', description: '≤10 great / no miss'                  },
+  { key: 'MG', label: 'MARVELOUS GAME', color: '#FFC400', description: '≤40 great / ≤2 miss'                  },
+  { key: 'TG', label: 'TALENTED GAME',  color: '#cd7f32', description: '≤90 great / ≤5 miss'                  },
+  { key: 'FG', label: 'FAIR GAME',      color: '#a8a8ae', description: 'Cleared with mistakes'                },
+  { key: 'RG', label: 'ROUGH GAME',     color: '#737373', description: 'Cleared with many mistakes'           },
+];
+
+// kcal formula reference so consumers can independently re-compute or
+// explain the number to their users. Matches resolveKcalContext().
+const SCHEME_KCAL_FORMULA = {
+  met: 11.8,
+  formula: '(MET × 3.5 × weight_kg / 200) × song_duration_minutes',
+  fallback_duration_seconds: 120,
+  sources: {
+    logged:              'PIUGame OCR captured the cabinet kcal directly (authoritative).',
+    estimated_duration:  'MET × profile_weight_kg × chart_duration_seconds from songs catalog.',
+    estimated_baseline:  'MET × profile_weight_kg × 120 s fallback (chart not in catalog).',
+  },
+};
+
+// GET /api/external/schemes
+// Static catalog of visual + scoring conventions used across Pump Shinsa.
+// Lets a consuming app render plays consistently (grade colours / mode
+// chips / plate badges / kcal explanation) without reading source code.
+// Cacheable — bumps SCHEMES_VERSION on any structural change.
+router.get('/schemes', requireApiToken, requireScope('steps:read'), (_req, res) => {
+  res.set('Cache-Control', 'public, max-age=300');
+  res.json({
+    schemes_v: SCHEMES_VERSION,
+    modes: SCHEME_MODES,
+    grades: SCHEME_GRADES,
+    plates: SCHEME_PLATES,
+    kcal: SCHEME_KCAL_FORMULA,
   });
 });
 
