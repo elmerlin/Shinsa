@@ -2152,20 +2152,49 @@ function renderWidgetPageHtml({
 </html>`;
 }
 
-function registerSharePreviewRoutes(app, { clientBuildDir }) {
-  const indexHtmlPath = path.join(clientBuildDir, 'index.html');
-  let cachedIndexHtml = null;
+function registerSharePreviewRoutes(app, { clientBuildDir, mobileWebBuildDir = '' }) {
+  // The Express server hosts share-preview routes for two different
+  // front-ends: the legacy desktop SPA (pumpshinsa.com → clientBuildDir)
+  // and the Expo mobile-web build (new.pumpshinsa.com → mobileWebBuildDir).
+  // Both routes inject OG meta into their respective index.html and let
+  // the SPA take over client-side, so an unfurl bot sees the rich preview
+  // and humans land on the right front-end.
+  //
+  // When mobileWebBuildDir is unset (local dev without the mobile-web
+  // export deployed), the mobile-host path falls through to the desktop
+  // shell — uglier but functional.
+  const desktopIndexHtmlPath = path.join(clientBuildDir, 'index.html');
+  const mobileIndexHtmlPath = mobileWebBuildDir
+    ? path.join(mobileWebBuildDir, 'index.html')
+    : '';
+  const cache = { desktop: null, mobile: null };
 
-  function getIndexHtml() {
-    if (cachedIndexHtml != null) return cachedIndexHtml;
+  function readIndexHtmlAt(filepath, key) {
+    if (cache[key] != null) return cache[key];
     try {
-      cachedIndexHtml = fs.readFileSync(indexHtmlPath, 'utf8');
-      return cachedIndexHtml;
+      cache[key] = fs.readFileSync(filepath, 'utf8');
+      return cache[key];
     } catch (err) {
-      console.error('Share preview: failed to read index.html:', err.message);
-      cachedIndexHtml = null;
+      console.error(`Share preview: failed to read ${filepath}:`, err.message);
+      cache[key] = null;
       return null;
     }
+  }
+
+  /**
+   * Pick the SPA shell HTML to inject OG meta into based on the request's
+   * Host header. new.pumpshinsa.com → mobile-web export; everything else
+   * (pumpshinsa.com, www, IP, custom domains) → the desktop client.
+   */
+  function getIndexHtml(req) {
+    const host = String(req?.headers?.host || '').toLowerCase().split(':')[0];
+    if (host === 'new.pumpshinsa.com' && mobileIndexHtmlPath) {
+      const html = readIndexHtmlAt(mobileIndexHtmlPath, 'mobile');
+      if (html) return html;
+      // Fall through to desktop if mobile shell is missing/unreadable —
+      // better to serve *something* than 404 the share link.
+    }
+    return readIndexHtmlAt(desktopIndexHtmlPath, 'desktop');
   }
 
   // Social preview image for posts (WhatsApp/iMessage/Twitter/etc).
@@ -2223,7 +2252,7 @@ function registerSharePreviewRoutes(app, { clientBuildDir }) {
     const postId = parseInt(req.params.id, 10);
     if (isNaN(postId)) return next();
 
-    const indexHtml = getIndexHtml();
+    const indexHtml = getIndexHtml(req);
     if (!indexHtml) return next();
 
     const db = getDb();
@@ -2336,7 +2365,7 @@ function registerSharePreviewRoutes(app, { clientBuildDir }) {
     const upscoreId = parseInt(req.params.id, 10);
     if (Number.isNaN(upscoreId)) return next();
 
-    const indexHtml = getIndexHtml();
+    const indexHtml = getIndexHtml(req);
     if (!indexHtml) return next();
 
     const db = getDb();
@@ -2442,7 +2471,7 @@ function registerSharePreviewRoutes(app, { clientBuildDir }) {
     const clearId = parseInt(req.params.id, 10);
     if (Number.isNaN(clearId)) return next();
 
-    const indexHtml = getIndexHtml();
+    const indexHtml = getIndexHtml(req);
     if (!indexHtml) return next();
 
     const db = getDb();
@@ -2537,7 +2566,7 @@ function registerSharePreviewRoutes(app, { clientBuildDir }) {
     const playId = parseInt(req.params.id, 10);
     if (Number.isNaN(playId)) return next();
 
-    const indexHtml = getIndexHtml();
+    const indexHtml = getIndexHtml(req);
     if (!indexHtml) return next();
 
     const db = getDb();
@@ -2579,7 +2608,7 @@ function registerSharePreviewRoutes(app, { clientBuildDir }) {
     const chartId = parseInt(req.params.chartId, 10);
     if (Number.isNaN(chartId)) return next();
 
-    const indexHtml = getIndexHtml();
+    const indexHtml = getIndexHtml(req);
     if (!indexHtml) return next();
 
     const db = getDb();
@@ -2625,7 +2654,7 @@ function registerSharePreviewRoutes(app, { clientBuildDir }) {
     const query = normalizeWhitespace(req.query?.q || '');
     if (!query) return next();
 
-    const indexHtml = getIndexHtml();
+    const indexHtml = getIndexHtml(req);
     if (!indexHtml) return next();
 
     const db = getDb();
@@ -3081,7 +3110,7 @@ function registerSharePreviewRoutes(app, { clientBuildDir }) {
     const sessionId = String(req.params.id || '');
     if (!sessionId) return next();
 
-    const indexHtml = getIndexHtml();
+    const indexHtml = getIndexHtml(req);
     if (!indexHtml) return next();
 
     const db = getDb();
@@ -3576,7 +3605,7 @@ function registerSharePreviewRoutes(app, { clientBuildDir }) {
     const id = req.params.id;
     if (!id) return next();
 
-    const indexHtml = getIndexHtml();
+    const indexHtml = getIndexHtml(req);
     if (!indexHtml) return next();
 
     const db = getDb();
@@ -3629,7 +3658,7 @@ function registerSharePreviewRoutes(app, { clientBuildDir }) {
     const id = req.params.id;
     if (!id) return next();
 
-    const indexHtml = getIndexHtml();
+    const indexHtml = getIndexHtml(req);
     if (!indexHtml) return next();
 
     const db = getDb();

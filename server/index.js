@@ -189,7 +189,15 @@ app.get('/charting/*', (req, res) => {
 
 // Serve static files in production
 const clientBuild = path.join(__dirname, '..', 'client', 'dist');
-registerSharePreviewRoutes(app, { clientBuildDir: clientBuild });
+// Mobile-web (Expo) build path, used by sharePreviews.js to inject OG
+// meta into the right SPA shell when a /post/:id-style link is shared
+// from new.pumpshinsa.com. Override via NEW_SHINSA_WEB_DIR for staging
+// environments; defaults to the nginx-served path on production.
+const mobileWebBuild = process.env.NEW_SHINSA_WEB_DIR || '/var/www/new-shinsa-web';
+registerSharePreviewRoutes(app, {
+  clientBuildDir: clientBuild,
+  mobileWebBuildDir: mobileWebBuild,
+});
 app.use(express.static(clientBuild));
 app.use((req, res) => {
   res.sendFile(path.join(clientBuild, 'index.html'));
