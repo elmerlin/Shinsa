@@ -9,7 +9,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, Share, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CommentsSheet } from '@/components/comments-sheet';
 import { ReplayModal } from '@/components/replay-modal';
@@ -26,6 +26,8 @@ import {
   buildFeedShareTitle,
   buildFeedShareSubtitle,
   buildFeedSharePayload,
+  buildPublicShareTitle,
+  buildPublicShareUrl,
 } from '@/app/(drawer)/(tabs)/feed';
 
 export default function ClearDetailScreen() {
@@ -49,6 +51,13 @@ export default function ClearDetailScreen() {
 
   const onComments = useCallback((it: FeedItem) => setCommentTarget(it), []);
   const onShare = useCallback((it: FeedItem) => setShareTarget(it), []);
+  const onOsShare = useCallback((it: FeedItem) => {
+    const url = buildPublicShareUrl(it);
+    const title = buildPublicShareTitle(it);
+    const subtitle = buildFeedShareSubtitle(it);
+    const message = subtitle ? `${title} · ${subtitle}\n${url}` : `${title}\n${url}`;
+    void Share.share({ message, url, title });
+  }, []);
   const onScore = useCallback((d: ScoreCardData) => setScoreTarget(d), []);
   const onReplay = useCallback((url: string, title: string) => setReplayTarget({ url, title }), []);
   const onJacket = useCallback(
@@ -78,6 +87,7 @@ export default function ClearDetailScreen() {
             onPump={onPump}
             onComments={onComments}
             onShare={onShare}
+            onOsShare={onOsShare}
             onJacket={onJacket}
             onScore={onScore}
           />

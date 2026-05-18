@@ -2,7 +2,7 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteD
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AchievementBadgePost } from '@/components/achievement-badge-post';
 import { ChartJacket } from '@/components/chart-jacket';
@@ -271,6 +271,7 @@ function ActionFooter({
   onPump,
   onComments,
   onShare,
+  onOsShare,
 }: {
   item: FeedItem;
   s: Styles;
@@ -278,6 +279,8 @@ function ActionFooter({
   onComments: (item: FeedItem) => void;
   /** Opens the SendToMessageSheet picker for this feed item. */
   onShare: (item: FeedItem) => void;
+  /** Opens the OS / Web Share API with a public link to the item. */
+  onOsShare: (item: FeedItem) => void;
 }) {
   const { theme } = useTheme();
   const pumped = !!item.user_pumped;
@@ -299,17 +302,29 @@ function ActionFooter({
         <IconSymbol name="bubble.left.and.bubble.right.fill" size={14} color={theme.textMuted} />
         <Text style={s.actionCount}>{item.comment_count ?? 0}</Text>
       </Pressable>
+      {/* Paperplane = in-app DM picker. Stays first because it's the
+          higher-intent action (sharing to someone you already chat
+          with). The OS share button next to it is for everyone else
+          — text someone outside Shinsa, post to Discord, etc. */}
       <Pressable
         onPress={() => onShare(item)}
         hitSlop={6}
-        style={({ pressed }) => [s.actionItem, pressed && { opacity: 0.6 }]}>
+        style={({ pressed }) => [s.actionItem, pressed && { opacity: 0.6 }]}
+        accessibilityLabel="Send to chat">
         <IconSymbol name="paperplane.fill" size={14} color={theme.textMuted} />
+      </Pressable>
+      <Pressable
+        onPress={() => onOsShare(item)}
+        hitSlop={6}
+        style={({ pressed }) => [s.actionItem, pressed && { opacity: 0.6 }]}
+        accessibilityLabel="Share elsewhere">
+        <IconSymbol name="square.and.arrow.up" size={14} color={theme.textMuted} />
       </Pressable>
     </View>
   );
 }
 
-function PostCard({ item, onPress, onPump, onComments, onShare, onReplay, s }: { item: FeedItem; onPress: () => void; onPump: (i: FeedItem) => void; onComments: (i: FeedItem) => void; onShare: (i: FeedItem) => void; onReplay: (url: string, title: string) => void; s: Styles }) {
+function PostCard({ item, onPress, onPump, onComments, onShare, onOsShare, onReplay, s }: { item: FeedItem; onPress: () => void; onPump: (i: FeedItem) => void; onComments: (i: FeedItem) => void; onShare: (i: FeedItem) => void; onOsShare: (i: FeedItem) => void; onReplay: (url: string, title: string) => void; s: Styles }) {
   const avatar = typeof item.avatar === 'string' ? fullImageUrl(item.avatar) : undefined;
   const images = parseImages(item.images);
   const firstImage = images[0] ? fullImageUrl(images[0]) : undefined;
@@ -376,16 +391,17 @@ function PostCard({ item, onPress, onPump, onComments, onShare, onReplay, s }: {
           ) : null}
         </>
       )}
-      <ActionFooter item={item} s={s} onPump={onPump} onComments={onComments} onShare={onShare} />
+      <ActionFooter item={item} s={s} onPump={onPump} onComments={onComments} onShare={onShare} onOsShare={onOsShare} />
     </Pressable>
   );
 }
 
-export function UpscoreCard({ item, onPump, onComments, onShare, onJacket, onScore, onReplay, s }: {
+export function UpscoreCard({ item, onPump, onComments, onShare, onOsShare, onJacket, onScore, onReplay, s }: {
   item: FeedItem;
   onPump: (i: FeedItem) => void;
   onComments: (i: FeedItem) => void;
   onShare: (i: FeedItem) => void;
+  onOsShare: (i: FeedItem) => void;
   onJacket: (chartId: number, songTitle: string, mode: string, level: number) => void;
   onScore: (data: ScoreCardData) => void;
   onReplay: (url: string, title: string) => void;
@@ -494,16 +510,17 @@ export function UpscoreCard({ item, onPump, onComments, onShare, onJacket, onSco
         </Pressable>
       ) : null}
 
-      <ActionFooter item={item} s={s} onPump={onPump} onComments={onComments} onShare={onShare} />
+      <ActionFooter item={item} s={s} onPump={onPump} onComments={onComments} onShare={onShare} onOsShare={onOsShare} />
     </View>
   );
 }
 
-export function ClearCard({ item, onPump, onComments, onShare, onJacket, onScore, s }: {
+export function ClearCard({ item, onPump, onComments, onShare, onOsShare, onJacket, onScore, s }: {
   item: FeedItem;
   onPump: (i: FeedItem) => void;
   onComments: (i: FeedItem) => void;
   onShare: (i: FeedItem) => void;
+  onOsShare: (i: FeedItem) => void;
   onJacket: (chartId: number, songTitle: string, mode: string, level: number) => void;
   onScore: (data: ScoreCardData) => void;
   s: Styles;
@@ -579,16 +596,17 @@ export function ClearCard({ item, onPump, onComments, onShare, onJacket, onScore
         </Pressable>
       </View>
 
-      <ActionFooter item={item} s={s} onPump={onPump} onComments={onComments} onShare={onShare} />
+      <ActionFooter item={item} s={s} onPump={onPump} onComments={onComments} onShare={onShare} onOsShare={onOsShare} />
     </View>
   );
 }
 
-function WeeklyChallengeCard({ item, onPump, onComments, onShare, onJacket, onScore, onReplay, s }: {
+function WeeklyChallengeCard({ item, onPump, onComments, onShare, onOsShare, onJacket, onScore, onReplay, s }: {
   item: FeedItem;
   onPump: (i: FeedItem) => void;
   onComments: (i: FeedItem) => void;
   onShare: (i: FeedItem) => void;
+  onOsShare: (i: FeedItem) => void;
   onJacket: (chartId: number, songTitle: string, mode: string, level: number) => void;
   onScore: (data: ScoreCardData) => void;
   onReplay: (url: string, title: string) => void;
@@ -627,7 +645,7 @@ function WeeklyChallengeCard({ item, onPump, onComments, onShare, onJacket, onSc
           rightChildren={<Text style={s.clearedVerb}>played a weekly challenge</Text>}
         />
         <Text style={s.wcSummary}>Logged a weekly challenge attempt</Text>
-        <ActionFooter item={item} s={s} onPump={onPump} onComments={onComments} onShare={onShare} />
+        <ActionFooter item={item} s={s} onPump={onPump} onComments={onComments} onShare={onShare} onOsShare={onOsShare} />
       </View>
     );
   }
@@ -739,7 +757,7 @@ function WeeklyChallengeCard({ item, onPump, onComments, onShare, onJacket, onSc
         </Pressable>
       ) : null}
 
-      <ActionFooter item={item} s={s} onPump={onPump} onComments={onComments} onShare={onShare} />
+      <ActionFooter item={item} s={s} onPump={onPump} onComments={onComments} onShare={onShare} onOsShare={onOsShare} />
     </View>
   );
 }
@@ -777,6 +795,7 @@ function PostCardWrap({
   onPump,
   onComments,
   onShare,
+  onOsShare,
   onReplay,
 }: {
   item: FeedItem;
@@ -785,6 +804,7 @@ function PostCardWrap({
   onPump: (i: FeedItem) => void;
   onComments: (i: FeedItem) => void;
   onShare: (i: FeedItem) => void;
+  onOsShare: (i: FeedItem) => void;
   onReplay: (url: string, title: string) => void;
 }) {
   const onPress = useCallback(() => {
@@ -797,6 +817,7 @@ function PostCardWrap({
       onPump={onPump}
       onComments={onComments}
       onShare={onShare}
+      onOsShare={onOsShare}
       onReplay={onReplay}
       onPress={onPress}
     />
@@ -821,6 +842,7 @@ function FeedFlatList({
   onPump,
   onComments,
   onShare,
+  onOsShare,
   onJacket,
   onScore,
   onReplay,
@@ -839,6 +861,7 @@ function FeedFlatList({
   onPump: (i: FeedItem) => void;
   onComments: (i: FeedItem) => void;
   onShare: (i: FeedItem) => void;
+  onOsShare: (i: FeedItem) => void;
   onJacket: (chartId: number, songTitle: string, mode: string, level: number) => void;
   onScore: (data: ScoreCardData) => void;
   onReplay: (url: string, title: string) => void;
@@ -859,6 +882,7 @@ function FeedFlatList({
             onPump={onPump}
             onComments={onComments}
             onShare={onShare}
+            onOsShare={onOsShare}
             onReplay={onReplay}
           />
         );
@@ -871,6 +895,7 @@ function FeedFlatList({
             onPump={onPump}
             onComments={onComments}
             onShare={onShare}
+            onOsShare={onOsShare}
             onJacket={onJacket}
             onScore={onScore}
             onReplay={onReplay}
@@ -885,6 +910,7 @@ function FeedFlatList({
             onPump={onPump}
             onComments={onComments}
             onShare={onShare}
+            onOsShare={onOsShare}
             onJacket={onJacket}
             onScore={onScore}
           />
@@ -898,6 +924,7 @@ function FeedFlatList({
             onPump={onPump}
             onComments={onComments}
             onShare={onShare}
+            onOsShare={onOsShare}
             onJacket={onJacket}
             onScore={onScore}
             onReplay={onReplay}
@@ -906,7 +933,7 @@ function FeedFlatList({
       }
       return null;
     },
-    [s, router, onPump, onComments, onShare, onJacket, onScore, onReplay],
+    [s, router, onPump, onComments, onShare, onOsShare, onJacket, onScore, onReplay],
   );
 
   const keyExtractor = useCallback(
@@ -1010,6 +1037,20 @@ export default function FeedScreen() {
   // that points back at the original post / upscore / clear.
   const [shareTarget, setShareTarget] = useState<FeedItem | null>(null);
   const onShare = useCallback((item: FeedItem) => setShareTarget(item), []);
+
+  // OS share — fires the system share sheet (or Web Share API on
+  // mobile web). Different from `onShare` above: that one opens our
+  // in-app DM picker. This one lets the user post the link to anything
+  // installed on their phone: text, email, Discord, copy to clipboard.
+  // URL points at new.pumpshinsa.com so unfurls hit the OG meta we
+  // serve from sharePreviews.js.
+  const onOsShare = useCallback((item: FeedItem) => {
+    const url = buildPublicShareUrl(item);
+    const title = buildPublicShareTitle(item);
+    const subtitle = buildFeedShareSubtitle(item);
+    const message = subtitle ? `${title} · ${subtitle}\n${url}` : `${title}\n${url}`;
+    void Share.share({ message, url, title });
+  }, []);
 
   // Fetch the songs library lazily (cached) so jacket-clicks for entries
   // missing `chart_id` can still resolve to a chart via title+mode+level.
@@ -1213,6 +1254,7 @@ export default function FeedScreen() {
           onPump={onPump}
           onComments={onComments}
           onShare={onShare}
+          onOsShare={onOsShare}
           onJacket={onJacket}
           onScore={onScore}
           onReplay={onReplay}
@@ -1328,6 +1370,34 @@ export function buildFeedShareSubtitle(item: FeedItem | null): string {
   if (score > 0 && grade) return `${grade} · ${score.toLocaleString()}`;
   if (score > 0) return score.toLocaleString();
   return '';
+}
+
+// Public-share helpers (used by the OS share button on every feed card).
+// URLs point at new.pumpshinsa.com so the share-preview routes (with the
+// OG meta injected by server/sharePreviews.js) light up rich unfurls in
+// Discord / Slack / iMessage when the recipient pastes the link.
+
+const PUBLIC_SHARE_BASE = 'https://new.pumpshinsa.com';
+
+export function buildPublicShareUrl(item: FeedItem | null): string {
+  if (!item) return PUBLIC_SHARE_BASE;
+  const id = String(item.id);
+  if (item.type === 'post') return `${PUBLIC_SHARE_BASE}/post/${id}`;
+  if (item.type === 'upscore') return `${PUBLIC_SHARE_BASE}/upscore/${id}`;
+  if (item.type === 'clear') return `${PUBLIC_SHARE_BASE}/clear/${id}`;
+  if (item.type === 'weekly_challenge') return `${PUBLIC_SHARE_BASE}/weekly-play/${id}`;
+  return PUBLIC_SHARE_BASE;
+}
+
+export function buildPublicShareTitle(item: FeedItem | null): string {
+  if (!item) return 'Pump Shinsa';
+  const user = String(item.username || 'someone');
+  const song = String((item as Record<string, unknown>).song_title || '').trim();
+  if (item.type === 'post') return `@${user} on Pump Shinsa`;
+  if (item.type === 'upscore') return song ? `@${user} upscored ${song}` : `@${user} upscored`;
+  if (item.type === 'clear') return song ? `@${user} cleared ${song}` : `@${user} new clear`;
+  if (item.type === 'weekly_challenge') return song ? `@${user} played ${song} (weekly challenge)` : `@${user} weekly challenge`;
+  return 'Pump Shinsa';
 }
 
 export function buildFeedSharePayload(item: FeedItem | null): EmbedSendPayload {
