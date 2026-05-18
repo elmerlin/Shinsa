@@ -99,11 +99,12 @@ function validateTimezone(tz) {
 }
 
 // MET-based per-song kcal estimate. PIU is roughly 11.8 MET (vigorous
-// dance) for ~2 minutes of song. Used as a fallback when the play row
-// doesn't have PIUGame's OCR'd kcal value. Hoisted above /steps so both
-// endpoints can share the same constants + per-user weight resolver.
+// dance). Songs vary from ~45 s (SHORT CUT) to ~4.5 min (FULL SONG);
+// the songs table has duration_seconds for ~98% of charts (sourced
+// from piucenter), so we use that when available and fall back to a
+// 2-min baseline when the chart isn't catalogued.
 const PIU_SESSION_MET = 11.8;
-const PIU_SONG_LENGTH_MINUTES = 2;
+const DEFAULT_SONG_LENGTH_SECONDS = 120;
 const DEFAULT_WEIGHT_KG = 70;
 
 function resolveKcalContext(db, userId) {
@@ -112,9 +113,23 @@ function resolveKcalContext(db, userId) {
   const weightKgUsed = Number.isFinite(profileWeight) && profileWeight > 0
     ? profileWeight
     : DEFAULT_WEIGHT_KG;
-  const kcalPerSongEstimate = (PIU_SESSION_MET * 3.5 * weightKgUsed / 200) * PIU_SONG_LENGTH_MINUTES;
+  // Per-minute kcal rate at this weight — used everywhere a duration is
+  // multiplied in. `kcalPerSongBaseline` is what a 120-second song
+  // estimates to, surfaced in the response as a sanity-check number.
+  const kcalPerMinute = PIU_SESSION_MET * 3.5 * weightKgUsed / 200;
+  const kcalPerSongBaseline = kcalPerMinute * (DEFAULT_SONG_LENGTH_SECONDS / 60);
   const weightSource = Number.isFinite(profileWeight) && profileWeight > 0 ? 'profile' : 'default';
-  return { weightKgUsed, kcalPerSongEstimate, weightSource };
+  return { weightKgUsed, kcalPerMinute, kcalPerSongBaseline, weightSource };
+}
+
+// Convert a song's duration (seconds) to a MET-based kcal estimate for
+// one play of that song. Uses the 120-second fallback when duration
+// isn't known — same behavior as before the duration JOIN landed.
+function estimateKcalForDuration(kcalPerMinute, durationSeconds) {
+  const minutes = (Number.isFinite(durationSeconds) && durationSeconds > 0)
+    ? durationSeconds / 60
+    : DEFAULT_SONG_LENGTH_SECONDS / 60;
+  return kcalPerMinute * minutes;
 }
 
 // Given a UTC timestamp string like "2026-05-17 21:23:54" (no Z) and an
@@ -174,23 +189,37 @@ router.get('/steps', requireApiToken, requireScope('steps:read'), (req, res) => 
   }
   const db = getDb();
 
-  const { weightKgUsed, kcalPerSongEstimate, weightSource } = resolveKcalContext(db, req.user.id);
+  const { weightKgUsed, kcalPerMinute, kcalPerSongBaseline, weightSource } = resolveKcalContext(db, req.user.id);
   const roundKcal = (v) => Math.round(v * 100) / 100;
 
   if (tz) {
     // tz-aware path: pull a UTC-padded slice (±14h to cover any zone),
     // then bucket each play's played_at_utc into the requested tz.
+    // LEFT JOIN to songs catalog so we know each chart's duration_seconds;
+    // the JOIN normalizes mode (Co-op / coop / CoOp) the same way the
+    // explore feed does so durations resolve even for non-canonical modes.
     const fromUtc = new Date(`${from}T00:00:00Z`).getTime() - 14 * 3600 * 1000;
     const toUtc = new Date(`${to}T23:59:59Z`).getTime() + 14 * 3600 * 1000;
     const rows = db.prepare(`
-      SELECT played_at_utc,
-             COALESCE(perfect,0) + COALESCE(great,0) + COALESCE(good,0) + COALESCE(bad,0) AS steps,
-             COALESCE(kcal, 0) AS kcal_logged
-        FROM user_recently_played
-       WHERE user_id = ?
-         AND played_at_utc != ''
-         AND played_at_utc >= ?
-         AND played_at_utc <= ?
+      SELECT rp.played_at_utc,
+             COALESCE(rp.perfect,0) + COALESCE(rp.great,0) + COALESCE(rp.good,0) + COALESCE(rp.bad,0) AS steps,
+             COALESCE(rp.kcal, 0) AS kcal_logged,
+             rp.mode AS rp_mode,
+             s.duration_seconds AS duration_seconds
+        FROM user_recently_played rp
+        LEFT JOIN songs s
+          ON TRIM(s.title) = TRIM(rp.song_title)
+          AND s.mode = (CASE
+            WHEN LOWER(REPLACE(REPLACE(rp.mode,'-',''),' ','')) IN ('coop','cooperative') THEN 'CoOp'
+            WHEN LOWER(rp.mode) IN ('single','singles','s') THEN 'Single'
+            WHEN LOWER(rp.mode) IN ('double','doubles','d') THEN 'Double'
+            ELSE rp.mode
+          END)
+          AND s.level = rp.level
+       WHERE rp.user_id = ?
+         AND rp.played_at_utc != ''
+         AND rp.played_at_utc >= ?
+         AND rp.played_at_utc <= ?
     `).all(
       req.user.id,
       new Date(fromUtc).toISOString().replace('T', ' ').slice(0, 19),
@@ -209,7 +238,9 @@ router.get('/steps', requireApiToken, requireScope('steps:read'), (req, res) => 
       }
       const steps = Number(r.steps) || 0;
       const loggedKcal = Number(r.kcal_logged) || 0;
-      const kcal = loggedKcal > 0 ? loggedKcal : kcalPerSongEstimate;
+      const kcal = loggedKcal > 0
+        ? loggedKcal
+        : estimateKcalForDuration(kcalPerMinute, Number(r.duration_seconds));
       day.steps += steps;
       day.plays += 1;
       day.kcal += kcal;
@@ -241,7 +272,8 @@ router.get('/steps', requireApiToken, requireScope('steps:read'), (req, res) => 
       hour_basis: tz,
       kcal_weight_kg: weightKgUsed,
       kcal_weight_source: weightSource,
-      kcal_per_song_estimate: roundKcal(kcalPerSongEstimate),
+      kcal_estimate_basis: 'song_duration',
+      kcal_per_song_baseline_120s: roundKcal(kcalPerSongBaseline),
       days,
     });
   }
@@ -251,33 +283,66 @@ router.get('/steps', requireApiToken, requireScope('steps:read'), (req, res) => 
   // string, so a date-only BETWEEN never matched anything. Compare on
   // the first 10 chars and group on the same prefix.
   //
-  // kcal: prefer the row's logged kcal (PIUGame OCR), fall back to the
-  // per-song MET estimate when it's 0/null. SQL CASE keeps the sum in
-  // one pass so we don't need a JS post-aggregation.
+  // kcal: prefer the row's logged kcal (PIUGame OCR), else
+  // (kcal_per_minute × song_duration_minutes), else the 120-second
+  // baseline when the chart isn't in the songs catalog. All three
+  // branches fold into a single SQL SUM via nested CASE.
   const dayRows = db.prepare(`
-    SELECT substr(date_played, 1, 10) AS date,
-           COALESCE(SUM(COALESCE(perfect,0) + COALESCE(great,0) + COALESCE(good,0) + COALESCE(bad,0)), 0) AS steps,
+    SELECT substr(rp.date_played, 1, 10) AS date,
+           COALESCE(SUM(COALESCE(rp.perfect,0) + COALESCE(rp.great,0) + COALESCE(rp.good,0) + COALESCE(rp.bad,0)), 0) AS steps,
            COUNT(*) AS plays,
-           COALESCE(SUM(CASE WHEN COALESCE(kcal,0) > 0 THEN kcal ELSE ? END), 0) AS kcal
-      FROM user_recently_played
-     WHERE user_id = ?
-       AND substr(date_played, 1, 10) BETWEEN ? AND ?
+           COALESCE(SUM(
+             CASE
+               WHEN COALESCE(rp.kcal,0) > 0 THEN rp.kcal
+               WHEN s.duration_seconds IS NOT NULL AND s.duration_seconds > 0
+                 THEN ? * (s.duration_seconds / 60.0)
+               ELSE ?
+             END
+           ), 0) AS kcal
+      FROM user_recently_played rp
+      LEFT JOIN songs s
+        ON TRIM(s.title) = TRIM(rp.song_title)
+        AND s.mode = (CASE
+          WHEN LOWER(REPLACE(REPLACE(rp.mode,'-',''),' ','')) IN ('coop','cooperative') THEN 'CoOp'
+          WHEN LOWER(rp.mode) IN ('single','singles','s') THEN 'Single'
+          WHEN LOWER(rp.mode) IN ('double','doubles','d') THEN 'Double'
+          ELSE rp.mode
+        END)
+        AND s.level = rp.level
+     WHERE rp.user_id = ?
+       AND substr(rp.date_played, 1, 10) BETWEEN ? AND ?
      GROUP BY date
      ORDER BY date ASC
-  `).all(kcalPerSongEstimate, req.user.id, from, to);
+  `).all(kcalPerMinute, kcalPerSongBaseline, req.user.id, from, to);
   const hourRows = db.prepare(`
-    SELECT substr(date_played, 1, 10) AS date,
-           CAST(strftime('%H', played_at_utc) AS INTEGER) AS hour,
-           COALESCE(SUM(COALESCE(perfect,0) + COALESCE(great,0) + COALESCE(good,0) + COALESCE(bad,0)), 0) AS steps,
+    SELECT substr(rp.date_played, 1, 10) AS date,
+           CAST(strftime('%H', rp.played_at_utc) AS INTEGER) AS hour,
+           COALESCE(SUM(COALESCE(rp.perfect,0) + COALESCE(rp.great,0) + COALESCE(rp.good,0) + COALESCE(rp.bad,0)), 0) AS steps,
            COUNT(*) AS plays,
-           COALESCE(SUM(CASE WHEN COALESCE(kcal,0) > 0 THEN kcal ELSE ? END), 0) AS kcal
-      FROM user_recently_played
-     WHERE user_id = ?
-       AND substr(date_played, 1, 10) BETWEEN ? AND ?
-       AND played_at_utc != ''
+           COALESCE(SUM(
+             CASE
+               WHEN COALESCE(rp.kcal,0) > 0 THEN rp.kcal
+               WHEN s.duration_seconds IS NOT NULL AND s.duration_seconds > 0
+                 THEN ? * (s.duration_seconds / 60.0)
+               ELSE ?
+             END
+           ), 0) AS kcal
+      FROM user_recently_played rp
+      LEFT JOIN songs s
+        ON TRIM(s.title) = TRIM(rp.song_title)
+        AND s.mode = (CASE
+          WHEN LOWER(REPLACE(REPLACE(rp.mode,'-',''),' ','')) IN ('coop','cooperative') THEN 'CoOp'
+          WHEN LOWER(rp.mode) IN ('single','singles','s') THEN 'Single'
+          WHEN LOWER(rp.mode) IN ('double','doubles','d') THEN 'Double'
+          ELSE rp.mode
+        END)
+        AND s.level = rp.level
+     WHERE rp.user_id = ?
+       AND substr(rp.date_played, 1, 10) BETWEEN ? AND ?
+       AND rp.played_at_utc != ''
      GROUP BY date, hour
      ORDER BY date ASC, hour ASC
-  `).all(kcalPerSongEstimate, req.user.id, from, to);
+  `).all(kcalPerMinute, kcalPerSongBaseline, req.user.id, from, to);
   const hoursByDate = new Map();
   for (const r of hourRows) {
     if (!hoursByDate.has(r.date)) hoursByDate.set(r.date, []);
@@ -295,7 +360,8 @@ router.get('/steps', requireApiToken, requireScope('steps:read'), (req, res) => 
     hour_basis: 'utc',
     kcal_weight_kg: weightKgUsed,
     kcal_weight_source: weightSource,
-    kcal_per_song_estimate: roundKcal(kcalPerSongEstimate),
+    kcal_estimate_basis: 'song_duration',
+    kcal_per_song_baseline_120s: roundKcal(kcalPerSongBaseline),
     days: dayRows.map((r) => ({
       date: r.date,
       steps: Number(r.steps) || 0,
@@ -342,7 +408,33 @@ router.get('/plays', requireApiToken, requireScope('steps:read'), (req, res) => 
   const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(500, limitRaw)) : 100;
 
   const db = getDb();
-  const { weightKgUsed, kcalPerSongEstimate, weightSource } = resolveKcalContext(db, req.user.id);
+  const { weightKgUsed, kcalPerMinute, kcalPerSongBaseline, weightSource } = resolveKcalContext(db, req.user.id);
+
+  // Shared SELECT projection for both tz/non-tz branches. The songs
+  // JOIN brings in duration_seconds so the per-play kcal estimate uses
+  // each chart's actual length (where catalogued; ~98% are).
+  const playSelect = `
+    SELECT rp.id AS play_id, rp.date_played, rp.played_at_utc,
+           rp.song_title, rp.mode, rp.level, rp.score, rp.grade, rp.plate,
+           COALESCE(rp.perfect,0) + COALESCE(rp.great,0) + COALESCE(rp.good,0) + COALESCE(rp.bad,0) AS steps,
+           COALESCE(rp.kcal, 0) AS kcal_logged,
+           COALESCE(rp.perfect, 0) AS perfect, COALESCE(rp.great, 0) AS great,
+           COALESCE(rp.good, 0) AS good, COALESCE(rp.bad, 0) AS bad,
+           COALESCE(rp.miss, 0) AS miss, COALESCE(rp.max_combo, 0) AS max_combo,
+           COALESCE(rp.replay_embed_url, '') AS replay_embed_url,
+           COALESCE(rp.replay_video_id, '') AS replay_video_id,
+           s.duration_seconds AS duration_seconds
+      FROM user_recently_played rp
+      LEFT JOIN songs s
+        ON TRIM(s.title) = TRIM(rp.song_title)
+        AND s.mode = (CASE
+          WHEN LOWER(REPLACE(REPLACE(rp.mode,'-',''),' ','')) IN ('coop','cooperative') THEN 'CoOp'
+          WHEN LOWER(rp.mode) IN ('single','singles','s') THEN 'Single'
+          WHEN LOWER(rp.mode) IN ('double','doubles','d') THEN 'Double'
+          ELSE rp.mode
+        END)
+        AND s.level = rp.level
+  `;
 
   let rows;
   if (tz) {
@@ -352,22 +444,13 @@ router.get('/plays', requireApiToken, requireScope('steps:read'), (req, res) => 
     const fromUtc = new Date(`${from}T00:00:00Z`).getTime() - 14 * 3600 * 1000;
     const toUtc = new Date(`${to}T23:59:59Z`).getTime() + 14 * 3600 * 1000;
     const raw = db.prepare(`
-      SELECT id AS play_id, date_played, played_at_utc, song_title, mode, level, score,
-             grade, plate,
-             COALESCE(perfect,0) + COALESCE(great,0) + COALESCE(good,0) + COALESCE(bad,0) AS steps,
-             COALESCE(kcal, 0) AS kcal_logged,
-             COALESCE(perfect, 0) AS perfect, COALESCE(great, 0) AS great,
-             COALESCE(good, 0) AS good, COALESCE(bad, 0) AS bad,
-             COALESCE(miss, 0) AS miss, COALESCE(max_combo, 0) AS max_combo,
-             COALESCE(replay_embed_url, '') AS replay_embed_url,
-             COALESCE(replay_video_id, '') AS replay_video_id
-        FROM user_recently_played
-       WHERE user_id = ?
-         AND played_at_utc != ''
-         AND played_at_utc >= ?
-         AND played_at_utc <= ?
-       ORDER BY played_at_utc DESC, id DESC
-       LIMIT ?
+      ${playSelect}
+     WHERE rp.user_id = ?
+       AND rp.played_at_utc != ''
+       AND rp.played_at_utc >= ?
+       AND rp.played_at_utc <= ?
+     ORDER BY rp.played_at_utc DESC, rp.id DESC
+     LIMIT ?
     `).all(
       req.user.id,
       new Date(fromUtc).toISOString().replace('T', ' ').slice(0, 19),
@@ -383,20 +466,11 @@ router.get('/plays', requireApiToken, requireScope('steps:read'), (req, res) => 
     }
   } else {
     rows = db.prepare(`
-      SELECT id AS play_id, date_played, played_at_utc, song_title, mode, level, score,
-             grade, plate,
-             COALESCE(perfect,0) + COALESCE(great,0) + COALESCE(good,0) + COALESCE(bad,0) AS steps,
-             COALESCE(kcal, 0) AS kcal_logged,
-             COALESCE(perfect, 0) AS perfect, COALESCE(great, 0) AS great,
-             COALESCE(good, 0) AS good, COALESCE(bad, 0) AS bad,
-             COALESCE(miss, 0) AS miss, COALESCE(max_combo, 0) AS max_combo,
-             COALESCE(replay_embed_url, '') AS replay_embed_url,
-             COALESCE(replay_video_id, '') AS replay_video_id
-        FROM user_recently_played
-       WHERE user_id = ?
-         AND substr(date_played, 1, 10) BETWEEN ? AND ?
-       ORDER BY COALESCE(played_at_utc, date_played) DESC, id DESC
-       LIMIT ?
+      ${playSelect}
+     WHERE rp.user_id = ?
+       AND substr(rp.date_played, 1, 10) BETWEEN ? AND ?
+     ORDER BY COALESCE(rp.played_at_utc, rp.date_played) DESC, rp.id DESC
+     LIMIT ?
     `).all(req.user.id, from, to, limit);
   }
 
@@ -409,10 +483,23 @@ router.get('/plays', requireApiToken, requireScope('steps:read'), (req, res) => 
     count: rows.length,
     kcal_weight_kg: weightKgUsed,
     kcal_weight_source: weightSource,
-    kcal_per_song_estimate: Math.round(kcalPerSongEstimate * 100) / 100,
+    kcal_estimate_basis: 'song_duration',
+    kcal_per_song_baseline_120s: Math.round(kcalPerSongBaseline * 100) / 100,
     plays: rows.map((r) => {
       const logged = Number(r.kcal_logged) || 0;
-      const kcal = logged > 0 ? logged : kcalPerSongEstimate;
+      const duration = Number(r.duration_seconds);
+      let kcal;
+      let kcalSource;
+      if (logged > 0) {
+        kcal = logged;
+        kcalSource = 'logged';
+      } else if (Number.isFinite(duration) && duration > 0) {
+        kcal = kcalPerMinute * (duration / 60);
+        kcalSource = 'estimated_duration';
+      } else {
+        kcal = kcalPerSongBaseline;
+        kcalSource = 'estimated_baseline';
+      }
       return {
         play_id: Number(r.play_id) || 0,
         played_at_utc: r.played_at_utc || '',
@@ -424,8 +511,9 @@ router.get('/plays', requireApiToken, requireScope('steps:read'), (req, res) => 
         grade: r.grade || '',
         plate: r.plate || '',
         steps: Number(r.steps) || 0,
+        duration_seconds: Number.isFinite(duration) && duration > 0 ? duration : null,
         kcal: Math.round(kcal * 100) / 100,
-        kcal_source: logged > 0 ? 'logged' : 'estimated',
+        kcal_source: kcalSource,
         judgments: {
           perfect: Number(r.perfect) || 0,
           great: Number(r.great) || 0,
