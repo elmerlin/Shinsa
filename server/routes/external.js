@@ -79,47 +79,167 @@ function requireScope(scope) {
 
 // ---- Data endpoints (PAT-authenticated) -------------------------------------
 
-// GET /api/external/steps?from=YYYY-MM-DD&to=YYYY-MM-DD
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+// Validate an IANA tz name by asking Intl whether it accepts it. Returns
+// the canonical name on success, null on failure. Caches results so we
+// don't pay the validation cost on every request.
+const tzCache = new Map();
+function validateTimezone(tz) {
+  if (!tz) return null;
+  if (tzCache.has(tz)) return tzCache.get(tz);
+  try {
+    const canonical = new Intl.DateTimeFormat('en-CA', { timeZone: tz }).resolvedOptions().timeZone;
+    tzCache.set(tz, canonical);
+    return canonical;
+  } catch {
+    tzCache.set(tz, null);
+    return null;
+  }
+}
+
+// Given a UTC timestamp string like "2026-05-17 21:23:54" (no Z) and an
+// IANA timezone, return { date, hour } as observed in that zone. Returns
+// null if the timestamp is unparseable.
+function utcToZoned(utcString, tz) {
+  if (!utcString) return null;
+  const iso = utcString.includes('T') ? utcString : utcString.replace(' ', 'T');
+  const ts = Date.parse(iso.endsWith('Z') ? iso : `${iso}Z`);
+  if (!Number.isFinite(ts)) return null;
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: tz,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date(ts));
+  const v = (type) => parts.find((p) => p.type === type)?.value || '';
+  return {
+    date: `${v('year')}-${v('month')}-${v('day')}`,
+    hour: parseInt(v('hour'), 10) || 0,
+  };
+}
+
+// GET /api/external/steps?from=YYYY-MM-DD&to=YYYY-MM-DD&tz=Europe/London
 // Returns daily step totals where one "step" = perfect+great+good+bad
-// (everything but misses). Date is the local `date_played` PIUGame surfaces,
-// so totals line up with what the user sees on the recently-played list.
+// (everything but misses).
 //
-// Each day also includes a sparse `hours` array bucketing plays by the UTC
-// hour they were logged at (`played_at_utc`). Hours with no plays are
-// omitted; sum of `hours[].steps` may be < `days[].steps` because some
-// older plays predate the `played_at_utc` column and have no timestamp.
+// `tz` (optional, IANA name): when provided, dates are computed from
+// `played_at_utc` in that timezone — so a request from London for
+// `from=today&to=today&tz=Europe/London` returns plays the user actually
+// did today in London. Without `tz`, dates are the raw `date_played`
+// timestamp PIUGame supplies (Asia/Seoul) — kept for backwards compat
+// with the original /steps consumers.
+//
+// `hours[]` per day buckets plays by the local hour (in the same tz);
+// without `tz` the hours are still UTC for compat. Hours with no plays
+// are omitted; sum may be < `days[].steps` because some older plays
+// predate the `played_at_utc` column.
 router.get('/steps', requireApiToken, requireScope('steps:read'), (req, res) => {
   const from = String(req.query.from || '').trim();
   const to = String(req.query.to || '').trim();
-  const dateRe = /^\d{4}-\d{2}-\d{2}$/;
-  if (!dateRe.test(from) || !dateRe.test(to)) {
+  if (!DATE_RE.test(from) || !DATE_RE.test(to)) {
     return res.status(400).json({ error: 'from and to must be YYYY-MM-DD dates' });
   }
   if (from > to) {
     return res.status(400).json({ error: 'from must be <= to' });
   }
+  const rawTz = String(req.query.tz || '').trim();
+  let tz = null;
+  if (rawTz) {
+    tz = validateTimezone(rawTz);
+    if (!tz) return res.status(400).json({ error: `Unknown tz: ${rawTz}` });
+  }
   const db = getDb();
+
+  if (tz) {
+    // tz-aware path: pull a UTC-padded slice (±14h to cover any zone),
+    // then bucket each play's played_at_utc into the requested tz.
+    const fromUtc = new Date(`${from}T00:00:00Z`).getTime() - 14 * 3600 * 1000;
+    const toUtc = new Date(`${to}T23:59:59Z`).getTime() + 14 * 3600 * 1000;
+    const rows = db.prepare(`
+      SELECT played_at_utc,
+             COALESCE(perfect,0) + COALESCE(great,0) + COALESCE(good,0) + COALESCE(bad,0) AS steps
+        FROM user_recently_played
+       WHERE user_id = ?
+         AND played_at_utc != ''
+         AND played_at_utc >= ?
+         AND played_at_utc <= ?
+    `).all(
+      req.user.id,
+      new Date(fromUtc).toISOString().replace('T', ' ').slice(0, 19),
+      new Date(toUtc).toISOString().replace('T', ' ').slice(0, 19),
+    );
+    // dayMap: localDate -> { steps, plays, hours: Map<hour, {steps, plays}> }
+    const dayMap = new Map();
+    for (const r of rows) {
+      const z = utcToZoned(r.played_at_utc, tz);
+      if (!z) continue;
+      if (z.date < from || z.date > to) continue;
+      let day = dayMap.get(z.date);
+      if (!day) {
+        day = { steps: 0, plays: 0, hours: new Map() };
+        dayMap.set(z.date, day);
+      }
+      const steps = Number(r.steps) || 0;
+      day.steps += steps;
+      day.plays += 1;
+      let hb = day.hours.get(z.hour);
+      if (!hb) {
+        hb = { steps: 0, plays: 0 };
+        day.hours.set(z.hour, hb);
+      }
+      hb.steps += steps;
+      hb.plays += 1;
+    }
+    const days = Array.from(dayMap.entries())
+      .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
+      .map(([date, d]) => ({
+        date,
+        steps: d.steps,
+        plays: d.plays,
+        hours: Array.from(d.hours.entries())
+          .sort((a, b) => a[0] - b[0])
+          .map(([hour, hb]) => ({ hour, steps: hb.steps, plays: hb.plays })),
+      }));
+    return res.json({
+      user_id: req.user.id,
+      from,
+      to,
+      tz,
+      hour_basis: tz,
+      days,
+    });
+  }
+
+  // Legacy KST path (no tz): kept for backwards compat. Fixes the BETWEEN
+  // bug — date_played is stored as a full "YYYY-MM-DD HH:MM:SS (GMT+9)"
+  // string, so a date-only BETWEEN never matched anything. Compare on
+  // the first 10 chars and group on the same prefix.
   const dayRows = db.prepare(`
-    SELECT date_played AS date,
+    SELECT substr(date_played, 1, 10) AS date,
            COALESCE(SUM(COALESCE(perfect,0) + COALESCE(great,0) + COALESCE(good,0) + COALESCE(bad,0)), 0) AS steps,
            COUNT(*) AS plays
       FROM user_recently_played
      WHERE user_id = ?
-       AND date_played BETWEEN ? AND ?
-     GROUP BY date_played
-     ORDER BY date_played ASC
+       AND substr(date_played, 1, 10) BETWEEN ? AND ?
+     GROUP BY date
+     ORDER BY date ASC
   `).all(req.user.id, from, to);
   const hourRows = db.prepare(`
-    SELECT date_played AS date,
+    SELECT substr(date_played, 1, 10) AS date,
            CAST(strftime('%H', played_at_utc) AS INTEGER) AS hour,
            COALESCE(SUM(COALESCE(perfect,0) + COALESCE(great,0) + COALESCE(good,0) + COALESCE(bad,0)), 0) AS steps,
            COUNT(*) AS plays
       FROM user_recently_played
      WHERE user_id = ?
-       AND date_played BETWEEN ? AND ?
+       AND substr(date_played, 1, 10) BETWEEN ? AND ?
        AND played_at_utc != ''
-     GROUP BY date_played, hour
-     ORDER BY date_played ASC, hour ASC
+     GROUP BY date, hour
+     ORDER BY date ASC, hour ASC
   `).all(req.user.id, from, to);
   const hoursByDate = new Map();
   for (const r of hourRows) {
@@ -151,25 +271,32 @@ const PIU_SESSION_MET = 11.8;
 const PIU_SONG_LENGTH_MINUTES = 2;
 const DEFAULT_WEIGHT_KG = 70;
 
-// GET /api/external/plays?from=YYYY-MM-DD&to=YYYY-MM-DD&limit=100
+// GET /api/external/plays?from=YYYY-MM-DD&to=YYYY-MM-DD&limit=100&tz=Europe/London
 // Returns per-play rows in the date range, newest first. Each row carries
 // the song, score, judgments, and kcal — preferring the OCR-captured value
 // from PIUGame when present and falling back to a MET-based estimate
 // scaled by the user's profile weight (or 70 kg default) when the row's
 // kcal column is empty.
 //
-// Date semantics match /steps: `date_played` is a free-form string PIUGame
-// surfaces (often "YYYY-MM-DD HH:MM:SS (GMT±N)"), so the BETWEEN check uses
-// lexicographic prefix matching on the YYYY-MM-DD inputs.
+// Date semantics match /steps:
+//   - With `tz` (IANA): the date range is interpreted in that timezone
+//     and `played_at_utc` is bucketed into it.
+//   - Without `tz`: the legacy KST behavior — compares the first 10 chars
+//     of `date_played` (PIUGame's Asia/Seoul timestamp).
 router.get('/plays', requireApiToken, requireScope('steps:read'), (req, res) => {
   const from = String(req.query.from || '').trim();
   const to = String(req.query.to || '').trim();
-  const dateRe = /^\d{4}-\d{2}-\d{2}$/;
-  if (!dateRe.test(from) || !dateRe.test(to)) {
+  if (!DATE_RE.test(from) || !DATE_RE.test(to)) {
     return res.status(400).json({ error: 'from and to must be YYYY-MM-DD dates' });
   }
   if (from > to) {
     return res.status(400).json({ error: 'from must be <= to' });
+  }
+  const rawTz = String(req.query.tz || '').trim();
+  let tz = null;
+  if (rawTz) {
+    tz = validateTimezone(rawTz);
+    if (!tz) return res.status(400).json({ error: `Unknown tz: ${rawTz}` });
   }
   const limitRaw = parseInt(String(req.query.limit || '100'), 10);
   const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(500, limitRaw)) : 100;
@@ -181,37 +308,67 @@ router.get('/plays', requireApiToken, requireScope('steps:read'), (req, res) => 
   const kcalPerSongEstimate = (PIU_SESSION_MET * 3.5 * weightKgUsed / 200) * PIU_SONG_LENGTH_MINUTES;
   const weightSource = Number.isFinite(profileWeight) && profileWeight > 0 ? 'profile' : 'default';
 
-  const rows = db.prepare(`
-    SELECT id AS play_id,
-           date_played,
-           played_at_utc,
-           song_title,
-           mode,
-           level,
-           score,
-           grade,
-           plate,
-           COALESCE(perfect,0) + COALESCE(great,0) + COALESCE(good,0) + COALESCE(bad,0) AS steps,
-           COALESCE(kcal, 0) AS kcal_logged,
-           COALESCE(perfect, 0) AS perfect,
-           COALESCE(great, 0) AS great,
-           COALESCE(good, 0) AS good,
-           COALESCE(bad, 0) AS bad,
-           COALESCE(miss, 0) AS miss,
-           COALESCE(max_combo, 0) AS max_combo,
-           COALESCE(replay_embed_url, '') AS replay_embed_url,
-           COALESCE(replay_video_id, '') AS replay_video_id
-      FROM user_recently_played
-     WHERE user_id = ?
-       AND date_played BETWEEN ? AND ?
-     ORDER BY COALESCE(played_at_utc, date_played) DESC, id DESC
-     LIMIT ?
-  `).all(req.user.id, from, to, limit);
+  let rows;
+  if (tz) {
+    // tz-aware path: ±14h UTC padding, then post-filter by zoned date.
+    // Pull `limit + 200` from SQL so the post-filter doesn't starve the
+    // requested page when a lot of UTC-adjacent rows fall outside [from,to].
+    const fromUtc = new Date(`${from}T00:00:00Z`).getTime() - 14 * 3600 * 1000;
+    const toUtc = new Date(`${to}T23:59:59Z`).getTime() + 14 * 3600 * 1000;
+    const raw = db.prepare(`
+      SELECT id AS play_id, date_played, played_at_utc, song_title, mode, level, score,
+             grade, plate,
+             COALESCE(perfect,0) + COALESCE(great,0) + COALESCE(good,0) + COALESCE(bad,0) AS steps,
+             COALESCE(kcal, 0) AS kcal_logged,
+             COALESCE(perfect, 0) AS perfect, COALESCE(great, 0) AS great,
+             COALESCE(good, 0) AS good, COALESCE(bad, 0) AS bad,
+             COALESCE(miss, 0) AS miss, COALESCE(max_combo, 0) AS max_combo,
+             COALESCE(replay_embed_url, '') AS replay_embed_url,
+             COALESCE(replay_video_id, '') AS replay_video_id
+        FROM user_recently_played
+       WHERE user_id = ?
+         AND played_at_utc != ''
+         AND played_at_utc >= ?
+         AND played_at_utc <= ?
+       ORDER BY played_at_utc DESC, id DESC
+       LIMIT ?
+    `).all(
+      req.user.id,
+      new Date(fromUtc).toISOString().replace('T', ' ').slice(0, 19),
+      new Date(toUtc).toISOString().replace('T', ' ').slice(0, 19),
+      limit + 200,
+    );
+    rows = [];
+    for (const r of raw) {
+      const z = utcToZoned(r.played_at_utc, tz);
+      if (!z || z.date < from || z.date > to) continue;
+      rows.push(r);
+      if (rows.length >= limit) break;
+    }
+  } else {
+    rows = db.prepare(`
+      SELECT id AS play_id, date_played, played_at_utc, song_title, mode, level, score,
+             grade, plate,
+             COALESCE(perfect,0) + COALESCE(great,0) + COALESCE(good,0) + COALESCE(bad,0) AS steps,
+             COALESCE(kcal, 0) AS kcal_logged,
+             COALESCE(perfect, 0) AS perfect, COALESCE(great, 0) AS great,
+             COALESCE(good, 0) AS good, COALESCE(bad, 0) AS bad,
+             COALESCE(miss, 0) AS miss, COALESCE(max_combo, 0) AS max_combo,
+             COALESCE(replay_embed_url, '') AS replay_embed_url,
+             COALESCE(replay_video_id, '') AS replay_video_id
+        FROM user_recently_played
+       WHERE user_id = ?
+         AND substr(date_played, 1, 10) BETWEEN ? AND ?
+       ORDER BY COALESCE(played_at_utc, date_played) DESC, id DESC
+       LIMIT ?
+    `).all(req.user.id, from, to, limit);
+  }
 
   res.json({
     user_id: req.user.id,
     from,
     to,
+    tz: tz || null,
     limit,
     count: rows.length,
     kcal_weight_kg: weightKgUsed,
