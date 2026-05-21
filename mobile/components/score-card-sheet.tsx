@@ -138,6 +138,12 @@ export function ScoreCardSheet({ visible, data, onClose, onReplay }: Props) {
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [challengeOpen, setChallengeOpen] = useState(false);
+  // MUST stay above the `if (!data)` early return — a hook after a
+  // conditional return changes the hook count between the closed
+  // (data == null) and open renders, which throws React error #310
+  // ("rendered more hooks than during the previous render") and white-
+  // screens the whole app. See handleShare below for its usage.
+  const [sharing, setSharing] = useState(false);
 
   if (!data) {
     return (
@@ -245,7 +251,7 @@ export function ScoreCardSheet({ visible, data, onClose, onReplay }: Props) {
   // The Url points at new.pumpshinsa.com when we have a play_id so the
   // recipient lands on a route the share-preview middleware decorates;
   // otherwise it's the chart deep-link (chartPath).
-  const [sharing, setSharing] = useState(false);
+  // (`sharing` state is declared up top with the other hooks — see note.)
   const handleShare = async () => {
     if (!chartPath && !playId) return;
     setSharing(true);
