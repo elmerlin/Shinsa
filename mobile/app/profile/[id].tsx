@@ -612,10 +612,26 @@ export function ProfileBody({ lookup }: { lookup: string }) {
 
   // Owner-only sync mutation for recent plays. Best-scores sync lives on the
   // Account screen since it's a heavier one-time operation.
+  // Surfaces an explicit start/finish signal: the button swaps to a
+  // "Syncing…" spinner while it runs, and an Alert reports the result
+  // (or the failure) on completion — previously it finished silently so
+  // there was no way to tell it had run.
   const syncRecentMutation = useMutation({
     mutationFn: () => piugameApi.syncRecentlyPlayed(),
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['piugame-recent', profileId] });
+      const plays = data?.plays_count ?? 0;
+      const scores = data?.scores_updated ?? 0;
+      Alert.alert(
+        'Sync complete',
+        `${plays} recent play${plays === 1 ? '' : 's'} pulled · ${scores} best score${scores === 1 ? '' : 's'} updated.`,
+      );
+    },
+    onError: (err) => {
+      Alert.alert(
+        'Sync failed',
+        err instanceof Error ? err.message : 'Could not sync recent plays. Try again in a moment.',
+      );
     },
   });
 
@@ -1096,9 +1112,14 @@ export function ProfileBody({ lookup }: { lookup: string }) {
                 }}
                 disabled={syncRecentMutation.isPending}
                 style={({ pressed }) => [s.deskMessageBtn, pressed && { opacity: 0.7 }]}>
-                {syncRecentMutation.isPending
-                  ? <ActivityIndicator size="small" color={theme.text} />
-                  : <Text style={s.deskMessageText}>Sync recent</Text>}
+                {syncRecentMutation.isPending ? (
+                  <View style={s.syncBtnBusy}>
+                    <ActivityIndicator size="small" color={theme.text} />
+                    <Text style={s.deskMessageText}>Syncing…</Text>
+                  </View>
+                ) : (
+                  <Text style={s.deskMessageText}>Sync recent</Text>
+                )}
               </Pressable>
             </View>
           ) : null}
@@ -1330,7 +1351,14 @@ export function ProfileBody({ lookup }: { lookup: string }) {
                 }}
                 disabled={syncRecentMutation.isPending}
                 style={({ pressed }) => [s.iconBtn, pressed && { opacity: 0.7 }]}>
-                {syncRecentMutation.isPending ? <ActivityIndicator size="small" color={theme.text} /> : <Text style={s.syncBtnText}>Sync recent</Text>}
+                {syncRecentMutation.isPending ? (
+                  <View style={s.syncBtnBusy}>
+                    <ActivityIndicator size="small" color={theme.text} />
+                    <Text style={s.syncBtnText}>Syncing…</Text>
+                  </View>
+                ) : (
+                  <Text style={s.syncBtnText}>Sync recent</Text>
+                )}
               </Pressable>
             </View>
           ) : null}
@@ -4019,6 +4047,9 @@ const makeStyles = (t: ThemeColors) => ({
     backgroundColor: t.surfaceMuted,
   },
   syncBtnText: { fontSize: 11, fontWeight: '700' as const, color: t.text },
+  // Row wrapper for the spinner + "Syncing…" label so the in-progress
+  // state reads as clearly active rather than a bare spinner.
+  syncBtnBusy: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6 },
   notifMenuCard: {
     backgroundColor: t.card,
     borderRadius: 12,
