@@ -250,15 +250,31 @@ export function createPiugameApi(client: ApiClient) {
     shoes(userId: string) {
       return client.request<PiugameShoesResponse>(`/api/piugame/shoes/${encodeURIComponent(userId)}`);
     },
+    // The sync endpoints scrape piugame.com live — best-scores can walk
+    // dozens of pages and routinely takes 20-60s; recently-played +
+    // pumbility are smaller but still ~15-25s. The ApiClient default
+    // timeout is 8s, which aborts the request long before the server
+    // finishes (the user then sees a spurious "Request timed out" even
+    // though the sync usually completes server-side). Give each a
+    // generous per-call timeout.
     syncBestScores() {
-      return client.request<PiugameSyncResponse>('/api/piugame/sync/best-scores', { method: 'POST' });
+      return client.request<PiugameSyncResponse>('/api/piugame/sync/best-scores', {
+        method: 'POST',
+        timeoutMs: 180_000,
+      });
     },
     syncRecentlyPlayed() {
-      return client.request<PiugameSyncRecentResponse>('/api/piugame/sync/recently-played', { method: 'POST' });
+      return client.request<PiugameSyncRecentResponse>('/api/piugame/sync/recently-played', {
+        method: 'POST',
+        timeoutMs: 90_000,
+      });
     },
     /** Scrape and store the user's Top-50 Pumbility chart list from PIUGame. */
     syncPumbility() {
-      return client.request<PiugameSyncPumbilityResponse>('/api/piugame/sync/pumbility', { method: 'POST' });
+      return client.request<PiugameSyncPumbilityResponse>('/api/piugame/sync/pumbility', {
+        method: 'POST',
+        timeoutMs: 90_000,
+      });
     },
     syncStatus(userId: string) {
       return client.request<PiugameSyncStatus>(`/api/piugame/sync-status/${encodeURIComponent(userId)}`);
