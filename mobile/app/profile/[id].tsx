@@ -16,6 +16,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { confirmAction, notify } from '@/lib/alert';
 import { AddShoeSheet } from '@/components/add-shoe-sheet';
 import { ChartJacket } from '@/components/chart-jacket';
 import { ClearsByLevelChart } from '@/components/clears-by-level-chart';
@@ -622,13 +623,13 @@ export function ProfileBody({ lookup }: { lookup: string }) {
       queryClient.invalidateQueries({ queryKey: ['piugame-recent', profileId] });
       const plays = data?.plays_count ?? 0;
       const scores = data?.scores_updated ?? 0;
-      Alert.alert(
+      notify(
         'Sync complete',
         `${plays} recent play${plays === 1 ? '' : 's'} pulled · ${scores} best score${scores === 1 ? '' : 's'} updated.`,
       );
     },
     onError: (err) => {
-      Alert.alert(
+      notify(
         'Sync failed',
         err instanceof Error ? err.message : 'Could not sync recent plays. Try again in a moment.',
       );
@@ -754,24 +755,20 @@ export function ProfileBody({ lookup }: { lookup: string }) {
   });
 
   const handleRetireShoe = (shoeId: number, name: string) => {
-    Alert.alert(
+    confirmAction(
       'Retire shoe?',
       `“${name}” will be marked as retired. You can still see it in the cabinet for history.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Retire', style: 'destructive', onPress: () => retireShoeMutation.mutate(shoeId) },
-      ],
+      () => retireShoeMutation.mutate(shoeId),
+      { confirmLabel: 'Retire', destructive: true },
     );
   };
 
   const handleDeleteShoe = (shoeId: number, name: string) => {
-    Alert.alert(
+    confirmAction(
       'Delete shoe?',
       `“${name}” will be removed from your cabinet permanently. Past plays linked to it will lose the connection.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: () => deleteShoeMutation.mutate(shoeId) },
-      ],
+      () => deleteShoeMutation.mutate(shoeId),
+      { confirmLabel: 'Delete', destructive: true },
     );
   };
 
@@ -1101,13 +1098,11 @@ export function ProfileBody({ lookup }: { lookup: string }) {
                   without leaving the profile. */}
               <Pressable
                 onPress={() => {
-                  Alert.alert(
+                  confirmAction(
                     'Sync recent plays?',
                     'Pulls your most recent plays from PIUGame. This usually takes a few seconds.',
-                    [
-                      { text: 'Cancel', style: 'cancel' },
-                      { text: 'Sync', onPress: () => syncRecentMutation.mutate() },
-                    ],
+                    () => syncRecentMutation.mutate(),
+                    { confirmLabel: 'Sync' },
                   );
                 }}
                 disabled={syncRecentMutation.isPending}
@@ -1340,13 +1335,11 @@ export function ProfileBody({ lookup }: { lookup: string }) {
               </Pressable>
               <Pressable
                 onPress={() => {
-                  Alert.alert(
+                  confirmAction(
                     'Sync recent plays?',
                     'Pulls your most recent plays from PIUGame. This usually takes a few seconds.',
-                    [
-                      { text: 'Cancel', style: 'cancel' },
-                      { text: 'Sync', onPress: () => syncRecentMutation.mutate() },
-                    ],
+                    () => syncRecentMutation.mutate(),
+                    { confirmLabel: 'Sync' },
                   );
                 }}
                 disabled={syncRecentMutation.isPending}
