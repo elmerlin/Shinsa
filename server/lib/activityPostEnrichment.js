@@ -1,5 +1,6 @@
 const { getUserTitleProgress } = require('./titleProgress');
 const { normalizeMode } = require('./chartKeys');
+const { toCanonicalTitle } = require('./songAliases');
 
 const recentPlayJudgmentsBeforeStmtCache = new WeakMap();
 const recentPlayJudgmentsAnyStmtCache = new WeakMap();
@@ -7,6 +8,7 @@ const recentPlayMetadataBeforeStmtCache = new WeakMap();
 const recentPlayMetadataAnyStmtCache = new WeakMap();
 const sessionReplayLinkStmtCache = new WeakMap();
 const songChartByExactStmtCache = new WeakMap();
+const songChartByCanonicalStmtCache = new WeakMap();
 const songChartByJacketStmtCache = new WeakMap();
 
 function getCachedStmt(cache, db, sql) {
@@ -183,6 +185,22 @@ function getSongChartByJacketStmt(db) {
   `);
 }
 
+// Case-insensitive fallback used when an alias (Korean ↔ English, "feat."
+// variant, etc.) maps the user's title to a different canonical form. The
+// alias table stores normalized (lowercased) titles but the songs catalog
+// preserves source casing, so we lowercase the column for the comparison.
+function getSongChartByCanonicalStmt(db) {
+  return getCachedStmt(songChartByCanonicalStmtCache, db, `
+    SELECT id AS chart_id, jacket_url
+    FROM songs
+    WHERE LOWER(TRIM(title)) = ?
+      AND mode = ?
+      AND level = ?
+    ORDER BY id ASC
+    LIMIT 1
+  `);
+}
+
 function findRecentPlayJudgments(db, { userId, createdAt, songTitle, mode, level, score }) {
   if (!userId || !songTitle || !mode) return null;
   const numericLevel = toInt(level);
@@ -285,6 +303,18 @@ function findSongChartMetadata(db, { songTitle, mode, level, jacketUrl = '' }) {
     for (const variant of buildTitleVariants(normalizedTitle)) {
       const match = stmt.get(variant, normalizedMode, numericLevel);
       if (match) return match;
+    }
+
+    // Alias fallback — handles Korean titles, "feat. X" variants, and
+    // whitespace/case quirks where the user_upscores/user_new_clears row
+    // stores a title that the songs catalog only has under its canonical
+    // (English) name. The piugame-song-aliases map already covers these
+    // pairs and the public `/api/songs/jacket-map` uses it; this brings
+    // server-side activity enrichment to parity.
+    const canonicalTitle = toCanonicalTitle(normalizedTitle);
+    if (canonicalTitle && canonicalTitle !== normalizedTitle.toLowerCase()) {
+      const canonicalMatch = getSongChartByCanonicalStmt(db).get(canonicalTitle, normalizedMode, numericLevel);
+      if (canonicalMatch) return canonicalMatch;
     }
   }
 

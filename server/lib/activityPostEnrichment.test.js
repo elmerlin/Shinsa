@@ -46,6 +46,18 @@ function createMockDb({ charts = [], recentPlays = [], syncRow = null, bestScore
         };
       }
 
+      if (sql.includes('FROM songs') && sql.includes('WHERE LOWER(TRIM(title)) = ?')) {
+        return {
+          get(lowerTitle, mode, level) {
+            return charts.find((chart) =>
+              String(chart.title || '').trim().toLowerCase() === lowerTitle
+                && chart.mode === mode
+                && chart.level === level
+            ) || null;
+          },
+        };
+      }
+
       if (sql.includes('FROM user_recently_played') && sql.includes('COALESCE(NULLIF(played_at_utc')) {
         return {
           get(userId, songTitle, mode, level, score) {
