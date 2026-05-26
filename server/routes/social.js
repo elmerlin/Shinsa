@@ -26,6 +26,7 @@ const {
   applyChartMetadata,
   enrichClearRecord,
   enrichUpscoreRecord,
+  findSongChartMetadata,
 } = require('../lib/activityPostEnrichment');
 const {
   normalizeUtcDateKey,
@@ -1931,11 +1932,22 @@ router.get('/feed/explore', requireAuth, (req, res) => {
   }
 
   const result = items.map((row, i) => {
-    // Only the songs-table jacket — never the piugame background. An
-    // empty jacket_url means the songs catalog is missing this chart
-    // and should be backfilled (see server/scripts/backfill-songs-
-    // catalog.js); the tile will render a placeholder until then.
-    const jacketUrl = row.song_jacket_url || '';
+    // The SQL JOIN matches titles exactly. When the user's play stores a
+    // title the catalog only has under its canonical name ("Cross Over
+    // feat. LyuU" Single 15 vs catalog "Cross Over" Single 15, Korean
+    // titles, etc.), the JOIN misses and song_jacket_url is null. Fall
+    // back to the alias-aware lookup so the same aliases that power
+    // /api/songs/jacket-map also resolve here.
+    let jacketUrl = row.song_jacket_url || '';
+    if (!jacketUrl) {
+      const meta = findSongChartMetadata(db, {
+        songTitle: row.song_title,
+        mode: row.mode,
+        level: row.level,
+        jacketUrl: row.background_url || '',
+      });
+      jacketUrl = String(meta?.jacket_url || '').trim();
+    }
     return {
       play_id: row.id,
       user_id: row.user_id,
