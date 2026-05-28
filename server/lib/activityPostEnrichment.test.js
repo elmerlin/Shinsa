@@ -2,9 +2,11 @@ const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
 
 const {
+  applyChartMetadata,
   enrichClearRecord,
   enrichClearRows,
   enrichUpscoreRows,
+  findSongChartMetadata,
 } = require('./activityPostEnrichment');
 
 function createMockDb({ charts = [], recentPlays = [], syncRow = null, bestScores = [] } = {}) {
@@ -26,11 +28,12 @@ function createMockDb({ charts = [], recentPlays = [], syncRow = null, bestScore
         };
       }
 
-      if (sql.includes('FROM songs') && sql.includes('WHERE title = ?')) {
+      // Exact (case-sensitive) match — real SQL is `WHERE TRIM(title) = ?`.
+      if (sql.includes('FROM songs') && sql.includes('WHERE TRIM(title) = ?')) {
         return {
           get(title, mode, level) {
             return charts.find((chart) =>
-              chart.title === title && chart.mode === mode && chart.level === level
+              String(chart.title || '').trim() === title && chart.mode === mode && chart.level === level
             ) || null;
           },
         };
@@ -46,13 +49,14 @@ function createMockDb({ charts = [], recentPlays = [], syncRow = null, bestScore
         };
       }
 
-      if (sql.includes('FROM songs') && sql.includes('WHERE LOWER(TRIM(title)) = ?')) {
+      // Normalized fallback — real SQL collapses whitespace + lowercases via
+      // `REPLACE(REPLACE(LOWER(TRIM(title)), '  ', ' '), '  ', ' ')`.
+      if (sql.includes('FROM songs') && sql.includes('REPLACE(REPLACE(LOWER(TRIM(title))')) {
+        const norm = (t) => String(t || '').trim().toLowerCase().replace(/\s+/g, ' ');
         return {
-          get(lowerTitle, mode, level) {
+          get(normalizedTitle, mode, level) {
             return charts.find((chart) =>
-              String(chart.title || '').trim().toLowerCase() === lowerTitle
-                && chart.mode === mode
-                && chart.level === level
+              norm(chart.title) === normalizedTitle && chart.mode === mode && chart.level === level
             ) || null;
           },
         };
@@ -294,5 +298,65 @@ describe('activity post enrichment replay handling', () => {
     assert.equal(item.title_next_node?.name, 'Expert Lv.1');
     assert.equal(item.title_next_node?.earned_points, 3030);
     assert.equal(item.title_next_node?.required_points, 40000);
+  });
+});
+
+describe('chart jacket resolution', () => {
+  it('resolves a jacket when the play and catalog titles differ only by casing', () => {
+    // Real-world pollution: the catalog has "God Mode feat. skizzo" (lowercase
+    // s) at Double 17, but the scraped play stores "God Mode feat. Skizzo"
+    // (capital S). The exact, case-sensitive match misses; the normalized
+    // fallback must still resolve it.
+    const db = createMockDb({
+      charts: [
+        { chart_id: 7, title: 'God Mode feat. skizzo', mode: 'Double', level: 17, jacket_url: '/jackets/pump/1507.jpg' },
+      ],
+    });
+
+    const meta = findSongChartMetadata(db, { songTitle: 'God Mode feat. Skizzo', mode: 'Double', level: 17 });
+    assert.equal(meta?.jacket_url, '/jackets/pump/1507.jpg');
+    assert.equal(meta?.chart_id, 7);
+  });
+
+  it('collapses internal whitespace differences between play and catalog titles', () => {
+    const db = createMockDb({
+      charts: [
+        { chart_id: 9, title: 'Beat the  Ghost', mode: 'Single', level: 12, jacket_url: '/jackets/pump/btg.jpg' },
+      ],
+    });
+
+    const meta = findSongChartMetadata(db, { songTitle: 'Beat the Ghost', mode: 'Single', level: 12 });
+    assert.equal(meta?.jacket_url, '/jackets/pump/btg.jpg');
+  });
+
+  it('prefers the exact case-sensitive match over the normalized fallback', () => {
+    const db = createMockDb({
+      charts: [
+        { chart_id: 1, title: 'ESCAPE', mode: 'Single', level: 20, jacket_url: '/jackets/escape-caps.jpg' },
+        { chart_id: 2, title: 'Escape', mode: 'Single', level: 20, jacket_url: '/jackets/escape-title.jpg' },
+      ],
+    });
+
+    const meta = findSongChartMetadata(db, { songTitle: 'Escape', mode: 'Single', level: 20 });
+    assert.equal(meta?.jacket_url, '/jackets/escape-title.jpg');
+    assert.equal(meta?.chart_id, 2);
+  });
+
+  it('applyChartMetadata fills jacket_url + chart_id via the normalized fallback', () => {
+    const db = createMockDb({
+      charts: [
+        { chart_id: 42, title: 'CARMEN BUS', mode: 'Single', level: 18, jacket_url: '/jackets/pump/carmen.jpg' },
+      ],
+    });
+
+    const enriched = applyChartMetadata(db, {
+      song_title: 'Carmen Bus',
+      mode: 'Single',
+      level: 18,
+      background_url: 'https://www.piugame.com/data/song_img/whatever.png',
+    });
+    assert.equal(enriched.jacket_url, '/jackets/pump/carmen.jpg');
+    assert.equal(enriched.chart_id, 42);
+    assert.equal(enriched.chart_path, '/songs/chart/42');
   });
 });

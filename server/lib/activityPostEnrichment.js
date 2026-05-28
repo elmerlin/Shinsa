@@ -1,5 +1,5 @@
 const { getUserTitleProgress } = require('./titleProgress');
-const { normalizeMode } = require('./chartKeys');
+const { normalizeMode, normalizeSongName } = require('./chartKeys');
 const { toCanonicalTitle } = require('./songAliases');
 
 const recentPlayJudgmentsBeforeStmtCache = new WeakMap();
@@ -185,15 +185,19 @@ function getSongChartByJacketStmt(db) {
   `);
 }
 
-// Case-insensitive fallback used when an alias (Korean ↔ English, "feat."
-// variant, etc.) maps the user's title to a different canonical form. The
-// alias table stores normalized (lowercased) titles but the songs catalog
-// preserves source casing, so we lowercase the column for the comparison.
+// Normalized fallback used when the scraped play-title and the catalog title
+// differ only by capitalization, whitespace, or locale. The songs catalog is
+// polluted with the same song under multiple casings (e.g. "feat. Skizzo" vs
+// "feat. skizzo") and uneven per-casing chart coverage, so a case-sensitive
+// exact match misses whenever the play's casing lacks that mode/level. We
+// normalize the column the same way the lookup key is normalized — LOWER +
+// TRIM + collapse internal whitespace (two REPLACE passes fold runs of up to
+// four spaces to one, which is far beyond anything a real title contains).
 function getSongChartByCanonicalStmt(db) {
   return getCachedStmt(songChartByCanonicalStmtCache, db, `
     SELECT id AS chart_id, jacket_url
     FROM songs
-    WHERE LOWER(TRIM(title)) = ?
+    WHERE REPLACE(REPLACE(LOWER(TRIM(title)), '  ', ' '), '  ', ' ') = ?
       AND mode = ?
       AND level = ?
     ORDER BY id ASC
@@ -299,22 +303,33 @@ function findSongChartMetadata(db, { songTitle, mode, level, jacketUrl = '' }) {
   if (!normalizedMode || numericLevel <= 0) return null;
 
   if (normalizedTitle) {
-    const stmt = getSongChartByExactStmt(db);
+    // 1) Exact (case-sensitive) match incl. trailing-punctuation variants —
+    //    the fast path that resolves the vast majority of rows.
+    const exactStmt = getSongChartByExactStmt(db);
     for (const variant of buildTitleVariants(normalizedTitle)) {
-      const match = stmt.get(variant, normalizedMode, numericLevel);
+      const match = exactStmt.get(variant, normalizedMode, numericLevel);
       if (match) return match;
     }
 
-    // Alias fallback — handles Korean titles, "feat. X" variants, and
-    // whitespace/case quirks where the user_upscores/user_new_clears row
-    // stores a title that the songs catalog only has under its canonical
-    // (English) name. The piugame-song-aliases map already covers these
-    // pairs and the public `/api/songs/jacket-map` uses it; this brings
-    // server-side activity enrichment to parity.
-    const canonicalTitle = toCanonicalTitle(normalizedTitle);
-    if (canonicalTitle && canonicalTitle !== normalizedTitle.toLowerCase()) {
-      const canonicalMatch = getSongChartByCanonicalStmt(db).get(canonicalTitle, normalizedMode, numericLevel);
-      if (canonicalMatch) return canonicalMatch;
+    // 2) Normalized fallback — ALWAYS run when the exact match misses, not
+    //    only when an alias rewrites the title. The catalog and the scraped
+    //    play-title routinely disagree on capitalization, whitespace, or
+    //    locale, and the exact match above is case-sensitive. Retry against a
+    //    normalized key: first the as-played title (lower + whitespace-
+    //    collapsed), then its alias-resolved canonical form (Korean ↔ English,
+    //    "feat. X" → base). This mirrors the normalization behind
+    //    /api/songs/jacket-map so every consumer resolves identically.
+    const ciStmt = getSongChartByCanonicalStmt(db);
+    const keys = [];
+    const pushKey = (value) => {
+      const key = String(value || '').trim();
+      if (key && !keys.includes(key)) keys.push(key);
+    };
+    pushKey(normalizeSongName(normalizedTitle));
+    pushKey(toCanonicalTitle(normalizedTitle));
+    for (const key of keys) {
+      const match = ciStmt.get(key, normalizedMode, numericLevel);
+      if (match) return match;
     }
   }
 
