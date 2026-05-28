@@ -33,6 +33,13 @@ function createMockDb({ directReplays = [], chartLinkedReplays = [] } = {}) {
         };
       }
 
+      // selectTopReplayHighlights enriches rows via applyChartMetadata, which
+      // probes the songs catalog for jacket_url/chart_id. These tests assert
+      // on replay selection/dedup, not jackets, so catalog lookups return null.
+      if (sql.includes('FROM songs')) {
+        return { get: () => null };
+      }
+
       throw new Error(`Unexpected SQL in test: ${sql}`);
     },
   };

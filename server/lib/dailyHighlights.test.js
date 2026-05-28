@@ -33,6 +33,15 @@ function createMockDb({ replaySourcePlay = null } = {}) {
         };
       }
 
+      // findSongChartMetadata (via applyChartMetadata) probes the songs
+      // catalog for jacket_url/chart_id. These tests don't exercise jacket
+      // resolution, so every catalog lookup returns null — applyChartMetadata
+      // then leaves jacket_url empty, which is fine for the replay-metadata
+      // assertions below.
+      if (sql.includes('FROM songs')) {
+        return { get: () => null };
+      }
+
       throw new Error(`Unexpected SQL in test: ${sql}`);
     },
   };
