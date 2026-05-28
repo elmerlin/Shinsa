@@ -134,7 +134,8 @@ async function main() {
       COUNT(*) AS play_count
     FROM user_recently_played urp
     LEFT JOIN songs s
-      ON TRIM(s.title) = TRIM(urp.song_title)
+      ON REPLACE(REPLACE(LOWER(TRIM(s.title)),'  ',' '),'  ',' ')
+         = REPLACE(REPLACE(LOWER(TRIM(urp.song_title)),'  ',' '),'  ',' ')
       AND s.mode = (CASE
         WHEN LOWER(REPLACE(REPLACE(urp.mode,'-',''),' ','')) IN ('coop','cooperative') THEN 'CoOp'
         WHEN LOWER(urp.mode) IN ('single','singles','s') THEN 'Single'
@@ -168,9 +169,16 @@ async function main() {
     INSERT INTO songs (title, artist, jacket_url, mode, level, bpm, song_key, flags)
     VALUES (?, '', ?, ?, ?, '', '', '')
   `);
+  // Case- and whitespace-insensitive so we don't create a casing-variant
+  // duplicate of a chart the seed catalog already has (e.g. inserting
+  // "God Mode feat. Skizzo" when "God Mode feat. skizzo" already exists).
+  // This is the root cause of the mixed-case catalog pollution.
   const dupCheckStmt = db.prepare(`
-    SELECT id FROM songs WHERE TRIM(title) = ? AND mode = ? AND level = ? LIMIT 1
+    SELECT id FROM songs
+    WHERE REPLACE(REPLACE(LOWER(TRIM(title)),'  ',' '),'  ',' ') = ?
+      AND mode = ? AND level = ? LIMIT 1
   `);
+  const normTitleKey = (t) => String(t || '').toLowerCase().replace(/\s+/g, ' ').trim();
 
   // Process in small batches so we don't hammer piugame with 600 parallel reqs.
   for (let i = 0; i < rows.length; i += MAX_PARALLEL_DOWNLOADS) {
@@ -185,7 +193,7 @@ async function main() {
         stats.skippedNoJacket++;
         continue;
       }
-      const existing = dupCheckStmt.get(row.title, row.norm_mode, row.level);
+      const existing = dupCheckStmt.get(normTitleKey(row.title), row.norm_mode, row.level);
       if (existing) {
         stats.skippedExisting++;
         continue;
