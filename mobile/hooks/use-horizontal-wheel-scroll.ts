@@ -51,11 +51,7 @@ export function useHorizontalWheelScroll(domId: string, ready: unknown = true) {
         e.preventDefault();
       };
       node.addEventListener('wheel', onWheel, { passive: false });
-      node.setAttribute('data-wheelscroll', '1'); // diagnostic marker
-      detach = () => {
-        node.removeEventListener('wheel', onWheel);
-        node.removeAttribute('data-wheelscroll');
-      };
+      detach = () => node.removeEventListener('wheel', onWheel);
     };
 
     attach();
