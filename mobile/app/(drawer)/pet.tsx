@@ -202,7 +202,7 @@ export default function PetScreen() {
             <CurrenciesRow pet={pet} s={s} />
             <VitalsCard pet={pet} s={s} />
             <CurrentRequestCard pet={pet} s={s} />
-            <RecommendedActionsCard pet={pet} s={s} />
+            <RecommendedActionsCard pet={pet} s={s} onOpenTab={setTab} />
             <CareActionsCard pet={pet} s={s} />
             <ActivitiesCard pet={pet} s={s} />
           </View>
@@ -621,27 +621,80 @@ function CurrentRequestCard({ pet, s }: { pet: Pet; s: Styles }) {
  * RECOMMENDED ACTIONS
  * ══════════════════════════════════════════════════════════════════ */
 
-function RecommendedActionsCard({ pet, s }: { pet: Pet; s: Styles }) {
-  const recs = pet.recommended_actions ?? [];
-  if (recs.length === 0) return null;
+// The server's recommended_actions is a plain string array of action ids
+// ('feed' | 'rest' | 'groom' | 'play-pump' | 'perform'), not objects. Map
+// each id to a label, a one-line reason, the icon, and the on-tap action so
+// the row is both legible and actionable.
+const REC_ACTION_META: Record<string, { label: string; reason: string; asset: PetUiAssetKey }> = {
+  feed:        { label: 'Feed',    reason: 'Hunger is running low',  asset: 'food' },
+  rest:        { label: 'Rest',    reason: 'Energy is running low',  asset: 'rest' },
+  groom:       { label: 'Groom',   reason: 'Build trust',            asset: 'groom' },
+  'play-pump': { label: 'Play',    reason: 'Momentum is slipping',   asset: 'momentum' },
+  perform:     { label: 'Perform', reason: 'Bond is ready',          asset: 'trick' },
+};
+
+/** recommended_actions entries are strings; tolerate a stray object too. */
+function recActionKey(rec: unknown): string {
+  if (typeof rec === 'string') return rec.trim();
+  const r = (rec ?? {}) as Record<string, unknown>;
+  return String(r.id || r.action || r.key || r.label || '').trim();
+}
+
+function humanizeActionKey(key: string): string {
+  return key.replace(/[-_]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function RecommendedActionsCard({ pet, s, onOpenTab }: { pet: Pet; s: Styles; onOpenTab: (tab: TabKey) => void }) {
+  const queryClient = useQueryClient();
+  const run = useMutation({
+    mutationFn: (key: string) => {
+      if (key === 'rest' || key === 'groom') return petsApi.activity(key);
+      if (key === 'play-pump') return petsApi.activity('play');
+      if (key === 'perform') return petsApi.interact('perform');
+      return Promise.resolve(null);
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['pet-me'] }),
+    onError: (err: unknown) => Alert.alert('Hmm', err instanceof Error ? err.message : 'Could not do that right now'),
+  });
+
+  // De-dupe and cap; the server already slices to 4 but be defensive.
+  const seen = new Set<string>();
+  const keys = (pet.recommended_actions ?? [])
+    .map(recActionKey)
+    .filter((k) => k && !seen.has(k) && (seen.add(k), true))
+    .slice(0, 4);
+  if (keys.length === 0) return null;
+
+  const press = (key: string) => {
+    if (key === 'feed') { onOpenTab('shop'); return; }
+    if (run.isPending) return;
+    run.mutate(key);
+  };
+
   return (
     <View style={s.card}>
       <Text style={s.cardEyebrow}>DO NEXT</Text>
-      {recs.slice(0, 4).map((r, i) => (
-        <View key={i} style={s.recRow}>
-          <View style={s.recIcon}>
-            <PetArt asset={recommendedActionAsset(r)} size={22} />
-          </View>
-          <Text style={s.recText}>{String(r.label || r.text || r.message || '')}</Text>
-        </View>
-      ))}
+      {keys.map((key) => {
+        const meta = REC_ACTION_META[key] ?? { label: humanizeActionKey(key), reason: '', asset: 'happy' as PetUiAssetKey };
+        return (
+          <Pressable
+            key={key}
+            onPress={() => press(key)}
+            disabled={run.isPending}
+            style={({ pressed }) => [s.recRow, pressed && { opacity: 0.7 }]}>
+            <View style={s.recIcon}>
+              <PetArt asset={meta.asset} size={22} />
+            </View>
+            <View style={s.recTextWrap}>
+              <Text style={s.recLabel}>{meta.label}</Text>
+              {meta.reason ? <Text style={s.recReason}>{meta.reason}</Text> : null}
+            </View>
+            <IconSymbol name="chevron.right" size={14} color={s.recChevronColor.color} />
+          </Pressable>
+        );
+      })}
     </View>
   );
-}
-
-function recommendedActionAsset(action: unknown): PetUiAssetKey {
-  const r = action as Record<string, unknown>;
-  return petAssetFromText(`${String(r.id || '')} ${String(r.label || '')} ${String(r.text || '')} ${String(r.message || '')}`, 'happy');
 }
 
 /* ════════════════════════════════════════════════════════════════════
@@ -1562,14 +1615,24 @@ const makeStyles = (t: ThemeColors) => ({
   requestActions: { flexDirection: 'row' as const, gap: 8, marginTop: 4 },
 
   // Recommended
-  recRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10 },
+  recRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 10,
+    paddingVertical: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: t.border,
+  },
   recIcon: {
     width: 30, height: 30,
     borderRadius: 8,
     backgroundColor: 'rgba(255,196,0,0.08)',
     alignItems: 'center' as const, justifyContent: 'center' as const,
   },
-  recText: { flex: 1, fontSize: 13, color: t.text, fontWeight: '600' as const },
+  recTextWrap: { flex: 1 },
+  recLabel: { fontSize: 13, color: t.text, fontWeight: '700' as const },
+  recReason: { fontSize: 11, color: t.textDim, marginTop: 1 },
+  recChevronColor: { color: t.textDim },
 
   // Care row
   careRow: { flexDirection: 'row' as const, gap: 6, flexWrap: 'wrap' as const },
