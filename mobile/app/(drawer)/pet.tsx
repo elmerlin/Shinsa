@@ -129,7 +129,7 @@ export default function PetScreen() {
   const { isDesktop } = useBreakpoint();
   const s = useThemedStyles(makeStyles);
   const [tab, setTab] = useState<TabKey>('feed');
-  const tabScrollRef = useHorizontalWheelScroll();
+  useHorizontalWheelScroll('pet-tab-rail');
 
   const meQuery = useQuery({
     queryKey: ['pet-me', user?.id ?? null],
@@ -222,7 +222,7 @@ export default function PetScreen() {
         <View style={isDesktop ? s.deskGrid : s.lowerSection}>
           <View style={isDesktop ? s.deskMain : undefined}>
             <View style={s.tabStrip}>
-              <ScrollView ref={tabScrollRef} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.tabRow}>
+              <ScrollView nativeID="pet-tab-rail" horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.tabRow}>
                 {TABS.map((t) => {
                   const active = tab === t.key;
                   return (

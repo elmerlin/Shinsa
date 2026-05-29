@@ -1,6 +1,5 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { Platform } from 'react-native';
-import type { ScrollView } from 'react-native';
 
 /**
  * Lets a horizontal ScrollView respond to a vertical mouse wheel on web by
@@ -11,38 +10,30 @@ import type { ScrollView } from 'react-native';
  *
  * Native (iOS/Android) is a no-op — touch already scrolls horizontally.
  *
- * Usage:
- *   const ref = useHorizontalWheelScroll();
- *   <ScrollView ref={ref} horizontal showsHorizontalScrollIndicator={false}>
+ * Pass a stable id and set the SAME id as the ScrollView's `nativeID`
+ * (react-native-web maps nativeID -> DOM id, which lands on the scroll
+ * container itself — far more reliable than chasing refs/getScrollableNode):
+ *
+ *   useHorizontalWheelScroll('pet-tab-rail');
+ *   <ScrollView nativeID="pet-tab-rail" horizontal showsHorizontalScrollIndicator={false}>
  */
 function isScrollContainer(el: HTMLElement): boolean {
   const ox = getComputedStyle(el).overflowX;
   return ox === 'auto' || ox === 'scroll';
 }
 
-export function useHorizontalWheelScroll() {
-  const ref = useRef<ScrollView>(null);
-
+export function useHorizontalWheelScroll(domId: string) {
   useEffect(() => {
     if (Platform.OS !== 'web') return;
+    const root = document.getElementById(domId);
+    if (!root) return;
 
-    // NB: findNodeHandle() throws on react-native-web. getScrollableNode()
-    // returns a real DOM node (web), but it can be the inner content node
-    // rather than the overflow container — so start there and walk out
-    // (then in) to the element that actually owns the horizontal overflow.
-    const inst = ref.current as unknown as { getScrollableNode?: () => unknown } | null;
-    const start = inst?.getScrollableNode?.();
-    if (!start || !(start instanceof HTMLElement)) return;
-
-    let scroller: HTMLElement | null = null;
-    for (let el: HTMLElement | null = start, hops = 0; el && hops < 6; el = el.parentElement, hops++) {
-      if (isScrollContainer(el)) { scroller = el; break; }
-    }
-    if (!scroller) {
-      scroller = (Array.from(start.querySelectorAll('*')) as HTMLElement[]).find(isScrollContainer) || null;
-    }
-    if (!scroller) return;
-    const node = scroller;
+    // nativeID lands on the ScrollView's scroll container, but fall back to a
+    // descendant scroller just in case the DOM shape changes across RNW versions.
+    const node: HTMLElement =
+      isScrollContainer(root)
+        ? root
+        : ((Array.from(root.querySelectorAll('*')) as HTMLElement[]).find(isScrollContainer) || root);
 
     const onWheel = (e: WheelEvent) => {
       if (node.scrollWidth <= node.clientWidth) return;
@@ -55,7 +46,5 @@ export function useHorizontalWheelScroll() {
 
     node.addEventListener('wheel', onWheel, { passive: false });
     return () => node.removeEventListener('wheel', onWheel);
-  }, []);
-
-  return ref;
+  }, [domId]);
 }
