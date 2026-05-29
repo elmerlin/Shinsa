@@ -23,6 +23,7 @@ import { CohostManagerSheet } from '@/components/cohost-manager-sheet';
 import { DefaultAvatar } from '@/components/default-avatar';
 import { GradeChip } from '@/components/grade-chip';
 import { PlateBadge } from '@/components/plate-badge';
+import { ReplayModal } from '@/components/replay-modal';
 import { ScoreCardSheet, type ScoreCardData } from '@/components/score-card-sheet';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { YouTubeEmbed } from '@/components/youtube-embed';
@@ -216,6 +217,7 @@ export default function LiveSessionScreen() {
   const [playModeFilter, setPlayModeFilter] = useState<PlayModeFilter>('All');
   const [playPassOnly, setPlayPassOnly] = useState(true);
   const [selectedPlay, setSelectedPlay] = useState<LiveSessionPlay | null>(null);
+  const [replayModal, setReplayModal] = useState<{ url: string; title: string } | null>(null);
 
   const activeCohosts = useMemo(
     () => (session?.participants ?? []).filter((p) => p.status === 'active' && p.role !== 'owner'),
@@ -797,6 +799,13 @@ export default function LiveSessionScreen() {
         visible={!!selectedPlay}
         data={selectedPlayData}
         onClose={() => setSelectedPlay(null)}
+        onReplay={(url, title) => setReplayModal({ url, title })}
+      />
+      <ReplayModal
+        visible={!!replayModal}
+        url={replayModal?.url}
+        title={replayModal?.title}
+        onClose={() => setReplayModal(null)}
       />
     </View>
   );

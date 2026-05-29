@@ -198,6 +198,7 @@ export function DailyHighlights() {
         visible={!!scoreSheet}
         data={scoreSheet}
         onClose={() => setScoreSheet(null)}
+        onReplay={(url, title) => setReplayModal({ url, title })}
       />
     </View>
   );
@@ -375,6 +376,7 @@ function buildUpscoreSheetData(u: UpscoreHighlight): ScoreCardData {
     mode: u.mode,
     level: u.level,
     chart_id: u.chart_id,
+    play_id: u.play_id,
     jacket_url: u.jacket_url,
     background_url: u.background_url,
     old_score: u.old_score,
@@ -404,6 +406,7 @@ function buildClearSheetData(c: ClearHighlight): ScoreCardData {
     mode: c.mode,
     level: c.level,
     chart_id: c.chart_id,
+    play_id: c.play_id,
     jacket_url: c.jacket_url,
     background_url: c.background_url,
     score: c.score,

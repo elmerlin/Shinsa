@@ -547,6 +547,8 @@ export interface ReplayHighlight {
 
 export interface UpscoreHighlight {
   upscore_id?: number;
+  /** Underlying play id (from recent-play enrichment) — keys comments. */
+  play_id?: number;
   user_id?: string;
   song_title?: string;
   mode?: string;
@@ -584,6 +586,8 @@ export interface UpscoreHighlight {
 
 export interface ClearHighlight {
   clear_id?: number;
+  /** Underlying play id (from recent-play enrichment) — keys comments. */
+  play_id?: number;
   user_id?: string;
   song_title?: string;
   mode?: string;
