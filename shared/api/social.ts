@@ -123,7 +123,7 @@ export function createSocialApi(client: ApiClient) {
     addPostComment(postId: string, content: string, parentId?: string | null) {
       return client.request<Comment>(`/api/social/posts/${postId}/comments`, {
         method: 'POST',
-        body: JSON.stringify({ content, parent_id: parentId ?? null }),
+        body: { content, parent_id: parentId ?? null },
       });
     },
     upscoreComments(upscoreId: string) {
@@ -132,7 +132,7 @@ export function createSocialApi(client: ApiClient) {
     addUpscoreComment(upscoreId: string, content: string, parentId?: string | null) {
       return client.request<Comment>(`/api/social/upscores/${upscoreId}/comments`, {
         method: 'POST',
-        body: JSON.stringify({ content, parent_id: parentId ?? null }),
+        body: { content, parent_id: parentId ?? null },
       });
     },
     clearComments(clearId: string) {
@@ -141,7 +141,7 @@ export function createSocialApi(client: ApiClient) {
     addClearComment(clearId: string, content: string, parentId?: string | null) {
       return client.request<Comment>(`/api/social/clears/${clearId}/comments`, {
         method: 'POST',
-        body: JSON.stringify({ content, parent_id: parentId ?? null }),
+        body: { content, parent_id: parentId ?? null },
       });
     },
     weeklyChallengePlayComments(playId: string) {
@@ -150,7 +150,7 @@ export function createSocialApi(client: ApiClient) {
     addWeeklyChallengePlayComment(playId: string, content: string, parentId?: string | null) {
       return client.request<Comment>(`/api/social/weekly-challenge-plays/${playId}/comments`, {
         method: 'POST',
-        body: JSON.stringify({ content, parent_id: parentId ?? null }),
+        body: { content, parent_id: parentId ?? null },
       });
     },
     /** Comments on a single play row — backs the score-card sheet's
@@ -161,7 +161,7 @@ export function createSocialApi(client: ApiClient) {
     addPlayComment(playId: string, content: string, parentId?: string | null) {
       return client.request<Comment>(`/api/social/plays/${playId}/comments`, {
         method: 'POST',
-        body: JSON.stringify({ content, parent_id: parentId ?? null }),
+        body: { content, parent_id: parentId ?? null },
       });
     },
     deletePlayComment(playId: string, commentId: string) {
