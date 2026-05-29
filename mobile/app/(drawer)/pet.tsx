@@ -871,7 +871,17 @@ function MissionsTab({ pet, s }: { pet: Pet; s: Styles }) {
       {missions.map((m, i) => {
         const id = String(m.id || i);
         const claimed = !!m.claimed;
-        const ready = !!m.ready_to_claim || !!m.complete;
+        // Server fields: label, desc, progress (number), target (number),
+        // complete (bool), reward_summary (string). (Older code looked for
+        // description/progress_text/ready_to_claim, which don't exist — so
+        // in-progress missions rendered as a bare title.)
+        const ready = !!m.complete || !!m.ready_to_claim;
+        const desc = String(m.desc || m.description || '').trim();
+        const target = Number(m.target) || 0;
+        const progress = Math.min(target || Infinity, Number(m.progress) || 0);
+        const pct = target > 0 ? Math.max(0, Math.min(1, progress / target)) : (ready ? 1 : 0);
+        const reward = String(m.reward_summary || '').trim();
+        const showProgress = target > 0 && !claimed;
         return (
           <View key={id} style={[s.missionRow, claimed && { opacity: 0.5 }]}>
             <View style={s.missionIcon}>
@@ -879,8 +889,16 @@ function MissionsTab({ pet, s }: { pet: Pet; s: Styles }) {
             </View>
             <View style={s.missionBody}>
               <Text style={s.missionName}>{String(m.label || m.title || id)}</Text>
-              {m.description ? <Text style={s.missionDesc}>{String(m.description)}</Text> : null}
-              {m.progress_text ? <Text style={s.missionProgress}>{String(m.progress_text)}</Text> : null}
+              {desc ? <Text style={s.missionDesc}>{desc}</Text> : null}
+              {showProgress ? (
+                <View style={s.missionProgressRow}>
+                  <View style={s.missionBar}>
+                    <View style={[s.missionBarFill, ready && s.missionBarFillReady, { width: `${pct * 100}%` }]} />
+                  </View>
+                  <Text style={s.missionProgress}>{progress} / {target}</Text>
+                </View>
+              ) : null}
+              {reward ? <Text style={s.missionReward}>{reward}</Text> : null}
             </View>
             {ready && !claimed ? (
               <Pressable
@@ -1026,7 +1044,7 @@ function trickAsset(trick: PetTrick): PetUiAssetKey {
 }
 
 function missionAsset(mission: Record<string, unknown>): PetUiAssetKey {
-  return petAssetFromText(`${String(mission.id || '')} ${String(mission.label || '')} ${String(mission.title || '')} ${String(mission.description || '')}`, 'mission');
+  return petAssetFromText(`${String(mission.id || '')} ${String(mission.label || '')} ${String(mission.title || '')} ${String(mission.desc || mission.description || '')}`, 'mission');
 }
 
 function toyAsset(id: string): PetUiAssetKey {
@@ -1730,11 +1748,16 @@ const makeStyles = (t: ThemeColors) => ({
     backgroundColor: 'rgba(0,0,0,0.24)',
     alignItems: 'center' as const, justifyContent: 'center' as const,
   },
-  missionBody: { flex: 1, minWidth: 0, gap: 3 },
+  missionBody: { flex: 1, minWidth: 0, gap: 4 },
   missionName: { fontSize: 13, fontWeight: '900' as const, color: t.text },
-  missionDesc: { fontSize: 11, color: t.textMuted, lineHeight: 14 },
-  missionProgress: { fontSize: 10, color: '#FFC400', fontWeight: '800' as const },
-  missionClaimed: { fontSize: 11, fontWeight: '800' as const, color: '#34D399' },
+  missionDesc: { fontSize: 11, color: t.textMuted, lineHeight: 15 },
+  missionProgressRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, marginTop: 2 },
+  missionBar: { flex: 1, height: 6, borderRadius: 999, backgroundColor: t.surfaceMuted, overflow: 'hidden' as const },
+  missionBarFill: { height: '100%' as const, borderRadius: 999, backgroundColor: t.accent },
+  missionBarFillReady: { backgroundColor: t.success },
+  missionProgress: { fontSize: 10, color: t.textMuted, fontWeight: '800' as const, fontVariant: ['tabular-nums' as const] },
+  missionReward: { fontSize: 10, color: t.accent, fontWeight: '800' as const, letterSpacing: 0.3, marginTop: 1 },
+  missionClaimed: { fontSize: 11, fontWeight: '800' as const, color: t.success },
 
   // Toys
   toyGrid: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8 },
