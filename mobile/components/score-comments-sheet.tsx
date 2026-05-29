@@ -87,7 +87,7 @@ export function ScoreCommentsSheet({ playId, visible, onClose, contextLine }: Pr
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (commentId: string) => socialApi.deletePlayComment(playIdStr, commentId),
+    mutationFn: (commentId: string) => socialApi.deletePlayComment(commentId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: PLAY_COMMENTS_QUERY_KEY(playIdStr) });
     },

@@ -164,8 +164,9 @@ export function createSocialApi(client: ApiClient) {
         body: { content, parent_id: parentId ?? null },
       });
     },
-    deletePlayComment(playId: string, commentId: string) {
-      return client.request<{ ok: true }>(`/api/social/plays/${playId}/comments/${commentId}`, {
+    deletePlayComment(commentId: string) {
+      // Server keys the delete by comment id alone: DELETE /plays/comments/:id
+      return client.request<{ ok: true }>(`/api/social/plays/comments/${commentId}`, {
         method: 'DELETE',
       });
     },
