@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Platform } from 'react-native';
+import { Platform, findNodeHandle } from 'react-native';
 import type { ScrollView } from 'react-native';
 
 /**
@@ -15,21 +15,38 @@ import type { ScrollView } from 'react-native';
  *   const ref = useHorizontalWheelScroll();
  *   <ScrollView ref={ref} horizontal showsHorizontalScrollIndicator={false}>
  */
+function isHorizontalScroller(el: HTMLElement): boolean {
+  const ox = getComputedStyle(el).overflowX;
+  return (ox === 'auto' || ox === 'scroll') && el.scrollWidth > el.clientWidth + 1;
+}
+
 export function useHorizontalWheelScroll() {
   const ref = useRef<ScrollView>(null);
 
   useEffect(() => {
     if (Platform.OS !== 'web') return;
-    const sv = ref.current as unknown as { getScrollableNode?: () => unknown } | null;
-    const node = sv?.getScrollableNode?.() as HTMLElement | undefined;
-    if (!node || typeof node.addEventListener !== 'function') return;
+
+    // react-native-web nests several divs; getScrollableNode() can return the
+    // inner content node (no overflow) rather than the overflow container, so
+    // resolve the actual horizontal scroller ourselves: check the host node,
+    // then its ancestors, then its descendants.
+    const host = findNodeHandle(ref.current) as unknown as HTMLElement | null;
+    if (!host || typeof host.getBoundingClientRect !== 'function') return;
+
+    let scroller: HTMLElement | null = null;
+    for (let el: HTMLElement | null = host, hops = 0; el && hops < 6; el = el.parentElement, hops++) {
+      if (isHorizontalScroller(el)) { scroller = el; break; }
+    }
+    if (!scroller) {
+      scroller = ([...host.querySelectorAll('*')] as HTMLElement[]).find(isHorizontalScroller) || null;
+    }
+    if (!scroller) return;
+    const node = scroller;
 
     const onWheel = (e: WheelEvent) => {
-      // Nothing to scroll — let the page handle it.
       if (node.scrollWidth <= node.clientWidth) return;
       // Only hijack a primarily-vertical gesture (a mouse wheel). A trackpad
-      // horizontal swipe (deltaX dominant) already scrolls the rail natively,
-      // so leave it alone.
+      // horizontal swipe (deltaX dominant) already scrolls the rail natively.
       if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
       node.scrollLeft += e.deltaY;
       e.preventDefault();
