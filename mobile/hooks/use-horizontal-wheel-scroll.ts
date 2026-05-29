@@ -25,26 +25,41 @@ function isScrollContainer(el: HTMLElement): boolean {
 export function useHorizontalWheelScroll(domId: string) {
   useEffect(() => {
     if (Platform.OS !== 'web') return;
-    const root = document.getElementById(domId);
-    if (!root) return;
 
-    // nativeID lands on the ScrollView's scroll container, but fall back to a
-    // descendant scroller just in case the DOM shape changes across RNW versions.
-    const node: HTMLElement =
-      isScrollContainer(root)
-        ? root
-        : ((Array.from(root.querySelectorAll('*')) as HTMLElement[]).find(isScrollContainer) || root);
+    let raf = 0;
+    let tries = 0;
+    let detach: (() => void) | null = null;
 
-    const onWheel = (e: WheelEvent) => {
-      if (node.scrollWidth <= node.clientWidth) return;
-      // Only hijack a primarily-vertical gesture (a mouse wheel). A trackpad
-      // horizontal swipe (deltaX dominant) already scrolls the rail natively.
-      if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
-      node.scrollLeft += e.deltaY;
-      e.preventDefault();
+    const attach = () => {
+      const root = document.getElementById(domId);
+      if (!root) {
+        // The rail often isn't in the DOM on first mount (data still loading),
+        // and this effect won't re-run, so poll a bounded number of frames
+        // until it appears.
+        if (tries++ < 180) raf = requestAnimationFrame(attach);
+        return;
+      }
+      const node: HTMLElement =
+        isScrollContainer(root)
+          ? root
+          : ((Array.from(root.querySelectorAll('*')) as HTMLElement[]).find(isScrollContainer) || root);
+
+      const onWheel = (e: WheelEvent) => {
+        if (node.scrollWidth <= node.clientWidth) return;
+        // Only hijack a primarily-vertical gesture (a mouse wheel). A trackpad
+        // horizontal swipe (deltaX dominant) already scrolls the rail natively.
+        if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+        node.scrollLeft += e.deltaY;
+        e.preventDefault();
+      };
+      node.addEventListener('wheel', onWheel, { passive: false });
+      detach = () => node.removeEventListener('wheel', onWheel);
     };
 
-    node.addEventListener('wheel', onWheel, { passive: false });
-    return () => node.removeEventListener('wheel', onWheel);
+    attach();
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+      if (detach) detach();
+    };
   }, [domId]);
 }
