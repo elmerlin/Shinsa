@@ -12,9 +12,10 @@ import { Platform } from 'react-native';
  *
  * Pass a stable id and set the SAME id as the ScrollView's `nativeID`
  * (react-native-web maps nativeID -> DOM id, which lands on the scroll
- * container itself — far more reliable than chasing refs/getScrollableNode):
+ * container itself). The `ready` arg re-runs the effect once the rail is
+ * actually mounted (it usually isn't on first render while data loads):
  *
- *   useHorizontalWheelScroll('pet-tab-rail');
+ *   useHorizontalWheelScroll('pet-tab-rail', !!data);
  *   <ScrollView nativeID="pet-tab-rail" horizontal showsHorizontalScrollIndicator={false}>
  */
 function isScrollContainer(el: HTMLElement): boolean {
@@ -22,9 +23,9 @@ function isScrollContainer(el: HTMLElement): boolean {
   return ox === 'auto' || ox === 'scroll';
 }
 
-export function useHorizontalWheelScroll(domId: string) {
+export function useHorizontalWheelScroll(domId: string, ready: unknown = true) {
   useEffect(() => {
-    if (Platform.OS !== 'web') return;
+    if (Platform.OS !== 'web' || !ready) return;
 
     let raf = 0;
     let tries = 0;
@@ -33,10 +34,7 @@ export function useHorizontalWheelScroll(domId: string) {
     const attach = () => {
       const root = document.getElementById(domId);
       if (!root) {
-        // The rail often isn't in the DOM on first mount (data still loading),
-        // and this effect won't re-run, so poll a bounded number of frames
-        // until it appears.
-        if (tries++ < 180) raf = requestAnimationFrame(attach);
+        if (tries++ < 60) raf = requestAnimationFrame(attach);
         return;
       }
       const node: HTMLElement =
@@ -53,7 +51,11 @@ export function useHorizontalWheelScroll(domId: string) {
         e.preventDefault();
       };
       node.addEventListener('wheel', onWheel, { passive: false });
-      detach = () => node.removeEventListener('wheel', onWheel);
+      node.setAttribute('data-wheelscroll', '1'); // diagnostic marker
+      detach = () => {
+        node.removeEventListener('wheel', onWheel);
+        node.removeAttribute('data-wheelscroll');
+      };
     };
 
     attach();
@@ -61,5 +63,5 @@ export function useHorizontalWheelScroll(domId: string) {
       if (raf) cancelAnimationFrame(raf);
       if (detach) detach();
     };
-  }, [domId]);
+  }, [domId, ready]);
 }

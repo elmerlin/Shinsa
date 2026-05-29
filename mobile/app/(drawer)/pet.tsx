@@ -129,13 +129,16 @@ export default function PetScreen() {
   const { isDesktop } = useBreakpoint();
   const s = useThemedStyles(makeStyles);
   const [tab, setTab] = useState<TabKey>('feed');
-  useHorizontalWheelScroll('pet-tab-rail');
 
   const meQuery = useQuery({
     queryKey: ['pet-me', user?.id ?? null],
     queryFn: () => petsApi.me(),
     enabled: !!user,
   });
+
+  // Re-run once the pet (and thus the tab rail) is actually in the DOM — the
+  // rail isn't rendered during the loading/adopt states.
+  useHorizontalWheelScroll('pet-tab-rail', !!meQuery.data?.pet);
 
   if (!user) {
     return (
