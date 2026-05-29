@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Platform, findNodeHandle } from 'react-native';
+import { Platform } from 'react-native';
 import type { ScrollView } from 'react-native';
 
 /**
@@ -15,9 +15,9 @@ import type { ScrollView } from 'react-native';
  *   const ref = useHorizontalWheelScroll();
  *   <ScrollView ref={ref} horizontal showsHorizontalScrollIndicator={false}>
  */
-function isHorizontalScroller(el: HTMLElement): boolean {
+function isScrollContainer(el: HTMLElement): boolean {
   const ox = getComputedStyle(el).overflowX;
-  return (ox === 'auto' || ox === 'scroll') && el.scrollWidth > el.clientWidth + 1;
+  return ox === 'auto' || ox === 'scroll';
 }
 
 export function useHorizontalWheelScroll() {
@@ -26,19 +26,20 @@ export function useHorizontalWheelScroll() {
   useEffect(() => {
     if (Platform.OS !== 'web') return;
 
-    // react-native-web nests several divs; getScrollableNode() can return the
-    // inner content node (no overflow) rather than the overflow container, so
-    // resolve the actual horizontal scroller ourselves: check the host node,
-    // then its ancestors, then its descendants.
-    const host = findNodeHandle(ref.current) as unknown as HTMLElement | null;
-    if (!host || typeof host.getBoundingClientRect !== 'function') return;
+    // NB: findNodeHandle() throws on react-native-web. getScrollableNode()
+    // returns a real DOM node (web), but it can be the inner content node
+    // rather than the overflow container — so start there and walk out
+    // (then in) to the element that actually owns the horizontal overflow.
+    const inst = ref.current as unknown as { getScrollableNode?: () => unknown } | null;
+    const start = inst?.getScrollableNode?.();
+    if (!start || !(start instanceof HTMLElement)) return;
 
     let scroller: HTMLElement | null = null;
-    for (let el: HTMLElement | null = host, hops = 0; el && hops < 6; el = el.parentElement, hops++) {
-      if (isHorizontalScroller(el)) { scroller = el; break; }
+    for (let el: HTMLElement | null = start, hops = 0; el && hops < 6; el = el.parentElement, hops++) {
+      if (isScrollContainer(el)) { scroller = el; break; }
     }
     if (!scroller) {
-      scroller = (Array.from(host.querySelectorAll('*')) as HTMLElement[]).find(isHorizontalScroller) || null;
+      scroller = (Array.from(start.querySelectorAll('*')) as HTMLElement[]).find(isScrollContainer) || null;
     }
     if (!scroller) return;
     const node = scroller;
