@@ -38,7 +38,7 @@ export function useHorizontalWheelScroll() {
       if (isHorizontalScroller(el)) { scroller = el; break; }
     }
     if (!scroller) {
-      scroller = ([...host.querySelectorAll('*')] as HTMLElement[]).find(isHorizontalScroller) || null;
+      scroller = (Array.from(host.querySelectorAll('*')) as HTMLElement[]).find(isHorizontalScroller) || null;
     }
     if (!scroller) return;
     const node = scroller;
