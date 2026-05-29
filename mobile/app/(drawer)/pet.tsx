@@ -45,6 +45,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/contexts/theme-context';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
+import { useHorizontalWheelScroll } from '@/hooks/use-horizontal-wheel-scroll';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { petsApi } from '@/lib/api';
 import {
@@ -61,9 +62,10 @@ import { PET_UI_ASSETS, type PetUiAssetKey } from '@/lib/pet-ui-assets';
 import type { ThemeColors } from '@/constants/theme';
 import type { Pet, PetActivity, PetCharacterId, PetTrick } from '@shared/api';
 
-type TabKey = 'tricks' | 'missions' | 'toys' | 'outfits' | 'habitat' | 'shop' | 'customize' | 'leaderboard';
+type TabKey = 'feed' | 'tricks' | 'missions' | 'toys' | 'outfits' | 'habitat' | 'shop' | 'customize' | 'leaderboard';
 
 const TABS: { key: TabKey; label: string; asset: PetUiAssetKey }[] = [
+  { key: 'feed',        label: 'Feed',        asset: 'food' },
   { key: 'tricks',      label: 'Tricks',      asset: 'trick' },
   { key: 'missions',    label: 'Missions',    asset: 'mission' },
   { key: 'toys',        label: 'Toys',        asset: 'toy' },
@@ -126,7 +128,8 @@ export default function PetScreen() {
   const { theme } = useTheme();
   const { isDesktop } = useBreakpoint();
   const s = useThemedStyles(makeStyles);
-  const [tab, setTab] = useState<TabKey>('tricks');
+  const [tab, setTab] = useState<TabKey>('feed');
+  const tabScrollRef = useHorizontalWheelScroll();
 
   const meQuery = useQuery({
     queryKey: ['pet-me', user?.id ?? null],
@@ -219,7 +222,7 @@ export default function PetScreen() {
         <View style={isDesktop ? s.deskGrid : s.lowerSection}>
           <View style={isDesktop ? s.deskMain : undefined}>
             <View style={s.tabStrip}>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.tabRow}>
+              <ScrollView ref={tabScrollRef} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.tabRow}>
                 {TABS.map((t) => {
                   const active = tab === t.key;
                   return (
@@ -241,6 +244,7 @@ export default function PetScreen() {
               </ScrollView>
             </View>
 
+            {tab === 'feed'        ? <FoodShop pet={pet} s={s} /> : null}
             {tab === 'tricks'      ? <TricksTab pet={pet} s={s} /> : null}
             {tab === 'missions'    ? <MissionsTab pet={pet} s={s} /> : null}
             {tab === 'toys'        ? <ToysTab pet={pet} s={s} /> : null}
@@ -666,7 +670,7 @@ function RecommendedActionsCard({ pet, s, onOpenTab }: { pet: Pet; s: Styles; on
   if (keys.length === 0) return null;
 
   const press = (key: string) => {
-    if (key === 'feed') { onOpenTab('shop'); return; }
+    if (key === 'feed') { onOpenTab('feed'); return; }
     if (run.isPending) return;
     run.mutate(key);
   };
@@ -1060,20 +1064,83 @@ function habitatAsset(kind: 'background' | 'prop' | 'floor' | 'wall', id: string
 }
 
 /* ════════════════════════════════════════════════════════════════════
- * SHOP TAB
+ * FEED TAB — buy/serve food (restores hunger). Its own tab so feeding is
+ * a first-class action, not buried under Shop. Shared nowhere else.
  * ══════════════════════════════════════════════════════════════════ */
 
-type ShopCategory = 'food' | 'clothing' | 'toys' | 'habitat';
-
-function ShopTab({ pet, s }: { pet: Pet; s: Styles }) {
+function FoodShop({ pet: _pet, s }: { pet: Pet; s: Styles }) {
   const queryClient = useQueryClient();
-  const [cat, setCat] = useState<ShopCategory>('food');
   const shopQuery = useQuery({ queryKey: ['pet-shop'], queryFn: () => petsApi.shop() });
   const buyFood = useMutation({
     mutationFn: (id: string) => petsApi.buyFood(id),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['pet-me'] }); queryClient.invalidateQueries({ queryKey: ['pet-shop'] }); },
     onError: (e: unknown) => Alert.alert('Hmm', e instanceof Error ? e.message : 'Buy failed'),
   });
+  if (shopQuery.isLoading) return <View style={s.empty}><ActivityIndicator /></View>;
+  const data = shopQuery.data;
+  if (!data) return <EmptyTab s={s} text="Food unavailable right now." />;
+  return (
+    <View style={s.tabBody}>
+      <View style={s.foodShelf}>
+        <PetArt asset="food" size={58} />
+        <View style={s.foodShelfText}>
+          <Text style={s.foodShelfTitle}>Feed your pet</Text>
+          <Text style={s.foodShelfSub}>Snacks restore hunger and lift mood. Favorites give a bonus.</Text>
+        </View>
+        <View style={s.shopBalance}>
+          <PetArt asset="trick" size={16} />
+          <Text style={s.shopBalanceValue}>{data.combo_balance.toLocaleString()}</Text>
+        </View>
+      </View>
+      <View style={s.shopGrid}>
+        {data.foods.map((f) => (
+          <Pressable
+            key={f.id}
+            onPress={() => buyFood.mutate(f.id)}
+            disabled={buyFood.isPending || data.combo_balance < f.cost}
+            style={({ pressed }) => [
+              s.shopCard,
+              f.preference === 'favorite' && { borderColor: 'rgba(253,224,71,0.6)' },
+              f.preference === 'disliked' && { borderColor: 'rgba(251,113,133,0.4)', opacity: 0.7 },
+              data.combo_balance < f.cost && { opacity: 0.4 },
+              pressed && { opacity: 0.8 },
+            ]}>
+            <View style={s.shopThumb}>
+              <PetArt asset={foodAsset(f)} size={52} />
+            </View>
+            <Text style={s.shopName} numberOfLines={1}>{f.name}</Text>
+            {f.desc ? <Text style={s.shopDesc} numberOfLines={2}>{f.desc}</Text> : null}
+            <View style={s.shopMeta}>
+              <View style={s.foodMetaRow}>
+                <PetArt asset="food" size={14} />
+                <Text style={s.shopMetaText}>+{f.hunger} hunger</Text>
+              </View>
+              <View style={s.foodMetaRow}>
+                <PetArt asset="happy" size={14} />
+                <Text style={s.shopMetaText}>+{f.happiness} happy</Text>
+              </View>
+            </View>
+            <View style={s.shopCostRow}>
+              <CostPill cost={f.cost} s={s} />
+              {f.preference === 'favorite' ? <Text style={s.shopFav}>LOVES</Text> : null}
+            </View>
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════════
+ * SHOP TAB
+ * ══════════════════════════════════════════════════════════════════ */
+
+type ShopCategory = 'clothing' | 'toys' | 'habitat';
+
+function ShopTab({ pet, s }: { pet: Pet; s: Styles }) {
+  const queryClient = useQueryClient();
+  const [cat, setCat] = useState<ShopCategory>('clothing');
+  const shopQuery = useQuery({ queryKey: ['pet-shop'], queryFn: () => petsApi.shop() });
   const buyToy = useMutation({
     mutationFn: (id: string) => petsApi.buyToy(id),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['pet-me'] }); queryClient.invalidateQueries({ queryKey: ['pet-shop'] }); },
@@ -1095,7 +1162,6 @@ function ShopTab({ pet, s }: { pet: Pet; s: Styles }) {
   if (!data) return <EmptyTab s={s} text="Shop unavailable right now." />;
 
   const SHOP_CATS: { key: ShopCategory; label: string; asset: PetUiAssetKey }[] = [
-    { key: 'food',     label: 'Food',     asset: 'food' },
     { key: 'clothing', label: 'Clothing', asset: 'outfit' },
     { key: 'toys',     label: 'Toys',     asset: 'toy' },
     { key: 'habitat',  label: 'Habitat',  asset: 'habitat' },
@@ -1126,53 +1192,6 @@ function ShopTab({ pet, s }: { pet: Pet; s: Styles }) {
           })}
         </View>
       </View>
-
-      {cat === 'food' ? (
-        <View style={s.foodSection}>
-          <View style={s.foodShelf}>
-            <PetArt asset="food" size={58} />
-            <View style={s.foodShelfText}>
-              <Text style={s.foodShelfTitle}>Food</Text>
-              <Text style={s.foodShelfSub}>Snacks restore hunger and can lift mood.</Text>
-            </View>
-          </View>
-          <View style={s.shopGrid}>
-            {data.foods.map((f) => (
-              <Pressable
-                key={f.id}
-                onPress={() => buyFood.mutate(f.id)}
-                disabled={buyFood.isPending || data.combo_balance < f.cost}
-                style={({ pressed }) => [
-                  s.shopCard,
-                  f.preference === 'favorite' && { borderColor: 'rgba(253,224,71,0.6)' },
-                  f.preference === 'disliked' && { borderColor: 'rgba(251,113,133,0.4)', opacity: 0.7 },
-                  data.combo_balance < f.cost && { opacity: 0.4 },
-                  pressed && { opacity: 0.8 },
-                ]}>
-                <View style={s.shopThumb}>
-                  <PetArt asset={foodAsset(f)} size={52} />
-                </View>
-                <Text style={s.shopName} numberOfLines={1}>{f.name}</Text>
-                {f.desc ? <Text style={s.shopDesc} numberOfLines={2}>{f.desc}</Text> : null}
-                <View style={s.shopMeta}>
-                  <View style={s.foodMetaRow}>
-                    <PetArt asset="food" size={14} />
-                    <Text style={s.shopMetaText}>+{f.hunger} hunger</Text>
-                  </View>
-                  <View style={s.foodMetaRow}>
-                    <PetArt asset="happy" size={14} />
-                    <Text style={s.shopMetaText}>+{f.happiness} happy</Text>
-                  </View>
-                </View>
-                <View style={s.shopCostRow}>
-                  <CostPill cost={f.cost} s={s} />
-                  {f.preference === 'favorite' ? <Text style={s.shopFav}>LOVES</Text> : null}
-                </View>
-              </Pressable>
-            ))}
-          </View>
-        </View>
-      ) : null}
 
       {cat === 'clothing' ? (
         <ClothingShop pet={pet} data={data} buyItem={(id) => buyItem.mutate(id)} pending={buyItem.isPending} s={s} />
@@ -1551,7 +1570,7 @@ const makeStyles = (t: ThemeColors) => ({
 
   // Hero
   hero: {
-    borderRadius: 18,
+    borderRadius: 16,
     padding: 18,
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
@@ -1592,7 +1611,7 @@ const makeStyles = (t: ThemeColors) => ({
     flex: 1, alignItems: 'center' as const, gap: 4,
     backgroundColor: t.card,
     borderWidth: StyleSheet.hairlineWidth, borderColor: t.border,
-    borderRadius: 12, paddingVertical: 12,
+    borderRadius: 14, paddingVertical: 12,
   },
   currencyIcon: {
     width: 34, height: 34,
@@ -1615,7 +1634,7 @@ const makeStyles = (t: ThemeColors) => ({
   vitalRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10 },
   vitalIcon: {
     width: 30, height: 30,
-    borderRadius: 8,
+    borderRadius: 10,
     backgroundColor: 'rgba(0,0,0,0.24)',
     alignItems: 'center' as const, justifyContent: 'center' as const,
   },
@@ -1643,7 +1662,7 @@ const makeStyles = (t: ThemeColors) => ({
   },
   recIcon: {
     width: 30, height: 30,
-    borderRadius: 8,
+    borderRadius: 10,
     backgroundColor: 'rgba(255,196,0,0.08)',
     alignItems: 'center' as const, justifyContent: 'center' as const,
   },
@@ -1669,7 +1688,7 @@ const makeStyles = (t: ThemeColors) => ({
     minHeight: 110,
     backgroundColor: t.surfaceMuted,
     borderWidth: StyleSheet.hairlineWidth, borderColor: t.border,
-    borderRadius: 10, padding: 10, gap: 6,
+    borderRadius: 12, padding: 10, gap: 6,
   },
   activityHead: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6 },
   activityIcon: {
@@ -1705,14 +1724,14 @@ const makeStyles = (t: ThemeColors) => ({
   // Buttons
   btnPrimary: {
     paddingHorizontal: 14, paddingVertical: 9,
-    borderRadius: 8,
+    borderRadius: 10,
     backgroundColor: t.accent,
     alignItems: 'center' as const,
   },
   btnPrimaryText: { color: '#050505', fontWeight: '900' as const, fontSize: 12, letterSpacing: 0.4 },
   btnGhost: {
     paddingHorizontal: 14, paddingVertical: 9,
-    borderRadius: 8,
+    borderRadius: 10,
     borderWidth: 1, borderColor: t.border,
     alignItems: 'center' as const,
   },
@@ -1788,7 +1807,7 @@ const makeStyles = (t: ThemeColors) => ({
     width: 56, height: 56,
     backgroundColor: 'rgba(0,0,0,0.32)',
     alignItems: 'center' as const, justifyContent: 'center' as const,
-    borderRadius: 6,
+    borderRadius: 10,
   },
   habitatName: { fontSize: 10, fontWeight: '700' as const, color: t.text, textAlign: 'center' as const },
   habitatBadge: { fontSize: 8, fontWeight: '900' as const, color: t.accent, letterSpacing: 0.6 },
@@ -1836,14 +1855,13 @@ const makeStyles = (t: ThemeColors) => ({
   shopCatRow: { flexDirection: 'row' as const, gap: 6 },
   shopCatBtn: {
     flex: 1, paddingVertical: 8,
-    borderRadius: 8, borderWidth: StyleSheet.hairlineWidth, borderColor: t.border,
+    borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, borderColor: t.border,
     backgroundColor: t.surfaceMuted, alignItems: 'center' as const,
   },
   shopCatBtnActive: { backgroundColor: t.accentTint, borderColor: t.accent },
   shopCatContent: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 5 },
   shopCatText: { fontSize: 11, fontWeight: '700' as const, color: t.textMuted, letterSpacing: 0.4 },
   shopCatTextActive: { color: t.accent, fontWeight: '900' as const },
-  foodSection: { gap: 10 },
   foodShelf: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
@@ -1866,7 +1884,7 @@ const makeStyles = (t: ThemeColors) => ({
   shopThumb: {
     width: 64, height: 64,
     backgroundColor: 'rgba(0,0,0,0.32)',
-    borderRadius: 8,
+    borderRadius: 10,
     alignItems: 'center' as const, justifyContent: 'center' as const,
   },
   shopThumbLg: {
@@ -1936,7 +1954,7 @@ const makeStyles = (t: ThemeColors) => ({
   },
   modalTitle: { fontSize: 16, fontWeight: '900' as const, color: t.text },
   modalInput: {
-    borderWidth: 1, borderColor: t.border, borderRadius: 8,
+    borderWidth: 1, borderColor: t.border, borderRadius: 10,
     padding: 10, color: t.text, fontSize: 14,
     backgroundColor: t.surfaceMuted,
   },
