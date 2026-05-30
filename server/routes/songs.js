@@ -784,6 +784,26 @@ function getSongCatalog(db, aliases, allowedModes = ['Single', 'Double']) {
   return catalog;
 }
 
+// Resolve a chart by its id, transparently mapping a shadow/duplicate row id
+// to the canonical chart via its chart key. A play under a localized/alias
+// title (e.g. "F(R)IEND") matches its own backfill row, so feed entries can
+// deep-link to a chart id the catalog de-duped away; without this, those
+// links 404 with "Chart not found".
+function resolveCatalogChartById(songCatalog, db, aliases, idParam) {
+  const direct = songCatalog.chartsById.get(String(idParam));
+  if (direct) return direct;
+  const row = db.prepare('SELECT title, mode, level, song_key, flags FROM songs WHERE id = ?')
+    .get(parseInt(idParam, 10) || 0);
+  if (!row) return null;
+  const chartKey = makeChartKey(
+    resolveKnownSongVariantTitle(row.title, row.song_key, row.flags),
+    normalizeMode(row.mode) || row.mode,
+    parseInt(row.level, 10) || 0,
+    aliases,
+  );
+  return chartKey ? (songCatalog.chartsByKey.get(chartKey) || null) : null;
+}
+
 function queryUserBestScores(db, userId) {
   if (!userId) return [];
   return db.prepare(`
@@ -3256,7 +3276,7 @@ router.get('/chart/:chartId/history', optionalAuth, (req, res) => {
   const db = getDb();
   const aliases = loadSongAliases();
   const songCatalog = getSongCatalog(db, aliases, ['Single', 'Double', 'CoOp']);
-  const chart = songCatalog.chartsById.get(String(req.params.chartId));
+  const chart = resolveCatalogChartById(songCatalog, db, aliases, req.params.chartId);
   if (!chart) return res.status(404).json({ error: 'Chart not found' });
 
   const targetUserId = String(req.query.user_id || req.user?.id || '').trim();
@@ -3379,7 +3399,7 @@ router.get('/chart/:chartId', optionalAuth, (req, res) => {
   const db = getDb();
   const aliases = loadSongAliases();
   const songCatalog = getSongCatalog(db, aliases, ['Single', 'Double', 'CoOp']);
-  const chart = songCatalog.chartsById.get(String(req.params.chartId));
+  const chart = resolveCatalogChartById(songCatalog, db, aliases, req.params.chartId);
   if (!chart) return res.status(404).json({ error: 'Chart not found' });
 
   const targetUserId = String(req.query.user_id || req.user?.id || '').trim();
