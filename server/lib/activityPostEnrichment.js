@@ -10,6 +10,7 @@ const sessionReplayLinkStmtCache = new WeakMap();
 const songChartByExactStmtCache = new WeakMap();
 const songChartByCanonicalStmtCache = new WeakMap();
 const songChartByJacketStmtCache = new WeakMap();
+const songJacketByTitleStmtCache = new WeakMap();
 
 function getCachedStmt(cache, db, sql) {
   let stmt = cache.get(db);
@@ -185,6 +186,20 @@ function getSongChartByJacketStmt(db) {
   `);
 }
 
+// Title-only jacket lookup (any mode/level). Used for UCS / unscored entries
+// that have no real chart row but ARE built on a base song that's in the
+// catalog — so the base song's artwork is resolvable by normalized title.
+function getSongJacketByTitleStmt(db) {
+  return getCachedStmt(songJacketByTitleStmtCache, db, `
+    SELECT jacket_url
+    FROM songs
+    WHERE REPLACE(REPLACE(LOWER(TRIM(title)), '  ', ' '), '  ', ' ') = ?
+      AND jacket_url != ''
+    ORDER BY id ASC
+    LIMIT 1
+  `);
+}
+
 // Normalized fallback used when the scraped play-title and the catalog title
 // differ only by capitalization, whitespace, or locale. The songs catalog is
 // polluted with the same song under multiple casings (e.g. "feat. Skizzo" vs
@@ -300,7 +315,22 @@ function findSongChartMetadata(db, { songTitle, mode, level, jacketUrl = '' }) {
   // so the lookup matches even when the input mode style differs.
   const normalizedMode = normalizeMode(mode) || String(mode || '').trim();
   const numericLevel = toInt(level);
-  if (!normalizedMode || numericLevel <= 0) return null;
+  if (!normalizedMode || numericLevel <= 0) {
+    // UCS / unscored plays carry mode "UCS" and level 0, so there's no real
+    // chart row to match — but the custom step is built on a base song that
+    // IS catalogued. Resolve that song's jacket by title alone so the feed
+    // tile shows artwork instead of a "?" placeholder. chart_id stays 0
+    // (there's no specific official chart to deep-link to).
+    if (!normalizedTitle) return null;
+    const titleStmt = getSongJacketByTitleStmt(db);
+    for (const key of [normalizeSongName(normalizedTitle), toCanonicalTitle(normalizedTitle)]) {
+      const k = String(key || '').trim();
+      if (!k) continue;
+      const match = titleStmt.get(k);
+      if (match && match.jacket_url) return { chart_id: 0, jacket_url: match.jacket_url };
+    }
+    return null;
+  }
 
   if (normalizedTitle) {
     // 1) Exact (case-sensitive) match incl. trailing-punctuation variants —
