@@ -655,7 +655,6 @@ function getSongCatalog(db, aliases, allowedModes = ['Single', 'Double']) {
   `).all();
 
   const songsByGroup = new Map();
-  const seenChartKeys = new Set();
   const charts = [];
   const chartsByKey = new Map();
   const chartsById = new Map();
@@ -666,6 +665,33 @@ function getSongCatalog(db, aliases, allowedModes = ['Single', 'Double']) {
     CoOp: new Map(),
   };
 
+  // Pre-pass: pick the canonical row for each chart key. A chart can exist
+  // under multiple titles that alias to one canonical name — e.g. the seed
+  // "Friend" (song_key 798) and a backfill row "F(R)IEND" / "헤스티아" (no
+  // song_key) created from a play's localized title. They share a canonical
+  // chartKey, so only one can win the de-dupe. Prefer the authoritative seed
+  // row (has a song_key), then the lowest id, so the real song keeps ALL its
+  // charts rather than losing some to a partial shadow that happens to sort
+  // first alphabetically.
+  const bestRowIdByChartKey = new Map();
+  {
+    const bestRowByChartKey = new Map();
+    for (const row of rows) {
+      const mode = normalizeMode(row.mode);
+      if (!mode || (allowedSet.size > 0 && !allowedSet.has(mode))) continue;
+      const level = parseInt(row.level, 10) || 0;
+      if (level <= 0) continue;
+      const ck = makeChartKey(resolveKnownSongVariantTitle(row.title, row.song_key, row.flags), mode, level, aliases);
+      if (!ck) continue;
+      const cur = bestRowByChartKey.get(ck);
+      const rowRank = row.song_key ? 0 : 1;
+      if (!cur || rowRank < (cur.song_key ? 0 : 1) || (rowRank === (cur.song_key ? 0 : 1) && row.id < cur.id)) {
+        bestRowByChartKey.set(ck, row);
+        bestRowIdByChartKey.set(ck, row.id);
+      }
+    }
+  }
+
   for (const row of rows) {
     const mode = normalizeMode(row.mode);
     if (!mode) continue;
@@ -675,8 +701,11 @@ function getSongCatalog(db, aliases, allowedModes = ['Single', 'Double']) {
     const resolvedTitle = resolveKnownSongVariantTitle(row.title, row.song_key, row.flags);
 
     const chartKey = makeChartKey(resolvedTitle, mode, level, aliases);
-    if (!chartKey || seenChartKeys.has(chartKey)) continue;
-    seenChartKeys.add(chartKey);
+    // Keep only the canonical row for each chart key (see bestRowIdByChartKey
+    // pre-pass below). This stops a partial shadow row — a backfill entry under
+    // a localized/alias title with no song_key — from stealing charts from the
+    // real seed song and hiding them on its page.
+    if (!chartKey || bestRowIdByChartKey.get(chartKey) !== row.id) continue;
 
     const groupKey = makeSongGroupKey(row, aliases);
 
