@@ -11,7 +11,7 @@
 
 import { Platform } from 'react-native';
 
-export type ThemeKey = 'dark' | 'light';
+export type ThemeKey = 'dark' | 'light' | 'classic';
 
 export interface ThemeColors {
   /** Page background. */
@@ -121,7 +121,36 @@ const light: ThemeColors = {
   spinner: BRAND.goldDeep,
 };
 
-export const themes: Record<ThemeKey, ThemeColors> = { dark, light };
+// "Classic" — the original pumpshinsa.com look: deep indigo-navy surfaces with
+// the signature PIU hot-pink accent. Opt-in only (Pump Gold dark/light remain
+// the default brand); added by user request.
+const classic: ThemeColors = {
+  bg: '#0a0a1a',
+  surface: '#12122a',
+  card: '#141428',
+  surfaceMuted: 'rgba(128,140,200,0.12)',
+  border: 'rgba(128,140,200,0.18)',
+  borderStrong: 'rgba(128,140,200,0.34)',
+  accent: '#ff3366',
+  accentMuted: '#ff6b8f',
+  accentDeep: '#d81e4a',
+  accentTint: 'rgba(255,51,102,0.14)',
+  text: '#F7FAFF',
+  textMuted: '#9aa3c0',
+  textDim: '#6b7299',
+  textOnAccent: '#FFFFFF',
+  danger: '#ef4444',
+  dangerBg: 'rgba(239,68,68,0.12)',
+  dangerBorder: 'rgba(239,68,68,0.32)',
+  success: '#33ff66',
+  skill: '#c084fc',
+  gold: '#ffd700',
+  silver: '#c0c0c0',
+  bronze: '#cd7f32',
+  spinner: '#ff3366',
+};
+
+export const themes: Record<ThemeKey, ThemeColors> = { dark, light, classic };
 
 export const DEFAULT_THEME_KEY: ThemeKey = 'dark';
 

@@ -33,6 +33,7 @@ const PREFERENCE_OPTIONS: { value: ThemePreference; label: string }[] = [
   { value: 'system', label: 'Auto' },
   { value: 'dark', label: 'Dark' },
   { value: 'light', label: 'Light' },
+  { value: 'classic', label: 'Classic' },
 ];
 
 type Styles = ReturnType<typeof useThemedStyles<ReturnType<typeof makeStyles>>>;

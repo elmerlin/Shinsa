@@ -29,11 +29,11 @@ async function readStored(): Promise<ThemePreference> {
   try {
     if (Platform.OS === 'web') {
       const v = typeof window !== 'undefined' ? window.localStorage.getItem(STORAGE_KEY) : null;
-      if (v === 'system' || v === 'dark' || v === 'light') return v;
+      if (v === 'system' || v === 'dark' || v === 'light' || v === 'classic') return v;
       return 'system';
     }
     const v = await SecureStore.getItemAsync(STORAGE_KEY);
-    if (v === 'system' || v === 'dark' || v === 'light') return v;
+    if (v === 'system' || v === 'dark' || v === 'light' || v === 'classic') return v;
     return 'system';
   } catch {
     return 'system';
@@ -67,7 +67,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const themeKey: ThemeKey = useMemo(() => {
-    if (preference === 'dark' || preference === 'light') return preference;
+    // Any explicit theme (dark/light/classic) wins; only 'system' follows the OS.
+    if (preference !== 'system') return preference;
     if (systemScheme === 'light') return 'light';
     if (systemScheme === 'dark') return 'dark';
     return DEFAULT_THEME_KEY;

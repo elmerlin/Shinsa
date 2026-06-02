@@ -95,7 +95,7 @@ function ThemedShell({ children }: { children: React.ReactNode }) {
   const { theme, themeKey } = useTheme();
   const navTheme = useMemo(
     () => ({
-      dark: themeKey === 'dark',
+      dark: themeKey !== 'light',
       colors: {
         primary: theme.accent,
         background: theme.bg,
@@ -117,7 +117,7 @@ function ThemedShell({ children }: { children: React.ReactNode }) {
   return (
     <NavThemeProvider value={navTheme}>
       {children}
-      <StatusBar style={themeKey === 'dark' ? 'light' : 'dark'} />
+      <StatusBar style={themeKey === 'light' ? 'dark' : 'light'} />
     </NavThemeProvider>
   );
 }
