@@ -30,6 +30,15 @@ function normalizeString(value) {
   return String(value || '').trim();
 }
 
+// normalizeSongName + parenthesis stripping. The catalog stores the same song
+// under both "Papasito (feat. KuTiNA)" and "Papasito feat. KuTiNA", with the
+// chart we want sometimes living only under one form — so a paren-sensitive
+// match misses. Dropping ( ) folds both to "papasito feat. kutina". The SQL in
+// getSongChartByCanonicalStmt strips ( ) the same way so key and column agree.
+function looseTitleKey(value) {
+  return normalizeSongName(value).replace(/[()]/g, '').replace(/\s+/g, ' ').trim();
+}
+
 function normalizeComparable(value) {
   return normalizeString(value).toLowerCase().replace(/\s+/g, ' ');
 }
@@ -193,7 +202,7 @@ function getSongJacketByTitleStmt(db) {
   return getCachedStmt(songJacketByTitleStmtCache, db, `
     SELECT jacket_url
     FROM songs
-    WHERE REPLACE(REPLACE(LOWER(TRIM(title)), '  ', ' '), '  ', ' ') = ?
+    WHERE REPLACE(REPLACE(REPLACE(REPLACE(LOWER(TRIM(title)), '(', ''), ')', ''), '  ', ' '), '  ', ' ') = ?
       AND jacket_url != ''
     ORDER BY id ASC
     LIMIT 1
@@ -212,7 +221,7 @@ function getSongChartByCanonicalStmt(db) {
   return getCachedStmt(songChartByCanonicalStmtCache, db, `
     SELECT id AS chart_id, jacket_url
     FROM songs
-    WHERE REPLACE(REPLACE(LOWER(TRIM(title)), '  ', ' '), '  ', ' ') = ?
+    WHERE REPLACE(REPLACE(REPLACE(REPLACE(LOWER(TRIM(title)), '(', ''), ')', ''), '  ', ' '), '  ', ' ') = ?
       AND mode = ?
       AND level = ?
     ORDER BY id ASC
@@ -323,7 +332,7 @@ function findSongChartMetadata(db, { songTitle, mode, level, jacketUrl = '' }) {
     // (there's no specific official chart to deep-link to).
     if (!normalizedTitle) return null;
     const titleStmt = getSongJacketByTitleStmt(db);
-    for (const key of [normalizeSongName(normalizedTitle), toCanonicalTitle(normalizedTitle)]) {
+    for (const key of [looseTitleKey(normalizedTitle), looseTitleKey(toCanonicalTitle(normalizedTitle))]) {
       const k = String(key || '').trim();
       if (!k) continue;
       const match = titleStmt.get(k);
@@ -355,8 +364,8 @@ function findSongChartMetadata(db, { songTitle, mode, level, jacketUrl = '' }) {
       const key = String(value || '').trim();
       if (key && !keys.includes(key)) keys.push(key);
     };
-    pushKey(normalizeSongName(normalizedTitle));
-    pushKey(toCanonicalTitle(normalizedTitle));
+    pushKey(looseTitleKey(normalizedTitle));
+    pushKey(looseTitleKey(toCanonicalTitle(normalizedTitle)));
     for (const key of keys) {
       const match = ciStmt.get(key, normalizedMode, numericLevel);
       if (match) return match;
