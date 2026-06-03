@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { DefaultAvatar } from '@/components/default-avatar';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { weeklyChallengesApi } from '@/lib/api';
 import { fullImageUrl } from '@/lib/images';
@@ -27,7 +28,7 @@ function PodiumRow({ award, s }: { award: WeeklyChallengeAward; s: ReturnType<ty
       {avatar ? (
         <Image source={{ uri: avatar }} style={s.avatar} contentFit="cover" />
       ) : (
-        <View style={[s.avatar, s.avatarFallback]} />
+        <DefaultAvatar size={28} />
       )}
       <View style={s.rowMain}>
         <Text style={s.username} numberOfLines={1}>{award.username_snapshot || 'unknown'}</Text>
@@ -53,7 +54,7 @@ function CoopPodiumRow({ row, s }: { row: WeeklyChallengeLeaderboardRow; s: Retu
       {avatar ? (
         <Image source={{ uri: avatar }} style={s.avatar} contentFit="cover" />
       ) : (
-        <View style={[s.avatar, s.avatarFallback]} />
+        <DefaultAvatar size={28} />
       )}
       <View style={s.rowMain}>
         <Text style={s.username} numberOfLines={1}>{row.username || 'unknown'}</Text>
@@ -207,7 +208,6 @@ const makeStyles = (t: ThemeColors) => ({
   },
   rankText: { fontSize: 10, fontWeight: '900' as const, color: '#050505' },
   avatar: { width: 28, height: 28, borderRadius: 14, backgroundColor: t.surfaceMuted },
-  avatarFallback: {},
   rowMain: { flex: 1, minWidth: 0 },
   username: { fontSize: 13, fontWeight: '700' as const, color: t.text },
   subline: { fontSize: 11, color: t.textMuted },
