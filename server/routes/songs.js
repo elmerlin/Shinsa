@@ -13,10 +13,9 @@ const {
   hasShortCutSuffix, normalizeShortCutSuffix, normalizeMode,
   toCanonicalTitle, makeChartKey, makeSongGroupKey,
 } = require('../lib/chartKeys');
+const { loadSongAliases, invalidateSongAliasCache } = require('../lib/songAliases');
+const { loadJacketMap, invalidateJacketMap } = require('../lib/jacketMap');
 
-// Cache the jacket map in memory (loaded once from pump-phoenix.json)
-let cachedJacketMap = null;
-let cachedSongAliases = null;
 let cachedSongCatalogByModes = new Map();
 let cachedSongCatalogVersion = '';
 let cachedSkillMetadataBySlug = null;
@@ -83,10 +82,6 @@ const PIUCENTER_SKILL_BASE_URL = 'https://www.piucenter.com/skill';
 const SKILL_METADATA_PATH = path.join(__dirname, '..', 'data', 'piucenter-skill-metadata.json');
 const SKILL_ELIGIBLE_WHERE_SQL = "((s.mode = 'Single' AND s.level > 6) OR (s.mode = 'Double' AND s.level > 9))";
 const SKILL_SORTS = new Set(['level_asc', 'level_desc', 'score_asc', 'score_desc']);
-const SONG_ALIAS_OVERRIDES = {
-  'papasito (feat. kutina)': 'papasito feat. kutina',
-  '파파시토 (feat. kutina)': 'papasito feat. kutina',
-};
 const IDENTITY_RECENT_WINDOW_DAYS = 90;
 const IDENTITY_EVOLUTION_POINT_COUNT = 12;
 const IDENTITY_DAY_MS = 24 * 60 * 60 * 1000;
@@ -2086,129 +2081,9 @@ function normalizeTierListType(value) {
   return 'Pass';
 }
 
-function loadSongAliases() {
-  if (cachedSongAliases) return cachedSongAliases;
-
-  const aliasesPath = path.join(__dirname, '..', 'data', 'piugame-song-aliases.json');
-  if (!fs.existsSync(aliasesPath)) {
-    cachedSongAliases = {};
-    return cachedSongAliases;
-  }
-
-  try {
-    const data = JSON.parse(fs.readFileSync(aliasesPath, 'utf-8'));
-    const rawAliases = (data && typeof data.aliases === 'object' && data.aliases) || {};
-    const normalizedAliases = {};
-
-    for (const [alias, canonical] of Object.entries(rawAliases)) {
-      const aliasNorm = normalizeSongName(alias);
-      const canonicalNorm = normalizeSongName(canonical);
-      if (!aliasNorm || !canonicalNorm || aliasNorm === canonicalNorm) continue;
-      if (!normalizedAliases[aliasNorm]) normalizedAliases[aliasNorm] = canonicalNorm;
-    }
-
-    for (const [alias, canonical] of Object.entries(SONG_ALIAS_OVERRIDES)) {
-      const aliasNorm = normalizeSongName(alias);
-      const canonicalNorm = normalizeSongName(canonical);
-      if (!aliasNorm || !canonicalNorm || aliasNorm === canonicalNorm) continue;
-      normalizedAliases[aliasNorm] = canonicalNorm;
-    }
-
-    cachedSongAliases = normalizedAliases;
-    return cachedSongAliases;
-  } catch (err) {
-    console.warn('Failed to load piugame-song-aliases.json:', err.message);
-    cachedSongAliases = {};
-    return cachedSongAliases;
-  }
-}
-
-function loadJacketMap() {
-  if (cachedJacketMap) return cachedJacketMap;
-  const jsonPath = path.join(__dirname, '..', '..', 'pump-phoenix.json');
-  if (!fs.existsSync(jsonPath)) return {};
-  const data = JSON.parse(fs.readFileSync(jsonPath, 'utf-8'));
-  const map = {};
-  const chartKeysBySong = {};
-
-  for (const song of data.songs) {
-    if (!song.jacket) continue;
-    const jacketUrl = '/jackets/' + song.jacket;
-    const name = resolveKnownSongVariantTitle(song.name || '', song.saIndex || '', song.flags || '');
-    const norm = normalizeSongName(name);
-    const songFlags = Array.isArray(song.flags) ? song.flags : [];
-    const isFullSong = songFlags.some(f => String(f).toLowerCase() === 'cut:4');
-
-    // Store by normalized name (first wins for base name)
-    if (!map[norm]) map[norm] = jacketUrl;
-
-    // For full-song variants (cut:4), also store under "title - full song -"
-    // so plays with the "- FULL SONG -" suffix resolve correctly
-    if (isFullSong) {
-      const fullSongNorm = normalizeSongName(`${song.name || ''} - FULL SONG -`);
-      if (!map[fullSongNorm]) map[fullSongNorm] = jacketUrl;
-    }
-
-    // Also store by name with mode|level for each chart
-    for (const chart of (song.charts || [])) {
-      if (chart.diffClass === 'S' || chart.diffClass === 'D') {
-        const mode = chart.diffClass === 'S' ? 'Single' : 'Double';
-        const key = `${norm}|${mode}|${chart.lvl}`;
-        if (!map[key]) map[key] = jacketUrl;
-
-        if (!chartKeysBySong[norm]) chartKeysBySong[norm] = [];
-        chartKeysBySong[norm].push({ mode, level: chart.lvl, jacketUrl });
-
-        // Also store full-song variant chart keys
-        if (isFullSong) {
-          const fullSongNorm = normalizeSongName(`${song.name || ''} - FULL SONG -`);
-          const fullSongKey = `${fullSongNorm}|${mode}|${chart.lvl}`;
-          map[fullSongKey] = jacketUrl;
-
-          if (!chartKeysBySong[fullSongNorm]) chartKeysBySong[fullSongNorm] = [];
-          chartKeysBySong[fullSongNorm].push({ mode, level: chart.lvl, jacketUrl });
-        }
-      }
-    }
-  }
-
-  // Expand map with locale aliases (e.g., Korean PIUGame titles -> canonical English song)
-  const aliases = loadSongAliases();
-  const VARIANT_SUFFIXES = ['- full song -', '- short cut -'];
-
-  for (const [aliasNorm, canonicalNorm] of Object.entries(aliases)) {
-    // Detect if the alias itself has a variant suffix (e.g., "풀 문 - full song -")
-    // but the canonical doesn't (e.g., "full moon")
-    let resolvedCanonical = canonicalNorm;
-    for (const suffix of VARIANT_SUFFIXES) {
-      if (aliasNorm.endsWith(suffix) && !canonicalNorm.endsWith(suffix)) {
-        // The alias has the suffix but canonical doesn't — resolve to canonical WITH suffix
-        const canonicalWithSuffix = normalizeSongName(`${canonicalNorm} ${suffix}`);
-        if (map[canonicalWithSuffix]) {
-          resolvedCanonical = canonicalWithSuffix;
-        }
-        break;
-      }
-    }
-
-    const canonicalJacket = map[resolvedCanonical];
-    if (!canonicalJacket) continue;
-
-    if (!map[aliasNorm]) map[aliasNorm] = canonicalJacket;
-
-    const chartKeys = chartKeysBySong[resolvedCanonical] || chartKeysBySong[canonicalNorm] || [];
-    for (const chart of chartKeys) {
-      const aliasChartKey = `${aliasNorm}|${chart.mode}|${chart.level}`;
-      if (!map[aliasChartKey]) map[aliasChartKey] = chart.jacketUrl;
-    }
-  }
-
-  cachedJacketMap = map;
-  return map;
-}
-
 function invalidateSongCaches() {
-  cachedJacketMap = null;
+  invalidateJacketMap();
+  invalidateSongAliasCache();
   cachedSongCatalogByModes = new Map();
   cachedSongCatalogVersion = '';
   cachedSkillMetadataBySlug = null;
@@ -5746,7 +5621,8 @@ router._test = {
   buildTrainingGapResponse,
   normalizeTrainingGapMode,
   resetCaches() {
-    cachedSongAliases = null;
+    invalidateSongAliasCache();
+    invalidateJacketMap();
     cachedSongCatalogByModes = new Map();
     cachedSongCatalogVersion = '';
   },

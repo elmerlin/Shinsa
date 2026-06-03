@@ -1,6 +1,7 @@
 const { getUserTitleProgress } = require('./titleProgress');
 const { normalizeMode, normalizeSongName } = require('./chartKeys');
 const { toCanonicalTitle } = require('./songAliases');
+const { resolveJacketUrl } = require('./jacketMap');
 
 const recentPlayJudgmentsBeforeStmtCache = new WeakMap();
 const recentPlayJudgmentsAnyStmtCache = new WeakMap();
@@ -369,6 +370,20 @@ function findSongChartMetadata(db, { songTitle, mode, level, jacketUrl = '' }) {
     for (const key of keys) {
       const match = ciStmt.get(key, normalizedMode, numericLevel);
       if (match) return match;
+    }
+
+    // 3) Authoritative fallback — the shared jacket-map (the same resolver
+    //    behind /api/songs/jacket-map), built from pump-phoenix.json + full
+    //    alias expansion. It resolves every title-variant dimension the
+    //    songs-table SQL can't (locale, feat./parens, cut suffixes, casing,
+    //    whitespace) and covers songs the catalog table is simply missing.
+    //    This is the single source of truth, so the feed shows exactly what
+    //    the catalog page would. The map yields a jacket only — recover the
+    //    chart_id from the songs table by that jacket so deep-links still work.
+    const mapJacket = resolveJacketUrl(normalizedTitle, normalizedMode, numericLevel);
+    if (mapJacket) {
+      const byJacket = getSongChartByJacketStmt(db).get(mapJacket, normalizedMode, numericLevel);
+      return { chart_id: byJacket ? byJacket.chart_id : 0, jacket_url: mapJacket };
     }
   }
 
