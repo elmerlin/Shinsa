@@ -473,6 +473,8 @@ export interface Comment {
   created_at?: string;
   pump_count?: number;
   user_pumped?: boolean | number;
+  /** Threaded replies to this top-level comment (server returns nested). */
+  replies?: Comment[];
   [key: string]: unknown;
 }
 

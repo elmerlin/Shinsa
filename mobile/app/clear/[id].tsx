@@ -8,10 +8,10 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, ScrollView, Share, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { CommentsSheet } from '@/components/comments-sheet';
+import { CommentsThread } from '@/components/comments-thread';
 import { ReplayModal } from '@/components/replay-modal';
 import { ScoreCardSheet, type ScoreCardData } from '@/components/score-card-sheet';
 import { SendToMessageSheet } from '@/components/messages/send-to-message-sheet';
@@ -44,12 +44,16 @@ export default function ClearDetailScreen() {
     enabled: !!id,
   });
 
-  const [commentTarget, setCommentTarget] = useState<FeedItem | null>(null);
   const [scoreTarget, setScoreTarget] = useState<ScoreCardData | null>(null);
   const [replayTarget, setReplayTarget] = useState<{ url: string; title: string } | null>(null);
   const [shareTarget, setShareTarget] = useState<FeedItem | null>(null);
 
-  const onComments = useCallback((it: FeedItem) => setCommentTarget(it), []);
+  // Comments render inline below the card; the comment button scrolls to them.
+  const scrollRef = useRef<ScrollView>(null);
+  const commentsY = useRef(0);
+  const onComments = useCallback(() => {
+    scrollRef.current?.scrollTo({ y: Math.max(commentsY.current - 12, 0), animated: true });
+  }, []);
   const onShare = useCallback((it: FeedItem) => setShareTarget(it), []);
   const onOsShare = useCallback((it: FeedItem) => {
     const url = buildPublicShareUrl(it);
@@ -80,7 +84,7 @@ export default function ClearDetailScreen() {
           </Text>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ padding: 12, paddingBottom: insets.bottom + 24 }}>
+        <ScrollView ref={scrollRef} contentContainerStyle={{ padding: 12, paddingBottom: insets.bottom + 24 }}>
           <ClearCard
             item={item}
             s={s}
@@ -91,15 +95,12 @@ export default function ClearDetailScreen() {
             onJacket={onJacket}
             onScore={onScore}
           />
+          <View onLayout={(e) => { commentsY.current = e.nativeEvent.layout.y; }}>
+            <CommentsThread itemType={item.type} itemId={item.id} />
+          </View>
         </ScrollView>
       )}
 
-      <CommentsSheet
-        visible={!!commentTarget}
-        itemType={commentTarget?.type}
-        itemId={commentTarget?.id}
-        onClose={() => setCommentTarget(null)}
-      />
       <ScoreCardSheet
         visible={!!scoreTarget}
         data={scoreTarget}

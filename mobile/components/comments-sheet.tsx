@@ -49,7 +49,7 @@ function timeAgo(input?: string): string {
   return d.toLocaleDateString();
 }
 
-function fetchCommentsFor(type: CommentItemType, id: string): Promise<Comment[]> {
+export function fetchCommentsFor(type: CommentItemType, id: string): Promise<Comment[]> {
   if (type === 'post') return socialApi.comments(id);
   if (type === 'upscore') return socialApi.upscoreComments(id);
   if (type === 'clear') return socialApi.clearComments(id);
@@ -57,13 +57,31 @@ function fetchCommentsFor(type: CommentItemType, id: string): Promise<Comment[]>
   throw new Error(`Unsupported comment type ${type}`);
 }
 
-function postCommentFor(type: CommentItemType, id: string, content: string): Promise<Comment> {
+export function postCommentFor(type: CommentItemType, id: string, content: string): Promise<Comment> {
   if (type === 'post') return socialApi.addPostComment(id, content);
   if (type === 'upscore') return socialApi.addUpscoreComment(id, content);
   if (type === 'clear') return socialApi.addClearComment(id, content);
   if (type === 'weekly_challenge') return socialApi.addWeeklyChallengePlayComment(id, content);
   throw new Error(`Unsupported comment type ${type}`);
 }
+
+/**
+ * The comments endpoints return a THREADED shape — top-level comments each
+ * with a nested `replies[]`. Flatten to a render list (parent immediately
+ * followed by its replies) so replies actually show; CommentRow indents any
+ * row with a `parent_id`. Without this, replies were silently dropped and the
+ * count (which includes replies) disagreed with what rendered.
+ */
+export function flattenComments(list: Comment[]): Comment[] {
+  const out: Comment[] = [];
+  for (const c of list || []) {
+    out.push(c);
+    for (const r of (c.replies as Comment[] | undefined) || []) out.push(r);
+  }
+  return out;
+}
+
+export { timeAgo };
 
 type Styles = ReturnType<typeof useThemedStyles<ReturnType<typeof makeStyles>>>;
 
@@ -170,7 +188,7 @@ export function CommentsSheet({ visible, itemType, itemId, onClose }: Props) {
               ) : comments.length === 0 ? (
                 <Text style={s.empty}>No comments yet. Be the first.</Text>
               ) : (
-                comments.map((c) => <CommentRow key={c.id} c={c} s={s} onProfile={goProfile} />)
+                flattenComments(comments).map((c) => <CommentRow key={c.id} c={c} s={s} onProfile={goProfile} />)
               )}
             </ScrollView>
 

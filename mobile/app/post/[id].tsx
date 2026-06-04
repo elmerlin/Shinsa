@@ -4,6 +4,7 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AchievementBadgePost } from '@/components/achievement-badge-post';
+import { flattenComments } from '@/components/comments-sheet';
 import { DefaultAvatar } from '@/components/default-avatar';
 import { SystemAvatar } from '@/components/system-avatar';
 import { LiveSessionCard } from '@/components/live-session-card';
@@ -110,7 +111,9 @@ export default function PostDetailScreen() {
   });
 
   const post = postQuery.data;
-  const comments = commentsQuery.data ?? [];
+  // Flatten the threaded shape (top-level + nested replies) so replies render
+  // and the count matches the server's (which includes replies).
+  const comments = flattenComments(commentsQuery.data ?? []);
   const avatar = post && typeof (post.user_avatar || post.avatar) === 'string'
     ? fullImageUrl((post.user_avatar || post.avatar) as string)
     : undefined;
