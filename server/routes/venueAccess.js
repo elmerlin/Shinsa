@@ -410,6 +410,23 @@ function ensureDojoMemberGroup(db, createdByUserId) {
 }
 
 /**
+ * Ensure the "Dojo Visitor" group exists and return its ID.
+ * Visitors are allowed to buy access but do not get check-in access from the group.
+ */
+function ensureDojoVisitorGroup(db, createdByUserId) {
+  let group = db.prepare('SELECT id FROM admin_user_groups WHERE name = ? COLLATE NOCASE').get(DOJO_VISITOR_GROUP_NAME);
+  if (group) return group.id;
+
+  const groupId = uuidv4();
+  db.prepare(`
+    INSERT INTO admin_user_groups (id, name, description, created_by)
+    VALUES (?, ?, ?, ?)
+  `).run(groupId, DOJO_VISITOR_GROUP_NAME, 'Pay-as-you-go Dojo visitors approved to purchase venue access', createdByUserId || null);
+
+  return groupId;
+}
+
+/**
  * Add a user to the "Pump Dojo" group if they are not already in it.
  * Also grants the 'checkin' feature to the group if not already granted.
  */
@@ -435,6 +452,75 @@ function addUserToDojoMemberGroup(db, userId, addedByUserId) {
         SELECT id FROM admin_user_groups WHERE name = ? COLLATE NOCASE
       )
   `).run(userId, DOJO_VISITOR_GROUP_NAME);
+}
+
+function addUserToDojoVisitorGroup(db, userId, addedByUserId) {
+  const groupId = ensureDojoVisitorGroup(db, addedByUserId);
+  db.prepare(`
+    INSERT OR IGNORE INTO admin_user_group_members (group_id, user_id, added_by)
+    VALUES (?, ?, ?)
+  `).run(groupId, userId, addedByUserId || null);
+}
+
+function removeUserFromDojoMemberGroup(db, userId) {
+  const result = db.prepare(`
+    DELETE FROM admin_user_group_members
+    WHERE user_id = ?
+      AND group_id IN (
+        SELECT id FROM admin_user_groups WHERE name = ? COLLATE NOCASE
+      )
+  `).run(userId, DOJO_MEMBER_GROUP_NAME);
+  return result?.changes || 0;
+}
+
+function hasCurrentMonthlySubscription(db, userId, venueId) {
+  const today = todayDateString();
+  const row = db.prepare(`
+    SELECT 1
+    FROM venue_subscriptions
+    WHERE user_id = ? AND venue_id = ? AND status = 'active'
+      AND current_period_start <= ? AND current_period_end >= ?
+    LIMIT 1
+  `).get(userId, venueId, today, today);
+  return !!row;
+}
+
+function moveExpiredDojoMemberToVisitor(db, userId, venueId, addedByUserId = null) {
+  if (hasCurrentMonthlySubscription(db, userId, venueId)) return false;
+
+  removeUserFromDojoMemberGroup(db, userId);
+  addUserToDojoVisitorGroup(db, userId, addedByUserId);
+  return true;
+}
+
+function reconcileExpiredVenueSubscriptions(db, userId, venueId, options = {}) {
+  if (!db || !userId || !venueId) {
+    return { expired_subscriptions: 0, moved_to_visitor: false };
+  }
+
+  const today = todayDateString();
+  const result = db.prepare(`
+    UPDATE venue_subscriptions
+    SET status = 'expired',
+        cancelled_at = COALESCE(cancelled_at, datetime('now')),
+        updated_at = datetime('now')
+    WHERE user_id = ? AND venue_id = ?
+      AND status IN ('active', 'past_due')
+      AND (square_subscription_id IS NULL OR TRIM(square_subscription_id) = '')
+      AND current_period_end IS NOT NULL
+      AND current_period_end < ?
+  `).run(userId, venueId, today);
+
+  const expiredCount = result?.changes || 0;
+  const shouldSyncGroups = options.syncGroups !== false;
+  const movedToVisitor = expiredCount > 0 && shouldSyncGroups
+    ? moveExpiredDojoMemberToVisitor(db, userId, venueId, options.addedByUserId || null)
+    : false;
+
+  return {
+    expired_subscriptions: expiredCount,
+    moved_to_visitor: movedToVisitor,
+  };
 }
 
 function finalizeVenuePaymentSuccess(db, paymentRow, options = {}) {
@@ -495,12 +581,15 @@ function finalizeVenuePaymentSuccess(db, paymentRow, options = {}) {
   }
 
   if (paymentRow.payment_type === 'subscription') {
+    reconcileExpiredVenueSubscriptions(db, paymentRow.user_id, paymentRow.venue_id);
+    const today = todayDateString();
     const existingSub = db.prepare(`
       SELECT id
       FROM venue_subscriptions
       WHERE user_id = ? AND venue_id = ? AND status IN ('active', 'past_due')
+        AND (current_period_end IS NULL OR current_period_end >= ?)
       LIMIT 1
-    `).get(paymentRow.user_id, paymentRow.venue_id);
+    `).get(paymentRow.user_id, paymentRow.venue_id, today);
 
     if (!existingSub) {
       const subId = uuidv4();
@@ -629,6 +718,7 @@ async function reconcilePendingVenuePaymentsForUser(db, userId) {
  *  3. User is in the "Pump Dojo" admin user group (backward-compat)
  */
 function checkUserVenueAccess(db, userId, venueId) {
+  reconcileExpiredVenueSubscriptions(db, userId, venueId);
   const today = todayDateString();
 
   // 1. Active monthly subscription whose period covers today
@@ -717,6 +807,7 @@ router.get('/my-access/:venueSlug', requireAuth, (req, res) => {
   if (!venue) return res.status(404).json({ error: 'Venue not found' });
 
   const access = getVenueAccessForMembership(db, req.user.id, venue.id);
+  const today = todayDateString();
 
   const subscription = db.prepare(`
     SELECT vs.id, vs.status, vs.current_period_start, vs.current_period_end, vs.cancelled_at,
@@ -725,11 +816,11 @@ router.get('/my-access/:venueSlug', requireAuth, (req, res) => {
     FROM venue_subscriptions vs
     JOIN venue_access_plans vap ON vap.id = vs.plan_id
     WHERE vs.user_id = ? AND vs.venue_id = ? AND vs.status IN ('active', 'past_due')
+      AND current_period_start <= ? AND current_period_end >= ?
     ORDER BY vs.current_period_end DESC
     LIMIT 1
-  `).get(req.user.id, venue.id);
+  `).get(req.user.id, venue.id, today, today);
 
-  const today = todayDateString();
   const dayPasses = db.prepare(`
     SELECT vdp.id, vdp.pass_date, vdp.status,
            vap.name AS plan_name, vap.price_amount, vap.currency
@@ -1037,10 +1128,13 @@ router.post('/purchase/subscription', requireAuth, async (req, res) => {
       return res.status(403).json({ error: 'You are not approved for this venue. Please contact the venue admin.' });
     }
 
+    reconcileExpiredVenueSubscriptions(db, req.user.id, plan.venue_id);
+    const today = todayDateString();
     const existing = db.prepare(`
       SELECT id FROM venue_subscriptions
       WHERE user_id = ? AND venue_id = ? AND status IN ('active', 'past_due')
-    `).get(req.user.id, plan.venue_id);
+        AND (current_period_end IS NULL OR current_period_end >= ?)
+    `).get(req.user.id, plan.venue_id, today);
     if (existing) {
       return res.status(409).json({ error: 'You already have an active subscription for this venue' });
     }
@@ -1191,9 +1285,10 @@ router.get('/my-membership/:venueSlug', requireAuth, async (req, res) => {
     FROM venue_subscriptions vs
     JOIN venue_access_plans vap ON vap.id = vs.plan_id
     WHERE vs.user_id = ? AND vs.venue_id = ? AND vs.status IN ('active', 'past_due')
+      AND current_period_start <= ? AND current_period_end >= ?
     ORDER BY vs.current_period_end DESC
     LIMIT 1
-  `).get(userId, venue.id);
+  `).get(userId, venue.id, today, today);
 
   // Past subscriptions
   const pastSubscriptions = db.prepare(`
@@ -2241,3 +2336,4 @@ router.delete('/admin/approved-users/:venueId/:userId', requireAuth, requireDojo
 
 module.exports = router;
 module.exports.checkUserVenueAccess = checkUserVenueAccess;
+module.exports.reconcileExpiredVenueSubscriptions = reconcileExpiredVenueSubscriptions;

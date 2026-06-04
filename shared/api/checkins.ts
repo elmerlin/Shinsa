@@ -166,7 +166,7 @@ export interface VenueAccessDiscount {
 
 export interface MyVenueAccess {
   has_access: boolean;
-  access_type: 'monthly' | 'day_pass' | null;
+  access_type: 'monthly' | 'day_pass' | 'group_member' | 'dojo_visitor' | null;
   subscription: VenueAccessSubscription | null;
   day_passes: VenueAccessDayPass[];
   discounts: VenueAccessDiscount[];
