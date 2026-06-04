@@ -94,6 +94,7 @@ export default function ClearDetailScreen() {
             onOsShare={onOsShare}
             onJacket={onJacket}
             onScore={onScore}
+            onReplay={onReplay}
           />
           <View onLayout={(e) => { commentsY.current = e.nativeEvent.layout.y; }}>
             <CommentsThread itemType={item.type} itemId={item.id} />

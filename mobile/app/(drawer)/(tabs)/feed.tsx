@@ -515,7 +515,32 @@ export function UpscoreCard({ item, onPump, onComments, onShare, onOsShare, onJa
   );
 }
 
-export function ClearCard({ item, onPump, onComments, onShare, onOsShare, onJacket, onScore, s }: {
+interface ClearEntry {
+  entry_type?: string;
+  song_title?: string;
+  mode?: string;
+  level?: number;
+  score?: number;
+  grade?: string;
+  plate?: string;
+  jacket_url?: string;
+  chart_id?: number;
+  play_id?: number;
+  perfect?: number;
+  great?: number;
+  good?: number;
+  bad?: number;
+  miss?: number;
+  max_combo?: number;
+  is_stage_break?: number | boolean;
+  over_top100_rank?: number;
+  replay_embed_url?: string;
+  played_at_utc?: string;
+  date_played?: string;
+  machine_name?: string;
+}
+
+export function ClearCard({ item, onPump, onComments, onShare, onOsShare, onJacket, onScore, onReplay, s }: {
   item: FeedItem;
   onPump: (i: FeedItem) => void;
   onComments: (i: FeedItem) => void;
@@ -523,43 +548,77 @@ export function ClearCard({ item, onPump, onComments, onShare, onOsShare, onJack
   onOsShare: (i: FeedItem) => void;
   onJacket: (chartId: number, songTitle: string, mode: string, level: number) => void;
   onScore: (data: ScoreCardData) => void;
+  onReplay?: (url: string, title: string) => void;
   s: Styles;
 }) {
+  const { theme } = useTheme();
+  const [showAll, setShowAll] = useState(false);
   const username = String(item.username || 'anonymous');
   const avatar = typeof item.avatar === 'string' ? fullImageUrl(item.avatar) : undefined;
   const itemRec = item as Record<string, unknown>;
-  const songTitle = String(itemRec.song_title ?? '').trim() || 'Unknown song';
-  const mode = String(itemRec.mode ?? '');
-  const level = Number(itemRec.level);
-  const score = Number(itemRec.score);
-  const grade = String(itemRec.grade ?? '');
-  const plate = itemRec.plate;
-  // Server enriches jacket_url via songs catalog; no piugame fallback.
-  const jacketRaw = itemRec.jacket_url as string | undefined;
-  const jacket = jacketRaw ? fullImageUrl(jacketRaw) : undefined;
-  const chartId = Number(itemRec.chart_id) || 0;
 
-  const buildScore = (): ScoreCardData => ({
-    song_title: songTitle,
-    mode,
-    level: Number.isFinite(level) ? level : undefined,
-    score,
-    grade,
-    plate: typeof plate === 'string' ? plate : undefined,
-    jacket_url: jacketRaw,
-    chart_id: chartId,
+  // A "new clears" event is a BATCH — `clears_json` holds every song cleared
+  // in that sync. Render them all (like UpscoreCard does its upscores), not
+  // just the top-level summary row, which dropped most of the batch. Skip
+  // skill-title unlocks. Fall back to the single top-level clear for legacy
+  // events that predate clears_json.
+  const parsed = parseList<ClearEntry>(itemRec.clears_json)
+    .filter((c) => c.entry_type !== 'title_unlock' && String(c.song_title || '').trim());
+  const entries: ClearEntry[] = parsed.length > 0 ? parsed : [{
+    song_title: String(itemRec.song_title ?? '').trim(),
+    mode: String(itemRec.mode ?? ''),
+    level: Number(itemRec.level) || undefined,
+    score: Number(itemRec.score) || 0,
+    grade: String(itemRec.grade ?? ''),
+    plate: typeof itemRec.plate === 'string' ? itemRec.plate : undefined,
+    jacket_url: itemRec.jacket_url as string | undefined,
+    chart_id: Number(itemRec.chart_id) || 0,
     play_id: Number(itemRec.play_id) || undefined,
     perfect: Number(itemRec.perfect) || 0,
     great: Number(itemRec.great) || 0,
     good: Number(itemRec.good) || 0,
     bad: Number(itemRec.bad) || 0,
     miss: Number(itemRec.miss) || 0,
-    max_combo: Number(itemRec.max_combo) || 0,
     is_stage_break: Boolean(itemRec.is_stage_break),
     over_top100_rank: Number(itemRec.over_top100_rank) || 0,
+    replay_embed_url: typeof itemRec.replay_embed_url === 'string' ? itemRec.replay_embed_url : undefined,
     played_at_utc: typeof itemRec.played_at_utc === 'string' ? itemRec.played_at_utc : undefined,
     machine_name: typeof itemRec.machine_name === 'string' ? itemRec.machine_name : undefined,
-    replay_embed_url: typeof itemRec.replay_embed_url === 'string' ? itemRec.replay_embed_url : undefined,
+  }];
+
+  const visible = showAll ? entries : entries.slice(0, 5);
+  const hasMore = entries.length > 5;
+
+  if (entries.length === 0 || !entries[0].song_title) {
+    return (
+      <View style={s.card}>
+        <CardHeader username={username} avatar={avatar} time={timeAgo(item.created_at)} s={s} />
+      </View>
+    );
+  }
+
+  const verb = entries.length > 1 ? `cleared ${entries.length} charts` : 'cleared a chart';
+  const buildScore = (c: ClearEntry): ScoreCardData => ({
+    song_title: c.song_title,
+    mode: c.mode,
+    level: Number.isFinite(Number(c.level)) ? Number(c.level) : undefined,
+    score: Number(c.score) || 0,
+    grade: c.grade,
+    plate: typeof c.plate === 'string' ? c.plate : undefined,
+    jacket_url: c.jacket_url,
+    chart_id: Number(c.chart_id) || 0,
+    play_id: Number(c.play_id) || undefined,
+    perfect: Number(c.perfect) || 0,
+    great: Number(c.great) || 0,
+    good: Number(c.good) || 0,
+    bad: Number(c.bad) || 0,
+    miss: Number(c.miss) || 0,
+    max_combo: Number(c.max_combo) || 0,
+    is_stage_break: Boolean(c.is_stage_break),
+    over_top100_rank: Number(c.over_top100_rank) || 0,
+    played_at_utc: c.played_at_utc,
+    machine_name: c.machine_name,
+    replay_embed_url: c.replay_embed_url,
     username: item.username,
     avatar: typeof item.avatar === 'string' ? item.avatar : undefined,
   });
@@ -571,30 +630,59 @@ export function ClearCard({ item, onPump, onComments, onShare, onOsShare, onJack
         avatar={avatar}
         time={timeAgo(item.created_at)}
         s={s}
-        rightChildren={<Text style={s.clearedVerb}>cleared a chart</Text>}
+        rightChildren={<Text style={s.clearedVerb}>{verb}</Text>}
       />
 
-      <View style={s.upscoreRow}>
-        <Pressable
-          onPress={() => onJacket(chartId, songTitle, mode, Number.isFinite(level) ? level : 0)}
-          hitSlop={4}
-          style={({ pressed }) => [pressed && { opacity: 0.7 }]}>
-          <ChartJacket jacketUrl={jacket} mode={mode} level={Number.isFinite(level) ? level : undefined} size="sm" />
-        </Pressable>
-        <View style={s.entryMain}>
-          <Text style={s.songTitle} numberOfLines={1}>{songTitle}</Text>
-          <View style={s.metaChipsRow}>
-            <PlateBadge plate={plate} size="xs" />
-          </View>
-        </View>
-        <Pressable
-          onPress={() => onScore(buildScore())}
-          hitSlop={4}
-          style={({ pressed }) => [s.scoresCol, pressed && { opacity: 0.7 }]}>
-          <Text style={s.scoreNum}>{fmtNum(score)}</Text>
-          <GradeChip grade={grade} score={score} size="sm" />
-        </Pressable>
+      <View style={s.entriesList}>
+        {visible.map((c, i) => {
+          const jacketUrl = typeof c.jacket_url === 'string' ? fullImageUrl(c.jacket_url) : undefined;
+          const chartId = Number(c.chart_id) || 0;
+          const lvl = Number(c.level);
+          const lvlSafe = Number.isFinite(lvl) ? lvl : undefined;
+          return (
+            <View key={i} style={s.upscoreRow}>
+              <Pressable
+                onPress={() => onJacket(chartId, c.song_title || '', c.mode || '', lvl || 0)}
+                hitSlop={4}
+                style={({ pressed }) => [pressed && { opacity: 0.7 }]}>
+                <ChartJacket jacketUrl={jacketUrl} mode={c.mode} level={lvlSafe} size="sm" />
+              </Pressable>
+              <View style={s.entryMain}>
+                <Text style={s.songTitle} numberOfLines={1}>{c.song_title || 'Unknown song'}</Text>
+                <View style={s.metaChipsRow}>
+                  <PlateBadge plate={c.plate} size="xs" />
+                  {typeof c.over_top100_rank === 'number' && c.over_top100_rank > 0 ? (
+                    <Text style={s.topRankChip}>TOP #{c.over_top100_rank}</Text>
+                  ) : null}
+                </View>
+              </View>
+              <Pressable
+                onPress={() => onScore(buildScore(c))}
+                hitSlop={4}
+                style={({ pressed }) => [s.scoresCol, pressed && { opacity: 0.7 }]}>
+                <Text style={s.scoreNum} numberOfLines={1}>{fmtNum(c.score)}</Text>
+                <GradeChip grade={c.grade} score={Number(c.score) || 0} size="xs" />
+              </Pressable>
+              {onReplay && c.replay_embed_url ? (
+                <Pressable
+                  onPress={() => onReplay(c.replay_embed_url as string, `${c.song_title || 'Song'} · ${c.mode || ''}${c.level ? ` ${c.level}` : ''}`)}
+                  hitSlop={6}
+                  style={({ pressed }) => [s.replayBtn, pressed && { opacity: 0.7 }]}>
+                  <IconSymbol name="play.rectangle.fill" size={14} color="#7dd3fc" />
+                </Pressable>
+              ) : null}
+            </View>
+          );
+        })}
       </View>
+
+      {hasMore ? (
+        <Pressable onPress={() => setShowAll((v) => !v)} hitSlop={8}>
+          <Text style={[s.showMoreBtn, { color: theme.accent }]}>
+            {showAll ? 'Show less' : `Show ${entries.length - 5} more`}
+          </Text>
+        </Pressable>
+      ) : null}
 
       <ActionFooter item={item} s={s} onPump={onPump} onComments={onComments} onShare={onShare} onOsShare={onOsShare} />
     </View>
@@ -913,6 +1001,7 @@ function FeedFlatList({
             onOsShare={onOsShare}
             onJacket={onJacket}
             onScore={onScore}
+            onReplay={onReplay}
           />
         );
       }
