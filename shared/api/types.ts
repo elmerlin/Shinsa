@@ -944,6 +944,9 @@ export interface LiveSessionSummary {
   live_url?: string;
   session_type?: string;
   is_unlisted?: boolean | number;
+  /** The server nests the host here (normalizeSessionPayload), not at the
+   *  directory-item top level. The home card must read session.host. */
+  host?: LiveSessionHost;
   [key: string]: unknown;
 }
 
