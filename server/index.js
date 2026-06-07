@@ -59,12 +59,56 @@ app.use(express.json({
 }));
 
 // Combined dashboard endpoint — single request instead of 3
+// The dashboard is a LIST endpoint, but tournament rows can carry multi-MB
+// base64 blobs meant only for detail/poster pages: `gif_avatar`, `poster_bg`,
+// and base64 avatars embedded inside `placement_snapshots` entries (one
+// observed at 5.4 MB — a single tournament's snapshots totalled ~20 MB,
+// blowing the response to 24 MB / 17 s and tripping the client's 8 s timeout).
+// List cards only need the rank+name placings preview and scalar fields, so
+// drop the base64 payloads here. Small URL avatars/posters are left intact.
+// Runs AFTER enrichment so it also catches base64 avatars in the
+// participant_preview that enrichTournamentSummaries adds.
+function isDataUri(v) {
+  return typeof v === 'string' && v.startsWith('data:');
+}
+function slimTournamentForList(t) {
+  const out = { ...t };
+  // Drop ANY base64 data-URI blob on the row (avatar, gif_avatar, poster_bg,
+  // and any future column) — these are detail/editor-only and each can be
+  // hundreds of KB to multiple MB. Small URL/path values are untouched.
+  for (const k of Object.keys(out)) {
+    if (isDataUri(out[k])) out[k] = '';
+  }
+  if (Array.isArray(out.participant_preview)) {
+    out.participant_preview = out.participant_preview.map((p) =>
+      p && isDataUri(p.avatar) ? { ...p, avatar: '' } : p
+    );
+  }
+  if (out.placement_snapshots) {
+    try {
+      const parsed = typeof out.placement_snapshots === 'string'
+        ? JSON.parse(out.placement_snapshots)
+        : out.placement_snapshots;
+      if (parsed && typeof parsed === 'object') {
+        for (const bucket of Object.values(parsed)) {
+          if (!Array.isArray(bucket)) continue;
+          for (const entry of bucket) {
+            if (entry && isDataUri(entry.avatar)) entry.avatar = '';
+          }
+        }
+        out.placement_snapshots = JSON.stringify(parsed);
+      }
+    } catch { /* unparseable — leave as-is */ }
+  }
+  return out;
+}
+
 app.get('/api/dashboard', (req, res) => {
   const db = getDb();
   let tournaments = [], duels = [], notices = [];
   try {
     const rows = db.prepare('SELECT * FROM tournaments WHERE archived = 0 ORDER BY created_at DESC LIMIT 50').all();
-    tournaments = enrichTournamentSummaries(db, rows);
+    tournaments = enrichTournamentSummaries(db, rows).map(slimTournamentForList);
   } catch (e) {
     console.error('Dashboard tournaments:', e.message);
   }
