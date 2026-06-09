@@ -26,6 +26,7 @@ import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { useWebPush } from '@/hooks/use-web-push';
 import { externalApi, piugameApi, youtubeApi } from '@/lib/api';
+import { syncHeartRateAfterPiugameSync } from '@/lib/heartRateSync';
 import type { ThemeColors } from '@/constants/theme';
 import type { ApiTokenRow } from '@shared/api';
 
@@ -123,6 +124,9 @@ function PiugameLinkSection({ s, userId }: { s: Styles; userId: string }) {
         tone: 'ok',
         text: `Synced ${data.plays_count ?? 0} recent plays · ${data.scores_updated ?? 0} best scores updated`,
       });
+      // iOS-only, fire-and-forget: pull Apple Watch HR for the freshly-synced
+      // plays and attach it. No-op off iOS / without HealthKit permission.
+      void syncHeartRateAfterPiugameSync(userId);
     },
     onError: (err) => {
       setFeedback({ tone: 'err', text: err instanceof Error ? err.message : 'Failed to sync recently played' });

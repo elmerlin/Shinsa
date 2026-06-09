@@ -55,6 +55,12 @@
         {
           "locationAlwaysAndWhenInUsePermission": "Shinsa uses your location to confirm you're at the dojo so check-ins stay accurate and auto-close when you leave."
         }
+      ],
+      [
+        "@kingstinct/react-native-healthkit",
+        {
+          "NSHealthShareUsageDescription": "Shinsa reads your heart rate from your Apple Watch workouts so it can show your BPM and cardio zones on the scores you play."
+        }
       ]
     ],
     "experiments": {
