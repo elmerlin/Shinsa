@@ -60,7 +60,9 @@
       [
         "@kingstinct/react-native-healthkit",
         {
-          "NSHealthShareUsageDescription": "Shinsa reads your heart rate from your Apple Watch workouts so it can show your BPM and cardio zones on the scores you play."
+          "NSHealthShareUsageDescription": "Shinsa reads your heart rate from your Apple Watch workouts so it can show your BPM and cardio zones on the scores you play.",
+          "NSHealthUpdateUsageDescription": false,
+          "background": false
         }
       ]
     ],
