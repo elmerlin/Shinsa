@@ -2,7 +2,7 @@
   "expo": {
     "name": "Shinsa",
     "slug": "shinsa",
-    "version": "1.0.21",
+    "version": "1.0.22",
     "orientation": "portrait",
     "icon": "./assets/brand/app-icon.png",
     "scheme": "shinsa",
@@ -18,11 +18,15 @@
     },
     "android": {
       "package": "com.shinsa.app",
-      "versionCode": 21,
+      "versionCode": 22,
       "permissions": [
         "REQUEST_INSTALL_PACKAGES",
         "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION"
+        "ACCESS_FINE_LOCATION",
+        "android.permission.health.READ_HEART_RATE",
+        "android.permission.health.READ_EXERCISE",
+        "android.permission.health.READ_ACTIVE_CALORIES_BURNED",
+        "android.permission.health.READ_TOTAL_CALORIES_BURNED"
       ],
       "adaptiveIcon": {
         "backgroundColor": "#050505",
@@ -64,7 +68,16 @@
           "NSHealthUpdateUsageDescription": "Shinsa only reads your heart rate to display it on your scores — it does not write any data to Apple Health.",
           "background": false
         }
-      ]
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 26
+          }
+        }
+      ],
+      "./plugins/with-health-connect"
     ],
     "experiments": {
       "typedRoutes": true,

@@ -124,8 +124,9 @@ function PiugameLinkSection({ s, userId }: { s: Styles; userId: string }) {
         tone: 'ok',
         text: `Synced ${data.plays_count ?? 0} recent plays · ${data.scores_updated ?? 0} best scores updated`,
       });
-      // iOS-only, fire-and-forget: pull Apple Watch HR for the freshly-synced
-      // plays and attach it. No-op off iOS / without HealthKit permission.
+      // Fire-and-forget: pull watch HR for the freshly-synced plays and
+      // attach it (HealthKit on iOS, Health Connect on Android — Garmin/
+      // Fitbit/Samsung/etc). No-op on web / without permission.
       void syncHeartRateAfterPiugameSync(userId);
     },
     onError: (err) => {
