@@ -41,6 +41,7 @@ const SECONDARY_NAV: NavItem[] = [
   { label: 'What to play', path: '/what-to-play' },
   { label: 'Rival', path: '/head-to-head' },
   { label: 'Skills', path: '/skill' },
+  { label: 'Cardio', path: '/cardio' },
   { label: 'Leaderboards', path: '/leaderboards' },
   { label: 'World Max', path: '/world-max', stub: true },
   { label: 'Shoes', path: '/shoes' },
@@ -182,6 +183,7 @@ export default function DrawerLayout() {
       <Drawer.Screen name="shoes" options={{ drawerItemStyle: { display: 'none' } }} />
       <Drawer.Screen name="messages" options={{ drawerItemStyle: { display: 'none' } }} />
       <Drawer.Screen name="pet" options={{ drawerItemStyle: { display: 'none' } }} />
+      <Drawer.Screen name="cardio" options={{ drawerItemStyle: { display: 'none' } }} />
       <Drawer.Screen name="account" options={{ drawerItemStyle: { display: 'none' } }} />
       <Drawer.Screen name="changelog" options={{ drawerItemStyle: { display: 'none' } }} />
     </Drawer>
