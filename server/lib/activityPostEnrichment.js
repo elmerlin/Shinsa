@@ -27,6 +27,37 @@ function toInt(value) {
   return Number.isFinite(numeric) ? numeric : 0;
 }
 
+const playHrByIdStmtCache = new WeakMap();
+function getPlayHrByIdStmt(db) {
+  return getCachedStmt(playHrByIdStmtCache, db, `
+    SELECT hr_avg, hr_peak, hr_min, hr_series, hr_source
+    FROM user_recently_played WHERE id = ?
+  `);
+}
+
+// Attach per-play heart rate by play_id. HR lives only on user_recently_played
+// (never in the denormalized feed JSON), so it's looked up exactly by id once
+// play_id is resolved. Only attaches when HR actually exists, to keep the
+// feed payload lean for the (currently common) no-HR case.
+function attachHeartRateById(db, entry) {
+  if (!entry || entry.hr_avg != null) return entry;
+  const playId = toInt(entry.play_id);
+  if (!playId) return entry;
+  const row = getPlayHrByIdStmt(db).get(playId);
+  if (!row) return entry;
+  const avg = toInt(row.hr_avg);
+  const peak = toInt(row.hr_peak);
+  if (avg <= 0 && peak <= 0) return entry;
+  return {
+    ...entry,
+    hr_avg: avg,
+    hr_peak: peak,
+    hr_min: toInt(row.hr_min),
+    hr_series: row.hr_series || '',
+    hr_source: row.hr_source || '',
+  };
+}
+
 function normalizeString(value) {
   return String(value || '').trim();
 }
@@ -510,7 +541,7 @@ function enrichUpscoreRows(db, userId, rows = [], createdAt = '') {
       level: item?.level,
       score: item?.new_score,
     });
-    return mergeReplayMetadata(enriched, lookup);
+    return attachHeartRateById(db, mergeReplayMetadata(enriched, lookup));
   });
 }
 
@@ -678,7 +709,7 @@ function enrichClearRows(db, userId, rows = [], createdAt = '') {
       level: item?.level,
       score: item?.score,
     });
-    return applyChartMetadata(db, mergeReplayMetadata(enriched, lookup));
+    return attachHeartRateById(db, applyChartMetadata(db, mergeReplayMetadata(enriched, lookup)));
   });
 }
 

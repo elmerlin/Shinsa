@@ -16,6 +16,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { HeartRateStrip } from '@/components/heart-rate-strip';
 import { PlateBadge } from '@/components/plate-badge';
 import { SendToMessageSheet } from '@/components/messages/send-to-message-sheet';
 import { ScoreCommentsSheet } from '@/components/score-comments-sheet';
@@ -63,6 +64,12 @@ export interface ScoreCardData {
   date_played?: string;
   machine_name?: string;
   replay_embed_url?: string;
+  /** Heart rate captured from HealthKit during this play (iOS/Apple Watch). */
+  hr_avg?: number;
+  hr_peak?: number;
+  hr_min?: number;
+  hr_series?: string | number[];
+  hr_source?: string;
 }
 
 interface Props {
@@ -423,6 +430,13 @@ export function ScoreCardSheet({ visible, data, onClose, onReplay }: Props) {
               </View>
 
               <JudgmentGrid data={data} s={s} />
+
+              <HeartRateStrip
+                avg={data.hr_avg}
+                peak={data.hr_peak}
+                series={data.hr_series}
+                source={data.hr_source}
+              />
 
               {/* Action chips — match the web ScoreSnapshotModal action set:
                   Comment / Send to DM / Challenge / Share link / Close. */}

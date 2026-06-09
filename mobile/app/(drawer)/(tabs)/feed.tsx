@@ -538,6 +538,11 @@ interface ClearEntry {
   played_at_utc?: string;
   date_played?: string;
   machine_name?: string;
+  hr_avg?: number;
+  hr_peak?: number;
+  hr_min?: number;
+  hr_series?: string | number[];
+  hr_source?: string;
 }
 
 export function ClearCard({ item, onPump, onComments, onShare, onOsShare, onJacket, onScore, onReplay, s }: {
@@ -584,6 +589,10 @@ export function ClearCard({ item, onPump, onComments, onShare, onOsShare, onJack
     replay_embed_url: typeof itemRec.replay_embed_url === 'string' ? itemRec.replay_embed_url : undefined,
     played_at_utc: typeof itemRec.played_at_utc === 'string' ? itemRec.played_at_utc : undefined,
     machine_name: typeof itemRec.machine_name === 'string' ? itemRec.machine_name : undefined,
+    hr_avg: Number(itemRec.hr_avg) || undefined,
+    hr_peak: Number(itemRec.hr_peak) || undefined,
+    hr_series: typeof itemRec.hr_series === 'string' ? itemRec.hr_series : undefined,
+    hr_source: typeof itemRec.hr_source === 'string' ? itemRec.hr_source : undefined,
   }];
 
   const visible = showAll ? entries : entries.slice(0, 5);
@@ -619,6 +628,10 @@ export function ClearCard({ item, onPump, onComments, onShare, onOsShare, onJack
     played_at_utc: c.played_at_utc,
     machine_name: c.machine_name,
     replay_embed_url: c.replay_embed_url,
+    hr_avg: Number(c.hr_avg) || undefined,
+    hr_peak: Number(c.hr_peak) || undefined,
+    hr_series: c.hr_series,
+    hr_source: c.hr_source,
     username: item.username,
     avatar: typeof item.avatar === 'string' ? item.avatar : undefined,
   });
