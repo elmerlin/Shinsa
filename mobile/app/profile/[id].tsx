@@ -40,6 +40,7 @@ import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { useWebPullToRefresh } from '@/hooks/use-web-pull-to-refresh';
 import { authApi, liveApi, messagesApi, piugameApi, socialApi, songsApi, weeklyChallengesApi } from '@/lib/api';
+import { syncHeartRateAfterPiugameSync } from '@/lib/heartRateSync';
 import { getMessagesInboxQueryKey } from '@/lib/messagesQueries';
 import { getGradeDisplayLabel, getGradeTier, TIER_COLORS } from '@/lib/grades';
 import { fullImageUrl } from '@/lib/images';
@@ -627,6 +628,20 @@ export function ProfileBody({ lookup }: { lookup: string }) {
         'Sync complete',
         `${plays} recent play${plays === 1 ? '' : 's'} pulled · ${scores} best score${scores === 1 ? '' : 's'} updated.`,
       );
+      // Attach watch heart rate to the freshly-synced plays (HealthKit /
+      // Health Connect) — this sync button MUST mirror the Account one;
+      // the original HR-capture bug was exactly this call missing here.
+      // Only interesting outcomes get a second notice; 'no-data'/'unavailable'
+      // stay quiet so watch-less users aren't nagged on every sync.
+      void syncHeartRateAfterPiugameSync(profileId).then((hr) => {
+        if (hr.state === 'uploaded' && hr.uploaded > 0) {
+          notify('Heart rate added', `❤️ BPM attached to ${hr.uploaded} play${hr.uploaded === 1 ? '' : 's'}.`);
+        } else if (hr.state === 'denied') {
+          notify('Heart rate skipped', 'Health access not granted — enable it in Settings to see BPM on your scores.');
+        } else if (hr.state === 'error') {
+          notify('Heart rate error', hr.message);
+        }
+      });
     },
     onError: (err) => {
       notify(
