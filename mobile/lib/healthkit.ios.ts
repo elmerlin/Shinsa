@@ -24,24 +24,23 @@ function toMs(value: unknown): number {
   return Number.isFinite(t) ? t : 0;
 }
 
+// Dev-only self-test at import: surfaces native-layer failures in the Metro
+// console at app launch (no auth/sync needed to see them).
+declare const __DEV__: boolean;
+
 export const healthKit: HealthKitReader = {
   async isAvailable() {
-    try {
-      return await isHealthDataAvailableAsync();
-    } catch {
-      return false;
-    }
+    // No catch: let native/Nitro failures propagate so the sync feedback can
+    // show the real error instead of a silent "no HealthKit on this device".
+    return await isHealthDataAvailableAsync();
   },
 
   async requestPermissions() {
-    try {
-      // Read-only: heart rate, active energy (calories), and workouts.
-      return await requestAuthorization({
-        toRead: [HEART_RATE, ACTIVE_ENERGY, WorkoutTypeIdentifier] as never,
-      });
-    } catch {
-      return false;
-    }
+    // Read-only: heart rate, active energy (calories), and workouts.
+    // No catch — see isAvailable.
+    return await requestAuthorization({
+      toRead: [HEART_RATE, ACTIVE_ENERGY, WorkoutTypeIdentifier] as never,
+    });
   },
 
   async getWorkoutsInRange(fromMs, toMs2) {
@@ -66,7 +65,8 @@ export const healthKit: HealthKitReader = {
           } as WorkoutWindow;
         })
         .filter((w) => w.start > 0 && w.end > w.start);
-    } catch {
+    } catch (e) {
+      console.warn('[healthkit] queryWorkoutSamples failed:', e);
       return [];
     }
   },
@@ -83,8 +83,16 @@ export const healthKit: HealthKitReader = {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .map((s: any) => ({ t: toMs(s.startDate), bpm: Math.round(Number(s.quantity) || 0) }))
         .filter((s) => s.t > 0 && s.bpm > 0);
-    } catch {
+    } catch (e) {
+      console.warn('[healthkit] queryQuantitySamples failed:', e);
       return [];
     }
   },
 };
+
+if (__DEV__) {
+  healthKit
+    .isAvailable()
+    .then((ok) => console.log('[healthkit] self-test: isAvailable =', ok))
+    .catch((e) => console.warn('[healthkit] self-test threw:', e));
+}

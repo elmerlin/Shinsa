@@ -88,18 +88,31 @@ function pickBestWorkout(workouts: WorkoutWindow[], plays: StampedPlay[]): Worko
   return bestCount > 0 ? best : null;
 }
 
+/** Outcome of an HR pass — surfaced in the sync feedback so failures are
+ * visible instead of silently producing "no HR anywhere". */
+export type HrSyncResult =
+  | { state: 'unavailable' }   // no HealthKit / Health Connect on this device
+  | { state: 'denied' }        // permission not granted
+  | { state: 'no-data' }       // permission OK, but no HR samples in the play windows
+  | { state: 'uploaded'; uploaded: number }
+  | { state: 'error'; message: string };  // native layer threw — message names it
+
 /**
- * Correlate HR for the given plays and upload. Returns the number of plays that
- * got HR, or null when HealthKit is unavailable / not authorized / no data.
+ * Correlate HR for the given plays and upload. Returns a discriminated status —
+ * never throws.
  */
-export async function syncHeartRateForPlays(plays: SyncablePlay[]): Promise<{ uploaded: number } | null> {
-  if (!(await healthKit.isAvailable())) return null;
-  if (!(await healthKit.requestPermissions())) return null;
+export async function syncHeartRateForPlays(plays: SyncablePlay[]): Promise<HrSyncResult> {
+  try {
+    if (!(await healthKit.isAvailable())) return { state: 'unavailable' };
+    if (!(await healthKit.requestPermissions())) return { state: 'denied' };
+  } catch (e) {
+    return { state: 'error', message: String(e instanceof Error ? e.message : e).slice(0, 200) };
+  }
 
   const stamped: StampedPlay[] = plays
     .map((p) => ({ id: Number(p.id ?? p.play_id), t: parsePlayedAt(p) }))
     .filter((s) => Number.isFinite(s.id) && s.id > 0 && s.t > 0);
-  if (!stamped.length) return null;
+  if (!stamped.length) return { state: 'no-data' };
 
   const minT = Math.min(...stamped.map((s) => s.t)) - WINDOW_BEFORE_MS;
   const maxT = Math.max(...stamped.map((s) => s.t)) + WINDOW_AFTER_MS;
@@ -108,7 +121,7 @@ export async function syncHeartRateForPlays(plays: SyncablePlay[]): Promise<{ up
     healthKit.getHeartRateSamples(minT, maxT),
     healthKit.getWorkoutsInRange(minT, maxT),
   ]);
-  if (!samples.length) return { uploaded: 0 };
+  if (!samples.length) return { state: 'no-data' };
 
   const playUploads: HeartRatePlayUpload[] = [];
   for (const { id, t } of stamped) {
@@ -150,22 +163,26 @@ export async function syncHeartRateForPlays(plays: SyncablePlay[]): Promise<{ up
     }
   }
 
-  if (!playUploads.length && !session) return { uploaded: 0 };
+  if (!playUploads.length && !session) return { state: 'no-data' };
   await healthApi.uploadHeartRate({ plays: playUploads, session });
-  return { uploaded: playUploads.length };
+  return { state: 'uploaded', uploaded: playUploads.length };
 }
 
 /**
  * Convenience entry point for after a piugame recently-played sync: fetch the
- * user's recent plays, correlate HR, upload. Fire-and-forget; never throws.
+ * user's recent plays, correlate HR, upload. Never throws; returns the outcome
+ * so the sync UI can surface it.
  */
-export async function syncHeartRateAfterPiugameSync(userId: string): Promise<void> {
+export async function syncHeartRateAfterPiugameSync(userId: string): Promise<HrSyncResult> {
   try {
-    if (!userId || !(await healthKit.isAvailable())) return;
+    if (!userId) return { state: 'unavailable' };
     const res = await piugameApi.recentlyPlayed(userId, { limit: 50, sort: 'desc' });
     const plays = (res?.plays || []) as SyncablePlay[];
-    if (plays.length) await syncHeartRateForPlays(plays);
-  } catch {
-    // Best-effort — HR enrichment must never break the sync flow.
+    if (!plays.length) return { state: 'no-data' };
+    return await syncHeartRateForPlays(plays);
+  } catch (e) {
+    // Best-effort — HR enrichment must never break the sync flow, but the
+    // outcome must say what happened.
+    return { state: 'error', message: String(e instanceof Error ? e.message : e).slice(0, 200) };
   }
 }

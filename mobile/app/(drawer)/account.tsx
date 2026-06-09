@@ -120,14 +120,25 @@ function PiugameLinkSection({ s, userId }: { s: Styles; userId: string }) {
     mutationFn: () => piugameApi.syncRecentlyPlayed(),
     onSuccess: (data) => {
       syncStatusQuery.refetch();
-      setFeedback({
-        tone: 'ok',
-        text: `Synced ${data.plays_count ?? 0} recent plays · ${data.scores_updated ?? 0} best scores updated`,
+      const base = `Synced ${data.plays_count ?? 0} recent plays · ${data.scores_updated ?? 0} best scores updated`;
+      setFeedback({ tone: 'ok', text: base });
+      // Pull watch HR for the freshly-synced plays and attach it (HealthKit
+      // on iOS, Health Connect on Android — Garmin/Fitbit/Samsung/etc), then
+      // surface the outcome. 'unavailable' (web / no health store) stays
+      // quiet; everything else is shown so capture failures aren't invisible.
+      void syncHeartRateAfterPiugameSync(userId).then((hr) => {
+        if (hr.state === 'uploaded' && hr.uploaded > 0) {
+          setFeedback({ tone: 'ok', text: `${base} · ❤️ heart rate on ${hr.uploaded} plays` });
+        } else if (hr.state === 'denied') {
+          setFeedback({ tone: 'ok', text: `${base} · ❤️ Health access not granted` });
+        } else if (hr.state === 'no-data') {
+          setFeedback({ tone: 'ok', text: `${base} · ❤️ no heart-rate data for these plays` });
+        } else if (hr.state === 'error') {
+          setFeedback({ tone: 'ok', text: `${base} · ❤️ HR error: ${hr.message}` });
+        } else if (hr.state === 'unavailable' && Platform.OS === 'ios') {
+          setFeedback({ tone: 'ok', text: `${base} · ❤️ HealthKit unavailable on this device` });
+        }
       });
-      // Fire-and-forget: pull watch HR for the freshly-synced plays and
-      // attach it (HealthKit on iOS, Health Connect on Android — Garmin/
-      // Fitbit/Samsung/etc). No-op on web / without permission.
-      void syncHeartRateAfterPiugameSync(userId);
     },
     onError: (err) => {
       setFeedback({ tone: 'err', text: err instanceof Error ? err.message : 'Failed to sync recently played' });
