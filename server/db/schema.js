@@ -1964,12 +1964,45 @@ function initializeDb() {
     ['machine_name', "TEXT DEFAULT ''"],
     ['over_top100_rank', 'INT DEFAULT 0'],
     ['played_at_utc', "TEXT DEFAULT ''"],
+    // Heart-rate metrics for this play, captured from HealthKit (iOS, Apple
+    // Watch) and correlated to the play's time window. Stored server-side so
+    // every client can display them. 0 / '' means "no HR data".
+    ['hr_avg', 'INT DEFAULT 0'],
+    ['hr_peak', 'INT DEFAULT 0'],
+    ['hr_min', 'INT DEFAULT 0'],
+    ['hr_series', "TEXT DEFAULT ''"],   // JSON: downsampled [bpm,...] for the sparkline
+    ['hr_source', "TEXT DEFAULT ''"],   // 'workout' | 'samples'
   ];
   for (const [col, type] of recentMigrations) {
     if (!recentCols.includes(col)) {
       db.exec(`ALTER TABLE user_recently_played ADD COLUMN ${col} ${type}`);
     }
   }
+
+  // Per-workout cardio session summary (the "Fitness Gaming" workout that
+  // frames a play session). Powers the cardio/zones view. Keyed by the
+  // HealthKit workout UUID so re-uploads upsert instead of duplicating.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS user_cardio_sessions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      workout_uuid TEXT NOT NULL,
+      started_at_utc TEXT DEFAULT '',
+      ended_at_utc TEXT DEFAULT '',
+      duration_s INTEGER DEFAULT 0,
+      hr_avg INTEGER DEFAULT 0,
+      hr_peak INTEGER DEFAULT 0,
+      hr_min INTEGER DEFAULT 0,
+      calories REAL DEFAULT 0,
+      zone_seconds TEXT DEFAULT '',  -- JSON: { "z1":s, "z2":s, ... } BPM-band seconds
+      play_count INTEGER DEFAULT 0,
+      source TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(user_id, workout_uuid)
+    );
+    CREATE INDEX IF NOT EXISTS idx_cardio_sessions_user
+      ON user_cardio_sessions(user_id, started_at_utc DESC);
+  `);
 
   // Keep recently played history across syncs while preventing duplicate rows on re-import.
   const recentIndexes = db.prepare("PRAGMA index_list(user_recently_played)").all().map(i => i.name);
