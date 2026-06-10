@@ -134,6 +134,13 @@ interface WeeklyChallengePlay {
   /** User's rank on the chart's weekly leaderboard (1-based). */
   weekly_challenge_rank?: number;
   weekly_challenge_week_key?: string;
+  hr_avg?: number;
+  hr_peak?: number;
+  hr_series?: string;
+  hr_source?: string;
+  hr_duration_s?: number;
+  hr_max?: number;
+  song_duration_s?: number;
   perfect?: number;
   great?: number;
   good?: number;
@@ -834,6 +841,13 @@ function WeeklyChallengeCard({ item, onPump, onComments, onShare, onOsShare, onJ
                   play_id: play.play_id,
                   username: item.username,
                   avatar: typeof item.avatar === 'string' ? item.avatar : undefined,
+                  hr_avg: Number(play.hr_avg) || undefined,
+                  hr_peak: Number(play.hr_peak) || undefined,
+                  hr_series: typeof play.hr_series === 'string' ? play.hr_series : undefined,
+                  hr_source: typeof play.hr_source === 'string' ? play.hr_source : undefined,
+                  hr_duration_s: Number(play.hr_duration_s) || undefined,
+                  hr_max: Number(play.hr_max) || undefined,
+                  song_duration_s: Number(play.song_duration_s) || undefined,
                 })}
                 hitSlop={4}
                 style={({ pressed }) => [s.scoresCol, pressed && { opacity: 0.7 }]}>

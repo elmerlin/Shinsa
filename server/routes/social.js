@@ -24,6 +24,7 @@ const { splitWcSummaryContent } = require('../lib/weeklyChallengeSummaryMarker')
 const { splitWcPersonalContent } = require('../lib/weeklyChallengePersonalMarker');
 const {
   applyChartMetadata,
+  attachHeartRateById,
   enrichClearRecord,
   enrichUpscoreRecord,
   findSongChartMetadata,
@@ -1806,7 +1807,7 @@ router.get('/feed', requireAuth, (req, res) => {
       wcp.avatar = normalizeUserAvatarForList(wcp.avatar, wcp.user_id, 64);
       const parsedPlays = safeParseJsonArray(wcp.plays_json);
       const enrichedPlays = parsedPlays.map((play) =>
-        enrichWeeklyChallengePlayItem(db, wcp.user_id, wcp.created_at, play)
+        attachHeartRateById(db, enrichWeeklyChallengePlayItem(db, wcp.user_id, wcp.created_at, play), wcp.user_id)
       );
       wcp.plays_json = JSON.stringify(enrichedPlays);
 
@@ -3273,7 +3274,7 @@ router.get('/weekly-challenge-plays/:id', optionalAuth, (req, res) => {
 
   const parsedPlays = safeParseJsonArray(row.plays_json);
   const enrichedPlays = parsedPlays.map((play) =>
-    enrichWeeklyChallengePlayItem(db, row.user_id, row.created_at, play)
+    attachHeartRateById(db, enrichWeeklyChallengePlayItem(db, row.user_id, row.created_at, play), row.user_id)
   );
   row.plays_json = JSON.stringify(enrichedPlays);
 

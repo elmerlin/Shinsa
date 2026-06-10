@@ -788,6 +788,7 @@ function enrichClearRecord(db, clear) {
 
 module.exports = {
   applyChartMetadata,
+  attachHeartRateById,
   buildClearFallbackItem,
   enrichClearRecord,
   enrichClearRows,
