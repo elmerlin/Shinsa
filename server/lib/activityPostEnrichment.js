@@ -35,6 +35,29 @@ function getPlayHrByIdStmt(db) {
   `);
 }
 
+// Chart length from the songs catalog (duration_seconds — the same data that
+// times YouTube replay embeds). Shipped as song_duration_s so the HR chart's
+// time axis uses the real song length instead of the captured sample span.
+const songDurationByChartIdStmtCache = new WeakMap();
+const songDurationByTitleStmtCache = new WeakMap();
+function getSongDurationS(db, entry) {
+  const chartId = toInt(entry?.chart_id);
+  if (chartId > 0) {
+    const stmt = getCachedStmt(songDurationByChartIdStmtCache, db,
+      'SELECT duration_seconds FROM songs WHERE id = ?');
+    const d = toInt(stmt.get(chartId)?.duration_seconds);
+    if (d > 0) return d;
+  }
+  const title = normalizeString(entry?.song_title);
+  if (title) {
+    const stmt = getCachedStmt(songDurationByTitleStmtCache, db,
+      'SELECT duration_seconds FROM songs WHERE TRIM(title) = ? AND mode = ? AND level = ? LIMIT 1');
+    const d = toInt(stmt.get(title, normalizeString(entry?.mode), toInt(entry?.level))?.duration_seconds);
+    if (d > 0) return d;
+  }
+  return 0;
+}
+
 // Player's effective max HR (manual users.max_hr, else highest synced peak,
 // else 190) — shipped as hr_max so viewers render the PLAYER's zones.
 // Mirrors getHrProfile in routes/health.js.
@@ -71,6 +94,7 @@ function attachHeartRateById(db, entry, userId = '') {
     hr_source: row.hr_source || '',
     hr_duration_s: toInt(row.hr_duration_s),
     hr_max: getUserEffectiveMaxHr(db, userId),
+    song_duration_s: getSongDurationS(db, entry),
   };
 }
 

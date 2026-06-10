@@ -74,6 +74,8 @@ export interface ScoreCardData {
   hr_duration_s?: number;
   /** The player's effective max HR — personalizes the zone bands. */
   hr_max?: number;
+  /** Chart length from the songs catalog — preferred x-axis duration. */
+  song_duration_s?: number;
 }
 
 interface Props {
@@ -464,6 +466,7 @@ export function ScoreCardSheet({ visible, data, onClose, onReplay }: Props) {
                 series={data.hr_series}
                 source={data.hr_source}
                 durationS={data.hr_duration_s}
+                songDurationS={data.song_duration_s}
                 maxHr={data.hr_max}
               />
             </View>

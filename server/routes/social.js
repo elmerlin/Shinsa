@@ -2391,6 +2391,9 @@ router.get('/plays/:id', optionalAuth, (req, res) => {
 
   // Player's effective max HR so viewers render the player's zones.
   if ((parseInt(play.hr_avg, 10) || 0) > 0 || (parseInt(play.hr_peak, 10) || 0) > 0) {
+    play.song_duration_s = db.prepare(
+      'SELECT duration_seconds FROM songs WHERE TRIM(title) = TRIM(?) AND mode = ? AND level = ? LIMIT 1',
+    ).get(play.song_title, play.mode, play.level)?.duration_seconds || 0;
     play.hr_max = db.prepare(`
       SELECT COALESCE(NULLIF((SELECT max_hr FROM users WHERE id = ?), 0),
                       (SELECT MAX(hr_peak) FROM user_recently_played WHERE user_id = ? AND hr_peak > 0),

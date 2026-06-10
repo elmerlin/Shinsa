@@ -811,6 +811,7 @@ export interface WeeklyChallengeChartScoresResponse {
     level: number;
     jacket_url?: string;
     week_key: string;
+    duration_seconds?: number;
   };
   total_attempts: number;
   scores: WeeklyChallengeChartScore[];

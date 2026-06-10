@@ -10,8 +10,10 @@ interface Props {
   series?: unknown;
   /** 'workout' (watch session) or 'samples'. */
   source?: string;
-  /** Seconds the series spans (≈ song length) — renders the x-axis. */
+  /** Seconds the series spans (captured sample window). */
   durationS?: number;
+  /** The chart's catalog length (songs.duration_seconds) — preferred for the x-axis. */
+  songDurationS?: number;
   /** The PLAYER's effective max HR — places their personal zone bands. */
   maxHr?: number;
   /** Tighter layout for narrow contexts. */
@@ -32,7 +34,7 @@ const FALLBACK_DURATION_S = 115;
 // line chart drawn over horizontal stripes marking the player's personal
 // zones (% of their max HR). react-native-svg renders identically on web,
 // iOS and Android.
-export function HeartRateStrip({ avg, peak, series, source, durationS, maxHr, compact }: Props) {
+export function HeartRateStrip({ avg, peak, series, source, durationS, songDurationS, maxHr, compact }: Props) {
   const [chartW, setChartW] = useState(0);
   const avgBpm = Math.round(Number(avg) || 0);
   const peakBpm = Math.round(Number(peak) || 0);
@@ -41,7 +43,13 @@ export function HeartRateStrip({ avg, peak, series, source, durationS, maxHr, co
 
   const effectiveMax = Number(maxHr) >= 120 ? Number(maxHr) : DEFAULT_MAX_HR;
   const chartH = compact ? 44 : 84;
-  const dur = Number(durationS) > 0 ? Number(durationS) : (points.length > 1 ? FALLBACK_DURATION_S : 0);
+  // Axis priority: catalog song length (same source as replay embeds) →
+  // captured sample span → approximate capture window.
+  const dur = Number(songDurationS) > 0
+    ? Number(songDurationS)
+    : Number(durationS) > 0
+      ? Number(durationS)
+      : (points.length > 1 ? FALLBACK_DURATION_S : 0);
 
   // Y-range: pad around the series so the curve fills the chart, then snap to
   // zone boundaries when they're close so bands read cleanly.

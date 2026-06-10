@@ -225,8 +225,10 @@ export function ChartScoresSheet({ chartId, onClose }: Props) {
                             hr_source: score.hr_source,
                             hr_duration_s: score.hr_duration_s,
                             hr_max: score.hr_max,
+                            song_duration_s: chart?.duration_seconds,
                           })}
                           chartTitle={chart?.song_title || ''}
+                          chartDurationS={chart?.duration_seconds}
                           s={s}
                         />
                       ))
@@ -265,6 +267,7 @@ function ScoreRow({
   onReplay,
   onOpenCard,
   chartTitle,
+  chartDurationS,
   s,
 }: {
   score: WeeklyChallengeChartScore;
@@ -273,6 +276,7 @@ function ScoreRow({
   onReplay: (url: string, title: string) => void;
   onOpenCard: () => void;
   chartTitle: string;
+  chartDurationS?: number;
   s: Styles;
 }) {
   const avatar = typeof score.avatar === 'string' ? fullImageUrl(score.avatar) : undefined;
@@ -319,6 +323,7 @@ function ScoreRow({
               series={score.hr_series}
               source={score.hr_source}
               durationS={score.hr_duration_s}
+              songDurationS={chartDurationS}
               maxHr={score.hr_max}
             />
           </View>

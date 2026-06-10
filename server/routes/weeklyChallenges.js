@@ -592,6 +592,10 @@ router.get('/charts/:chartId/scores', (req, res) => {
       });
     }
 
+    const chartDuration = db.prepare(
+      'SELECT duration_seconds FROM songs WHERE TRIM(title) = TRIM(?) AND mode = ? AND level = ? LIMIT 1',
+    ).get(chart.song_title_snapshot, chart.mode, chart.level)?.duration_seconds || 0;
+
     res.json({
       chart: {
         id: chart.id,
@@ -601,6 +605,7 @@ router.get('/charts/:chartId/scores', (req, res) => {
         level: chart.level,
         jacket_url: chart.jacket_url_snapshot,
         week_key: chart.week_key,
+        duration_seconds: chartDuration,
       },
       total_attempts: rows.length,
       scores,
