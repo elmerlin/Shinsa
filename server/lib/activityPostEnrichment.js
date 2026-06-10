@@ -77,7 +77,21 @@ function getUserEffectiveMaxHr(db, userId) {
 // play_id is resolved. Only attaches when HR actually exists, to keep the
 // feed payload lean for the (currently common) no-HR case.
 function attachHeartRateById(db, entry, userId = '') {
-  if (!entry || entry.hr_avg != null) return entry;
+  if (!entry) return entry;
+  if (entry.hr_avg != null) {
+    // Already carries HR (enriched upstream) — backfill the zone/axis
+    // context if that pass predates hr_max/song_duration_s.
+    const avg = toInt(entry.hr_avg);
+    const peak = toInt(entry.hr_peak);
+    if ((avg > 0 || peak > 0) && entry.hr_max == null) {
+      return {
+        ...entry,
+        hr_max: getUserEffectiveMaxHr(db, userId),
+        song_duration_s: entry.song_duration_s ?? getSongDurationS(db, entry),
+      };
+    }
+    return entry;
+  }
   const playId = toInt(entry.play_id);
   if (!playId) return entry;
   const row = getPlayHrByIdStmt(db).get(playId);
