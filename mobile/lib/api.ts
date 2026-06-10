@@ -4,6 +4,7 @@ import {
   createCheckinsApi,
   createDashboardApi,
   createExternalApi,
+  createFridgeApi,
   createHealthApi,
   createLiveApi,
   createMessagesApi,
@@ -40,5 +41,6 @@ export const weeklyChallengesApi = createWeeklyChallengesApi(apiClient);
 export const youtubeApi = createYoutubeApi(apiClient);
 export const externalApi = createExternalApi(apiClient);
 export const healthApi = createHealthApi(apiClient);
+export const fridgeApi = createFridgeApi(apiClient);
 
 export const apiBaseUrl = baseUrl.replace(/\/$/, '');

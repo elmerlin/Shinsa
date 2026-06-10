@@ -14,4 +14,5 @@ export * from './weekly-challenges';
 export * from './youtube';
 export * from './external';
 export * from './health';
+export * from './fridge';
 export * from './types';

@@ -69,6 +69,37 @@ async function createDayPassPaymentLink({ userId, email, username, venueId, plan
 }
 
 /**
+ * Create a generic Quick Pay payment link (one name + one price). Used by the
+ * dojo fridge tab; venue passes keep their dedicated creator above.
+ */
+async function createQuickPayLink({ name, amountPence, currency = 'GBP', redirectPath = '/', paymentNote = '' }) {
+  const client = getSquareClient();
+  const { v4: uuidv4 } = require('uuid');
+
+  const result = await client.checkout.paymentLinks.create({
+    idempotencyKey: uuidv4(),
+    quickPay: {
+      name: String(name || 'Payment').slice(0, 255),
+      priceMoney: {
+        amount: BigInt(amountPence),
+        currency: currency.toUpperCase(),
+      },
+      locationId: SQUARE_LOCATION_ID,
+    },
+    checkoutOptions: {
+      redirectUrl: `${APP_URL}${redirectPath}`,
+    },
+    ...(paymentNote ? { paymentNote: String(paymentNote).slice(0, 500) } : {}),
+  });
+
+  return {
+    id: result.paymentLink.id,
+    url: result.paymentLink.url,
+    orderId: result.paymentLink.orderId,
+  };
+}
+
+/**
  * Create a Square Payment Link for a monthly subscription.
  * Requires a subscription plan variation to be set up in Square.
  * If no Square plan variation ID is provided, falls back to a one-off payment.
@@ -187,6 +218,7 @@ module.exports = {
   getSquareClient,
   isSquareConfigured,
   createDayPassPaymentLink,
+  createQuickPayLink,
   createSubscriptionPaymentLink,
   verifyWebhookSignature,
   cancelSquareSubscription,

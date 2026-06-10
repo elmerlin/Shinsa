@@ -1980,6 +1980,53 @@ function initializeDb() {
     }
   }
 
+  // Dojo fridge: honor-system tab for the mini fridge. Items are
+  // server-controlled (price in pence); tab entries accumulate per user and
+  // settle in one Square quick-pay payment (one fixed fee per settlement
+  // instead of per can). Informal by design — trusted/whitelisted community.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS fridge_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      emoji TEXT DEFAULT '',
+      price_pence INTEGER NOT NULL,
+      sort_order INTEGER DEFAULT 0,
+      active INTEGER DEFAULT 1
+    );
+    CREATE TABLE IF NOT EXISTS fridge_tab_entries (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      item_id INTEGER REFERENCES fridge_items(id) ON DELETE SET NULL,
+      item_name TEXT NOT NULL,
+      price_pence INTEGER NOT NULL,
+      qty INTEGER DEFAULT 1,
+      created_at TEXT DEFAULT (datetime('now')),
+      settling_payment_id INTEGER DEFAULT NULL,
+      settled_at TEXT DEFAULT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_fridge_tab_user ON fridge_tab_entries(user_id, settled_at);
+    CREATE TABLE IF NOT EXISTS fridge_payments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      amount_pence INTEGER NOT NULL,
+      status TEXT DEFAULT 'pending',
+      square_link_id TEXT DEFAULT '',
+      square_order_id TEXT DEFAULT '',
+      square_payment_id TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now')),
+      paid_at TEXT DEFAULT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_fridge_payments_user ON fridge_payments(user_id, status);
+  `);
+  if ((db.prepare('SELECT COUNT(*) AS c FROM fridge_items').get().c || 0) === 0) {
+    const seed = db.prepare('INSERT INTO fridge_items (name, emoji, price_pence, sort_order) VALUES (?, ?, ?, ?)');
+    seed.run('Soft Drink Can', '🥤', 100, 1);
+    seed.run('Energy Drink', '⚡', 200, 2);
+    seed.run('Bottle of Water', '💧', 100, 3);
+    seed.run('Energy Gel', '🍯', 150, 4);
+    seed.run('Pre-Workout', '🏋️', 150, 5);
+  }
+
   // Per-workout cardio session summary (the "Fitness Gaming" workout that
   // frames a play session). Powers the cardio/zones view. Keyed by the
   // HealthKit workout UUID so re-uploads upsert instead of duplicating.

@@ -42,6 +42,7 @@ const SECONDARY_NAV: NavItem[] = [
   { label: 'Rival', path: '/head-to-head' },
   { label: 'Skills', path: '/skill' },
   { label: 'Cardio', path: '/cardio' },
+  { label: 'Dojo Fridge', path: '/fridge' },
   { label: 'Leaderboards', path: '/leaderboards' },
   { label: 'World Max', path: '/world-max', stub: true },
   { label: 'Shoes', path: '/shoes' },
