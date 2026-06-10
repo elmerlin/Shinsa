@@ -24,6 +24,8 @@ import { DefaultAvatar } from '@/components/default-avatar';
 import { GradeChip } from '@/components/grade-chip';
 import { PlateBadge } from '@/components/plate-badge';
 import { ReplayModal } from '@/components/replay-modal';
+import { HeartRateStrip } from '@/components/heart-rate-strip';
+import { HrZoneBar } from '@/components/hr-zone-bar';
 import { ScoreCardSheet, type ScoreCardData } from '@/components/score-card-sheet';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { YouTubeEmbed } from '@/components/youtube-embed';
@@ -37,12 +39,14 @@ import { syncHeartRateAfterPiugameSync } from '@/lib/heartRateSync';
 
 // Chat composer: single-line baseline; grows with content up to ~5 lines.
 const COMPOSER_MIN_H = 36;
+import { hrZoneColor } from '@/lib/heartRate';
 import { fullImageUrl } from '@/lib/images';
 import { parseYouTubeUrl } from '@/lib/youtube';
 import type {
   LiveSessionFull,
   LiveSessionMessage,
   LiveSessionPlay,
+  LiveSessionHrBlock,
   LiveSessionSummaryPayload,
 } from '@shared/api';
 import type { ThemeColors } from '@/constants/theme';
@@ -542,11 +546,8 @@ export default function LiveSessionScreen() {
               {summary ? <SummaryStats summary={summary} s={s} /> : (
                 <Text style={s.playsEmpty}>Stats appear once the host has logged a play.</Text>
               )}
-              {!isLive && summary?.postText ? (
-                <View style={s.recapCard}>
-                  <Text style={s.recapEyebrow}>RECAP</Text>
-                  <Text style={s.recapText}>{summary.postText}</Text>
-                </View>
+              {!isLive && summary ? (
+                <RecapBlock summary={summary} onPlayPress={setSelectedPlay} s={s} />
               ) : null}
             </ScrollView>
           ) : null}
@@ -622,11 +623,8 @@ export default function LiveSessionScreen() {
               </View>
             ) : null}
 
-            {!isLive && summary?.postText ? (
-              <View style={s.recapCard}>
-                <Text style={s.recapEyebrow}>RECAP</Text>
-                <Text style={s.recapText}>{summary.postText}</Text>
-              </View>
+            {!isLive && summary ? (
+              <RecapBlock summary={summary} onPlayPress={setSelectedPlay} s={s} />
             ) : null}
           </ScrollView>
 
@@ -795,11 +793,8 @@ export default function LiveSessionScreen() {
 
             {/* Recap shows only after the session ends — during a live session we
                 don't surface the auto-generated post text in the viewer feed. */}
-            {!isLive && summary?.postText ? (
-              <View style={s.recapCard}>
-                <Text style={s.recapEyebrow}>RECAP</Text>
-                <Text style={s.recapText}>{summary.postText}</Text>
-              </View>
+            {!isLive && summary ? (
+              <RecapBlock summary={summary} onPlayPress={setSelectedPlay} s={s} />
             ) : null}
           </ScrollView>
 
@@ -1348,6 +1343,161 @@ function HeroCard({
   );
 }
 
+// Post-session recap: segmented [Recap | ♥ Heart rate]. Recap restores the
+// old pumpshinsa.com summary card's Top Plays (top 3 by score, top 3 by
+// rating); the HR slide shows the session curve over personal zone bands,
+// time-in-zone, and per-level intensity with S/D separated (D23 ≠ S23).
+function RecapBlock({ summary, onPlayPress, s }: {
+  summary: LiveSessionSummaryPayload;
+  onPlayPress: (play: LiveSessionPlay) => void;
+  s: Styles;
+}) {
+  const [tab, setTab] = useState<'recap' | 'hr'>('recap');
+  const hr = summary.hr;
+
+  return (
+    <View style={s.recapCard}>
+      <View style={s.recapSegRow}>
+        <Pressable
+          onPress={() => setTab('recap')}
+          style={({ pressed }) => [s.recapSegBtn, tab === 'recap' && s.recapSegBtnActive, pressed && { opacity: 0.8 }]}>
+          <Text style={[s.recapSegText, tab === 'recap' && s.recapSegTextActive]}>RECAP</Text>
+        </Pressable>
+        {hr ? (
+          <Pressable
+            onPress={() => setTab('hr')}
+            style={({ pressed }) => [s.recapSegBtn, tab === 'hr' && s.recapSegBtnActive, pressed && { opacity: 0.8 }]}>
+            <Text style={[s.recapSegText, tab === 'hr' && s.recapSegTextActive]}>♥ HEART RATE</Text>
+          </Pressable>
+        ) : null}
+      </View>
+
+      {tab === 'recap' ? (
+        <View style={s.recapBody}>
+          <TopPlaysTable title="Top 3 by score" rows={summary.topSongsByScore || []} type="score" onPlayPress={onPlayPress} s={s} />
+          <TopPlaysTable title="Top 3 by rating" rows={summary.topSongsByRating || []} type="rating" onPlayPress={onPlayPress} s={s} />
+          {summary.postText ? <Text style={s.recapText}>{summary.postText}</Text> : null}
+        </View>
+      ) : hr ? (
+        <SessionHrView hr={hr} s={s} />
+      ) : null}
+    </View>
+  );
+}
+
+function TopPlaysTable({ title, rows, type, onPlayPress, s }: {
+  title: string;
+  rows: LiveSessionPlay[];
+  type: 'score' | 'rating';
+  onPlayPress: (play: LiveSessionPlay) => void;
+  s: Styles;
+}) {
+  const list = Array.isArray(rows) ? rows.slice(0, 3) : [];
+  if (list.length === 0) return null;
+  return (
+    <View style={s.topTable}>
+      <Text style={s.topTableTitle}>{title.toUpperCase()}</Text>
+      {list.map((row, idx) => {
+        const value = type === 'score'
+          ? fmtNum(Number(row.score) || 0)
+          : fmtNum(Number((row as Record<string, unknown>)._rating ?? row.rating) || 0);
+        return (
+          <Pressable
+            key={`${row.id ?? idx}`}
+            onPress={() => onPlayPress(row)}
+            style={({ pressed }) => [s.topRow, pressed && { opacity: 0.7 }]}>
+            <Text style={s.topRank}>{idx + 1}</Text>
+            <ChartJacket
+              jacketUrl={typeof row.jacket_url === 'string' ? fullImageUrl(row.jacket_url) : (row.background_url ? fullImageUrl(row.background_url) : undefined)}
+              mode={row.mode}
+              level={row.level}
+              size="xs"
+            />
+            <View style={s.topMain}>
+              <Text style={s.topSong} numberOfLines={1}>{row.song_title || '—'}</Text>
+              {Number(row.over_top100_rank) > 0 ? (
+                <Text style={s.topBadge}>TOP #{Number(row.over_top100_rank)}</Text>
+              ) : null}
+            </View>
+            <View style={s.topValueCol}>
+              <Text style={[s.topValue, type === 'rating' && { color: '#7dd3fc' }]}>{value}</Text>
+              <GradeChip grade={row.grade} score={Number(row.score) || 0} size="xs" />
+            </View>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+function SessionHrView({ hr, s }: { hr: LiveSessionHrBlock; s: Styles }) {
+  const mins = Math.round((Number(hr.duration_s) || 0) / 60);
+  return (
+    <View style={s.recapBody}>
+      <View style={s.hrStatRow}>
+        <View style={s.hrStatCell}>
+          <Text style={[s.hrStatValue, { color: '#f87171' }]}>{hr.hr_avg || '—'}</Text>
+          <Text style={s.hrStatLabel}>AVG BPM</Text>
+        </View>
+        <View style={s.hrStatCell}>
+          <Text style={[s.hrStatValue, { color: hrZoneColor(hr.hr_peak, hr.max_hr) }]}>{hr.hr_peak || '—'}</Text>
+          <Text style={s.hrStatLabel}>PEAK BPM</Text>
+        </View>
+        <View style={s.hrStatCell}>
+          <Text style={s.hrStatValue}>{mins > 0 ? `${mins}m` : '—'}</Text>
+          <Text style={s.hrStatLabel}>SONG TIME</Text>
+        </View>
+        <View style={s.hrStatCell}>
+          <Text style={s.hrStatValue}>{hr.play_count}</Text>
+          <Text style={s.hrStatLabel}>PLAYS</Text>
+        </View>
+      </View>
+
+      <HeartRateStrip
+        avg={hr.hr_avg}
+        peak={hr.hr_peak}
+        series={hr.series}
+        durationS={hr.duration_s}
+        maxHr={hr.max_hr}
+      />
+
+      <HrZoneBar zoneSeconds={hr.zone_seconds || {}} />
+
+      {hr.peak_song ? (
+        <Text style={s.hrPeakSong}>
+          Highest HR: <Text style={s.hrPeakSongStrong}>{hr.peak_song.hr_peak} BPM</Text> on{' '}
+          {hr.peak_song.song_title} ({hr.peak_song.mode === 'Double' || String(hr.peak_song.mode).startsWith('D') ? 'D' : 'S'}{hr.peak_song.level})
+        </Text>
+      ) : null}
+
+      {hr.per_level.length > 0 ? (
+        <View style={s.hrLevelTable}>
+          <Text style={s.topTableTitle}>AVG HR BY LEVEL</Text>
+          {hr.per_level.map((g) => (
+            <View key={g.key} style={s.hrLevelRow}>
+              <Text style={[s.hrLevelKey, { color: g.mode === 'D' ? '#4cf4aa' : '#ff7a7a' }]}>{g.key}</Text>
+              <View style={s.hrLevelBarTrack}>
+                <View
+                  style={[
+                    s.hrLevelBarFill,
+                    {
+                      width: `${Math.min(100, Math.round((g.hr_avg / Math.max(1, hr.max_hr)) * 100))}%` as never,
+                      backgroundColor: hrZoneColor(g.hr_avg, hr.max_hr),
+                    },
+                  ]}
+                />
+              </View>
+              <Text style={s.hrLevelAvg}>{g.hr_avg}</Text>
+              <Text style={s.hrLevelPeak}>pk {g.hr_peak}</Text>
+              <Text style={s.hrLevelPlays}>×{g.plays}</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 function SummaryStats({ summary, s }: { summary: LiveSessionSummaryPayload; s: Styles }) {
   return (
     <View style={s.section}>
@@ -1821,6 +1971,70 @@ const makeStyles = (t: ThemeColors) => ({
     gap: 8,
   },
   recapEyebrow: { fontSize: 10, fontWeight: '900' as const, letterSpacing: 1.6, color: t.textDim },
+  recapSegRow: { flexDirection: 'row' as const, gap: 6, marginBottom: 10 },
+  recapSegBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: t.border,
+    backgroundColor: t.surfaceMuted,
+  },
+  recapSegBtnActive: { backgroundColor: t.accentTint, borderColor: t.accent },
+  recapSegText: { fontSize: 10, fontWeight: '900' as const, letterSpacing: 1, color: t.textMuted },
+  recapSegTextActive: { color: t.accent },
+  recapBody: { gap: 12 },
+
+  topTable: { gap: 6 },
+  topTableTitle: { fontSize: 10, fontWeight: '900' as const, letterSpacing: 1.2, color: t.textDim },
+  topRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8 },
+  topRank: { width: 14, fontSize: 12, fontWeight: '900' as const, color: t.textMuted, fontVariant: ['tabular-nums' as const] },
+  topMain: { flex: 1, minWidth: 0, gap: 2 },
+  topSong: { fontSize: 12, fontWeight: '800' as const, color: t.text },
+  topBadge: {
+    alignSelf: 'flex-start' as const,
+    fontSize: 8,
+    fontWeight: '900' as const,
+    color: '#FFE06B',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 999,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,196,0,0.55)',
+    backgroundColor: 'rgba(255,196,0,0.15)',
+    overflow: 'hidden' as const,
+    letterSpacing: 0.5,
+  },
+  topValueCol: { alignItems: 'flex-end' as const, gap: 2 },
+  topValue: { fontSize: 12, fontWeight: '900' as const, color: t.text, fontVariant: ['tabular-nums' as const] },
+
+  hrStatRow: { flexDirection: 'row' as const, gap: 6 },
+  hrStatCell: {
+    flex: 1,
+    alignItems: 'center' as const,
+    gap: 2,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: t.surfaceMuted,
+  },
+  hrStatValue: { fontSize: 16, fontWeight: '900' as const, color: t.text, fontVariant: ['tabular-nums' as const] },
+  hrStatLabel: { fontSize: 8, fontWeight: '800' as const, color: t.textDim, letterSpacing: 0.6 },
+  hrPeakSong: { fontSize: 12, color: t.textMuted, lineHeight: 17 },
+  hrPeakSongStrong: { fontWeight: '900' as const, color: '#f87171' },
+  hrLevelTable: { gap: 6 },
+  hrLevelRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8 },
+  hrLevelKey: { width: 34, fontSize: 12, fontWeight: '900' as const, fontVariant: ['tabular-nums' as const] },
+  hrLevelBarTrack: {
+    flex: 1,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: t.surfaceMuted,
+    overflow: 'hidden' as const,
+  },
+  hrLevelBarFill: { height: 8, borderRadius: 4 },
+  hrLevelAvg: { width: 30, textAlign: 'right' as const, fontSize: 12, fontWeight: '900' as const, color: t.text, fontVariant: ['tabular-nums' as const] },
+  hrLevelPeak: { width: 44, textAlign: 'right' as const, fontSize: 10, color: t.textMuted, fontVariant: ['tabular-nums' as const] },
+  hrLevelPlays: { width: 26, textAlign: 'right' as const, fontSize: 10, color: t.textDim, fontVariant: ['tabular-nums' as const] },
   recapText: { fontSize: 13, lineHeight: 19, color: t.text },
 
   // End-session header button (host only)

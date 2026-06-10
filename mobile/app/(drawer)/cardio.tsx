@@ -8,11 +8,12 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { HrZoneBar } from '@/components/hr-zone-bar';
 import { TopBar } from '@/components/top-bar';
 import { useTheme } from '@/contexts/theme-context';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { healthApi } from '@/lib/api';
-import { formatDuration, HR_ZONE_META, hrZoneColor } from '@/lib/heartRate';
+import { formatDuration, hrZoneColor } from '@/lib/heartRate';
 import type { CardioSession } from '@shared/api';
 import type { ThemeColors } from '@/constants/theme';
 
@@ -28,36 +29,6 @@ function formatSessionDate(raw?: string): string {
 
 type Styles = ReturnType<typeof useThemedStyles<ReturnType<typeof makeStyles>>>;
 
-// Horizontal stacked time-in-zone bar + a per-zone minute breakdown.
-function ZoneBar({ zoneSeconds, s }: { zoneSeconds: Record<string, number>; s: Styles }) {
-  const total = HR_ZONE_META.reduce((sum, z) => sum + (Number(zoneSeconds[z.key]) || 0), 0);
-  if (total <= 0) return null;
-  return (
-    <View style={s.zoneWrap}>
-      <View style={s.zoneBar}>
-        {HR_ZONE_META.map((z) => {
-          const sec = Number(zoneSeconds[z.key]) || 0;
-          if (sec <= 0) return null;
-          return <View key={z.key} style={{ flex: sec, backgroundColor: z.color }} />;
-        })}
-      </View>
-      <View style={s.zoneLegend}>
-        {HR_ZONE_META.map((z) => {
-          const sec = Number(zoneSeconds[z.key]) || 0;
-          if (sec <= 0) return null;
-          const pct = Math.round((sec / total) * 100);
-          return (
-            <View key={z.key} style={s.zoneLegendItem}>
-              <View style={[s.zoneDot, { backgroundColor: z.color }]} />
-              <Text style={s.zoneLegendLabel}>{z.label}</Text>
-              <Text style={s.zoneLegendVal}>{pct}%</Text>
-            </View>
-          );
-        })}
-      </View>
-    </View>
-  );
-}
 
 function CardioCard({ session, maxHr, s }: { session: CardioSession; maxHr?: number; s: Styles }) {
   const avg = Math.round(Number(session.hr_avg) || 0);
@@ -90,7 +61,7 @@ function CardioCard({ session, maxHr, s }: { session: CardioSession; maxHr?: num
         </View>
       </View>
 
-      <ZoneBar zoneSeconds={session.zone_seconds || {}} s={s} />
+      <HrZoneBar zoneSeconds={session.zone_seconds || {}} />
     </View>
   );
 }
@@ -186,19 +157,6 @@ const makeStyles = (t: ThemeColors) => ({
   statValue: { fontSize: 20, fontWeight: '900' as const, color: t.text, fontVariant: ['tabular-nums' as const] },
   statLabel: { fontSize: 9, fontWeight: '800' as const, color: t.textDim, letterSpacing: 0.6 },
 
-  zoneWrap: { gap: 8 },
-  zoneBar: {
-    flexDirection: 'row' as const,
-    height: 14,
-    borderRadius: 7,
-    overflow: 'hidden' as const,
-    backgroundColor: t.surfaceMuted,
-  },
-  zoneLegend: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 10 },
-  zoneLegendItem: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4 },
-  zoneDot: { width: 8, height: 8, borderRadius: 4 },
-  zoneLegendLabel: { fontSize: 10, fontWeight: '700' as const, color: t.textMuted },
-  zoneLegendVal: { fontSize: 10, fontWeight: '900' as const, color: t.text, fontVariant: ['tabular-nums' as const] },
 
   center: { paddingVertical: 40, alignItems: 'center' as const },
   empty: { alignItems: 'center' as const, gap: 8, paddingVertical: 36, paddingHorizontal: 12 },

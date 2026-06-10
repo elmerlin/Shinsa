@@ -145,6 +145,123 @@ function buildLiveSessionPostText(summary) {
   return lines.join('\n');
 }
 
+
+// ---- Session heart-rate block --------------------------------------------
+// Computed from the session's play rows (hr_* attached by getSessionPlays).
+// Zones are % of the player's max HR — keep these bands in sync with
+// mobile/lib/heartRate.ts (z0 below 68%, then 68/73/80/87/93).
+const HR_ZONE_BANDS = [
+  { key: 'z0', pctMin: 0, pctMax: 0.68 },
+  { key: 'z1', pctMin: 0.68, pctMax: 0.73 },
+  { key: 'z2', pctMin: 0.73, pctMax: 0.8 },
+  { key: 'z3', pctMin: 0.8, pctMax: 0.87 },
+  { key: 'z4', pctMin: 0.87, pctMax: 0.93 },
+  { key: 'z5', pctMin: 0.93, pctMax: 10 },
+];
+
+function parseHrSeriesJson(raw) {
+  if (typeof raw !== 'string' || !raw.trim()) return [];
+  try {
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr.map((v) => Math.round(Number(v) || 0)).filter((n) => n > 0 && n < 300) : [];
+  } catch {
+    return [];
+  }
+}
+
+function hrZoneKeyFor(bpm, maxHr) {
+  const pct = bpm / Math.max(1, maxHr);
+  for (const band of HR_ZONE_BANDS) {
+    if (pct >= band.pctMin && pct < band.pctMax) return band.key;
+  }
+  return 'z5';
+}
+
+function downsampleSeries(values, max) {
+  if (values.length <= max) return values;
+  const out = [];
+  for (let i = 0; i < max; i += 1) {
+    out.push(values[Math.round((i * (values.length - 1)) / (max - 1))]);
+  }
+  return out;
+}
+
+function buildSessionHrBlock(sortedRows) {
+  // sortedRows arrive newest-first; play the session forward for the chart.
+  const hrRows = sortedRows
+    .filter((r) => toInt(r.hr_avg) > 0 || toInt(r.hr_peak) > 0)
+    .slice()
+    .reverse();
+  if (hrRows.length === 0) return null;
+
+  const maxHr = Math.max(190, ...hrRows.map((r) => toInt(r.hr_max)).filter((n) => n > 0));
+
+  let stitched = [];
+  let totalDuration = 0;
+  let weightedAvgSum = 0;
+  let weightSum = 0;
+  let peak = 0;
+  let peakRow = null;
+  const zoneSeconds = {};
+  const levelGroups = new Map();
+
+  for (const row of hrRows) {
+    const avg = toInt(row.hr_avg);
+    const rowPeak = toInt(row.hr_peak);
+    const series = parseHrSeriesJson(row.hr_series);
+    const duration = toInt(row.hr_duration_s) || toInt(row.song_duration_s) || 115;
+
+    totalDuration += duration;
+    if (avg > 0) {
+      weightedAvgSum += avg * duration;
+      weightSum += duration;
+    }
+    if (rowPeak > peak) {
+      peak = rowPeak;
+      peakRow = row;
+    }
+    if (series.length > 0) {
+      stitched = stitched.concat(series);
+      const dwell = duration / series.length;
+      for (const bpm of series) {
+        const key = hrZoneKeyFor(bpm, maxHr);
+        zoneSeconds[key] = (zoneSeconds[key] || 0) + dwell;
+      }
+    } else if (avg > 0) {
+      const key = hrZoneKeyFor(avg, maxHr);
+      zoneSeconds[key] = (zoneSeconds[key] || 0) + duration;
+    }
+
+    const modeKey = String(row.mode || '').trim().toLowerCase().startsWith('d') ? 'D' : 'S';
+    const levelKey = `${modeKey}${toInt(row.level)}`;
+    const group = levelGroups.get(levelKey) || { key: levelKey, mode: modeKey, level: toInt(row.level), plays: 0, avgSum: 0, peak: 0 };
+    group.plays += 1;
+    group.avgSum += avg;
+    group.peak = Math.max(group.peak, rowPeak);
+    levelGroups.set(levelKey, group);
+  }
+
+  for (const k of Object.keys(zoneSeconds)) zoneSeconds[k] = Math.round(zoneSeconds[k]);
+
+  const perLevel = Array.from(levelGroups.values())
+    .map((g) => ({ key: g.key, mode: g.mode, level: g.level, plays: g.plays, hr_avg: g.plays > 0 ? Math.round(g.avgSum / g.plays) : 0, hr_peak: g.peak }))
+    .sort((a, b) => (a.level - b.level) || (a.mode === b.mode ? 0 : a.mode === 'S' ? -1 : 1));
+
+  return {
+    play_count: hrRows.length,
+    hr_avg: weightSum > 0 ? Math.round(weightedAvgSum / weightSum) : 0,
+    hr_peak: peak,
+    peak_song: peakRow
+      ? { song_title: String(peakRow.song_title || ''), mode: String(peakRow.mode || ''), level: toInt(peakRow.level), hr_peak: peak }
+      : null,
+    max_hr: maxHr,
+    zone_seconds: zoneSeconds,
+    per_level: perLevel,
+    series: downsampleSeries(stitched, 120),
+    duration_s: Math.round(totalDuration),
+  };
+}
+
 function buildLiveSessionSummary(rows, userProfile = {}, extras = {}) {
   const sourceRows = Array.isArray(rows) ? rows : [];
   if (sourceRows.length === 0) return null;
@@ -317,6 +434,7 @@ function buildLiveSessionSummary(rows, userProfile = {}, extras = {}) {
     topSongsByScore,
     topSongsByRating,
     topSongsByRatingPreview,
+    hr: buildSessionHrBlock(normalizedRows),
     viewerCount: Math.max(0, toInt(extras?.viewerCount)),
     viewerPeak: Math.max(0, toInt(extras?.viewerPeak)),
     messageCount: Math.max(0, toInt(extras?.messageCount)),

@@ -1067,6 +1067,18 @@ export interface LiveSessionPlay {
 /** Aggregate stats the server computes for the session. Includes top plays
  *  by score + rating, judgment totals, calorie estimate, etc. Used for the
  *  Summary panel in the viewer. */
+export interface LiveSessionHrBlock {
+  play_count: number;
+  hr_avg: number;
+  hr_peak: number;
+  peak_song: { song_title: string; mode: string; level: number; hr_peak: number } | null;
+  max_hr: number;
+  zone_seconds: Record<string, number>;
+  per_level: { key: string; mode: 'S' | 'D'; level: number; plays: number; hr_avg: number; hr_peak: number }[];
+  series: number[];
+  duration_s: number;
+}
+
 export interface LiveSessionSummaryPayload {
   version: number;
   sessionId: string;
@@ -1094,6 +1106,8 @@ export interface LiveSessionSummaryPayload {
   averageRating?: number;
   topSongsByScore?: LiveSessionPlay[];
   topSongsByRating?: LiveSessionPlay[];
+  /** Session heart-rate rollup — present when any play carried HR. */
+  hr?: LiveSessionHrBlock | null;
   viewerCount: number;
   viewerPeak: number;
   messageCount: number;
