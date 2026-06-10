@@ -543,6 +543,7 @@ interface ClearEntry {
   hr_min?: number;
   hr_series?: string | number[];
   hr_source?: string;
+  hr_duration_s?: number;
 }
 
 export function ClearCard({ item, onPump, onComments, onShare, onOsShare, onJacket, onScore, onReplay, s }: {
@@ -593,6 +594,7 @@ export function ClearCard({ item, onPump, onComments, onShare, onOsShare, onJack
     hr_peak: Number(itemRec.hr_peak) || undefined,
     hr_series: typeof itemRec.hr_series === 'string' ? itemRec.hr_series : undefined,
     hr_source: typeof itemRec.hr_source === 'string' ? itemRec.hr_source : undefined,
+    hr_duration_s: Number(itemRec.hr_duration_s) || undefined,
   }];
 
   const visible = showAll ? entries : entries.slice(0, 5);
@@ -632,6 +634,7 @@ export function ClearCard({ item, onPump, onComments, onShare, onOsShare, onJack
     hr_peak: Number(c.hr_peak) || undefined,
     hr_series: c.hr_series,
     hr_source: c.hr_source,
+    hr_duration_s: Number(c.hr_duration_s) || undefined,
     username: item.username,
     avatar: typeof item.avatar === 'string' ? item.avatar : undefined,
   });

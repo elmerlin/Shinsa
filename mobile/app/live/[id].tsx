@@ -33,6 +33,10 @@ import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { parseGrade } from '@/lib/grades';
 import { liveApi } from '@/lib/api';
+import { syncHeartRateAfterPiugameSync } from '@/lib/heartRateSync';
+
+// Chat composer: single-line baseline; grows with content up to ~5 lines.
+const COMPOSER_MIN_H = 36;
 import { fullImageUrl } from '@/lib/images';
 import { parseYouTubeUrl } from '@/lib/youtube';
 import type {
@@ -278,10 +282,33 @@ export default function LiveSessionScreen() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['live-session', id] });
       queryClient.invalidateQueries({ queryKey: ['live-sessions'] });
+      // Ending a session is the natural "I'm done playing" moment — attach
+      // watch heart rate to the session's plays, exactly like a manual
+      // recently-played sync would (no-op on web: HealthKit/Health Connect
+      // unavailable there; the next phone sync backfills instead, since the
+      // HR pass always re-covers the last 50 plays).
+      if (user?.id) {
+        void syncHeartRateAfterPiugameSync(user.id).then((hr) => {
+          if (hr.state === 'uploaded' && hr.uploaded > 0) {
+            Alert.alert('Heart rate added', `❤️ BPM attached to ${hr.uploaded} play${hr.uploaded === 1 ? '' : 's'} from this session.`);
+          } else if (hr.state === 'error') {
+            Alert.alert('Heart rate error', hr.message);
+          }
+        });
+      }
     },
   });
 
   const handleEnd = () => {
+    // RN-web's Alert can't render buttons (the dialog never shows), which
+    // made END silently do nothing on web — use window.confirm there.
+    if (Platform.OS === 'web') {
+      const ok = (globalThis as { confirm?: (msg: string) => boolean }).confirm?.(
+        'End your live session? A recap post will be created automatically.',
+      );
+      if (ok) endMutation.mutate();
+      return;
+    }
     Alert.alert(
       'End your live session?',
       'Your session will be marked as ended and a recap post will be created automatically.',
@@ -958,11 +985,22 @@ function ChatComposer({
 }) {
   const { theme } = useTheme();
   const [draft, setDraft] = useState('');
+  // Single line until content wraps (multiline TextInput otherwise renders
+  // ~2 lines tall when empty, especially on web where it maps to <textarea>).
+  const [composerH, setComposerH] = useState(COMPOSER_MIN_H);
+  const composerRef = useRef<TextInput>(null);
+
   const sendMutation = useMutation({
     mutationFn: (msg: string) => liveApi.sendMessage(sessionId, msg),
     onSuccess: () => {
       setDraft('');
+      setComposerH(COMPOSER_MIN_H);
       onSent();
+    },
+    onSettled: () => {
+      // editable={false} during the send blurs the input on web and focus
+      // doesn't come back when it re-enables — restore it after the re-render.
+      if (Platform.OS === 'web') setTimeout(() => composerRef.current?.focus(), 50);
     },
   });
 
@@ -976,9 +1014,13 @@ function ChatComposer({
     <KeyboardAvoidingView behavior="padding">
       <View style={[s.composer, { paddingBottom: bottomInset + 8 }]}>
         <TextInput
-          style={s.composerInput}
+          ref={composerRef}
+          style={[s.composerInput, { height: composerH }]}
           value={draft}
           onChangeText={setDraft}
+          onContentSizeChange={(e) =>
+            setComposerH(Math.min(100, Math.max(COMPOSER_MIN_H, Math.ceil(e.nativeEvent.contentSize.height))))
+          }
           placeholder="Drop into chat…"
           placeholderTextColor={theme.textDim}
           multiline

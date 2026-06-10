@@ -790,6 +790,15 @@ export interface WeeklyChallengeChartScore {
   play_id?: string | number;
   replay_embed_url?: string;
   background_url?: string;
+  played_at_utc?: string;
+  date_played?: string;
+  /** Heart rate captured during this play (HealthKit / Health Connect). */
+  hr_avg?: number;
+  hr_peak?: number;
+  hr_min?: number;
+  hr_series?: string;
+  hr_source?: string;
+  hr_duration_s?: number;
 }
 
 export interface WeeklyChallengeChartScoresResponse {

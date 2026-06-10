@@ -527,6 +527,7 @@ router.get('/charts/:chartId/scores', (req, res) => {
              rp.perfect, rp.great, rp.good, rp.bad, rp.miss, rp.max_combo,
              rp.background_url, rp.date_played, rp.played_at_utc,
              rp.replay_embed_url, rp.replay_video_id, rp.replay_start_seconds, rp.replay_end_seconds,
+             rp.hr_avg, rp.hr_peak, rp.hr_min, rp.hr_series, rp.hr_source, rp.hr_duration_s,
              u.username, u.avatar, u.avatar_v, u.nationality, u.skill_title
       FROM user_recently_played rp
       JOIN users u ON rp.user_id = u.id

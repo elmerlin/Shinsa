@@ -1972,6 +1972,7 @@ function initializeDb() {
     ['hr_min', 'INT DEFAULT 0'],
     ['hr_series', "TEXT DEFAULT ''"],   // JSON: downsampled [bpm,...] for the sparkline
     ['hr_source', "TEXT DEFAULT ''"],   // 'workout' | 'samples'
+    ['hr_duration_s', 'INT DEFAULT 0'], // span of the sampled window (x-axis for the sparkline)
   ];
   for (const [col, type] of recentMigrations) {
     if (!recentCols.includes(col)) {

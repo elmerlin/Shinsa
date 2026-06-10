@@ -6,3 +6,4 @@ dist/
 *.db-shm
 .DS_Store
 server/__pycache__/
+server/db/*.bak-*

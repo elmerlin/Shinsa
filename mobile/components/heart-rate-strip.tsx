@@ -8,15 +8,22 @@ interface Props {
   series?: unknown;
   /** 'workout' (Apple Watch session) or 'samples'. */
   source?: string;
+  /** Seconds the series spans (≈ song length) — renders the x-axis. */
+  durationS?: number;
   /** Tighter layout for narrow contexts. */
   compact?: boolean;
+}
+
+function fmtClock(totalSeconds: number): string {
+  const s = Math.max(0, Math.round(totalSeconds));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
 // A self-contained heart-rate readout for the dark score card: a ♥ avg/peak
 // header plus a zone-colored bar sparkline of the HR curve during the play.
 // No chart dependency — plain Views so it renders identically on web, iOS and
 // Android.
-export function HeartRateStrip({ avg, peak, series, source, compact }: Props) {
+export function HeartRateStrip({ avg, peak, series, source, durationS, compact }: Props) {
   const avgBpm = Math.round(Number(avg) || 0);
   const peakBpm = Math.round(Number(peak) || 0);
   const points = parseHrSeries(series);
@@ -70,8 +77,16 @@ export function HeartRateStrip({ avg, peak, series, source, compact }: Props) {
         </View>
       ) : null}
 
+      {points.length > 1 && Number(durationS) > 0 ? (
+        <View style={s.axis}>
+          <Text style={s.axisLabel}>0:00</Text>
+          <Text style={s.axisLabel}>{fmtClock(Number(durationS) / 2)}</Text>
+          <Text style={s.axisLabel}>{fmtClock(Number(durationS))}</Text>
+        </View>
+      ) : null}
+
       {source === 'workout' && !compact ? (
-        <Text style={s.source}>Apple Watch workout</Text>
+        <Text style={s.source}>Watch workout</Text>
       ) : null}
     </View>
   );
@@ -97,5 +112,7 @@ const s = StyleSheet.create({
   peakLabel: { fontSize: 9, fontWeight: '900', color: 'rgba(255,255,255,0.5)', letterSpacing: 1 },
   peak: { fontSize: 16, fontWeight: '900', fontVariant: ['tabular-nums'] },
   spark: { flexDirection: 'row', alignItems: 'flex-end' },
+  axis: { flexDirection: 'row', justifyContent: 'space-between', marginTop: -2 },
+  axisLabel: { fontSize: 9, fontWeight: '700', color: 'rgba(255,255,255,0.4)', fontVariant: ['tabular-nums'] },
   source: { fontSize: 9, fontWeight: '700', color: 'rgba(255,255,255,0.45)', letterSpacing: 0.4 },
 });

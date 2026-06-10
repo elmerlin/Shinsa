@@ -137,6 +137,8 @@ export async function syncHeartRateForPlays(plays: SyncablePlay[]): Promise<HrSy
       hr_peak: Math.max(...bpms),
       hr_min: Math.min(...bpms),
       hr_series: downsample(bpms, MAX_SERIES_POINTS),
+      // Actual span the samples cover (≈ song length) — the sparkline x-axis.
+      hr_duration_s: Math.round((win[win.length - 1].t - win[0].t) / 1000),
       source: inWorkout ? 'workout' : 'samples',
     });
   }

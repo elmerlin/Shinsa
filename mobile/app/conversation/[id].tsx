@@ -212,6 +212,10 @@ export function ConversationView({
     [query.data?.messages],
   );
 
+  // The composer input — refocused after a send on web, where the temporary
+  // editable={false} during the request blurs it and focus never returns.
+  const composerInputRef = useRef<TextInput>(null);
+
   const sendMutation = useMutation({
     mutationFn: (content: string) => messagesApi.sendMessage(conversationId, { content }),
     // Optimistic insert: render the bubble before the network call resolves.
@@ -249,6 +253,11 @@ export function ConversationView({
       void queryClient.invalidateQueries({ queryKey: threadKey });
       // Also refetch inbox so the row's last-message preview updates.
       void queryClient.invalidateQueries({ queryKey: getMessagesInboxQueryKey(user?.id) });
+    },
+    onSettled: () => {
+      // Restore focus after editable flips back to true (post-re-render),
+      // so the user can keep typing without clicking the field again.
+      if (Platform.OS === 'web') setTimeout(() => composerInputRef.current?.focus(), 50);
     },
   });
 
@@ -561,6 +570,7 @@ export function ConversationView({
           }}
           style={[s.composer, { paddingBottom: composerBottomPadding, marginBottom: keyboardGap }]}>
           <TextInput
+            ref={composerInputRef}
             style={s.input}
             value={draft}
             onChangeText={(value) => {

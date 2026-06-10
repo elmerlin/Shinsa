@@ -30,7 +30,7 @@ function toInt(value) {
 const playHrByIdStmtCache = new WeakMap();
 function getPlayHrByIdStmt(db) {
   return getCachedStmt(playHrByIdStmtCache, db, `
-    SELECT hr_avg, hr_peak, hr_min, hr_series, hr_source
+    SELECT hr_avg, hr_peak, hr_min, hr_series, hr_source, hr_duration_s
     FROM user_recently_played WHERE id = ?
   `);
 }
@@ -55,6 +55,7 @@ function attachHeartRateById(db, entry) {
     hr_min: toInt(row.hr_min),
     hr_series: row.hr_series || '',
     hr_source: row.hr_source || '',
+    hr_duration_s: toInt(row.hr_duration_s),
   };
 }
 

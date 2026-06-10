@@ -30,6 +30,8 @@ export interface HeartRatePlayUpload {
   hr_peak: number;
   hr_min?: number;
   hr_series?: number[];
+  /** Seconds spanned by the sampled window — the sparkline's x-axis. */
+  hr_duration_s?: number;
   source?: 'workout' | 'samples';
 }
 

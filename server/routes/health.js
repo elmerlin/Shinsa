@@ -49,7 +49,7 @@ router.post('/heart-rate', requireAuth, (req, res) => {
   // Ownership-checked update: only the caller's own plays can be annotated.
   const updateStmt = db.prepare(`
     UPDATE user_recently_played
-    SET hr_avg = ?, hr_peak = ?, hr_min = ?, hr_series = ?, hr_source = ?
+    SET hr_avg = ?, hr_peak = ?, hr_min = ?, hr_series = ?, hr_source = ?, hr_duration_s = ?
     WHERE id = ? AND user_id = ?
   `);
 
@@ -66,6 +66,7 @@ router.post('/heart-rate', requireAuth, (req, res) => {
         clampBpm(p?.hr_min),
         sanitizeSeries(p?.hr_series),
         normSource(p?.source),
+        Math.max(0, Math.min(3600, Math.round(Number(p?.hr_duration_s) || 0))),
         playId,
         userId,
       );

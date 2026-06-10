@@ -70,6 +70,7 @@ export interface ScoreCardData {
   hr_min?: number;
   hr_series?: string | number[];
   hr_source?: string;
+  hr_duration_s?: number;
 }
 
 interface Props {
@@ -431,13 +432,6 @@ export function ScoreCardSheet({ visible, data, onClose, onReplay }: Props) {
 
               <JudgmentGrid data={data} s={s} />
 
-              <HeartRateStrip
-                avg={data.hr_avg}
-                peak={data.hr_peak}
-                series={data.hr_series}
-                source={data.hr_source}
-              />
-
               {/* Action chips — match the web ScoreSnapshotModal action set:
                   Comment / Send to DM / Challenge / Share link / Close. */}
               <View style={s.actionRow}>
@@ -479,6 +473,18 @@ export function ScoreCardSheet({ visible, data, onClose, onReplay }: Props) {
               </View>
             </View>
           </View>
+
+          {(Number(data.hr_avg) || 0) > 0 || (Number(data.hr_peak) || 0) > 0 ? (
+            <View style={s.hrCard}>
+              <HeartRateStrip
+                avg={data.hr_avg}
+                peak={data.hr_peak}
+                series={data.hr_series}
+                source={data.hr_source}
+                durationS={data.hr_duration_s}
+              />
+            </View>
+          ) : null}
         </ScrollView>
       </View>
 
@@ -581,6 +587,15 @@ const makeStyles = (_t: ThemeColors) => ({
       },
       android: { elevation: 10 },
     }),
+  },
+  hrCard: {
+    width: '100%' as const,
+    maxWidth: 380,
+    borderRadius: 22,
+    padding: 12,
+    backgroundColor: '#0a0e18',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.12)',
   },
   bgFallback: { backgroundColor: '#0f1a2d' },
   overlay: { backgroundColor: 'rgba(6,10,18,0.62)' },

@@ -17,6 +17,7 @@ import { DefaultAvatar } from '@/components/default-avatar';
 import { GradeChip } from '@/components/grade-chip';
 import { PlateBadge } from '@/components/plate-badge';
 import { ReplayModal } from '@/components/replay-modal';
+import { ScoreCardSheet, type ScoreCardData } from '@/components/score-card-sheet';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/contexts/theme-context';
@@ -79,6 +80,7 @@ export function ChartScoresSheet({ chartId, onClose }: Props) {
   const { theme } = useTheme();
   const s = useThemedStyles(makeStyles);
   const [replayTarget, setReplayTarget] = useState<{ url: string; title: string } | null>(null);
+  const [scoreTarget, setScoreTarget] = useState<ScoreCardData | null>(null);
   const visible = chartId != null;
   const { isDesktop } = useBreakpoint();
 
@@ -195,6 +197,33 @@ export function ChartScoresSheet({ chartId, onClose }: Props) {
                           isMe={user?.id === score.user_id}
                           onProfile={() => goProfile(score.username)}
                           onReplay={(url, title) => setReplayTarget({ url, title })}
+                          onOpenCard={() => setScoreTarget({
+                            song_title: chart?.song_title,
+                            mode: chart?.mode,
+                            level: chart?.level,
+                            jacket_url: chart?.jacket_url,
+                            play_id: score.play_id,
+                            score: score.score,
+                            grade: score.grade,
+                            plate: score.plate ?? undefined,
+                            perfect: score.perfect,
+                            great: score.great,
+                            good: score.good,
+                            bad: score.bad,
+                            miss: score.miss,
+                            max_combo: score.max_combo,
+                            played_at_utc: score.played_at_utc,
+                            date_played: score.date_played,
+                            replay_embed_url: score.replay_embed_url,
+                            username: score.username,
+                            avatar: score.avatar,
+                            hr_avg: score.hr_avg,
+                            hr_peak: score.hr_peak,
+                            hr_min: score.hr_min,
+                            hr_series: score.hr_series,
+                            hr_source: score.hr_source,
+                            hr_duration_s: score.hr_duration_s,
+                          })}
                           chartTitle={chart?.song_title || ''}
                           s={s}
                         />
@@ -214,6 +243,13 @@ export function ChartScoresSheet({ chartId, onClose }: Props) {
         title={replayTarget?.title}
         onClose={() => setReplayTarget(null)}
       />
+
+      <ScoreCardSheet
+        visible={!!scoreTarget}
+        data={scoreTarget}
+        onClose={() => setScoreTarget(null)}
+        onReplay={(url, title) => setReplayTarget({ url, title })}
+      />
     </>
   );
 }
@@ -225,6 +261,7 @@ function ScoreRow({
   isMe,
   onProfile,
   onReplay,
+  onOpenCard,
   chartTitle,
   s,
 }: {
@@ -232,6 +269,7 @@ function ScoreRow({
   isMe: boolean;
   onProfile: () => void;
   onReplay: (url: string, title: string) => void;
+  onOpenCard: () => void;
   chartTitle: string;
   s: Styles;
 }) {
@@ -261,6 +299,7 @@ function ScoreRow({
             {score.username || 'anonymous'}{isMe ? <Text style={s.youTag}>  YOU</Text> : null}
           </Text>
         </Pressable>
+        <Pressable onPress={onOpenCard} hitSlop={4} style={({ pressed }) => [pressed && { opacity: 0.7 }]}>
         <View style={s.statRow}>
           <Text style={[s.score, { color: scoreColor }]}>{fmtNum(score.score)}</Text>
           <GradeChip grade={score.grade} score={score.score} size="sm" />
@@ -269,6 +308,7 @@ function ScoreRow({
             <Text style={s.attempts}>{score.attempt_count}×</Text>
           ) : null}
         </View>
+        </Pressable>
       </View>
       <View style={s.right}>
         <Text style={s.rp}>{fmtNum(score.rating_points)}<Text style={s.rpUnit}> RP</Text></Text>

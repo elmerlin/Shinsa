@@ -76,6 +76,15 @@ function createMockDb({ charts = [], recentPlays = [], syncRow = null, bestScore
         };
       }
 
+      // Per-play heart-rate attach (attachHeartRateById) — exact-id lookup.
+      if (sql.includes('hr_avg') && sql.includes('WHERE id = ?')) {
+        return {
+          get(playId) {
+            return recentPlays.find((play) => play.id === playId) || null;
+          },
+        };
+      }
+
       throw new Error(`Unexpected SQL in test: ${sql}`);
     },
   };
