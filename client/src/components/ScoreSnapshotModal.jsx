@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { createMessageStoryItem, getPlayComments, addPlayComment, deletePlayComment } from '../utils/api';
 import SendToDirectMessageButton from './SendToDirectMessageButton';
 import ScoreSnapshotCard from './ScoreSnapshotCard';
+import HeartRateStrip from './HeartRateStrip';
+import { hasHeartRate } from '../utils/heartRate';
 import ItemCommentSection from './ItemCommentSection';
 import YouTubeReplayModal from './YouTubeReplayModal';
 import { buildReplayModalTitle } from '../utils/replayTitle';
@@ -513,6 +515,19 @@ export default function ScoreSnapshotModal({
             onCommentClick={() => setCommentSectionOpen(v => !v)}
             missingJudgmentHint={missingJudgmentHint}
           />
+          {hasHeartRate(score) ? (
+            <div className="mt-2">
+              <HeartRateStrip
+                avg={score.hr_avg}
+                peak={score.hr_peak}
+                series={score.hr_series}
+                source={score.hr_source}
+                durationS={score.hr_duration_s}
+                songDurationS={score.song_duration_s}
+                maxHr={score.hr_max}
+              />
+            </div>
+          ) : null}
           <div className="mt-2 flex flex-wrap gap-2 px-1">
             <ScoreCardImageShareButton
               score={score}

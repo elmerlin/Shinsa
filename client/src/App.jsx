@@ -57,6 +57,7 @@ const WhatToPlayPage = lazy(() => import('./pages/WhatToPlayPage'));
 const ChangeLogPage = lazy(() => import('./pages/ChangeLogPage'));
 const CheckinPage = lazy(() => import('./pages/CheckinPage'));
 const MembershipPage = lazy(() => import('./pages/MembershipPage'));
+const FridgePage = lazy(() => import('./pages/FridgePage'));
 const DojoPage = lazy(() => import('./pages/DojoPage'));
 const LeaderboardsPage = lazy(() => import('./pages/LeaderboardsPage'));
 const LivePage = lazy(() => import('./pages/LivePage'));
@@ -725,6 +726,17 @@ function UserMenu() {
               {t('app.nav.pump_dojo')}
             </Link>
           )}
+          <Link
+            to="/fridge"
+            onClick={closeMenu}
+            className={menuLinkClass}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <rect x="6" y="3" width="12" height="18" rx="2" />
+              <path strokeLinecap="round" d="M6 10h12M9 6.5v1.5M9 13v3" />
+            </svg>
+            Dojo Fridge
+          </Link>
           {canAccessDojoAdmin && (
             <Link
               to="/dojoadmin"
@@ -1582,6 +1594,7 @@ export default function App() {
             <Route path="/checkin" element={<CheckinPage />} />
             <Route path="/membership" element={<MembershipPage />} />
             <Route path="/dojo" element={<Navigate to="/membership" replace />} />
+            <Route path="/fridge" element={<FridgePage />} />
             <Route path="/dojoadmin" element={<DojoPage />} />
             <Route path="/leaderboards" element={<LeaderboardsPage />} />
             <Route path="/:username" element={<ProfilePage />} />

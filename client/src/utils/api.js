@@ -1562,3 +1562,23 @@ export const huntPetWorldEncounter = (id, timingBonus) => request(`/pet-world/en
 export const dismissPetWorldEncounter = (id) => request(`/pet-world/encounters/${encodeURIComponent(id)}/dismiss`, { method: 'POST' });
 export const getPetWorldVisitors = () => request('/pet-world/visitors');
 export const postPetWorldPresence = (userId) => request(`/pet-world/presence/${encodeURIComponent(userId)}`, { method: 'POST' });
+
+// --- Dojo fridge (honor-system tab, settled via Square) ---
+export const getFridgeItems = () => request('/fridge/items');
+export const getFridgeTab = () => request('/fridge/tab');
+export const addFridgeTabItem = (itemId, qty = 1) => request('/fridge/tab', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ item_id: itemId, qty }),
+});
+export const removeFridgeTabEntry = (entryId) => request(`/fridge/tab/${encodeURIComponent(entryId)}`, { method: 'DELETE' });
+export const settleFridgeTab = () => request('/fridge/settle', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({}),
+});
+export const reconcileFridgeTab = () => request('/fridge/reconcile', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({}),
+});

@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import HeartRateStrip, { HrZoneBar } from './HeartRateStrip';
+import { hrZoneColor } from '../utils/heartRate';
 import PiuChartJacket from './PiuChartJacket';
 import ScoreSnapshotModal from './ScoreSnapshotModal';
-import { getChartKeyMap, lookupPlay } from '../utils/api';
+import { getChartKeyMap, lookupPlay , getLiveSession } from '../utils/api';
 import { buildScoreSnapshotLinkShare } from '../utils/directMessageShares';
 
 function formatNumber(value) {
@@ -149,6 +151,68 @@ function SongTable({ title, rows, type, onRowClick }) {
   );
 }
 
+// ♥ Heart rate slide for the session recap: stats, session curve over the
+// player's personal zone bands, time-in-zone, highest-HR song, and per-level
+// intensity with S/D separated (D23 ≠ S23).
+function SessionHrSection({ hr }) {
+  if (!hr) return null;
+  const mins = Math.round((Number(hr.duration_s) || 0) / 60);
+  const perLevel = Array.isArray(hr.per_level) ? hr.per_level : [];
+  return (
+    <div className="rounded-xl border border-red-400/20 bg-black/20 p-2.5 space-y-2.5">
+      <p className="text-[11px] font-display font-bold uppercase tracking-wide text-red-300">♥ Heart rate</p>
+      <div className="grid grid-cols-4 gap-1.5 text-center">
+        <div className="rounded-lg bg-white/[0.04] py-1.5">
+          <p className="font-display text-base font-bold text-red-400 tabular-nums">{hr.hr_avg || '—'}</p>
+          <p className="text-[8px] font-bold uppercase tracking-wide text-gray-500">Avg BPM</p>
+        </div>
+        <div className="rounded-lg bg-white/[0.04] py-1.5">
+          <p className="font-display text-base font-bold tabular-nums" style={{ color: hrZoneColor(hr.hr_peak, hr.max_hr) }}>{hr.hr_peak || '—'}</p>
+          <p className="text-[8px] font-bold uppercase tracking-wide text-gray-500">Peak BPM</p>
+        </div>
+        <div className="rounded-lg bg-white/[0.04] py-1.5">
+          <p className="font-display text-base font-bold text-white tabular-nums">{mins > 0 ? `${mins}m` : '—'}</p>
+          <p className="text-[8px] font-bold uppercase tracking-wide text-gray-500">Song time</p>
+        </div>
+        <div className="rounded-lg bg-white/[0.04] py-1.5">
+          <p className="font-display text-base font-bold text-white tabular-nums">{hr.play_count || 0}</p>
+          <p className="text-[8px] font-bold uppercase tracking-wide text-gray-500">Plays</p>
+        </div>
+      </div>
+      <HeartRateStrip avg={hr.hr_avg} peak={hr.hr_peak} series={hr.series} durationS={hr.duration_s} maxHr={hr.max_hr} />
+      <HrZoneBar zoneSeconds={hr.zone_seconds || {}} maxHr={hr.max_hr} />
+      {hr.peak_song ? (
+        <p className="text-[11px] text-gray-400">
+          Highest HR: <span className="font-bold text-red-400">{hr.peak_song.hr_peak} BPM</span> on {hr.peak_song.song_title}{' '}
+          ({String(hr.peak_song.mode || '').startsWith('D') ? 'D' : 'S'}{hr.peak_song.level})
+        </p>
+      ) : null}
+      {perLevel.length > 0 ? (
+        <div className="space-y-1">
+          <p className="text-[10px] font-display font-bold uppercase tracking-wide text-gray-500">Avg HR by level</p>
+          {perLevel.map((g) => (
+            <div key={g.key} className="flex items-center gap-2">
+              <span className={`w-9 text-[11px] font-bold tabular-nums ${g.mode === 'D' ? 'text-emerald-300' : 'text-rose-300'}`}>{g.key}</span>
+              <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/5">
+                <div
+                  className="h-2 rounded-full"
+                  style={{
+                    width: `${Math.min(100, Math.round((g.hr_avg / Math.max(1, hr.max_hr)) * 100))}%`,
+                    backgroundColor: hrZoneColor(g.hr_avg, hr.max_hr),
+                  }}
+                />
+              </div>
+              <span className="w-8 text-right text-[11px] font-bold tabular-nums text-gray-200">{g.hr_avg}</span>
+              <span className="w-11 text-right text-[10px] tabular-nums text-gray-500">pk {g.hr_peak}</span>
+              <span className="w-7 text-right text-[10px] tabular-nums text-gray-600">×{g.plays}</span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export default function SessionSummaryCard({
   summary,
   className = '',
@@ -161,6 +225,19 @@ export default function SessionSummaryCard({
   const [topPlaysExpanded, setTopPlaysExpanded] = useState(false);
   const [selectedScore, setSelectedScore] = useState(null);
   const [chartKeyMap, setChartKeyMap] = useState(null);
+  // Session heart rate: new posts carry summary.hr in the marker; older posts
+  // fetch the fresh summary by sessionId once Top Plays is expanded.
+  const [freshHr, setFreshHr] = useState(null);
+  const hr = summary?.hr || freshHr;
+  useEffect(() => {
+    if (!topPlaysExpanded || hr || !summary?.sessionId) return;
+    let cancelled = false;
+    getLiveSession(String(summary.sessionId))
+      .then((res) => { if (!cancelled && res?.summary?.hr) setFreshHr(res.summary.hr); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topPlaysExpanded, summary?.sessionId]);
 
   useEffect(() => {
     getChartKeyMap().then(setChartKeyMap).catch(() => {});
@@ -330,9 +407,10 @@ export default function SessionSummaryCard({
             <div className="space-y-2 mt-2">
               <SongTable title="Top 3 songs by score" rows={summary?.topSongsByScore || []} type="score" onRowClick={handleRowClick} />
               <SongTable title="Top 3 songs by rating" rows={summary?.topSongsByRating || []} type="rating" onRowClick={handleRowClick} />
+              {hr ? <SessionHrSection hr={hr} /> : null}
             </div>
           ) : (
-            <p className="text-[10px] text-gray-500 mt-1.5">Tap to expand</p>
+            <p className="text-[10px] text-gray-500 mt-1.5">Tap to expand{summary?.hr || summary?.sessionId ? ' · ♥ heart rate' : ''}</p>
           )}
         </div>
       ) : null}
