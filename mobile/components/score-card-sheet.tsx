@@ -440,8 +440,23 @@ export function ScoreCardSheet({ visible, data, onClose, onReplay }: Props) {
             </View>
           </View>
 
-          {/* Action icons — below the jacket card so they never cover the
-              art. Comment / Send to DM / Challenge / Share / Close. */}
+
+          {(Number(data.hr_avg) || 0) > 0 || (Number(data.hr_peak) || 0) > 0 ? (
+            <View style={s.hrCard}>
+              <HeartRateStrip
+                avg={data.hr_avg}
+                peak={data.hr_peak}
+                series={data.hr_series}
+                source={data.hr_source}
+                durationS={data.hr_duration_s}
+                songDurationS={data.song_duration_s}
+                maxHr={data.hr_max}
+              />
+            </View>
+          ) : null}
+
+          {/* Action icons — last, below all content (jacket + HR), in thumb
+              reach. Comment / Send to DM / Challenge / Share / Close. */}
           <View style={s.actionBar}>
             {playId ? (
               <IconAction icon="bubble.left.and.bubble.right.fill" label="Comment" onPress={() => setCommentsOpen(true)} />
@@ -457,20 +472,6 @@ export function ScoreCardSheet({ visible, data, onClose, onReplay }: Props) {
             ) : null}
             <IconAction icon="xmark" label="Close" onPress={onClose} />
           </View>
-
-          {(Number(data.hr_avg) || 0) > 0 || (Number(data.hr_peak) || 0) > 0 ? (
-            <View style={s.hrCard}>
-              <HeartRateStrip
-                avg={data.hr_avg}
-                peak={data.hr_peak}
-                series={data.hr_series}
-                source={data.hr_source}
-                durationS={data.hr_duration_s}
-                songDurationS={data.song_duration_s}
-                maxHr={data.hr_max}
-              />
-            </View>
-          ) : null}
         </ScrollView>
       </View>
 
