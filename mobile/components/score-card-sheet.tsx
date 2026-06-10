@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import { useState } from 'react';
 import {
+  ActivityIndicator,
   Linking,
   Modal,
   Platform,
@@ -434,46 +435,25 @@ export function ScoreCardSheet({ visible, data, onClose, onReplay }: Props) {
 
               <JudgmentGrid data={data} s={s} />
 
-              {/* Action chips — match the web ScoreSnapshotModal action set:
-                  Comment / Send to DM / Challenge / Share link / Close. */}
-              <View style={s.actionRow}>
-                {playId ? (
-                  <ActionChip
-                    icon="bubble.left.and.bubble.right.fill"
-                    label="Comment"
-                    onPress={() => setCommentsOpen(true)}
-                  />
-                ) : null}
-                {chartPath ? (
-                  <ActionChip
-                    icon="paperplane.fill"
-                    label="Send"
-                    accent
-                    onPress={() => setShareOpen(true)}
-                  />
-                ) : null}
-                {chartPath ? (
-                  <ActionChip
-                    icon="trophy.fill"
-                    label="Challenge"
-                    amber
-                    onPress={() => setChallengeOpen(true)}
-                  />
-                ) : null}
-                {(chartPath || playId) ? (
-                  <ActionChip
-                    icon="square.and.arrow.up"
-                    label={sharing ? 'Preparing…' : 'Share'}
-                    onPress={handleShare}
-                  />
-                ) : null}
-                <ActionChip
-                  icon="xmark"
-                  label="Close"
-                  onPress={onClose}
-                />
-              </View>
             </View>
+          </View>
+
+          {/* Action icons — below the jacket card so they never cover the
+              art. Comment / Send to DM / Challenge / Share / Close. */}
+          <View style={s.actionBar}>
+            {playId ? (
+              <IconAction icon="bubble.left.and.bubble.right.fill" label="Comment" onPress={() => setCommentsOpen(true)} />
+            ) : null}
+            {chartPath ? (
+              <IconAction icon="paperplane.fill" label="Send" accent onPress={() => setShareOpen(true)} />
+            ) : null}
+            {chartPath ? (
+              <IconAction icon="trophy.fill" label="Challenge" amber onPress={() => setChallengeOpen(true)} />
+            ) : null}
+            {(chartPath || playId) ? (
+              <IconAction icon="square.and.arrow.up" label="Share" busy={sharing} onPress={handleShare} />
+            ) : null}
+            <IconAction icon="xmark" label="Close" onPress={onClose} />
           </View>
 
           {(Number(data.hr_avg) || 0) > 0 || (Number(data.hr_peak) || 0) > 0 ? (
@@ -523,44 +503,50 @@ export function ScoreCardSheet({ visible, data, onClose, onReplay }: Props) {
   );
 }
 
-function ActionChip({
+function IconAction({
   icon,
   label,
   onPress,
   accent,
   amber,
+  busy,
 }: {
   icon: string;
   label: string;
   onPress: () => void;
   accent?: boolean;
   amber?: boolean;
+  busy?: boolean;
 }) {
   const s = useThemedStyles(makeStyles);
   const { theme } = useTheme();
   const tint = amber ? '#fbbf24' : accent ? theme.accent : '#fff';
   const bg = amber
-    ? 'rgba(251,191,36,0.18)'
+    ? 'rgba(251,191,36,0.16)'
     : accent
       ? theme.accentTint
-      : 'rgba(255,255,255,0.08)';
+      : 'rgba(255,255,255,0.10)';
   const border = amber
     ? 'rgba(251,191,36,0.45)'
     : accent
       ? theme.accent
-      : 'rgba(255,255,255,0.18)';
+      : 'rgba(255,255,255,0.22)';
   return (
     <Pressable
       onPress={onPress}
-      hitSlop={4}
+      hitSlop={6}
+      accessibilityLabel={label}
       style={({ pressed }) => [
-        s.actionChip,
+        s.iconBtn,
         { backgroundColor: bg, borderColor: border },
-        pressed && { opacity: 0.75 },
+        pressed && { opacity: 0.7 },
       ]}>
-      {/* IconSymbol's name prop is typed to a closed enum — relax to string */}
-      <IconSymbol name={icon as never} size={13} color={tint} />
-      <Text style={[s.actionChipText, { color: tint }]}>{label}</Text>
+      {busy ? (
+        <ActivityIndicator size="small" color={tint} />
+      ) : (
+        // IconSymbol's name prop is typed to a closed enum — relax to string
+        <IconSymbol name={icon as never} size={18} color={tint} />
+      )}
     </Pressable>
   );
 }
@@ -688,23 +674,21 @@ const makeStyles = (_t: ThemeColors) => ({
   judgmentLabel: { fontSize: 9, fontWeight: '900' as const, letterSpacing: 0.6 },
   judgmentValue: { fontSize: 14, fontWeight: '700' as const, color: '#fff', fontVariant: ['tabular-nums' as const] },
 
-  // Action chip row at the bottom of the score card. Wraps so we can fit
-  // 4-5 chips on a single mobile width without horizontal overflow.
-  actionRow: {
+  // Icon action bar below the jacket card — round icon buttons on the
+  // backdrop, so nothing covers the art.
+  actionBar: {
     flexDirection: 'row' as const,
-    flexWrap: 'wrap' as const,
-    gap: 6,
-    justifyContent: 'flex-end' as const,
-    marginTop: 8,
+    justifyContent: 'center' as const,
+    gap: 12,
+    width: '100%' as const,
+    maxWidth: 380,
   },
-  actionChip: {
-    flexDirection: 'row' as const,
+  iconBtn: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     alignItems: 'center' as const,
-    gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
+    justifyContent: 'center' as const,
     borderWidth: 1,
   },
-  actionChipText: { fontSize: 11, fontWeight: '900' as const, letterSpacing: 0.4 },
 });
