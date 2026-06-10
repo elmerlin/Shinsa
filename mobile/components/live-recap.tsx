@@ -101,15 +101,40 @@ export function LiveRecap({ summary, onPlayPress }: {
 // Recap for FEED POSTS: old posts were serialized before the hr block (and
 // some before topSongs), so when the marker lacks hr but knows its sessionId,
 // fetch the live session's fresh summary and render that instead.
-export function PostLiveRecap({ summary }: { summary: Partial<LiveSessionSummaryPayload> }) {
+export function PostLiveRecap({ summary, collapsible }: {
+  summary: Partial<LiveSessionSummaryPayload>;
+  /** Feed lists: render a compact expand bar; fetch + full recap on tap. */
+  collapsible?: boolean;
+}) {
+  const s = useThemedStyles(makeStyles);
+  const [expanded, setExpanded] = useState(!collapsible);
   const sessionId = String(summary.sessionId || '');
-  const needsFresh = !summary.hr && !!sessionId;
+  // Old posts predate the hr block in the marker — refetch the session's
+  // fresh summary. Only once expanded, so feed lists don't fan out requests.
+  const needsFresh = expanded && !summary.hr && !!sessionId;
   const freshQuery = useQuery({
     queryKey: ['live-session', sessionId],
     queryFn: () => liveApi.session(sessionId),
     enabled: needsFresh,
     staleTime: 5 * 60_000,
   });
+
+  if (!expanded) {
+    const hasAny = (summary.topSongsByScore?.length || 0) > 0
+      || (summary.topSongsByRating?.length || 0) > 0
+      || !!summary.hr
+      || !!sessionId;
+    if (!hasAny) return null;
+    return (
+      <Pressable
+        onPress={() => setExpanded(true)}
+        style={({ pressed }) => [s.expandBar, pressed && { opacity: 0.7 }]}>
+        <Text style={s.expandBarText}>TOP PLAYS{summary.hr || sessionId ? ' · ♥ HEART RATE' : ''}</Text>
+        <Text style={s.expandBarChevron}>▾</Text>
+      </Pressable>
+    );
+  }
+
   const fresh = freshQuery.data?.summary;
   const effective = (needsFresh && fresh) ? { ...summary, ...fresh, postText: '' } : { ...summary, postText: '' };
   return <LiveRecap summary={effective} />;
@@ -238,6 +263,19 @@ const makeStyles = (t: ThemeColors) => ({
     gap: 10,
   },
   recapText: { fontSize: 12, color: t.textMuted, lineHeight: 18 },
+  expandBar: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: t.border,
+    backgroundColor: t.surfaceMuted,
+  },
+  expandBarText: { fontSize: 10, fontWeight: '900' as const, letterSpacing: 1, color: t.textMuted },
+  expandBarChevron: { fontSize: 12, color: t.textDim },
   segRow: { flexDirection: 'row' as const, gap: 6 },
   segBtn: {
     paddingHorizontal: 12,

@@ -21,6 +21,7 @@ import { StompPumpIcon } from '@/components/ui/stomp-pump-icon';
 import { SendToMessageSheet } from '@/components/messages/send-to-message-sheet';
 import { SessionShareCard } from '@/components/session-share-card';
 import { SessionSummaryCard } from '@/components/session-summary-card';
+import { PostLiveRecap } from '@/components/live-recap';
 import { WcSummaryCard } from '@/components/wc-summary-card';
 import { WcPersonalCard } from '@/components/wc-personal-card';
 import { IconSymbol } from '@/components/ui/icon-symbol';
@@ -378,10 +379,12 @@ function PostCard({ item, onPress, onPump, onComments, onShare, onOsShare, onRep
         s={s}
       />
       {summary ? <LiveSessionCard summary={summary} /> : null}
+      {summary ? <PostLiveRecap summary={summary} collapsible /> : null}
       {wcSummary ? <WcSummaryCard summary={wcSummary} /> : null}
       {wcPersonal ? <WcPersonalCard summary={wcPersonal} /> : null}
       {sessionShare ? <SessionShareCard share={sessionShare} onReplay={onReplay} /> : null}
       {sessionSummary ? <SessionSummaryCard summary={sessionSummary} /> : null}
+      {sessionSummary ? <PostLiveRecap summary={sessionSummary as Record<string, unknown>} collapsible /> : null}
       {sessionPlan ? <SessionPlanCard plan={sessionPlan} /> : null}
       {badgePost ? (
         <AchievementBadgePost
