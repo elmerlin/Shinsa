@@ -8,6 +8,7 @@ import { flattenComments } from '@/components/comments-sheet';
 import { DefaultAvatar } from '@/components/default-avatar';
 import { SystemAvatar } from '@/components/system-avatar';
 import { LiveSessionCard } from '@/components/live-session-card';
+import { PostLiveRecap } from '@/components/live-recap';
 import { ReplayModal } from '@/components/replay-modal';
 import { SessionPlanCard } from '@/components/session-plan-card';
 import { SessionShareCard } from '@/components/session-share-card';
@@ -157,6 +158,7 @@ export default function PostDetailScreen() {
       </Pressable>
 
       {liveSummary ? <LiveSessionCard summary={liveSummary} /> : null}
+      {liveSummary ? <PostLiveRecap summary={liveSummary} /> : null}
       {wcSummary ? <WcSummaryCard summary={wcSummary} /> : null}
       {wcPersonal ? <WcPersonalCard summary={wcPersonal} /> : null}
       {sessionShare ? <SessionShareCard share={sessionShare} onReplay={onReplay} /> : null}

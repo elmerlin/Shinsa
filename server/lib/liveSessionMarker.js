@@ -87,6 +87,47 @@ function sanitizeLiveSummary(summary) {
     hostUsername: String(src.hostUsername || ''),
     topSongsByScore: sanitizeSongRows(src.topSongsByScore),
     topSongsByRating: sanitizeSongRows(src.topSongsByRating),
+    hr: sanitizeHrBlock(src.hr),
+  };
+}
+
+// Session heart-rate rollup (see buildSessionHrBlock). Kept compact: the
+// series is already downsampled to ≤120 points before it gets here.
+function sanitizeHrBlock(src) {
+  if (!src || typeof src !== 'object') return null;
+  const peak = toInt(src.hr_peak);
+  const avg = toInt(src.hr_avg);
+  if (avg <= 0 && peak <= 0) return null;
+  return {
+    play_count: toInt(src.play_count),
+    hr_avg: avg,
+    hr_peak: peak,
+    peak_song: src.peak_song && typeof src.peak_song === 'object'
+      ? {
+          song_title: String(src.peak_song.song_title || ''),
+          mode: String(src.peak_song.mode || ''),
+          level: toInt(src.peak_song.level),
+          hr_peak: toInt(src.peak_song.hr_peak),
+        }
+      : null,
+    max_hr: toInt(src.max_hr) || 190,
+    zone_seconds: Object.fromEntries(
+      Object.entries(src.zone_seconds || {})
+        .map(([k, v]) => [String(k), toInt(v)])
+        .filter(([k, v]) => /^z[0-9]$/.test(k) && v > 0),
+    ),
+    per_level: Array.isArray(src.per_level)
+      ? src.per_level.slice(0, 40).map((g) => ({
+          key: String(g?.key || ''),
+          mode: g?.mode === 'D' ? 'D' : 'S',
+          level: toInt(g?.level),
+          plays: toInt(g?.plays),
+          hr_avg: toInt(g?.hr_avg),
+          hr_peak: toInt(g?.hr_peak),
+        }))
+      : [],
+    series: Array.isArray(src.series) ? src.series.slice(0, 120).map((v) => toInt(v)).filter((n) => n > 0) : [],
+    duration_s: toInt(src.duration_s),
   };
 }
 
