@@ -62,13 +62,14 @@ function downsample(values: number[], max: number): number[] {
 }
 
 // Time-in-zone seconds, crediting each sample's zone for the gap until the next.
-function zoneSeconds(samples: HrSample[]): Record<string, number> {
+// Zones are personal (% of the player's max HR).
+function zoneSeconds(samples: HrSample[], maxHr: number): Record<string, number> {
   const out: Record<string, number> = {};
   for (let i = 0; i < samples.length; i += 1) {
     const gap = i < samples.length - 1
       ? Math.min(samples[i + 1].t - samples[i].t, ZONE_GAP_CAP_MS)
       : 1000;
-    const z = hrZoneFor(samples[i].bpm).key;
+    const z = hrZoneFor(samples[i].bpm, maxHr).key;
     out[z] = (out[z] || 0) + Math.max(0, gap) / 1000;
   }
   for (const k of Object.keys(out)) out[k] = Math.round(out[k]);
@@ -148,6 +149,16 @@ export async function syncHeartRateForPlays(plays: SyncablePlay[]): Promise<HrSy
   if (best) {
     const wSamples = samples.filter((s) => s.t >= best.start && s.t <= best.end);
     if (wSamples.length) {
+      // Personal zones: manual max if set, else the highest peak the server
+      // has seen — including this very session's samples (first-sync case).
+      const sessionPeak = Math.max(...samples.map((x) => x.bpm));
+      let maxHr = sessionPeak;
+      try {
+        const prof = await healthApi.hrProfile();
+        maxHr = prof.max_hr_manual > 0
+          ? prof.max_hr_manual
+          : Math.max(prof.max_hr_observed, sessionPeak);
+      } catch { /* profile fetch is best-effort; sessionPeak still works */ }
       const bpms = wSamples.map((s) => s.bpm);
       session = {
         workout_uuid: best.uuid,
@@ -158,7 +169,7 @@ export async function syncHeartRateForPlays(plays: SyncablePlay[]): Promise<HrSy
         hr_peak: Math.max(...bpms),
         hr_min: Math.min(...bpms),
         calories: Math.round(best.calories),
-        zone_seconds: zoneSeconds(wSamples),
+        zone_seconds: zoneSeconds(wSamples, maxHr),
         play_count: stamped.filter((s) => s.t >= best.start && s.t <= best.end).length,
         source: 'workout',
       };

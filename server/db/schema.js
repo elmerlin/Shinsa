@@ -3247,6 +3247,9 @@ function initializeDb() {
   const userCols = db.prepare("PRAGMA table_info(users)").all().map(c => c.name);
   const userMigrations = [
     ['is_admin', 'INT DEFAULT 0'],
+    // Manual max heart rate for personalized HR zones; 0 = auto (derive from
+    // the highest hr_peak ever synced).
+    ['max_hr', 'INT DEFAULT 0'],
     ['age', 'INT DEFAULT NULL'],
     ['height_cm', 'REAL DEFAULT NULL'],
     ['weight_kg', 'REAL DEFAULT NULL'],

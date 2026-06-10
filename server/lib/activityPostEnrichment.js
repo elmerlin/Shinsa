@@ -35,11 +35,25 @@ function getPlayHrByIdStmt(db) {
   `);
 }
 
+// Player's effective max HR (manual users.max_hr, else highest synced peak,
+// else 190) — shipped as hr_max so viewers render the PLAYER's zones.
+// Mirrors getHrProfile in routes/health.js.
+const userMaxHrStmtCache = new WeakMap();
+function getUserEffectiveMaxHr(db, userId) {
+  if (!userId) return 190;
+  const stmt = getCachedStmt(userMaxHrStmtCache, db, `
+    SELECT COALESCE(NULLIF((SELECT max_hr FROM users WHERE id = ?), 0),
+                    (SELECT MAX(hr_peak) FROM user_recently_played WHERE user_id = ? AND hr_peak > 0),
+                    190) AS max_hr
+  `);
+  return toInt(stmt.get(userId, userId)?.max_hr) || 190;
+}
+
 // Attach per-play heart rate by play_id. HR lives only on user_recently_played
 // (never in the denormalized feed JSON), so it's looked up exactly by id once
 // play_id is resolved. Only attaches when HR actually exists, to keep the
 // feed payload lean for the (currently common) no-HR case.
-function attachHeartRateById(db, entry) {
+function attachHeartRateById(db, entry, userId = '') {
   if (!entry || entry.hr_avg != null) return entry;
   const playId = toInt(entry.play_id);
   if (!playId) return entry;
@@ -56,6 +70,7 @@ function attachHeartRateById(db, entry) {
     hr_series: row.hr_series || '',
     hr_source: row.hr_source || '',
     hr_duration_s: toInt(row.hr_duration_s),
+    hr_max: getUserEffectiveMaxHr(db, userId),
   };
 }
 
@@ -542,7 +557,7 @@ function enrichUpscoreRows(db, userId, rows = [], createdAt = '') {
       level: item?.level,
       score: item?.new_score,
     });
-    return attachHeartRateById(db, mergeReplayMetadata(enriched, lookup));
+    return attachHeartRateById(db, mergeReplayMetadata(enriched, lookup), userId);
   });
 }
 
@@ -710,7 +725,7 @@ function enrichClearRows(db, userId, rows = [], createdAt = '') {
       level: item?.level,
       score: item?.score,
     });
-    return attachHeartRateById(db, applyChartMetadata(db, mergeReplayMetadata(enriched, lookup)));
+    return attachHeartRateById(db, applyChartMetadata(db, mergeReplayMetadata(enriched, lookup)), userId);
   });
 }
 

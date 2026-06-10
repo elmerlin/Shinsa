@@ -799,6 +799,7 @@ export interface WeeklyChallengeChartScore {
   hr_series?: string;
   hr_source?: string;
   hr_duration_s?: number;
+  hr_max?: number;
 }
 
 export interface WeeklyChallengeChartScoresResponse {

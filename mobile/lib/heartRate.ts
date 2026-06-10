@@ -1,38 +1,67 @@
-// Heart-rate helpers shared by the display layer (and, later, the HealthKit
-// capture/correlation). HR is captured on iOS from the Apple Watch workout,
-// correlated to each play's time window, and stored server-side so it renders
-// on every platform. Zones are simple BPM bands (no age/maxHR needed) — the
-// same keys (z1..z5) the server stores in user_cardio_sessions.zone_seconds.
+// Heart-rate helpers shared by the display layer and the capture/correlation
+// pipeline. Zones are PERSONALIZED: percentage bands of the player's max HR
+// (manual setting → else highest peak ever synced → else DEFAULT_MAX_HR).
+// The player's effective max ships with their HR data as `hr_max`, so viewers
+// always see the player's own zones. Zone keys (z0..z5) are stored in
+// user_cardio_sessions.zone_seconds and must stay stable.
 
-export interface HrZone {
+export const DEFAULT_MAX_HR = 190;
+
+export interface HrZoneMeta {
   key: string;
   label: string;
-  min: number; // inclusive
-  max: number; // exclusive
+  /** Band bounds as a fraction of max HR. [pctMin, pctMax) */
+  pctMin: number;
+  pctMax: number;
   color: string;
 }
 
-// Ordered low → high. Bands are intentionally simple/absolute so they work
-// without knowing the player's age or max HR. Tuned for the ~110–195 range a
-// PIU session lives in.
-export const HR_ZONES: readonly HrZone[] = [
-  { key: 'z1', label: 'Warm up', min: 0, max: 120, color: '#60a5fa' },
-  { key: 'z2', label: 'Fat burn', min: 120, max: 140, color: '#34d399' },
-  { key: 'z3', label: 'Cardio', min: 140, max: 160, color: '#fde047' },
-  { key: 'z4', label: 'Hard', min: 160, max: 180, color: '#fb923c' },
-  { key: 'z5', label: 'Peak', min: 180, max: 1000, color: '#f87171' },
+// Ordered low → high. z0 is "below zones" (recovery / between songs).
+export const HR_ZONE_META: readonly HrZoneMeta[] = [
+  { key: 'z0', label: 'Below zones', pctMin: 0, pctMax: 0.68, color: '#94a3b8' },
+  { key: 'z1', label: 'Easy', pctMin: 0.68, pctMax: 0.73, color: '#60a5fa' },
+  { key: 'z2', label: 'Steady', pctMin: 0.73, pctMax: 0.8, color: '#34d399' },
+  { key: 'z3', label: 'Mod. hard', pctMin: 0.8, pctMax: 0.87, color: '#fde047' },
+  { key: 'z4', label: 'Hard', pctMin: 0.87, pctMax: 0.93, color: '#fb923c' },
+  { key: 'z5', label: 'Very hard', pctMin: 0.93, pctMax: 10, color: '#f87171' },
 ];
 
-export function hrZoneFor(bpm: number): HrZone {
-  const n = Number(bpm) || 0;
-  for (const z of HR_ZONES) {
-    if (n >= z.min && n < z.max) return z;
-  }
-  return HR_ZONES[HR_ZONES.length - 1];
+export interface HrZone extends HrZoneMeta {
+  /** Absolute BPM bounds for a given max HR. [min, max) */
+  min: number;
+  max: number;
 }
 
-export function hrZoneColor(bpm: number): string {
-  return hrZoneFor(bpm).color;
+function normalizeMaxHr(maxHr?: number): number {
+  const n = Math.round(Number(maxHr) || 0);
+  return n >= 120 && n <= 260 ? n : DEFAULT_MAX_HR;
+}
+
+/** Absolute BPM bands for a player's max HR, low → high. */
+export function hrZonesFor(maxHr?: number): HrZone[] {
+  const mx = normalizeMaxHr(maxHr);
+  return HR_ZONE_META.map((z) => ({
+    ...z,
+    min: Math.round(z.pctMin * mx),
+    max: Math.round(Math.min(z.pctMax, 10) * mx),
+  }));
+}
+
+export function hrZoneFor(bpm: number, maxHr?: number): HrZone {
+  const zones = hrZonesFor(maxHr);
+  const n = Number(bpm) || 0;
+  for (const z of zones) {
+    if (n >= z.min && n < z.max) return z;
+  }
+  return zones[zones.length - 1];
+}
+
+export function hrZoneColor(bpm: number, maxHr?: number): string {
+  return hrZoneFor(bpm, maxHr).color;
+}
+
+export function hrZoneMetaByKey(key: string): HrZoneMeta | undefined {
+  return HR_ZONE_META.find((z) => z.key === key);
 }
 
 // Accepts the stored hr_series (JSON string OR already-parsed array) and

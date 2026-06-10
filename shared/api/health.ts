@@ -49,6 +49,12 @@ export interface CardioSessionUpload {
   source?: 'workout' | 'samples';
 }
 
+export interface HrProfile {
+  max_hr_manual: number;
+  max_hr_observed: number;
+  max_hr_effective: number;
+}
+
 export interface HeartRateUploadResult {
   ok: boolean;
   plays_updated: number;
@@ -67,6 +73,18 @@ export function createHealthApi(client: ApiClient) {
       return client.request<CardioSessionsResponse>(
         `/api/health/cardio-sessions${qs ? `?${qs}` : ''}`,
       );
+    },
+    // Max-HR sources (manual / observed / effective) — personalizes HR zones.
+    hrProfile(params?: { user_id?: string }) {
+      const qs = params?.user_id ? `?user_id=${encodeURIComponent(params.user_id)}` : '';
+      return client.request<HrProfile>(`/api/health/hr-profile${qs}`);
+    },
+    // Set the manual max HR (0 = back to auto).
+    setMaxHr(maxHr: number) {
+      return client.request<{ ok: boolean } & HrProfile>('/api/health/max-hr', {
+        method: 'POST',
+        body: { max_hr: maxHr },
+      });
     },
     // Upload per-play HR + an optional cardio session summary.
     uploadHeartRate(payload: { plays: HeartRatePlayUpload[]; session?: CardioSessionUpload }) {

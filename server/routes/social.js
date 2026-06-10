@@ -2389,6 +2389,15 @@ router.get('/plays/:id', optionalAuth, (req, res) => {
 
   play.avatar = normalizeUserAvatarForList(play.avatar, play.user_id, 40, play.avatar_v);
 
+  // Player's effective max HR so viewers render the player's zones.
+  if ((parseInt(play.hr_avg, 10) || 0) > 0 || (parseInt(play.hr_peak, 10) || 0) > 0) {
+    play.hr_max = db.prepare(`
+      SELECT COALESCE(NULLIF((SELECT max_hr FROM users WHERE id = ?), 0),
+                      (SELECT MAX(hr_peak) FROM user_recently_played WHERE user_id = ? AND hr_peak > 0),
+                      190) AS max_hr
+    `).get(play.user_id, play.user_id)?.max_hr || 190;
+  }
+
   res.json(play);
 });
 

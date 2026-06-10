@@ -35,6 +35,41 @@ function sanitizeZones(raw) {
 const SOURCES = new Set(['workout', 'samples']);
 const normSource = (s) => (SOURCES.has(String(s || '')) ? String(s) : '');
 
+// Personalized HR zones are % of max HR. Effective max = manual setting
+// (users.max_hr) when set, else the highest peak the system has ever seen
+// synced for this user, else a safe default. Mirrored in mobile/lib/heartRate.ts.
+const DEFAULT_MAX_HR = 190;
+const MIN_MANUAL_MAX_HR = 120;
+const MAX_MANUAL_MAX_HR = 230;
+
+function getHrProfile(db, userId) {
+  const manual = clampBpm(db.prepare('SELECT max_hr FROM users WHERE id = ?').get(userId)?.max_hr);
+  const observed = clampBpm(
+    db.prepare('SELECT MAX(hr_peak) AS peak FROM user_recently_played WHERE user_id = ? AND hr_peak > 0').get(userId)?.peak,
+  );
+  const effective = manual > 0 ? manual : (observed > 0 ? observed : DEFAULT_MAX_HR);
+  return { max_hr_manual: manual, max_hr_observed: observed, max_hr_effective: effective };
+}
+
+// GET /api/health/hr-profile — max-HR sources for the current user (or
+// ?user_id= to view another player's, e.g. to render their zones).
+router.get('/hr-profile', requireAuth, (req, res) => {
+  const db = getDb();
+  const targetUserId = String(req.query.user_id || req.user.id).trim();
+  res.json(getHrProfile(db, targetUserId));
+});
+
+// POST /api/health/max-hr — set (or clear with 0) the manual max HR.
+router.post('/max-hr', requireAuth, (req, res) => {
+  const db = getDb();
+  const raw = Math.round(Number(req.body?.max_hr) || 0);
+  if (raw !== 0 && (raw < MIN_MANUAL_MAX_HR || raw > MAX_MANUAL_MAX_HR)) {
+    return res.status(400).json({ error: `max_hr must be 0 (auto) or ${MIN_MANUAL_MAX_HR}–${MAX_MANUAL_MAX_HR}` });
+  }
+  db.prepare('UPDATE users SET max_hr = ? WHERE id = ?').run(raw, req.user.id);
+  res.json({ ok: true, ...getHrProfile(db, req.user.id) });
+});
+
 // POST /api/health/heart-rate — upload per-play HR + an optional cardio session.
 // Body: { plays: [{ play_id, hr_avg, hr_peak, hr_min?, hr_series?, source? }],
 //         session?: { workout_uuid, started_at_utc, ended_at_utc, duration_s,

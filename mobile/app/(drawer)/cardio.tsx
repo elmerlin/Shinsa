@@ -12,7 +12,7 @@ import { TopBar } from '@/components/top-bar';
 import { useTheme } from '@/contexts/theme-context';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { healthApi } from '@/lib/api';
-import { formatDuration, HR_ZONES, hrZoneColor } from '@/lib/heartRate';
+import { formatDuration, HR_ZONE_META, hrZoneColor } from '@/lib/heartRate';
 import type { CardioSession } from '@shared/api';
 import type { ThemeColors } from '@/constants/theme';
 
@@ -30,19 +30,19 @@ type Styles = ReturnType<typeof useThemedStyles<ReturnType<typeof makeStyles>>>;
 
 // Horizontal stacked time-in-zone bar + a per-zone minute breakdown.
 function ZoneBar({ zoneSeconds, s }: { zoneSeconds: Record<string, number>; s: Styles }) {
-  const total = HR_ZONES.reduce((sum, z) => sum + (Number(zoneSeconds[z.key]) || 0), 0);
+  const total = HR_ZONE_META.reduce((sum, z) => sum + (Number(zoneSeconds[z.key]) || 0), 0);
   if (total <= 0) return null;
   return (
     <View style={s.zoneWrap}>
       <View style={s.zoneBar}>
-        {HR_ZONES.map((z) => {
+        {HR_ZONE_META.map((z) => {
           const sec = Number(zoneSeconds[z.key]) || 0;
           if (sec <= 0) return null;
           return <View key={z.key} style={{ flex: sec, backgroundColor: z.color }} />;
         })}
       </View>
       <View style={s.zoneLegend}>
-        {HR_ZONES.map((z) => {
+        {HR_ZONE_META.map((z) => {
           const sec = Number(zoneSeconds[z.key]) || 0;
           if (sec <= 0) return null;
           const pct = Math.round((sec / total) * 100);
@@ -59,7 +59,7 @@ function ZoneBar({ zoneSeconds, s }: { zoneSeconds: Record<string, number>; s: S
   );
 }
 
-function CardioCard({ session, s }: { session: CardioSession; s: Styles }) {
+function CardioCard({ session, maxHr, s }: { session: CardioSession; maxHr?: number; s: Styles }) {
   const avg = Math.round(Number(session.hr_avg) || 0);
   const peak = Math.round(Number(session.hr_peak) || 0);
   const cals = Math.round(Number(session.calories) || 0);
@@ -77,7 +77,7 @@ function CardioCard({ session, s }: { session: CardioSession; s: Styles }) {
           <Text style={s.statLabel}>AVG BPM</Text>
         </View>
         <View style={s.statCell}>
-          <Text style={[s.statValue, { color: peak > 0 ? hrZoneColor(peak) : undefined }]}>{peak > 0 ? peak : '—'}</Text>
+          <Text style={[s.statValue, { color: peak > 0 ? hrZoneColor(peak, maxHr) : undefined }]}>{peak > 0 ? peak : '—'}</Text>
           <Text style={s.statLabel}>PEAK BPM</Text>
         </View>
         <View style={s.statCell}>
@@ -104,6 +104,13 @@ export default function CardioScreen() {
     queryKey: ['cardio-sessions'],
     queryFn: () => healthApi.cardioSessions({ limit: 30 }),
   });
+  // Personal zone boundaries (manual max HR → else highest synced peak).
+  const profileQuery = useQuery({
+    queryKey: ['hr-profile'],
+    queryFn: () => healthApi.hrProfile(),
+    staleTime: 5 * 60_000,
+  });
+  const maxHr = profileQuery.data?.max_hr_effective;
 
   const sessions = data?.sessions ?? [];
 
@@ -119,8 +126,8 @@ export default function CardioScreen() {
         <Text style={s.eyebrow}>CARDIO</Text>
         <Text style={s.heading}>Your heart rate, on the pad</Text>
         <Text style={s.sub}>
-          Wear your Apple Watch and start a workout (Fitness Gaming) while you play. Heart rate
-          syncs to your scores and rolls up into the sessions below.
+          Wear your watch and record a workout while you play (Fitness Gaming on Apple Watch, or
+          any Garmin/Fitbit/Samsung activity). Heart rate syncs to your scores and rolls up below.
         </Text>
 
         {isLoading ? (
@@ -130,14 +137,14 @@ export default function CardioScreen() {
             <Text style={s.emptyHeart}>♥</Text>
             <Text style={s.emptyTitle}>No cardio sessions yet</Text>
             <Text style={s.emptyText}>
-              Start an Apple Watch workout next time you play. Your average/peak BPM, calories and
+              Record a watch workout next time you play. Your average/peak BPM, calories and
               time-in-zone will show up here, and a heart-rate curve appears on each score.
             </Text>
           </View>
         ) : (
           <View style={s.list}>
             {sessions.map((session) => (
-              <CardioCard key={session.workout_uuid} session={session} s={s} />
+              <CardioCard key={session.workout_uuid} session={session} maxHr={maxHr} s={s} />
             ))}
           </View>
         )}

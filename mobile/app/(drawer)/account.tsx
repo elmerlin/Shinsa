@@ -25,7 +25,7 @@ import { useAutoUpdate } from '@/hooks/use-auto-update';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { useWebPush } from '@/hooks/use-web-push';
-import { externalApi, piugameApi, youtubeApi } from '@/lib/api';
+import { externalApi, healthApi, piugameApi, youtubeApi } from '@/lib/api';
 import { syncHeartRateAfterPiugameSync } from '@/lib/heartRateSync';
 import type { ThemeColors } from '@/constants/theme';
 import type { ApiTokenRow } from '@shared/api';
@@ -361,6 +361,95 @@ function PiugameLinkSection({ s, userId }: { s: Styles; userId: string }) {
  * (`shinsa://youtube-callback`). When the redirect fires, the browser
  * auto-closes and we refetch the status to flip into the linked state.
  */
+// Max heart rate for personalized HR zones. Auto = highest peak ever synced;
+// the manual value overrides it (0 clears back to auto).
+function HeartRateSection({ s }: { s: Styles }) {
+  const queryClient = useQueryClient();
+  const [draft, setDraft] = useState('');
+  const [feedback, setFeedback] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null);
+
+  const profileQuery = useQuery({
+    queryKey: ['hr-profile'],
+    queryFn: () => healthApi.hrProfile(),
+  });
+  const prof = profileQuery.data;
+
+  const saveMutation = useMutation({
+    mutationFn: (maxHr: number) => healthApi.setMaxHr(maxHr),
+    onSuccess: (data) => {
+      queryClient.setQueryData(['hr-profile'], {
+        max_hr_manual: data.max_hr_manual,
+        max_hr_observed: data.max_hr_observed,
+        max_hr_effective: data.max_hr_effective,
+      });
+      setDraft('');
+      setFeedback({
+        tone: 'ok',
+        text: data.max_hr_manual > 0
+          ? `Max HR set to ${data.max_hr_manual} — zones updated.`
+          : `Back to auto — using highest synced peak (${data.max_hr_effective}).`,
+      });
+    },
+    onError: (err) => {
+      setFeedback({ tone: 'err', text: err instanceof Error ? err.message : 'Failed to save max HR' });
+    },
+  });
+
+  const handleSave = () => {
+    const n = parseInt(draft, 10);
+    if (!Number.isFinite(n) || n < 120 || n > 230) {
+      setFeedback({ tone: 'err', text: 'Enter a max HR between 120 and 230.' });
+      return;
+    }
+    saveMutation.mutate(n);
+  };
+
+  return (
+    <View style={s.card}>
+      <Text style={s.cardTitle}>Heart rate zones</Text>
+      <Text style={s.cardHint}>
+        Zones are percentages of your max heart rate (Easy 68–73% · Steady 73–80% · Mod. hard
+        80–87% · Hard 87–93% · Very hard 93%+). By default your max is the highest BPM ever
+        synced from your watch; set it manually if you know it.
+      </Text>
+      <View style={s.row}>
+        <Text style={s.rowLabel}>Max HR in use</Text>
+        <Text style={s.rowValue}>
+          {prof ? `${prof.max_hr_effective} BPM ${prof.max_hr_manual > 0 ? '(manual)' : prof.max_hr_observed > 0 ? '(highest synced)' : '(default)'}` : '…'}
+        </Text>
+      </View>
+      <View style={s.syncBtnRow}>
+        <TextInput
+          style={[s.input, { flex: 1 }]}
+          value={draft}
+          onChangeText={setDraft}
+          placeholder={prof ? `e.g. ${prof.max_hr_effective}` : 'e.g. 190'}
+          placeholderTextColor="#6b7689"
+          keyboardType="number-pad"
+          maxLength={3}
+        />
+        <Pressable
+          onPress={handleSave}
+          disabled={saveMutation.isPending}
+          style={({ pressed }) => [s.primaryBtn, { paddingHorizontal: 16 }, (pressed || saveMutation.isPending) && { opacity: 0.7 }]}>
+          <Text style={s.primaryBtnText}>Save</Text>
+        </Pressable>
+        {prof && prof.max_hr_manual > 0 ? (
+          <Pressable
+            onPress={() => saveMutation.mutate(0)}
+            disabled={saveMutation.isPending}
+            style={({ pressed }) => [s.secondaryBtn, { paddingHorizontal: 14 }, (pressed || saveMutation.isPending) && { opacity: 0.7 }]}>
+            <Text style={s.secondaryBtnText}>Auto</Text>
+          </Pressable>
+        ) : null}
+      </View>
+      {feedback ? (
+        <Text style={[s.cardHint, { color: feedback.tone === 'ok' ? '#34d399' : '#fda4af' }]}>{feedback.text}</Text>
+      ) : null}
+    </View>
+  );
+}
+
 function YoutubeLinkSection({ s }: { s: Styles }) {
   const { theme } = useTheme();
   const queryClient = useQueryClient();
@@ -1291,6 +1380,7 @@ export default function AccountScreen() {
           </View>
 
           <PiugameLinkSection s={s} userId={user.id} />
+          <HeartRateSection s={s} />
           <YoutubeLinkSection s={s} />
           <ApiTokensSection s={s} />
           <AppearanceSection s={s} />

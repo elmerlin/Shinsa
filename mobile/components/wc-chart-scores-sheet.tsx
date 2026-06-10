@@ -223,6 +223,7 @@ export function ChartScoresSheet({ chartId, onClose }: Props) {
                             hr_series: score.hr_series,
                             hr_source: score.hr_source,
                             hr_duration_s: score.hr_duration_s,
+                            hr_max: score.hr_max,
                           })}
                           chartTitle={chart?.song_title || ''}
                           s={s}
