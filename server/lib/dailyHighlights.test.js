@@ -42,6 +42,12 @@ function createMockDb({ replaySourcePlay = null } = {}) {
         return { get: () => null };
       }
 
+      // attachHeartRateById probes per-play HR (+ the user's effective max
+      // HR). These tests don't exercise HR — return nothing.
+      if (sql.includes('hr_avg') || sql.includes('max_hr')) {
+        return { get: () => null };
+      }
+
       throw new Error(`Unexpected SQL in test: ${sql}`);
     },
   };

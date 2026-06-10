@@ -1,4 +1,4 @@
-const { applyChartMetadata } = require('./activityPostEnrichment');
+const { applyChartMetadata, attachHeartRateById } = require('./activityPostEnrichment');
 
 const replaySourcePlayStmtCache = new WeakMap();
 
@@ -140,7 +140,7 @@ function resolveDailyHighlightReplayRows(db, rows = []) {
     // (song_title, mode, level) tuple in the songs table. Without it the
     // mobile highlight tile falls back to the piugame.com background_url
     // which loads slowly / inconsistently from some networks.
-    return applyChartMetadata(db, resolved);
+    return attachHeartRateById(db, applyChartMetadata(db, resolved), String(row.user_id || ''));
   });
 }
 

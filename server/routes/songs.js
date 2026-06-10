@@ -3159,11 +3159,17 @@ router.get('/chart/:chartId/history', optionalAuth, (req, res) => {
 
   const recentRows = db.prepare(`
     SELECT id, user_id, song_title, mode, level, score, grade, plate, background_url, date_played,
-           perfect, great, good, bad, miss, max_combo
+           perfect, great, good, bad, miss, max_combo,
+           hr_avg, hr_peak, hr_series, hr_source, hr_duration_s
     FROM user_recently_played
     WHERE user_id = ? AND mode = ? AND level = ?
     ORDER BY id DESC
   `).all(targetUserId, chart.mode, chart.level);
+  const targetMaxHr = db.prepare(`
+    SELECT COALESCE(NULLIF((SELECT max_hr FROM users WHERE id = ?), 0),
+                (SELECT MAX(hr_peak) FROM user_recently_played WHERE user_id = ? AND hr_peak > 0),
+                190) AS max_hr
+    `).get(targetUserId, targetUserId)?.max_hr || 190;
 
   const chartHistory = recentRows
     .filter((row) => makeChartKey(row.song_title, row.mode, row.level, aliases) === chart.key)
@@ -3186,6 +3192,12 @@ router.get('/chart/:chartId/history', optionalAuth, (req, res) => {
         bad: parseInt(row.bad, 10) || 0,
         miss: parseInt(row.miss, 10) || 0,
         max_combo: parseInt(row.max_combo, 10) || 0,
+        hr_avg: parseInt(row.hr_avg, 10) || 0,
+        hr_peak: parseInt(row.hr_peak, 10) || 0,
+        hr_series: row.hr_series || '',
+        hr_source: row.hr_source || '',
+        hr_duration_s: parseInt(row.hr_duration_s, 10) || 0,
+        hr_max: (parseInt(row.hr_avg, 10) || 0) > 0 || (parseInt(row.hr_peak, 10) || 0) > 0 ? targetMaxHr : 0,
       };
     });
 
@@ -3292,11 +3304,17 @@ router.get('/chart/:chartId', optionalAuth, (req, res) => {
     `).all(targetUserId, chart.mode, chart.level);
     const recentRows = db.prepare(`
       SELECT id, user_id, song_title, mode, level, score, grade, plate, background_url, date_played,
-             perfect, great, good, bad, miss, max_combo, replay_embed_url
+             perfect, great, good, bad, miss, max_combo, replay_embed_url,
+             hr_avg, hr_peak, hr_series, hr_source, hr_duration_s
       FROM user_recently_played
       WHERE user_id = ? AND mode = ? AND level = ?
       ORDER BY id DESC
     `).all(targetUserId, chart.mode, chart.level);
+    const targetMaxHr = db.prepare(`
+      SELECT COALESCE(NULLIF((SELECT max_hr FROM users WHERE id = ?), 0),
+                      (SELECT MAX(hr_peak) FROM user_recently_played WHERE user_id = ? AND hr_peak > 0),
+                      190) AS max_hr
+    `).get(targetUserId, targetUserId)?.max_hr || 190;
 
     const bestCandidates = bestRows
       .filter((row) => makeChartKey(row.song_title, row.mode, row.level, aliases) === chart.key);
@@ -3324,6 +3342,12 @@ router.get('/chart/:chartId', optionalAuth, (req, res) => {
         bad: parseInt(row.bad, 10) || 0,
         miss: parseInt(row.miss, 10) || 0,
         max_combo: parseInt(row.max_combo, 10) || 0,
+        hr_avg: parseInt(row.hr_avg, 10) || 0,
+        hr_peak: parseInt(row.hr_peak, 10) || 0,
+        hr_series: row.hr_series || '',
+        hr_source: row.hr_source || '',
+        hr_duration_s: parseInt(row.hr_duration_s, 10) || 0,
+        hr_max: (parseInt(row.hr_avg, 10) || 0) > 0 || (parseInt(row.hr_peak, 10) || 0) > 0 ? targetMaxHr : 0,
       };
     });
 

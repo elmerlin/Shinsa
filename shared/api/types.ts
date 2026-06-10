@@ -198,6 +198,14 @@ export interface ChartHistoryEntry {
   bad?: number;
   miss?: number;
   max_combo?: number;
+  /** Heart rate captured for this play (HealthKit / Health Connect). */
+  hr_avg?: number;
+  hr_peak?: number;
+  hr_series?: string;
+  hr_source?: string;
+  hr_duration_s?: number;
+  hr_max?: number;
+  song_duration_s?: number;
 }
 
 export interface ChartProgressionPoint {
@@ -584,6 +592,14 @@ export interface UpscoreHighlight {
   machine_name?: string;
   replay_embed_url?: string;
   [key: string]: unknown;
+  /** Heart rate captured for this play (HealthKit / Health Connect). */
+  hr_avg?: number;
+  hr_peak?: number;
+  hr_series?: string;
+  hr_source?: string;
+  hr_duration_s?: number;
+  hr_max?: number;
+  song_duration_s?: number;
 }
 
 export interface ClearHighlight {
@@ -615,6 +631,14 @@ export interface ClearHighlight {
   machine_name?: string;
   replay_embed_url?: string;
   [key: string]: unknown;
+  /** Heart rate captured for this play (HealthKit / Health Connect). */
+  hr_avg?: number;
+  hr_peak?: number;
+  hr_series?: string;
+  hr_source?: string;
+  hr_duration_s?: number;
+  hr_max?: number;
+  song_duration_s?: number;
 }
 
 export interface DailyHighlights {
@@ -1030,6 +1054,14 @@ export interface LiveSessionPlay {
   rating?: number;
   background_url?: string;
   [key: string]: unknown;
+  /** Heart rate captured for this play (HealthKit / Health Connect). */
+  hr_avg?: number;
+  hr_peak?: number;
+  hr_series?: string;
+  hr_source?: string;
+  hr_duration_s?: number;
+  hr_max?: number;
+  song_duration_s?: number;
 }
 
 /** Aggregate stats the server computes for the session. Includes top plays

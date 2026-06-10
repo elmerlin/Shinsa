@@ -285,6 +285,19 @@ export default function ChartDetailScreen() {
     played_at_utc: typeof entry.date_played === 'string' ? entry.date_played : undefined,
     username: userSummary?.user?.username,
     avatar: typeof userSummary?.user?.avatar === 'string' ? userSummary.user.avatar : undefined,
+    // HR ships on history entries (source='recent'); best-scores rows
+    // don't have it and stay undefined.
+    hr_avg: Number((entry as Record<string, unknown>).hr_avg) || undefined,
+    hr_peak: Number((entry as Record<string, unknown>).hr_peak) || undefined,
+    hr_series: typeof (entry as Record<string, unknown>).hr_series === 'string'
+      ? (entry as { hr_series?: string }).hr_series
+      : undefined,
+    hr_source: typeof (entry as Record<string, unknown>).hr_source === 'string'
+      ? (entry as { hr_source?: string }).hr_source
+      : undefined,
+    hr_duration_s: Number((entry as Record<string, unknown>).hr_duration_s) || undefined,
+    hr_max: Number((entry as Record<string, unknown>).hr_max) || undefined,
+    song_duration_s: Number(chart?.duration_seconds) || undefined,
   });
 
   const buildFriendScoreData = (rec: ChartFriendRecord): ScoreCardData => ({

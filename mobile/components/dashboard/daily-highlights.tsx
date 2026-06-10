@@ -397,6 +397,13 @@ function buildUpscoreSheetData(u: UpscoreHighlight): ScoreCardData {
     date_played: u.date_played,
     machine_name: u.machine_name,
     replay_embed_url: u.replay_embed_url,
+    hr_avg: u.hr_avg,
+    hr_peak: u.hr_peak,
+    hr_series: u.hr_series,
+    hr_source: u.hr_source,
+    hr_duration_s: u.hr_duration_s,
+    hr_max: u.hr_max,
+    song_duration_s: u.song_duration_s,
   };
 }
 
@@ -425,6 +432,13 @@ function buildClearSheetData(c: ClearHighlight): ScoreCardData {
     date_played: c.date_played,
     machine_name: c.machine_name,
     replay_embed_url: c.replay_embed_url,
+    hr_avg: c.hr_avg,
+    hr_peak: c.hr_peak,
+    hr_series: c.hr_series,
+    hr_source: c.hr_source,
+    hr_duration_s: c.hr_duration_s,
+    hr_max: c.hr_max,
+    song_duration_s: c.song_duration_s,
   };
 }
 

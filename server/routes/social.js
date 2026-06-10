@@ -3006,7 +3006,8 @@ router.get('/daily-highlights', (req, res) => {
   for (const row of upscoreRows) {
     const enriched = enrichUpscoreRow(db, row);
     const items = safeParseJsonArray(enriched.upscores_json);
-    for (const item of items) {
+    for (const rawItem of items) {
+      const item = attachHeartRateById(db, rawItem, row.user_id);
       const delta = (toInt(item.new_score) || toInt(item.score)) - toInt(item.old_score);
       flatUpscores.push({
         ...item,
@@ -3078,8 +3079,9 @@ router.get('/daily-highlights', (req, res) => {
     const enriched = enrichClearRow(db, row);
     const items = safeParseJsonArray(enriched.clears_json);
     if (items.length > 0) {
-      for (const item of items) {
-        if (String(item?.entry_type || '') === 'title_unlock') continue;
+      for (const rawItem of items) {
+        if (String(rawItem?.entry_type || '') === 'title_unlock') continue;
+        const item = attachHeartRateById(db, rawItem, row.user_id);
         flatClears.push({
           ...item,
           clear_id: row.clear_id,

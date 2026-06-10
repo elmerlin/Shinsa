@@ -1793,13 +1793,29 @@ function getSessionPlays(db, liveSessionId) {
       COALESCE(part.status, '') AS participant_status,
       COALESCE(s.make, '') AS shoe_make,
       COALESCE(s.model, '') AS shoe_model,
-      COALESCE(s.colorway, '') AS shoe_colorway
+      COALESCE(s.colorway, '') AS shoe_colorway,
+      COALESCE(rp.hr_avg, 0) AS hr_avg,
+      COALESCE(rp.hr_peak, 0) AS hr_peak,
+      COALESCE(rp.hr_series, '') AS hr_series,
+      COALESCE(rp.hr_source, '') AS hr_source,
+      COALESCE(rp.hr_duration_s, 0) AS hr_duration_s,
+      CASE WHEN rp.hr_avg > 0 OR rp.hr_peak > 0 THEN
+        COALESCE(NULLIF(u.max_hr, 0),
+                 (SELECT MAX(rp2.hr_peak) FROM user_recently_played rp2 WHERE rp2.user_id = p.user_id AND rp2.hr_peak > 0),
+                 190)
+      ELSE 0 END AS hr_max,
+      COALESCE(chart.duration_seconds, 0) AS song_duration_s
     FROM live_session_plays p
     LEFT JOIN users u ON u.id = p.user_id
     LEFT JOIN live_session_participants part
       ON part.live_session_id = p.live_session_id
      AND part.user_id = p.user_id
     LEFT JOIN user_shoes s ON s.id = p.shoe_id
+    LEFT JOIN user_recently_played rp ON rp.id = p.recently_played_id
+    LEFT JOIN songs chart
+      ON TRIM(chart.title) = TRIM(p.song_title)
+     AND chart.mode = p.mode
+     AND chart.level = p.level
     WHERE p.live_session_id = ?
     ORDER BY p.id DESC
     LIMIT ?
