@@ -895,6 +895,13 @@ export interface ExplorePlay {
   over_top100_rank?: number;
   highlight_tier?: 'hero' | 'feature' | 'standard';
   comment_count?: number;
+  hr_avg?: number;
+  hr_peak?: number;
+  hr_series?: string;
+  hr_source?: string;
+  hr_duration_s?: number;
+  hr_max?: number;
+  song_duration_s?: number;
 }
 
 export interface ExploreFeedResponse {

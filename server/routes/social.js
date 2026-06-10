@@ -1884,6 +1884,13 @@ router.get('/feed/explore', requireAuth, (req, res) => {
            rp.background_url, rp.replay_embed_url, rp.replay_video_id,
            rp.replay_start_seconds, rp.replay_end_seconds,
            rp.played_at_utc, rp.over_top100_rank,
+           rp.hr_avg, rp.hr_peak, rp.hr_series, rp.hr_source, rp.hr_duration_s,
+           CASE WHEN rp.hr_avg > 0 OR rp.hr_peak > 0 THEN
+             COALESCE(NULLIF(u.max_hr, 0),
+                      (SELECT MAX(rp2.hr_peak) FROM user_recently_played rp2 WHERE rp2.user_id = rp.user_id AND rp2.hr_peak > 0),
+                      190)
+           ELSE 0 END AS hr_max,
+           COALESCE(s.duration_seconds, 0) AS song_duration_s,
            u.username, u.avatar, u.avatar_v, u.nationality,
            s.jacket_url AS song_jacket_url,
            (SELECT COUNT(*) FROM play_comments pc WHERE pc.play_id = rp.id) as comment_count

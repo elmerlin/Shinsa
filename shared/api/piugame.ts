@@ -31,6 +31,14 @@ export interface PiugameBestScore {
 
 export interface PiugameRecentPlay extends PiugameBestScore {
   /** Recently-played list returns roughly the same shape as best_scores. */
+  /** Heart rate captured for this play (HealthKit / Health Connect). */
+  hr_avg?: number;
+  hr_peak?: number;
+  hr_series?: string;
+  hr_source?: string;
+  hr_duration_s?: number;
+  hr_max?: number;
+  song_duration_s?: number;
 }
 
 export interface PiugamePumbilityScore {

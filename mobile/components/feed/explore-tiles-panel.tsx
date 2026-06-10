@@ -105,6 +105,13 @@ export function ExploreTilesPanel({ s: parentStyles, theme, onScore, onReplay }:
       avatar: play.avatar,
       played_at_utc: play.played_at_utc,
       replay_embed_url: play.replay_embed_url,
+      hr_avg: play.hr_avg,
+      hr_peak: play.hr_peak,
+      hr_series: play.hr_series,
+      hr_source: play.hr_source,
+      hr_duration_s: play.hr_duration_s,
+      hr_max: play.hr_max,
+      song_duration_s: play.song_duration_s,
     });
   };
 

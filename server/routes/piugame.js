@@ -4487,6 +4487,12 @@ router.get('/recently-played/:userId', (req, res) => {
       COALESCE(s.make, '') AS shoe_make,
       COALESCE(s.model, '') AS shoe_model,
       COALESCE(s.colorway, '') AS shoe_colorway,
+      COALESCE(chart.duration_seconds, 0) AS song_duration_s,
+      CASE WHEN p.hr_avg > 0 OR p.hr_peak > 0 THEN
+        COALESCE(NULLIF((SELECT max_hr FROM users WHERE id = p.user_id), 0),
+                 (SELECT MAX(rp2.hr_peak) FROM user_recently_played rp2 WHERE rp2.user_id = p.user_id AND rp2.hr_peak > 0),
+                 190)
+      ELSE 0 END AS hr_max,
       COALESCE(NULLIF(p.replay_embed_url, ''), NULLIF(yt.session_youtube_url, ''), '') AS replay_embed_url
     FROM user_recently_played p
     LEFT JOIN user_shoes s ON s.id = p.shoe_id

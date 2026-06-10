@@ -882,6 +882,19 @@ export function ProfileBody({ lookup }: { lookup: string }) {
     replay_embed_url: entry.replay_embed_url,
     username: profile?.username,
     avatar: typeof profile?.avatar === 'string' ? profile.avatar : undefined,
+    // HR ships on recent plays (p.* + hr_max/song_duration_s); best-scores
+    // rows simply don't have these fields and stay undefined.
+    hr_avg: Number((entry as Record<string, unknown>).hr_avg) || undefined,
+    hr_peak: Number((entry as Record<string, unknown>).hr_peak) || undefined,
+    hr_series: typeof (entry as Record<string, unknown>).hr_series === 'string'
+      ? (entry as { hr_series?: string }).hr_series
+      : undefined,
+    hr_source: typeof (entry as Record<string, unknown>).hr_source === 'string'
+      ? (entry as { hr_source?: string }).hr_source
+      : undefined,
+    hr_duration_s: Number((entry as Record<string, unknown>).hr_duration_s) || undefined,
+    hr_max: Number((entry as Record<string, unknown>).hr_max) || undefined,
+    song_duration_s: Number((entry as Record<string, unknown>).song_duration_s) || undefined,
   });
 
   const onReplay = (url: string, title: string) => setReplayTarget({ url, title });
