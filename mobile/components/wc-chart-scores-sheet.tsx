@@ -17,6 +17,7 @@ import { DefaultAvatar } from '@/components/default-avatar';
 import { GradeChip } from '@/components/grade-chip';
 import { PlateBadge } from '@/components/plate-badge';
 import { ReplayModal } from '@/components/replay-modal';
+import { HeartRateStrip } from '@/components/heart-rate-strip';
 import { ScoreCardSheet, type ScoreCardData } from '@/components/score-card-sheet';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAuth } from '@/contexts/auth-context';
@@ -309,6 +310,19 @@ function ScoreRow({
             <Text style={s.attempts}>{score.attempt_count}×</Text>
           ) : null}
         </View>
+        {(Number(score.hr_avg) || 0) > 0 || (Number(score.hr_peak) || 0) > 0 ? (
+          <View style={s.hrInline}>
+            <HeartRateStrip
+              compact
+              avg={score.hr_avg}
+              peak={score.hr_peak}
+              series={score.hr_series}
+              source={score.hr_source}
+              durationS={score.hr_duration_s}
+              maxHr={score.hr_max}
+            />
+          </View>
+        ) : null}
         </Pressable>
       </View>
       <View style={s.right}>
@@ -330,6 +344,9 @@ function ScoreRow({
 }
 
 const makeStyles = (t: ThemeColors) => ({
+  // The HR strip is designed for dark surfaces — give it a dark base so it
+  // reads identically in light + dark themes.
+  hrInline: { marginTop: 6, borderRadius: 12, backgroundColor: '#0a0e18', overflow: 'hidden' as const },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' as const },
   backdropFill: { ...StyleSheet.absoluteFillObject },
   sheet: {

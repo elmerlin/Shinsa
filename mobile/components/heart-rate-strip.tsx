@@ -23,6 +23,11 @@ function fmtClock(totalSeconds: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
+// Plays captured before hr_duration_s existed have no stored span. The
+// capture window is WINDOW_BEFORE+AFTER ≈ 115s — close to a typical PIU song
+// — so use it as the approximate axis until the next sync stores the truth.
+const FALLBACK_DURATION_S = 115;
+
 // Heart-rate readout for a play: ♥ avg/peak header, then the HR curve as a
 // line chart drawn over horizontal stripes marking the player's personal
 // zones (% of their max HR). react-native-svg renders identically on web,
@@ -36,6 +41,7 @@ export function HeartRateStrip({ avg, peak, series, source, durationS, maxHr, co
 
   const effectiveMax = Number(maxHr) >= 120 ? Number(maxHr) : DEFAULT_MAX_HR;
   const chartH = compact ? 44 : 84;
+  const dur = Number(durationS) > 0 ? Number(durationS) : (points.length > 1 ? FALLBACK_DURATION_S : 0);
 
   // Y-range: pad around the series so the curve fills the chart, then snap to
   // zone boundaries when they're close so bands read cleanly.
@@ -86,6 +92,9 @@ export function HeartRateStrip({ avg, peak, series, source, durationS, maxHr, co
               {bands.map((b) => (
                 <Rect key={b.key} x={0} y={b.y} width={chartW} height={b.h} fill={b.color} opacity={0.16} />
               ))}
+              {[0.25, 0.5, 0.75].map((f) => (
+                <Rect key={f} x={chartW * f} y={0} width={StyleSheet.hairlineWidth || 1} height={chartH} fill="#ffffff" opacity={0.14} />
+              ))}
               <Polyline
                 points={linePoints}
                 fill="none"
@@ -99,11 +108,11 @@ export function HeartRateStrip({ avg, peak, series, source, durationS, maxHr, co
         </View>
       ) : null}
 
-      {points.length > 1 && Number(durationS) > 0 ? (
+      {points.length > 1 && dur > 0 ? (
         <View style={s.axis}>
-          <Text style={s.axisLabel}>0:00</Text>
-          <Text style={s.axisLabel}>{fmtClock(Number(durationS) / 2)}</Text>
-          <Text style={s.axisLabel}>{fmtClock(Number(durationS))}</Text>
+          {[0, 0.25, 0.5, 0.75, 1].map((f) => (
+            <Text key={f} style={s.axisLabel}>{fmtClock(dur * f)}</Text>
+          ))}
         </View>
       ) : null}
 
