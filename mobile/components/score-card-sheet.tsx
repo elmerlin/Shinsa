@@ -274,8 +274,10 @@ export function ScoreCardSheet({ visible, data, onClose, onReplay }: Props) {
     const caption = `${songTitle} · ${grade} · ${displayScore.toLocaleString()}`;
     const shareTitle = data.username ? `@${data.username} · ${songTitle}` : songTitle;
     const cacheBust = String(data.played_at_utc || data.date_played || playId || '');
+    // Story-format render (1080x1920, IG-safe margins, HR chart below the
+    // card). The landscape .jpg stays for link unfurls.
     const imageUrl = playId
-      ? `${apiBaseUrl}/og/play/${encodeURIComponent(String(playId))}.jpg?v=${encodeURIComponent(cacheBust)}`
+      ? `${apiBaseUrl}/og/play/${encodeURIComponent(String(playId))}/story.jpg?v=${encodeURIComponent(cacheBust)}`
       : '';
     try {
       // Web path — prefer Web Share API. Try image + URL first, then

@@ -1804,6 +1804,229 @@ function ogFmtClock(totalSeconds) {
   return `${Math.floor(v / 60)}:${String(v % 60).padStart(2, '0')}`;
 }
 
+
+// Latest Shinsa app icon (Pump Gold brand) from the repo — the old client
+// wordmark is the legacy look.
+let cachedBrandIconBuffer = null;
+async function loadShinsaBrandIcon() {
+  if (cachedBrandIconBuffer) return cachedBrandIconBuffer;
+  try {
+    const iconPath = path.join(__dirname, '..', 'mobile', 'assets', 'brand', 'icon.png');
+    const raw = fs.readFileSync(iconPath);
+    cachedBrandIconBuffer = await sharp(raw)
+      .resize(96, 96, { fit: 'cover' })
+      .composite([{
+        input: Buffer.from('<svg width="96" height="96" xmlns="http://www.w3.org/2000/svg"><rect width="96" height="96" rx="24" fill="#fff"/></svg>'),
+        blend: 'dest-in',
+      }])
+      .png()
+      .toBuffer();
+  } catch { cachedBrandIconBuffer = null; }
+  return cachedBrandIconBuffer;
+}
+
+// Instagram-story share card (1080x1920): top/bottom safe space, the score
+// card with heavy scrims for readability, the HR zone-band chart stacked
+// BELOW the card (mirrors the in-app layout), Pump Gold branding.
+async function renderPlayStoryJpeg({ play, brandAssets = null, artworkBuffer = null }) {
+  const width = 1080;
+  const height = 1920;
+  const M = 80;             // side margin
+  const cardX = M;
+  const cardW = width - M * 2;
+
+  const hrAvgV = parseInt(play?.hr_avg, 10) || 0;
+  const hrPeakV = parseInt(play?.hr_peak, 10) || 0;
+  let hrSeries = [];
+  try {
+    const parsedSeries = JSON.parse(String(play?.hr_series || '[]'));
+    if (Array.isArray(parsedSeries)) hrSeries = parsedSeries.map((n) => parseInt(n, 10) || 0).filter((n) => n > 0 && n < 300);
+  } catch { /* not json */ }
+  const hasHr = (hrAvgV > 0 || hrPeakV > 0) && hrSeries.length > 1;
+
+  const cardY = 330;
+  const cardH = hasHr ? 880 : 1060;
+  const hrY = cardY + cardH + 28;
+  const hrH = 470;
+
+  const songTitle = String(play?.song_title || 'Unknown chart').trim() || 'Unknown chart';
+  const titleLines = wrapTextByChars(songTitle, 20, 2).lines;
+  const modeAccent = getModeAccent(play?.mode);
+  const gradeText = formatDisplayGrade(play?.grade || '') || '--';
+  const gradeAccent = getGradeAccent(gradeText);
+  const scoreText = formatScore(play?.score);
+  const playedAt = formatPreviewDateLabel(play?.played_at_utc || play?.date_played || '');
+  const machineName = normalizeWhitespace(String(play?.machine_name || ''));
+  const metaLine = [
+    playedAt ? `Played ${playedAt}` : '',
+    String(play?.mode || '').trim() && parseInt(play?.level, 10) > 0 ? `${String(play.mode).trim()} ${parseInt(play.level, 10)}` : '',
+  ].filter(Boolean).join('  •  ');
+  const plateName = getPlateName(play?.plate || '');
+  const judgments = [
+    { key: 'PERFECT', value: parseInt(play?.perfect, 10) || 0, color: '#7dd3fc' },
+    { key: 'GREAT', value: parseInt(play?.great, 10) || 0, color: '#86efac' },
+    { key: 'GOOD', value: parseInt(play?.good, 10) || 0, color: '#fde047' },
+    { key: 'BAD', value: parseInt(play?.bad, 10) || 0, color: '#f5a5ff' },
+    { key: 'MISS', value: parseInt(play?.miss, 10) || 0, color: '#fda4af' },
+  ];
+  const showJudgments = judgments.some((item) => item.value > 0);
+
+  const titleSvg = titleLines.map((line, index) => (
+    `<text x="${cardX + 48}" y="${cardY + 118 + index * 70}" fill="#ffffff" font-size="60" font-weight="900" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(line)}</text>`
+  )).join('\n');
+  const metaBaseY = cardY + 118 + titleLines.length * 70;
+
+  const judgPanelY = cardY + cardH - 132;
+  const judgItemW = Math.floor((cardW - 96) / 5);
+  const judgmentsSvg = showJudgments ? judgments.map((item, index) => {
+    const cx = cardX + 48 + index * judgItemW + Math.floor(judgItemW / 2);
+    return `
+      <text x="${cx}" y="${judgPanelY + 42}" text-anchor="middle" fill="${item.color}" font-size="20" font-weight="800" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${item.key}</text>
+      <text x="${cx}" y="${judgPanelY + 86}" text-anchor="middle" fill="#ffffff" font-size="38" font-weight="900" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">${escapeXml(formatScore(item.value))}</text>`;
+  }).join('\n') : '';
+
+  // HR panel svg (below the card)
+  let hrSvg = '';
+  if (hasHr) {
+    const maxHrV = parseInt(play?.hr_max, 10) || 190;
+    const durS = (parseInt(play?.song_duration_s, 10) || 0) > 0
+      ? parseInt(play.song_duration_s, 10)
+      : ((parseInt(play?.hr_duration_s, 10) || 0) > 0 ? parseInt(play.hr_duration_s, 10) : 115);
+    const chX = cardX + 48;
+    const chW = cardW - 96;
+    const chY = hrY + 150;
+    const chH = 210;
+    let lo = Math.min(...hrSeries) - 8;
+    let hi = Math.max(...hrSeries) + 8;
+    if (hi - lo < 30) { const mid = (hi + lo) / 2; lo = mid - 15; hi = mid + 15; }
+    const yFor = (bpm) => chY + chH - ((bpm - lo) / (hi - lo)) * chH;
+    const bandsSvg = ogHrZoneBands(maxHrV).map((b) => {
+      const top = Math.min(b.max, hi);
+      const bottom = Math.max(b.min, lo);
+      if (top <= bottom) return '';
+      const y = yFor(top);
+      return `<rect x="${chX}" y="${y.toFixed(1)}" width="${chW}" height="${(yFor(bottom) - y).toFixed(1)}" fill="${b.color}" opacity="0.18" />`;
+    }).join('\n');
+    const gridSvg = [0.25, 0.5, 0.75].map((f) => (
+      `<rect x="${(chX + chW * f).toFixed(1)}" y="${chY}" width="2" height="${chH}" fill="#ffffff" opacity="0.12" />`
+    )).join('\n');
+    const linePts = hrSeries.map((bpm, i) => (
+      `${(chX + (i / Math.max(1, hrSeries.length - 1)) * chW).toFixed(1)},${yFor(bpm).toFixed(1)}`
+    )).join(' ');
+    const axisSvg = [0, 0.25, 0.5, 0.75, 1].map((f) => {
+      const anchorPos = f === 0 ? 'start' : f === 1 ? 'end' : 'middle';
+      return `<text x="${(chX + chW * f).toFixed(1)}" y="${chY + chH + 38}" text-anchor="${anchorPos}" fill="rgba(255,255,255,0.5)" font-size="22" font-weight="700" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">${ogFmtClock(durS * f)}</text>`;
+    }).join('\n');
+    hrSvg = `
+    <rect x="${cardX}" y="${hrY}" width="${cardW}" height="${hrH}" rx="36" fill="rgba(248,113,113,0.10)" stroke="rgba(248,113,113,0.32)" stroke-width="2" />
+    <text x="${chX}" y="${hrY + 64}" fill="rgba(252,165,165,0.92)" font-size="24" font-weight="800" letter-spacing="5" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">♥ HEART RATE</text>
+    <text x="${chX}" y="${hrY + 124}" fill="#ffffff" font-size="58" font-weight="900" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${hrAvgV || '—'}</text>
+    <text x="${chX + (String(hrAvgV).length * 36) + 14}" y="${hrY + 120}" fill="rgba(255,255,255,0.6)" font-size="22" font-weight="800" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">BPM AVG</text>
+    ${hrPeakV > 0 ? `<text x="${cardX + cardW - 48}" y="${hrY + 78}" text-anchor="end" fill="rgba(255,255,255,0.5)" font-size="20" font-weight="900" letter-spacing="3" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">PEAK</text>
+    <text x="${cardX + cardW - 48}" y="${hrY + 124}" text-anchor="end" fill="${ogHrZoneColor(hrPeakV, maxHrV)}" font-size="46" font-weight="900" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${hrPeakV}</text>` : ''}
+    ${bandsSvg}
+    ${gridSvg}
+    <polyline points="${linePts}" fill="none" stroke="#ffffff" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round" />
+    ${axisSvg}
+    <text x="${chX}" y="${hrY + hrH - 26}" fill="rgba(255,255,255,0.45)" font-size="20" font-weight="600" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">Zones from max ${maxHrV} BPM</text>`;
+  }
+
+  const usernameLabel = brandAssets?.usernameLabel || '@player';
+  const textSvg = `
+  <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <radialGradient id="storyGlow" cx="50%" cy="8%" r="70%">
+        <stop offset="0%" stop-color="rgba(255,210,74,0.14)"/>
+        <stop offset="60%" stop-color="rgba(255,210,74,0.03)"/>
+        <stop offset="100%" stop-color="rgba(255,210,74,0)"/>
+      </radialGradient>
+      <linearGradient id="storyScrimTop" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="rgba(3,4,7,0.86)"/>
+        <stop offset="100%" stop-color="rgba(3,4,7,0.18)"/>
+      </linearGradient>
+      <linearGradient id="storyScrimBottom" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="rgba(3,4,7,0.0)"/>
+        <stop offset="40%" stop-color="rgba(3,4,7,0.45)"/>
+        <stop offset="100%" stop-color="rgba(3,4,7,0.94)"/>
+      </linearGradient>
+      <linearGradient id="storyGold" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0%" stop-color="#ffd24a"/>
+        <stop offset="100%" stop-color="#f7b733"/>
+      </linearGradient>
+    </defs>
+    <rect x="0" y="0" width="${width}" height="${height}" fill="url(#storyGlow)" />
+
+    <text x="${M + 118}" y="252" fill="#ffffff" font-size="56" font-weight="900" letter-spacing="6" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">SHINSA</text>
+    <rect x="${M + 118}" y="268" width="120" height="6" rx="3" fill="url(#storyGold)" />
+    <text x="${width - M}" y="252" text-anchor="end" fill="rgba(255,255,255,0.78)" font-size="34" font-weight="700" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(usernameLabel)}</text>
+
+    <rect x="${cardX}" y="${cardY}" width="${cardW}" height="${cardH}" rx="36" fill="none" stroke="rgba(255,255,255,0.14)" stroke-width="2" />
+    <rect x="${cardX}" y="${cardY}" width="${cardW}" height="240" rx="36" fill="url(#storyScrimTop)" />
+    <rect x="${cardX}" y="${cardY + Math.round(cardH * 0.42)}" width="${cardW}" height="${cardH - Math.round(cardH * 0.42)}" fill="url(#storyScrimBottom)" />
+    <rect x="${cardX}" y="${cardY + cardH - 72}" width="${cardW}" height="72" fill="rgba(3,4,7,0.94)" />
+
+    ${titleSvg}
+    <text x="${cardX + 48}" y="${metaBaseY + 14}" fill="rgba(255,255,255,0.88)" font-size="28" font-weight="700" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(String(play?.username || 'Player'))}</text>
+    <text x="${cardX + 48}" y="${metaBaseY + 56}" fill="rgba(255,255,255,0.82)" font-size="26" font-weight="600" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(metaLine)}</text>
+    ${machineName ? `<text x="${cardX + 48}" y="${metaBaseY + 96}" fill="rgba(255,255,255,0.82)" font-size="26" font-weight="600" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(machineName)}</text>` : ''}
+
+    <circle cx="${cardX + cardW - 110}" cy="${cardY + 110}" r="74" fill="${modeAccent.from}" />
+    <circle cx="${cardX + cardW - 110}" cy="${cardY + 110}" r="60" fill="rgba(8,10,16,0.45)" />
+    <text x="${cardX + cardW - 110}" y="${cardY + 92}" text-anchor="middle" fill="rgba(255,255,255,0.85)" font-size="20" font-weight="800" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">LEVEL</text>
+    <text x="${cardX + cardW - 110}" y="${cardY + 142}" text-anchor="middle" fill="#ffffff" font-size="54" font-weight="900" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(String(parseInt(play?.level, 10) || '?'))}</text>
+
+    <text x="${cardX + 48}" y="${cardY + cardH - 196}" fill="${play?.is_stage_break ? '#fda4af' : '#ffffff'}" font-size="${play?.is_stage_break ? 72 : 104}" font-weight="900" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(play?.is_stage_break ? 'STAGE BREAK' : scoreText)}</text>
+    ${plateName ? `<text x="${cardX + 48}" y="${cardY + cardH - 152}" fill="#ffd24a" font-size="26" font-weight="800" letter-spacing="3" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(plateName)}</text>` : ''}
+    <text x="${cardX + cardW - 48}" y="${cardY + cardH - 196}" text-anchor="end" fill="${escapeXml(gradeAccent)}" font-size="110" font-weight="900" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(gradeText)}</text>
+
+    ${showJudgments ? `<rect x="${cardX + 28}" y="${judgPanelY}" width="${cardW - 56}" height="112" rx="28" fill="rgba(3,7,15,0.66)" stroke="rgba(255,255,255,0.10)" />` : ''}
+    ${judgmentsSvg}
+
+    ${hrSvg}
+
+    <text x="${width / 2}" y="1830" text-anchor="middle" fill="rgba(255,255,255,0.42)" font-size="30" font-weight="700" letter-spacing="3" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">pumpshinsa.com</text>
+  </svg>`;
+
+  let cardArtworkOverlay = null;
+  if (artworkBuffer?.length) {
+    cardArtworkOverlay = {
+      input: await sharp(artworkBuffer)
+        .rotate()
+        .resize(cardW, cardH, { fit: 'cover' })
+        .modulate({ brightness: 1.08, saturation: 1.08 })
+        .composite([{
+          input: Buffer.from(`<svg width="${cardW}" height="${cardH}" xmlns="http://www.w3.org/2000/svg"><rect width="${cardW}" height="${cardH}" rx="36" fill="#fff"/></svg>`),
+          blend: 'dest-in',
+        }])
+        .png()
+        .toBuffer(),
+      top: cardY,
+      left: cardX,
+    };
+  }
+
+  const brandIcon = await loadShinsaBrandIcon();
+  const composites = [
+    ...(cardArtworkOverlay ? [cardArtworkOverlay] : []),
+    { input: Buffer.from(textSvg) },
+  ];
+  if (brandIcon) composites.push({ input: brandIcon, top: 180, left: M });
+  if (brandAssets?.avatarBuffer?.length) {
+    composites.push({
+      input: await sharp(brandAssets.avatarBuffer).resize(56, 56).png().toBuffer(),
+      top: 206,
+      left: width - M - 320 - 56 >= 0 ? width - M - 380 : width - M - 56,
+    });
+  }
+
+  return sharp({
+    create: { width, height, channels: 4, background: { r: 5, g: 5, b: 8, alpha: 1 } },
+  })
+    .composite(composites)
+    .jpeg({ quality: 90, mozjpeg: true })
+    .toBuffer();
+}
+
 async function renderPlayOgJpeg({
   play,
   brandAssets = null,
@@ -2052,6 +2275,8 @@ async function renderPlayOgJpeg({
     <rect x="${cardX}" y="${cardY}" width="${cardW}" height="${cardH}" rx="30" fill="url(#innerGlow)" />
     <rect x="${cardX}" y="${cardY}" width="${cardW}" height="${cardH}" rx="30" fill="url(#centerReveal)" />
     <rect x="${cardX}" y="${cardY}" width="${cardW}" height="${cardH}" rx="30" fill="url(#bottomVignette)" />
+
+    <rect x="${cardX + 22}" y="${cardY + 26}" width="${Math.round(cardW * 0.6)}" height="172" rx="20" fill="rgba(4,7,12,0.55)" />
 
     ${titleSvg}
 
@@ -2689,6 +2914,75 @@ function registerSharePreviewRoutes(app, { clientBuildDir, mobileWebBuildDir = '
       return res.send(jpeg);
     } catch (err) {
       console.error('Share preview: play og render failed:', err.message);
+      return res.status(500).send('Error');
+    }
+  });
+
+  // Portrait story-format share image (1080x1920) — what the app's Share
+  // button attaches. The landscape /og/play/:id.jpg stays for link unfurls.
+  app.get('/og/play/:id/story.jpg', async (req, res) => {
+    const playId = parseInt(req.params.id, 10);
+    if (Number.isNaN(playId)) return res.status(400).send('Invalid play id');
+
+    const db = getDb();
+    const play = db.prepare(`
+      SELECT rp.*, u.id AS user_id, u.username, u.avatar, u.avatar_v, u.skill_title
+      FROM user_recently_played rp
+      JOIN users u ON rp.user_id = u.id
+      WHERE rp.id = ?
+    `).get(playId);
+    if (!play) return res.status(404).send('Not found');
+
+    if ((parseInt(play.hr_avg, 10) || 0) > 0 || (parseInt(play.hr_peak, 10) || 0) > 0) {
+      play.hr_max = db.prepare(`
+        SELECT COALESCE(NULLIF((SELECT max_hr FROM users WHERE id = ?), 0),
+                        (SELECT MAX(hr_peak) FROM user_recently_played WHERE user_id = ? AND hr_peak > 0),
+                        190) AS max_hr
+      `).get(play.user_id, play.user_id)?.max_hr || 190;
+      play.song_duration_s = db.prepare(
+        'SELECT duration_seconds FROM songs WHERE TRIM(title) = TRIM(?) AND mode = ? AND level = ? LIMIT 1',
+      ).get(play.song_title, play.mode, play.level)?.duration_seconds || 0;
+    }
+
+    const versionRaw = String(play.played_at_utc || play.date_played || play.id || '');
+    const version = versionRaw.replace(/[^A-Za-z0-9_.-]/g, '_');
+    const etag = `W/"play-story-${playId}-${version}"`;
+    if (req.headers['if-none-match'] === etag) return res.status(304).end();
+
+    try {
+      const origin = getRequestOrigin(req);
+      const resolvedJacketUrl = resolveUpscoreItemJacketUrl(db, play);
+      let artworkBuffer = null;
+      try {
+        artworkBuffer = await loadPreviewArtworkBuffer({
+          clientBuildDir,
+          origin,
+          jacketUrl: resolvedJacketUrl || String(play.background_url || '').trim(),
+          backgroundUrl: String(play.background_url || '').trim(),
+        });
+      } catch (assetErr) {
+        console.error('Share preview: story artwork load failed (rendering without):', assetErr.message);
+      }
+      let brandAssets = null;
+      try {
+        brandAssets = await buildBrandAssets({
+          clientBuildDir,
+          origin,
+          username: play.username,
+          avatar: play.avatar,
+          userId: play.user_id,
+          avatarVersion: play.avatar_v,
+        });
+      } catch (assetErr) {
+        console.error('Share preview: story brand assets failed (rendering without):', assetErr.message);
+      }
+      const jpeg = await renderPlayStoryJpeg({ play, brandAssets, artworkBuffer });
+      res.set('Content-Type', 'image/jpeg');
+      res.set('Cache-Control', 'public, max-age=3600');
+      res.set('ETag', etag);
+      return res.send(jpeg);
+    } catch (err) {
+      console.error('Share preview: play story render failed:', err.message);
       return res.status(500).send('Error');
     }
   });
