@@ -1770,6 +1770,40 @@ async function renderClearOgJpeg({
     .toBuffer();
 }
 
+const OG_HR_ZONES = [
+  { pctMin: 0, pctMax: 0.68, color: '#94a3b8' },
+  { pctMin: 0.68, pctMax: 0.73, color: '#60a5fa' },
+  { pctMin: 0.73, pctMax: 0.8, color: '#34d399' },
+  { pctMin: 0.8, pctMax: 0.87, color: '#fde047' },
+  { pctMin: 0.87, pctMax: 0.93, color: '#fb923c' },
+  { pctMin: 0.93, pctMax: 10, color: '#f87171' },
+];
+
+// Personal HR zone bands — % of the player's max HR, mirroring the app's
+// heartRate lib (z0 below-zones … z5 very hard).
+function ogHrZoneBands(maxHr) {
+  const mx = (Number(maxHr) >= 120 && Number(maxHr) <= 260) ? Number(maxHr) : 190;
+  return OG_HR_ZONES.map((z) => ({
+    min: Math.round(z.pctMin * mx),
+    max: Math.round(Math.min(z.pctMax, 10) * mx),
+    color: z.color,
+  }));
+}
+
+function ogHrZoneColor(bpm, maxHr) {
+  const bands = ogHrZoneBands(maxHr);
+  const n = Number(bpm) || 0;
+  for (const b of bands) {
+    if (n >= b.min && n < b.max) return b.color;
+  }
+  return bands[bands.length - 1].color;
+}
+
+function ogFmtClock(totalSeconds) {
+  const v = Math.max(0, Math.round(totalSeconds));
+  return `${Math.floor(v / 60)}:${String(v % 60).padStart(2, '0')}`;
+}
+
 async function renderPlayOgJpeg({
   play,
   brandAssets = null,
@@ -1778,8 +1812,17 @@ async function renderPlayOgJpeg({
   height = 630,
 }) {
   const username = brandAssets?.usernameLabel || (play?.username ? `@${play.username}` : '@player');
+  const hrAvgV = parseInt(play?.hr_avg, 10) || 0;
+  const hrPeakV = parseInt(play?.hr_peak, 10) || 0;
+  let hrSeries = [];
+  try {
+    const parsedSeries = JSON.parse(String(play?.hr_series || '[]'));
+    if (Array.isArray(parsedSeries)) hrSeries = parsedSeries.map((n) => parseInt(n, 10) || 0).filter((n) => n > 0 && n < 300);
+  } catch { /* not json */ }
+  // Full HR panel (zone-band curve) when there's a series; pill fallback otherwise.
+  const hasHrPanel = (hrAvgV > 0 || hrPeakV > 0) && hrSeries.length > 1;
   const songTitle = String(play?.song_title || 'Unknown chart').trim() || 'Unknown chart';
-  const titleLines = wrapTextByChars(songTitle, 24, 2).lines;
+  const titleLines = wrapTextByChars(songTitle, hasHrPanel ? 16 : 24, 2).lines;
   const title = titleLines.length > 0 ? titleLines : [textSnippet(songTitle, 28)];
   const badgeText = chartBadgeLabel(play?.mode, play?.level);
   const modeAccent = getModeAccent(play?.mode);
@@ -1806,21 +1849,78 @@ async function renderPlayOgJpeg({
     { key: 'MISS', value: parseInt(play?.miss, 10) || 0, color: '#fda4af' },
   ];
   const showJudgments = judgments.some((item) => item.value > 0);
-  const hrAvg = parseInt(play?.hr_avg, 10) || 0;
-  const hrPeak = parseInt(play?.hr_peak, 10) || 0;
+  const hrAvg = hrAvgV;
+  const hrPeak = hrPeakV;
   const pillItems = [
     skillTitle ? { text: skillTitle, fill: 'rgba(34,211,238,0.12)', stroke: 'rgba(103,232,249,0.34)', color: '#d9f9ff' } : null,
     overRank > 0 ? { text: `TOP #${overRank}`, fill: 'rgba(250,204,21,0.12)', stroke: 'rgba(250,204,21,0.36)', color: '#fef08a' } : null,
     badgeText ? { text: badgeText, fill: modeAccent.fill, stroke: modeAccent.border, color: '#ffffff' } : null,
-    hrAvg > 0 || hrPeak > 0
+    (hrAvg > 0 || hrPeak > 0) && !hasHrPanel
       ? { text: `♥ ${hrAvg || '—'} AVG · ${hrPeak || '—'} PEAK BPM`, fill: 'rgba(248,113,113,0.14)', stroke: 'rgba(248,113,113,0.40)', color: '#fecaca' }
       : null,
   ].filter(Boolean);
 
   const cardX = 68;
   const cardY = 102;
-  const cardW = width - 136;
   const cardH = 468;
+  const hrPanelW = 340;
+  const hrPanelGap = 24;
+  const fullCardW = width - 136;
+  const cardW = hasHrPanel ? fullCardW - hrPanelW - hrPanelGap : fullCardW;
+  const hrPanelX = cardX + cardW + hrPanelGap;
+
+  // Dedicated HR panel — mirrors the in-app card: ♥ avg/peak header, the HR
+  // curve over the player's personal zone bands, quarter gridlines + song-time
+  // axis, max-HR footnote.
+  let hrPanelSvg = '';
+  if (hasHrPanel) {
+    const maxHrV = parseInt(play?.hr_max, 10) || 190;
+    const durS = (parseInt(play?.song_duration_s, 10) || 0) > 0
+      ? parseInt(play.song_duration_s, 10)
+      : ((parseInt(play?.hr_duration_s, 10) || 0) > 0 ? parseInt(play.hr_duration_s, 10) : 115);
+    const chX = hrPanelX + 26;
+    const chW = hrPanelW - 52;
+    const chY = cardY + 132;
+    const chH = 236;
+    let lo = Math.min(...hrSeries) - 8;
+    let hi = Math.max(...hrSeries) + 8;
+    if (hi - lo < 30) { const mid = (hi + lo) / 2; lo = mid - 15; hi = mid + 15; }
+    const yFor = (bpm) => chY + chH - ((bpm - lo) / (hi - lo)) * chH;
+    const bandsSvg = ogHrZoneBands(maxHrV)
+      .map((b) => {
+        const top = Math.min(b.max, hi);
+        const bottom = Math.max(b.min, lo);
+        if (top <= bottom) return '';
+        const y = yFor(top);
+        return `<rect x="${chX}" y="${y.toFixed(1)}" width="${chW}" height="${(yFor(bottom) - y).toFixed(1)}" fill="${b.color}" opacity="0.18" />`;
+      })
+      .join('\n');
+    const gridSvg = [0.25, 0.5, 0.75]
+      .map((f) => `<rect x="${(chX + chW * f).toFixed(1)}" y="${chY}" width="1" height="${chH}" fill="#ffffff" opacity="0.14" />`)
+      .join('\n');
+    const linePts = hrSeries
+      .map((bpm, i) => `${(chX + (i / Math.max(1, hrSeries.length - 1)) * chW).toFixed(1)},${yFor(bpm).toFixed(1)}`)
+      .join(' ');
+    const axisSvg = [0, 0.25, 0.5, 0.75, 1]
+      .map((f) => {
+        const anchor = f === 0 ? 'start' : f === 1 ? 'end' : 'middle';
+        return `<text x="${(chX + chW * f).toFixed(1)}" y="${chY + chH + 26}" text-anchor="${anchor}" fill="rgba(255,255,255,0.45)" font-size="14" font-weight="700" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">${ogFmtClock(durS * f)}</text>`;
+      })
+      .join('\n');
+    hrPanelSvg = `
+    <rect x="${hrPanelX}" y="${cardY}" width="${hrPanelW}" height="${cardH}" rx="30" fill="rgba(248,113,113,0.10)" stroke="rgba(248,113,113,0.30)" />
+    <text x="${chX}" y="${cardY + 44}" fill="rgba(252,165,165,0.9)" font-size="15" font-weight="800" letter-spacing="3" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">♥ HEART RATE</text>
+    <text x="${chX}" y="${cardY + 96}" fill="#ffffff" font-size="46" font-weight="900" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${hrAvgV || '—'}</text>
+    <text x="${chX + (String(hrAvgV).length * 28) + 10}" y="${cardY + 94}" fill="rgba(255,255,255,0.6)" font-size="14" font-weight="800" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">BPM AVG</text>
+    ${hrPeakV > 0 ? `<text x="${hrPanelX + hrPanelW - 26}" y="${cardY + 70}" text-anchor="end" fill="rgba(255,255,255,0.5)" font-size="13" font-weight="900" letter-spacing="2" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">PEAK</text>
+    <text x="${hrPanelX + hrPanelW - 26}" y="${cardY + 98}" text-anchor="end" fill="${ogHrZoneColor(hrPeakV, maxHrV)}" font-size="30" font-weight="900" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${hrPeakV}</text>` : ''}
+    ${bandsSvg}
+    ${gridSvg}
+    <polyline points="${linePts}" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />
+    ${axisSvg}
+    <text x="${chX}" y="${cardY + cardH - 22}" fill="rgba(255,255,255,0.45)" font-size="13" font-weight="600" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">Zones from max ${maxHrV} BPM</text>
+    `;
+  }
   const levelSize = 112;
   const levelX = cardX + cardW - levelSize - 36;
   const levelY = cardY + 42;
@@ -1974,6 +2074,7 @@ async function renderPlayOgJpeg({
 
     <rect x="${cardX + 20}" y="${judgmentPanelY}" width="${cardW - 40}" height="76" rx="22" fill="rgba(3,7,15,0.52)" stroke="rgba(255,255,255,0.10)" />
     ${judgmentsSvg}
+    ${hrPanelSvg}
   </svg>
   `;
 
@@ -2526,9 +2627,20 @@ function registerSharePreviewRoutes(app, { clientBuildDir, mobileWebBuildDir = '
     `).get(playId);
     if (!play) return res.status(404).send('Not found');
 
+    if ((parseInt(play.hr_avg, 10) || 0) > 0 || (parseInt(play.hr_peak, 10) || 0) > 0) {
+      play.hr_max = db.prepare(`
+        SELECT COALESCE(NULLIF((SELECT max_hr FROM users WHERE id = ?), 0),
+                        (SELECT MAX(hr_peak) FROM user_recently_played WHERE user_id = ? AND hr_peak > 0),
+                        190) AS max_hr
+      `).get(play.user_id, play.user_id)?.max_hr || 190;
+      play.song_duration_s = db.prepare(
+        'SELECT duration_seconds FROM songs WHERE TRIM(title) = TRIM(?) AND mode = ? AND level = ? LIMIT 1',
+      ).get(play.song_title, play.mode, play.level)?.duration_seconds || 0;
+    }
+
     const versionRaw = String(play.played_at_utc || play.date_played || play.id || '');
     const version = versionRaw.replace(/[^A-Za-z0-9_.-]/g, '_');
-    const etag = `W/"play-og-${playId}-${version}"`;
+    const etag = `W/"play-og2-${playId}-${version}"`;
     if (req.headers['if-none-match'] === etag) return res.status(304).end();
 
     try {
