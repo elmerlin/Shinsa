@@ -1806,10 +1806,15 @@ async function renderPlayOgJpeg({
     { key: 'MISS', value: parseInt(play?.miss, 10) || 0, color: '#fda4af' },
   ];
   const showJudgments = judgments.some((item) => item.value > 0);
+  const hrAvg = parseInt(play?.hr_avg, 10) || 0;
+  const hrPeak = parseInt(play?.hr_peak, 10) || 0;
   const pillItems = [
     skillTitle ? { text: skillTitle, fill: 'rgba(34,211,238,0.12)', stroke: 'rgba(103,232,249,0.34)', color: '#d9f9ff' } : null,
     overRank > 0 ? { text: `TOP #${overRank}`, fill: 'rgba(250,204,21,0.12)', stroke: 'rgba(250,204,21,0.36)', color: '#fef08a' } : null,
     badgeText ? { text: badgeText, fill: modeAccent.fill, stroke: modeAccent.border, color: '#ffffff' } : null,
+    hrAvg > 0 || hrPeak > 0
+      ? { text: `♥ ${hrAvg || '—'} AVG · ${hrPeak || '—'} PEAK BPM`, fill: 'rgba(248,113,113,0.14)', stroke: 'rgba(248,113,113,0.40)', color: '#fecaca' }
+      : null,
   ].filter(Boolean);
 
   const cardX = 68;
@@ -1896,7 +1901,7 @@ async function renderPlayOgJpeg({
       </linearGradient>
       <linearGradient id="topBar" x1="0" y1="0" x2="1" y2="0">
         <stop offset="0%" stop-color="rgba(53,123,255,0.18)"/>
-        <stop offset="100%" stop-color="rgba(255,87,164,0.12)"/>
+        <stop offset="100%" stop-color="rgba(255,210,74,0.12)"/>
       </linearGradient>
       <linearGradient id="cardShade" x1="0" y1="0" x2="0" y2="1">
         <stop offset="0%" stop-color="rgba(4,8,16,0.02)"/>
@@ -1916,7 +1921,7 @@ async function renderPlayOgJpeg({
       <linearGradient id="innerGlow" x1="0" y1="0" x2="1" y2="1">
         <stop offset="0%" stop-color="rgba(125,211,252,0.12)"/>
         <stop offset="55%" stop-color="rgba(125,211,252,0.0)"/>
-        <stop offset="100%" stop-color="rgba(236,72,153,0.06)"/>
+        <stop offset="100%" stop-color="rgba(255,210,74,0.06)"/>
       </linearGradient>
       <linearGradient id="bottomVignette" x1="0" y1="0" x2="0" y2="1">
         <stop offset="0%" stop-color="rgba(7,12,22,0.0)"/>
@@ -1996,7 +2001,7 @@ async function renderActivityOgJpeg({
   headline = 'Pump Shinsa Update',
   subline = '',
   accentFrom = '#3aaaff',
-  accentTo = '#ff3366',
+  accentTo = '#ffd24a',
   width = 1200,
   height = 630,
 }) {
@@ -2531,20 +2536,34 @@ function registerSharePreviewRoutes(app, { clientBuildDir, mobileWebBuildDir = '
       const resolvedJacketUrl = resolveUpscoreItemJacketUrl(db, play);
       const preferredArtworkUrl = resolvedJacketUrl || String(play.background_url || '').trim();
       const fallbackArtworkUrl = String(play.background_url || '').trim();
-      const artworkBuffer = await loadPreviewArtworkBuffer({
-        clientBuildDir,
-        origin,
-        jacketUrl: preferredArtworkUrl,
-        backgroundUrl: fallbackArtworkUrl,
-      });
-      const brandAssets = await buildBrandAssets({
-        clientBuildDir,
-        origin,
-        username: play.username,
-        avatar: play.avatar,
-        userId: play.user_id,
-        avatarVersion: play.avatar_v,
-      });
+      // Asset fetches must never fail the render — a 500 here gets written to
+      // disk by the app's share flow and attached as a blank "image" (the
+      // observed blank-on-first-share bug: cold artwork fetch timed out, the
+      // retry hit a warm cache). Render without the asset instead.
+      let artworkBuffer = null;
+      try {
+        artworkBuffer = await loadPreviewArtworkBuffer({
+          clientBuildDir,
+          origin,
+          jacketUrl: preferredArtworkUrl,
+          backgroundUrl: fallbackArtworkUrl,
+        });
+      } catch (assetErr) {
+        console.error('Share preview: play artwork load failed (rendering without):', assetErr.message);
+      }
+      let brandAssets = null;
+      try {
+        brandAssets = await buildBrandAssets({
+          clientBuildDir,
+          origin,
+          username: play.username,
+          avatar: play.avatar,
+          userId: play.user_id,
+          avatarVersion: play.avatar_v,
+        });
+      } catch (assetErr) {
+        console.error('Share preview: play brand assets failed (rendering without):', assetErr.message);
+      }
       const jpeg = await renderPlayOgJpeg({
         play,
         brandAssets,

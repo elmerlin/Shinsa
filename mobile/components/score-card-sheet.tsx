@@ -312,7 +312,11 @@ export function ScoreCardSheet({ visible, data, onClose, onReplay }: Props) {
         const available = await Sharing.isAvailableAsync();
         if (available) {
           const dest = `${FileSystem.cacheDirectory || ''}shinsa-score-${playId}.jpg`;
-          const { uri } = await FileSystem.downloadAsync(imageUrl, dest);
+          const dl = await FileSystem.downloadAsync(imageUrl, dest);
+          // A failed render (e.g. 500) writes the error body to disk — attaching
+          // that shares a blank "image". Fall through to URL-only instead.
+          if ((dl.status || 0) !== 200) throw new Error(`og render ${dl.status}`);
+          const { uri } = dl;
           // expo-sharing on Android can't carry a separate URL field, so
           // we put the link in the dialogTitle. Many apps surface it as
           // pre-filled body text. On iOS we use RN's Share with both

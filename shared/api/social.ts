@@ -24,6 +24,10 @@ export interface FeedParams {
 
 export function createSocialApi(client: ApiClient) {
   return {
+    /** Single play with user info + comment count (+ hr fields when present). */
+    getPlay(playId: number | string) {
+      return client.request<Record<string, unknown>>(`/api/social/plays/${playId}`);
+    },
     feed(params: FeedParams = {}) {
       const search = new URLSearchParams();
       if (params.page) search.set('page', String(params.page));
