@@ -2012,10 +2012,12 @@ async function renderPlayStoryJpeg({ play, brandAssets = null, artworkBuffer = n
   ];
   if (brandIcon) composites.push({ input: brandIcon, top: 180, left: M });
   if (brandAssets?.avatarBuffer?.length) {
+    // Sit just left of the right-aligned @username (34px font ≈ 19px/char).
+    const usernameWidth = Math.round(String(usernameLabel).length * 19);
     composites.push({
       input: await sharp(brandAssets.avatarBuffer).resize(56, 56).png().toBuffer(),
       top: 206,
-      left: width - M - 320 - 56 >= 0 ? width - M - 380 : width - M - 56,
+      left: Math.max(M, width - M - usernameWidth - 76),
     });
   }
 
