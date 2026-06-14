@@ -33,10 +33,29 @@ export interface YoutubeConnectStartPayload {
   next_path: string;
 }
 
+/** A live broadcast on the user's channel — used to attach a stream to a
+ *  live session without pasting a URL. */
+export interface YoutubeBroadcast {
+  id: string;
+  video_id: string;
+  title: string;
+  life_cycle_status: string;
+  privacy_status: string;
+  is_live_now: boolean;
+  scheduled_start_time: string;
+  actual_start_time: string;
+  stream_url: string;
+}
+
 export function createYoutubeApi(client: ApiClient) {
   return {
     status() {
       return client.request<YoutubeConnectionStatus>('/api/youtube/status');
+    },
+    /** The user's live broadcasts (live now + upcoming/ready), newest-relevant
+     *  first. Empty when not linked. */
+    broadcasts() {
+      return client.request<{ broadcasts: YoutubeBroadcast[] }>('/api/youtube/broadcasts');
     },
     /** Kick off the OAuth handshake. Caller is responsible for opening the
      *  returned `auth_url` in a browser session and awaiting the redirect

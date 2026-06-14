@@ -83,6 +83,7 @@ function getStructuredSongPayload(message: LiveSessionMessage): {
   jacketUrl: string;
   score: number;
   grade: string;
+  performer: string;
 } | null {
   const type = String(message.message_type || '').trim().toLowerCase();
   if (!SONG_MESSAGE_TYPES.has(type)) return null;
@@ -98,8 +99,11 @@ function getStructuredSongPayload(message: LiveSessionMessage): {
   const score = parseInt(String(metadata.score ?? ''), 10) || 0;
   const grade = String(metadata.grade || '').trim();
   const jacketUrl = String(metadata.jacket_url || '').trim();
+  // The play/request was performed BY a player — the message row itself is
+  // posted as "System", so the real attribution lives in the metadata.
+  const performer = String(metadata.performed_by_username || metadata.performer_username || '').trim();
 
-  return { songTitle, mode, level, score, grade, jacketUrl };
+  return { songTitle, mode, level, score, grade, jacketUrl, performer };
 }
 
 function fmtNum(n: number | null | undefined): string {
@@ -1085,9 +1089,9 @@ function ChatRow({
               </>
             ) : null}
           </View>
-          {message.username ? (
+          {(song.performer || (message.username && message.username !== 'System')) ? (
             <Text style={s.songSubtle} numberOfLines={1}>
-              @{message.username}
+              @{song.performer || message.username}
             </Text>
           ) : null}
         </View>

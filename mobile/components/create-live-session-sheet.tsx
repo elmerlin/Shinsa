@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import {
   ActivityIndicator,
@@ -6,6 +6,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Switch,
   Text,
@@ -16,7 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useTheme } from '@/contexts/theme-context';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
-import { liveApi } from '@/lib/api';
+import { liveApi, youtubeApi } from '@/lib/api';
 import type { ThemeColors } from '@/constants/theme';
 
 interface Props {
@@ -42,6 +43,23 @@ export function CreateLiveSessionSheet({ visible, onClose, onCreated }: Props) {
   const [title, setTitle] = useState('');
   const [streamUrl, setStreamUrl] = useState('');
   const [isUnlisted, setIsUnlisted] = useState(false);
+
+  // If the host has linked YouTube, offer their live/upcoming broadcasts as
+  // one-tap stream attachments (only fetched while the sheet is open).
+  const ytStatusQuery = useQuery({
+    queryKey: ['youtube-status'],
+    queryFn: () => youtubeApi.status(),
+    enabled: visible,
+    staleTime: 60_000,
+  });
+  const ytLinked = !!ytStatusQuery.data?.linked;
+  const broadcastsQuery = useQuery({
+    queryKey: ['youtube-broadcasts'],
+    queryFn: () => youtubeApi.broadcasts(),
+    enabled: visible && ytLinked,
+    staleTime: 30_000,
+  });
+  const broadcasts = broadcastsQuery.data?.broadcasts ?? [];
 
   const createMutation = useMutation({
     mutationFn: () =>
@@ -96,8 +114,41 @@ export function CreateLiveSessionSheet({ visible, onClose, onCreated }: Props) {
               <Text style={s.fieldHint}>Leave blank to auto-name "{`{your username}`} live session".</Text>
             </View>
 
+            {ytLinked ? (
+              <View style={s.field}>
+                <Text style={s.fieldLabel}>Your YouTube streams</Text>
+                {broadcastsQuery.isLoading ? (
+                  <View style={s.ytLoading}><ActivityIndicator size="small" color={theme.accent} /></View>
+                ) : broadcasts.length === 0 ? (
+                  <Text style={s.fieldHint}>No live or upcoming broadcasts found on your channel.</Text>
+                ) : (
+                  <ScrollView style={s.ytList} nestedScrollEnabled keyboardShouldPersistTaps="handled">
+                    {broadcasts.map((b) => {
+                      const selected = streamUrl.trim() === b.stream_url;
+                      return (
+                        <Pressable
+                          key={b.id}
+                          onPress={() => setStreamUrl(selected ? '' : b.stream_url)}
+                          disabled={createMutation.isPending}
+                          style={({ pressed }) => [s.ytRow, selected && s.ytRowSelected, pressed && { opacity: 0.8 }]}>
+                          <View style={[s.ytDot, b.is_live_now ? s.ytDotLive : s.ytDotIdle]} />
+                          <View style={s.ytRowMain}>
+                            <Text style={s.ytRowTitle} numberOfLines={1}>{b.title || 'Untitled stream'}</Text>
+                            <Text style={s.ytRowStatus}>
+                              {b.is_live_now ? 'LIVE NOW' : (b.life_cycle_status || 'ready').toUpperCase()}
+                            </Text>
+                          </View>
+                          {selected ? <IconSymbol name="checkmark" size={15} color={theme.accent} /> : null}
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+                )}
+              </View>
+            ) : null}
+
             <View style={s.field}>
-              <Text style={s.fieldLabel}>Stream URL (optional)</Text>
+              <Text style={s.fieldLabel}>{ytLinked ? 'Or paste a stream URL' : 'Stream URL (optional)'}</Text>
               <TextInput
                 style={s.input}
                 value={streamUrl}
@@ -189,6 +240,25 @@ const makeStyles = (t: ThemeColors) => ({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: t.border,
   },
+
+  ytLoading: { paddingVertical: 14, alignItems: 'center' as const },
+  ytList: { maxHeight: 168, borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, borderColor: t.border, backgroundColor: t.card },
+  ytRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: t.border,
+  },
+  ytRowSelected: { backgroundColor: t.accentTint },
+  ytDot: { width: 8, height: 8, borderRadius: 4 },
+  ytDotLive: { backgroundColor: '#dc2626' },
+  ytDotIdle: { backgroundColor: t.textDim },
+  ytRowMain: { flex: 1, minWidth: 0, gap: 1 },
+  ytRowTitle: { fontSize: 13, fontWeight: '700' as const, color: t.text },
+  ytRowStatus: { fontSize: 9, fontWeight: '800' as const, letterSpacing: 0.6, color: t.textMuted },
 
   toggleRow: {
     flexDirection: 'row' as const,
