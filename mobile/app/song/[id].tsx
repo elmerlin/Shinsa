@@ -12,6 +12,7 @@ import { ScoreCardSheet, type ScoreCardData } from '@/components/score-card-shee
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/contexts/theme-context';
+import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { songsApi } from '@/lib/api';
 import { getGradeDisplayLabel, getGradeTier, TIER_COLORS } from '@/lib/grades';
@@ -234,6 +235,7 @@ export default function ChartDetailScreen() {
   const chartId = Number(id);
   const { theme } = useTheme();
   const { user } = useAuth();
+  const { isDesktop } = useBreakpoint();
   const s = useThemedStyles(makeStyles);
   const [scoreTarget, setScoreTarget] = useState<ScoreCardData | null>(null);
   const [replayTarget, setReplayTarget] = useState<{ url: string; title: string } | null>(null);
@@ -309,7 +311,7 @@ export default function ChartDetailScreen() {
   return (
     <View style={s.container}>
       <Stack.Screen options={{ title: chart?.title || 'Chart' }} />
-      <ScrollView contentContainerStyle={s.scroll}>
+      <ScrollView contentContainerStyle={[s.scroll, isDesktop && s.scrollDesktop]}>
         {isLoading && (
           <View style={s.center}><ActivityIndicator color={theme.spinner} /></View>
         )}
@@ -320,127 +322,101 @@ export default function ChartDetailScreen() {
           </View>
         )}
 
-        {chart && (
-          <>
-            <HeaderCard chart={chart} s={s} />
-
-            {(user || (chart.level ?? 0) >= 20) ? (
-              <View style={s.actionRow}>
-                {user ? (
-                  <Pressable
-                    onPress={() => setSaveListOpen(true)}
-                    style={({ pressed }) => [s.actionBtn, pressed && { opacity: 0.85 }]}
-                    accessibilityLabel="Save chart to a list">
-                    <IconSymbol name="list.bullet" size={15} color={theme.text} />
-                    <Text style={s.actionBtnText}>Save to list</Text>
+{(() => {
+          if (!chart) return null;
+          // Desktop reflows the single mobile column into two: a fixed-width
+          // left rail (art + actions + your best + skills) and a wider right
+          // column (history + friends). Mobile stacks exactly as before.
+          const headerEl = <HeaderCard chart={chart} s={s} />;
+          const actionsEl = (user || (chart.level ?? 0) >= 20) ? (
+            <View style={s.actionRow}>
+              {user ? (
+                <Pressable
+                  onPress={() => setSaveListOpen(true)}
+                  style={({ pressed }) => [s.actionBtn, pressed && { opacity: 0.85 }]}
+                  accessibilityLabel="Save chart to a list">
+                  <IconSymbol name="list.bullet" size={15} color={theme.text} />
+                  <Text style={s.actionBtnText}>Save to list</Text>
+                </Pressable>
+              ) : null}
+              {(chart.level ?? 0) >= 20 ? (
+                <Pressable
+                  onPress={() => router.push({ pathname: '/leaderboards', params: { tab: 'over20', level: String(chart.level || ''), song: String(chart.title || ''), mode: String(chart.mode || '') } })}
+                  style={({ pressed }) => [s.actionBtnAccent, pressed && { opacity: 0.85 }]}
+                  accessibilityLabel="View Over Top 100">
+                  <IconSymbol name="trophy.fill" size={15} color={theme.bg} />
+                  <Text style={s.actionBtnAccentText}>OVER Top 100</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null;
+          const bestEl = best ? (
+            <PersonalBest
+              best={best}
+              replayUrl={replayUrl}
+              s={s}
+              onScorePress={() => setScoreTarget(buildScoreData(best))}
+              onReplayPress={() => onReplay(replayUrl, `${chart.title} · ${chart.mode || ''}${chart.level ? ` ${chart.level}` : ''}`)}
+            />
+          ) : userSummary ? (
+            <View style={s.section}>
+              <Text style={s.eyebrow}>YOUR BEST</Text>
+              <View style={s.emptyCard}><Text style={s.emptyText}>No clears yet</Text></View>
+            </View>
+          ) : null;
+          const historyEl = sortedHistory.length > 0 ? (
+            <View style={s.section}>
+              <View style={s.sectionHeaderRow}><Text style={s.eyebrow}>HISTORY</Text><Text style={s.sectionCount}>{sortedHistory.length}</Text></View>
+              <View style={s.listCard}>
+                {visibleHistory.map((row) => (
+                  <HistoryRow key={String(row.id)} row={row} s={s} onPress={() => setScoreTarget(buildScoreData(row))} />
+                ))}
+                {hasMoreHistory ? (
+                  <Pressable onPress={() => setShowAllHistory((v) => !v)} style={({ pressed }) => [s.showMoreBtn, pressed && { opacity: 0.7 }]}>
+                    <Text style={s.showMoreText}>{showAllHistory ? 'Show less' : `Show ${sortedHistory.length - 5} more`}</Text>
                   </Pressable>
                 ) : null}
-                {(chart.level ?? 0) >= 20 ? (
-                  // Charts at level 20+ are tracked in PIU's global OVER Top 100
-                  // ranking. Deep-link straight to the right tab + chart selection.
-                  <Pressable
-                    onPress={() => router.push({
-                      pathname: '/leaderboards',
-                      params: {
-                        tab: 'over20',
-                        level: String(chart.level || ''),
-                        song: String(chart.title || ''),
-                        mode: String(chart.mode || ''),
-                      },
-                    })}
-                    style={({ pressed }) => [s.actionBtnAccent, pressed && { opacity: 0.85 }]}
-                    accessibilityLabel="View Over Top 100">
-                    <IconSymbol name="trophy.fill" size={15} color={theme.bg} />
-                    <Text style={s.actionBtnAccentText}>OVER Top 100</Text>
+              </View>
+            </View>
+          ) : null;
+          const friendsEl = friendRecords.length > 0 ? (
+            <View style={s.section}>
+              <View style={s.sectionHeaderRow}><Text style={s.eyebrow}>FRIENDS</Text><Text style={s.sectionCount}>{friendRecords.length}</Text></View>
+              <View style={s.listCard}>
+                {friendRecords.map((rec) => (
+                  <FriendRecordRow key={rec.user.id} rec={rec} chart={chart} s={s} onPress={() => setScoreTarget(buildFriendScoreData(rec))} onReplayPress={onReplay} onProfilePress={onProfile} />
+                ))}
+              </View>
+            </View>
+          ) : null;
+          const skillsEl = (chart.skills && chart.skills.length > 0) ? (
+            <View style={s.section}>
+              <View style={s.sectionHeaderRow}><Text style={s.eyebrow}>SKILLS</Text><Text style={s.sectionCount}>{chart.skills.length}</Text></View>
+              <View style={s.skillsRow}>
+                {chart.skills.map((sk) => (
+                  <Pressable key={sk.slug} onPress={() => router.push({ pathname: '/skill/[slug]', params: { slug: sk.slug } })} style={({ pressed }) => [s.skillChip, pressed && { opacity: 0.7 }]}>
+                    <Text style={s.skillChipText}>{sk.name}</Text>
                   </Pressable>
-                ) : null}
+                ))}
               </View>
-            ) : null}
-
-            {best ? (
-              <PersonalBest
-                best={best}
-                replayUrl={replayUrl}
-                s={s}
-                onScorePress={() => setScoreTarget(buildScoreData(best))}
-                onReplayPress={() => onReplay(replayUrl, `${chart.title} · ${chart.mode || ''}${chart.level ? ` ${chart.level}` : ''}`)}
-              />
-            ) : userSummary ? (
-              <View style={s.section}>
-                <Text style={s.eyebrow}>YOUR BEST</Text>
-                <View style={s.emptyCard}>
-                  <Text style={s.emptyText}>No clears yet</Text>
-                </View>
+            </View>
+          ) : null;
+          const hasRightColumn = sortedHistory.length > 0 || friendRecords.length > 0;
+          if (isDesktop && hasRightColumn) {
+            return (
+              <View style={s.deskRow}>
+                <View style={s.deskLeft}>{headerEl}{actionsEl}{bestEl}{skillsEl}</View>
+                <View style={s.deskRight}>{historyEl}{friendsEl}</View>
               </View>
-            ) : null}
-
-            {sortedHistory.length > 0 && (
-              <View style={s.section}>
-                <View style={s.sectionHeaderRow}>
-                  <Text style={s.eyebrow}>HISTORY</Text>
-                  <Text style={s.sectionCount}>{sortedHistory.length}</Text>
-                </View>
-                <View style={s.listCard}>
-                  {visibleHistory.map((row) => (
-                    <HistoryRow key={String(row.id)} row={row} s={s} onPress={() => setScoreTarget(buildScoreData(row))} />
-                  ))}
-                  {hasMoreHistory ? (
-                    <Pressable
-                      onPress={() => setShowAllHistory((v) => !v)}
-                      style={({ pressed }) => [s.showMoreBtn, pressed && { opacity: 0.7 }]}>
-                      <Text style={s.showMoreText}>
-                        {showAllHistory ? 'Show less' : `Show ${sortedHistory.length - 5} more`}
-                      </Text>
-                    </Pressable>
-                  ) : null}
-                </View>
-              </View>
-            )}
-
-            {friendRecords.length > 0 && (
-              <View style={s.section}>
-                <View style={s.sectionHeaderRow}>
-                  <Text style={s.eyebrow}>FRIENDS</Text>
-                  <Text style={s.sectionCount}>{friendRecords.length}</Text>
-                </View>
-                <View style={s.listCard}>
-                  {friendRecords.map((rec) => (
-                    <FriendRecordRow
-                      key={rec.user.id}
-                      rec={rec}
-                      chart={chart}
-                      s={s}
-                      onPress={() => setScoreTarget(buildFriendScoreData(rec))}
-                      onReplayPress={onReplay}
-                      onProfilePress={onProfile}
-                    />
-                  ))}
-                </View>
-              </View>
-            )}
-
-            {chart.skills && chart.skills.length > 0 && (
-              <View style={s.section}>
-                <View style={s.sectionHeaderRow}>
-                  <Text style={s.eyebrow}>SKILLS</Text>
-                  <Text style={s.sectionCount}>{chart.skills.length}</Text>
-                </View>
-                <View style={s.skillsRow}>
-                  {chart.skills.map((sk) => (
-                    // Tap any skill chip to deep-link into the per-skill index
-                    // (mobile Skills detail screen with description + charts).
-                    <Pressable
-                      key={sk.slug}
-                      onPress={() => router.push({ pathname: '/skill/[slug]', params: { slug: sk.slug } })}
-                      style={({ pressed }) => [s.skillChip, pressed && { opacity: 0.7 }]}>
-                      <Text style={s.skillChipText}>{sk.name}</Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </View>
-            )}
-          </>
-        )}
+            );
+          }
+          if (isDesktop) {
+            // No history/friends yet — keep a single readable column instead of
+            // a lopsided two-column with an empty right side.
+            return <View style={s.deskSingle}>{headerEl}{actionsEl}{bestEl}{skillsEl}</View>;
+          }
+          return <>{headerEl}{actionsEl}{bestEl}{historyEl}{friendsEl}{skillsEl}</>;
+        })()}
       </ScrollView>
 
       <ScoreCardSheet
@@ -481,6 +457,13 @@ export default function ChartDetailScreen() {
 const makeStyles = (t: ThemeColors) => ({
   container: { flex: 1, backgroundColor: t.bg },
   scroll: { padding: 16, paddingBottom: 60, gap: 18 },
+  // Desktop: center the content and split into a fixed left rail + wider
+  // right column instead of a full-bleed stretched mobile column.
+  scrollDesktop: { maxWidth: 1080, alignSelf: 'center' as const, width: '100%' as const, paddingHorizontal: 24, paddingTop: 24 },
+  deskRow: { flexDirection: 'row' as const, alignItems: 'flex-start' as const, gap: 20, width: '100%' as const },
+  deskLeft: { width: 380, gap: 18 },
+  deskRight: { flex: 1, minWidth: 0, gap: 18 },
+  deskSingle: { maxWidth: 600, width: '100%' as const, alignSelf: 'center' as const, gap: 18 },
   center: { padding: 32, alignItems: 'center' as const },
 
   // Action button row (Save to list / OVER Top 100). Single button keeps full
