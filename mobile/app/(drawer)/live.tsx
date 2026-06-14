@@ -203,7 +203,12 @@ function SessionCard({
   onPress: () => void;
   s: Styles;
 }) {
-  const { session, host, last_play, is_following } = entry;
+  const { session, last_play, is_following } = entry;
+  // The server nests the host inside `session` (normalizeSessionPayload);
+  // reading the top-level entry.host is why the card showed "@anonymous" for
+  // a session that, by definition, was started by a signed-in account. Keep
+  // entry.host as a defensive fallback. (Same fix as live-now-strip.)
+  const host = (session?.host as typeof entry.host) || entry.host || undefined;
   const isLive = session.status === 'live';
   const hostAvatar = typeof host?.avatar === 'string' ? fullImageUrl(host.avatar) : undefined;
   const jacket = last_play?.background_url || '';
