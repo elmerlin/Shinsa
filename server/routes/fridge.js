@@ -14,6 +14,10 @@ const {
 // per settlement instead of per £1 can). Walk-ins use the piggy bank.
 
 const MAX_QTY = 12;
+// Minimum tab before a settle is allowed — below this the fixed card fee
+// makes it not worth processing. Enforced server-side (authoritative); the
+// clients gate the button + show how much more is needed.
+const MIN_SETTLE_PENCE = 1000;
 // A settle attempt locks the entries it covers; if the checkout is abandoned
 // the lock auto-expires so the tab is editable again.
 const PENDING_LOCK_HOURS = 24;
@@ -51,7 +55,7 @@ router.get('/items', requireAuth, (req, res) => {
   const items = db.prepare(
     'SELECT id, name, emoji, price_pence FROM fridge_items WHERE active = 1 ORDER BY sort_order, id',
   ).all();
-  res.json({ items, square_enabled: isSquareConfigured() });
+  res.json({ items, square_enabled: isSquareConfigured(), min_settle_pence: MIN_SETTLE_PENCE });
 });
 
 // GET /api/fridge/tab — open tab + recent settled history
@@ -103,6 +107,13 @@ router.post('/settle', requireAuth, async (req, res) => {
   const tab = getOpenTab(db, req.user.id);
   if (tab.settling) return res.status(409).json({ error: 'A settle is already in progress — finish or wait for it to expire.' });
   if (tab.total_pence <= 0) return res.status(400).json({ error: 'Nothing on your tab.' });
+  if (tab.total_pence < MIN_SETTLE_PENCE) {
+    const moreNeeded = ((MIN_SETTLE_PENCE - tab.total_pence) / 100).toFixed(2);
+    return res.status(400).json({
+      error: `£${(MIN_SETTLE_PENCE / 100).toFixed(0)} minimum to settle — add £${moreNeeded} more.`,
+      min_settle_pence: MIN_SETTLE_PENCE,
+    });
+  }
 
   const itemCount = tab.entries.reduce((n, e) => n + e.qty, 0);
   try {

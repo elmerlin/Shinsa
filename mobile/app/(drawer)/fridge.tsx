@@ -89,6 +89,7 @@ export default function FridgeScreen() {
 
   const items = itemsQuery.data?.items ?? [];
   const squareEnabled = !!itemsQuery.data?.square_enabled;
+  const minSettle = itemsQuery.data?.min_settle_pence ?? 1000;
   const tab = tabQuery.data;
   const entries = tab?.entries ?? [];
   const total = tab?.total_pence ?? 0;
@@ -177,6 +178,13 @@ export default function FridgeScreen() {
                 <ActivityIndicator size="small" color={theme.accent} />
                 <Text style={s.settlingNoteText}>
                   Checkout in progress — finish paying in the Square tab, then pull to refresh.
+                </Text>
+              </View>
+            ) : total < minSettle ? (
+              // Below the minimum — show the gate instead of an enabled button.
+              <View style={s.minNote}>
+                <Text style={s.minNoteText}>
+                  {pounds(minSettle)} minimum to settle — add {pounds(minSettle - total)} more.
                 </Text>
               </View>
             ) : (
@@ -285,6 +293,15 @@ const makeStyles = (t: ThemeColors) => ({
   settleBtnText: { color: t.textOnAccent, fontSize: 15, fontWeight: '900' as const, letterSpacing: 0.3 },
   settlingNote: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8 },
   settlingNoteText: { flex: 1, fontSize: 12, color: t.textMuted, lineHeight: 17 },
+  minNote: {
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    backgroundColor: t.surfaceMuted,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: t.border,
+  },
+  minNoteText: { fontSize: 13, fontWeight: '700' as const, color: t.textMuted, textAlign: 'center' as const },
   errText: { fontSize: 12, color: '#fda4af' },
 
   historyWrap: { marginTop: 8, gap: 6 },

@@ -38,7 +38,7 @@ export interface FridgePaymentHistoryRow {
 export function createFridgeApi(client: ApiClient) {
   return {
     items() {
-      return client.request<{ items: FridgeItem[]; square_enabled: boolean }>('/api/fridge/items');
+      return client.request<{ items: FridgeItem[]; square_enabled: boolean; min_settle_pence: number }>('/api/fridge/items');
     },
     tab() {
       return client.request<FridgeTab & { history: FridgePaymentHistoryRow[] }>('/api/fridge/tab');

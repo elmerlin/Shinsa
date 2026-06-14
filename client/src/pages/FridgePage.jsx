@@ -30,6 +30,7 @@ export default function FridgePage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [items, setItems] = useState([]);
   const [squareEnabled, setSquareEnabled] = useState(true);
+  const [minSettle, setMinSettle] = useState(1000);
   const [tab, setTab] = useState({ entries: [], total_pence: 0, settling: false, history: [] });
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -58,6 +59,7 @@ export default function FridgePage() {
         if (!cancelled) {
           setItems(data.items || []);
           setSquareEnabled(!!data.square_enabled);
+          if (data.min_settle_pence) setMinSettle(data.min_settle_pence);
         }
       } catch (err) {
         if (!cancelled) setError(err?.message || 'Failed to load fridge items');
@@ -204,6 +206,10 @@ export default function FridgePage() {
               tab.settling ? (
                 <p className="text-xs text-gray-400">
                   Checkout in progress — finish paying in the Square tab, then refresh this page.
+                </p>
+              ) : tab.total_pence < minSettle ? (
+                <p className="rounded-xl border border-piu-border bg-white/5 px-4 py-3 text-center text-sm font-semibold text-gray-300">
+                  {pounds(minSettle)} minimum to settle — add {pounds(minSettle - tab.total_pence)} more.
                 </p>
               ) : (
                 <button
