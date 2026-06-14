@@ -86,6 +86,13 @@ export function createHealthApi(client: ApiClient) {
         body: { max_hr: maxHr },
       });
     },
+    // Lightweight {id, played_at_utc} for plays still missing HR — the
+    // device-side history backfill reads HealthKit/Health Connect for each.
+    playsNeedingHr(limit = 10000) {
+      return client.request<{ plays: { id: number; played_at_utc: string }[] }>(
+        `/api/health/plays-needing-hr?limit=${limit}`,
+      );
+    },
     // Upload per-play HR + an optional cardio session summary.
     uploadHeartRate(payload: { plays: HeartRatePlayUpload[]; session?: CardioSessionUpload }) {
       return client.request<HeartRateUploadResult>('/api/health/heart-rate', {

@@ -70,6 +70,27 @@ router.post('/max-hr', requireAuth, (req, res) => {
   res.json({ ok: true, ...getHrProfile(db, req.user.id) });
 });
 
+// GET /api/health/plays-needing-hr — lightweight {id, played_at_utc} for the
+// caller's plays that don't yet have heart rate, newest first. Powers the
+// device-side history backfill (the app reads HealthKit/Health Connect for
+// each play's window and uploads). Only id + timestamp, so even thousands of
+// plays is a tiny payload.
+router.get('/plays-needing-hr', requireAuth, (req, res) => {
+  const db = getDb();
+  const limit = Math.max(1, Math.min(20000, parseInt(req.query.limit, 10) || 10000));
+  const rows = db.prepare(`
+    SELECT id, COALESCE(NULLIF(played_at_utc, ''), date_played) AS played_at_utc
+    FROM user_recently_played
+    WHERE user_id = ?
+      AND (hr_avg IS NULL OR hr_avg = 0)
+      AND (hr_peak IS NULL OR hr_peak = 0)
+      AND TRIM(COALESCE(NULLIF(played_at_utc, ''), date_played, '')) <> ''
+    ORDER BY played_at_utc DESC, id DESC
+    LIMIT ?
+  `).all(req.user.id, limit);
+  res.json({ plays: rows });
+});
+
 // POST /api/health/heart-rate — upload per-play HR + an optional cardio session.
 // Body: { plays: [{ play_id, hr_avg, hr_peak, hr_min?, hr_series?, source? }],
 //         session?: { workout_uuid, started_at_utc, ended_at_utc, duration_s,

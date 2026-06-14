@@ -76,6 +76,36 @@ function zoneSeconds(samples: HrSample[], maxHr: number): Record<string, number>
   return out;
 }
 
+// Only emit a curve when there are enough points for an honest line — a 1–2
+// point "series" (sparse passive HR on a non-workout day) just shows a chip.
+const MIN_SERIES_POINTS = 5;
+
+// Per-play HR from a pool of samples/workouts covering its window. Shared by
+// the post-sync pass and the history backfill. Returns null when no samples
+// fall in the play's window.
+function computePlayHr(
+  id: number,
+  t: number,
+  samples: HrSample[],
+  workouts: WorkoutWindow[],
+): HeartRatePlayUpload | null {
+  const win = samples.filter((s) => s.t >= t - WINDOW_BEFORE_MS && s.t <= t + WINDOW_AFTER_MS);
+  if (!win.length) return null;
+  const bpms = win.map((s) => s.bpm);
+  const inWorkout = workouts.some((w) => t >= w.start && t <= w.end);
+  return {
+    play_id: id,
+    hr_avg: Math.round(mean(bpms)),
+    hr_peak: Math.max(...bpms),
+    hr_min: Math.min(...bpms),
+    // Span the samples cover (≈ song length) — the sparkline x-axis.
+    hr_duration_s: Math.round((win[win.length - 1].t - win[0].t) / 1000),
+    // Curve only when dense enough; sparse passive HR uploads avg/peak only.
+    hr_series: win.length >= MIN_SERIES_POINTS ? downsample(bpms, MAX_SERIES_POINTS) : [],
+    source: inWorkout ? 'workout' : 'samples',
+  };
+}
+
 function pickBestWorkout(workouts: WorkoutWindow[], plays: StampedPlay[]): WorkoutWindow | null {
   let best: WorkoutWindow | null = null;
   let bestCount = 0;
@@ -126,22 +156,8 @@ export async function syncHeartRateForPlays(plays: SyncablePlay[]): Promise<HrSy
 
   const playUploads: HeartRatePlayUpload[] = [];
   for (const { id, t } of stamped) {
-    const from = t - WINDOW_BEFORE_MS;
-    const to = t + WINDOW_AFTER_MS;
-    const win = samples.filter((s) => s.t >= from && s.t <= to);
-    if (!win.length) continue;
-    const bpms = win.map((s) => s.bpm);
-    const inWorkout = workouts.some((w) => t >= w.start && t <= w.end);
-    playUploads.push({
-      play_id: id,
-      hr_avg: Math.round(mean(bpms)),
-      hr_peak: Math.max(...bpms),
-      hr_min: Math.min(...bpms),
-      hr_series: downsample(bpms, MAX_SERIES_POINTS),
-      // Actual span the samples cover (≈ song length) — the sparkline x-axis.
-      hr_duration_s: Math.round((win[win.length - 1].t - win[0].t) / 1000),
-      source: inWorkout ? 'workout' : 'samples',
-    });
+    const upload = computePlayHr(id, t, samples, workouts);
+    if (upload) playUploads.push(upload);
   }
 
   let session: CardioSessionUpload | undefined;
@@ -196,6 +212,96 @@ export async function syncHeartRateAfterPiugameSync(userId: string): Promise<HrS
   } catch (e) {
     // Best-effort — HR enrichment must never break the sync flow, but the
     // outcome must say what happened.
+    return { state: 'error', message: String(e instanceof Error ? e.message : e).slice(0, 200) };
+  }
+}
+
+export interface BackfillProgress {
+  totalDays: number;
+  daysDone: number;
+  playsMatched: number;
+}
+
+export type BackfillResult =
+  | { state: 'unavailable' }
+  | { state: 'denied' }
+  | { state: 'done'; matched: number; days: number; totalPlays: number }
+  | { state: 'error'; message: string };
+
+const BACKFILL_UPLOAD_BATCH = 100;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// 'YYYY-MM-DD...' (UTC) → that day's UTC midnight epoch ms.
+function utcDayStart(playedAt: string): number {
+  const t = parsePlayedAt({ played_at_utc: playedAt });
+  if (!t) return 0;
+  return Math.floor(t / DAY_MS) * DAY_MS;
+}
+
+/**
+ * One-time history backfill: read HealthKit/Health Connect for every past play
+ * that still lacks HR and upload what's recoverable. Groups plays by UTC day so
+ * it's ~one health-store query per play-day (not per play); processes oldest →
+ * newest; uploads in batches; reports progress. The HR samples live on-device,
+ * so this can only run client-side. Never throws.
+ */
+export async function backfillHeartRateHistory(
+  onProgress?: (p: BackfillProgress) => void,
+): Promise<BackfillResult> {
+  try {
+    if (!(await healthKit.isAvailable())) return { state: 'unavailable' };
+    if (!(await healthKit.requestPermissions())) return { state: 'denied' };
+
+    const res = await healthApi.playsNeedingHr();
+    const plays = (res?.plays || [])
+      .map((p) => ({ id: Number(p.id), t: parsePlayedAt({ played_at_utc: p.played_at_utc }) }))
+      .filter((p) => Number.isFinite(p.id) && p.id > 0 && p.t > 0);
+    if (!plays.length) return { state: 'done', matched: 0, days: 0, totalPlays: 0 };
+
+    // Group by UTC day.
+    const byDay = new Map<number, StampedPlay[]>();
+    for (const p of plays) {
+      const day = Math.floor(p.t / DAY_MS) * DAY_MS;
+      (byDay.get(day) || byDay.set(day, []).get(day)!).push(p);
+    }
+    const days = [...byDay.keys()].sort((a, b) => a - b); // oldest first
+
+    let matched = 0;
+    let daysDone = 0;
+    let batch: HeartRatePlayUpload[] = [];
+    const flush = async () => {
+      if (!batch.length) return;
+      await healthApi.uploadHeartRate({ plays: batch });
+      batch = [];
+    };
+
+    for (const dayStart of days) {
+      const dayPlays = byDay.get(dayStart)!;
+      // Pad the day window by the per-play correlation window so plays near
+      // midnight still see their full surrounding samples.
+      const from = dayStart - WINDOW_BEFORE_MS;
+      const to = dayStart + DAY_MS + WINDOW_AFTER_MS;
+      try {
+        const [samples, workouts] = await Promise.all([
+          healthKit.getHeartRateSamples(from, to),
+          healthKit.getWorkoutsInRange(from, to),
+        ]);
+        if (samples.length) {
+          for (const { id, t } of dayPlays) {
+            const upload = computePlayHr(id, t, samples, workouts);
+            if (upload) { batch.push(upload); matched += 1; }
+          }
+          if (batch.length >= BACKFILL_UPLOAD_BATCH) await flush();
+        }
+      } catch {
+        // Skip a bad day rather than abort the whole backfill.
+      }
+      daysDone += 1;
+      onProgress?.({ totalDays: days.length, daysDone, playsMatched: matched });
+    }
+    await flush();
+    return { state: 'done', matched, days: days.length, totalPlays: plays.length };
+  } catch (e) {
     return { state: 'error', message: String(e instanceof Error ? e.message : e).slice(0, 200) };
   }
 }
