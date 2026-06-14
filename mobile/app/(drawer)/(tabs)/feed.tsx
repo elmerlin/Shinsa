@@ -382,7 +382,7 @@ function PostCard({ item, onPress, onPump, onComments, onShare, onOsShare, onRep
       {summary ? <PostLiveRecap summary={summary} collapsible /> : null}
       {wcSummary ? <WcSummaryCard summary={wcSummary} /> : null}
       {wcPersonal ? <WcPersonalCard summary={wcPersonal} /> : null}
-      {sessionShare ? <SessionShareCard share={sessionShare} onReplay={onReplay} /> : null}
+      {sessionShare ? <SessionShareCard share={sessionShare} onReplay={onReplay} posterUserId={item.user_id} posterUsername={item.username} posterAvatar={typeof item.avatar === 'string' ? item.avatar : undefined} /> : null}
       {sessionSummary ? <SessionSummaryCard summary={sessionSummary} /> : null}
       {sessionSummary ? <PostLiveRecap summary={sessionSummary as Record<string, unknown>} collapsible /> : null}
       {sessionPlan ? <SessionPlanCard plan={sessionPlan} /> : null}

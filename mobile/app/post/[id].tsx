@@ -161,7 +161,7 @@ export default function PostDetailScreen() {
       {liveSummary ? <PostLiveRecap summary={liveSummary} /> : null}
       {wcSummary ? <WcSummaryCard summary={wcSummary} /> : null}
       {wcPersonal ? <WcPersonalCard summary={wcPersonal} /> : null}
-      {sessionShare ? <SessionShareCard share={sessionShare} onReplay={onReplay} /> : null}
+      {sessionShare ? <SessionShareCard share={sessionShare} onReplay={onReplay} posterUserId={post?.user_id as string | undefined} posterUsername={post?.username as string | undefined} posterAvatar={typeof post?.avatar === 'string' ? post.avatar as string : undefined} /> : null}
       {sessionSummary ? <SessionSummaryCard summary={sessionSummary} /> : null}
       {sessionPlan ? <SessionPlanCard plan={sessionPlan} /> : null}
 

@@ -28,6 +28,18 @@ export function createSocialApi(client: ApiClient) {
     getPlay(playId: number | string) {
       return client.request<Record<string, unknown>>(`/api/social/plays/${playId}`);
     },
+    // Resolve a play (incl. HR) by its identifying fields — for surfaces that
+    // only carry song/mode/level/score (e.g. session-share rows lack play_id).
+    lookupPlay(params: { song_title: string; mode: string; level: number; score: number; user_id: string }) {
+      const q = new URLSearchParams({
+        song_title: params.song_title,
+        mode: params.mode,
+        level: String(params.level),
+        score: String(params.score),
+        user_id: params.user_id,
+      });
+      return client.request<Record<string, unknown>>(`/api/social/plays/lookup?${q.toString()}`);
+    },
     feed(params: FeedParams = {}) {
       const search = new URLSearchParams();
       if (params.page) search.set('page', String(params.page));

@@ -3,8 +3,10 @@ import { useState } from 'react';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { ChartJacket } from '@/components/chart-jacket';
 import { GradeChip } from '@/components/grade-chip';
+import { ScoreCardSheet, type ScoreCardData } from '@/components/score-card-sheet';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
+import { socialApi } from '@/lib/api';
 import { fullImageUrl } from '@/lib/images';
 import type { SessionShare, SessionShareRow } from '@/lib/sessionShareMarker';
 import type { ThemeColors } from '@/constants/theme';
@@ -18,6 +20,11 @@ interface Props {
    * mount a modal at the right scope).
    */
   onReplay?: (url: string, title: string) => void;
+  /** The post author (= session host) — lets a tapped row resolve the full
+   *  play (incl. heart rate) since share rows don't carry play_id. */
+  posterUserId?: string;
+  posterUsername?: string;
+  posterAvatar?: string;
 }
 
 const COLLAPSED_ROW_COUNT = 5;
@@ -38,9 +45,49 @@ function joinSchedule(parts: Array<string | undefined>): string {
  * YouTube replay embeds open via the browser/system handler — mirrors the
  * desktop pumpshinsa.com card so feed-embedded shares aren't truncated.
  */
-export function SessionShareCard({ share, onReplay }: Props) {
+export function SessionShareCard({ share, onReplay, posterUserId, posterUsername, posterAvatar }: Props) {
   const s = useThemedStyles(makeStyles);
   const [expanded, setExpanded] = useState(false);
+  const [scoreTarget, setScoreTarget] = useState<ScoreCardData | null>(null);
+  const [loadingRow, setLoadingRow] = useState<number | null>(null);
+
+  // Share rows lack play_id, so resolve the full play (incl. HR) by its
+  // identifying fields against the post author. Falls back to the row's own
+  // fields if the lookup misses, so the card always opens.
+  const openRow = async (row: SessionShareRow, index: number) => {
+    const base: ScoreCardData = {
+      song_title: row.song_title,
+      mode: row.mode,
+      level: row.level,
+      score: row.score,
+      grade: row.grade,
+      jacket_url: row.jacket_url,
+      replay_embed_url: row.replay_embed_url,
+      played_at_utc: row.played_at_utc,
+      username: posterUsername,
+      avatar: posterAvatar,
+    };
+    const score = Number(row.score) || 0;
+    if (!posterUserId || !row.song_title || !row.mode || !row.level || score <= 0) {
+      setScoreTarget(base);
+      return;
+    }
+    setLoadingRow(index);
+    try {
+      const play = await socialApi.lookupPlay({
+        song_title: row.song_title,
+        mode: row.mode,
+        level: row.level,
+        score,
+        user_id: posterUserId,
+      }) as Record<string, unknown>;
+      setScoreTarget({ ...base, ...(play || {}), username: posterUsername, avatar: posterAvatar } as ScoreCardData);
+    } catch {
+      setScoreTarget(base); // play not found (e.g. re-synced away) — still show the row
+    } finally {
+      setLoadingRow(null);
+    }
+  };
   const isHop = share.shareType === 'hour_of_power';
   const eyebrow = isHop ? 'HOUR OF POWER' : 'SESSION SHARE';
   const title = String(share.sessionTitle || (isHop ? 'Hour of Power' : 'Session share')).trim();
@@ -129,21 +176,28 @@ export function SessionShareCard({ share, onReplay }: Props) {
             const replayUrl = String(row.replay_embed_url || '').trim();
             return (
               <View key={i} style={s.songCell}>
-                <ChartJacket
-                  jacketUrl={jacketUrl}
-                  mode={row.mode}
-                  level={row.level}
-                  size="xs"
-                />
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={s.songTitle} numberOfLines={1}>{row.song_title || 'Unknown'}</Text>
-                  <View style={s.songMetaRow}>
-                    {row.score && row.score > 0 ? (
-                      <Text style={s.songScore}>{fmtNum(row.score)}</Text>
-                    ) : null}
-                    {row.grade ? <GradeChip grade={row.grade} score={row.score ?? 0} size="xs" /> : null}
+                <Pressable
+                  onPress={() => openRow(row, i)}
+                  hitSlop={4}
+                  style={({ pressed }) => [s.songTap, pressed && { opacity: 0.7 }]}
+                  accessibilityLabel={`Open ${row.song_title || 'score'} details`}>
+                  <ChartJacket
+                    jacketUrl={jacketUrl}
+                    mode={row.mode}
+                    level={row.level}
+                    size="xs"
+                  />
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={s.songTitle} numberOfLines={1}>{row.song_title || 'Unknown'}</Text>
+                    <View style={s.songMetaRow}>
+                      {row.score && row.score > 0 ? (
+                        <Text style={s.songScore}>{fmtNum(row.score)}</Text>
+                      ) : null}
+                      {row.grade ? <GradeChip grade={row.grade} score={row.score ?? 0} size="xs" /> : null}
+                      {loadingRow === i ? <Text style={s.songLoading}>…</Text> : null}
+                    </View>
                   </View>
-                </View>
+                </Pressable>
                 {replayUrl ? (
                   <Pressable
                     onPress={() => handleReplayOpen(row)}
@@ -169,6 +223,13 @@ export function SessionShareCard({ share, onReplay }: Props) {
           </Text>
         </Pressable>
       ) : null}
+
+      <ScoreCardSheet
+        visible={!!scoreTarget}
+        data={scoreTarget}
+        onClose={() => setScoreTarget(null)}
+        onReplay={onReplay}
+      />
     </View>
   );
 }
@@ -184,6 +245,8 @@ function Stat({ label, value, sub, s }: { label: string; value: string; sub?: st
 }
 
 const makeStyles = (t: ThemeColors) => ({
+  songTap: { flex: 1, minWidth: 0, flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8 },
+  songLoading: { fontSize: 12, color: t.textDim },
   card: {
     borderRadius: 16,
     borderWidth: StyleSheet.hairlineWidth,
