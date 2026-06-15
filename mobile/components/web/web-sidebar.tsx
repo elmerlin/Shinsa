@@ -58,6 +58,7 @@ const SECTIONS: NavSection[] = [
   {
     title: 'Discover',
     items: [
+      { label: 'Check In', path: '/checkin', icon: 'checkmark.circle.fill' },
       { label: 'Tournaments', path: '/tournaments', icon: 'flag.fill', prefix: true },
       { label: 'Live', path: '/live', icon: 'video.fill', prefix: true },
       { label: 'Weekly Challenges', path: '/weekly-challenges', icon: 'calendar' },
@@ -66,11 +67,13 @@ const SECTIONS: NavSection[] = [
       { label: 'What to Play', path: '/what-to-play', icon: 'lightbulb.fill' },
       { label: 'Rival', path: '/head-to-head', icon: 'person.2.fill' },
       { label: 'Skills', path: '/skill', icon: 'sparkles', prefix: true },
+      { label: 'Cardio', path: '/cardio', icon: 'heart.fill' },
       { label: 'Leaderboards', path: '/leaderboards', icon: 'list.number' },
       { label: 'Shoes', path: '/shoes', icon: 'figure.run' },
       { label: 'Messages', path: '/messages', icon: 'message.fill', prefix: true },
       { label: 'Posts', path: '/posts', icon: 'square.and.pencil', prefix: true },
       { label: 'Pet', path: '/pet', icon: 'pawprint.fill', prefix: true },
+      { label: 'Dojo Fridge', path: '/fridge', icon: 'cup.and.saucer.fill' },
     ],
   },
   {
