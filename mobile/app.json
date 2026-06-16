@@ -12,7 +12,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.shinsa.app",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "Shinsa uses the camera for on-device Pump It Up movement analysis. Video is not uploaded by Movement Lab."
       }
     },
     "android": {
@@ -20,6 +21,7 @@
       "versionCode": 18,
       "permissions": [
         "REQUEST_INSTALL_PACKAGES",
+        "android.permission.CAMERA",
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION"
       ],

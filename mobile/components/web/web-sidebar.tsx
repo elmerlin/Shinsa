@@ -63,6 +63,7 @@ const SECTIONS: NavSection[] = [
       { label: 'Weekly Challenges', path: '/weekly-challenges', icon: 'calendar' },
       { label: 'Lists', path: '/lists', icon: 'list.bullet', prefix: true },
       { label: 'Training', path: '/training', icon: 'chart.line.uptrend.xyaxis' },
+      { label: 'Movement Lab', path: '/movement-lab', icon: 'figure.run' },
       { label: 'What to Play', path: '/what-to-play', icon: 'lightbulb.fill' },
       { label: 'Rival', path: '/head-to-head', icon: 'person.2.fill' },
       { label: 'Skills', path: '/skill', icon: 'sparkles', prefix: true },

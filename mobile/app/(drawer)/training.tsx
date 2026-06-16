@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { Image } from 'expo-image';
+import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -82,6 +83,7 @@ function fmtSyncedAt(iso: string | null): string {
 
 export default function TrainingScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { user } = useAuth();
   const { theme } = useTheme();
   const s = useThemedStyles(makeStyles);
@@ -207,6 +209,19 @@ export default function TrainingScreen() {
             })}
           </View>
           ) : null}
+
+          <Pressable
+            onPress={() => router.push('/movement-lab' as never)}
+            style={({ pressed }) => [s.movementLabCard, pressed && { opacity: 0.85 }]}>
+            <View style={s.movementLabMain}>
+              <Text style={s.movementLabEyebrow}>NATIVE ONLY</Text>
+              <Text style={s.movementLabTitle}>Movement Lab</Text>
+              <Text style={s.movementLabBody}>
+                Match foot movement to Pump step timing for reaction consistency and speed analysis.
+              </Text>
+            </View>
+            <Text style={s.movementLabCta}>Open</Text>
+          </Pressable>
 
           {loadQuery.isLoading ? (
             <View style={s.center}><ActivityIndicator color={theme.spinner} /></View>
@@ -707,6 +722,28 @@ const makeStyles = (t: ThemeColors) => ({
     borderColor: 'transparent',
   },
   modeLabel: { fontSize: 11, fontWeight: '900' as const, letterSpacing: 1.6 },
+
+  movementLabCard: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+    gap: 12,
+    backgroundColor: t.card,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: t.border,
+    padding: 14,
+  },
+  movementLabMain: { flex: 1, minWidth: 0, gap: 3 },
+  movementLabEyebrow: {
+    fontSize: 9,
+    fontWeight: '900' as const,
+    letterSpacing: 1.4,
+    color: t.accent,
+  },
+  movementLabTitle: { fontSize: 17, fontWeight: '900' as const, color: t.text },
+  movementLabBody: { fontSize: 12, color: t.textMuted, lineHeight: 17 },
+  movementLabCta: { fontSize: 12, fontWeight: '900' as const, color: t.accent },
 
   // Zone badge
   zoneCard: {

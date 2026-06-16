@@ -38,6 +38,7 @@ const SECONDARY_NAV: NavItem[] = [
   { label: 'Weekly Challenges', path: '/weekly-challenges' },
   { label: 'Lists', path: '/lists' },
   { label: 'Training', path: '/training' },
+  { label: 'Movement Lab', path: '/movement-lab' },
   { label: 'What to play', path: '/what-to-play' },
   { label: 'Rival', path: '/head-to-head' },
   { label: 'Skills', path: '/skill' },
@@ -173,6 +174,7 @@ export default function DrawerLayout() {
       <Drawer.Screen name="live" options={{ drawerItemStyle: { display: 'none' } }} />
       <Drawer.Screen name="lists" options={{ drawerItemStyle: { display: 'none' } }} />
       <Drawer.Screen name="training" options={{ drawerItemStyle: { display: 'none' } }} />
+      <Drawer.Screen name="movement-lab" options={{ drawerItemStyle: { display: 'none' } }} />
       <Drawer.Screen name="skill" options={{ drawerItemStyle: { display: 'none' } }} />
       <Drawer.Screen name="leaderboards" options={{ drawerItemStyle: { display: 'none' } }} />
       <Drawer.Screen name="world-max" options={{ drawerItemStyle: { display: 'none' } }} />
