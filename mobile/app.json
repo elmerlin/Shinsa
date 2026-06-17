@@ -52,6 +52,7 @@
       ],
       "expo-secure-store",
       "./plugins/with-install-apk-queries",
+      "./plugins/with-local-android-build-properties",
       [
         "expo-location",
         {
