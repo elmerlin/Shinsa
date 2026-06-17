@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
 import { runOnJS } from 'react-native-worklets';
 import {
@@ -13,7 +13,9 @@ import { nitroPoseExercises } from 'react-native-nitro-pose-exercises';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import {
   estimateFootFrameConfidence,
+  normalizeCameraFrameTimestampMs,
   normalizePoseLandmarksToFootFrame,
+  startMovementPoseSession,
 } from '@/lib/movement/nativeMovementAnalyzer';
 import type {
   NativePoseLandmark,
@@ -57,7 +59,12 @@ export function MovementCameraView({
     onPoseStatusChange?.(status);
   }, [onPoseStatusChange]);
 
-  const handlePoseLandmarks = useCallback((landmarks: NativePoseLandmark[], timestampMs: number) => {
+  const handlePoseLandmarks = useCallback((
+    landmarks: NativePoseLandmark[],
+    rawFrameTimestamp: number,
+    capturedAtMs: number,
+  ) => {
+    const timestampMs = normalizeCameraFrameTimestampMs(rawFrameTimestamp, platform, capturedAtMs);
     const frame = normalizePoseLandmarksToFootFrame(landmarks, timestampMs, { minConfidence: 0.15 });
     const confidence = estimateFootFrameConfidence(frame);
     if (confidence <= 0) {
@@ -79,7 +86,7 @@ export function MovementCameraView({
       confidence,
       frameCount: frameCountRef.current,
     });
-  }, [emitStatus, onLandmarkFrame]);
+  }, [emitStatus, onLandmarkFrame, platform]);
 
   const handleNoPoseFrame = useCallback(() => {
     emitStatus({
@@ -89,6 +96,16 @@ export function MovementCameraView({
       frameCount: frameCountRef.current,
       message: 'No body landmarks from the latest camera frames yet.',
     });
+  }, [emitStatus]);
+
+  const handlePoseFrameError = useCallback((message: string) => {
+    emitStatus({
+      state: 'error',
+      label: 'Pose frame error',
+      confidence: 0,
+      frameCount: frameCountRef.current,
+      message,
+    }, true);
   }, [emitStatus]);
 
   const frameOutput = useFrameOutput({
@@ -106,6 +123,8 @@ export function MovementCameraView({
       const accepted = asyncRunner.runAsync(() => {
         'worklet';
         try {
+          const rawFrameTimestamp = frame.timestamp;
+          const capturedAtMs = Date.now();
           if (platform === 'android') {
             nitroPoseExercises.processFrameAndroid(frame);
           } else {
@@ -114,10 +133,12 @@ export function MovementCameraView({
 
           const landmarks = nitroPoseExercises.landmarks as NativePoseLandmark[];
           if (landmarks.length > 0) {
-            runOnJS(handlePoseLandmarks)(landmarks, Date.now());
+            runOnJS(handlePoseLandmarks)(landmarks, rawFrameTimestamp, capturedAtMs);
           } else {
             runOnJS(handleNoPoseFrame)();
           }
+        } catch (error) {
+          runOnJS(handlePoseFrameError)(String(error));
         } finally {
           frame.dispose();
         }
@@ -168,6 +189,7 @@ export function MovementCameraView({
     nitroPoseExercises.initialize('')
       .then(() => {
         if (!mounted) return;
+        startMovementPoseSession(nitroPoseExercises);
         setPoseReady(true);
         emitStatus({
           state: 'ready',
@@ -193,6 +215,11 @@ export function MovementCameraView({
       mounted = false;
       setPoseReady(false);
       try {
+        nitroPoseExercises.stopSession();
+      } catch {
+        // The package throws/ignores stop depending on the current native state.
+      }
+      try {
         nitroPoseExercises.release();
       } catch {
         // Native release can throw if initialization failed before the module allocated resources.
@@ -201,12 +228,19 @@ export function MovementCameraView({
   }, [device, emitStatus, enablePoseInference, permission.hasPermission]);
 
   if (!permission.hasPermission) {
+    const canRequestPermission = permission.canRequestPermission;
     return (
       <View style={s.fallback}>
         <Text style={s.fallbackTitle}>Camera access</Text>
-        <Text style={s.fallbackBody}>Movement Lab needs the rear camera for on-device foot tracking.</Text>
-        <Pressable onPress={() => permission.requestPermission()} style={({ pressed }) => [s.primaryButton, pressed && { opacity: 0.85 }]}>
-          <Text style={s.primaryButtonText}>Allow camera</Text>
+        <Text style={s.fallbackBody}>
+          {canRequestPermission
+            ? 'Movement Lab needs the rear camera for on-device foot tracking.'
+            : 'Camera permission is blocked. Open system Settings and allow Shinsa to use the camera.'}
+        </Text>
+        <Pressable
+          onPress={() => canRequestPermission ? permission.requestPermission() : Linking.openSettings()}
+          style={({ pressed }) => [s.primaryButton, pressed && { opacity: 0.85 }]}>
+          <Text style={s.primaryButtonText}>{canRequestPermission ? 'Allow camera' : 'Open Settings'}</Text>
         </Pressable>
       </View>
     );
@@ -228,6 +262,15 @@ export function MovementCameraView({
         device={device}
         isActive={cameraActive}
         outputs={outputs}
+        onError={(error) => {
+          emitStatus({
+            state: 'error',
+            label: 'Camera error',
+            confidence: 0,
+            frameCount: frameCountRef.current,
+            message: error.message,
+          }, true);
+        }}
       />
       <View style={s.overlay}>{children}</View>
     </View>

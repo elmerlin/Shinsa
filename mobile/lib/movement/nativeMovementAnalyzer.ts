@@ -1,6 +1,7 @@
 import { computeReactionSamples, detectMovementOnsets } from './analytics';
 import { buildMockMovementSession, createDemoStepCues } from './mockMovementAnalyzer';
 import { createDefaultPadCalibration } from './padLayout';
+import type { ExerciseConfig } from 'react-native-nitro-pose-exercises';
 import type {
   FootLandmarkFrame,
   FootLandmarkPoint,
@@ -75,12 +76,53 @@ export interface NativeAnalyzerAvailability {
   recommendedPackages: string[];
 }
 
+export type MovementPoseExerciseConfig = ExerciseConfig;
+
+export interface MovementPoseSessionEngine {
+  loadExercise(config: MovementPoseExerciseConfig): void;
+  startSession(targetReps: number, countdownSeconds: number): void;
+}
+
 const LEFT_ANKLE_INDEX = 27;
 const RIGHT_ANKLE_INDEX = 28;
 const LEFT_HEEL_INDEX = 29;
 const RIGHT_HEEL_INDEX = 30;
 const LEFT_FOOT_INDEX = 31;
 const RIGHT_FOOT_INDEX = 32;
+
+export function createMovementPoseExerciseConfig(): MovementPoseExerciseConfig {
+  return {
+    name: 'Shinsa Movement Tracking',
+    type: 'flow',
+    angles: [],
+    phases: [],
+    repSequence: [],
+    formRules: [],
+    holdDurationMs: 0,
+    postureFamily: 'none',
+    visibilityThreshold: 0.15,
+    cameraAngle: 'front',
+  };
+}
+
+export function startMovementPoseSession(
+  engine: MovementPoseSessionEngine,
+  config = createMovementPoseExerciseConfig(),
+): void {
+  engine.loadExercise(config);
+  engine.startSession(0, 0);
+}
+
+export function normalizeCameraFrameTimestampMs(
+  rawTimestamp: number,
+  platform: string,
+  capturedAtMs = Date.now(),
+): number {
+  if (!Number.isFinite(rawTimestamp) || rawTimestamp <= 0) return capturedAtMs;
+  if (platform === 'android') return rawTimestamp / 1_000_000;
+  if (platform === 'ios') return rawTimestamp * 1_000;
+  return rawTimestamp;
+}
 
 export function normalizePoseLandmarksToFootFrame(
   landmarks: readonly (NativePoseLandmark | undefined)[],
@@ -120,16 +162,17 @@ export function estimateFootFrameConfidence(frame: FootLandmarkFrame): number {
   return round(total / points.length, 3);
 }
 
-export function buildMovementSessionFromFrames({
-  mode,
-  frames,
-  calibration = createDefaultPadCalibration(mode),
-  stepCues = createDemoStepCues(mode, 'movement-live'),
-  startedAt = new Date().toISOString(),
-  endedAt = new Date().toISOString(),
-  songId = stepCues[0]?.songId ?? 'movement-live',
-  songTitle = 'Movement Lab live session',
-}: BuildMovementSessionFromFramesInput): MovementSession {
+export function buildMovementSessionFromFrames(input: BuildMovementSessionFromFramesInput): MovementSession {
+  const {
+    mode,
+    frames,
+    calibration = createDefaultPadCalibration(input.mode),
+    startedAt = new Date().toISOString(),
+    endedAt = new Date().toISOString(),
+  } = input;
+  const stepCues = input.stepCues ?? createDemoStepCues(mode, 'movement-live');
+  const songId = input.songId ?? stepCues[0]?.songId ?? 'movement-live';
+  const songTitle = input.songTitle ?? 'Movement Lab live session';
   const events = detectMovementOnsets(frames, calibration);
   const samples = computeReactionSamples(stepCues, events);
   return {
@@ -144,7 +187,9 @@ export function buildMovementSessionFromFrames({
     events,
     samples,
     isDemo: false,
-    notes: 'Live on-device pose landmarks matched against sample step cues until chart timing import is connected.',
+    notes: input.stepCues
+      ? 'Live on-device pose landmarks matched against selected chart timing.'
+      : 'Live on-device pose landmarks matched against sample step cues until chart timing import is connected.',
   };
 }
 

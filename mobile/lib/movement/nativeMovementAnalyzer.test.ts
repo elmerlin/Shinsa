@@ -3,7 +3,10 @@ import assert from 'node:assert/strict';
 import {
   buildDemoFallbackMovementSession,
   buildMovementSessionFromFrames,
+  createMovementPoseExerciseConfig,
+  normalizeCameraFrameTimestampMs,
   normalizePoseLandmarksToFootFrame,
+  startMovementPoseSession,
 } from './nativeMovementAnalyzer';
 import { createDefaultPadCalibration } from './padLayout';
 import type { FootLandmarkFrame, StepCue } from './types';
@@ -33,6 +36,13 @@ describe('native movement pose landmark adapter', () => {
 
     assert.ok(frame.left);
     assert.equal(frame.right, undefined);
+  });
+
+  it('normalizes platform-native camera frame timestamps into milliseconds', () => {
+    assert.equal(normalizeCameraFrameTimestampMs(12.5, 'ios', 999), 12_500);
+    assert.equal(normalizeCameraFrameTimestampMs(12_500_000_000, 'android', 999), 12_500);
+    assert.equal(normalizeCameraFrameTimestampMs(12_500, 'native', 999), 12_500);
+    assert.equal(normalizeCameraFrameTimestampMs(0, 'android', 999), 999);
   });
 });
 
@@ -73,6 +83,41 @@ describe('native movement live session builder', () => {
     assert.equal(session.mode, 'doubles');
     assert.ok(session.events.length > 0);
     assert.equal(session.notes?.includes('Deterministic simulator data'), true);
+  });
+});
+
+describe('native movement pose session lifecycle', () => {
+  it('creates a neutral pose config for continuous lower-body tracking', () => {
+    const config = createMovementPoseExerciseConfig();
+
+    assert.equal(config.name, 'Shinsa Movement Tracking');
+    assert.equal(config.type, 'flow');
+    assert.equal(config.postureFamily, 'none');
+    assert.equal(config.cameraAngle, 'front');
+    assert.equal(config.visibilityThreshold, 0.15);
+    assert.deepEqual(config.angles, []);
+    assert.deepEqual(config.phases, []);
+    assert.deepEqual(config.repSequence, []);
+    assert.deepEqual(config.formRules, []);
+  });
+
+  it('loads the neutral config before starting an active zero-countdown pose session', () => {
+    const calls: string[] = [];
+    const engine = {
+      loadExercise(config: ReturnType<typeof createMovementPoseExerciseConfig>) {
+        calls.push(`load:${config.name}`);
+      },
+      startSession(targetReps: number, countdownSeconds: number) {
+        calls.push(`start:${targetReps}:${countdownSeconds}`);
+      },
+    };
+
+    startMovementPoseSession(engine);
+
+    assert.deepEqual(calls, [
+      'load:Shinsa Movement Tracking',
+      'start:0:0',
+    ]);
   });
 });
 

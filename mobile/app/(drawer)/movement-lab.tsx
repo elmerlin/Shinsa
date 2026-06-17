@@ -5,15 +5,26 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useQuery } from '@tanstack/react-query';
 import { TopBar } from '@/components/top-bar';
 import { MovementCameraView } from '@/components/movement/MovementCameraView';
 import { MovementTimelineChart, MovementTimelineSelection } from '@/components/movement/MovementTimelineChart';
 import { PadCalibrationOverlay } from '@/components/movement/PadCalibrationOverlay';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
+import { songsApi } from '@/lib/api';
+import {
+  chartMatchesPumpMode,
+  chartTimingToMovementStepCues,
+  formatChartLabel,
+  formatChartTimingTitle,
+  rebaseFootLandmarkFrame,
+  shouldApplyChartTimingResponse,
+} from '@/lib/movement/chartTiming';
 import { mapPointToPanel, summarizeMovementSession } from '@/lib/movement/analytics';
 import { buildMockMovementSession } from '@/lib/movement/mockMovementAnalyzer';
 import {
@@ -37,6 +48,7 @@ import type {
   ReactionSample,
 } from '@/lib/movement/types';
 import type { ThemeColors } from '@/constants/theme';
+import type { ChartTimingResponse, Song } from '@shared/api';
 
 type Phase = 'landing' | 'permission' | 'calibration' | 'live' | 'results' | 'recent';
 
@@ -59,9 +71,15 @@ export default function MovementLabScreen() {
   const [cameraGranted, setCameraGranted] = useState(false);
   const liveFramesRef = useRef<FootLandmarkFrame[]>([]);
   const liveStartedAtRef = useRef<string | null>(null);
+  const liveFrameOriginTimestampRef = useRef<number | null>(null);
   const lastLiveUiUpdateRef = useRef(0);
   const [liveFrameCount, setLiveFrameCount] = useState(0);
   const [latestFootFrame, setLatestFootFrame] = useState<FootLandmarkFrame | null>(null);
+  const [chartSearch, setChartSearch] = useState('');
+  const [selectedChartTiming, setSelectedChartTiming] = useState<ChartTimingResponse | null>(null);
+  const [chartTimingLoadingId, setChartTimingLoadingId] = useState<number | null>(null);
+  const [chartTimingError, setChartTimingError] = useState<string | null>(null);
+  const chartTimingRequestIdRef = useRef(0);
   const [poseStatus, setPoseStatus] = useState<PoseAnalyzerStatus>({
     state: 'disabled',
     label: 'Pose disabled',
@@ -83,6 +101,16 @@ export default function MovementLabScreen() {
     () => session?.samples.find((sample) => sample.cueId === selectedCueId) ?? null,
     [selectedCueId, session],
   );
+  const chartsQuery = useQuery({
+    queryKey: ['movement-lab', 'charts'],
+    queryFn: () => songsApi.list({ limit: 5000 }),
+    enabled: Platform.OS !== 'web',
+    staleTime: 1000 * 60 * 10,
+  });
+  const chartChoices = useMemo(
+    () => filterChartChoices(chartsQuery.data ?? [], mode, chartSearch),
+    [chartSearch, chartsQuery.data, mode],
+  );
 
   useEffect(() => {
     loadRecentMovementSessions().then(setRecentSessions).catch(() => setRecentSessions([]));
@@ -99,6 +127,7 @@ export default function MovementLabScreen() {
   const resetLiveCapture = useCallback(() => {
     liveFramesRef.current = [];
     liveStartedAtRef.current = null;
+    liveFrameOriginTimestampRef.current = null;
     lastLiveUiUpdateRef.current = 0;
     setLiveFrameCount(0);
     setLatestFootFrame(null);
@@ -111,10 +140,15 @@ export default function MovementLabScreen() {
   }, []);
 
   const startMode = (nextMode: PumpMode) => {
+    chartTimingRequestIdRef.current += 1;
     setMode(nextMode);
     setConfirmedZoneIds([]);
     setSession(null);
     setSelectedCueId(null);
+    setSelectedChartTiming(null);
+    setChartTimingLoadingId(null);
+    setChartTimingError(null);
+    setChartSearch('');
     resetLiveCapture();
     setPhase('permission');
   };
@@ -122,6 +156,7 @@ export default function MovementLabScreen() {
   const startLiveRun = () => {
     liveFramesRef.current = [];
     liveStartedAtRef.current = new Date().toISOString();
+    liveFrameOriginTimestampRef.current = null;
     lastLiveUiUpdateRef.current = 0;
     setLiveFrameCount(0);
     setLatestFootFrame(null);
@@ -129,22 +164,74 @@ export default function MovementLabScreen() {
   };
 
   const handleLandmarkFrame = useCallback((frame: FootLandmarkFrame) => {
-    liveFramesRef.current = [...liveFramesRef.current, frame].slice(-1_200);
-    if (frame.timestampMs - lastLiveUiUpdateRef.current > 250) {
-      lastLiveUiUpdateRef.current = frame.timestampMs;
-      setLatestFootFrame(frame);
+    if (liveFrameOriginTimestampRef.current === null) {
+      liveFrameOriginTimestampRef.current = frame.timestampMs;
+    }
+    const rebasedFrame = rebaseFootLandmarkFrame(frame, liveFrameOriginTimestampRef.current);
+    liveFramesRef.current = [...liveFramesRef.current, rebasedFrame].slice(-1_200);
+    if (rebasedFrame.timestampMs - lastLiveUiUpdateRef.current > 250) {
+      lastLiveUiUpdateRef.current = rebasedFrame.timestampMs;
+      setLatestFootFrame(rebasedFrame);
       setLiveFrameCount(liveFramesRef.current.length);
     }
   }, []);
 
-  const finishRun = async () => {
+  const selectChartTiming = useCallback(async (chart: Song) => {
+    const chartId = chart.id;
+    const requestId = chartTimingRequestIdRef.current + 1;
+    chartTimingRequestIdRef.current = requestId;
+    const requestedMode = mode;
+    setChartTimingLoadingId(chartId);
+    setChartTimingError(null);
+    try {
+      const timing = await songsApi.chartTiming(chartId);
+      if (requestId !== chartTimingRequestIdRef.current) return;
+      if (!shouldApplyChartTimingResponse({
+        requestId,
+        activeRequestId: chartTimingRequestIdRef.current,
+        mode: requestedMode,
+        timing,
+      })) {
+        throw new Error(`Loaded chart timing does not match ${MODE_LABEL[requestedMode]}.`);
+      }
+      if (!timing.stepCues.length) {
+        throw new Error('No step cues found for this chart.');
+      }
+      setSelectedChartTiming(timing);
+    } catch (error) {
+      if (requestId !== chartTimingRequestIdRef.current) return;
+      setSelectedChartTiming(null);
+      setChartTimingError(error instanceof Error ? error.message : 'Chart timing could not be loaded.');
+    } finally {
+      if (requestId === chartTimingRequestIdRef.current) {
+        setChartTimingLoadingId(null);
+      }
+    }
+  }, [mode]);
+
+  const finishRun = async ({ allowDemoFallback = false }: { allowDemoFallback?: boolean } = {}) => {
     const frames = liveFramesRef.current;
     const endedAt = new Date().toISOString();
+    if (frames.length === 0 && !allowDemoFallback) {
+      setPoseStatus({
+        state: 'waiting',
+        label: 'No pose frames yet',
+        confidence: 0,
+        frameCount: 0,
+        message: 'Wait until Movement Lab captures at least one pose frame, or use the explicit demo fallback.',
+      });
+      return;
+    }
     const nextSession = frames.length > 0
       ? buildMovementSessionFromFrames({
         mode,
         calibration,
         frames,
+        ...(selectedChartTiming ? {
+          stepCues: chartTimingToMovementStepCues(selectedChartTiming),
+          songId: String(selectedChartTiming.chart.chart_id),
+          songTitle: formatChartTimingTitle(selectedChartTiming),
+        } : {}),
         startedAt: liveStartedAtRef.current ?? endedAt,
         endedAt,
       })
@@ -204,12 +291,24 @@ export default function MovementLabScreen() {
           mode={mode}
           cameraGranted={cameraGranted}
           calibration={calibration}
+          chartChoices={chartChoices}
+          chartSearch={chartSearch}
+          chartTimingError={chartTimingError}
+          chartTimingLoading={chartsQuery.isLoading}
+          chartTimingLoadingId={chartTimingLoadingId}
+          selectedChartTiming={selectedChartTiming}
           activeZoneId={activeZone?.id}
           confirmedZoneIds={confirmedZoneIds}
           onPermissionChange={setCameraGranted}
+          onChartSearchChange={setChartSearch}
+          onSelectChartTiming={selectChartTiming}
           onModeChange={(nextMode) => {
+            chartTimingRequestIdRef.current += 1;
             setMode(nextMode);
             setConfirmedZoneIds([]);
+            setSelectedChartTiming(null);
+            setChartTimingLoadingId(null);
+            setChartTimingError(null);
           }}
           onConfirmZone={(zoneId) => {
             setConfirmedZoneIds((current) => current.includes(zoneId) ? current : [...current, zoneId]);
@@ -228,9 +327,11 @@ export default function MovementLabScreen() {
           frameCount={liveFrameCount}
           poseStatus={poseStatus}
           availabilityReason={availability.reason}
+          hasSelectedChartTiming={!!selectedChartTiming}
           onLandmarkFrame={handleLandmarkFrame}
           onPoseStatusChange={setPoseStatus}
-          onFinish={finishRun}
+          onFinish={() => finishRun()}
+          onUseDemoFallback={() => finishRun({ allowDemoFallback: true })}
           onBack={() => setPhase('calibration')}
         />
       ) : null}
@@ -359,9 +460,17 @@ function CalibrationView({
   mode,
   cameraGranted,
   calibration,
+  chartChoices,
+  chartSearch,
+  chartTimingError,
+  chartTimingLoading,
+  chartTimingLoadingId,
+  selectedChartTiming,
   activeZoneId,
   confirmedZoneIds,
   onPermissionChange,
+  onChartSearchChange,
+  onSelectChartTiming,
   onModeChange,
   onConfirmZone,
   onBack,
@@ -371,9 +480,17 @@ function CalibrationView({
   mode: PumpMode;
   cameraGranted: boolean;
   calibration: ReturnType<typeof createDefaultPadCalibration>;
+  chartChoices: Song[];
+  chartSearch: string;
+  chartTimingError: string | null;
+  chartTimingLoading: boolean;
+  chartTimingLoadingId: number | null;
+  selectedChartTiming: ChartTimingResponse | null;
   activeZoneId?: string;
   confirmedZoneIds: string[];
   onPermissionChange: (granted: boolean) => void;
+  onChartSearchChange: (value: string) => void;
+  onSelectChartTiming: (chart: Song) => void;
   onModeChange: (mode: PumpMode) => void;
   onConfirmZone: (zoneId: string) => void;
   onBack: () => void;
@@ -391,6 +508,18 @@ function CalibrationView({
         </Text>
       </View>
       <ModeSwitch mode={mode} onChange={onModeChange} s={s} />
+      <ChartTimingPicker
+        s={s}
+        mode={mode}
+        charts={chartChoices}
+        search={chartSearch}
+        loading={chartTimingLoading}
+        loadingChartId={chartTimingLoadingId}
+        error={chartTimingError}
+        selectedTiming={selectedChartTiming}
+        onSearchChange={onChartSearchChange}
+        onSelectChart={onSelectChartTiming}
+      />
       <MovementCameraView isActive onPermissionChange={onPermissionChange}>
         <PadCalibrationOverlay
           calibration={calibration}
@@ -424,9 +553,11 @@ function LiveView({
   frameCount,
   poseStatus,
   availabilityReason,
+  hasSelectedChartTiming,
   onLandmarkFrame,
   onPoseStatusChange,
   onFinish,
+  onUseDemoFallback,
   onBack,
 }: {
   s: Styles;
@@ -436,9 +567,11 @@ function LiveView({
   frameCount: number;
   poseStatus: PoseAnalyzerStatus;
   availabilityReason: string;
+  hasSelectedChartTiming: boolean;
   onLandmarkFrame: (frame: FootLandmarkFrame) => void;
   onPoseStatusChange: (status: PoseAnalyzerStatus) => void;
   onFinish: () => void;
+  onUseDemoFallback: () => void;
   onBack: () => void;
 }) {
   const currentPanel = useMemo(
@@ -478,11 +611,21 @@ function LiveView({
         <Text style={s.bodyText}>{poseStatus.message ?? 'Live landmarks are converted to derived movement events on this device. No video is stored or uploaded.'}</Text>
         <Text style={s.muted}>
           {frameCount > 0
-            ? 'Finishing this run uses captured pose landmarks and the sample step timeline until chart timing import is connected.'
-            : 'No pose frames captured yet. Finishing now will save clearly labelled demo fallback data.'}
+            ? hasSelectedChartTiming
+              ? 'Finishing this run uses captured pose landmarks and the selected chart timing.'
+              : 'Finishing this run uses captured pose landmarks and the sample step timeline.'
+            : 'No pose frames captured yet. Wait for pose tracking before finishing, or choose the explicit demo fallback.'}
         </Text>
         <View style={s.buttonRow}>
-          <PrimaryButton label="Finish analysis" onPress={onFinish} s={s} />
+          <PrimaryButton
+            label={frameCount > 0 ? 'Finish analysis' : 'Waiting for pose'}
+            onPress={onFinish}
+            s={s}
+            disabled={frameCount === 0}
+          />
+          {frameCount === 0 ? (
+            <PrimaryButton label="Use demo fallback" onPress={onUseDemoFallback} s={s} variant="ghost" />
+          ) : null}
           <PrimaryButton label="Recalibrate" onPress={onBack} s={s} variant="ghost" />
         </View>
       </View>
@@ -611,6 +754,88 @@ function ModeSwitch({
   );
 }
 
+function ChartTimingPicker({
+  s,
+  mode,
+  charts,
+  search,
+  loading,
+  loadingChartId,
+  error,
+  selectedTiming,
+  onSearchChange,
+  onSelectChart,
+}: {
+  s: Styles;
+  mode: PumpMode;
+  charts: Song[];
+  search: string;
+  loading: boolean;
+  loadingChartId: number | null;
+  error: string | null;
+  selectedTiming: ChartTimingResponse | null;
+  onSearchChange: (value: string) => void;
+  onSelectChart: (chart: Song) => void;
+}) {
+  const selectedChartId = selectedTiming?.chart.chart_id ?? null;
+  return (
+    <View style={s.panel}>
+      <View style={s.chartPickerHeader}>
+        <View>
+          <Text style={s.eyebrow}>STEP TIMING</Text>
+          <Text style={s.cardTitle}>
+            {selectedTiming ? formatChartTimingTitle(selectedTiming) : `${MODE_LABEL[mode]} chart timing`}
+          </Text>
+        </View>
+        <Text style={[s.confidencePill, selectedTiming ? s.goodPill : s.neutralPill]}>
+          {selectedTiming ? `${selectedTiming.stepCues.length} cues` : 'Optional'}
+        </Text>
+      </View>
+      <Text style={s.bodyText}>
+        Select a chart to match live movement against real step timing. If you skip this, Movement Lab uses clearly labelled sample cues.
+      </Text>
+      <TextInput
+        value={search}
+        onChangeText={onSearchChange}
+        placeholder="Search song or artist"
+        placeholderTextColor={s.textInputPlaceholder.color}
+        style={s.textInput}
+        autoCorrect={false}
+        autoCapitalize="none"
+      />
+      {loading ? <Text style={s.muted}>Loading chart catalog...</Text> : null}
+      {error ? <Text style={s.errorText}>{error}</Text> : null}
+      <View style={s.chartChoiceList}>
+        {charts.map((chart) => {
+          const loadingThisChart = loadingChartId === chart.id;
+          const selected = selectedChartId === chart.id;
+          return (
+            <Pressable
+              key={chart.id}
+              onPress={() => onSelectChart(chart)}
+              style={({ pressed }) => [
+                s.chartChoice,
+                selected && s.chartChoiceSelected,
+                pressed && s.pressed,
+              ]}>
+              <View style={s.chartChoiceMain}>
+                <Text style={s.chartChoiceTitle} numberOfLines={1}>{chart.title}</Text>
+                <Text style={s.muted} numberOfLines={1}>{chart.artist || 'Unknown artist'}</Text>
+              </View>
+              <Text style={s.chartChoiceMeta}>
+                {loadingThisChart ? 'Loading' : formatChartLabel(chart)}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      {!loading && charts.length === 0 ? (
+        <Text style={s.muted}>No {MODE_LABEL[mode].toLowerCase()} charts match this search.</Text>
+      ) : null}
+    </View>
+  );
+}
+
 function SummaryGrid({ summary, s, demo }: { summary: MovementSummary; s: Styles; demo?: boolean }) {
   return (
     <View style={s.summaryGrid}>
@@ -650,19 +875,41 @@ function PrimaryButton({
   onPress,
   s,
   variant = 'primary',
+  disabled = false,
 }: {
   label: string;
   onPress: () => void;
   s: Styles;
   variant?: 'primary' | 'secondary' | 'ghost';
+  disabled?: boolean;
 }) {
   const buttonStyle = variant === 'primary' ? s.primaryButton : variant === 'secondary' ? s.secondaryButton : s.ghostButton;
   const textStyle = variant === 'primary' ? s.primaryButtonText : variant === 'secondary' ? s.secondaryButtonText : s.ghostButtonText;
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [buttonStyle, pressed && s.pressed]}>
-      <Text style={textStyle}>{label}</Text>
+    <Pressable
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => [buttonStyle, disabled && s.disabledButton, pressed && !disabled && s.pressed]}>
+      <Text style={[textStyle, disabled && s.disabledButtonText]}>{label}</Text>
     </Pressable>
   );
+}
+
+function filterChartChoices(charts: Song[], mode: PumpMode, search: string): Song[] {
+  const needle = search.trim().toLowerCase();
+  const seen = new Set<number>();
+  return charts
+    .filter((chart) => {
+      if (!chart.id || seen.has(chart.id)) return false;
+      if (!chart.title || !chartMatchesPumpMode(chart, mode)) return false;
+      if (needle) {
+        const haystack = `${chart.title} ${chart.artist || ''}`.toLowerCase();
+        if (!haystack.includes(needle)) return false;
+      }
+      seen.add(chart.id);
+      return true;
+    })
+    .slice(0, 8);
 }
 
 function formatMs(value: number | null): string {
@@ -793,6 +1040,65 @@ const makeStyles = (t: ThemeColors) => ({
     gap: 10,
     marginTop: 4,
   },
+  chartPickerHeader: {
+    flexDirection: 'row' as const,
+    alignItems: 'flex-start' as const,
+    justifyContent: 'space-between' as const,
+    gap: 12,
+  },
+  textInput: {
+    minHeight: 44,
+    borderRadius: 7,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: t.borderStrong,
+    backgroundColor: t.surfaceMuted,
+    color: t.text,
+    fontSize: 14,
+    paddingHorizontal: 12,
+  },
+  textInputPlaceholder: {
+    color: t.textDim,
+  },
+  errorText: {
+    color: '#fb7185',
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  chartChoiceList: {
+    gap: 7,
+  },
+  chartChoice: {
+    minHeight: 54,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+    gap: 10,
+    borderRadius: 7,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: t.border,
+    backgroundColor: t.surfaceMuted,
+    paddingHorizontal: 11,
+    paddingVertical: 9,
+  },
+  chartChoiceSelected: {
+    borderColor: t.accent,
+    backgroundColor: t.accentTint,
+  },
+  chartChoiceMain: {
+    flex: 1,
+    minWidth: 0,
+  },
+  chartChoiceTitle: {
+    color: t.text,
+    fontSize: 13,
+    fontWeight: '900' as const,
+  },
+  chartChoiceMeta: {
+    color: t.accent,
+    fontSize: 12,
+    fontWeight: '900' as const,
+    fontVariant: ['tabular-nums' as const],
+  },
   primaryButton: {
     minHeight: 46,
     alignItems: 'center' as const,
@@ -836,6 +1142,12 @@ const makeStyles = (t: ThemeColors) => ({
     color: t.textMuted,
     fontSize: 14,
     fontWeight: '900' as const,
+  },
+  disabledButton: {
+    opacity: 0.45,
+  },
+  disabledButtonText: {
+    color: t.textDim,
   },
   pressed: {
     opacity: 0.82,

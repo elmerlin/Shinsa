@@ -1,5 +1,5 @@
 import type { ApiClient } from './client';
-import type { ChartDetailResponse, ScoutingCard, Song, SongLibraryResponse } from './types';
+import type { ChartDetailResponse, ChartTimingResponse, ScoutingCard, Song, SongLibraryResponse } from './types';
 
 export interface SongsListParams {
   q?: string;
@@ -42,6 +42,9 @@ export function createSongsApi(client: ApiClient) {
       if (params.follow_from_user_id) search.set('follow_from_user_id', params.follow_from_user_id);
       const qs = search.toString();
       return client.request<ChartDetailResponse>(`/api/songs/chart/${chartId}${qs ? `?${qs}` : ''}`);
+    },
+    chartTiming(chartId: number | string) {
+      return client.request<ChartTimingResponse>(`/api/songs/chart/${encodeURIComponent(String(chartId))}/timing`);
     },
     /** `{ "{normalized_title}|{Mode}|{level}": jacket_path }` plus base-title-only entries. */
     jacketMap() {

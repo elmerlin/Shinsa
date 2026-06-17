@@ -232,6 +232,37 @@ export interface ChartDetailResponse {
   friend_records?: ChartFriendRecord[];
 }
 
+export type PumpPadSide = 'left' | 'right';
+export type PumpPanel = 'topLeft' | 'topRight' | 'center' | 'bottomLeft' | 'bottomRight';
+
+export interface StepCue {
+  id: string;
+  songId?: string;
+  chartId?: number;
+  timeMs: number;
+  beat?: number;
+  panel: PumpPanel;
+  side?: PumpPadSide;
+  expectedFoot?: 'left' | 'right';
+}
+
+export interface ChartTimingResponse {
+  chart: {
+    chart_id: number;
+    title: string;
+    artist: string;
+    mode: 'Single' | 'Double' | string;
+    level: number;
+  };
+  source: {
+    type: 'chart-editor-preset';
+    file: string;
+    title: string;
+    artist: string;
+  };
+  stepCues: StepCue[];
+}
+
 /** Player scouting card — the tournament Poster / Profile uses this to
  *  display attribute bars, competitive levels, specialties, and a
  *  signature blurb summarizing the player's style. Server endpoint:

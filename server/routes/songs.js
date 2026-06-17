@@ -8,6 +8,7 @@ const { normalizeUserAvatarForList } = require('../lib/avatarProxy');
 const { buildPlayerScoutingCard } = require('../lib/playerScoutingCard');
 const { computeAllProfiles, QUERY_BUFFER_DAYS } = require('../lib/trainingLoad');
 const { buildTrainingGapPayload } = require('../lib/trainingGap');
+const { loadChartTimingForChart } = require('../lib/chartTiming');
 const {
   normalizeSongName, parseSongFlags, resolveKnownSongVariantTitle,
   hasShortCutSuffix, normalizeShortCutSuffix, normalizeMode,
@@ -3267,6 +3268,24 @@ router.put('/chart/:chartId/feedback', requireAuth, (req, res) => {
   });
 
   res.json({ ok: true, feedback });
+});
+
+// GET /api/songs/chart/:chartId/timing - Movement Lab step cues from local chart-editor presets
+router.get('/chart/:chartId/timing', optionalAuth, async (req, res) => {
+  const db = getDb();
+  const aliases = loadSongAliases();
+  const songCatalog = getSongCatalog(db, aliases, ['Single', 'Double']);
+  const chart = resolveCatalogChartById(songCatalog, db, aliases, req.params.chartId);
+  if (!chart) return res.status(404).json({ error: 'Chart not found' });
+
+  try {
+    const timing = await loadChartTimingForChart(chart);
+    if (!timing) return res.status(404).json({ error: 'Chart timing not found' });
+    res.json(timing);
+  } catch (err) {
+    console.warn('Failed to load chart timing:', err.message);
+    res.status(500).json({ error: 'Failed to load chart timing' });
+  }
 });
 
 // GET /api/songs/chart/:chartId — chart page payload
