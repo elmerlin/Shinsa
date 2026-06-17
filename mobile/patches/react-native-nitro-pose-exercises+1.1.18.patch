@@ -1,0 +1,15 @@
+diff --git a/node_modules/react-native-nitro-pose-exercises/android/src/main/java/com/margelo/nitro/nitroposeexercises/NitroPoseExercises.kt b/node_modules/react-native-nitro-pose-exercises/android/src/main/java/com/margelo/nitro/nitroposeexercises/NitroPoseExercises.kt
+index 35afe90..7f410bb 100644
+--- a/node_modules/react-native-nitro-pose-exercises/android/src/main/java/com/margelo/nitro/nitroposeexercises/NitroPoseExercises.kt
++++ b/node_modules/react-native-nitro-pose-exercises/android/src/main/java/com/margelo/nitro/nitroposeexercises/NitroPoseExercises.kt
+@@ -359,1 +359,1 @@ private fun processExerciseLogic() {
+-  repAngleSnapshots = angleSnapshots
++  repAngleSnapshots = angleSnapshots.toTypedArray()
+@@ -367,6 +367,5 @@ private fun processExerciseLogic() {
+   if (detectedPhase != _currentPhase && detectedPhase != ExercisePhase.UNKNOWN) {
+-    val previousPhase = _currentPhase
+     _currentPhase = detectedPhase
+     onPhaseChange?.invoke(detectedPhase)
+-    handlePhaseTransition(previousPhase, detectedPhase, config)
++    handlePhaseTransition(detectedPhase, config)
+   }

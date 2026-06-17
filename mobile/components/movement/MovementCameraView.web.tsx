@@ -1,11 +1,16 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
+import type { PoseAnalyzerStatus } from '@/lib/movement/nativeMovementAnalyzer';
+import type { FootLandmarkFrame } from '@/lib/movement/types';
 import type { ThemeColors } from '@/constants/theme';
 
 interface Props {
   isActive?: boolean;
   children?: React.ReactNode;
   onPermissionChange?: (granted: boolean) => void;
+  enablePoseInference?: boolean;
+  onLandmarkFrame?: (frame: FootLandmarkFrame) => void;
+  onPoseStatusChange?: (status: PoseAnalyzerStatus) => void;
 }
 
 export function MovementCameraView({ children }: Props) {

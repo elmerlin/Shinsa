@@ -10,21 +10,28 @@ function upsertGradleProperty(properties, key, value) {
   properties.push({ type: 'property', key, value });
 }
 
+function applyLocalAndroidBuildProperties(properties, options = {}) {
+  const architectures = options.reactNativeArchitectures || process.env.SHINSA_ANDROID_ARCHITECTURES;
+  const workerLimit = options.gradleWorkersMax || process.env.SHINSA_GRADLE_WORKERS_MAX;
+  const minSdkVersion = options.minSdkVersion || process.env.SHINSA_ANDROID_MIN_SDK_VERSION || '26';
+
+  if (architectures) {
+    upsertGradleProperty(properties, 'reactNativeArchitectures', architectures);
+  }
+
+  if (workerLimit) {
+    upsertGradleProperty(properties, 'org.gradle.workers.max', workerLimit);
+  }
+
+  upsertGradleProperty(properties, 'android.minSdkVersion', String(minSdkVersion));
+}
+
 module.exports = function withLocalAndroidBuildProperties(config, options = {}) {
   return withGradleProperties(config, (cfg) => {
-    const architectures = options.reactNativeArchitectures || process.env.SHINSA_ANDROID_ARCHITECTURES;
-    const workerLimit = options.gradleWorkersMax || process.env.SHINSA_GRADLE_WORKERS_MAX;
-
-    if (architectures) {
-      upsertGradleProperty(cfg.modResults, 'reactNativeArchitectures', architectures);
-    }
-
-    if (workerLimit) {
-      upsertGradleProperty(cfg.modResults, 'org.gradle.workers.max', workerLimit);
-    }
-
+    applyLocalAndroidBuildProperties(cfg.modResults, options);
     return cfg;
   });
 };
 
+module.exports.applyLocalAndroidBuildProperties = applyLocalAndroidBuildProperties;
 module.exports.upsertGradleProperty = upsertGradleProperty;

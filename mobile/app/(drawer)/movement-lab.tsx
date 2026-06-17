@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Platform,
   Pressable,
@@ -14,16 +14,28 @@ import { MovementCameraView } from '@/components/movement/MovementCameraView';
 import { MovementTimelineChart, MovementTimelineSelection } from '@/components/movement/MovementTimelineChart';
 import { PadCalibrationOverlay } from '@/components/movement/PadCalibrationOverlay';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
-import { summarizeMovementSession } from '@/lib/movement/analytics';
+import { mapPointToPanel, summarizeMovementSession } from '@/lib/movement/analytics';
 import { buildMockMovementSession } from '@/lib/movement/mockMovementAnalyzer';
-import { getNativeMovementAnalyzerAvailability } from '@/lib/movement/nativeMovementAnalyzer';
+import {
+  buildDemoFallbackMovementSession,
+  buildMovementSessionFromFrames,
+  getNativeMovementAnalyzerAvailability,
+} from '@/lib/movement/nativeMovementAnalyzer';
 import { createDefaultPadCalibration } from '@/lib/movement/padLayout';
 import {
   loadRecentMovementSessions,
   saveMovementSession,
   savePadCalibration,
 } from '@/lib/movement/storage';
-import type { MovementSession, MovementSummary, PumpMode, ReactionSample } from '@/lib/movement/types';
+import type { PoseAnalyzerStatus } from '@/lib/movement/nativeMovementAnalyzer';
+import type {
+  FootLandmarkFrame,
+  MovementSession,
+  MovementSummary,
+  PadCalibration,
+  PumpMode,
+  ReactionSample,
+} from '@/lib/movement/types';
 import type { ThemeColors } from '@/constants/theme';
 
 type Phase = 'landing' | 'permission' | 'calibration' | 'live' | 'results' | 'recent';
@@ -45,6 +57,17 @@ export default function MovementLabScreen() {
   const [recentSessions, setRecentSessions] = useState<MovementSession[]>([]);
   const [selectedCueId, setSelectedCueId] = useState<string | null>(null);
   const [cameraGranted, setCameraGranted] = useState(false);
+  const liveFramesRef = useRef<FootLandmarkFrame[]>([]);
+  const liveStartedAtRef = useRef<string | null>(null);
+  const lastLiveUiUpdateRef = useRef(0);
+  const [liveFrameCount, setLiveFrameCount] = useState(0);
+  const [latestFootFrame, setLatestFootFrame] = useState<FootLandmarkFrame | null>(null);
+  const [poseStatus, setPoseStatus] = useState<PoseAnalyzerStatus>({
+    state: 'disabled',
+    label: 'Pose disabled',
+    confidence: 0,
+    frameCount: 0,
+  });
 
   const calibration = useMemo(
     () => session?.calibration ?? createDefaultPadCalibration(mode),
@@ -66,27 +89,70 @@ export default function MovementLabScreen() {
   }, []);
 
   useEffect(() => {
-    if (phase !== 'calibration' && phase !== 'live') return;
+    if (phase !== 'calibration') return;
     const id = setInterval(() => {
       setActiveZoneIndex((current) => (current + 1) % Math.max(1, calibration.zones.length));
-    }, phase === 'live' ? 620 : 900);
+    }, 900);
     return () => clearInterval(id);
   }, [calibration.zones.length, phase]);
+
+  const resetLiveCapture = useCallback(() => {
+    liveFramesRef.current = [];
+    liveStartedAtRef.current = null;
+    lastLiveUiUpdateRef.current = 0;
+    setLiveFrameCount(0);
+    setLatestFootFrame(null);
+    setPoseStatus({
+      state: 'disabled',
+      label: 'Pose disabled',
+      confidence: 0,
+      frameCount: 0,
+    });
+  }, []);
 
   const startMode = (nextMode: PumpMode) => {
     setMode(nextMode);
     setConfirmedZoneIds([]);
     setSession(null);
     setSelectedCueId(null);
+    resetLiveCapture();
     setPhase('permission');
   };
 
+  const startLiveRun = () => {
+    liveFramesRef.current = [];
+    liveStartedAtRef.current = new Date().toISOString();
+    lastLiveUiUpdateRef.current = 0;
+    setLiveFrameCount(0);
+    setLatestFootFrame(null);
+    setPhase('live');
+  };
+
+  const handleLandmarkFrame = useCallback((frame: FootLandmarkFrame) => {
+    liveFramesRef.current = [...liveFramesRef.current, frame].slice(-1_200);
+    if (frame.timestampMs - lastLiveUiUpdateRef.current > 250) {
+      lastLiveUiUpdateRef.current = frame.timestampMs;
+      setLatestFootFrame(frame);
+      setLiveFrameCount(liveFramesRef.current.length);
+    }
+  }, []);
+
   const finishRun = async () => {
-    const run = buildMockMovementSession(mode);
-    setSession(run.session);
-    setSelectedCueId(run.session.samples[0]?.cueId ?? null);
-    if (run.session.calibration) await savePadCalibration(run.session.calibration);
-    await saveMovementSession(run.session);
+    const frames = liveFramesRef.current;
+    const endedAt = new Date().toISOString();
+    const nextSession = frames.length > 0
+      ? buildMovementSessionFromFrames({
+        mode,
+        calibration,
+        frames,
+        startedAt: liveStartedAtRef.current ?? endedAt,
+        endedAt,
+      })
+      : buildDemoFallbackMovementSession(mode);
+    setSession(nextSession);
+    setSelectedCueId(nextSession.samples[0]?.cueId ?? null);
+    if (nextSession.calibration) await savePadCalibration(nextSession.calibration);
+    await saveMovementSession(nextSession);
     setRecentSessions(await loadRecentMovementSessions());
     setPhase('results');
   };
@@ -149,7 +215,7 @@ export default function MovementLabScreen() {
             setConfirmedZoneIds((current) => current.includes(zoneId) ? current : [...current, zoneId]);
           }}
           onBack={() => setPhase('permission')}
-          onStartRun={() => setPhase('live')}
+          onStartRun={startLiveRun}
         />
       ) : null}
 
@@ -158,8 +224,12 @@ export default function MovementLabScreen() {
           s={s}
           mode={mode}
           calibration={calibration}
-          activeZoneId={activeZone?.id}
+          latestFrame={latestFootFrame}
+          frameCount={liveFrameCount}
+          poseStatus={poseStatus}
           availabilityReason={availability.reason}
+          onLandmarkFrame={handleLandmarkFrame}
+          onPoseStatusChange={setPoseStatus}
           onFinish={finishRun}
           onBack={() => setPhase('calibration')}
         />
@@ -274,7 +344,7 @@ function PermissionView({
       <Text style={s.eyebrow}>CAMERA PERMISSION</Text>
       <Text style={s.sectionHeadline}>{MODE_LABEL[mode]} camera setup</Text>
       <Text style={s.bodyText}>
-        Processing is designed to run on-device. This first build uses the camera permission and deterministic analyzer data while the native pose bridge is proven on hardware.
+        Processing runs on-device through the native camera and pose bridge. If no pose frames are received on this device, the result is labelled as demo fallback data.
       </Text>
       <View style={s.buttonRow}>
         <PrimaryButton label="Continue to camera" onPress={onContinue} s={s} />
@@ -350,19 +420,34 @@ function LiveView({
   s,
   mode,
   calibration,
-  activeZoneId,
+  latestFrame,
+  frameCount,
+  poseStatus,
   availabilityReason,
+  onLandmarkFrame,
+  onPoseStatusChange,
   onFinish,
   onBack,
 }: {
   s: Styles;
   mode: PumpMode;
   calibration: ReturnType<typeof createDefaultPadCalibration>;
-  activeZoneId?: string;
+  latestFrame: FootLandmarkFrame | null;
+  frameCount: number;
+  poseStatus: PoseAnalyzerStatus;
   availabilityReason: string;
+  onLandmarkFrame: (frame: FootLandmarkFrame) => void;
+  onPoseStatusChange: (status: PoseAnalyzerStatus) => void;
   onFinish: () => void;
   onBack: () => void;
 }) {
+  const currentPanel = useMemo(
+    () => formatLatestPanel(latestFrame, calibration) ?? 'none',
+    [calibration, latestFrame],
+  );
+  const poseActive = poseStatus.state === 'tracking';
+  const poseWarn = poseStatus.state === 'error' || poseStatus.state === 'waiting';
+
   return (
     <>
       <View style={s.phaseHeader}>
@@ -370,20 +455,32 @@ function LiveView({
           <Text style={s.eyebrow}>LIVE SESSION</Text>
           <Text style={s.sectionHeadline}>{MODE_LABEL[mode]} movement stream</Text>
         </View>
-        <Text style={[s.confidencePill, s.warnPill]}>Mock analyzer</Text>
+        <Text style={[s.confidencePill, poseActive ? s.goodPill : poseWarn ? s.warnPill : s.neutralPill]}>
+          {poseStatus.label}
+        </Text>
       </View>
-      <MovementCameraView isActive>
-        <PadCalibrationOverlay calibration={calibration} activeZoneId={activeZoneId} />
+      <MovementCameraView
+        isActive
+        enablePoseInference
+        onLandmarkFrame={onLandmarkFrame}
+        onPoseStatusChange={onPoseStatusChange}>
+        <PadCalibrationOverlay calibration={calibration} activeZoneId={currentPanel} />
         <View style={s.liveHud}>
           <MetricTile label="Mode" value={MODE_LABEL[mode]} s={s} compact />
-          <MetricTile label="Confidence" value="Demo" s={s} compact />
-          <MetricTile label="Current panel" value={activeZoneId ?? 'none'} s={s} compact />
+          <MetricTile label="Confidence" value={poseStatus.confidence > 0 ? `${Math.round(poseStatus.confidence * 100)}%` : 'Seeking'} s={s} compact />
+          <MetricTile label="Frames" value={`${frameCount}`} s={s} compact />
+          <MetricTile label="Current panel" value={currentPanel} s={s} compact />
         </View>
       </MovementCameraView>
       <View style={s.panel}>
         <Text style={s.cardTitle}>Analyzer status</Text>
         <Text style={s.bodyText}>{availabilityReason}</Text>
-        <Text style={s.muted}>Finishing this run produces deterministic sample data for testing the analytics UI.</Text>
+        <Text style={s.bodyText}>{poseStatus.message ?? 'Live landmarks are converted to derived movement events on this device. No video is stored or uploaded.'}</Text>
+        <Text style={s.muted}>
+          {frameCount > 0
+            ? 'Finishing this run uses captured pose landmarks and the sample step timeline until chart timing import is connected.'
+            : 'No pose frames captured yet. Finishing now will save clearly labelled demo fallback data.'}
+        </Text>
         <View style={s.buttonRow}>
           <PrimaryButton label="Finish analysis" onPress={onFinish} s={s} />
           <PrimaryButton label="Recalibrate" onPress={onBack} s={s} variant="ghost" />
@@ -574,6 +671,17 @@ function formatMs(value: number | null): string {
 
 function formatSpeed(value: number | null): string {
   return typeof value === 'number' && Number.isFinite(value) ? `${value.toFixed(2)} u/s` : 'No data';
+}
+
+function formatLatestPanel(frame: FootLandmarkFrame | null, calibration: PadCalibration): string | null {
+  const point = frame?.left?.footIndex?.point
+    ?? frame?.right?.footIndex?.point
+    ?? frame?.left?.heel?.point
+    ?? frame?.right?.heel?.point
+    ?? frame?.left?.ankle?.point
+    ?? frame?.right?.ankle?.point;
+  if (!point) return null;
+  return mapPointToPanel(point, calibration, { includeNearest: true })?.zoneId ?? null;
 }
 
 type Styles = ReturnType<typeof useThemedStyles<ReturnType<typeof makeStyles>>>;
@@ -804,6 +912,10 @@ const makeStyles = (t: ThemeColors) => ({
   warnPill: {
     color: '#facc15',
     backgroundColor: 'rgba(250,204,21,0.13)',
+  },
+  neutralPill: {
+    color: t.textMuted,
+    backgroundColor: t.surfaceMuted,
   },
   modeSwitch: {
     flexDirection: 'row' as const,
