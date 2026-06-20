@@ -4,9 +4,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -17,6 +15,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { useKeyboardHeight } from '@/hooks/use-keyboard-height';
 import { useTheme } from '@/contexts/theme-context';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { piugameApi } from '@/lib/api';
@@ -57,6 +56,7 @@ function useDebounced<T>(value: T, delay = 250): T {
  */
 export function AddShoeSheet({ visible, hasCurrentShoe, onClose, onAdded }: Props) {
   const insets = useSafeAreaInsets();
+  const kbHeight = useKeyboardHeight();
   const { theme } = useTheme();
   const s = useThemedStyles(makeStyles);
   const queryClient = useQueryClient();
@@ -176,7 +176,7 @@ export function AddShoeSheet({ visible, hasCurrentShoe, onClose, onAdded }: Prop
     <Modal visible={visible} animationType="none" transparent onRequestClose={onClose}>
       <View style={s.backdrop}>
         <Pressable style={s.backdropFill} onPress={onClose} />
-        <KeyboardAvoidingView behavior="padding" style={s.sheetWrap}>
+        <View style={[s.sheetWrap, { paddingBottom: kbHeight }]}>
           <View style={[s.sheet, { paddingBottom: insets.bottom + 12 }]}>
             <View style={s.handle} />
             <View style={s.titleRow}>
@@ -349,7 +349,7 @@ export function AddShoeSheet({ visible, hasCurrentShoe, onClose, onAdded }: Prop
               </Pressable>
             </ScrollView>
           </View>
-        </KeyboardAvoidingView>
+        </View>
       </View>
     </Modal>
   );

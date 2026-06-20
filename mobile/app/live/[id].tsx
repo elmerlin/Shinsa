@@ -6,7 +6,6 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
   Linking,
   Platform,
   Pressable,
@@ -31,6 +30,7 @@ import { YouTubeEmbed } from '@/components/youtube-embed';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/contexts/theme-context';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
+import { useKeyboardHeight } from '@/hooks/use-keyboard-height';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { parseGrade } from '@/lib/grades';
 import { liveApi } from '@/lib/api';
@@ -987,6 +987,16 @@ function ChatComposer({
   // ~2 lines tall when empty, especially on web where it maps to <textarea>).
   const [composerH, setComposerH] = useState(COMPOSER_MIN_H);
   const composerRef = useRef<TextInput>(null);
+  // Lift the composer above the soft keyboard. KeyboardAvoidingView is
+  // unreliable here (it wrapped only the composer, so "padding" had no
+  // height to push, leaving the input hidden under the keyboard). Tracking
+  // the keyboard height and pushing the bar up by that amount is the same
+  // pattern the DM thread (conversation/[id].tsx) uses — and it works.
+  const keyboardHeight = useKeyboardHeight();
+  const keyboardGap = Platform.OS === 'ios' ? keyboardHeight : 0;
+  // When the keyboard is up it covers the home-indicator area, so drop the
+  // bottom safe-area inset and use a small fixed pad instead.
+  const padBottom = keyboardHeight > 0 ? 8 : bottomInset + 8;
 
   const sendMutation = useMutation({
     mutationFn: (msg: string) => liveApi.sendMessage(sessionId, msg),
@@ -1009,38 +1019,36 @@ function ChatComposer({
   };
 
   return (
-    <KeyboardAvoidingView behavior="padding">
-      <View style={[s.composer, { paddingBottom: bottomInset + 8 }]}>
-        <TextInput
-          ref={composerRef}
-          style={[s.composerInput, { height: composerH }]}
-          value={draft}
-          onChangeText={setDraft}
-          onContentSizeChange={(e) =>
-            setComposerH(Math.min(100, Math.max(COMPOSER_MIN_H, Math.ceil(e.nativeEvent.contentSize.height))))
-          }
-          placeholder="Drop into chat…"
-          placeholderTextColor={theme.textDim}
-          multiline
-          maxLength={500}
-          editable={!sendMutation.isPending}
-        />
-        <Pressable
-          onPress={handleSend}
-          disabled={!draft.trim() || sendMutation.isPending}
-          style={({ pressed }) => [
-            s.composerSendBtn,
-            (!draft.trim() || sendMutation.isPending) && { opacity: 0.4 },
-            pressed && { opacity: 0.7 },
-          ]}>
-          {sendMutation.isPending ? (
-            <ActivityIndicator size="small" color="#0a0f1c" />
-          ) : (
-            <IconSymbol name="paperplane.fill" size={16} color="#0a0f1c" />
-          )}
-        </Pressable>
-      </View>
-    </KeyboardAvoidingView>
+    <View style={[s.composer, { paddingBottom: padBottom, marginBottom: keyboardGap }]}>
+      <TextInput
+        ref={composerRef}
+        style={[s.composerInput, { height: composerH }]}
+        value={draft}
+        onChangeText={setDraft}
+        onContentSizeChange={(e) =>
+          setComposerH(Math.min(100, Math.max(COMPOSER_MIN_H, Math.ceil(e.nativeEvent.contentSize.height))))
+        }
+        placeholder="Drop into chat…"
+        placeholderTextColor={theme.textDim}
+        multiline
+        maxLength={500}
+        editable={!sendMutation.isPending}
+      />
+      <Pressable
+        onPress={handleSend}
+        disabled={!draft.trim() || sendMutation.isPending}
+        style={({ pressed }) => [
+          s.composerSendBtn,
+          (!draft.trim() || sendMutation.isPending) && { opacity: 0.4 },
+          pressed && { opacity: 0.7 },
+        ]}>
+        {sendMutation.isPending ? (
+          <ActivityIndicator size="small" color="#0a0f1c" />
+        ) : (
+          <IconSymbol name="paperplane.fill" size={16} color="#0a0f1c" />
+        )}
+      </Pressable>
+    </View>
   );
 }
 

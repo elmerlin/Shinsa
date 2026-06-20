@@ -90,7 +90,11 @@ export default function UpscoreDetailScreen() {
           </Text>
         </View>
       ) : (
-        <ScrollView ref={scrollRef} contentContainerStyle={{ padding: 12, paddingBottom: insets.bottom + 24 }}>
+        <ScrollView
+          ref={scrollRef}
+          contentContainerStyle={{ padding: 12, paddingBottom: insets.bottom + 24 }}
+          keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets>
           <UpscoreCard
             item={item}
             s={s}

@@ -6,8 +6,6 @@ import { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -16,6 +14,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useKeyboardHeight } from '@/hooks/use-keyboard-height';
 import { TopBar } from '@/components/top-bar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAuth } from '@/contexts/auth-context';
@@ -74,6 +73,7 @@ type Styles = ReturnType<typeof useThemedStyles<ReturnType<typeof makeStyles>>>;
 
 export default function PostsScreen() {
   const insets = useSafeAreaInsets();
+  const keyboardHeight = useKeyboardHeight();
   const router = useRouter();
   const { user } = useAuth();
   const { theme } = useTheme();
@@ -156,10 +156,8 @@ export default function PostsScreen() {
   const submitError = submitMutation.error instanceof Error ? submitMutation.error.message : '';
 
   return (
-    <KeyboardAvoidingView
-      behavior="padding"
-      style={s.container}>
-      <ScrollView contentContainerStyle={[s.scroll, { paddingTop: insets.top + 12 }]} keyboardShouldPersistTaps="handled">
+    <View style={s.container}>
+      <ScrollView contentContainerStyle={[s.scroll, { paddingTop: insets.top + 12, paddingBottom: keyboardHeight > 0 ? keyboardHeight + 16 : 80 }]} keyboardShouldPersistTaps="handled">
         <View style={s.topBar}>
           <TopBar />
         </View>
@@ -307,7 +305,7 @@ export default function PostsScreen() {
           )}
         </View>
       </ScrollView>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 

@@ -10,6 +10,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   Text,
@@ -20,6 +21,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DefaultAvatar } from '@/components/default-avatar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useTheme } from '@/contexts/theme-context';
+import { useKeyboardHeight } from '@/hooks/use-keyboard-height';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { messagesApi } from '@/lib/api';
 import { fullImageUrl } from '@/lib/images';
@@ -37,6 +39,8 @@ interface Props {
 
 export function StoriesStrip({ enabled = true, onPickStory }: Props) {
   const insets = useSafeAreaInsets();
+  const keyboardHeight = useKeyboardHeight();
+  const keyboardGap = Platform.OS === 'ios' ? keyboardHeight : 0;
   const s = useThemedStyles(makeStyles);
   const queryClient = useQueryClient();
   const [toolsOpen, setToolsOpen] = useState(false);
@@ -164,7 +168,7 @@ export function StoriesStrip({ enabled = true, onPickStory }: Props) {
       <Modal visible={toolsOpen} transparent animationType="none" onRequestClose={() => setToolsOpen(false)}>
         <View style={s.sheetBackdrop}>
           <Pressable style={s.sheetScrim} onPress={() => setToolsOpen(false)} />
-          <View style={[s.sheet, { paddingBottom: insets.bottom + 14 }]}>
+          <View style={[s.sheet, { paddingBottom: keyboardHeight > 0 ? 14 : insets.bottom + 14, marginBottom: keyboardGap }]}>
             <View style={s.sheetHandle} />
             <View style={s.sheetHeader}>
               <View style={{ flex: 1, minWidth: 0 }}>

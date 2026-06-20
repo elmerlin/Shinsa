@@ -4,7 +4,6 @@ import { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -17,6 +16,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/contexts/theme-context';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
+import { useKeyboardHeight } from '@/hooks/use-keyboard-height';
 import { authApi, tournamentsApi } from '@/lib/api';
 import { fullImageUrl } from '@/lib/images';
 import type { ThemeColors } from '@/constants/theme';
@@ -39,6 +39,8 @@ export function PlayerAddSheet({ visible, tournamentId, existingPlayers, onClose
   const s = useThemedStyles(makeStyles);
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
+  const keyboardHeight = useKeyboardHeight();
+  const keyboardGap = Platform.OS === 'ios' ? keyboardHeight : 0;
   const queryClient = useQueryClient();
   const [query, setQuery] = useState('');
 
@@ -86,9 +88,8 @@ export function PlayerAddSheet({ visible, tournamentId, existingPlayers, onClose
   return (
     <Modal visible={visible} animationType="none" transparent onRequestClose={onClose}>
       <View style={s.backdrop}>
-        <KeyboardAvoidingView
-          behavior="padding"
-          style={[s.sheet, { paddingBottom: insets.bottom + 12 }]}>
+        <View
+          style={[s.sheet, { paddingBottom: keyboardHeight > 0 ? 12 : insets.bottom + 12, marginBottom: keyboardGap }]}>
           <View style={s.handle} />
           <View style={s.header}>
             <View style={{ flex: 1 }}>
@@ -219,7 +220,7 @@ export function PlayerAddSheet({ visible, tournamentId, existingPlayers, onClose
               )}
             </View>
           </ScrollView>
-        </KeyboardAvoidingView>
+        </View>
       </View>
     </Modal>
   );

@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Linking,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -17,6 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/contexts/theme-context';
+import { useKeyboardHeight } from '@/hooks/use-keyboard-height';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { songsApi } from '@/lib/api';
 import { fullImageUrl } from '@/lib/images';
@@ -94,6 +96,7 @@ interface ChartGroup {
 
 export default function SkillDetailScreen() {
   const insets = useSafeAreaInsets();
+  const keyboardHeight = useKeyboardHeight();
   const router = useRouter();
   const { user } = useAuth();
   const { theme } = useTheme();
@@ -178,7 +181,9 @@ export default function SkillDetailScreen() {
       />
 
       <ScrollView
-        contentContainerStyle={[s.scroll, { paddingTop: 8, paddingBottom: insets.bottom + 24 }]}
+        contentContainerStyle={[s.scroll, { paddingTop: 8, paddingBottom: (keyboardHeight > 0 ? keyboardHeight : insets.bottom) + 24 }]}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
         refreshControl={
           <RefreshControl
             refreshing={skillQuery.isRefetching}

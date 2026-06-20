@@ -5,7 +5,6 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -21,6 +20,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/contexts/theme-context';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
+import { useKeyboardHeight } from '@/hooks/use-keyboard-height';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { songsApi } from '@/lib/api';
 import { getGradeDisplayLabel } from '@/lib/grades';
@@ -84,6 +84,9 @@ export default function ListDetailScreen() {
   // Desktop only: tapping a chart pins it in the right rail instead of
   // routing to /song/[id]. Mobile keeps the drill-down.
   const [selectedItem, setSelectedItem] = useState<UserListItem | null>(null);
+
+  const keyboardHeight = useKeyboardHeight();
+  const keyboardGap = Platform.OS === 'ios' ? keyboardHeight : 0;
 
   // Hydrate sort pref from storage once.
   useEffect(() => {
@@ -421,11 +424,8 @@ export default function ListDetailScreen() {
 
       <Modal visible={!!dialog} animationType="none" transparent onRequestClose={closeDialog}>
         <Pressable style={s.sheetBackdrop} onPress={closeDialog}>
-          <KeyboardAvoidingView
-            behavior="padding"
-            style={s.dialogWrap}>
-            <Pressable style={s.dialog} onPress={(e) => e.stopPropagation()}>
-              <Text style={s.sheetTitle}>{dialog?.kind === 'clone' ? 'Clone list' : 'Rename list'}</Text>
+          <Pressable style={[s.dialog, { marginBottom: keyboardGap }]} onPress={(e) => e.stopPropagation()}>
+            <Text style={s.sheetTitle}>{dialog?.kind === 'clone' ? 'Clone list' : 'Rename list'}</Text>
               <TextInput
                 value={draftName}
                 onChangeText={setDraftName}
@@ -463,8 +463,7 @@ export default function ListDetailScreen() {
                   )}
                 </Pressable>
               </View>
-            </Pressable>
-          </KeyboardAvoidingView>
+          </Pressable>
         </Pressable>
       </Modal>
     </View>
@@ -863,7 +862,6 @@ const makeStyles = (t: ThemeColors) => ({
   targetChipText: { fontSize: 13, fontWeight: '800' as const, color: t.text },
   targetChipTextActive: { color: t.bg },
 
-  dialogWrap: { width: '100%' as const },
   dialog: {
     backgroundColor: t.card,
     borderRadius: 14,

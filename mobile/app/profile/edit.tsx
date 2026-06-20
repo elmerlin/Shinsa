@@ -6,7 +6,6 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
@@ -21,6 +20,7 @@ import { DefaultAvatar } from '@/components/default-avatar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/contexts/theme-context';
+import { useKeyboardHeight } from '@/hooks/use-keyboard-height';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { authApi } from '@/lib/api';
 import { fullImageUrl } from '@/lib/images';
@@ -165,6 +165,7 @@ function buildDirtyPayload(form: FormState, baseline: FormState): UpdateMePayloa
 
 export default function EditProfileScreen() {
   const insets = useSafeAreaInsets();
+  const keyboardHeight = useKeyboardHeight();
   const router = useRouter();
   const { user, refreshUser } = useAuth();
   const { theme } = useTheme();
@@ -262,10 +263,9 @@ export default function EditProfileScreen() {
           ),
         }}
       />
-      <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
-        <ScrollView
-          contentContainerStyle={[s.scroll, { paddingBottom: insets.bottom + 32 }]}
-          keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={[s.scroll, { paddingBottom: (keyboardHeight > 0 ? keyboardHeight : insets.bottom) + 32 }]}
+        keyboardShouldPersistTaps="handled">
 
           {/* Avatar — tap to pick a new photo; long-press / clear button removes it */}
           <View style={s.avatarBlock}>
@@ -456,8 +456,7 @@ export default function EditProfileScreen() {
               {saveMutation.error instanceof Error ? saveMutation.error.message : 'Failed to save'}
             </Text>
           ) : null}
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </ScrollView>
     </View>
   );
 }

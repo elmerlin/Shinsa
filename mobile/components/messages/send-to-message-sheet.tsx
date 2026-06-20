@@ -16,6 +16,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -28,6 +29,7 @@ import { DefaultAvatar } from '@/components/default-avatar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/contexts/theme-context';
+import { useKeyboardHeight } from '@/hooks/use-keyboard-height';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { authApi, messagesApi, socialApi } from '@/lib/api';
 import { fullImageUrl } from '@/lib/images';
@@ -65,6 +67,8 @@ export function SendToMessageSheet({
   tone = 'cyan',
 }: Props) {
   const insets = useSafeAreaInsets();
+  const keyboardHeight = useKeyboardHeight();
+  const keyboardGap = Platform.OS === 'ios' ? keyboardHeight : 0;
   const { user } = useAuth();
   const { theme } = useTheme();
   const s = useThemedStyles(makeStyles);
@@ -162,7 +166,7 @@ export function SendToMessageSheet({
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
       <View style={s.backdrop}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <View style={[s.sheet, { paddingBottom: insets.bottom + 12 }]}>
+        <View style={[s.sheet, { paddingBottom: keyboardHeight > 0 ? 12 : insets.bottom + 12, marginBottom: keyboardGap }]}>
           <View style={s.handle} />
 
           <View style={s.header}>

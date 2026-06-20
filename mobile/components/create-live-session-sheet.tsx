@@ -2,7 +2,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -14,6 +13,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useKeyboardHeight } from '@/hooks/use-keyboard-height';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useTheme } from '@/contexts/theme-context';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
@@ -39,6 +39,7 @@ export function CreateLiveSessionSheet({ visible, onClose, onCreated }: Props) {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const s = useThemedStyles(makeStyles);
+  const kbHeight = useKeyboardHeight();
   const queryClient = useQueryClient();
   const [title, setTitle] = useState('');
   const [streamUrl, setStreamUrl] = useState('');
@@ -87,8 +88,8 @@ export function CreateLiveSessionSheet({ visible, onClose, onCreated }: Props) {
     <Modal visible={visible} animationType="none" transparent onRequestClose={handleClose}>
       <View style={s.backdrop}>
         <Pressable style={s.backdropFill} onPress={handleClose} />
-        <KeyboardAvoidingView behavior="padding" style={s.sheetWrap}>
-          <View style={[s.sheet, { paddingBottom: insets.bottom + 12 }]}>
+        <View style={[s.sheetWrap, { paddingBottom: kbHeight }]}>
+          <View style={[s.sheet, { paddingBottom: kbHeight > 0 ? 12 : insets.bottom + 12 }]}>
             <View style={s.handle} />
             <View style={s.titleRow}>
               <View style={s.titleStack}>
@@ -200,7 +201,7 @@ export function CreateLiveSessionSheet({ visible, onClose, onCreated }: Props) {
               )}
             </Pressable>
           </View>
-        </KeyboardAvoidingView>
+        </View>
       </View>
     </Modal>
   );

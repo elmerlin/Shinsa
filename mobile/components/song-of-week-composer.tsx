@@ -11,8 +11,10 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChartJacket } from '@/components/chart-jacket';
 import { useTheme } from '@/contexts/theme-context';
+import { useKeyboardHeight } from '@/hooks/use-keyboard-height';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { socialApi, songsApi } from '@/lib/api';
 import { fullImageUrl } from '@/lib/images';
@@ -109,6 +111,9 @@ interface Props {
 export function SongOfWeekComposer({ visible, existingPick, onClose, onSaved }: Props) {
   const s = useThemedStyles(makeStyles);
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
+  const keyboardHeight = useKeyboardHeight();
+  const keyboardGap = Platform.OS === 'ios' ? keyboardHeight : 0;
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [modeFilter, setModeFilter] = useState<ModeFilter>('all');
@@ -175,7 +180,7 @@ export function SongOfWeekComposer({ visible, existingPick, onClose, onSaved }: 
 
   return (
     <Modal visible={visible} animationType="none" transparent onRequestClose={onClose}>
-      <View style={s.backdrop}>
+      <View style={[s.backdrop, { paddingBottom: keyboardGap }]}>
         <View style={s.sheet}>
           <View style={s.header}>
             <View style={{ flex: 1 }}>
@@ -311,7 +316,7 @@ export function SongOfWeekComposer({ visible, existingPick, onClose, onSaved }: 
             </View>
           </ScrollView>
 
-          <View style={s.footer}>
+          <View style={[s.footer, { paddingBottom: keyboardHeight > 0 ? 8 : insets.bottom + 8 }]}>
             {error ? <Text style={s.errorText}>{error}</Text> : null}
             <Pressable onPress={onClose} hitSlop={6} style={({ pressed }) => [{ paddingHorizontal: 12 }, pressed && { opacity: 0.7 }]}>
               <Text style={s.cancelText}>Cancel</Text>

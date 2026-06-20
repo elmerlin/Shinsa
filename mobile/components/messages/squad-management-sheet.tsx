@@ -24,6 +24,7 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -37,6 +38,7 @@ import { DefaultAvatar } from '@/components/default-avatar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useTheme } from '@/contexts/theme-context';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
+import { useKeyboardHeight } from '@/hooks/use-keyboard-height';
 import { authApi, messagesApi, songsApi } from '@/lib/api';
 import { fullImageUrl } from '@/lib/images';
 import { getConversationQueryKey, getMessagesInboxQueryKey } from '@/lib/messagesQueries';
@@ -84,6 +86,8 @@ const TAB_LIST: { value: Tab; label: string }[] = [
 
 export function SquadManagementSheet({ conversationId, visible, onClose, viewerId, onLeft, messages = [] }: Props) {
   const insets = useSafeAreaInsets();
+  const keyboardHeight = useKeyboardHeight();
+  const keyboardGap = Platform.OS === 'ios' ? keyboardHeight : 0;
   const { theme } = useTheme();
   const s = useThemedStyles(makeStyles);
   const queryClient = useQueryClient();
@@ -263,7 +267,7 @@ export function SquadManagementSheet({ conversationId, visible, onClose, viewerI
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
       <View style={s.backdrop}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <View style={[s.sheet, { paddingBottom: insets.bottom + 12 }]}>
+        <View style={[s.sheet, { paddingBottom: keyboardHeight > 0 ? 12 : insets.bottom + 12, marginBottom: keyboardGap }]}>
           <View style={s.handle} />
 
           <View style={s.header}>

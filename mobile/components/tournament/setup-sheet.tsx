@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -16,6 +15,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/contexts/theme-context';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
+import { useKeyboardHeight } from '@/hooks/use-keyboard-height';
 import { tournamentsApi } from '@/lib/api';
 import { FORMAT_ICONS, FORMAT_LABELS } from '@/lib/tournament-format';
 import type { ThemeColors } from '@/constants/theme';
@@ -86,6 +86,7 @@ export function TournamentSetupSheet({ visible, tournamentId, onClose, onSaved }
   const s = useThemedStyles(makeStyles);
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
+  const kbHeight = useKeyboardHeight();
   const queryClient = useQueryClient();
   const isEdit = !!tournamentId;
   const [name, setName] = useState('');
@@ -268,9 +269,7 @@ export function TournamentSetupSheet({ visible, tournamentId, onClose, onSaved }
   return (
     <Modal visible={visible} animationType="none" transparent onRequestClose={onClose}>
       <View style={s.backdrop}>
-        <KeyboardAvoidingView
-          behavior="padding"
-          style={[s.sheet, { paddingBottom: insets.bottom + 12 }]}>
+        <View style={[s.sheetWrap, { paddingBottom: kbHeight }]}><View style={[s.sheet, { paddingBottom: kbHeight > 0 ? 8 : insets.bottom + 12 }]}>
           <View style={s.handle} />
           <View style={s.header}>
             <View style={{ flex: 1 }}>
@@ -408,7 +407,7 @@ export function TournamentSetupSheet({ visible, tournamentId, onClose, onSaved }
                 : <Text style={s.footerSaveText}>{isEdit ? 'Save changes' : 'Create tournament'}</Text>}
             </Pressable>
           </View>
-        </KeyboardAvoidingView>
+        </View></View>
       </View>
 
       {/* Format picker — slides up on top of the setup sheet. */}
@@ -575,6 +574,7 @@ function NumberRow({
 
 const makeStyles = (t: ThemeColors) => ({
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.62)', justifyContent: 'flex-end' as const, alignItems: 'center' as const },
+  sheetWrap: { width: '100%' as const, maxWidth: 720, alignItems: 'center' as const, flex: Platform.OS === 'web' ? undefined : 1, justifyContent: 'flex-end' as const },
   sheet: {
     width: '100%' as const,
     maxWidth: 720,

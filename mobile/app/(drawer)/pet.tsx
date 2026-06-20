@@ -28,6 +28,7 @@ import {
   Alert,
   Image,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -46,6 +47,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/contexts/theme-context';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { useHorizontalWheelScroll } from '@/hooks/use-horizontal-wheel-scroll';
+import { useKeyboardHeight } from '@/hooks/use-keyboard-height';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { petsApi } from '@/lib/api';
 import {
@@ -1347,6 +1349,7 @@ function CustomizeTab({ pet, s, onOpenLeaderboard: _onOpenLeaderboard }: { pet: 
   const queryClient = useQueryClient();
   const [renameOpen, setRenameOpen] = useState(false);
   const [draftName, setDraftName] = useState(pet.nickname || '');
+  const keyboardHeight = useKeyboardHeight();
 
   const rename = useMutation({
     mutationFn: (name: string) => petsApi.rename(name),
@@ -1431,7 +1434,7 @@ function CustomizeTab({ pet, s, onOpenLeaderboard: _onOpenLeaderboard }: { pet: 
       {/* Rename modal */}
       <Modal visible={renameOpen} transparent animationType="none" onRequestClose={() => setRenameOpen(false)}>
         <Pressable style={s.modalBackdrop} onPress={() => setRenameOpen(false)}>
-          <Pressable onPress={(e) => e.stopPropagation?.()} style={s.modalCard}>
+          <Pressable onPress={(e) => e.stopPropagation?.()} style={[s.modalCard, { marginBottom: Platform.OS === 'ios' ? keyboardHeight : 0 }]}>
             <Text style={s.modalTitle}>Rename your pet</Text>
             <TextInput
               value={draftName}

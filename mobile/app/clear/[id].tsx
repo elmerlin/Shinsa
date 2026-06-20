@@ -84,7 +84,11 @@ export default function ClearDetailScreen() {
           </Text>
         </View>
       ) : (
-        <ScrollView ref={scrollRef} contentContainerStyle={{ padding: 12, paddingBottom: insets.bottom + 24 }}>
+        <ScrollView
+          ref={scrollRef}
+          contentContainerStyle={{ padding: 12, paddingBottom: insets.bottom + 24 }}
+          keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets>
           <ClearCard
             item={item}
             s={s}

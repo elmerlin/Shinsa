@@ -5,7 +5,6 @@ import { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -22,6 +21,7 @@ import { TopBar } from '@/components/top-bar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useTheme } from '@/contexts/theme-context';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
+import { useKeyboardHeight } from '@/hooks/use-keyboard-height';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { songsApi } from '@/lib/api';
 import { fullImageUrl } from '@/lib/images';
@@ -102,6 +102,8 @@ export default function ListsScreen() {
   const [draftName, setDraftName] = useState('');
   const [sort, setSort] = useState<SortKey>('recent');
   const { isDesktop } = useBreakpoint();
+  const keyboardHeight = useKeyboardHeight();
+  const keyboardGap = Platform.OS === 'ios' ? keyboardHeight : 0;
 
   const listsQuery = useQuery({
     queryKey: LISTS_QUERY_KEY,
@@ -325,11 +327,8 @@ export default function ListsScreen() {
       </ScrollView>
 
       <Modal visible={mode.kind !== 'idle'} animationType="none" transparent onRequestClose={closeDialog}>
-        <Pressable style={s.dialogBackdrop} onPress={closeDialog}>
-          <KeyboardAvoidingView
-            behavior="padding"
-            style={s.dialogWrap}>
-            <Pressable style={s.dialog} onPress={(e) => e.stopPropagation()}>
+        <Pressable style={[s.dialogBackdrop, { paddingBottom: 24 + keyboardGap }]} onPress={closeDialog}>
+          <Pressable style={s.dialog} onPress={(e) => e.stopPropagation()}>
               <Text style={s.dialogTitle}>{dialogTitle}</Text>
               <TextInput
                 value={draftName}
@@ -368,8 +367,7 @@ export default function ListsScreen() {
                   )}
                 </Pressable>
               </View>
-            </Pressable>
-          </KeyboardAvoidingView>
+          </Pressable>
         </Pressable>
       </Modal>
     </View>
@@ -632,7 +630,6 @@ const makeStyles = (t: ThemeColors) => ({
 
   // Dialog (create/rename)
   dialogBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center' as const, padding: 24 },
-  dialogWrap: { width: '100%' as const },
   dialog: {
     backgroundColor: t.card,
     borderRadius: 14,

@@ -5,7 +5,6 @@ import {
   ActivityIndicator,
   Animated,
   Easing,
-  KeyboardAvoidingView,
   LayoutChangeEvent,
   Modal,
   Platform,
@@ -24,6 +23,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/contexts/theme-context';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
+import { useKeyboardHeight } from '@/hooks/use-keyboard-height';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { authApi, socialApi, songsApi } from '@/lib/api';
 import { fullImageUrl } from '@/lib/images';
@@ -278,6 +278,8 @@ interface PickerProps {
 
 function PlayerPickerSheet({ visible, onClose, onPick, meId }: PickerProps) {
   const insets = useSafeAreaInsets();
+  const keyboardHeight = useKeyboardHeight();
+  const keyboardGap = Platform.OS === 'ios' ? keyboardHeight : 0;
   const { theme } = useTheme();
   const s = useThemedStyles(makePickerStyles);
   const [query, setQuery] = useState('');
@@ -329,10 +331,7 @@ function PlayerPickerSheet({ visible, onClose, onPick, meId }: PickerProps) {
     <Modal visible={visible} animationType="none" transparent onRequestClose={onClose}>
       <View style={s.backdrop}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <KeyboardAvoidingView
-          behavior="padding"
-          style={s.sheetWrap}>
-          <View style={[s.sheet, { paddingBottom: insets.bottom + 12 }]}>
+        <View style={[s.sheet, { paddingBottom: keyboardHeight > 0 ? 12 : insets.bottom + 12, marginBottom: keyboardGap }]}>
             <View style={s.handle} />
             <View style={s.titleRow}>
               <Text style={s.title}>Pick rival</Text>
@@ -383,7 +382,6 @@ function PlayerPickerSheet({ visible, onClose, onPick, meId }: PickerProps) {
               )}
             </ScrollView>
           </View>
-        </KeyboardAvoidingView>
       </View>
     </Modal>
   );

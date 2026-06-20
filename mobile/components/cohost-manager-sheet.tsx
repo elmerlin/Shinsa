@@ -3,7 +3,6 @@ import { Image } from 'expo-image';
 import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -13,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useKeyboardHeight } from '@/hooks/use-keyboard-height';
 import { DefaultAvatar } from '@/components/default-avatar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useTheme } from '@/contexts/theme-context';
@@ -58,6 +58,8 @@ export function CohostManagerSheet({
   const s = useThemedStyles(makeStyles);
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
+  const keyboardHeight = useKeyboardHeight();
+  const keyboardGap = Platform.OS === 'ios' ? keyboardHeight : 0;
 
   const trimmed = search.trim();
   const searchQuery = useQuery({
@@ -119,8 +121,8 @@ export function CohostManagerSheet({
     <Modal visible={visible} animationType="none" transparent onRequestClose={handleClose}>
       <View style={s.backdrop}>
         <Pressable style={s.backdropFill} onPress={handleClose} />
-        <KeyboardAvoidingView behavior="padding" style={s.sheetWrap}>
-          <View style={[s.sheet, { paddingBottom: insets.bottom + 12 }]}>
+        <View style={s.sheetWrap}>
+          <View style={[s.sheet, { paddingBottom: insets.bottom + 12, marginBottom: keyboardGap }]}>
             <View style={s.handle} />
             <View style={s.titleRow}>
               <View style={{ flex: 1 }}>
@@ -214,7 +216,7 @@ export function CohostManagerSheet({
               </Text>
             ) : null}
           </View>
-        </KeyboardAvoidingView>
+        </View>
       </View>
     </Modal>
   );

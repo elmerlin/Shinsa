@@ -7,6 +7,7 @@ import {
   Alert,
   FlatList,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -37,6 +38,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/contexts/theme-context';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
+import { useKeyboardHeight } from '@/hooks/use-keyboard-height';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { useWebPullToRefresh } from '@/hooks/use-web-pull-to-refresh';
 import { authApi, liveApi, messagesApi, piugameApi, socialApi, songsApi, weeklyChallengesApi } from '@/lib/api';
@@ -424,6 +426,7 @@ export function ProfileBody({ lookup }: { lookup: string }) {
   // doesn't on every device — pad the scroll's top so content never sits
   // under the system tray either way.
   const insets = useSafeAreaInsets();
+  const keyboardHeight = useKeyboardHeight();
 
   // Lookup can be a user_id or `@username`. Strip leading @ and treat as
   // username when it looks like one, else as id.
@@ -1218,7 +1221,7 @@ export function ProfileBody({ lookup }: { lookup: string }) {
       ) : null}
       <ScrollView
         ref={setWebScrollRef as never}
-        contentContainerStyle={[s.scroll, { paddingTop: insets.top + 14 }]}
+        contentContainerStyle={[s.scroll, { paddingTop: insets.top + 14, paddingBottom: 80 + (Platform.OS === 'ios' ? keyboardHeight : 0) }]}
         refreshControl={
           <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={theme.spinner} />
         }>

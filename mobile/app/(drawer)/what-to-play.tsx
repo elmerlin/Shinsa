@@ -7,7 +7,6 @@ import {
   Animated,
   Dimensions,
   Easing,
-  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -20,6 +19,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TopBar } from '@/components/top-bar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { useKeyboardHeight } from '@/hooks/use-keyboard-height';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/contexts/theme-context';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
@@ -621,6 +621,8 @@ function TrackSheet({
   onFeedbackSaved: (chartId: number, feedback: ChartFeedback) => void;
 }) {
   const insets = useSafeAreaInsets();
+  const keyboardHeight = useKeyboardHeight();
+  const keyboardGap = Platform.OS === 'ios' ? keyboardHeight : 0;
   const { theme } = useTheme();
   const s = useThemedStyles(makeTrackStyles);
   const queryClient = useQueryClient();
@@ -774,10 +776,8 @@ function TrackSheet({
     <Modal visible={visible} animationType="none" transparent onRequestClose={onClose}>
       <View style={s.backdrop}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <KeyboardAvoidingView
-          behavior="padding"
-          style={s.sheetWrap}>
-          <View style={[s.sheet, { paddingBottom: insets.bottom + 8 }]}>
+        <View style={s.sheetWrap}>
+          <View style={[s.sheet, { paddingBottom: insets.bottom + 8, marginBottom: keyboardGap }]}>
             <View style={s.handle} />
 
             {/* Header */}
@@ -943,7 +943,7 @@ function TrackSheet({
               </Pressable>
             </View>
           </View>
-        </KeyboardAvoidingView>
+        </View>
       </View>
     </Modal>
   );

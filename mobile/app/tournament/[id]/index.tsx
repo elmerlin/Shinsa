@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TopBar } from '@/components/top-bar';
 import {
@@ -185,7 +185,14 @@ export default function TournamentDetailScreen() {
     <View style={s.container}>
       <Stack.Screen options={{ title: tournament.name || 'Tournament' }} />
       <View style={[s.topBar, { paddingTop: insets.top + 8 }]}><TopBar /></View>
-      <ScrollView contentContainerStyle={[s.scroll, { paddingBottom: insets.bottom + 80 }]}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={insets.top + 56}>
+      <ScrollView
+        contentContainerStyle={[s.scroll, { paddingBottom: insets.bottom + 80 }]}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets>
         <TournamentHero
           tournament={tournament}
           live={live}
@@ -293,6 +300,7 @@ export default function TournamentDetailScreen() {
           </View>
         ) : null}
       </ScrollView>
+      </KeyboardAvoidingView>
 
       <MatchDetailSheet
         visible={!!matchTarget}
