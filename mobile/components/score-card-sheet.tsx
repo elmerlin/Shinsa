@@ -1,9 +1,10 @@
+import { useQuery } from '@tanstack/react-query';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Linking,
@@ -22,7 +23,7 @@ import { PlateBadge } from '@/components/plate-badge';
 import { SendToMessageSheet } from '@/components/messages/send-to-message-sheet';
 import { ScoreCommentsSheet } from '@/components/score-comments-sheet';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { apiBaseUrl } from '@/lib/api';
+import { apiBaseUrl, socialApi } from '@/lib/api';
 import { useTheme } from '@/contexts/theme-context';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { getGradeDisplayLabel, getGradeTier, TIER_COLORS } from '@/lib/grades';
@@ -61,6 +62,9 @@ export interface ScoreCardData {
   /** Player username — comes from the parent feed item. */
   username?: string;
   avatar?: string;
+  /** Player's user id — lets the card resolve this play's HR when the
+   *  caller's row doesn't already carry it. */
+  user_id?: string;
   played_at_utc?: string;
   date_played?: string;
   machine_name?: string;
@@ -140,7 +144,7 @@ function JudgmentGrid({ data, s }: { data: ScoreCardData; s: Styles }) {
   );
 }
 
-export function ScoreCardSheet({ visible, data, onClose, onReplay }: Props) {
+export function ScoreCardSheet({ visible, data: rawData, onClose, onReplay }: Props) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { theme } = useTheme();
@@ -157,6 +161,53 @@ export function ScoreCardSheet({ visible, data, onClose, onReplay }: Props) {
   // ("rendered more hooks than during the previous render") and white-
   // screens the whole app. See handleShare below for its usage.
   const [sharing, setSharing] = useState(false);
+
+  // ── Lazy heart-rate resolution ──────────────────────────────────────
+  // The card renders HR when present, but many surfaces build it from rows
+  // that don't carry it: the feed recap top-plays (the server's
+  // sanitizeTopSong drops hr_*), session-share rows, friend scores, etc.
+  // When HR is missing but the play is identifiable, resolve it so the card
+  // shows HR *anywhere* it's opened, if it exists. Prefer the field+user
+  // lookup (matches the canonical user_recently_played row) over the play_id
+  // route, since some surfaces' play_id is a different id-space (e.g. the
+  // recap's play_id is live_session_plays.id, not user_recently_played.id).
+  // ALL hooks MUST run before the `if (!data)` return — see note above.
+  const hrPresent = !!rawData && ((Number(rawData.hr_avg) || 0) > 0 || (Number(rawData.hr_peak) || 0) > 0);
+  const hrUserId = rawData ? String((rawData as { user_id?: unknown }).user_id ?? '') : '';
+  const hrPlayId = rawData?.play_id != null && rawData.play_id !== '' ? String(rawData.play_id) : '';
+  const hrScore = Number(rawData?.score ?? rawData?.new_score ?? 0) || 0;
+  const canLookupByFields = !!rawData?.song_title && !!rawData?.mode && rawData?.level != null && hrScore > 0 && !!hrUserId;
+  const canResolveHr = !!rawData && !hrPresent && !rawData.is_stage_break && (canLookupByFields || !!hrPlayId);
+  const hrQuery = useQuery({
+    queryKey: ['score-card-hr', canLookupByFields
+      ? `f:${rawData?.song_title}|${rawData?.mode}|${rawData?.level}|${hrScore}|${hrUserId}`
+      : `p:${hrPlayId}`],
+    queryFn: () => (canLookupByFields
+      ? socialApi.lookupPlay({
+          song_title: String(rawData?.song_title ?? ''),
+          mode: String(rawData?.mode ?? ''),
+          level: Number(rawData?.level ?? 0),
+          score: hrScore,
+          user_id: hrUserId,
+        })
+      : socialApi.getPlay(hrPlayId)),
+    enabled: visible && canResolveHr,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+  // Merge ONLY the HR fields from the resolved play — never clobber the
+  // caller-curated display fields (username, jacket, score deltas, …).
+  const data = useMemo<ScoreCardData | null>(() => {
+    if (!rawData) return null;
+    const r = hrQuery.data as Record<string, unknown> | undefined;
+    if (!r) return rawData;
+    const merged = { ...rawData } as Record<string, unknown>;
+    for (const k of ['hr_avg', 'hr_peak', 'hr_min', 'hr_series', 'hr_source', 'hr_duration_s', 'hr_max', 'song_duration_s']) {
+      const cur = merged[k];
+      if ((cur == null || cur === 0) && r[k] != null) merged[k] = r[k];
+    }
+    return merged as ScoreCardData;
+  }, [rawData, hrQuery.data]);
 
   if (!data) {
     return (

@@ -2,7 +2,7 @@
   "expo": {
     "name": "Shinsa",
     "slug": "shinsa",
-    "version": "1.0.46",
+    "version": "1.0.47",
     "orientation": "portrait",
     "icon": "./assets/brand/app-icon.png",
     "scheme": "shinsa",
@@ -18,7 +18,7 @@
     },
     "android": {
       "package": "com.shinsa.app",
-      "versionCode": 46,
+      "versionCode": 47,
       "permissions": [
         "REQUEST_INSTALL_PACKAGES",
         "ACCESS_COARSE_LOCATION",
