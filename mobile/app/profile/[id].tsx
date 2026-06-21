@@ -867,6 +867,9 @@ export function ProfileBody({ lookup }: { lookup: string }) {
     level: entry.level,
     chart_id: entry.chart_id,
     play_id: entry.play_id ?? entry.id,
+    // Lets the score card resolve HR via the safe field+user lookup; best-
+    // scores rows carry no HR and a non-recently-played id-space play_id.
+    user_id: entry.user_id ?? profile?.id,
     jacket_url: entry.jacket_url,
     score: Number(entry.score) || 0,
     grade: entry.grade,

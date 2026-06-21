@@ -201,6 +201,19 @@ export function ScoreCardSheet({ visible, data: rawData, onClose, onReplay }: Pr
     if (!rawData) return null;
     const r = hrQuery.data as Record<string, unknown> | undefined;
     if (!r) return rawData;
+    // Trust the resolved HR only if the fetched play is actually THIS play.
+    // getPlay(play_id) can hit an unrelated row when a surface's play_id is
+    // from a different id-space than user_recently_played (e.g. a
+    // user_best_scores.id) — without this guard that would paint a stranger's
+    // heart rate onto the card. lookupPlay matches these fields server-side,
+    // so the guard is a no-op for that path and a hard backstop for getPlay.
+    const norm = (v: unknown) => String(v ?? '').trim().toLowerCase();
+    const samePlay =
+      norm(r.song_title) === norm(rawData.song_title)
+      && norm(r.mode) === norm(rawData.mode)
+      && Number(r.level) === Number(rawData.level)
+      && Number(r.score) === (Number(rawData.score ?? rawData.new_score) || 0);
+    if (!samePlay) return rawData;
     const merged = { ...rawData } as Record<string, unknown>;
     for (const k of ['hr_avg', 'hr_peak', 'hr_min', 'hr_series', 'hr_source', 'hr_duration_s', 'hr_max', 'song_duration_s']) {
       const cur = merged[k];

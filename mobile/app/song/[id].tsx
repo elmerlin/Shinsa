@@ -273,6 +273,9 @@ export default function ChartDetailScreen() {
     level: chart?.level,
     chart_id: chartId,
     play_id: typeof entry.id === 'string' || typeof entry.id === 'number' ? entry.id : undefined,
+    // Lets the score card resolve this play's HR via the safe field+user
+    // lookup (best-scores rows carry no HR and a non-recently-played id).
+    user_id: user?.id,
     jacket_url: chart?.jacket_url,
     score: Number(entry.score) || 0,
     grade: typeof entry.grade === 'string' ? entry.grade : undefined,
@@ -304,6 +307,8 @@ export default function ChartDetailScreen() {
 
   const buildFriendScoreData = (rec: ChartFriendRecord): ScoreCardData => ({
     ...buildScoreData(rec.best),
+    // Override the owner so HR resolves for the friend, not the viewer.
+    user_id: rec.user.id,
     username: rec.user.username,
     avatar: rec.user.avatar,
   });
