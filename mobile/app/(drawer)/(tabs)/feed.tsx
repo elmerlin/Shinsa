@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AchievementBadgePost } from '@/components/achievement-badge-post';
+import { SkillTitleUnlockCard } from '@/components/skill-title-unlock-card';
 import { ChartJacket } from '@/components/chart-jacket';
 import { CommentsSheet } from '@/components/comments-sheet';
 import { DefaultAvatar } from '@/components/default-avatar';
@@ -556,6 +557,13 @@ interface ClearEntry {
   hr_duration_s?: number;
   hr_max?: number;
   song_duration_s?: number;
+  // Skill-title unlock rows (entry_type === 'title_unlock').
+  title_name?: string;
+  title_family?: string;
+  title_level?: number;
+  title_tier?: string;
+  title_required_points?: number;
+  title_earned_points?: number;
 }
 
 export function ClearCard({ item, onPump, onComments, onShare, onOsShare, onJacket, onScore, onReplay, s }: {
@@ -580,8 +588,51 @@ export function ClearCard({ item, onPump, onComments, onShare, onOsShare, onJack
   // just the top-level summary row, which dropped most of the batch. Skip
   // skill-title unlocks. Fall back to the single top-level clear for legacy
   // events that predate clears_json.
-  const parsed = parseList<ClearEntry>(itemRec.clears_json)
-    .filter((c) => c.entry_type !== 'title_unlock' && String(c.song_title || '').trim());
+  const allParsed = parseList<ClearEntry>(itemRec.clears_json);
+  const titleUnlocks = allParsed.filter((c) => c.entry_type === 'title_unlock');
+  const parsed = allParsed.filter((c) => c.entry_type !== 'title_unlock' && String(c.song_title || '').trim());
+
+  // Skill-title unlocks post as clear rows with mode 'Skill Title' and no
+  // jacket, so the generic chart row below rendered a "?" thumbnail. Render
+  // them as tier-badged skill-title cards instead. (A post is always either
+  // skill-title unlocks or chart clears — the server posts them separately.)
+  const topIsTitleUnlock =
+    parsed.length === 0 && titleUnlocks.length === 0 &&
+    (String(itemRec.mode ?? '') === 'Skill Title' ||
+      String(itemRec.grade ?? '') === 'SKILL TITLE' ||
+      String(itemRec.entry_type ?? '') === 'title_unlock');
+  const skillTitles: ClearEntry[] = topIsTitleUnlock
+    ? [{
+        title_name: String(itemRec.title_name ?? itemRec.song_title ?? '').trim() || 'Skill Title',
+        title_family: typeof itemRec.title_family === 'string' ? itemRec.title_family : undefined,
+        title_level: Number(itemRec.title_level) || undefined,
+        title_tier: typeof itemRec.title_tier === 'string' ? itemRec.title_tier : undefined,
+        title_required_points: Number(itemRec.title_required_points) || Number(itemRec.score) || undefined,
+        title_earned_points: Number(itemRec.title_earned_points) || undefined,
+        level: Number(itemRec.level) || undefined,
+        score: Number(itemRec.score) || undefined,
+      }]
+    : titleUnlocks;
+
+  if (skillTitles.length > 0 && parsed.length === 0) {
+    const titleVerb = skillTitles.length > 1 ? `unlocked ${skillTitles.length} skill titles` : 'unlocked a skill title';
+    return (
+      <View style={s.card}>
+        <CardHeader
+          username={username}
+          avatar={avatar}
+          time={timeAgo(item.created_at)}
+          s={s}
+          rightChildren={<Text style={s.clearedVerb}>{titleVerb}</Text>}
+        />
+        <View style={s.entriesList}>
+          {skillTitles.map((t, i) => <SkillTitleUnlockCard key={i} clear={t} />)}
+        </View>
+        <ActionFooter item={item} s={s} onPump={onPump} onComments={onComments} onShare={onShare} onOsShare={onOsShare} />
+      </View>
+    );
+  }
+
   const entries: ClearEntry[] = parsed.length > 0 ? parsed : [{
     song_title: String(itemRec.song_title ?? '').trim(),
     mode: String(itemRec.mode ?? ''),
