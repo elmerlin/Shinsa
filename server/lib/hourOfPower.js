@@ -1,5 +1,6 @@
 const { calculateRatingPoints, gradeFromScore, normalizeGrade } = require('./titleProgress');
 const { formatDurationLabel } = require('./liveSessionSummary');
+const { applyChartMetadata } = require('./activityPostEnrichment');
 
 const LIVE_SESSION_TYPE = 'live';
 const HOP_SESSION_TYPE = 'hop';
@@ -246,7 +247,7 @@ function summarizeHourOfPower(session, rows, options = {}) {
   };
 }
 
-function buildHourOfPowerShare(session, hopSummary) {
+function buildHourOfPowerShare(db, session, hopSummary) {
   if (!hopSummary) return null;
 
   const config = resolveHourOfPowerConfig(session);
@@ -266,14 +267,26 @@ function buildHourOfPowerShare(session, hopSummary) {
   const sessionMachineName = hopSummary.counted_rows
     .map((row) => String(row?.machine_name || '').trim())
     .find(Boolean) || '';
-  const rows = hopSummary.counted_rows.map((row) => ({
+  const rows = hopSummary.counted_rows.map((row) => {
+    // Resolve the Shinsa-hosted jacket from the songs catalog (chart_id /
+    // chart_path / jacket_url). applyChartMetadata only fills missing fields
+    // and deliberately ignores background_url (the piugame CDN), so an empty
+    // jacket_url means the catalog lacks the chart rather than papering over
+    // it with an external image.
+    const meta = applyChartMetadata(db, {
+      song_title: String(row?.song_title || ''),
+      mode: String(row?.mode || ''),
+      level: toInt(row?.level),
+      jacket_url: String(row?.jacket_url || ''),
+    });
+    return {
     song_title: String(row?.song_title || ''),
     mode: String(row?.mode || ''),
     level: toInt(row?.level),
     score: toInt(row?.score),
     grade: String(row?.hop_resolved_grade || row?.grade || ''),
     rating_points: toInt(row?.hop_rating_points_earned),
-    jacket_url: String(row?.background_url || row?.jacket_url || ''),
+    jacket_url: String(meta?.jacket_url || row?.jacket_url || ''),
     replay_embed_url: String(row?.replay_embed_url || ''),
     replay_video_id: String(row?.replay_video_id || ''),
     replay_start_seconds: toInt(row?.replay_start_seconds),
@@ -284,7 +297,8 @@ function buildHourOfPowerShare(session, hopSummary) {
     bad: toInt(row?.bad),
     miss: toInt(row?.miss),
     date_played: String(row?.date_played || ''),
-  }));
+    };
+  });
 
   return {
     version: 1,

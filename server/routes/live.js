@@ -30,7 +30,7 @@ const {
 const { serializeLiveSessionMarker } = require('../lib/liveSessionMarker');
 const { createUserNotification } = require('../lib/notifications');
 const { normalizePiugamePlayedAtUtc } = require('../lib/piugameDate');
-const { enrichClearRows, enrichUpscoreRows } = require('../lib/activityPostEnrichment');
+const { enrichClearRows, enrichUpscoreRows, applyChartMetadata } = require('../lib/activityPostEnrichment');
 const { persistWeeklyChallengePlayPosts } = require('../lib/weeklyChallenges');
 const {
   extractYoutubeVideoId,
@@ -1824,7 +1824,9 @@ function getSessionPlays(db, liveSessionId) {
   return rows.map((row) => {
     const key = buildPlayOutcomeKey(row.song_title, row.mode, row.level, row.score, row.user_id);
     const outcome = outcomeMap.get(key) || null;
-    return {
+    // Resolve the Shinsa-hosted jacket from the songs catalog so the score
+    // card / recap show artwork even when the play row has no background_url.
+    return applyChartMetadata(db, {
       ...row,
       avatar: normalizeUserAvatarForList(row.avatar, row.user_id, 56, row.avatar_v),
       participant_role: normalizeLiveParticipantRole(row.participant_role),
@@ -1833,7 +1835,7 @@ function getSessionPlays(db, liveSessionId) {
       singles_pumbility_gain: outcome ? outcome.singles_pumbility_gain : 0,
       session_result_type: outcome ? outcome.type : '',
       over_top100_rank: Math.max(toInt(row.over_top100_rank), toInt(outcome?.over_top100_rank)),
-    };
+    });
   });
 }
 
@@ -1867,7 +1869,7 @@ function getLatestSessionPlay(db, liveSessionId) {
 
   const key = buildPlayOutcomeKey(row.song_title, row.mode, row.level, row.score, row.user_id);
   const outcome = outcomeMap.get(key) || null;
-  return {
+  return applyChartMetadata(db, {
     ...row,
     avatar: normalizeUserAvatarForList(row.avatar, row.user_id, 56, row.avatar_v),
     participant_role: normalizeLiveParticipantRole(row.participant_role),
@@ -1876,7 +1878,7 @@ function getLatestSessionPlay(db, liveSessionId) {
     singles_pumbility_gain: outcome ? outcome.singles_pumbility_gain : 0,
     session_result_type: outcome ? outcome.type : '',
     over_top100_rank: Math.max(toInt(row.over_top100_rank), toInt(outcome?.over_top100_rank)),
-  };
+  });
 }
 
 function getLiveSessionYoutubeVideoId(session) {
@@ -2286,12 +2288,12 @@ function getSessionPlaysWithDurations(db, liveSessionId) {
     const durationMatch = durationLookup.get(`${titleKey}|${modeKey}|${normalizedLevel}`)
       || ((modeKey === 'ucs' || normalizedLevel <= 0) ? durationLookup.get(`${titleKey}|*`) : null)
       || null;
-    return {
+    return applyChartMetadata(db, {
       ...play,
       avatar: normalizeUserAvatarForList(play.avatar, play.user_id, 56, play.avatar_v),
       duration_seconds: durationMatch ? toInt(durationMatch.duration_seconds) : 0,
       duration_source: durationMatch?.duration_source || '',
-    };
+    });
   });
 }
 
@@ -3781,7 +3783,7 @@ function createParticipantLiveSessionArtifacts(db, session, participant, partici
   const replayEnhancedPlays = attachReplayMetadataToPlayRows(participantPlays, replayLookup);
   const participantDisplayState = buildSessionDisplayState(db, session, replayEnhancedPlays);
   const hopShare = isHourOfPowerSession(session)
-    ? buildHourOfPowerShare(session, participantDisplayState.hop)
+    ? buildHourOfPowerShare(db, session, participantDisplayState.hop)
     : null;
   const filteredUpscores = enrichUpscoreRows(
     db,

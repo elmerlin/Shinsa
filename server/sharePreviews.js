@@ -376,6 +376,22 @@ function getPlateName(value) {
   return PLATE_NAMES[code] || code;
 }
 
+// Plate chip colours — mirror mobile/components/plate-badge.tsx THEMES so the
+// share image's plate badge matches the in-app PlateBadge.
+const PLATE_CHIP_THEME = {
+  PG: { code: '#86e8ff', border: 'rgba(118,205,255,0.45)' },
+  UG: { code: '#86e8ff', border: 'rgba(118,205,255,0.45)' },
+  EG: { code: '#ffd84b', border: 'rgba(250,204,21,0.45)' },
+  SG: { code: '#ffd84b', border: 'rgba(250,204,21,0.45)' },
+  MG: { code: '#ece8e1', border: 'rgba(226,232,240,0.40)' },
+  TG: { code: '#ece8e1', border: 'rgba(226,232,240,0.40)' },
+  FG: { code: '#ffab39', border: 'rgba(251,146,60,0.45)' },
+  RG: { code: '#ffab39', border: 'rgba(251,146,60,0.45)' },
+};
+function getPlateChip(value) {
+  return PLATE_CHIP_THEME[String(value || '').trim().toUpperCase()] || null;
+}
+
 function summarizeUpscore(upscore) {
   const username = upscore?.username ? `@${upscore.username}` : 'A player';
   const items = parseJsonArray(upscore?.upscores_json);
@@ -1932,9 +1948,21 @@ async function renderPlayStoryJpeg({ play, brandAssets = null, artworkBuffer = n
   }
 
   const usernameLabel = brandAssets?.usernameLabel || '@player';
+  // Compact mode-gradient level pill + plate chip (match the in-app card).
+  const levelDigits = String(parseInt(play?.level, 10) || '?');
+  const levelPillH = 92;
+  const levelPillW = Math.max(150, levelDigits.length * 46 + 64);
+  const levelX = cardX + cardW - levelPillW - 48;
+  const levelY = cardY + 52;
+  const plateCode = String(play?.plate || '').trim().toUpperCase();
+  const plateChip = getPlateChip(plateCode);
   const textSvg = `
   <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
     <defs>
+      <linearGradient id="levelGrad" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="${escapeXml(modeAccent.from)}"/>
+        <stop offset="100%" stop-color="${escapeXml(modeAccent.to)}"/>
+      </linearGradient>
       <radialGradient id="storyGlow" cx="50%" cy="8%" r="70%">
         <stop offset="0%" stop-color="rgba(255,210,74,0.14)"/>
         <stop offset="60%" stop-color="rgba(255,210,74,0.03)"/>
@@ -1970,13 +1998,14 @@ async function renderPlayStoryJpeg({ play, brandAssets = null, artworkBuffer = n
     <text x="${cardX + 48}" y="${metaBaseY + 56}" fill="rgba(255,255,255,0.82)" font-size="26" font-weight="600" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(metaLine)}</text>
     ${machineName ? `<text x="${cardX + 48}" y="${metaBaseY + 96}" fill="rgba(255,255,255,0.82)" font-size="26" font-weight="600" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(machineName)}</text>` : ''}
 
-    <circle cx="${cardX + cardW - 110}" cy="${cardY + 110}" r="74" fill="${modeAccent.from}" />
-    <circle cx="${cardX + cardW - 110}" cy="${cardY + 110}" r="60" fill="rgba(8,10,16,0.45)" />
-    <text x="${cardX + cardW - 110}" y="${cardY + 92}" text-anchor="middle" fill="rgba(255,255,255,0.85)" font-size="20" font-weight="800" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">LEVEL</text>
-    <text x="${cardX + cardW - 110}" y="${cardY + 142}" text-anchor="middle" fill="#ffffff" font-size="54" font-weight="900" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(String(parseInt(play?.level, 10) || '?'))}</text>
+    <rect x="${levelX}" y="${levelY}" width="${levelPillW}" height="${levelPillH}" rx="${levelPillH / 2}" fill="url(#levelGrad)" stroke="rgba(255,255,255,0.45)" stroke-width="3" />
+    <text x="${levelX + Math.round(levelPillW / 2)}" y="${levelY + 64}" text-anchor="middle" fill="#ffffff" font-size="56" font-weight="900" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(levelDigits)}</text>
 
     <text x="${cardX + 48}" y="${cardY + cardH - 196}" fill="${play?.is_stage_break ? '#fda4af' : '#ffffff'}" font-size="${play?.is_stage_break ? 72 : 104}" font-weight="900" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(play?.is_stage_break ? 'STAGE BREAK' : scoreText)}</text>
-    ${plateName ? `<text x="${cardX + 48}" y="${cardY + cardH - 152}" fill="#ffd24a" font-size="26" font-weight="800" letter-spacing="3" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(plateName)}</text>` : ''}
+    ${plateChip
+      ? `<rect x="${cardX + 48}" y="${cardY + cardH - 178}" width="64" height="40" rx="9" fill="rgba(13,18,28,0.90)" stroke="${plateChip.border}" stroke-width="2" />
+    <text x="${cardX + 80}" y="${cardY + cardH - 150}" text-anchor="middle" fill="${plateChip.code}" font-size="22" font-weight="900" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(plateCode)}</text>${plateName ? `<text x="${cardX + 126}" y="${cardY + cardH - 150}" fill="rgba(226,232,240,0.88)" font-size="24" font-weight="800" letter-spacing="2" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(String(plateName).toUpperCase())}</text>` : ''}`
+      : (plateName ? `<text x="${cardX + 48}" y="${cardY + cardH - 150}" fill="rgba(226,232,240,0.88)" font-size="26" font-weight="800" letter-spacing="3" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(String(plateName).toUpperCase())}</text>` : '')}
     <text x="${cardX + cardW - 48}" y="${cardY + cardH - 196}" text-anchor="end" fill="${escapeXml(gradeAccent)}" font-size="110" font-weight="900" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(gradeText)}</text>
 
     ${showJudgments ? `<rect x="${cardX + 28}" y="${judgPanelY}" width="${cardW - 56}" height="112" rx="28" fill="rgba(3,7,15,0.66)" stroke="rgba(255,255,255,0.10)" />` : ''}
@@ -1993,7 +2022,7 @@ async function renderPlayStoryJpeg({ play, brandAssets = null, artworkBuffer = n
       input: await sharp(artworkBuffer)
         .rotate()
         .resize(cardW, cardH, { fit: 'cover' })
-        .modulate({ brightness: 1.08, saturation: 1.08 })
+        .modulate({ brightness: 0.82, saturation: 1.06 })
         .composite([{
           input: Buffer.from(`<svg width="${cardW}" height="${cardH}" xmlns="http://www.w3.org/2000/svg"><rect width="${cardW}" height="${cardH}" rx="36" fill="#fff"/></svg>`),
           blend: 'dest-in',
@@ -2079,7 +2108,7 @@ async function renderPlayOgJpeg({
   const pillItems = [
     skillTitle ? { text: skillTitle, fill: 'rgba(34,211,238,0.12)', stroke: 'rgba(103,232,249,0.34)', color: '#d9f9ff' } : null,
     overRank > 0 ? { text: `TOP #${overRank}`, fill: 'rgba(250,204,21,0.12)', stroke: 'rgba(250,204,21,0.36)', color: '#fef08a' } : null,
-    badgeText ? { text: badgeText, fill: modeAccent.fill, stroke: modeAccent.border, color: '#ffffff' } : null,
+    // (mode badge intentionally omitted — the level pill already conveys it.)
     (hrAvg > 0 || hrPeak > 0) && !hasHrPanel
       ? { text: `♥ ${hrAvg || '—'} AVG · ${hrPeak || '—'} PEAK BPM`, fill: 'rgba(248,113,113,0.14)', stroke: 'rgba(248,113,113,0.40)', color: '#fecaca' }
       : null,
@@ -2146,9 +2175,15 @@ async function renderPlayOgJpeg({
     <text x="${chX}" y="${cardY + cardH - 22}" fill="rgba(255,255,255,0.45)" font-size="13" font-weight="600" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">Zones from max ${maxHrV} BPM</text>
     `;
   }
-  const levelSize = 112;
-  const levelX = cardX + cardW - levelSize - 36;
-  const levelY = cardY + 42;
+  // Compact mode-gradient level pill (matches the in-app card's levelBadge),
+  // not a big "LEVEL" medallion.
+  const levelDigits = String(parseInt(play?.level, 10) || '?');
+  const levelPillH = 64;
+  const levelPillW = Math.max(96, levelDigits.length * 30 + 44);
+  const levelX = cardX + cardW - levelPillW - 36;
+  const levelY = cardY + 34;
+  const plateCode = String(play?.plate || '').trim().toUpperCase();
+  const plateChip = getPlateChip(plateCode);
   const playerAvatarSize = 42;
   const playerAvatarX = cardX + 40;
   const playerAvatarY = cardY + 132;
@@ -2160,9 +2195,10 @@ async function renderPlayOgJpeg({
       input: await sharp(artworkBuffer)
         .rotate()
         .resize(cardW, cardH, { fit: 'cover' })
-        .gamma(1.08)
-        .modulate({ brightness: 1.3, saturation: 1.16 })
-        .sharpen(1.1)
+        // Dim the jacket so it reads as a background behind white text —
+        // matches the in-app card's dark overlay (the SVG scrim below adds
+        // the rest). Previously this BRIGHTENED the art, washing out copy.
+        .modulate({ brightness: 0.55, saturation: 1.06 })
         .composite([{
           input: Buffer.from(`<svg width="${cardW}" height="${cardH}" xmlns="http://www.w3.org/2000/svg"><rect x="0" y="0" width="${cardW}" height="${cardH}" rx="30" ry="30" fill="#fff"/></svg>`),
           blend: 'dest-in',
@@ -2266,10 +2302,6 @@ async function renderPlayOgJpeg({
         <stop offset="100%" stop-color="rgba(56,189,248,0)"/>
       </radialGradient>
     </defs>
-    <rect x="0" y="0" width="${width}" height="88" fill="url(#topBar)" />
-    <text x="66" y="70" fill="rgba(186,230,253,0.86)" font-size="16" font-weight="800" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial" letter-spacing="4">RUN DETAILS</text>
-    <text x="${width - 148}" y="60" fill="rgba(255,255,255,0.76)" font-size="22" text-anchor="end" font-weight="700" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(username)}</text>
-
     <rect x="${cardX}" y="${cardY}" width="${cardW}" height="${cardH}" rx="30" fill="rgba(5,10,20,0.05)" stroke="rgba(172,196,255,0.18)" />
     <rect x="${cardX}" y="${cardY}" width="${cardW}" height="${cardH}" rx="30" fill="url(#cardShade)" />
     <rect x="${cardX}" y="${cardY}" width="${cardW}" height="${cardH}" rx="30" fill="url(#leftRailShade)" />
@@ -2278,14 +2310,12 @@ async function renderPlayOgJpeg({
     <rect x="${cardX}" y="${cardY}" width="${cardW}" height="${cardH}" rx="30" fill="url(#centerReveal)" />
     <rect x="${cardX}" y="${cardY}" width="${cardW}" height="${cardH}" rx="30" fill="url(#bottomVignette)" />
 
-    <rect x="${cardX + 22}" y="${cardY + 26}" width="${Math.round(cardW * 0.6)}" height="172" rx="20" fill="rgba(4,7,12,0.55)" />
+    <rect x="${cardX}" y="${cardY}" width="${cardW}" height="${cardH}" rx="30" fill="rgba(6,10,18,0.50)" />
 
     ${titleSvg}
 
-    <rect x="${levelX}" y="${levelY}" width="${levelSize}" height="${levelSize}" rx="${Math.round(levelSize / 2)}" fill="url(#levelGrad)" stroke="rgba(255,255,255,0.40)" stroke-width="3" />
-    <circle cx="${levelX + Math.round(levelSize / 2)}" cy="${levelY + Math.round(levelSize / 2)}" r="${Math.round(levelSize / 2) - 12}" fill="rgba(8,14,24,0.34)" />
-    <text x="${levelX + Math.round(levelSize / 2)}" y="${levelY + 34}" text-anchor="middle" fill="rgba(222,234,247,0.86)" font-size="16" font-weight="800" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">LEVEL</text>
-    <text x="${levelX + Math.round(levelSize / 2)}" y="${levelY + 76}" text-anchor="middle" fill="#ffffff" font-size="42" font-weight="900" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(String(parseInt(play?.level, 10) || '?'))}</text>
+    <rect x="${levelX}" y="${levelY}" width="${levelPillW}" height="${levelPillH}" rx="${levelPillH / 2}" fill="url(#levelGrad)" stroke="rgba(255,255,255,0.45)" stroke-width="2" />
+    <text x="${levelX + Math.round(levelPillW / 2)}" y="${levelY + 45}" text-anchor="middle" fill="#ffffff" font-size="40" font-weight="900" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(levelDigits)}</text>
 
     ${playerAvatarOverlay ? `<circle cx="${playerAvatarX + Math.round(playerAvatarSize / 2)}" cy="${playerAvatarY + Math.round(playerAvatarSize / 2)}" r="${Math.round(playerAvatarSize / 2) + 2}" fill="none" stroke="rgba(255,255,255,0.22)" stroke-width="2" />` : ''}
     <text x="${cardX + 40 + (playerAvatarOverlay ? 58 : 0)}" y="${cardY + 148}" fill="#ffffff" font-size="20" font-weight="800" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(String(play?.username || 'Player'))}</text>
@@ -2294,10 +2324,12 @@ async function renderPlayOgJpeg({
     ${pillsSvg}
 
     <text x="${scoreX}" y="${cardY + 326}" fill="${play?.is_stage_break ? '#fda4af' : '#ffffff'}" font-size="${play?.is_stage_break ? 46 : 62}" font-weight="900" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(play?.is_stage_break ? 'STAGE BREAK' : scoreText)}</text>
-    ${plateName ? `<text x="${scoreX}" y="${cardY + 358}" fill="rgba(250,226,150,0.92)" font-size="16" font-weight="800" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial" letter-spacing="1.5">${escapeXml(plateName)}</text>` : ''}
+    ${plateChip
+      ? `<rect x="${scoreX}" y="${cardY + 338}" width="48" height="30" rx="7" fill="rgba(13,18,28,0.88)" stroke="${plateChip.border}" stroke-width="1.5" />
+    <text x="${scoreX + 24}" y="${cardY + 359}" text-anchor="middle" fill="${plateChip.code}" font-size="16" font-weight="900" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(plateCode)}</text>${plateName ? `<text x="${scoreX + 62}" y="${cardY + 359}" fill="rgba(226,232,240,0.86)" font-size="15" font-weight="800" letter-spacing="1.4" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(String(plateName).toUpperCase())}</text>` : ''}`
+      : (plateName ? `<text x="${scoreX}" y="${cardY + 359}" fill="rgba(226,232,240,0.86)" font-size="15" font-weight="800" letter-spacing="1.5" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(String(plateName).toUpperCase())}</text>` : '')}
 
-    <text x="${cardX + cardW - 40}" y="${cardY + 314}" text-anchor="end" fill="${escapeXml(gradeAccent)}" font-size="70" font-weight="900" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(gradeText)}</text>
-    ${badgeText ? `<text x="${cardX + cardW - 40}" y="${cardY + 344}" text-anchor="end" fill="rgba(214,224,240,0.80)" font-size="18" font-weight="700" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(String(play?.mode || '').trim())} chart</text>` : ''}
+    <text x="${cardX + cardW - 40}" y="${cardY + 320}" text-anchor="end" fill="${escapeXml(gradeAccent)}" font-size="74" font-weight="900" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial">${escapeXml(gradeText)}</text>
 
     <rect x="${cardX + 20}" y="${judgmentPanelY}" width="${cardW - 40}" height="76" rx="22" fill="rgba(3,7,15,0.52)" stroke="rgba(255,255,255,0.10)" />
     ${judgmentsSvg}
