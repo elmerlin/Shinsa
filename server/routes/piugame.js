@@ -34,7 +34,7 @@ const {
   persistWeeklyChallengePlayPosts,
 } = require('../lib/weeklyChallenges');
 const { normalizePiugamePlayedAtUtc } = require('../lib/piugameDate');
-const { enrichClearRows, enrichUpscoreRows } = require('../lib/activityPostEnrichment');
+const { enrichClearRows, enrichUpscoreRows, applyChartMetadata } = require('../lib/activityPostEnrichment');
 const {
   calculatePlayLoad,
   computeAllProfiles,
@@ -4542,6 +4542,35 @@ router.get('/titles/:userId', (req, res) => {
 });
 
 // GET /api/piugame/training-load/:userId
+// Resolve a Shinsa-hosted catalog jacket for each training-evidence clear so
+// the mobile NEXT TARGET card shows artwork. The clears only carry the raw
+// piugame background_url, which frequently fails to load on native.
+function enrichTrainingJackets(db, profiles) {
+  if (!db || !profiles) return profiles;
+  const enrichClear = (c) => {
+    if (!c || !c.song_title) return;
+    const meta = applyChartMetadata(db, {
+      song_title: c.song_title,
+      mode: c.mode,
+      level: c.level,
+      background_url: c.background_url || '',
+    });
+    c.jacket_url = String(meta?.jacket_url || '');
+  };
+  const enrichEvidence = (ev) => {
+    if (!ev) return;
+    if (Array.isArray(ev.clears)) ev.clears.forEach(enrichClear);
+    if (Array.isArray(ev.near_passes)) ev.near_passes.forEach(enrichClear);
+  };
+  for (const key of ['single', 'double', 'overall']) {
+    const lp = profiles[key] && profiles[key].likely_pass;
+    if (!lp) continue;
+    enrichEvidence(lp.target);
+    if (Array.isArray(lp.feeder_levels)) lp.feeder_levels.forEach(enrichEvidence);
+  }
+  return profiles;
+}
+
 router.get('/training-load/:userId', (req, res) => {
   const db = getDb();
   const userId = req.params.userId;
@@ -4567,6 +4596,7 @@ router.get('/training-load/:userId', (req, res) => {
   const lastSyncedAt = (sync && sync.last_recently_played_sync) || null;
 
   const result = computeAllProfiles(plays, ianaTimezone, lastSyncedAt);
+  enrichTrainingJackets(db, result);
   res.json(result);
 });
 
@@ -4609,6 +4639,7 @@ router.get('/training-population/:userId', (req, res) => {
   ).get(userId);
   const lastSyncedAt = (sync && sync.last_recently_played_sync) || null;
   const profiles = computeAllProfiles(userPlays, ianaTimezone, lastSyncedAt);
+  enrichTrainingJackets(db, profiles);
 
   // Build per-user scatter data for the population chart (avatar + metrics)
   const userAvatars = {};

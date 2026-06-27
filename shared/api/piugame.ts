@@ -584,9 +584,14 @@ export interface TrainingModeProfile extends TrainingZone {
 
 export interface TrainingLikelyPassClear {
   song_title: string;
+  mode?: string;
+  level?: number;
   score: number;
   grade: string;
   background_url?: string;
+  /** Shinsa-hosted catalog jacket (server-resolved); preferred over the raw
+   *  piugame background_url, which often fails to load on native. */
+  jacket_url?: string;
 }
 
 export interface TrainingLikelyPassLevel {

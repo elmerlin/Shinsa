@@ -331,6 +331,8 @@ function buildRecentLevelEvidence(recentPlays, ianaTimezone) {
 
     const playDetail = {
       song_title: play.song_title || '',
+      mode: play.mode || '',
+      level: playLevel,
       score,
       grade,
       background_url: play.background_url || '',

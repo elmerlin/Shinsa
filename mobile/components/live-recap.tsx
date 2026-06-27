@@ -45,7 +45,7 @@ export function LiveRecap({ summary, onPlayPress }: {
         avatar: internalPlay.avatar,
         score: internalPlay.score,
         grade: internalPlay.grade,
-        jacket_url: internalPlay.background_url || (internalPlay.jacket_url as string | undefined),
+        jacket_url: (internalPlay.jacket_url as string | undefined) || internalPlay.background_url,
         is_stage_break: internalPlay.score === 0,
       }
     : null;

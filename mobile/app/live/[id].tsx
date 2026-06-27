@@ -40,6 +40,7 @@ import { syncHeartRateAfterPiugameSync } from '@/lib/heartRateSync';
 const COMPOSER_MIN_H = 36;
 import { hrZoneColor } from '@/lib/heartRate';
 import { fullImageUrl } from '@/lib/images';
+import { resolveJacketSource } from '@/lib/jacket';
 import { parseYouTubeUrl } from '@/lib/youtube';
 import type {
   LiveSessionFull,
@@ -264,7 +265,7 @@ export default function LiveSessionScreen() {
       avatar: selectedPlay.avatar,
       score: selectedPlay.score,
       grade: selectedPlay.grade,
-      jacket_url: selectedPlay.background_url || selectedPlay.jacket_url as string | undefined,
+      jacket_url: (selectedPlay.jacket_url as string | undefined) || selectedPlay.background_url,
       is_stage_break: selectedPlay.score === 0,
     };
   }, [selectedPlay]);
@@ -1214,11 +1215,14 @@ function NowPlayingCard({
   isLive: boolean;
   s: Styles;
 }) {
-  const jacket = lastPlay.background_url || '';
+  // Prefer the Shinsa-hosted catalog jacket (bundled in the app / reliable on
+  // native) over the raw piugame background_url, which often fails to load on
+  // native. resolveJacketSource handles both + the bundled pack.
+  const jacketSource = resolveJacketSource((lastPlay.jacket_url as string | undefined) || lastPlay.background_url);
   return (
     <View style={s.npCard}>
-      {jacket ? (
-        <Image source={{ uri: jacket }} style={s.npThumb} contentFit="cover" />
+      {jacketSource ? (
+        <Image source={jacketSource as never} style={s.npThumb} contentFit="cover" />
       ) : (
         <View style={[s.npThumb, s.npThumbFallback]} />
       )}
@@ -1263,12 +1267,12 @@ function HeroCard({
   compact?: boolean;
 }) {
   const hostAvatar = typeof session.host?.avatar === 'string' ? fullImageUrl(session.host.avatar) : undefined;
-  const jacket = lastPlay?.background_url || '';
+  const jacketSource = resolveJacketSource((lastPlay?.jacket_url as string | undefined) || lastPlay?.background_url);
   return (
     <View style={[s.hero, compact && s.heroCompact]}>
       <View style={s.heroBgWrap}>
-        {jacket ? (
-          <Image source={{ uri: jacket }} style={s.heroBg} contentFit="cover" />
+        {jacketSource ? (
+          <Image source={jacketSource as never} style={s.heroBg} contentFit="cover" />
         ) : (
           <View style={[s.heroBg, s.heroBgFallback]} />
         )}
@@ -1391,7 +1395,7 @@ function Stat({ label, value, sub, s }: { label: string; value: string; sub?: st
 }
 
 function PlayRow({ play, onPress, s }: { play: LiveSessionPlay; onPress?: () => void; s: Styles }) {
-  const jacket = play.background_url || '';
+  const jacketSource = resolveJacketSource((play.jacket_url as string | undefined) || play.background_url);
   const passed = play.score > 0;
   const performerAvatar = typeof play.avatar === 'string' ? fullImageUrl(play.avatar) : undefined;
   const isCohostPlay = play.participant_role === 'cohost' || play.participant_role === 'co-host';
@@ -1400,8 +1404,8 @@ function PlayRow({ play, onPress, s }: { play: LiveSessionPlay; onPress?: () => 
       onPress={onPress}
       disabled={!onPress}
       style={({ pressed }) => [s.playRow, pressed && onPress ? { opacity: 0.7 } : null]}>
-      {jacket ? (
-        <Image source={{ uri: jacket }} style={s.playJacket} contentFit="cover" />
+      {jacketSource ? (
+        <Image source={jacketSource as never} style={s.playJacket} contentFit="cover" />
       ) : (
         <View style={[s.playJacket, s.playJacketFallback]} />
       )}

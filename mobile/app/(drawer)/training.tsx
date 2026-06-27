@@ -15,6 +15,8 @@ import Svg, { Defs, LinearGradient, Path, Stop } from 'react-native-svg';
 import { GradeChip } from '@/components/grade-chip';
 import { TopBar } from '@/components/top-bar';
 import { HelpButton, HelpSheet } from '@/components/help-sheet';
+import { CoachLabTab } from '@/components/training/coach-lab-tab';
+import { PlayerLandscapeChart } from '@/components/training/player-landscape-chart';
 import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/contexts/theme-context';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
@@ -86,6 +88,7 @@ export default function TrainingScreen() {
   const { theme } = useTheme();
   const s = useThemedStyles(makeStyles);
   const [mode, setMode] = useState<DisplayMode>('single');
+  const [pageTab, setPageTab] = useState<'load' | 'analytics'>('load');
   const [helpKey, setHelpKey] = useState<HelpKey | null>(null);
   const openHelp = (key: HelpKey) => setHelpKey(key);
   const { isDesktop } = useBreakpoint();
@@ -208,7 +211,25 @@ export default function TrainingScreen() {
           </View>
           ) : null}
 
-          {loadQuery.isLoading ? (
+          <View style={s.pageTabRow}>
+            {(['load', 'analytics'] as const).map((t) => {
+              const active = t === pageTab;
+              return (
+                <Pressable
+                  key={t}
+                  onPress={() => setPageTab(t)}
+                  style={({ pressed }) => [s.pageTabBtn, active && { borderBottomColor: theme.accent }, pressed && { opacity: 0.85 }]}>
+                  <Text style={[s.pageTabLabel, { color: active ? theme.text : theme.textDim }]}>
+                    {t === 'load' ? 'LOAD' : 'COACH LAB'}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          {pageTab === 'analytics' ? (
+            user?.id ? <CoachLabTab userId={user.id} mode={mode} /> : null
+          ) : loadQuery.isLoading ? (
             <View style={s.center}><ActivityIndicator color={theme.spinner} /></View>
           ) : loadQuery.isError ? (
             <View style={s.errorBox}>
@@ -231,6 +252,9 @@ export default function TrainingScreen() {
               ) : null}
               {population ? (
                 <PopulationSection population={population} s={s} onHelp={handleHelp} />
+              ) : null}
+              {population && population.scatter && population.scatter.length >= 3 ? (
+                <PlayerLandscapeChart scatter={population.scatter} mode={mode} />
               ) : null}
             </>
           ) : null}
@@ -533,8 +557,9 @@ function LikelyPassCard({
         {sampleClears.length > 0 ? (
           <View style={s.clearsList}>
             {sampleClears.map((clr, i) => {
-              // Prefer the APK-bundled jacket; falls back to network URL.
-              const clrSource = resolveJacketSource((clr as { jacket_url?: string }).jacket_url);
+              // Prefer the Shinsa catalog jacket (bundled / reliable on native)
+              // over the raw piugame background_url, which often fails to load.
+              const clrSource = resolveJacketSource(clr.jacket_url || clr.background_url);
               return (
               <View key={`${clr.song_title}-${i}`} style={s.clearRow}>
                 {clrSource ? (
@@ -707,6 +732,20 @@ const makeStyles = (t: ThemeColors) => ({
     borderColor: 'transparent',
   },
   modeLabel: { fontSize: 11, fontWeight: '900' as const, letterSpacing: 1.6 },
+
+  pageTabRow: {
+    flexDirection: 'row' as const,
+    gap: 20,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: t.border,
+  },
+  pageTabBtn: {
+    paddingVertical: 10,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+    marginBottom: -StyleSheet.hairlineWidth,
+  },
+  pageTabLabel: { fontSize: 12, fontWeight: '900' as const, letterSpacing: 1.4 },
 
   // Zone badge
   zoneCard: {

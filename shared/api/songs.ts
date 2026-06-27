@@ -63,6 +63,19 @@ export function createSongsApi(client: ApiClient) {
       const qs = search.toString();
       return client.request<SkillBreakdownResponse>(`/api/songs/analytics/skill-breakdown/${encodeURIComponent(userId)}${qs ? `?${qs}` : ''}`);
     },
+    /** Chart-level pass-gap coaching model ("Coach Lab"). Builds the energy
+     *  equation (base demand + economy tax vs reserve) for a target chart at
+     *  the player's working level. `mode` accepts the display modes; the
+     *  server treats anything other than 'single'/'double' as overall. The
+     *  mobile lab seeds its sliders from `concepts.supply` + `selection.target_level`. */
+    trainingGapAnalytics(userId: string, params: { mode?: 'overall' | 'single' | 'double'; level?: number; chart_id?: number } = {}) {
+      const search = new URLSearchParams();
+      if (params.mode) search.set('mode', params.mode);
+      if (params.level != null) search.set('level', String(params.level));
+      if (params.chart_id != null) search.set('chart_id', String(params.chart_id));
+      const qs = search.toString();
+      return client.request<TrainingGapResponse>(`/api/songs/analytics/training-gap/${encodeURIComponent(userId)}${qs ? `?${qs}` : ''}`);
+    },
     rankings(userId: string, params: { scope?: string; mode?: string } = {}) {
       const search = new URLSearchParams();
       if (params.scope) search.set('scope', params.scope);
@@ -777,6 +790,153 @@ export interface SkillBreakdownResponse {
   strengths?: string[];
   /** Bottom 3 played skill slugs (only present when there are 4+ played skills). */
   weaknesses?: string[];
+}
+
+// --- Training gap (Coach Lab) ---
+
+/** The four supply/demand concept axes the gap model scores (0–100 each). */
+export interface TrainingGapConceptMix {
+  pattern_recognition: number;
+  movement_control: number;
+  speed_reserve: number;
+  stamina_reserve: number;
+}
+
+export interface TrainingGapLoadBlend {
+  physical: number;
+  mental: number;
+  effective_training_ratio: number;
+  ratio_source: string;
+}
+
+export interface TrainingGapConcepts {
+  /** Blended player ability per concept — the lab seeds its sliders from this. */
+  supply: TrainingGapConceptMix;
+  evidence_supply: TrainingGapConceptMix;
+  /** The selected chart's demand per concept. */
+  demand: TrainingGapConceptMix;
+  /** demand − supply per concept. */
+  gaps: TrainingGapConceptMix;
+  execution_economy: number;
+  effective_time: number;
+  load_blend: TrainingGapLoadBlend;
+}
+
+export type TrainingGapBlockerState = 'ready' | 'mental' | 'physical' | 'mixed';
+
+export interface TrainingGapDerived {
+  pass_load: number;
+  chart_physical_factor: number;
+  base_demand: number;
+  economy_tax: number;
+  actual_demand: number;
+  reserve: number;
+  reserve_source: string;
+  pass_margin: number;
+  physical_gap: number;
+  mental_gap_to_close: number;
+  blocker_state: TrainingGapBlockerState;
+  execution_economy: number;
+  execution_economy_norm: number;
+  effective_time: number;
+  irreducibly_physical: number;
+  economy_debt: number;
+  training_ratio_used: number;
+}
+
+export interface TrainingGapSkillTag {
+  slug: string;
+  name: string;
+}
+
+export interface TrainingGapChartDemand extends TrainingGapConceptMix {
+  source: string;
+  tagged: boolean;
+}
+
+export interface TrainingGapBestRecord {
+  score: number;
+  grade: string;
+  source: string;
+  is_pass: boolean;
+  date_played: string;
+}
+
+export interface TrainingGapSelectedChart {
+  chart_id: number;
+  key: string;
+  title: string;
+  artist: string;
+  mode: string;
+  level: number;
+  jacket_url: string;
+  bpm: string;
+  best_record: TrainingGapBestRecord | null;
+  skills: TrainingGapSkillTag[];
+  demand: TrainingGapChartDemand;
+}
+
+export interface TrainingGapSelectableLevel {
+  level: number;
+  chart_count: number;
+  is_target: boolean;
+  is_nearby: boolean;
+}
+
+export interface TrainingGapSelection {
+  mode: string;
+  /** Working difficulty the model centred on — seeds the Chart Difficulty slider. */
+  target_level: number;
+  chart_id: number | null;
+  default_chart_id: number | null;
+  selectable_levels: TrainingGapSelectableLevel[];
+  chart: TrainingGapSelectedChart | null;
+}
+
+export interface TrainingGapChartSnapshot {
+  chart_id: number;
+  key: string;
+  title: string;
+  artist: string;
+  mode: string;
+  level: number;
+  jacket_url: string;
+  bpm: string;
+  skills: TrainingGapSkillTag[];
+  best_record: TrainingGapBestRecord | null;
+  demand: TrainingGapChartDemand;
+  concepts: TrainingGapConcepts;
+  derived: TrainingGapDerived;
+  modeled_deficit: number;
+  is_unplayed: boolean;
+  is_selected?: boolean;
+}
+
+export interface TrainingGapScenario {
+  key: string;
+  label: string;
+  description: string;
+  delta: TrainingGapConceptMix;
+  concepts: TrainingGapConceptMix;
+  derived: TrainingGapDerived;
+  pass_margin_delta: number;
+}
+
+export interface TrainingGapResponse {
+  /** Echoes the training profile, augmented with analytics_* annotations. */
+  profile: Record<string, unknown>;
+  selection: TrainingGapSelection;
+  concepts: TrainingGapConcepts;
+  derived: TrainingGapDerived;
+  charts: TrainingGapChartSnapshot[];
+  evidence: {
+    best_scores: unknown[];
+    recent_load: Record<string, unknown>;
+  };
+  scenarios: TrainingGapScenario[];
+  target_level: number;
+  default_chart_id: number | null;
+  blocker_state: TrainingGapBlockerState;
 }
 
 export interface LevelPercentile {
