@@ -8,6 +8,14 @@ const { createUserNotification } = require('../lib/notifications');
 const { checkUserVenueAccess } = require('./venueAccess');
 
 const AUTO_CHECKOUT_AWAY_MS = 60 * 60 * 1000;
+// Hard cap — a check-in is only trusted for this long, then it expires no
+// matter what. The proximity logic only fires when the app keeps reporting,
+// but people play without the app open, so this app-independent expiry is what
+// actually stops someone staying "checked in" long after they've left.
+const MAX_SESSION_MS = 6 * 60 * 60 * 1000;
+// How often the background sweep runs (independent of any app traffic — the
+// gap that left stale check-ins stuck was that the sweep only ran on requests).
+const CHECKIN_SWEEP_INTERVAL_MS = 15 * 60 * 1000;
 const ACTIVE_CHECKIN_EXIT_BUFFER_METERS = 25;
 const ACTIVE_CHECKIN_MAX_ACCURACY_BUFFER_METERS = 30;
 
@@ -133,11 +141,108 @@ function runAutoCheckoutSweep(db) {
       machine_name: row.machine_name,
       checked_out_at: thresholdSql,
       auto_checked_out_at: nowSql,
+      reason: 'proximity_away_timeout',
+    });
+  }
+
+  // ── Time cap ─────────────────────────────────────────────────────────
+  // Expire any check-in older than MAX_SESSION_MS regardless of proximity /
+  // app activity. Covers the case the proximity sweep can't: the user left
+  // and closed the app, so their last reported status froze at 'near' and
+  // nothing ever cleared them.
+  const expiryCutoffSql = formatSqlDateTime(new Date(now.getTime() - MAX_SESSION_MS));
+  const expiredRows = db.prepare(`
+    SELECT c.id,
+           c.user_id,
+           c.checked_in_at,
+           v.id AS venue_id,
+           v.name AS venue_name,
+           m.name AS machine_name,
+           u.username
+    FROM checkins c
+    JOIN venues v ON v.id = c.venue_id
+    JOIN venue_machines m ON m.id = c.machine_id
+    JOIN users u ON u.id = c.user_id
+    WHERE c.checked_out_at IS NULL
+      AND c.checked_in_at IS NOT NULL
+      AND datetime(c.checked_in_at) <= datetime(?)
+  `).all(expiryCutoffSql);
+
+  const updateExpired = db.prepare(`
+    UPDATE checkins
+    SET checked_out_at = ?,
+        auto_checked_out_at = ?,
+        checkout_reason = 'max_session_timeout'
+    WHERE id = ? AND checked_out_at IS NULL
+  `);
+
+  for (const row of expiredRows) {
+    // Cap the recorded session at exactly MAX_SESSION_MS so duration stats
+    // don't balloon for an abandoned check-in.
+    const checkedInAt = parseUtcDate(row.checked_in_at);
+    const expiryAt = checkedInAt ? new Date(checkedInAt.getTime() + MAX_SESSION_MS) : now;
+    const expirySql = formatSqlDateTime(expiryAt > now ? now : expiryAt);
+    const result = updateExpired.run(expirySql, nowSql, row.id);
+    if (!result.changes) continue;
+
+    clearPlayingStatus.run(row.user_id);
+    notifyUsersAboutCheckinEvent(db, {
+      actorUserId: row.user_id,
+      actorUsername: row.username,
+      eventType: 'checkout',
+      venueId: row.venue_id,
+      venueName: row.venue_name,
+      machineName: row.machine_name,
+    });
+
+    autoCheckedOut.push({
+      checkin_id: row.id,
+      user_id: row.user_id,
+      username: row.username,
+      venue_id: row.venue_id,
+      venue_name: row.venue_name,
+      machine_name: row.machine_name,
+      checked_out_at: expirySql,
+      auto_checked_out_at: nowSql,
+      reason: 'max_session_timeout',
     });
   }
 
   return autoCheckedOut;
 }
+
+// Background sweep scheduler — runs runAutoCheckoutSweep on a fixed interval so
+// stale check-ins clear even when no app is making requests (which is exactly
+// how check-ins got stuck for over a day). Also runs once at startup.
+let checkinSweepStarted = false;
+function startCheckinAutoCheckoutScheduler() {
+  const summary = {
+    interval_minutes: Math.round(CHECKIN_SWEEP_INTERVAL_MS / 60000),
+    max_session_hours: Math.round(MAX_SESSION_MS / 3600000),
+  };
+  if (checkinSweepStarted) return { started: false, ...summary };
+  checkinSweepStarted = true;
+
+  const tick = () => {
+    try {
+      const swept = runAutoCheckoutSweep(getDb());
+      if (swept.length) {
+        const detail = swept
+          .map((s) => `${s.username}@${s.venue_name} (${s.reason || 'auto'})`)
+          .join(', ');
+        console.log(`[CheckinAutoCheckout] Cleared ${swept.length} stale check-in(s): ${detail}`);
+      }
+    } catch (err) {
+      console.error('[CheckinAutoCheckout] Sweep failed:', err?.message || err);
+    }
+  };
+
+  const timer = setInterval(tick, CHECKIN_SWEEP_INTERVAL_MS);
+  if (typeof timer.unref === 'function') timer.unref();
+  tick(); // immediate pass so a deploy clears existing stragglers right away
+  return { started: true, ...summary };
+}
+router.startCheckinAutoCheckoutScheduler = startCheckinAutoCheckoutScheduler;
 
 function startOfWeekMonday(date) {
   const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());

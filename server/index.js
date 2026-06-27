@@ -197,6 +197,17 @@ if (typeof socialRoutes.startDailyMixTapeNightlyScheduler === 'function') {
   }
 }
 
+if (typeof checkinRoutes.startCheckinAutoCheckoutScheduler === 'function') {
+  try {
+    const status = checkinRoutes.startCheckinAutoCheckoutScheduler();
+    console.log(
+      `[CheckinAutoCheckout] Sweep active every ${status.interval_minutes}m; check-ins expire after ${status.max_session_hours}h.`
+    );
+  } catch (err) {
+    console.error('[CheckinAutoCheckout] Failed to start scheduler:', err?.message || err);
+  }
+}
+
 // Return 404 for unmatched API routes (prevents hanging requests)
 app.use('/api', (req, res) => {
   res.status(404).json({ error: 'Not found' });
