@@ -138,7 +138,7 @@ function resolveDailyHighlightReplayRows(db, rows = []) {
     const resolved = resolveReplayHighlightRow(db, row);
     // applyChartMetadata fills in jacket_url + chart_id by looking up the
     // (song_title, mode, level) tuple in the songs table. Without it the
-    // mobile highlight tile falls back to the piugame.com background_url
+    // mobile highlight tile falls back to the PIUGame background_url
     // which loads slowly / inconsistently from some networks.
     return attachHeartRateById(db, applyChartMetadata(db, resolved), String(row.user_id || ''));
   });

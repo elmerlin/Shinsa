@@ -20,8 +20,8 @@ import { apiBaseUrl } from './api';
  *     → { uri: 'https://pumpshinsa.com/jackets/pump/19.jpg' }  [otherwise]
  *   resolveJacketSource('https://pumpshinsa.com/jackets/pump/19.jpg')
  *     → bundled require id (the absolute URL is rewritten to its path)
- *   resolveJacketSource('https://www.piugame.com/data/song_img/abc.png')
- *     → { uri: 'https://www.piugame.com/data/song_img/abc.png' }
+ *   resolveJacketSource('https://phoenix.piugame.com/data/song_img/abc.png')
+ *     → { uri: 'https://phoenix.piugame.com/data/song_img/abc.png' }
  */
 export function resolveJacketSource(rawUrl?: string | null): number | ImageSource | null {
   if (!rawUrl) return null;

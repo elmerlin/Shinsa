@@ -685,7 +685,7 @@ function enrichSessionShareRow(db, userId, createdAt, row) {
     max_combo: Math.max(toInt(row.max_combo), toInt(lookup?.max_combo)),
     over_top100_rank: toInt(row.over_top100_rank) || toInt(lookup?.over_top100_rank),
     // Intentionally NOT falling back to lookup.background_url here —
-    // background_url is the piugame.com CDN, and we serve our own
+    // background_url is the PIUGame CDN, and we serve our own
     // jackets via /jackets/pump/. If row.jacket_url is empty the songs
     // catalog is missing a row; fix that, don't paper over with piugame.
     jacket_url: row.jacket_url || '',
@@ -1877,7 +1877,7 @@ router.get('/feed/explore', requireAuth, (req, res) => {
   // TRIM(title) + mode normalization mirror what activityPostEnrichment
   // does — without them, songs catalogued with trailing whitespace (e.g.
   // 'Black Swan ') or upstream mode='Co-op' (vs catalog's 'CoOp') miss
-  // the JOIN and the tile falls back to the piugame.com background URL.
+  // the JOIN and the tile falls back to the PIUGame background URL.
   const rows = db.prepare(`
     SELECT rp.id, rp.user_id, rp.song_title, rp.mode, rp.level, rp.score, rp.grade,
            rp.plate, rp.perfect, rp.great, rp.good, rp.bad, rp.miss, rp.max_combo,

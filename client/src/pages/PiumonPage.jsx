@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import piuAvatarCatalog from '../data/piuAvatarCatalog.json';
 
 const TOTAL_SUPPLY_DEFAULT = 1000;
-const SOURCE_URL = 'https://piugame.com/my_page/avatar_shop.php';
+const SOURCE_URL = 'https://phoenix.piugame.com/my_page/avatar_shop.php';
 
 const CUSTOM_HEROES = [
   {

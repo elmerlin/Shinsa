@@ -8,7 +8,7 @@ const cheerio = require('cheerio');
 const httpsAgent = new https.Agent({ rejectUnauthorized: false });
 
 const AM_PASS_BASE = 'https://am-pass.net';
-const PIU_BASE = 'https://www.piugame.com';
+const PIU_BASE = 'https://phoenix.piugame.com';
 const REDIRECT_STATUS = new Set([301, 302, 303, 307, 308]);
 const MAX_REDIRECTS = 12;
 
@@ -215,7 +215,7 @@ async function loginViaAmPass(client, username, password) {
 }
 
 /**
- * Login to PIUGame (primary: piugame.com form login, fallback: legacy am-pass flow)
+ * Login to PIUGame (primary: Phoenix PIUGame form login, fallback: legacy am-pass flow)
  * Returns the authenticated client or throws on failure
  */
 async function login(username, password) {
@@ -659,7 +659,7 @@ async function scrapePlayDataLevelSummaries(client, levelKeys = []) {
 }
 
 /**
- * Small delay helper to avoid hammering piugame.com
+ * Small delay helper to avoid hammering PIUGame.
  */
 function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -773,7 +773,7 @@ async function scrapeBestScores(client, onProgress) {
   // Fetch remaining pages with small delay between requests
   for (let page = 2; page <= maxPage; page++) {
     try {
-      await delay(300); // Be polite to piugame.com
+      await delay(300); // Be polite to PIUGame.
       const res = await client.get(`${PIU_BASE}/my_page/my_best_score.php?page=${page}`);
       const $ = cheerio.load(res.data);
       const pageScores = parseScoresFromPage($);
@@ -795,7 +795,7 @@ async function scrapeBestScores(client, onProgress) {
 }
 
 /**
- * Scrape leaderboard top songs using the same AJAX pagination as piugame.com.
+ * Scrape leaderboard top songs using the same AJAX pagination as Phoenix PIUGame.
  * Returns songs in rank order.
  */
 async function scrapeTopSongs(
@@ -1007,7 +1007,7 @@ function extractJudgmentBreakdown($, $li) {
   }
 
   // Strategy 3: Image-based label detection
-  // piugame.com renders grades, plates, and modes as images — judgment labels may be images too
+  // PIUGame renders grades, plates, and modes as images — judgment labels may be images too
   if (!found) {
     const matchedFromImages = {};
     const KEYWORDS = ['perfect', 'great', 'good', 'bad', 'miss'];

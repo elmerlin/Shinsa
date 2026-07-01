@@ -3061,7 +3061,7 @@ export default function ProfilePage() {
       {/* Syncing indicator */}
       {piuSyncing === 'auto' && isPiuTab && (
         <div className="text-center text-xs text-piu-accent animate-pulse py-2 mb-2">
-          Syncing latest data from piugame.com...
+          Syncing latest data from phoenix.piugame.com...
         </div>
       )}
 

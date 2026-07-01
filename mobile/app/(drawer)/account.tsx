@@ -211,7 +211,7 @@ function PiugameLinkSection({ s, userId }: { s: Styles; userId: string }) {
           <Text style={s.cardTitle}>Connect your PIUGame account</Text>
           <Text style={s.cardHint}>
             We pull your Pumbility, best scores, and recently played plays. Your credentials are
-            encrypted at rest and only used to log in to piugame.com.
+            encrypted at rest and only used to log in to phoenix.piugame.com.
           </Text>
           <TextInput
             style={s.input}

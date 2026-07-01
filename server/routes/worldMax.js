@@ -8,9 +8,9 @@ const { normalizeUserAvatarForList } = require('../lib/avatarProxy');
 
 const router = express.Router();
 
-const PIU_BASE = 'https://www.piugame.com';
+const PIU_BASE = 'https://phoenix.piugame.com';
 
-// Fixed options from https://piugame.com/game_info/piu_history.php
+// Fixed options from Phoenix PIUGame's game history page.
 const PIU_GAME_OPTIONS = [
   { code: 'phoenix', name: 'PUMP IT UP PHOENIX', image_url: `${PIU_BASE}/l_img/logo.png` },
   { code: 'xx-20th-anniversary-edition', name: 'PUMP IT UP - XX 20TH ANNIVERSARY EDITION', image_url: `${PIU_BASE}/l_img/history_card_img20.png` },

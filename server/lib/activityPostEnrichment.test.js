@@ -111,7 +111,7 @@ describe('activity post enrichment replay handling', () => {
           miss: 0,
           max_combo: 510,
           plate: 'ACE',
-          background_url: 'https://www.piugame.com/data/song_img/napalm.png',
+          background_url: 'https://phoenix.piugame.com/data/song_img/napalm.png',
           date_played: '2026-04-01 01:27:49 (GMT+9)',
           played_at_utc: '2026-03-31 16:27:49',
           over_top100_rank: 1,
@@ -159,7 +159,7 @@ describe('activity post enrichment replay handling', () => {
           miss: 0,
           max_combo: 480,
           plate: 'ACE',
-          background_url: 'https://www.piugame.com/data/song_img/iolite.png',
+          background_url: 'https://phoenix.piugame.com/data/song_img/iolite.png',
           date_played: '2026-04-01 04:15:32 (GMT+9)',
           played_at_utc: '2026-03-31 19:15:32',
           over_top100_rank: 0,
@@ -205,7 +205,7 @@ describe('activity post enrichment replay handling', () => {
           miss: 24,
           max_combo: 0,
           plate: 'FG',
-          background_url: 'https://www.piugame.com/data/song_img/phalanx.png',
+          background_url: 'https://phoenix.piugame.com/data/song_img/phalanx.png',
           date_played: '2026-04-03 20:55:37 (GMT+9)',
           played_at_utc: '2026-04-03 11:55:37',
           over_top100_rank: 0,
@@ -362,7 +362,7 @@ describe('chart jacket resolution', () => {
       song_title: 'Carmen Bus',
       mode: 'Single',
       level: 18,
-      background_url: 'https://www.piugame.com/data/song_img/whatever.png',
+      background_url: 'https://phoenix.piugame.com/data/song_img/whatever.png',
     });
     assert.equal(enriched.jacket_url, '/jackets/pump/carmen.jpg');
     assert.equal(enriched.chart_id, 42);

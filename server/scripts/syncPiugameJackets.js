@@ -8,7 +8,7 @@ const sharp = require('sharp');
 const { createClient, scrapeTopSongs } = require('../lib/piugameScraper');
 
 const ROOT_DIR = path.join(__dirname, '..', '..');
-const PIU_BASE = 'https://www.piugame.com';
+const PIU_BASE = 'https://phoenix.piugame.com';
 const httpsAgent = new https.Agent({ rejectUnauthorized: false });
 const JACKET_CANONICAL_OVERRIDES = {
   'Canon D - FULL SONG -': 'Canon D FULL Song MIX',

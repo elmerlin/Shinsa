@@ -258,7 +258,7 @@ export function createPiugameApi(client: ApiClient) {
     shoes(userId: string) {
       return client.request<PiugameShoesResponse>(`/api/piugame/shoes/${encodeURIComponent(userId)}`);
     },
-    // The sync endpoints scrape piugame.com live — best-scores can walk
+    // The sync endpoints scrape Phoenix PIUGame live — best-scores can walk
     // dozens of pages and routinely takes 20-60s; recently-played +
     // pumbility are smaller but still ~15-25s. The ApiClient default
     // timeout is 8s, which aborts the request long before the server

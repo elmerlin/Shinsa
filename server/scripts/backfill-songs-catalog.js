@@ -4,7 +4,7 @@
  *
  * For every (song_title, mode, level) tuple that's been played but isn't
  * in the songs table:
- *   1. Download the piugame.com jacket from the play row's background_url
+ *   1. Download the PIUGame jacket from the play row's background_url
  *      into /opt/Shinsa/client/public/jackets/pump/<hash>.png
  *   2. Insert a row in songs with the Shinsa-hosted path as jacket_url.
  *
@@ -39,7 +39,7 @@ function normalizeMode(mode) {
   return String(mode || '').trim();
 }
 
-// piugame.com's intermediate cert isn't in the prod machine's trust
+// PIUGame's intermediate cert may be absent from the prod machine's trust
 // store. Since we're only fetching public jacket binaries (no secrets
 // in either direction), bypass verification with a permissive agent.
 const insecureAgent = new https.Agent({ rejectUnauthorized: false });

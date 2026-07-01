@@ -80,7 +80,7 @@ export function ChartJacket({
   const label = getBadgeLabel(mode, level);
   // Prefer the APK-bundled jacket so first paint doesn't wait on a
   // network round trip. Falls back to a {uri} when the jacket isn't in
-  // the local pack (e.g. piugame.com URL or a song we haven't catalogued).
+  // the local pack (e.g. PIUGame URL or a song we haven't catalogued).
   const source = resolveJacketSource(jacketUrl);
 
   return (

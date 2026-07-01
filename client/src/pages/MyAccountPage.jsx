@@ -2000,7 +2000,7 @@ const plateFor = (code)  => schemes.plates.find(p => p.key === code) || null;`;
             </div>
 
             <p className="text-xs text-gray-400">
-              Connect your piugame.com account to import your pumbility rating, best scores,
+              Connect your PIUGame account to import your pumbility rating, best scores,
               and recently played songs. Your credentials are stored encrypted on the server.
             </p>
 
@@ -2019,7 +2019,7 @@ const plateFor = (code)  => schemes.plates.find(p => p.key === code) || null;`;
                   <input
                     type="text"
                     className="input-field"
-                    placeholder="Your am-pass / piugame.com username"
+                    placeholder="Your PIUGame username"
                     value={piuForm.piugame_username}
                     onChange={e => setPiuForm(f => ({ ...f, piugame_username: e.target.value }))}
                     required
@@ -2030,7 +2030,7 @@ const plateFor = (code)  => schemes.plates.find(p => p.key === code) || null;`;
                   <input
                     type="password"
                     className="input-field"
-                    placeholder="Your am-pass / piugame.com password"
+                    placeholder="Your PIUGame password"
                     value={piuForm.piugame_password}
                     onChange={e => setPiuForm(f => ({ ...f, piugame_password: e.target.value }))}
                     required
@@ -2057,7 +2057,7 @@ const plateFor = (code)  => schemes.plates.find(p => p.key === code) || null;`;
                       <input
                         type="text"
                         className="input-field"
-                        placeholder="Your am-pass / piugame.com username"
+                        placeholder="Your PIUGame username"
                         value={piuForm.piugame_username}
                         onChange={e => setPiuForm(f => ({ ...f, piugame_username: e.target.value }))}
                         required
@@ -2068,7 +2068,7 @@ const plateFor = (code)  => schemes.plates.find(p => p.key === code) || null;`;
                       <input
                         type="password"
                         className="input-field"
-                        placeholder="Your am-pass / piugame.com password"
+                        placeholder="Your PIUGame password"
                         value={piuForm.piugame_password}
                         onChange={e => setPiuForm(f => ({ ...f, piugame_password: e.target.value }))}
                         required
@@ -2096,7 +2096,7 @@ const plateFor = (code)  => schemes.plates.find(p => p.key === code) || null;`;
             <div className="card space-y-3">
               <h3 className="font-display font-bold text-sm text-piu-accent">DATA SYNC</h3>
               <p className="text-xs text-gray-400">
-                Import and update your data from piugame.com. Best scores can only be fully refreshed once per day.
+                Import and update your data from phoenix.piugame.com. Best scores can only be fully refreshed once per day.
               </p>
 
               <div className="grid grid-cols-1 gap-2">
@@ -2123,7 +2123,7 @@ const plateFor = (code)  => schemes.plates.find(p => p.key === code) || null;`;
                 >
                   <div className="text-left">
                     <p className="text-sm font-display font-bold">Import All Best Scores</p>
-                    <p className="text-[10px] text-gray-500">Full import from piugame.com (once per day)</p>
+                    <p className="text-[10px] text-gray-500">Full import from phoenix.piugame.com (once per day)</p>
                   </div>
                   {piuSyncing === 'best-scores' ? (
                     <span className="text-xs text-piu-accent animate-pulse">Importing...</span>

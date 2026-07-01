@@ -310,7 +310,7 @@ async function main() {
   const topSongsPayload = {
     generated_at: generatedAt,
     source: {
-      site: 'https://www.piugame.com/leaderboard/top_songs.php',
+      site: 'https://phoenix.piugame.com/leaderboard/top_songs.php',
       date: String(opts.date),
       mode: String(opts.mode),
       locale_pair: ['en', 'kr'],
@@ -322,7 +322,7 @@ async function main() {
   const aliasesPayload = {
     generated_at: generatedAt,
     source: {
-      site: 'https://www.piugame.com/leaderboard/top_songs.php',
+      site: 'https://phoenix.piugame.com/leaderboard/top_songs.php',
       date: String(opts.date),
       mode: String(opts.mode),
     },

@@ -790,7 +790,7 @@ function enrichClearRecord(db, clear) {
     plate: clear.plate || primaryItem?.plate || '',
     background_url: clear.background_url || primaryItem?.background_url || '',
     // Surface the Shinsa-hosted jacket URL at the top level so feed
-    // consumers can prefer it over the piugame.com background. The
+    // consumers can prefer it over the PIUGame background. The
     // enriched item already has it from applyChartMetadata.
     jacket_url: clear.jacket_url || primaryItem?.jacket_url || '',
     played_at_utc: clear.played_at_utc || primaryItem?.played_at_utc || '',
