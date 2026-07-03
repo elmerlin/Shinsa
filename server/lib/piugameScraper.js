@@ -12,6 +12,14 @@ const PIU_BASE = 'https://phoenix.piugame.com';
 const REDIRECT_STATUS = new Set([301, 302, 303, 307, 308]);
 const MAX_REDIRECTS = 12;
 
+// phoenix.piugame.com serves all content, but its /ssoc SSO callback is broken:
+// GET /ssoc?sid=... answers 302 `Location: /ssoc&referer=...` (query glued onto
+// the path, sid dropped) and /ssoc/ is an outright 404. www.piugame.com still
+// runs a working /ssoc/ handler and scopes the session cookies it issues to
+// .piugame.com, which phoenix accepts — so every piugame ssoc hop is routed
+// through www no matter which host the upstream redirect names.
+const SSO_CALLBACK_BASE = 'https://www.piugame.com/ssoc/';
+
 // Grade mapping from image filename codes
 const GRADE_MAP = {
   sss_p: 'SSS+', sss: 'SSS', ss_p: 'SS+', ss: 'SS',
@@ -60,6 +68,47 @@ async function persistCookiesFromResponse(jar, responseUrl, headers) {
   }
 }
 
+async function getJarCookieValue(jar, url, key) {
+  try {
+    const cookies = await jar.getCookies(url);
+    return cookies.find((cookie) => cookie.key === key)?.value || '';
+  } catch (_) {
+    return '';
+  }
+}
+
+/**
+ * Reroute piugame /ssoc SSO-callback hops to www's working handler (see
+ * SSO_CALLBACK_BASE). Also repairs phoenix's mangled redirect form, where the
+ * query string is glued onto the path and the sid parameter is dropped; the
+ * sid is restored from the session cookie already in the jar.
+ */
+async function normalizeSsoCallbackUrl(rawUrl, jar) {
+  let url;
+  try {
+    url = new URL(rawUrl);
+  } catch (_) {
+    return rawUrl;
+  }
+  if (!/(^|\.)piugame\.com$/i.test(url.hostname)) return rawUrl;
+
+  if (url.pathname === '/ssoc' || url.pathname === '/ssoc/') {
+    return `${SSO_CALLBACK_BASE}${url.search}`;
+  }
+
+  if (url.pathname.startsWith('/ssoc&')) {
+    let query = url.pathname.slice('/ssoc&'.length) + url.search.replace('?', '&');
+    if (!/(^|&)sid=/.test(query) && jar) {
+      const sid = (await getJarCookieValue(jar, `https://${url.hostname}/`, 'sid'))
+        || (await getJarCookieValue(jar, 'https://api.am-pass.net/', 'sid'));
+      if (sid) query = `sid=${encodeURIComponent(sid)}&${query}`;
+    }
+    return `${SSO_CALLBACK_BASE}?${query}`;
+  }
+
+  return rawUrl;
+}
+
 /**
  * Axios does not expose intermediate redirect responses in interceptors.
  * Handle redirects manually so cookies from 30x hops are preserved.
@@ -90,7 +139,7 @@ async function requestWithRedirects(rawClient, jar, config) {
     const status = response.status || 0;
     const location = response.headers?.location;
     if (location && REDIRECT_STATUS.has(status)) {
-      url = new URL(location, url).toString();
+      url = await normalizeSsoCallbackUrl(new URL(location, url).toString(), jar);
 
       // Browser-like behavior on redirect after form POST.
       if (status === 303 || ((status === 301 || status === 302) && method !== 'GET' && method !== 'HEAD')) {
@@ -1393,6 +1442,7 @@ async function scrapeOverRankingTop100(
 module.exports = {
   login,
   createClient,
+  normalizeSsoCallbackUrl,
   setLanguage,
   scrapePumbility,
   scrapePlayDataLevelSummaries,

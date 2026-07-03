@@ -1,7 +1,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { CookieJar } = require('tough-cookie');
 
 const {
+  normalizeSsoCallbackUrl,
   setLanguage,
   scrapePumbility,
   scrapePlayDataLevelSummaries,
@@ -57,4 +59,46 @@ test('live PIUGame scraper requests use the Phoenix host', async () => {
   assert.ok(piugameCalls.some((call) => call.url === 'https://phoenix.piugame.com/leaderboard/top_songs.php?mode=total&date=202602'));
   assert.ok(piugameCalls.some((call) => call.url === 'https://phoenix.piugame.com/ajax/top_songs.php'));
   assert.ok(piugameCalls.some((call) => call.url === 'https://phoenix.piugame.com/my_page/recently_played.php'));
+});
+
+test('ssoc callback hops are rerouted to the working www handler', async () => {
+  assert.equal(
+    await normalizeSsoCallbackUrl('https://phoenix.piugame.com/ssoc?sid=abc123&referer=aHR0cA==', null),
+    'https://www.piugame.com/ssoc/?sid=abc123&referer=aHR0cA=='
+  );
+  assert.equal(
+    await normalizeSsoCallbackUrl('https://www.piugame.com/ssoc?sid=abc123&referer=aHR0cA==', null),
+    'https://www.piugame.com/ssoc/?sid=abc123&referer=aHR0cA=='
+  );
+});
+
+test('mangled phoenix ssoc redirects are repaired with the sid from the jar', async () => {
+  const jar = new CookieJar();
+  await jar.setCookie('sid=abc123; Domain=.piugame.com; Path=/', 'https://www.piugame.com/');
+
+  assert.equal(
+    await normalizeSsoCallbackUrl('https://phoenix.piugame.com/ssoc&referer=aHR0cA==', jar),
+    'https://www.piugame.com/ssoc/?sid=abc123&referer=aHR0cA=='
+  );
+
+  // Keeps an explicit sid if the upstream redirect somehow retained one.
+  assert.equal(
+    await normalizeSsoCallbackUrl('https://phoenix.piugame.com/ssoc&sid=zzz&referer=aHR0cA==', jar),
+    'https://www.piugame.com/ssoc/?sid=zzz&referer=aHR0cA=='
+  );
+});
+
+test('non-ssoc and non-piugame URLs pass through unchanged', async () => {
+  assert.equal(
+    await normalizeSsoCallbackUrl('https://phoenix.piugame.com/my_page/recently_played.php', null),
+    'https://phoenix.piugame.com/my_page/recently_played.php'
+  );
+  assert.equal(
+    await normalizeSsoCallbackUrl('https://am-pass.net/ssoc?sid=abc&referer=aHR0cA==', null),
+    'https://am-pass.net/ssoc?sid=abc&referer=aHR0cA=='
+  );
+  assert.equal(
+    await normalizeSsoCallbackUrl('/ssoc&referer=aHR0cA==', null),
+    '/ssoc&referer=aHR0cA=='
+  );
 });
