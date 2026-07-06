@@ -433,7 +433,13 @@ function ensureCurrentWeeklyChallengeWeek(db, now = new Date()) {
  *   — only Co-op charts are loaded, and only Co-op plays are scanned, so
  *   the leaderboard for each division is fully isolated.
  */
-function aggregateWeeklyResults(db, weekId, division = 'main') {
+function aggregateWeeklyResults(db, weekId, division = 'main', options = {}) {
+  // persistSnapshots=false makes this a pure read: it still returns the
+  // computed snapshots map, but does NOT upsert weekly_challenge_user_snapshots.
+  // The back-fill repair uses this so re-aggregating an old finalized week
+  // never overwrites that week's frozen identity (username/avatar) with the
+  // player's current profile. Live-week aggregation keeps the default (true).
+  const persistSnapshots = options.persistSnapshots !== false;
   const week = db.prepare('SELECT * FROM weekly_challenge_weeks WHERE id = ?').get(weekId);
   if (!week) return null;
 
@@ -609,11 +615,13 @@ function aggregateWeeklyResults(db, weekId, division = 'main') {
       skill_level_snapshot: profile.skill_level || 1,
       skill_family_snapshot: profile.skill_family || '',
     };
-    upsertSnapshot.run(
-      weekId, profile.user_id,
-      profile.username || '', avatarSnapshot, profile.nationality || '',
-      profile.skill_title || '', profile.skill_level || 1, profile.skill_family || ''
-    );
+    if (persistSnapshots) {
+      upsertSnapshot.run(
+        weekId, profile.user_id,
+        profile.username || '', avatarSnapshot, profile.nationality || '',
+        profile.skill_title || '', profile.skill_level || 1, profile.skill_family || ''
+      );
+    }
   }
 
   // Build chart results: Top 3 per chart
@@ -898,6 +906,101 @@ function finalizeWeek(db, weekId) {
 
   db.prepare("UPDATE weekly_challenge_weeks SET status = 'finalized', closed_at = datetime('now') WHERE id = ?")
     .run(weekId);
+}
+
+// ---------------------------------------------------------------------------
+// Repair: back-fill frozen results for weeks closed by an older build
+// ---------------------------------------------------------------------------
+
+/**
+ * Back-fill the frozen weekly_challenge_results rows for a finalized week that
+ * was closed before per-chart result freezing existed (that landed ~2026-W20;
+ * W13–W19 were finalized with a leaderboard + awards but zero result rows).
+ *
+ * Re-aggregates the retained raw plays for both divisions and inserts the
+ * missing rows. The existing frozen leaderboard/awards are left untouched so
+ * historical standings never shift — this only restores the per-chart score
+ * detail that the week page + all-time summary read. Idempotent: a division
+ * that already has any frozen result is skipped, and INSERT OR IGNORE guards
+ * the UNIQUE(weekly_chart_id, user_id) constraint.
+ */
+function backfillFrozenResultsForWeek(db, weekId) {
+  const week = db.prepare('SELECT * FROM weekly_challenge_weeks WHERE id = ?').get(weekId);
+  if (!week || week.status !== 'finalized') return 0;
+
+  const insertResult = db.prepare(`
+    INSERT OR IGNORE INTO weekly_challenge_results
+      (weekly_chart_id, user_id, score, raw_grade, resolved_grade, plate,
+       perfect, great, good, bad, miss, max_combo, rating_points, played_at, source_play_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  let inserted = 0;
+  for (const division of ['main', 'coop']) {
+    const existing = db.prepare(`
+      SELECT COUNT(*) AS cnt FROM weekly_challenge_results r
+      JOIN weekly_challenge_charts wc ON wc.id = r.weekly_chart_id
+      WHERE wc.week_id = ? AND wc.division = ?
+    `).get(weekId, division)?.cnt || 0;
+    if (existing > 0) continue;
+
+    // persistSnapshots:false — reconstruct results without overwriting the
+    // week's frozen identity snapshots with players' current profiles.
+    const agg = aggregateWeeklyResults(db, weekId, division, { persistSnapshots: false });
+    if (!agg || agg.userChartBests.size === 0) continue;
+
+    const runDivision = db.transaction(() => {
+      for (const [, entry] of agg.userChartBests) {
+        const p = entry.play;
+        const info = insertResult.run(
+          entry.weeklyChart.id, p.user_id, p.score,
+          p.grade || '', entry.resolvedGrade, p.plate || '',
+          p.perfect || 0, p.great || 0, p.good || 0, p.bad || 0, p.miss || 0,
+          p.max_combo || 0, entry.ratingPoints,
+          p.played_at_utc || p.date_played || '',
+          p.id || null,
+        );
+        inserted += info.changes;
+      }
+    });
+    runDivision();
+  }
+  return inserted;
+}
+
+/**
+ * Scan for finalized weeks that have charts but no frozen results and repair
+ * each. Safe to run on every boot: the guard query is cheap and returns
+ * nothing once the data is healthy.
+ */
+function repairMissingFrozenResults(db) {
+  const broken = db.prepare(`
+    SELECT w.id, w.week_key
+    FROM weekly_challenge_weeks w
+    WHERE w.status = 'finalized'
+      AND (SELECT COUNT(*) FROM weekly_challenge_charts c WHERE c.week_id = w.id) > 0
+      AND (SELECT COUNT(*) FROM weekly_challenge_results r
+           JOIN weekly_challenge_charts c ON c.id = r.weekly_chart_id
+           WHERE c.week_id = w.id) = 0
+    ORDER BY w.week_key
+  `).all();
+
+  const repaired = [];
+  for (const w of broken) {
+    try {
+      const n = backfillFrozenResultsForWeek(db, w.id);
+      if (n > 0) repaired.push({ week_key: w.week_key, inserted: n });
+    } catch (err) {
+      console.error(`[WeeklyChallenges] back-fill failed for ${w.week_key}:`, err.message);
+    }
+  }
+  if (repaired.length > 0) {
+    console.log(
+      '[WeeklyChallenges] back-filled frozen results for',
+      repaired.map((r) => `${r.week_key}(${r.inserted})`).join(', '),
+    );
+  }
+  return repaired;
 }
 
 // ---------------------------------------------------------------------------
@@ -1625,4 +1728,6 @@ module.exports = {
   computeIsoWeekKey,
   publishWeeklyChallengeSummary,
   repairMissingSummaryPosts,
+  backfillFrozenResultsForWeek,
+  repairMissingFrozenResults,
 };

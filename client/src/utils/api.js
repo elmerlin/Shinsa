@@ -968,6 +968,7 @@ export const getDailyHighlights = () => request('/social/daily-highlights');
 // ─── Weekly Challenges ──────────────────────────────
 export const getWeeklyChallengesHome = () => request('/weekly-challenges/home');
 export const getWeeklyChallengeWeeks = () => request('/weekly-challenges/weeks');
+export const getWeeklyChallengesSummary = () => request('/weekly-challenges/summary');
 export const getWeeklyChallengeWeek = (weekKey, params = {}) => {
   const qs = new URLSearchParams(params).toString();
   return request(`/weekly-challenges/week/${weekKey}${qs ? `?${qs}` : ''}`);

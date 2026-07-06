@@ -195,14 +195,23 @@ export default function WeeklyChallengesPage() {
             </p>
           )}
         </div>
-        <WeeklyChallengeWeekPicker
-          weeks={weeks}
-          loadingWeeks={weeksLoading}
-          currentWeekKey={weekKey}
-          currentWeek={week}
-          onOpen={loadWeeks}
-          onSelect={handleWeekSelect}
-        />
+        <div className="flex items-center gap-2">
+          <Link
+            to="/weekly-challenges/summary"
+            className="flex items-center gap-1.5 rounded-md border border-piu-gold/25 bg-piu-gold/[0.06] px-2.5 py-1.5 text-[11px] font-display font-bold text-piu-gold/90 transition-colors hover:bg-piu-gold/[0.12]"
+          >
+            <span>🏆</span>
+            <span className="hidden sm:inline">All-Time</span>
+          </Link>
+          <WeeklyChallengeWeekPicker
+            weeks={weeks}
+            loadingWeeks={weeksLoading}
+            currentWeekKey={weekKey}
+            currentWeek={week}
+            onOpen={loadWeeks}
+            onSelect={handleWeekSelect}
+          />
+        </div>
       </div>
 
       {loading && !weekData && (

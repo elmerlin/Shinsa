@@ -994,8 +994,8 @@ export default function PostCard({ post, showAuthor = true, onDelete, onUpdate, 
         <div className="flex items-center gap-3">
           {showAuthor && post.user_id === '__shinsa_system__' ? (
             <>
-              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-piu-gold to-amber-600 flex items-center justify-center font-display font-bold text-sm text-piu-dark">
-                S
+              <div className="w-9 h-9 rounded-full bg-[#0d1017] border border-piu-border flex items-center justify-center overflow-hidden">
+                <img src="/shinsa-mark.png" alt="Shinsa" className="w-[76%] h-[76%] object-contain" />
               </div>
               <div>
                 <span className="font-display font-bold text-sm text-piu-gold">Shinsa</span>

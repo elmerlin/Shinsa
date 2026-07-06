@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DailyHighlights } from '@/components/dashboard/daily-highlights';
 import { DefaultAvatar } from '@/components/default-avatar';
 import { SystemAvatar } from '@/components/system-avatar';
+import { isSystemUsername } from '@/lib/system-user';
 import { LiveNowStrip } from '@/components/dashboard/live-now-strip';
 import { NoticeBoard } from '@/components/dashboard/notice-board';
 import { SongOfWeekStrip } from '@/components/dashboard/song-of-week-strip';
@@ -182,7 +183,7 @@ function ActivityRow({ a, s }: { a: ActivityItem; s: Styles }) {
   // Duels still don't have a single-item mobile screen, so the username
   // fallback covers those — drop the user on the owner's profile so the
   // activity is at least reachable.
-  const fallbackUsername = a.username && a.username !== '__shinsa__' ? a.username : null;
+  const fallbackUsername = a.username && !isSystemUsername(a.username) ? a.username : null;
   const hasNavTarget = !!target || !!fallbackUsername;
 
   const handlePress = () => {
@@ -201,7 +202,7 @@ function ActivityRow({ a, s }: { a: ActivityItem; s: Styles }) {
       <Text style={s.activityIcon}>{icon}</Text>
       {avatar ? (
         <Image source={{ uri: avatar }} style={s.activityAvatar} contentFit="cover" />
-      ) : a.username === '__shinsa__' ? (
+      ) : isSystemUsername(a.username) ? (
         <SystemAvatar size={22} />
       ) : (
         <DefaultAvatar size={22} />

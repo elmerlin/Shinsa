@@ -62,6 +62,7 @@ const DojoPage = lazy(() => import('./pages/DojoPage'));
 const LeaderboardsPage = lazy(() => import('./pages/LeaderboardsPage'));
 const LivePage = lazy(() => import('./pages/LivePage'));
 const WeeklyChallengesPage = lazy(() => import('./pages/WeeklyChallengesPage'));
+const WeeklyChallengesSummaryPage = lazy(() => import('./pages/WeeklyChallengesSummaryPage'));
 const SongOfWeekPage = lazy(() => import('./pages/SongOfWeekPage'));
 const SongOfWeekDetailPage = lazy(() => import('./pages/SongOfWeekDetailPage'));
 const LiveOverlayPage = lazy(() => import('./pages/LiveOverlayPage'));
@@ -1546,6 +1547,7 @@ export default function App() {
             <Route path="/online-duel/new" element={<OnlineDuelSetup />} />
             <Route path="/online-duel/:id" element={<OnlineDuelRoom />} />
             <Route path="/weekly-challenges" element={<WeeklyChallengesPage />} />
+            <Route path="/weekly-challenges/summary" element={<WeeklyChallengesSummaryPage />} />
             <Route path="/live" element={<LivePage />} />
             <Route path="/live/:sessionId" element={<LivePage />} />
             <Route path="/live/:sessionId/overlay" element={<LiveOverlayPage />} />

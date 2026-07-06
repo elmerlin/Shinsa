@@ -249,6 +249,27 @@ router.get('/home', optionalAuth, (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// GET /summary — All-time hall of fame across every finalized week
+// ---------------------------------------------------------------------------
+
+router.get('/summary', (req, res) => {
+  try {
+    const db = getDb();
+    const cacheKey = 'summary:all-time';
+    let data = getCached(cacheKey);
+    if (!data) {
+      const { buildWeeklyChallengeAllTimeSummary } = require('../lib/weeklyChallengeAllTime');
+      data = buildWeeklyChallengeAllTimeSummary(db);
+      setCache(cacheKey, data);
+    }
+    res.json(data);
+  } catch (err) {
+    console.error('[WeeklyChallenges] /summary error:', err.message);
+    res.status(500).json({ error: 'Failed to load weekly challenge summary' });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // GET /weeks — Archive list
 // ---------------------------------------------------------------------------
 

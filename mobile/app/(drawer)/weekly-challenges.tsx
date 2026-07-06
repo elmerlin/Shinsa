@@ -213,15 +213,23 @@ export default function WeeklyChallengesScreen() {
       <View style={[s.topBar, { paddingTop: insets.top + 8 }]}>
         <TopBar
           rightExtra={
-            !isDesktop ? (
+            <View style={s.topBarActions}>
               <Pressable
-                onPress={() => setPickerOpen(true)}
+                onPress={() => router.push('/weekly-challenges-summary')}
                 hitSlop={6}
-                style={({ pressed }) => [s.weekPickerBtn, pressed && { opacity: 0.7 }]}>
-                <Text style={s.weekPickerText}>{week?.week_key ?? 'Loading…'}</Text>
-                <IconSymbol name="chevron.right" size={14} color={theme.textMuted} />
+                style={({ pressed }) => [s.allTimeBtn, pressed && { opacity: 0.7 }]}>
+                <Text style={s.allTimeBtnText}>🏆 All-Time</Text>
               </Pressable>
-            ) : null
+              {!isDesktop ? (
+                <Pressable
+                  onPress={() => setPickerOpen(true)}
+                  hitSlop={6}
+                  style={({ pressed }) => [s.weekPickerBtn, pressed && { opacity: 0.7 }]}>
+                  <Text style={s.weekPickerText}>{week?.week_key ?? 'Loading…'}</Text>
+                  <IconSymbol name="chevron.right" size={14} color={theme.textMuted} />
+                </Pressable>
+              ) : null}
+            </View>
           }
         />
       </View>
@@ -407,6 +415,7 @@ export default function WeeklyChallengesScreen() {
         weeks={weeksQuery.data ?? []}
         currentKey={weekKey}
         onPick={(k) => { setWeekKey(k); setPickerOpen(false); }}
+        onSummary={() => { setPickerOpen(false); router.push('/weekly-challenges-summary'); }}
         onClose={() => setPickerOpen(false)}
       />
 
@@ -951,12 +960,14 @@ function WeekPickerSheet({
   weeks,
   currentKey,
   onPick,
+  onSummary,
   onClose,
 }: {
   visible: boolean;
   weeks: WeeklyChallengeWeekIndexEntry[];
   currentKey: string;
   onPick: (k: string) => void;
+  onSummary: () => void;
   onClose: () => void;
 }) {
   const insets = useSafeAreaInsets();
@@ -975,6 +986,16 @@ function WeekPickerSheet({
             </Pressable>
           </View>
           <ScrollView style={s.sheetList} contentContainerStyle={s.sheetListContent}>
+            <Pressable
+              onPress={onSummary}
+              style={({ pressed }) => [s.summaryRow, pressed && { opacity: 0.85 }]}>
+              <Text style={s.summaryRowIcon}>🏆</Text>
+              <View style={s.weekRowMain}>
+                <Text style={s.summaryRowTitle}>All-Time Stats</Text>
+                <Text style={s.summaryRowSub}>Hall of Fame across every week</Text>
+              </View>
+              <IconSymbol name="chevron.right" size={16} color="#fbbf24" />
+            </Pressable>
             {weeks.map((w) => {
               const active = w.week_key === currentKey || (currentKey === 'current' && w.status === 'active');
               const isLive = w.status === 'active';
@@ -1049,6 +1070,31 @@ const makeStyles = (t: ThemeColors) => ({
     borderColor: t.border,
   },
   weekPickerText: { fontSize: 12, fontWeight: '800' as const, color: t.text, letterSpacing: 0.5 },
+  topBarActions: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8 },
+  allTimeBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(250, 204, 21, 0.10)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(250, 204, 21, 0.35)',
+  },
+  allTimeBtnText: { fontSize: 12, fontWeight: '800' as const, color: '#fbbf24', letterSpacing: 0.3 },
+  summaryRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    marginBottom: 6,
+    backgroundColor: 'rgba(250, 204, 21, 0.08)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(250, 204, 21, 0.3)',
+  },
+  summaryRowIcon: { fontSize: 18 },
+  summaryRowTitle: { fontSize: 14, fontWeight: '900' as const, color: '#fbbf24' },
+  summaryRowSub: { fontSize: 11, color: t.textMuted, marginTop: 1 },
 
   scroll: { paddingHorizontal: 12, gap: 14 },
   center: { padding: 32, alignItems: 'center' as const },

@@ -7,6 +7,7 @@ import { AchievementBadgePost } from '@/components/achievement-badge-post';
 import { flattenComments } from '@/components/comments-sheet';
 import { DefaultAvatar } from '@/components/default-avatar';
 import { SystemAvatar } from '@/components/system-avatar';
+import { displayUsername, isSystemUsername } from '@/lib/system-user';
 import { LiveSessionCard } from '@/components/live-session-card';
 import { PostLiveRecap } from '@/components/live-recap';
 import { ReplayModal } from '@/components/replay-modal';
@@ -142,17 +143,19 @@ export default function PostDetailScreen() {
   const bodyEl = post ? (
     <>
       <Pressable
-        onPress={() => post.username && goProfile(post.username)}
+        onPress={() => post.username && !isSystemUsername(post.username) && goProfile(post.username)}
         style={({ pressed }) => [s.postHeader, pressed && { opacity: 0.7 }]}>
         {avatar ? (
           <Image source={{ uri: avatar }} style={s.postAvatar} contentFit="cover" />
-        ) : post.username === '__shinsa__' ? (
+        ) : isSystemUsername(post.username) ? (
           <SystemAvatar size={44} />
         ) : (
           <DefaultAvatar size={44} />
         )}
         <View style={s.postHeaderInfo}>
-          <Text style={s.postUsername}>@{post.username || 'anonymous'}</Text>
+          <Text style={s.postUsername}>
+            {isSystemUsername(post.username) ? displayUsername(post.username) : `@${post.username || 'anonymous'}`}
+          </Text>
           <Text style={s.postTime}>{timeAgo(post.created_at)}</Text>
         </View>
       </Pressable>

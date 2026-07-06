@@ -10,6 +10,7 @@ import { ChartJacket } from '@/components/chart-jacket';
 import { CommentsSheet } from '@/components/comments-sheet';
 import { DefaultAvatar } from '@/components/default-avatar';
 import { SystemAvatar } from '@/components/system-avatar';
+import { displayUsername, isSystemUsername } from '@/lib/system-user';
 import { GradeChip } from '@/components/grade-chip';
 import { TopBar } from '@/components/top-bar';
 import { ExploreTilesPanel } from '@/components/feed/explore-tiles-panel';
@@ -242,7 +243,7 @@ function CardHeader({
   const router = useRouter();
   const goToProfile = (e: { stopPropagation?: () => void }) => {
     e.stopPropagation?.();
-    if (!username || username === 'anonymous') return;
+    if (!username || username === 'anonymous' || isSystemUsername(username)) return;
     router.push({ pathname: '/profile/[id]', params: { id: `@${username}` } });
   };
   return (
@@ -250,9 +251,9 @@ function CardHeader({
       <Pressable onPress={goToProfile} hitSlop={4} style={({ pressed }) => [pressed && { opacity: 0.7 }]}>
         {avatar ? (
           <Image source={{ uri: avatar }} style={s.avatar} contentFit="cover" />
-        ) : username === '__shinsa__' ? (
-          // System bot (weekly challenge recaps, announcements) gets its own
-          // sprite so it reads as a system message, not a missing avatar.
+        ) : isSystemUsername(username) ? (
+          // System account (weekly challenge recaps, announcements) gets the
+          // Shinsa brand mark so it reads as an official message.
           <SystemAvatar size={36} />
         ) : (
           // Anyone showing up in the feed is, by definition, an active player
@@ -264,7 +265,7 @@ function CardHeader({
       <View style={s.headerInfo}>
         <View style={s.headerLine}>
           <Pressable onPress={goToProfile} hitSlop={4} style={({ pressed }) => [pressed && { opacity: 0.7 }]}>
-            <Text style={s.username}>{username}</Text>
+            <Text style={s.username}>{displayUsername(username)}</Text>
           </Pressable>
           {rightChildren}
         </View>

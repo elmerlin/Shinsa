@@ -61,7 +61,74 @@ export function createWeeklyChallengesApi(client: ApiClient) {
         `/api/weekly-challenges/users/${encodeURIComponent(userId)}/history`,
       );
     },
+    /** All-time hall of fame: rating/wins/judgment leaderboards rolled up
+     *  across every finalized week. Cached server-side. */
+    summary() {
+      return client.request<WeeklyChallengeAllTimeSummary>('/api/weekly-challenges/summary');
+    },
   };
+}
+
+/** One row in an all-time stat leaderboard. `value` is the ranked metric;
+ *  the optional fields carry a card-specific secondary number. */
+export interface WeeklyChallengePlayerStat {
+  user_id: string;
+  username: string;
+  avatar: string;
+  avatar_v?: number;
+  nationality: string;
+  skill_title?: string;
+  value: number;
+  charts?: number;
+  sss?: number;
+  sss_plus?: number;
+  points?: number;
+}
+
+export interface WeeklyChallengeTopPlay {
+  user_id: string;
+  username: string;
+  avatar: string;
+  nationality: string;
+  song_title: string;
+  mode: string;
+  level: number;
+  jacket_url: string;
+  score: number;
+  grade: string;
+  plate: string;
+  rating_points: number;
+  week_key: string;
+  perfect?: number;
+  great?: number;
+  good?: number;
+  bad?: number;
+  miss?: number;
+}
+
+export interface WeeklyChallengeAllTimeSummary {
+  generatedAt: string;
+  totals: {
+    weeks: number;
+    players: number;
+    chartsCleared: number;
+    ratingPoints: number;
+    perfects: number;
+    sssPlus: number;
+  };
+  topPlays: WeeklyChallengeTopPlay[];
+  mostRatingPoints: WeeklyChallengePlayerStat[];
+  mostSongsCleared: WeeklyChallengePlayerStat[];
+  mostPerfects: WeeklyChallengePlayerStat[];
+  mostSSS: WeeklyChallengePlayerStat[];
+  mostPerfectGames: WeeklyChallengePlayerStat[];
+  mostChallenges: WeeklyChallengePlayerStat[];
+  wins: {
+    overall: WeeklyChallengePlayerStat[];
+    singles: WeeklyChallengePlayerStat[];
+    doubles: WeeklyChallengePlayerStat[];
+  };
+  mostPodiums: WeeklyChallengePlayerStat[];
 }
 
 export interface UserWeeklyChallengeHistoryEntry {

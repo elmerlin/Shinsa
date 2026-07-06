@@ -152,6 +152,20 @@ app.use('/api/pet-bomber', petBomberRoutes);
 app.use('/api/piumon', piumonRoutes);
 app.use('/api/external', externalRoutes);
 
+// One-time repair: back-fill frozen per-chart results for early weekly
+// challenge weeks (W13–W19) that were finalized before result freezing
+// existed. Cheap no-op once the data is healthy; runs off the request path.
+try {
+  const { getDb } = require('./db/schema');
+  const { repairMissingFrozenResults } = require('./lib/weeklyChallenges');
+  const repaired = repairMissingFrozenResults(getDb());
+  if (repaired.length > 0) {
+    console.log(`[WeeklyChallenges] repaired ${repaired.length} week(s) of frozen results on boot.`);
+  }
+} catch (err) {
+  console.error('[WeeklyChallenges] frozen-results repair failed:', err?.message || err);
+}
+
 if (typeof piugameRoutes.startOverRankingNightlyScheduler === 'function') {
   try {
     const status = piugameRoutes.startOverRankingNightlyScheduler();
