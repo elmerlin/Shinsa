@@ -2,7 +2,7 @@
   "expo": {
     "name": "Shinsa",
     "slug": "shinsa",
-    "version": "1.0.51",
+    "version": "1.0.52",
     "orientation": "portrait",
     "icon": "./assets/brand/app-icon.png",
     "scheme": "shinsa",
@@ -11,14 +11,14 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.shinsa.app",
-      "buildNumber": "21",
+      "buildNumber": "22",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
       "package": "com.shinsa.app",
-      "versionCode": 51,
+      "versionCode": 52,
       "permissions": [
         "REQUEST_INSTALL_PACKAGES",
         "ACCESS_COARSE_LOCATION",
