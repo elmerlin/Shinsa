@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { Image } from 'expo-image';
-import { Stack, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import {
   ActivityIndicator,
   Pressable,
@@ -13,7 +13,11 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { DefaultAvatar } from '@/components/default-avatar';
+import { TopBar } from '@/components/top-bar';
+import { IconSymbol } from '@/components/ui/icon-symbol';
+import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/contexts/theme-context';
+import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { weeklyChallengesApi } from '@/lib/api';
 import { fullImageUrl } from '@/lib/images';
@@ -49,7 +53,7 @@ function gradeColor(grade?: string): string {
 
 type Styles = ReturnType<typeof useThemedStyles<ReturnType<typeof makeStyles>>>;
 
-function Avatar({ avatar, username, size, s }: { avatar?: string; username?: string; size: number; s: Styles }) {
+function Avatar({ avatar, size }: { avatar?: string; size: number }) {
   const uri = avatar ? fullImageUrl(avatar) : undefined;
   if (uri) {
     return <Image source={{ uri }} style={{ width: size, height: size, borderRadius: size / 2 }} contentFit="cover" />;
@@ -60,7 +64,9 @@ function Avatar({ avatar, username, size, s }: { avatar?: string; username?: str
 export default function WeeklyChallengesSummaryScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { user } = useAuth();
   const { theme } = useTheme();
+  const { isDesktop } = useBreakpoint();
   const s = useThemedStyles(makeStyles);
 
   const query = useQuery({
@@ -75,12 +81,31 @@ export default function WeeklyChallengesSummaryScreen() {
     if (!username) return;
     router.push({ pathname: '/profile/[id]', params: { id: `@${username}` } });
   };
+  const backToWeek = () => router.push('/weekly-challenges');
+
+  // On desktop, two-up the Top Plays and the stat leaderboards so a wide
+  // viewport reads as a dashboard instead of one stretched mobile column.
+  const gridItem = isDesktop ? s.gridItem : undefined;
 
   return (
     <View style={s.container}>
-      <Stack.Screen options={{ title: 'Hall of Fame', headerBackTitle: 'Weekly' }} />
+      <View style={[s.topBar, { paddingTop: insets.top + 8 }]}>
+        <TopBar
+          rightExtra={
+            <Pressable
+              onPress={backToWeek}
+              hitSlop={6}
+              style={({ pressed }) => [s.thisWeekBtn, pressed && { opacity: 0.7 }]}>
+              <IconSymbol name="chevron.left" size={13} color={theme.textMuted} />
+              <Text style={s.thisWeekText}>This week</Text>
+            </Pressable>
+          }
+        />
+      </View>
+
       <ScrollView
-        contentContainerStyle={[s.scroll, { paddingBottom: insets.bottom + 40 }]}
+        style={isDesktop ? { flex: 1 } : undefined}
+        contentContainerStyle={[s.scroll, isDesktop && s.scrollDesktop, { paddingBottom: insets.bottom + 40 }]}
         refreshControl={<RefreshControl refreshing={query.isRefetching} onRefresh={() => query.refetch()} tintColor={theme.spinner} />}>
         {query.isLoading ? (
           <View style={s.center}><ActivityIndicator color={theme.spinner} /></View>
@@ -89,11 +114,14 @@ export default function WeeklyChallengesSummaryScreen() {
         ) : data ? (
           <>
             <View style={s.intro}>
+              <Pressable onPress={backToWeek} hitSlop={6} style={({ pressed }) => [s.backRow, pressed && { opacity: 0.6 }]}>
+                <IconSymbol name="chevron.left" size={14} color={theme.textMuted} />
+                <Text style={s.backText}>Weekly Challenges</Text>
+              </Pressable>
               <Text style={s.introTitle}>🏆 All-Time Records</Text>
               <Text style={s.introSub}>Across every finalized weekly challenge</Text>
             </View>
 
-            {/* Totals banner */}
             {totals ? (
               <View style={s.totalsGrid}>
                 <TotalTile value={totals.weeks} label="Weeks" s={s} />
@@ -112,15 +140,13 @@ export default function WeeklyChallengesSummaryScreen() {
               </View>
             ) : (
               <>
-                {/* Top plays */}
                 <SectionHeader title="TOP PLAYS" hint="by rating points" s={s} />
-                <View style={s.topPlayList}>
-                  {(data.topPlays ?? []).slice(0, 12).map((play, i) => (
-                    <TopPlayRow key={`${play.user_id}-${i}`} rank={i + 1} play={play} onProfile={goProfile} s={s} />
+                <View style={[s.topPlayList, isDesktop && s.grid2]}>
+                  {(data.topPlays ?? []).slice(0, isDesktop ? 20 : 12).map((play, i) => (
+                    <TopPlayRow key={`${play.user_id}-${i}`} rank={i + 1} play={play} onProfile={goProfile} style={gridItem} s={s} />
                   ))}
                 </View>
 
-                {/* Champions */}
                 <SectionHeader title="CHAMPIONS" hint="most weekly wins" s={s} />
                 <View style={s.champCard}>
                   <WinsColumn label="Overall" color="#fbbf24" rows={data.wins?.overall ?? []} onProfile={goProfile} s={s} />
@@ -128,43 +154,23 @@ export default function WeeklyChallengesSummaryScreen() {
                   <WinsColumn label="Doubles" color="#34d399" rows={data.wins?.doubles ?? []} onProfile={goProfile} s={s} />
                 </View>
 
-                {/* Leaderboards */}
                 <SectionHeader title="LEADERBOARDS" hint="all-time totals" s={s} />
-                <StatCard
-                  icon="⚡" title="All-Time Points" hint="total rating"
-                  rows={data.mostRatingPoints ?? []} onProfile={goProfile} s={s}
-                  valueOf={(r) => fmtNum(r.value)} subOf={(r) => `${fmtNum(r.charts)} charts`}
-                />
-                <StatCard
-                  icon="🎖️" title="Most Podiums" hint="top-3 finishes"
-                  rows={data.mostPodiums ?? []} onProfile={goProfile} s={s}
-                  valueOf={(r) => fmtNum(r.value)}
-                />
-                <StatCard
-                  icon="✅" title="Songs Cleared" hint="charts passed"
-                  rows={data.mostSongsCleared ?? []} onProfile={goProfile} s={s}
-                  valueOf={(r) => fmtNum(r.value)} subOf={(r) => `${fmtNum(r.sss_plus)} SSS+`}
-                />
-                <StatCard
-                  icon="💎" title="Most SSS+" hint="top-grade clears"
-                  rows={data.mostSSS ?? []} onProfile={goProfile} s={s}
-                  valueOf={(r) => fmtNum(r.value)} subOf={(r) => `+${fmtNum(r.sss)} SSS`}
-                />
-                <StatCard
-                  icon="🎯" title="Most Perfects" hint="total PG judgments"
-                  rows={data.mostPerfects ?? []} onProfile={goProfile} s={s}
-                  valueOf={(r) => fmtNum(r.value)} subOf={(r) => `${fmtNum(r.charts)} charts`}
-                />
-                <StatCard
-                  icon="🏵️" title="Perfect Games" hint="flawless PG plates"
-                  rows={data.mostPerfectGames ?? []} onProfile={goProfile} s={s}
-                  valueOf={(r) => fmtNum(r.value)}
-                />
-                <StatCard
-                  icon="📅" title="Most Weeks Entered" hint="loyalty"
-                  rows={data.mostChallenges ?? []} onProfile={goProfile} s={s}
-                  valueOf={(r) => `${fmtNum(r.value)} wk`} subOf={(r) => `${fmtNum(r.points)} pts`}
-                />
+                <View style={isDesktop ? s.grid2 : undefined}>
+                  <StatCard icon="⚡" title="All-Time Points" hint="total rating" rows={data.mostRatingPoints ?? []} onProfile={goProfile} style={gridItem} s={s}
+                    valueOf={(r) => fmtNum(r.value)} subOf={(r) => `${fmtNum(r.charts)} charts`} />
+                  <StatCard icon="🎖️" title="Most Podiums" hint="top-3 finishes" rows={data.mostPodiums ?? []} onProfile={goProfile} style={gridItem} s={s}
+                    valueOf={(r) => fmtNum(r.value)} />
+                  <StatCard icon="✅" title="Songs Cleared" hint="charts passed" rows={data.mostSongsCleared ?? []} onProfile={goProfile} style={gridItem} s={s}
+                    valueOf={(r) => fmtNum(r.value)} subOf={(r) => `${fmtNum(r.sss_plus)} SSS+`} />
+                  <StatCard icon="💎" title="Most SSS+" hint="top-grade clears" rows={data.mostSSS ?? []} onProfile={goProfile} style={gridItem} s={s}
+                    valueOf={(r) => fmtNum(r.value)} subOf={(r) => `+${fmtNum(r.sss)} SSS`} />
+                  <StatCard icon="🎯" title="Most Perfects" hint="total PG judgments" rows={data.mostPerfects ?? []} onProfile={goProfile} style={gridItem} s={s}
+                    valueOf={(r) => fmtNum(r.value)} subOf={(r) => `${fmtNum(r.charts)} charts`} />
+                  <StatCard icon="🏵️" title="Perfect Games" hint="flawless PG plates" rows={data.mostPerfectGames ?? []} onProfile={goProfile} style={gridItem} s={s}
+                    valueOf={(r) => fmtNum(r.value)} />
+                  <StatCard icon="📅" title="Most Weeks Entered" hint="loyalty" rows={data.mostChallenges ?? []} onProfile={goProfile} style={gridItem} s={s}
+                    valueOf={(r) => `${fmtNum(r.value)} wk`} subOf={(r) => `${fmtNum(r.points)} pts`} />
+                </View>
               </>
             )}
           </>
@@ -201,7 +207,7 @@ function PlayerRow({
   return (
     <Pressable onPress={() => onProfile(row.username)} style={({ pressed }) => [s.playerRow, pressed && { opacity: 0.7 }]}>
       <Text style={[s.playerRank, rank <= 3 && { color: MEDAL_COLOR[rank - 1] }]}>{rank}</Text>
-      <Avatar avatar={row.avatar} username={row.username} size={26} s={s} />
+      <Avatar avatar={row.avatar} size={26} />
       <Text style={s.playerName} numberOfLines={1}>{row.username}</Text>
       <View style={s.playerValueWrap}>
         <Text style={s.playerValue}>{value}</Text>
@@ -212,15 +218,15 @@ function PlayerRow({
 }
 
 function StatCard({
-  icon, title, hint, rows, valueOf, subOf, onProfile, s,
+  icon, title, hint, rows, valueOf, subOf, onProfile, style, s,
 }: {
   icon: string; title: string; hint?: string; rows: WeeklyChallengePlayerStat[];
   valueOf: (r: WeeklyChallengePlayerStat) => string;
   subOf?: (r: WeeklyChallengePlayerStat) => string;
-  onProfile: (u?: string) => void; s: Styles;
+  onProfile: (u?: string) => void; style?: object; s: Styles;
 }) {
   return (
-    <View style={s.statCard}>
+    <View style={[s.statCard, style]}>
       <View style={s.statCardHeader}>
         <Text style={s.statCardTitle}>{icon}  {title}</Text>
         {hint ? <Text style={s.statCardHint}>{hint}</Text> : null}
@@ -229,15 +235,7 @@ function StatCard({
         <Text style={s.statEmpty}>No data yet</Text>
       ) : (
         rows.slice(0, 10).map((row, i) => (
-          <PlayerRow
-            key={`${row.user_id}-${i}`}
-            rank={i + 1}
-            row={row}
-            value={valueOf(row)}
-            sub={subOf ? subOf(row) : undefined}
-            onProfile={onProfile}
-            s={s}
-          />
+          <PlayerRow key={`${row.user_id}-${i}`} rank={i + 1} row={row} value={valueOf(row)} sub={subOf ? subOf(row) : undefined} onProfile={onProfile} s={s} />
         ))
       )}
     </View>
@@ -259,7 +257,7 @@ function WinsColumn({
         rows.slice(0, 3).map((row, i) => (
           <Pressable key={row.user_id} onPress={() => onProfile(row.username)} style={({ pressed }) => [s.winsRow, pressed && { opacity: 0.7 }]}>
             <Text style={[s.winsRank, i <= 2 && { color: MEDAL_COLOR[i] }]}>{i + 1}</Text>
-            <Avatar avatar={row.avatar} username={row.username} size={18} s={s} />
+            <Avatar avatar={row.avatar} size={18} />
             <Text style={s.winsName} numberOfLines={1}>{row.username}</Text>
             <Text style={s.winsValue}>{row.value}</Text>
           </Pressable>
@@ -270,13 +268,13 @@ function WinsColumn({
 }
 
 function TopPlayRow({
-  rank, play, onProfile, s,
+  rank, play, onProfile, style, s,
 }: {
-  rank: number; play: WeeklyChallengeTopPlay; onProfile: (u?: string) => void; s: Styles;
+  rank: number; play: WeeklyChallengeTopPlay; onProfile: (u?: string) => void; style?: object; s: Styles;
 }) {
   const jacket = play.jacket_url ? fullImageUrl(play.jacket_url) : undefined;
   return (
-    <View style={[s.topPlayRow, rank <= 3 && s.topPlayRowHero]}>
+    <View style={[s.topPlayRow, rank <= 3 && s.topPlayRowHero, style]}>
       <Text style={[s.topPlayRank, rank <= 3 && { color: MEDAL_COLOR[rank - 1] }]}>{rank}</Text>
       <View style={s.topPlayJacket}>
         {jacket ? (
@@ -291,7 +289,7 @@ function TopPlayRow({
       <View style={s.topPlayMid}>
         <Text style={s.topPlaySong} numberOfLines={1}>{play.song_title}</Text>
         <Pressable onPress={() => onProfile(play.username)} style={s.topPlayUser}>
-          <Avatar avatar={play.avatar} username={play.username} size={16} s={s} />
+          <Avatar avatar={play.avatar} size={16} />
           <Text style={s.topPlayUserName} numberOfLines={1}>{play.username}</Text>
           <Text style={s.topPlayWeek}>· {play.week_key}</Text>
         </Pressable>
@@ -306,29 +304,57 @@ function TopPlayRow({
 
 const makeStyles = (t: ThemeColors) => ({
   container: { flex: 1, backgroundColor: t.bg },
-  scroll: { paddingHorizontal: 12, paddingTop: 12, gap: 4 },
+  topBar: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    gap: 12,
+  },
+  thisWeekBtn: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 2,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: t.surfaceMuted,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: t.border,
+  },
+  thisWeekText: { fontSize: 12, fontWeight: '800' as const, color: t.textMuted, letterSpacing: 0.3 },
+
+  scroll: { paddingHorizontal: 12, paddingTop: 4, gap: 4 },
+  // Centre the column on desktop so it stops stretching edge-to-edge, and
+  // give it a touch more horizontal breathing room than the mobile gutter.
+  scrollDesktop: { maxWidth: 1040, width: '100%' as const, alignSelf: 'center' as const, paddingHorizontal: 24 },
   center: { padding: 40, alignItems: 'center' as const },
   errorBox: { padding: 16, borderRadius: 8, backgroundColor: t.dangerBg, borderWidth: 1, borderColor: t.dangerBorder, margin: 8 },
   errorText: { color: t.danger, fontSize: 14 },
 
-  intro: { paddingHorizontal: 4, paddingBottom: 8 },
-  introTitle: { fontSize: 20, fontWeight: '900' as const, color: t.text, letterSpacing: 0.3 },
-  introSub: { fontSize: 12, color: t.textMuted, marginTop: 2 },
+  intro: { paddingHorizontal: 4, paddingBottom: 8, paddingTop: 4 },
+  backRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 2, marginBottom: 8, marginLeft: -4 },
+  backText: { fontSize: 13, fontWeight: '700' as const, color: t.textMuted },
+  introTitle: { fontSize: 22, fontWeight: '900' as const, color: t.text, letterSpacing: 0.3 },
+  introSub: { fontSize: 13, color: t.textMuted, marginTop: 2 },
+
+  // Two-column grid used for Top Plays + stat leaderboards on desktop.
+  grid2: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8, alignItems: 'flex-start' as const },
+  gridItem: { flexBasis: '48.8%' as const, flexGrow: 1, marginBottom: 0 },
 
   totalsGrid: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 6, marginBottom: 10 },
   totalTile: {
     flexBasis: '31.5%' as const, flexGrow: 1, alignItems: 'center' as const, gap: 3,
     backgroundColor: t.card, borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, borderColor: t.border,
-    paddingVertical: 10,
+    paddingVertical: 12,
   },
-  totalValue: { fontSize: 17, fontWeight: '900' as const, color: t.text, fontVariant: ['tabular-nums' as const] },
+  totalValue: { fontSize: 18, fontWeight: '900' as const, color: t.text, fontVariant: ['tabular-nums' as const] },
   totalLabel: { fontSize: 9, fontWeight: '800' as const, letterSpacing: 1, color: t.textDim, textTransform: 'uppercase' as const },
 
-  sectionHeader: { flexDirection: 'row' as const, alignItems: 'baseline' as const, gap: 8, paddingHorizontal: 4, marginTop: 14, marginBottom: 6 },
+  sectionHeader: { flexDirection: 'row' as const, alignItems: 'baseline' as const, gap: 8, paddingHorizontal: 4, marginTop: 14, marginBottom: 6, width: '100%' as const },
   sectionTitle: { fontSize: 11, fontWeight: '900' as const, letterSpacing: 1.6, color: t.textDim },
   sectionHint: { fontSize: 10, color: t.textDim, opacity: 0.7 },
 
-  // Top plays
   topPlayList: { gap: 6 },
   topPlayRow: {
     flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10,
@@ -350,9 +376,8 @@ const makeStyles = (t: ThemeColors) => ({
   topPlayScore: { fontSize: 14, fontWeight: '900' as const, fontVariant: ['tabular-nums' as const] },
   topPlayPts: { fontSize: 11, fontWeight: '900' as const, color: '#fbbf24', fontVariant: ['tabular-nums' as const] },
 
-  // Champions
   champCard: {
-    flexDirection: 'row' as const, gap: 10,
+    flexDirection: 'row' as const, gap: 10, width: '100%' as const,
     backgroundColor: t.card, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: t.border, padding: 12,
   },
   winsCol: { flex: 1, gap: 4 },
@@ -363,7 +388,6 @@ const makeStyles = (t: ThemeColors) => ({
   winsName: { flex: 1, fontSize: 11, fontWeight: '700' as const, color: t.text },
   winsValue: { fontSize: 11, fontWeight: '900' as const, color: t.text, fontVariant: ['tabular-nums' as const] },
 
-  // Stat cards
   statCard: {
     backgroundColor: t.card, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: t.border,
     padding: 10, marginBottom: 8,
@@ -382,7 +406,7 @@ const makeStyles = (t: ThemeColors) => ({
 
   emptyBlock: {
     backgroundColor: t.card, borderRadius: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: t.border,
-    padding: 20, alignItems: 'center' as const, gap: 6, marginTop: 10,
+    padding: 20, alignItems: 'center' as const, gap: 6, marginTop: 10, width: '100%' as const,
   },
   emptyTitle: { fontSize: 14, fontWeight: '800' as const, color: t.text },
   emptyBody: { fontSize: 12, color: t.textMuted, textAlign: 'center' as const },

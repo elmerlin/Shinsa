@@ -179,6 +179,7 @@ export default function DrawerLayout() {
       <Drawer.Screen name="leaderboards" options={{ drawerItemStyle: { display: 'none' } }} />
       <Drawer.Screen name="world-max" options={{ drawerItemStyle: { display: 'none' } }} />
       <Drawer.Screen name="weekly-challenges" options={{ drawerItemStyle: { display: 'none' } }} />
+      <Drawer.Screen name="weekly-challenges-summary" options={{ drawerItemStyle: { display: 'none' } }} />
       <Drawer.Screen name="what-to-play" options={{ drawerItemStyle: { display: 'none' } }} />
       <Drawer.Screen name="head-to-head" options={{ drawerItemStyle: { display: 'none' } }} />
       <Drawer.Screen name="shoes" options={{ drawerItemStyle: { display: 'none' } }} />
