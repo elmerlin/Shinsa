@@ -14,10 +14,11 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TopBar } from '@/components/top-bar';
+import { useAuth } from '@/contexts/auth-context';
 import { useTheme } from '@/contexts/theme-context';
 import { useThemedStyles } from '@/hooks/use-themed-styles';
 import { fridgeApi } from '@/lib/api';
-import type { FridgeItem, FridgeTabEntry } from '@shared/api';
+import type { FridgeAdminTab, FridgeItem, FridgeTabEntry } from '@shared/api';
 import type { ThemeColors } from '@/constants/theme';
 
 function pounds(pence: number): string {
@@ -32,14 +33,37 @@ function formatWhen(raw?: string | null): string {
   return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
+/** Whole days since a timestamp; '' when unparseable. */
+function daysOpen(raw?: string | null): string {
+  if (!raw) return '';
+  const norm = raw.includes('T') ? raw : raw.replace(' ', 'T');
+  const d = new Date(/(?:z|[+-]\d{2}:?\d{2})$/i.test(norm) ? norm : `${norm}Z`);
+  if (Number.isNaN(d.getTime())) return '';
+  const days = Math.floor((Date.now() - d.getTime()) / 86_400_000);
+  if (days <= 0) return 'today';
+  return days === 1 ? '1 day' : `${days} days`;
+}
+
 type Styles = ReturnType<typeof useThemedStyles<ReturnType<typeof makeStyles>>>;
 
 export default function FridgeScreen() {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
+  const { user } = useAuth();
   const s = useThemedStyles(makeStyles);
   const queryClient = useQueryClient();
   const params = useLocalSearchParams<{ payment?: string }>();
+
+  // Dojo admins get the whole slate under their own tab — this app has no
+  // control panel, so the fridge screen is the only sensible home for it.
+  const canSeeAllTabs = !!(
+    user
+    && (user.is_admin === true
+      || Number(user.is_admin) === 1
+      || (user.feature_access
+        && typeof user.feature_access === 'object'
+        && (user.feature_access as Record<string, unknown>).dojo_admin))
+  );
 
   const itemsQuery = useQuery({
     queryKey: ['fridge-items'],
@@ -49,6 +73,11 @@ export default function FridgeScreen() {
   const tabQuery = useQuery({
     queryKey: ['fridge-tab'],
     queryFn: () => fridgeApi.tab(),
+  });
+  const adminTabsQuery = useQuery({
+    queryKey: ['fridge-admin-tabs'],
+    queryFn: () => fridgeApi.adminTabs(),
+    enabled: canSeeAllTabs,
   });
 
   const refreshTab = () => queryClient.invalidateQueries({ queryKey: ['fridge-tab'] });
@@ -207,6 +236,17 @@ export default function FridgeScreen() {
           ) : null}
         </View>
 
+        {/* Everyone's open tabs — Dojo admins only */}
+        {canSeeAllTabs ? (
+          <AdminTabsSection
+            s={s}
+            loading={adminTabsQuery.isLoading}
+            tabs={adminTabsQuery.data?.tabs ?? []}
+            totalOwedPence={adminTabsQuery.data?.summary?.total_owed_pence ?? 0}
+            minSettlePence={adminTabsQuery.data?.min_settle_pence ?? 0}
+          />
+        ) : null}
+
         {/* History */}
         {history.length > 0 ? (
           <View style={s.historyWrap}>
@@ -224,8 +264,86 @@ export default function FridgeScreen() {
   );
 }
 
+/**
+ * The whole dojo's open slate. Read-only: settling stays the drinker's own
+ * action (their card, their Square checkout), so this answers "who owes what"
+ * without giving an admin a way to charge somebody.
+ */
+function AdminTabsSection({
+  s,
+  loading,
+  tabs,
+  totalOwedPence,
+  minSettlePence,
+}: {
+  s: Styles;
+  loading: boolean;
+  tabs: FridgeAdminTab[];
+  totalOwedPence: number;
+  minSettlePence: number;
+}) {
+  return (
+    <View style={s.adminWrap}>
+      <View style={s.adminHead}>
+        <Text style={s.adminTitle}>EVERYONE'S TABS</Text>
+        <Text style={s.adminTotal}>{pounds(totalOwedPence)} out</Text>
+      </View>
+
+      {loading ? (
+        <View style={s.center}><ActivityIndicator size="small" /></View>
+      ) : tabs.length === 0 ? (
+        <Text style={s.adminEmpty}>Nothing on the slate — every tab is settled.</Text>
+      ) : (
+        tabs.map((tab) => {
+          const age = daysOpen(tab.oldest_entry_at);
+          // They can't settle below the minimum, so don't chase them for it.
+          const belowMinimum = minSettlePence > 0 && tab.total_pence < minSettlePence;
+          return (
+            <View key={tab.user_id} style={s.adminRow}>
+              <View style={s.adminRowMain}>
+                <Text style={s.adminName} numberOfLines={1}>{tab.username}</Text>
+                <Text style={s.adminMeta} numberOfLines={1}>
+                  {tab.item_count} drink{tab.item_count === 1 ? '' : 's'}
+                  {age ? ` · oldest ${age}` : ''}
+                  {tab.settling ? ' · checking out' : belowMinimum ? ' · under minimum' : ''}
+                </Text>
+              </View>
+              <Text style={s.adminAmount}>{pounds(tab.total_pence)}</Text>
+            </View>
+          );
+        })
+      )}
+    </View>
+  );
+}
+
 const makeStyles = (t: ThemeColors) => ({
   container: { flex: 1, backgroundColor: t.bg },
+  adminWrap: {
+    marginTop: 6,
+    padding: 12,
+    borderRadius: 14,
+    backgroundColor: t.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: t.border,
+    gap: 6,
+  },
+  adminHead: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, gap: 8 },
+  adminTitle: { fontSize: 11, fontWeight: '900' as const, letterSpacing: 1.4, color: t.textMuted },
+  adminTotal: { fontSize: 13, fontWeight: '900' as const, color: t.accent },
+  adminEmpty: { fontSize: 12, color: t.textMuted, paddingVertical: 6 },
+  adminRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 10,
+    paddingVertical: 7,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: t.border,
+  },
+  adminRowMain: { flex: 1, minWidth: 0, gap: 2 },
+  adminName: { fontSize: 13, fontWeight: '800' as const, color: t.text },
+  adminMeta: { fontSize: 11, color: t.textMuted },
+  adminAmount: { fontSize: 14, fontWeight: '900' as const, color: t.text },
   topBar: { paddingHorizontal: 16, paddingBottom: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: t.border },
   scroll: { padding: 16, gap: 10 },
   eyebrow: { fontSize: 13, fontWeight: '800' as const, letterSpacing: 2, color: t.accent, textTransform: 'uppercase' as const },

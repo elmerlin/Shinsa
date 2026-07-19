@@ -1583,3 +1583,5 @@ export const reconcileFridgeTab = () => request('/fridge/reconcile', {
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({}),
 });
+// Every open tab and what each person owes. Admin / dojo_admin only.
+export const getAdminFridgeTabs = () => request('/fridge/admin/tabs');

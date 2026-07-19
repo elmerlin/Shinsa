@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const { getDb } = require('../db/schema');
-const { requireAuth } = require('./auth');
+const { requireAuth, hasFeatureAccess } = require('./auth');
+const { normalizeUserAvatarForList } = require('../lib/avatarProxy');
 const {
   isSquareConfigured,
   createQuickPayLink,
@@ -21,6 +22,23 @@ const MIN_SETTLE_PENCE = 1000;
 // A settle attempt locks the entries it covers; if the checkout is abandoned
 // the lock auto-expires so the tab is editable again.
 const PENDING_LOCK_HOURS = 24;
+
+function isAdmin(user) {
+  return user?.is_admin === true || Number(user?.is_admin) === 1;
+}
+
+// Seeing everyone else's tab is a narrower privilege than running your own —
+// full admins and Dojo Admins only (same bar as the venue takings).
+function canSeeAllFridgeTabs(db, user) {
+  if (!db || !user?.id) return false;
+  return isAdmin(user) || hasFeatureAccess(db, user, 'dojo_admin');
+}
+
+function requireFridgeAdmin(req, res, next) {
+  const db = getDb();
+  if (canSeeAllFridgeTabs(db, req.user)) return next();
+  return res.status(403).json({ error: 'Fridge tabs are only visible to Dojo admins.' });
+}
 
 function unlockStalePayments(db, userId) {
   const stale = db.prepare(`
@@ -199,4 +217,105 @@ router.post('/reconcile', requireAuth, async (req, res) => {
   res.json({ reconciled, ...tab });
 });
 
+// GET /api/fridge/admin/tabs — every open tab, who owes what.
+// "Open" mirrors getOpenTab: entries with settled_at IS NULL. Entries locked by
+// an in-flight settle still count as owed (the money isn't in yet) but are
+// flagged so an admin doesn't chase someone who is mid-checkout.
+router.get('/admin/tabs', requireAuth, requireFridgeAdmin, (req, res) => {
+  const db = getDb();
+
+  // Expire abandoned checkouts first so the settling flags below are honest.
+  const stalePayers = db.prepare(`
+    SELECT DISTINCT user_id FROM fridge_payments
+    WHERE status = 'pending' AND created_at < datetime('now', '-${PENDING_LOCK_HOURS} hours')
+  `).all();
+  for (const row of stalePayers) unlockStalePayments(db, row.user_id);
+
+  const entries = db.prepare(`
+    SELECT e.id, e.user_id, e.item_id, e.item_name, e.price_pence, e.qty,
+           e.created_at, e.settling_payment_id,
+           COALESCE(i.emoji, '') AS emoji,
+           u.username, u.avatar, u.avatar_v
+    FROM fridge_tab_entries e
+    LEFT JOIN fridge_items i ON i.id = e.item_id
+    JOIN users u ON u.id = e.user_id
+    WHERE e.settled_at IS NULL
+    ORDER BY e.created_at DESC, e.id DESC
+  `).all();
+
+  const byUser = new Map();
+  for (const entry of entries) {
+    let tab = byUser.get(entry.user_id);
+    if (!tab) {
+      tab = {
+        user_id: entry.user_id,
+        username: entry.username || '',
+        avatar: normalizeUserAvatarForList(entry.avatar, entry.user_id, 64, entry.avatar_v),
+        total_pence: 0,
+        settling_pence: 0,
+        item_count: 0,
+        entry_count: 0,
+        oldest_entry_at: entry.created_at,
+        newest_entry_at: entry.created_at,
+        settling: false,
+        entries: [],
+      };
+      byUser.set(entry.user_id, tab);
+    }
+
+    const qty = parseInt(entry.qty, 10) || 0;
+    const linePence = (parseInt(entry.price_pence, 10) || 0) * qty;
+    const isSettling = entry.settling_payment_id != null;
+
+    tab.total_pence += linePence;
+    if (isSettling) {
+      tab.settling = true;
+      tab.settling_pence += linePence;
+    }
+    tab.item_count += qty;
+    tab.entry_count += 1;
+    // Rows arrive newest-first, so the last one seen is the oldest.
+    tab.oldest_entry_at = entry.created_at;
+    tab.entries.push({
+      id: entry.id,
+      item_name: entry.item_name,
+      emoji: entry.emoji || '',
+      price_pence: parseInt(entry.price_pence, 10) || 0,
+      qty,
+      line_pence: linePence,
+      created_at: entry.created_at,
+      settling: isSettling,
+    });
+  }
+
+  // Biggest debt first — that's the one an admin acts on.
+  const tabs = Array.from(byUser.values()).sort((a, b) => {
+    if (b.total_pence !== a.total_pence) return b.total_pence - a.total_pence;
+    return String(a.username).localeCompare(String(b.username), undefined, { sensitivity: 'base' });
+  });
+
+  const recentSettlements = db.prepare(`
+    SELECT p.id, p.user_id, p.amount_pence, p.paid_at, u.username
+    FROM fridge_payments p
+    JOIN users u ON u.id = p.user_id
+    WHERE p.status = 'paid'
+    ORDER BY p.paid_at DESC, p.id DESC
+    LIMIT 10
+  `).all();
+
+  res.json({
+    tabs,
+    recent_settlements: recentSettlements,
+    summary: {
+      open_tab_count: tabs.length,
+      total_owed_pence: tabs.reduce((sum, tab) => sum + tab.total_pence, 0),
+      settling_pence: tabs.reduce((sum, tab) => sum + tab.settling_pence, 0),
+      entry_count: tabs.reduce((sum, tab) => sum + tab.entry_count, 0),
+      item_count: tabs.reduce((sum, tab) => sum + tab.item_count, 0),
+    },
+    min_settle_pence: MIN_SETTLE_PENCE,
+  });
+});
+
 module.exports = router;
+module.exports.canSeeAllFridgeTabs = canSeeAllFridgeTabs;
