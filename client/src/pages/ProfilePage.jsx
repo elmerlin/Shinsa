@@ -302,6 +302,10 @@ function getDoubleLevelColor(level) {
   return interpolateHex('#86efac', '#14532d', ratio);
 }
 
+// Co-op "level" is player count (2-5), not difficulty, so the heatmap uses a
+// fixed sky-blue instead of an intensity ramp (matches the mobile CoOp color).
+const COOP_HEATMAP_COLOR = '#38bdf8';
+
 function isStageBreakPlay(play) {
   return (parseInt(play?.score, 10) || 0) <= 0;
 }
@@ -1823,12 +1827,14 @@ export default function ProfilePage() {
           plays: [],
           singles: 0,
           doubles: 0,
+          coops: 0,
           singleLevelTotal: 0,
           doubleLevelTotal: 0,
         };
       }
 
-      const mode = play?.mode === 'Single' || play?.mode === 'Double' ? play.mode : '';
+      const normalizedMode = normalizeChartMode(play?.mode);
+      const mode = normalizedMode === 'Single' || normalizedMode === 'Double' || normalizedMode === 'CoOp' ? normalizedMode : '';
       const level = parseInt(play?.level, 10) || 0;
 
       if (mode === 'Single') {
@@ -1837,6 +1843,8 @@ export default function ProfilePage() {
       } else if (mode === 'Double') {
         dayMap[dayKey].doubles += 1;
         dayMap[dayKey].doubleLevelTotal += level;
+      } else if (mode === 'CoOp') {
+        dayMap[dayKey].coops += 1;
       }
 
       if ((parseInt(play?.score, 10) || 0) > 0) {
@@ -1860,23 +1868,34 @@ export default function ProfilePage() {
 
     const dayEntries = Object.values(dayMap);
     dayEntries.forEach((d) => {
-      d.total = d.singles + d.doubles;
+      d.total = d.singles + d.doubles + d.coops;
       d.singleAvgLevel = d.singles > 0 ? d.singleLevelTotal / d.singles : 0;
       d.doubleAvgLevel = d.doubles > 0 ? d.doubleLevelTotal / d.doubles : 0;
       d.singleRatio = d.total > 0 ? d.singles / d.total : 0;
       d.doubleRatio = d.total > 0 ? d.doubles / d.total : 0;
+      d.coopRatio = d.total > 0 ? d.coops / d.total : 0;
       d.singleColor = d.singles > 0 ? getSingleLevelColor(d.singleAvgLevel) : 'transparent';
       d.doubleColor = d.doubles > 0 ? getDoubleLevelColor(d.doubleAvgLevel) : 'transparent';
 
-      if (d.singles > 0 && d.doubles > 0) {
-        const singlesPct = clamp(d.singleRatio * 100, 0, 100);
-        d.fill = `linear-gradient(90deg, ${d.singleColor} 0%, ${d.singleColor} ${singlesPct}%, ${d.doubleColor} ${singlesPct}%, ${d.doubleColor} 100%)`;
-      } else if (d.singles > 0) {
-        d.fill = d.singleColor;
-      } else if (d.doubles > 0) {
-        d.fill = d.doubleColor;
-      } else {
+      const segments = [];
+      if (d.singles > 0) segments.push({ color: d.singleColor, count: d.singles });
+      if (d.doubles > 0) segments.push({ color: d.doubleColor, count: d.doubles });
+      if (d.coops > 0) segments.push({ color: COOP_HEATMAP_COLOR, count: d.coops });
+
+      if (segments.length === 0) {
         d.fill = 'transparent';
+      } else if (segments.length === 1) {
+        d.fill = segments[0].color;
+      } else {
+        const stops = [];
+        let cumulative = 0;
+        for (const seg of segments) {
+          const startPct = clamp((cumulative / d.total) * 100, 0, 100);
+          cumulative += seg.count;
+          const endPct = clamp((cumulative / d.total) * 100, 0, 100);
+          stops.push(`${seg.color} ${startPct}%, ${seg.color} ${endPct}%`);
+        }
+        d.fill = `linear-gradient(90deg, ${stops.join(', ')})`;
       }
 
       d.plays = d.plays.sort((a, b) => {
@@ -1937,6 +1956,7 @@ export default function ProfilePage() {
       latestDayKey: latestDate ? toDayKey(latestDate) : '',
       activeDays: dayEntries.length,
       totalPlays: plays.length,
+      hasCoopPlays: dayEntries.some((d) => d.coops > 0),
       singleLegend: singleMax > 0
         ? {
           min: singleMin === Infinity ? singleMax : singleMin,
@@ -2429,7 +2449,7 @@ export default function ProfilePage() {
                             style={{ background: cell.data ? cell.fill : '#111827' }}
                             title={
                               cell.data
-                                ? `${cell.label} | ${cell.data.total} plays (${Math.round(cell.data.doubleRatio * 100)}% Double / ${Math.round(cell.data.singleRatio * 100)}% Single)`
+                                ? `${cell.label} | ${cell.data.total} plays (${Math.round(cell.data.doubleRatio * 100)}% Double / ${Math.round(cell.data.singleRatio * 100)}% Single${cell.data.coops > 0 ? ` / ${Math.round(cell.data.coopRatio * 100)}% Co-op` : ''})`
                                 : cell.label
                             }
                             disabled={!cell.data}
@@ -2477,6 +2497,16 @@ export default function ProfilePage() {
                   <span className="text-[10px] text-gray-500 shrink-0">
                     D{overviewPlayHeatmap.doubleLegend.min} - D{overviewPlayHeatmap.doubleLegend.max}
                   </span>
+                </div>
+              )}
+              {overviewPlayHeatmap.hasCoopPlays && (
+                <div className="flex items-center justify-end gap-2 w-full">
+                  <span className="text-[10px] font-display font-bold text-sky-300 shrink-0">Co-op</span>
+                  <span
+                    className="w-2.5 h-2.5 rounded-[2px] border border-piu-border/35"
+                    style={{ backgroundColor: COOP_HEATMAP_COLOR }}
+                    title="Co-op"
+                  />
                 </div>
               )}
             </div>
